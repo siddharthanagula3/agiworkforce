@@ -107,7 +107,7 @@ import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-aud
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
-import type { RouteOutcomeClass } from '@agiworkforce/routing';
+import { isSelfContainedResponseRequest, type RouteOutcomeClass } from '@agiworkforce/routing';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
 
@@ -2197,6 +2197,7 @@ async function runMcpTool(
     planTier?: string | null;
     usageAttribution?: UsageAttribution;
     webSearchMaxResults?: number;
+    webSearchRequired?: boolean;
     webSearchDomainPolicy?: ResearchDomainPolicy | null;
     surface?: string | null;
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
@@ -2494,6 +2495,7 @@ async function runMcpTool(
       surface: executionContext.surface ?? null,
       conversationId: executionContext.conversationId ?? null,
       latestAttachedImage: executionContext.latestAttachedImage ?? (() => null),
+      userMessage: executionContext.latestUserMessage ?? '',
     });
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
@@ -2545,6 +2547,16 @@ async function runMcpTool(
   if (isWebSearchTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (
+      executionContext?.webSearchRequired !== true &&
+      isSelfContainedResponseRequest(executionContext?.latestUserMessage ?? '')
+    ) {
+      return {
+        content:
+          'This request can be answered from the conversation. Write or render the requested output without web search. No web search was performed.',
+        isError: true,
+      };
     }
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
@@ -5095,6 +5107,7 @@ export async function* runToolLoop(
               googleUserDataRouted: processed.googleUserData === true,
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
               latestUserMessage: lastUserTurnText(processed.chatRequest?.messages),
+              webSearchRequired: processed.searchRequirement?.required === true,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {

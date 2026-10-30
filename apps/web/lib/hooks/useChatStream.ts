@@ -49,6 +49,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
 import { useFastModeAllowanceStore } from '@shared/stores/fast-mode-allowance-store';
 import { readSelectedLocalModel } from '@features/desktop-host';
 import {
@@ -64,9 +65,9 @@ import { logger } from '@shared/lib/logger';
 import { trackProductEvent } from '@shared/lib/product-analytics';
 import {
   getModelMetadataById,
-  getModelReasoning,
   MANAGED_MEMORY_CITATIONS_HEADER,
   managedMemoryLocalTurnContext,
+  resolveThinkingSendPolicy,
   resolveModelEffort,
   WEB_SEARCH_CITATION_DELTA_KEY,
   WEB_SEARCH_CITATION_KIND,
@@ -710,6 +711,7 @@ async function saveMessageToDb(
     return { id: saved.id };
   } catch (error) {
     if (error instanceof ManagedCloudChatHttpError) {
+      if (error.status === 409 && error.reason === ASSISTANT_CONTENT_CHANGED_REASON) throw error;
       if (error.status === RATE_LIMITED_SAVE_STATUS) {
         console.warn('[useChatStream] Message persistence rate-limited; every retry was refused');
       }
@@ -1185,8 +1187,6 @@ const CLARIFY_DISMISSED_SILENTLY = 'The user declined the clarifying questions w
  */
 const DURABLE_RUN_POLL_INTERVAL_MS = 2_500;
 
-export const REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS = 1_500;
-
 const ROUTE_SWITCH_PROGRESS_ID = 'route-switch';
 
 function describeSettledInteractiveCard(card: InteractiveCard): string | null {
@@ -1370,6 +1370,7 @@ async function continueRemotelyAnsweredTurn(
       isTemporaryConversation: turn.isTemporaryConversation,
       getAuthToken,
       seedContent: message?.content ?? '',
+      seedMetadata: message?.metadata ?? {},
       ...(message?.metadata?.tools
         ? { seedTools: message.metadata.tools.map((tool) => ({ ...tool })) }
         : {}),
@@ -1494,6 +1495,7 @@ interface ConsumeStreamContext {
   latencyTrace?: ChatLatencyTrace;
   seedContent?: string;
   seedTools?: MessageToolEntry[];
+  seedMetadata?: MessageMetadata;
   /**
    * The row this answer branches from, on a conversation that has variants. The
    * turn is only durable once the stream ends, so this has to travel with the
@@ -1801,10 +1803,8 @@ async function driveDeviceSteps(
     throw await chatApiErrorFromResponse(response, `Device step resume failed: ${response.status}`);
   }
 
-  const assistantContent =
-    findConversationMessage(ctx.conversationId, ctx.assistantMessageId)?.content ?? '';
-  const seedTools = findConversationMessage(ctx.conversationId, ctx.assistantMessageId)?.metadata
-    ?.tools;
+  const assistantMessage = findConversationMessage(ctx.conversationId, ctx.assistantMessageId);
+  const seedTools = assistantMessage?.metadata?.tools;
   const next = await consumeAssistantStream({
     response,
     assistantMessageId: ctx.assistantMessageId,
@@ -1812,7 +1812,8 @@ async function driveDeviceSteps(
     conversationId: ctx.conversationId,
     isTemporaryConversation: ctx.isTemporaryConversation,
     getAuthToken: ctx.getAuthToken,
-    seedContent: assistantContent,
+    seedContent: assistantMessage?.content ?? '',
+    seedMetadata: assistantMessage?.metadata ?? {},
     ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
   });
 
@@ -1933,7 +1934,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     conversationId,
     ctx.assistantMessageId,
   )?.metadata;
-  const seedMetadata = ctx.seedContent !== undefined ? liveMessageMetadata : undefined;
+  const seedMetadata = ctx.seedMetadata;
   // Stamped on the assistant placeholder at send time (see sendMessage); read here
   // once, up front, because buildAssistantMetadata rebuilds metadata from scratch
   // and would otherwise drop it on the final persist.
@@ -2465,6 +2466,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     const metadata: MessageMetadata = {
       artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
     };
+    if (seedMetadata?.assistantContentEdit) {
+      metadata.assistantContentEdit = seedMetadata.assistantContentEdit;
+    }
     if (generatedVideoUrl) {
       metadata.toolType = 'video-generation';
       metadata.videoStatus = 'completed';
@@ -2668,6 +2672,20 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         })
         .catch((err) => {
           notifyPersistenceFailure('assistant', err);
+          if (
+            err instanceof ManagedCloudChatHttpError &&
+            err.reason === ASSISTANT_CONTENT_CHANGED_REASON
+          ) {
+            const current = findConversationMessage(conversationId, assistantMessageId);
+            updateMessage(
+              assistantMessageId,
+              {
+                metadata: { ...current?.metadata, contentSaveConflict: true },
+              },
+              conversationId,
+            );
+            return;
+          }
           // The retries inside saveMessageToDb are spent. Everything the reader
           // can see that is not the answer text, the tool timeline, the reasoning
           // blocks, the generated-file list, exists only in this tab now, and a
@@ -2713,24 +2731,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let sequenceGapSeen = false;
 
   openFirstTokenWait();
-
-  let firstStreamActivitySeen = false;
-  const reasoningFallbackTimer = getModelReasoning(model).capable
-    ? setTimeout(() => {
-        if (firstStreamActivitySeen) return;
-        applyLocalAgentEvent({
-          type: 'progress-update',
-          progressId: 'thinking',
-          summary: deriveAgentActivityLabel({ kind: 'thinking' }),
-          status: 'running',
-        });
-      }, REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS)
-    : undefined;
-  const markFirstStreamActivitySeen = () => {
-    if (firstStreamActivitySeen) return;
-    firstStreamActivitySeen = true;
-    if (reasoningFallbackTimer !== undefined) clearTimeout(reasoningFallbackTimer);
-  };
 
   const seamSeed = ctx.seedContent ?? '';
   let seamPending = seamSeed.length > 0;
@@ -3013,7 +3013,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     while (true) {
       const { done, value } = await reader.read();
       if (!done && value && value.byteLength > 0) latencyTrace?.markFirstChunk();
-      markFirstStreamActivitySeen();
 
       const text = done ? decoder.decode() : decoder.decode(value, { stream: true });
 
@@ -3489,13 +3488,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               byteCount: f.byte_count,
               kind: f.kind,
               ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
+              ...(f.render_identity ? { renderIdentity: f.render_identity } : {}),
               surface: f.surface,
               previewable: f.previewable,
             }));
             if (incoming.length > 0) {
               const merged = [...(currentGeneratedFiles ?? [])];
               for (const file of incoming) {
-                const existing = merged.findIndex((m) => m.fileName === file.fileName);
+                const existing = merged.findIndex((m) => m.id === file.id);
                 if (existing >= 0) merged[existing] = file;
                 else merged.push(file);
               }
@@ -3613,7 +3613,6 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   } finally {
     endStreamPhase(assistantMessageId, 'reconnecting');
     closeFirstTokenWait();
-    markFirstStreamActivitySeen();
     coalescedAppends.flush();
     await reader.cancel().catch(() => undefined);
   }
@@ -3882,9 +3881,20 @@ export function useChatStream(
         return false;
       }
       const latencyTrace = localModel ? undefined : startChatLatencyTrace();
+      const thinkingAtSend = useThinkingStore.getState();
+      const conversationThinkingAtSend = thinkingAtSend.byConversation[conversationId];
+      const requestedThinking =
+        options.thinkingEnabled ?? conversationThinkingAtSend?.enabled ?? thinkingAtSend.enabled;
+      const inheritedEffort = conversationThinkingAtSend?.effort ?? thinkingAtSend.effort;
+      const requestedEffort =
+        options.thinkingEffort ??
+        (options.thinkingEnabled === true && inheritedEffort === 'none'
+          ? resolveModelEffort(model, undefined)
+          : inheritedEffort);
       const sendReplay = createSendReplayMetadata({
         webSearchEnabled: options.webSearch,
-        thinkingEnabled: options.thinkingEnabled,
+        thinkingEnabled: requestedThinking,
+        thinkingEffort: requestedEffort,
         codeExecutionEnabled: options.codeExecution,
         officeCreationEnabled: options.officeCreation,
         officeOutputFormat: options.officeFormat,
@@ -4055,6 +4065,9 @@ export function useChatStream(
             abortControllersRef.current.set(realConversationId, abortController);
           }
           useChatStore.getState().renameConversationId(conversationId, realConversationId);
+          useThinkingStore
+            .getState()
+            .adoptConversationPreference(conversationId, realConversationId);
           conversationId = realConversationId;
         }
       }
@@ -4191,20 +4204,12 @@ export function useChatStream(
             ...(latencyTrace ? { traceparent: latencyTrace.traceparent } : {}),
           });
           const thinkingState = useThinkingStore.getState();
-          const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
+          const thinkingPolicy = resolveThinkingSendPolicy({
+            modelId: model,
+            requestedThinking,
+            requestedEffort,
+          });
           const selectedModelMetadata = getModelMetadataById(model);
-          const modelCanThink = selectedModelMetadata?.capabilities.thinking ?? true;
-          const thinkingEnabled = modelCanThink ? requestedThinking : undefined;
-          const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
-          const reasoningRequest = selectedModelMetadata?.reasoning?.request;
-          const supportsEffort = selectedModelMetadata
-            ? Boolean(reasoningRequest?.effortPath || reasoningRequest?.responsesEffortPath)
-            : true;
-          const resolvedEffort = selectedModelMetadata
-            ? resolveModelEffort(model, thinkingEffort)
-            : thinkingEffort;
-          const sendsEffortWithoutThinking =
-            selectedModelMetadata?.reasoning?.control === 'effort_levels';
           const promotionalOffering = freeQuotaSelection(model);
           const freeQuotaChatTurn = freeQuotaChatOffering(model) !== null;
           const promotionalMedia =
@@ -4314,11 +4319,8 @@ export function useChatStream(
                   : undefined,
               agi_work_plan_approval:
                 options.workMode === 'agiwork' && !options.agiWorkPlan?.length ? true : undefined,
-              thinking_mode: thinkingEnabled,
-              effort:
-                supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)
-                  ? resolvedEffort
-                  : undefined,
+              thinking_mode: thinkingPolicy.thinkingEnabled,
+              effort: thinkingPolicy.effort,
               speed:
                 thinkingState.fast &&
                 useFastModeAllowanceStore.getState().allowed &&
@@ -4570,6 +4572,25 @@ export function useChatStream(
             ?.isTemporary,
         );
         const model = message.model || selectedModel;
+        let originUser: Message | undefined;
+        for (let index = messageIndex - 1; index >= 0; index -= 1) {
+          if (conversationMessages[index]?.role === 'user') {
+            originUser = conversationMessages[index];
+            break;
+          }
+        }
+        const replay = originUser?.metadata?.sendReplay ?? message.metadata?.sendReplay;
+        const thinkingState = useThinkingStore.getState();
+        const inherited = thinkingState.byConversation[conversationId] ?? thinkingState;
+        const thinkingPolicy = resolveThinkingSendPolicy({
+          modelId: model,
+          requestedThinking: replay?.thinkingEnabled ?? inherited.enabled,
+          requestedEffort:
+            replay?.thinkingEffort ??
+            (replay?.thinkingEnabled === true && inherited.effort === 'none'
+              ? resolveModelEffort(model, undefined)
+              : inherited.effort),
+        });
 
         const getAuthToken: AuthTokenProvider = async () => {
           const token = await getToken();
@@ -4631,6 +4652,8 @@ export function useChatStream(
               assistant_message_id: assistantMessageId,
               stream: true,
               [PAST_CHAT_LINKS_REQUEST_KEY]: true,
+              thinking_mode: thinkingPolicy.thinkingEnabled,
+              effort: thinkingPolicy.effort,
               use_prompt_cache: true,
               ...turnPrivacyRequestFields(
                 {
@@ -4661,6 +4684,7 @@ export function useChatStream(
             getAuthToken,
             seedContent,
             seedTools,
+            seedMetadata: priorMetadata ?? {},
             onRunHandle: (handle) => {
               if (handle) {
                 activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
@@ -5068,15 +5092,14 @@ export function useResolveToolApproval(
       const abortController = new AbortController();
       abortControllers.current.set(turn.conversationId, abortController);
 
-      const assistantContent =
-        findConversationMessage(turn.conversationId, assistantMessageId)?.content ?? '';
+      const assistantMessage = findConversationMessage(turn.conversationId, assistantMessageId);
+      const assistantContent = assistantMessage?.content ?? '';
       const toolApprovals = turn.calls.map((c) => ({
         tool_call_id: c.toolCallId,
         decision: turn.decisions.get(c.toolCallId) ?? 'rejected',
       }));
 
-      const seedTools = findConversationMessage(turn.conversationId, assistantMessageId)?.metadata
-        ?.tools;
+      const seedTools = assistantMessage?.metadata?.tools;
 
       startStreaming(assistantMessageId, turn.conversationId);
       setLoading(true, turn.conversationId);
@@ -5119,6 +5142,7 @@ export function useResolveToolApproval(
           isTemporaryConversation: turn.isTemporaryConversation,
           getAuthToken,
           seedContent: assistantContent,
+          seedMetadata: assistantMessage?.metadata ?? {},
           seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
         });
 
@@ -5361,6 +5385,7 @@ function useResolveToolInput(
           isTemporaryConversation: turn.isTemporaryConversation,
           getAuthToken,
           seedContent: assistantMessage?.content ?? '',
+          seedMetadata: assistantMessage?.metadata ?? {},
           ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
         });
 

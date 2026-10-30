@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   GeneratedFileWireSchema,
@@ -21,6 +20,18 @@ const wireFile = {
 describe('GeneratedFileWireSchema', () => {
   it('accepts the server wire shape (generated-file-persist.ts GeneratedFileWire)', () => {
     expect(GeneratedFileWireSchema.safeParse(wireFile).success).toBe(true);
+  });
+
+  it('accepts bounded versioned render identity and ignores invalid provenance', () => {
+    const identity = `matplotlib-v1:33333333-3333-4333-8333-333333333333:${'a'.repeat(64)}`;
+    expect(
+      GeneratedFileWireSchema.parse({ ...wireFile, render_identity: identity }).render_identity,
+    ).toBe(identity);
+    for (const render_identity of ['chart.png', identity + 'x', 123, '<script>']) {
+      expect(
+        GeneratedFileWireSchema.parse({ ...wireFile, render_identity }).render_identity,
+      ).toBeUndefined();
+    }
   });
 
   it('accepts a descriptor without checksum_sha256', () => {

@@ -17,11 +17,10 @@ function slice(from: string, to: string): string {
 type State = 'loading' | 'ready' | 'unavailable' | 'signed_out';
 
 function accountRefresh(serverStates: State[]) {
-  const document = { visibilityState: 'visible' };
+  let active = true;
   const ctx = { isStreaming: false };
   let tick: (() => void) | undefined;
   const fetches: State[] = [];
-  let harness: { onReturn(): void; setState(value: State): void; read(): State };
   const refreshCloudAccountUI = vi.fn(async () => {
     const next = serverStates.shift() ?? 'ready';
     fetches.push(next);
@@ -30,7 +29,7 @@ function accountRefresh(serverStates: State[]) {
   const compiled = ts.transpileModule(
     `let managedCloudChatState = 'loading';
 let lastAccountRefreshOnReturn = 0;
-${slice('function refreshAccountOnReturn', "document.addEventListener('visibilitychange'")}
+${slice('function refreshAccountOnReturn', 'subscribeBrowserActivity(refreshAccountOnReturn)')}
 return {
   onReturn: refreshAccountOnReturn,
   setState: (value) => { managedCloudChatState = value; },
@@ -39,8 +38,8 @@ return {
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
   // llm-guardrail-allow: executes repository-owned panel code inside this isolated test fixture.
-  harness = new Function(
-    'document',
+  const harness: { onReturn(): void; setState(value: State): void; read(): State } = new Function(
+    'isBrowserUserActive',
     '_ctx',
     'refreshOpenAccountChatOnReturn',
     'refreshCloudAccountUI',
@@ -49,7 +48,7 @@ return {
     'setInterval',
     compiled.outputText,
   )(
-    document,
+    () => active,
     ctx,
     () => undefined,
     refreshCloudAccountUI,
@@ -61,10 +60,13 @@ return {
     },
   );
   return {
-    harness: harness!,
+    harness,
     fetches,
     refreshCloudAccountUI,
     ctx,
+    setActive: (value: boolean) => {
+      active = value;
+    },
     tickInterval: () => tick?.(),
   };
 }
@@ -113,6 +115,19 @@ describe('the panel shows the plan the server has now', () => {
     expect(panelSource).toContain(
       'setInterval(refreshAccountWhileOpen, ACCOUNT_REFRESH_WHILE_OPEN_MS)',
     );
+  });
+
+  it('does not poll an inactive panel and refreshes when the reader returns', async () => {
+    const h = accountRefresh(['ready']);
+    h.setActive(false);
+    h.tickInterval();
+    h.harness.onReturn();
+    await Promise.resolve();
+    expect(h.refreshCloudAccountUI).not.toHaveBeenCalled();
+    h.setActive(true);
+    h.harness.onReturn();
+    await Promise.resolve();
+    expect(h.refreshCloudAccountUI).toHaveBeenCalledTimes(1);
   });
 
   it('re-checks the account when a turn is refused for the plan', () => {

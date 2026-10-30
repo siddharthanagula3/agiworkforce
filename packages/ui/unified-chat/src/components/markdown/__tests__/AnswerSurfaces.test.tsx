@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type MermaidDiagramModule = typeof import('../MermaidDiagram');
@@ -130,7 +130,7 @@ describe('answer surfaces', () => {
     expect(screen.getByText('Selected: Monthly')).toBeTruthy();
   });
 
-  it('shows gallery captions and moves Next to the next concept', () => {
+  it('shows separate gallery resources in their authored order', () => {
     const { container } = render(
       <MarkdownContent
         content={fence('gallery', 'One | #1d4ed8\nTwo | #2563eb\nThree | #1e3a8a')}
@@ -138,12 +138,13 @@ describe('answer surfaces', () => {
     );
 
     expect(container.querySelectorAll('[data-gallery-swatch]')).toHaveLength(3);
-    expect(container.querySelector('[data-gallery-slide="current"]')?.textContent).toContain('One');
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(container.querySelector('[data-gallery-slide="current"]')?.textContent).toContain('Two');
+    expect(
+      Array.from(container.querySelectorAll('figcaption')).map((caption) => caption.textContent),
+    ).toEqual(['One', 'Two', 'Three']);
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
   });
 
-  it('discloses advanced settings and plots one chart whose axis fits the largest value', () => {
+  it('discloses advanced settings and uses the canonical chart renderer with exact data', () => {
     const { container } = render(
       <MarkdownContent
         content={[
@@ -160,13 +161,11 @@ describe('answer surfaces', () => {
     expect(screen.getByText('Advanced settings')).toBeTruthy();
     expect(screen.getByText('Click to expand or collapse')).toBeTruthy();
     expect(container.querySelectorAll('[data-answer-chart]')).toHaveLength(1);
+    expect(container.querySelector('[data-chart-kind="bar"]')).toBeTruthy();
     expect(
-      Number(container.querySelector('[data-chart-axis]')?.getAttribute('data-chart-axis')),
-    ).toBeGreaterThanOrEqual(280);
-    expect(container.querySelector('[data-chart-bar="Apr"]')?.getAttribute('title')).toBe(
-      'Apr: 280',
-    );
-    expect(screen.getByRole('cell', { name: '280' })).toBeTruthy();
+      container.querySelector('[data-testid="chart-artifact-summary"]')?.textContent,
+    ).toContain('280');
+    expect(container.querySelector('table')?.textContent).toContain('Apr280');
   });
 
   it('labels map stops and only draws a map tile when coordinates exist', () => {
@@ -276,6 +275,12 @@ describe('answer surfaces', () => {
       />,
     );
 
+    for (const label of ['Document', 'Chat message', 'Social post'])
+      fireEvent.click(
+        within(screen.getByRole('region', { name: label })).getByRole('button', {
+          name: 'Edit text',
+        }),
+      );
     const documentField = screen.getByRole('textbox', { name: 'Document' });
     fireEvent.change(documentField, { target: { value: 'i am able to write here' } });
     expect(documentField).toHaveProperty('value', 'i am able to write here');

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createManagedCloudChatClient } from '../managed-cloud-chat-client';
+import {
+  createManagedCloudChatClient,
+  ManagedCloudChatHttpError,
+} from '../managed-cloud-chat-client';
 import {
   MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   MANAGED_CLOUD_ORGANIZATION_HEADER,
@@ -71,6 +74,30 @@ describe('createManagedCloudChatClient', () => {
       '/api/chat/conversations?limit=100&offset=0&archived=exclude',
       { headers: {} },
     );
+  });
+
+  it('preserves safe structured conflict details for clients to offer the right recovery', async () => {
+    const fetchImpl = vi.fn(async () =>
+      response(
+        {
+          error: {
+            message: 'The stored answer changed.',
+            code: 'CONFLICT',
+            details: { reason: 'state_changed' },
+          },
+        },
+        409,
+      ),
+    );
+    const client = createManagedCloudChatClient({ fetchImpl });
+    await expect(client.getConversation(rawConversation.id)).rejects.toBeInstanceOf(
+      ManagedCloudChatHttpError,
+    );
+    await expect(client.getConversation(rawConversation.id)).rejects.toMatchObject({
+      status: 409,
+      code: 'CONFLICT',
+      reason: 'state_changed',
+    });
   });
 
   it('fails closed when a successful HTTP response violates the contract', async () => {

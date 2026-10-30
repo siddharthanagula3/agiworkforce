@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { classifyImageToolIntent, imageToolIntentAllows } from '@agiworkforce/routing';
 import {
   isChatImageMimeType,
   parseInteractiveCardDelta,
@@ -24,8 +25,12 @@ import {
 import { createManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
 
 import { withMediaJobSpan } from '@/lib/observability/media-telemetry';
-import { latestConversationImageAssetId } from '@/lib/server/media-assets';
+import {
+  getActiveWorkspaceMediaAssetById,
+  latestConversationImageAssetId,
+} from '@/lib/server/media-assets';
 import { isImageStorageConfigured } from '@/lib/server/media-storage';
+import { logger } from '@/lib/logger';
 import {
   evaluateModelAccessForOrganization,
   modelPolicyRefusalInit,
@@ -50,6 +55,7 @@ const MEDIA_ASSET_URL_PATTERN =
   /^\/api\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const DATA_URL_BASE64_PATTERN = /^data:([^;,]+);base64,(.+)$/i;
 const OPERATION_ID_LENGTH = 32;
+const IMAGE_CHAT_TOOL_IMAGES_PER_CALL = 1;
 const WITHDRAWN_STATUSES: ReadonlySet<number> = new Set([402, 403]);
 const GENERATED_HEADLINE = 'Generated image';
 const EDITED_HEADLINE = 'Edited image';
@@ -69,6 +75,7 @@ export interface ImageChatToolContext {
   surface: string | null;
   conversationId: string | null;
   latestAttachedImage: () => string | null;
+  userMessage: string;
 }
 
 export type ImageChatToolOutcome =
@@ -124,14 +131,15 @@ function generateImageToolDefinition(aspectRatios: readonly string[]) {
     function: {
       name: GENERATE_IMAGE_TOOL_NAME,
       description:
-        "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+        "Create one image resource from a description and show it to the user in the chat. Use it only when the user's requested output is a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. For multiple distinct images, call once per requested item in the user's order, with one subject per call. Render those returned image URLs in separate rows of a gallery fence (caption | image URL | description); a gallery layout is rendered by the chat, not generated as a picture. Never substitute one collage for separately requested images. Make a collage only when the user explicitly asks for a collage. Writing, emails, documents, reusable prompts and copyable snippets are text, even when they describe images. Functional interfaces, screens, apps, web page mockups, dashboards, charts, graphs, diagrams, tables, forms, cards, carousels and rendering galleries use inline blocks or live artifacts. An explicit picture request may depict interface concepts. Words such as render, visual, gallery or artifact do not request a generated picture. Write the prompt as a complete, specific description of this one image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply briefly without describing it at length or repeating a standalone link. Each image uses the account's credits.",
       parameters: {
         type: 'object',
         properties: {
           prompt: {
             type: 'string',
             maxLength: IMAGE_TOOL_PROMPT_MAX_LENGTH,
-            description: 'The full description of the image to create.',
+            description:
+              'The full description of one image resource; use separate calls for distinct requested subjects.',
           },
           aspect_ratio: {
             type: 'string',
@@ -296,19 +304,39 @@ function imageCard(
 }
 
 async function editSource(
-  context: ImageChatToolContext,
+  context: Pick<ImageChatToolContext, 'userId' | 'db' | 'conversationId' | 'latestAttachedImage'>,
   imageAssetId: string | undefined,
 ): Promise<{ asset_id: string } | { b64_json: string } | null> {
-  if (imageAssetId) return { asset_id: imageAssetId };
-  const attached = context.latestAttachedImage();
-  if (attached) return { b64_json: attached };
-  if (!context.conversationId) return null;
-  const latest = await latestConversationImageAssetId(
-    context.userId,
-    context.conversationId,
-    context.db,
-  );
-  return latest ? { asset_id: latest } : null;
+  try {
+    const attached = context.latestAttachedImage();
+    if (attached) return imageAssetId ? null : { b64_json: attached };
+    if (imageAssetId) {
+      if (!context.conversationId) return null;
+      const asset = await getActiveWorkspaceMediaAssetById(
+        context.userId,
+        imageAssetId,
+        context.db,
+        { conversationId: context.conversationId },
+      );
+      return asset?.kind === 'image' ? { asset_id: imageAssetId } : null;
+    }
+    if (!context.conversationId) return null;
+    const latest = await latestConversationImageAssetId(
+      context.userId,
+      context.conversationId,
+      context.db,
+    );
+    return latest ? { asset_id: latest } : null;
+  } catch (error) {
+    logger.warn({ error }, '[image-chat] source image context could not be verified');
+    return null;
+  }
+}
+
+export async function imageChatSourceAvailable(
+  context: Pick<ImageChatToolContext, 'userId' | 'db' | 'conversationId' | 'latestAttachedImage'>,
+): Promise<boolean> {
+  return (await editSource(context, undefined)) !== null;
 }
 
 function refused(content: string, unavailable = false): ImageChatToolOutcome {
@@ -322,12 +350,24 @@ export async function executeImageChatTool(
 ): Promise<ImageChatToolOutcome> {
   const surface = context.surface ? IMAGE_TOOL_SURFACES[context.surface] : undefined;
   if (!surface) return refused('Images cannot be made in this app.', true);
+  const intent = classifyImageToolIntent(context.userMessage);
+  if (intent === null) {
+    return refused(
+      'The user did not request a generated picture or an image edit. Answer with text, inline blocks or a complete artifact. No image was generated and no image credits were used.',
+    );
+  }
 
   const operation: ImageCardOperation = toolName === EDIT_IMAGE_TOOL_NAME ? 'edit' : 'generate';
   let prompt: string;
   let request: Record<string, unknown>;
   let aspectRatio: string | undefined;
   if (operation === 'generate') {
+    const hasSourceImage = intent === 'continuation' && (await imageChatSourceAvailable(context));
+    if (!imageToolIntentAllows(intent, operation, hasSourceImage)) {
+      return refused(
+        'This image call is not authorized by the user request and an available source image. No image was generated and no image credits were used.',
+      );
+    }
     const parsed = GenerateImageInputSchema.safeParse(args);
     if (!parsed.success) {
       return refused(
@@ -336,9 +376,18 @@ export async function executeImageChatTool(
     }
     prompt = parsed.data.prompt;
     aspectRatio = parsed.data.aspect_ratio;
-    request = { prompt, ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}) };
+    request = {
+      prompt,
+      n: IMAGE_CHAT_TOOL_IMAGES_PER_CALL,
+      ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+    };
   } else {
     const parsed = EditImageInputSchema.safeParse(args);
+    if (!imageToolIntentAllows(intent, operation, true)) {
+      return refused(
+        'The user requested a new picture rather than an edit. No source image was read or sent to the image service.',
+      );
+    }
     if (!parsed.success) {
       return refused(
         `${EDIT_IMAGE_TOOL_NAME} needs a non-empty "prompt" of at most ${IMAGE_TOOL_PROMPT_MAX_LENGTH} characters, and "image_asset_id" when given must be an asset_id from an earlier image result.`,
@@ -347,11 +396,17 @@ export async function executeImageChatTool(
     const source = await editSource(context, parsed.data.image_asset_id);
     if (!source) {
       return refused(
-        'There is no image to change: the user attached none to this message and none was made earlier in this conversation. Ask the user to attach the image.',
+        'The requested source image is not available in this turn or conversation. Use the attached image without image_asset_id, or a verified image from this conversation. No image was generated and no image credits were used.',
       );
     }
     prompt = parsed.data.prompt;
-    request = { prompt, operation: 'edit', provider: EDIT_PROVIDER, source_image: source };
+    request = {
+      prompt,
+      n: IMAGE_CHAT_TOOL_IMAGES_PER_CALL,
+      operation: 'edit',
+      provider: EDIT_PROVIDER,
+      source_image: source,
+    };
   }
   if (context.conversationId) request['conversation_id'] = context.conversationId;
 

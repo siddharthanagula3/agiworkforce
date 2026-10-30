@@ -1,5 +1,6 @@
 import { computeDerivedArtifactId } from '@agiworkforce/artifacts';
 import type { InteractiveCard } from '@agiworkforce/types';
+import { readGeneratedFigureIdentity } from '@agiworkforce/cloud-contracts';
 
 export interface TurnArtifact {
   id: string;
@@ -149,24 +150,33 @@ export function logoConceptArtifact(input: {
   };
 }
 
-export function isSandboxChartImage(fileName: string): boolean {
-  return /^chart(?:-\d+)?\.png$/i.test(fileName);
+interface GeneratedImageIdentity {
+  id: string;
+  uri: string;
+  kind?: string;
+  mimeType: string;
+  checksumSha256?: string;
+  renderIdentity?: string;
 }
 
-export function hideSandboxChartImage(
-  fileName: string,
-  content: string,
-  artifacts: readonly { type: string; content: string }[],
-): boolean {
-  if (!isSandboxChartImage(fileName)) return false;
-  if (/```chart\b/i.test(content)) return true;
-  return artifacts.some((artifact) => {
-    if (artifact.type === 'chart' || artifact.type === 'svg') return true;
-    if (artifact.type === 'html' || artifact.type === 'code') {
-      return /<svg\b|```chart\b|"type"\s*:\s*"bar"/i.test(artifact.content);
-    }
-    return false;
-  });
+export function groupGeneratedImageOutputs<T extends GeneratedImageIdentity>(
+  files: readonly T[],
+): { images: T[]; aliases: T[] } {
+  const seen = new Set<string>();
+  const images: T[] = [];
+  const aliases: T[] = [];
+  for (const file of files) {
+    if (file.kind !== 'image') continue;
+    const identities = [`id:${file.id}`, `uri:${file.uri}`];
+    const renderIdentity = readGeneratedFigureIdentity(file.renderIdentity);
+    if (renderIdentity) identities.push(`render:${renderIdentity}`);
+    if (/^[a-f\d]{64}$/i.test(file.checksumSha256 ?? ''))
+      identities.push(`sha256:${file.mimeType}:${file.checksumSha256?.toLowerCase()}`);
+    if (identities.some((identity) => seen.has(identity))) aliases.push(file);
+    else images.push(file);
+    identities.forEach((identity) => seen.add(identity));
+  }
+  return { images, aliases };
 }
 
 export function imageCardModelId(

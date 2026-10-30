@@ -7,7 +7,16 @@ export const WRITING_KIND_LANGUAGES: ReadonlySet<string> = new Set([
   'message',
   'document',
   'post',
+  'snippet',
 ]);
+
+export function isEditableAssistantFenceLanguage(language: string): boolean {
+  return (
+    language === EMAIL_BLOCK_LANGUAGE ||
+    language === 'prompt' ||
+    WRITING_KIND_LANGUAGES.has(language)
+  );
+}
 
 const RICH_BLOCK_LANGUAGES: ReadonlySet<string> = new Set([
   EMAIL_BLOCK_LANGUAGE,

@@ -12,6 +12,7 @@ import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
+import { readPngRenderIdentity } from '@/lib/e2b/png-render-identity';
 
 export const MAX_GENERATED_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -23,6 +24,7 @@ export interface GeneratedFileWire {
   byte_count: number;
   kind: string;
   checksum_sha256: string;
+  render_identity?: string;
   surface: GeneratedFileSurface;
   previewable: boolean;
 }
@@ -250,6 +252,8 @@ export async function persistGeneratedFileBytes(
     const kind = mediaKindFor(mimeType);
     const classification = classifyGeneratedFile(filename, mimeType);
     const checksum = createHash('sha256').update(data).digest('hex');
+    const renderIdentity =
+      provider === 'e2b' && mimeType === 'image/png' ? readPngRenderIdentity(data) : undefined;
     const stored = await storeMedia({ userId, kind, data, contentType: mimeType });
     storedPathname = stored.pathname;
     const assetId = await insertMediaAsset(
@@ -270,6 +274,7 @@ export async function persistGeneratedFileBytes(
           filename,
           origin,
           checksumSha256: checksum,
+          ...(renderIdentity ? { renderIdentity } : {}),
           surface: classification.presentation,
           previewable: classification.previewable,
           ...(params.extraMetadata ?? {}),
@@ -320,6 +325,7 @@ export async function persistGeneratedFileBytes(
         byte_count: stored.byteSize,
         kind: generatedFileKind(filename, mimeType),
         checksum_sha256: checksum,
+        ...(renderIdentity ? { render_identity: renderIdentity } : {}),
         surface: classification.presentation,
         previewable: classification.previewable,
       },

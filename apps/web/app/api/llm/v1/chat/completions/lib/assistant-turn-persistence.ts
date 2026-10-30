@@ -2,6 +2,7 @@ import 'server-only';
 
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { repairContinuationSeam } from '@agiworkforce/unified-chat/continuation-seam';
 import {
   INTERACTIVE_CARDS_METADATA_KEY,
   PROJECT_FILE_CITATIONS_METADATA_KEY,
@@ -35,6 +36,11 @@ import type {
 import type { PersistedTurnResearch } from './assistant-turn-research';
 import type { ProcessedRequest } from './request-processor';
 import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import {
+  ASSISTANT_CONTENT_PRESERVED_METADATA_SQL,
+  SERVER_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL,
+} from '@/lib/server/assistant-content-edits';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
 
@@ -44,7 +50,8 @@ export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
 const INSERT_ASSISTANT_TURN_SQL = `insert into web_messages
          (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata, parent_id)
        select $1::uuid, c.id, 'assistant', $3::text, $4::text, $5::text,
-              $6::integer, $7::integer, $8::jsonb, $11::uuid
+              $6::integer, $7::integer,
+              $8::jsonb - '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}', $11::uuid
          from public.web_conversations c
         where c.id = $2::uuid
           and c.user_id = $9
@@ -56,8 +63,9 @@ const INSERT_ASSISTANT_TURN_SQL = `insert into web_messages
               provider = excluded.provider,
               input_tokens = excluded.input_tokens,
               output_tokens = excluded.output_tokens,
-              metadata = web_messages.metadata || excluded.metadata
-        where web_messages.conversation_id = excluded.conversation_id`;
+              metadata = web_messages.metadata || ${ASSISTANT_CONTENT_PRESERVED_METADATA_SQL}
+        where web_messages.conversation_id = excluded.conversation_id
+          and ${SERVER_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL}`;
 
 // Both scoped through web_conversations for the same reason the insert is: the
 // claimed RLS role is the first gate, this join is the second, and a row whose
@@ -107,6 +115,8 @@ export type AssistantTurnOrigin = Pick<
       | 'toolExecutionObserved'
       | 'llmRequest'
       | 'chatRequest'
+      | 'assistantContinuationSeed'
+      | 'assistantContentEditRevision'
     >
   >;
 
@@ -242,6 +252,11 @@ export async function persistAssistantTurn(params: {
   const { processed, userId, snapshot } = params;
   const conversationId = processed.conversationId;
   const messageId = processed.assistantMessageId;
+  const seed = processed.assistantContinuationSeed;
+  const content =
+    seed && !snapshot.content.startsWith(seed)
+      ? seed + repairContinuationSeam(seed, snapshot.content)
+      : snapshot.content;
 
   if (!conversationId) return;
   if (processed.conversationIsTemporary) return;
@@ -262,7 +277,7 @@ export async function persistAssistantTurn(params: {
     [INTERACTIVE_CARDS_METADATA_KEY]: snapshot.interactiveCards,
   });
   if (
-    !snapshot.content.trim() &&
+    !content.trim() &&
     !snapshot.truncated &&
     !processed.projectSources?.length &&
     !snapshot.runReference &&
@@ -279,6 +294,9 @@ export async function persistAssistantTurn(params: {
   const metadata: Record<string, unknown> = {
     artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
     serverPersisted: true,
+    ...(processed.assistantContentEditRevision
+      ? { [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: processed.assistantContentEditRevision }
+      : {}),
     requestId: processed.requestId,
     provider: snapshot.provider,
     routeLane: processed.routeLane ?? null,
@@ -318,7 +336,7 @@ export async function persistAssistantTurn(params: {
   const insertParams = (parentId: string | null): unknown[] => [
     messageId,
     conversationId,
-    snapshot.content,
+    content,
     snapshot.model,
     snapshot.provider,
     Math.max(0, Math.trunc(snapshot.inputTokens)),
@@ -402,7 +420,7 @@ export async function persistAssistantTurn(params: {
         userId,
         conversationId,
         messageId,
-        content: snapshot.content,
+        content,
         artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
       });
     }

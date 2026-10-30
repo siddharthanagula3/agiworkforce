@@ -1,5 +1,10 @@
-
 import { listCanonicalModels, type ModelCapabilities, type RoutingSlot } from '@agiworkforce/types';
+import {
+  classifyResponseOutputIntent,
+  isSelfContainedResponseRequest,
+  requestsNonImageOutput,
+  requestsSeparateImageResources,
+} from '@agiworkforce/routing';
 
 export type ClassifiedTask =
   | 'computer_use'
@@ -82,21 +87,6 @@ const COMPUTER_USE: RegExp[] = [
   /\buse (the |my )?computer\b/i,
   /\bdesktop automation\b/i,
   /\bfill (in |out )?the form\b/i,
-];
-
-const IMAGE_GEN: RegExp[] = [
-  /\bgenerate (an? |some )?image\b/i,
-  /\bcreate (an? |a |some )?image\b/i,
-  /\bdraw (me |a |an )?\b/i,
-  /\bpaint (me |a |an )?\b/i,
-  /\bvisuali[sz]e\b/i,
-  /\bmake (a |an |some )?(picture|photo|image)\b/i,
-  /\billustrat(e|ion)\b/i,
-  /\b(ai |digital )?artwork\b/i,
-  /\bimage model\b/i,
-  /\bimage gen(erat(e|ion))?\b/i,
-  /\bai (art|photo|picture|image)\b/i,
-  /\bphotorealistic\b/i,
 ];
 
 const VIDEO_GEN: RegExp[] = [
@@ -250,7 +240,16 @@ export function classifyPrompt(
   const tokens = estimateTokens(content);
   const signals: string[] = [];
 
-  let match: string | null;
+  let match: string | null = null;
+
+  if (requestsSeparateImageResources(content)) {
+    return {
+      task: 'general',
+      slot: SLOT_MAP.general[tier],
+      reason: 'separate image resources need conversational tool orchestration',
+      signals: ['multiple image resources requested'],
+    };
+  }
 
   if ((match = matchesAny(content, COMPUTER_USE))) {
     signals.push(`computer-use keyword: "${match}"`);
@@ -262,7 +261,12 @@ export function classifyPrompt(
     };
   }
 
-  if ((match = matchesAny(content, IMAGE_GEN) ?? matchCatalogMediaModel(content, 'imageGen'))) {
+  if (
+    !requestsNonImageOutput(content) &&
+    (classifyResponseOutputIntent(content) === 'image' ||
+      (match = matchCatalogMediaModel(content, 'imageGen')))
+  ) {
+    match ??= content;
     signals.push(`image-gen keyword: "${match}"`);
     return {
       task: 'image_generation',
@@ -282,7 +286,7 @@ export function classifyPrompt(
     };
   }
 
-  if ((match = matchesAny(content, DEEP_RESEARCH))) {
+  if (!isSelfContainedResponseRequest(content) && (match = matchesAny(content, DEEP_RESEARCH))) {
     signals.push(`deep-research keyword: "${match}"`);
     return {
       task: 'deep_research',
@@ -292,7 +296,7 @@ export function classifyPrompt(
     };
   }
 
-  if ((match = matchesAny(content, SEARCH))) {
+  if (!isSelfContainedResponseRequest(content) && (match = matchesAny(content, SEARCH))) {
     signals.push(`search keyword: "${match}"`);
     return { task: 'search', slot: SLOT_MAP.search[tier], reason: TASK_REASONS.search, signals };
   }

@@ -8,6 +8,23 @@ const imageModel = requireCatalogModel(
 );
 
 describe('classifyPrompt', () => {
+  it('keeps multiple requested image resources on a conversational slot', () => {
+    expect(classifyPrompt('Generate four images of fictional workspaces.').task).toBe('general');
+    expect(classifyPrompt('Create one collage of four images.').task).toBe('image_generation');
+  });
+  it.each([
+    'Draw a sequence diagram for the payment webhook.',
+    'Visualize the supplied numbers in a line chart.',
+    'Create a wireframe for the settings page.',
+    'Render a UI gallery with forms, cards, carousels and math.',
+    'Write seven reusable prompts about illustration and image generation.',
+    'Write an email requesting leave today.',
+    'Format a document headed current progress.',
+    'Explain how to generate an image.',
+  ])('keeps text and rendered output on the chat route: %s', (prompt) => {
+    expect(classifyPrompt(prompt).task).not.toMatch(/image_generation|search|deep_research/u);
+  });
+
   it('detects computer use, click keyword', () => {
     const r = classifyPrompt('click on the submit button');
     expect(r.task).toBe('computer_use');

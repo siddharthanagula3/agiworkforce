@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { listCanonicalModels } from '@agiworkforce/types';
-import { useChatStream, REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS } from './useChatStream';
+import { useChatStream } from './useChatStream';
+
+const WAIT_WITHOUT_EVENTS_MS = 60_000;
 
 const REASONING_CHAT_MODEL = (() => {
   const model = listCanonicalModels().find((candidate) => candidate.reasoning?.capable === true);
@@ -66,7 +68,7 @@ function assistantMessage() {
   return useChatStore.getState().messages.find((message) => message.role === 'assistant');
 }
 
-describe('useChatStream reasoning-kind pre-token activity fallback', () => {
+describe('useChatStream reports observed activity', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useThinkingStore.getState().setEnabled(false);
@@ -85,7 +87,7 @@ describe('useChatStream reasoning-kind pre-token activity fallback', () => {
     vi.restoreAllMocks();
   });
 
-  it('switches the activity label to Thinking once the threshold passes with no stream activity', async () => {
+  it('never calls elapsed waiting time reasoning, even for a reasoning-capable model', async () => {
     const stream = pendingStream();
     vi.mocked(fetch).mockResolvedValueOnce(stream.response);
 
@@ -99,14 +101,15 @@ describe('useChatStream reasoning-kind pre-token activity fallback', () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS);
+      await vi.advanceTimersByTimeAsync(WAIT_WITHOUT_EVENTS_MS);
     });
 
-    expect(assistantMessage()?.metadata?.agentActivity).toMatchObject({
-      entries: expect.arrayContaining([
-        expect.objectContaining({ summary: 'Thinking', status: 'running' }),
-      ]),
-    });
+    expect(
+      assistantMessage()?.metadata?.agentActivity?.entries.some(
+        (entry) => entry.kind === 'progress' && entry.summary === 'Thinking',
+      ),
+    ).toBe(false);
+    expect(assistantMessage()?.metadata?.isThinkingStreaming).not.toBe(true);
 
     await act(async () => {
       stream.deliver(sseEvent('Rayleigh scattering.', 'stop'));
@@ -118,7 +121,7 @@ describe('useChatStream reasoning-kind pre-token activity fallback', () => {
     expect(assistantMessage()?.content).toContain('Rayleigh scattering.');
   });
 
-  it('never overrides a label once real stream bytes have already arrived', async () => {
+  it('keeps ordinary text generation separate from reasoning', async () => {
     const stream = pendingStream();
     vi.mocked(fetch).mockResolvedValueOnce(stream.response);
 
@@ -137,7 +140,7 @@ describe('useChatStream reasoning-kind pre-token activity fallback', () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS);
+      await vi.advanceTimersByTimeAsync(WAIT_WITHOUT_EVENTS_MS);
     });
 
     expect(
@@ -156,7 +159,7 @@ describe('useChatStream reasoning-kind pre-token activity fallback', () => {
     expect(assistantMessage()?.content).toContain('Quick reply.');
   });
 
-  it('does not apply the fallback for a non-reasoning model', async () => {
+  it('does not invent reasoning for a non-reasoning model', async () => {
     const nonReasoningModel = listCanonicalModels().find(
       (candidate) => candidate.reasoning?.capable !== true,
     );
@@ -175,7 +178,7 @@ describe('useChatStream reasoning-kind pre-token activity fallback', () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(REASONING_ACTIVITY_FALLBACK_THRESHOLD_MS);
+      await vi.advanceTimersByTimeAsync(WAIT_WITHOUT_EVENTS_MS);
     });
 
     expect(

@@ -1,3 +1,4 @@
+import { isEffort, type Effort } from '@agiworkforce/types';
 import { z } from 'zod';
 
 import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
@@ -29,6 +30,7 @@ const ProjectChatHandoffSchema = z.object({
     projectId: z.string().min(1).max(200).nullable(),
     webSearchEnabled: z.boolean().optional(),
     thinkingEnabled: z.boolean().optional(),
+    thinkingEffort: z.custom<Effort>(isEffort).optional(),
     codeExecutionEnabled: z.boolean().optional(),
     officeCreationEnabled: z.boolean().optional(),
     officeOutputFormat: z.enum(CHAT_OUTPUT_FORMATS).optional(),

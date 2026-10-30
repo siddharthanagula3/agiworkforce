@@ -14,6 +14,7 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 import { MessageBubble } from '../MessageBubble';
+import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '../../../lib/assistant-content-edit-contract';
 
 const CONVERSATION_ID = 'conv-1';
 
@@ -43,6 +44,21 @@ beforeEach(() => {
  * having said so. The notice is the difference between a loss and a surprise.
  */
 describe('an assistant turn whose metadata was not saved', () => {
+  it('re-renders a content-save conflict without claiming the answer was saved', () => {
+    const message = assistantMessage();
+    const view = render(<MessageBubble message={message} />);
+    expect(screen.queryByRole('alert')).toBeNull();
+    view.rerender(
+      <MessageBubble
+        message={{ ...message, metadata: { contentSaveConflict: true, metadataNotSaved: true } }}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(ASSISTANT_CONTENT_CHANGED_MESSAGE);
+    expect(screen.getByRole('button', { name: 'Reopen saved chat' })).toBeInTheDocument();
+    expect(screen.queryByText(/answer and its sources will still be here/i)).toBeNull();
+    expect(screen.queryByText(/response saved/i)).toBeNull();
+  });
+
   it('says what will not survive a reload', () => {
     render(<MessageBubble message={assistantMessage({ metadataNotSaved: true })} />);
 

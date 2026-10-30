@@ -23,6 +23,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
   Brain,
+  TriangleAlert,
   Check,
   BookOpen,
   CalendarClock,
@@ -98,6 +99,7 @@ import {
   type ArtifactManifest,
   type ComputeSession,
   type GeneratedFile,
+  type ImageCardBody,
   type ProjectFileCitation,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
@@ -117,12 +119,15 @@ import {
   useVoiceSessionStore,
 } from '@/features/chat/stores/voice-session-store';
 import { TranscriptNotice } from './TranscriptNotice';
+import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '../../lib/assistant-content-edit-contract';
 import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
 import {
   AgentActivityTimeline,
   BranchNavigator,
   CodeBlockEditorContext,
+  AnswerImageRendererContext,
+  type AnswerImageRenderer,
   getManagedModelPresentationLabel,
   hasCanonicalToolActivity,
   hasOpenApprovalDecision,
@@ -163,6 +168,7 @@ import {
   extractCodeBlocks,
   removeArtifactBlocks,
   splitProseAroundArtifacts,
+  isInlineVisualizationFence,
 } from '../../utils/artifact-detector';
 import {
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
@@ -208,6 +214,7 @@ import { loadWorkbookSheets, pptxToSlidesMarkdown } from '../../lib/office-file-
 import { formatBytes } from '@shared/utils/format';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
+import { ImageToolCard } from './cards/ImageToolCard';
 import { TurnPluginDraftCard } from '../PluginDraftCard';
 import {
   hasResponseRatingDetails,
@@ -245,7 +252,7 @@ import { ImageLightbox } from '../ImageLightbox';
 import { getImageModelLabel, type ImageAspectRatio } from '../../lib/imageGenerationOptions';
 import {
   editableDocumentFromReply,
-  hideSandboxChartImage,
+  groupGeneratedImageOutputs,
   imageCardModelId,
   interactiveCardsForTurn,
   logoConceptArtifact,
@@ -256,6 +263,12 @@ import { detectCardType } from '../cards';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
 import { MediaGenerationPlaceholder } from './MediaGenerationPlaceholder';
 import { EditableMessage } from './EditableMessage';
+import {
+  countEditableAssistantFences,
+  collectInlineImageSources,
+  imageResourceKey,
+  type AssistantFenceEdit,
+} from '@agiworkforce/unified-chat/assistant-fence-edits';
 
 /**
  * Inline user-message editing.
@@ -642,6 +655,7 @@ interface Message {
      * richer than what a reload will show, and the notice below says so.
      */
     metadataNotSaved?: true;
+    contentSaveConflict?: boolean;
   };
 }
 
@@ -657,6 +671,7 @@ export interface RegenerateModelOption {
 interface MessageBubbleProps {
   message: Message;
   onEdit?: (messageId: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   onRegenerate?: (messageId: string) => void;
   /**
    * Re-run a Deep Research turn that errored or was stopped.
@@ -748,6 +763,7 @@ interface MessageBubbleProps {
 const MessageBubbleComponent = function MessageBubble({
   message,
   onEdit,
+  onFenceEdit,
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
@@ -1456,6 +1472,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (isUser) return null;
     const block = extractTrailingUnclosedBlock(message.content, messageCodeBlocks);
     if (!block) return null;
+    if (isInlineVisualizationFence(block.language, block.content)) return null;
     const renderable =
       artifactDerivationPolicy === EXPLICIT_ARTIFACT_DERIVATION_POLICY
         ? isExplicitlyRenderableArtifact(block.language, block.content)
@@ -1483,6 +1500,27 @@ const MessageBubbleComponent = function MessageBubble({
   const generatedFiles = useMemo<GeneratedFileMetadataEntry[]>(
     () => (isUser ? [] : (message.metadata?.generatedFiles ?? [])),
     [isUser, message.metadata?.generatedFiles],
+  );
+  const generatedImageOutputs = useMemo(
+    () => groupGeneratedImageOutputs(generatedFiles),
+    [generatedFiles],
+  );
+  const inlineGeneratedImageIds = useMemo(() => {
+    if (!generatedFiles.some((file) => file.kind === 'image')) return new Set<string>();
+    const sources = new Set(collectInlineImageSources(message.content));
+    if (message.metadata?.toolType === 'image-generation' && message.metadata.imageUrl) {
+      const key = imageResourceKey(message.metadata.imageUrl);
+      if (key) sources.add(key);
+    }
+    return new Set(
+      generatedFiles
+        .filter((file) => file.kind === 'image' && sources.has(imageResourceKey(file.uri)))
+        .map((file) => file.id),
+    );
+  }, [generatedFiles, message.content, message.metadata?.toolType, message.metadata?.imageUrl]);
+  const duplicateGeneratedImageIds = useMemo(
+    () => new Set(generatedImageOutputs.aliases.map((file) => file.id)),
+    [generatedImageOutputs],
   );
 
   // Fetched source text per generated-file id; 'error' → honest chip fallback.
@@ -1611,6 +1649,7 @@ const MessageBubbleComponent = function MessageBubble({
     // addressable in the artifact panel.
     for (const f of generatedFiles) {
       if (f.kind === 'image') {
+        if (duplicateGeneratedImageIds.has(f.id)) continue;
         out.push({
           id: generatedFileArtifactId(f.id),
           type: 'image',
@@ -1698,6 +1737,7 @@ const MessageBubbleComponent = function MessageBubble({
     generatedTextContent,
     officePreviews,
     generatedFileRecords,
+    duplicateGeneratedImageIds,
   ]);
 
   const artifacts = useMemo(() => {
@@ -1709,7 +1749,14 @@ const MessageBubbleComponent = function MessageBubble({
     // SharedArtifacts intentionally omit web-only generated-file provenance,
     // so a reload must also enrich the matching persisted entry with the
     // freshly reconstructed side-map fields instead of discarding them.
-    const merged = [...baseArtifacts];
+    const duplicateImageArtifactSources = new Map(
+      generatedImageOutputs.aliases.map((file) => [generatedFileArtifactId(file.id), file.uri]),
+    );
+    const merged = baseArtifacts.filter(
+      (artifact) =>
+        artifact.type !== 'image' ||
+        duplicateImageArtifactSources.get(artifact.id) !== artifact.content,
+    );
     for (const artifact of generatedFileArtifacts) {
       const existingIndex = merged.findIndex((existing) => existing.id === artifact.id);
       if (existingIndex === -1) {
@@ -1749,7 +1796,13 @@ const MessageBubbleComponent = function MessageBubble({
       }
     }
     return merged;
-  }, [visibleExistingArtifacts, extractedArtifacts, generatedFileArtifacts, generatedFileRecords]);
+  }, [
+    visibleExistingArtifacts,
+    extractedArtifacts,
+    generatedFileArtifacts,
+    generatedFileRecords,
+    generatedImageOutputs.aliases,
+  ]);
 
   // Generated files rendered through the EXISTING attachment grid: images get
   // the thumbnail + ImageLightbox path; descriptors without a successfully
@@ -1763,13 +1816,13 @@ const MessageBubbleComponent = function MessageBubble({
     return generatedFiles.filter((file) => {
       if (
         file.kind === 'image' &&
-        hideSandboxChartImage(file.fileName, message.content, artifacts)
+        (duplicateGeneratedImageIds.has(file.id) || inlineGeneratedImageIds.has(file.id))
       ) {
         return false;
       }
       return file.kind === 'image' || !artifactFileIds.has(file.id);
     });
-  }, [generatedFiles, artifacts, message.content]);
+  }, [generatedFiles, artifacts, duplicateGeneratedImageIds, inlineGeneratedImageIds]);
 
   const generatedFileAttachments = useMemo<Attachment[]>(
     () =>
@@ -1785,10 +1838,21 @@ const MessageBubbleComponent = function MessageBubble({
     [unprojectedGeneratedFiles],
   );
 
-  const deliverables = useMemo<GeneratedFileMetadataEntry[]>(
-    () => unprojectedGeneratedFiles.filter((file) => file.kind !== 'image'),
-    [unprojectedGeneratedFiles],
-  );
+  const deliverables = useMemo<GeneratedFileMetadataEntry[]>(() => {
+    const unprojectedIds = new Set(
+      unprojectedGeneratedFiles.filter((file) => file.kind !== 'image').map((file) => file.id),
+    );
+    return generatedFiles.filter((file) =>
+      file.kind === 'image'
+        ? duplicateGeneratedImageIds.has(file.id) || inlineGeneratedImageIds.has(file.id)
+        : unprojectedIds.has(file.id),
+    );
+  }, [
+    unprojectedGeneratedFiles,
+    generatedFiles,
+    duplicateGeneratedImageIds,
+    inlineGeneratedImageIds,
+  ]);
 
   const displayAttachments = useMemo<Attachment[]>(
     () => [...(message.attachments ?? []), ...generatedFileAttachments],
@@ -1818,8 +1882,20 @@ const MessageBubbleComponent = function MessageBubble({
   // Keep their artifact projection panel-only so the message does not render a
   // second, visually redundant "Open artifact" card beneath the same image.
   const inlineArtifacts = useMemo(
-    () => artifacts.filter((artifact) => artifact.type !== 'image'),
-    [artifacts],
+    () =>
+      artifacts.filter(
+        (artifact) =>
+          artifact.type !== 'image' &&
+          !(
+            isInlineVisualizationFence(artifact.language, artifact.content) &&
+            messageCodeBlocks.some(
+              (block) =>
+                block.language.toLowerCase() === artifact.language?.toLowerCase() &&
+                block.content.trim() === artifact.content.trim(),
+            )
+          ),
+      ),
+    [artifacts, messageCodeBlocks],
   );
   const createdArtifacts = useMemo(
     () => inlineArtifacts.filter((artifact) => !artifact.generatedFile && !artifact.interrupted),
@@ -1998,19 +2074,75 @@ const MessageBubbleComponent = function MessageBubble({
     searchSources.length,
     citationsByMarker,
   ]);
+  const handleFenceEdit = useMemo(
+    () =>
+      !isUser && onFenceEdit
+        ? (edit: AssistantFenceEdit) => onFenceEdit(message.id, edit)
+        : undefined,
+    [isUser, onFenceEdit, message.id],
+  );
+  const trailingFenceIndexOffset = useMemo(
+    () => (trailingProse ? countEditableAssistantFences(leadProse) : 0),
+    [leadProse, trailingProse],
+  );
 
   const interactiveCards = useMemo(
     () =>
       interactiveCardsForTurn(message.metadata?.interactiveCards ?? [], Boolean(turnFailureReason)),
     [message.metadata?.interactiveCards, turnFailureReason],
   );
+  const inlineToolImages = useMemo(() => {
+    const images = new Map<string, { cardId: string; assetId: string; body: ImageCardBody }>();
+    if (!interactiveCards.some((card) => card.recognized && card.kind === 'image.v1'))
+      return images;
+    const sources = collectInlineImageSources(cleanedContent, 'gallery');
+    for (const card of interactiveCards) {
+      if (!card.recognized || card.kind !== 'image.v1') continue;
+      for (const image of card.body.images) {
+        const key = imageResourceKey(image.url);
+        if (key && sources.has(key))
+          images.set(key, {
+            cardId: card.cardId,
+            assetId: image.assetId,
+            body: { ...card.body, images: [image] },
+          });
+      }
+    }
+    return images;
+  }, [interactiveCards, cleanedContent]);
+  const renderInlineToolImage = useCallback<AnswerImageRenderer>(
+    ({ src }) => {
+      const image = inlineToolImages.get(imageResourceKey(src));
+      return image ? (
+        <div data-image-tool-card={image.cardId} data-image-asset={image.assetId}>
+          <ImageToolCard body={image.body} />
+        </div>
+      ) : undefined;
+    },
+    [inlineToolImages],
+  );
+  const separateInteractiveCards = useMemo(
+    () =>
+      interactiveCards.flatMap((card): InteractiveCard[] => {
+        if (!card.recognized || card.kind !== 'image.v1') return [card];
+        const images = card.body.images.filter(
+          (image) => !inlineToolImages.has(imageResourceKey(image.url)),
+        );
+        return images.length === card.body.images.length
+          ? [card]
+          : images.length
+            ? [{ ...card, body: { ...card.body, images } }]
+            : [];
+      }),
+    [interactiveCards, inlineToolImages],
+  );
   const leadingInteractiveCards = useMemo(
-    () => interactiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
-    [interactiveCards],
+    () => separateInteractiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
+    [separateInteractiveCards],
   );
   const trailingInteractiveCards = useMemo(
-    () => interactiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
-    [interactiveCards],
+    () => separateInteractiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
+    [separateInteractiveCards],
   );
 
   /**
@@ -2232,13 +2364,11 @@ const MessageBubbleComponent = function MessageBubble({
           : undefined) ?? imageCardModelId(message.metadata?.interactiveCards),
       )
     : null;
-  const answeredByChipLabel = generatedImageLabel
-    ? generatedImageLabel
-    : answeredByLabel
-      ? isAutoModeModelId(message.metadata?.requestedModel)
-        ? `Auto chose ${answeredByLabel}`
-        : answeredByLabel
-      : undefined;
+  const answeredByChipLabel = answeredByLabel
+    ? isAutoModeModelId(message.metadata?.requestedModel)
+      ? `Auto chose ${answeredByLabel}`
+      : answeredByLabel
+    : undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
     !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
@@ -2687,7 +2817,7 @@ const MessageBubbleComponent = function MessageBubble({
               !media ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <AgiMark size={16} spinning />
-                  <span className="text-sm">Thinking...</span>
+                  <span className="text-sm">Generating response…</span>
                 </div>
               ) : producedNoVisibleOutput ? (
                 <TranscriptNotice
@@ -2718,8 +2848,14 @@ const MessageBubbleComponent = function MessageBubble({
                         literalHtml={isUser}
                         onFollowUp={onFollowUp}
                         footnoteScope={`${message.id}lead`}
+                        onFenceEdit={handleFenceEdit}
                       />
                     </CodeBlockEditorContext.Provider>
+                  );
+                  const richMarkdown = (
+                    <AnswerImageRendererContext.Provider value={renderInlineToolImage}>
+                      {markdown}
+                    </AnswerImageRendererContext.Provider>
                   );
                   return (
                     <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
@@ -2729,10 +2865,10 @@ const MessageBubbleComponent = function MessageBubble({
                           cardType={formatCardType}
                           messageId={message.id}
                         >
-                          {markdown}
+                          {richMarkdown}
                         </MessageFormatCard>
                       ) : (
-                        markdown
+                        richMarkdown
                       )}
                     </StreamAnnouncer>
                   );
@@ -3007,28 +3143,32 @@ const MessageBubbleComponent = function MessageBubble({
               data-testid="message-trailing-prose"
               className="prose dark:prose-invert message-text mt-3 max-w-none wrap-anywhere text-start"
             >
-              {proseIsStreaming ? (
-                <StreamingMarkdownContent
-                  content={trailingProse}
-                  isStreaming
-                  citations={citationsByMarker}
-                  trustedImageUrls={trustedImageUrls}
-                  announce={false}
-                  onFollowUp={onFollowUp}
-                  footnoteScope={`${message.id}tail`}
-                />
-              ) : (
-                <CodeBlockEditorContext.Provider value={openCodeBlockInEditor}>
-                  <MarkdownContent
+              <AnswerImageRendererContext.Provider value={renderInlineToolImage}>
+                {proseIsStreaming ? (
+                  <StreamingMarkdownContent
                     content={trailingProse}
-                    citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                    isStreaming
+                    citations={citationsByMarker}
                     trustedImageUrls={trustedImageUrls}
-                    linkifyNumericCitations={canLinkNumericCitations}
+                    announce={false}
                     onFollowUp={onFollowUp}
                     footnoteScope={`${message.id}tail`}
                   />
-                </CodeBlockEditorContext.Provider>
-              )}
+                ) : (
+                  <CodeBlockEditorContext.Provider value={openCodeBlockInEditor}>
+                    <MarkdownContent
+                      content={trailingProse}
+                      citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                      trustedImageUrls={trustedImageUrls}
+                      linkifyNumericCitations={canLinkNumericCitations}
+                      onFollowUp={onFollowUp}
+                      footnoteScope={`${message.id}tail`}
+                      onFenceEdit={handleFenceEdit}
+                      fenceIndexOffset={trailingFenceIndexOffset}
+                    />
+                  </CodeBlockEditorContext.Provider>
+                )}
+              </AnswerImageRendererContext.Provider>
             </div>
           )}
 
@@ -3389,15 +3529,33 @@ const MessageBubbleComponent = function MessageBubble({
 
           {!isUser && <StreamPhaseNotice messageId={message.id} />}
 
-          {!isUser && message.metadata?.metadataNotSaved && (
+          {!isUser && message.metadata?.contentSaveConflict && (
             <div className="mt-2">
               <TranscriptNotice
-                tone="neutral"
-                icon={CircleAlert}
-                message="The tool steps and reasoning shown here were not saved. The answer and its sources will still be here after a reload; the rest of this turn will not."
+                tone="danger"
+                role="alert"
+                icon={TriangleAlert}
+                message={ASSISTANT_CONTENT_CHANGED_MESSAGE}
+                action={{
+                  label: 'Reopen saved chat',
+                  ariaLabel: 'Reopen saved chat',
+                  onClick: () => window.location.reload(),
+                }}
               />
             </div>
           )}
+
+          {!isUser &&
+            message.metadata?.metadataNotSaved &&
+            !message.metadata.contentSaveConflict && (
+              <div className="mt-2">
+                <TranscriptNotice
+                  tone="neutral"
+                  icon={CircleAlert}
+                  message="The tool steps and reasoning shown here were not saved. The answer and its sources will still be here after a reload; the rest of this turn will not."
+                />
+              </div>
+            )}
 
           {searchNotice && (
             <div className="mt-2">
@@ -3870,9 +4028,7 @@ const MessageBubbleComponent = function MessageBubble({
                   data-testid="message-answered-by"
                   className={cn(
                     'max-w-full truncate text-caption leading-tight text-[var(--chat-text-muted)]',
-                    generatedImageLabel
-                      ? undefined
-                      : 'opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
+                    'opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
                   )}
                 >
                   {answeredByChipLabel}
@@ -4028,6 +4184,7 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.sendReplay === next?.sendReplay &&
     prev?.mcpContext === next?.mcpContext &&
     prev?.metadataNotSaved === next?.metadataNotSaved &&
+    prev?.contentSaveConflict === next?.contentSaveConflict &&
     prev?.secretRedactionCount === next?.secretRedactionCount &&
     prev?.truncatedAttachments === next?.truncatedAttachments &&
     toolEntriesEqual(prev?.tools, next?.tools)
@@ -4072,6 +4229,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
 
   // Check callback references (they should be memoized by parent)
   if (prev.onEdit !== next.onEdit) return false;
+  if (prev.onFenceEdit !== next.onFenceEdit) return false;
   if (prev.onRegenerate !== next.onRegenerate) return false;
   if (prev.onDelete !== next.onDelete) return false;
   if (prev.onDeleteVariant !== next.onDeleteVariant) return false;

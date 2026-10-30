@@ -5,12 +5,20 @@ import type { Effort } from '@agiworkforce/types';
 
 export type EffortLevel = Effort;
 
+const DEFAULT_EFFORT: EffortLevel = 'medium';
+
 const EFFORT_CYCLE: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+export interface ThinkingPreference {
+  enabled: boolean;
+  effort: EffortLevel;
+}
 
 interface ThinkingState {
   enabled: boolean;
   effort: EffortLevel;
   fast: boolean;
+  byConversation: Record<string, ThinkingPreference>;
 }
 
 interface ThinkingActions {
@@ -19,6 +27,10 @@ interface ThinkingActions {
   setEffort: (level: EffortLevel) => void;
   cycleEffort: () => void;
   setFast: (fast: boolean) => void;
+  setConversationEnabled: (conversationId: string, enabled: boolean) => void;
+  setConversationEffort: (conversationId: string, effort: EffortLevel) => void;
+  clearConversationPreference: (conversationId: string) => void;
+  adoptConversationPreference: (fromId: string, toId: string) => void;
 }
 
 export type ThinkingStore = ThinkingState & ThinkingActions;
@@ -28,8 +40,38 @@ export const useThinkingStore = create<ThinkingStore>()(
     persist(
       immer<ThinkingStore>((set) => ({
         enabled: false,
-        effort: 'medium',
+        effort: DEFAULT_EFFORT,
         fast: false,
+        byConversation: {},
+
+        setConversationEnabled: (conversationId, enabled) =>
+          set((state) => {
+            const current = state.byConversation[conversationId] ?? state;
+            state.byConversation[conversationId] = {
+              enabled,
+              effort: enabled && current.effort === 'none' ? DEFAULT_EFFORT : current.effort,
+            };
+          }),
+
+        setConversationEffort: (conversationId, effort) =>
+          set((state) => {
+            state.byConversation[conversationId] = { enabled: effort !== 'none', effort };
+          }),
+
+        clearConversationPreference: (conversationId) =>
+          set((state) => {
+            delete state.byConversation[conversationId];
+          }),
+
+        adoptConversationPreference: (fromId, toId) =>
+          set((state) => {
+            if (fromId === toId) return;
+            const preference = state.byConversation[fromId];
+            if (preference && !state.byConversation[toId]) {
+              state.byConversation[toId] = preference;
+            }
+            delete state.byConversation[fromId];
+          }),
 
         setFast: (fast) =>
           set((state) => {
@@ -39,6 +81,7 @@ export const useThinkingStore = create<ThinkingStore>()(
         setEnabled: (enabled) =>
           set((state) => {
             state.enabled = enabled;
+            if (enabled && state.effort === 'none') state.effort = DEFAULT_EFFORT;
           }),
 
         toggle: () =>
@@ -54,7 +97,7 @@ export const useThinkingStore = create<ThinkingStore>()(
         setEffort: (level) =>
           set((state) => {
             state.effort = level;
-            state.enabled = true;
+            state.enabled = level !== 'none';
           }),
 
         cycleEffort: () =>

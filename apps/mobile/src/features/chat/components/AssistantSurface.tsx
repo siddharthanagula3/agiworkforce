@@ -7,6 +7,21 @@ import type { ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { checklistProgress, type AssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
 
+type MobileAssistantFence = Exclude<
+  AssistantFence,
+  { kind: 'code' | 'card' | 'stats' | 'form' | 'carousel' }
+>;
+
+export function canRenderAssistantSurface(fence: AssistantFence): fence is MobileAssistantFence {
+  return (
+    fence.kind !== 'code' &&
+    fence.kind !== 'card' &&
+    fence.kind !== 'stats' &&
+    fence.kind !== 'form' &&
+    fence.kind !== 'carousel'
+  );
+}
+
 function CopyControl({ label, text, color }: { label: string; text: string; color: string }) {
   const { status, copy } = useCopyAction();
   const share = () => {
@@ -149,7 +164,7 @@ export function AssistantSurface({
   colors,
   onFollowUp,
 }: {
-  fence: Exclude<AssistantFence, { kind: 'code' }>;
+  fence: MobileAssistantFence;
   colors: ColorScheme;
   onFollowUp?: (text: string) => void;
 }) {

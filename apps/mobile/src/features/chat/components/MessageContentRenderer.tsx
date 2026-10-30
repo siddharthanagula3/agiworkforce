@@ -21,7 +21,7 @@ import {
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { classifyAssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
-import { AssistantSurface } from './AssistantSurface';
+import { AssistantSurface, canRenderAssistantSurface } from './AssistantSurface';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
@@ -854,7 +854,7 @@ export function renderMarkdownContent(
       const codeContent = match[4].trim();
       const fenceLanguage = match[3]?.trim().split(/\s+/)[0] ?? '';
       const classified = classifyAssistantFence(fenceLanguage, codeContent);
-      if (classified.kind !== 'code') {
+      if (canRenderAssistantSurface(classified)) {
         elements.push(
           <AssistantSurface
             key={`surface-${keyCounter++}`}

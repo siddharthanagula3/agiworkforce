@@ -68,6 +68,10 @@ export function webSearchToolDef(): {
       description:
         'Search the web for current information. Use for recent events, facts you are ' +
         'not confident about, or anything that may have changed since your training data. ' +
+        'Writing, rewriting, formatting, calculations and rendering text, components or artifacts ' +
+        'from the conversation need no search. Search for these only when the user also asks ' +
+        'for external facts or sources; words such as current chat, render, visual or gallery ' +
+        'do not by themselves require external information. ' +
         `Returns up to ${WEB_SEARCH_MAX_RESULTS} web results with titles, URLs, and snippets, ` +
         'follow up with url_fetch on a specific result if you need the full page content. ' +
         'Search ONCE first and read the results; only search again if that pass genuinely ' +

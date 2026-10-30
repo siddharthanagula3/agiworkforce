@@ -134,6 +134,7 @@ import {
   isAutoModeModelId,
 } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { resolveModelEffort, resolveThinkingSendPolicy, type Effort } from '@agiworkforce/types';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { containsSecrets } from '@/lib/security/secrets-audit';
 import {
@@ -380,6 +381,7 @@ export interface ComposerSendMeta {
    * it tracks model capability, so it cannot express intent. */
   searchRequested?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
   officeOutputFormat?: ChatOutputFormat;
@@ -1745,22 +1747,23 @@ const ChatComposerNewComponent = ({
   const responseStyle = useStyleStore((s) => s.style);
   const responseLength = useStyleStore((s) => s.length);
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
-  const thinkingEnabled = useThinkingStore((s) => s.enabled);
-  const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
-
-  // Thinking is persisted across model switches. Clear that preference when the
-  // newly selected explicit model cannot reason, otherwise the next request is
-  // rejected before the model gets a chance to answer. Auto remains eligible
-  // because its final model is chosen server-side for each task.
-  useEffect(() => {
-    if (
-      thinkingEnabled &&
-      !isAutoModeModelId(composerSelectedModelId) &&
-      !modelSupportsThinkingCap
-    ) {
-      setThinkingEnabled(false);
-    }
-  }, [composerSelectedModelId, modelSupportsThinkingCap, setThinkingEnabled, thinkingEnabled]);
+  const globalThinkingEnabled = useThinkingStore((s) => s.enabled);
+  const globalThinkingEffort = useThinkingStore((s) => s.effort);
+  const conversationThinking = useThinkingStore((s) => s.byConversation?.[toggleBucketKey]);
+  const thinkingEnabled = conversationThinking?.enabled ?? globalThinkingEnabled;
+  const thinkingEffort = conversationThinking?.effort ?? globalThinkingEffort;
+  const setConversationThinkingEnabled = useThinkingStore((s) => s.setConversationEnabled);
+  const setThinkingEnabled = useCallback(
+    (enabled: boolean) => {
+      setConversationThinkingEnabled(toggleBucketKey, enabled);
+    },
+    [toggleBucketKey, setConversationThinkingEnabled],
+  );
+  const thinkingPolicy = resolveThinkingSendPolicy({
+    modelId: composerSelectedModelId,
+    requestedThinking: promotedModelSelected ? false : thinkingEnabled,
+    requestedEffort: promotedModelSelected ? undefined : thinkingEffort,
+  });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   /**
@@ -3224,7 +3227,7 @@ const ChatComposerNewComponent = ({
         officeOutputFormat ? CHAT_OUTPUT_FORMAT_LABEL[officeOutputFormat] : 'Office files',
       );
     }
-    if (thinkingEnabled) labels.push('Extended thinking');
+    if (thinkingPolicy.thinkingEnabled) labels.push('Extended thinking');
     if (selectedSkillName) labels.push(`/${selectedSkillName}`);
     if (selectedMcpContext?.prompt) labels.push(`Prompt: ${selectedMcpContext.prompt.name}`);
     if (selectedMcpContext?.resources?.length) {
@@ -3244,7 +3247,7 @@ const ChatComposerNewComponent = ({
     codeExecutionEnabled,
     officeCreationEnabled,
     officeOutputFormat,
-    thinkingEnabled,
+    thinkingPolicy.thinkingEnabled,
     selectedSkillName,
     selectedMcpContext,
     plural,
@@ -3347,6 +3350,7 @@ const ChatComposerNewComponent = ({
       let sendWebSearchEnabled = webSearchEnabled;
       let sendCodeExecutionEnabled = codeExecutionEnabled;
       let sendThinkingEnabled = thinkingEnabled;
+      let sendThinkingEffort: Effort | undefined = thinkingEffort;
       let sendImageMode = imageMode;
       let artifactInstruction: string | undefined;
       if (pendingSlashCommand) {
@@ -3366,6 +3370,9 @@ const ChatComposerNewComponent = ({
           (outcome.toggles.codeExecutionEnabled ?? sendCodeExecutionEnabled);
         sendImageMode = outcome.toggles.imageMode ?? sendImageMode;
         sendThinkingEnabled = outcome.enableThinking === true || sendThinkingEnabled;
+        if (outcome.enableThinking && sendThinkingEffort === 'none') {
+          sendThinkingEffort = resolveModelEffort(composerSelectedModelId, undefined);
+        }
         if (!outgoingContent.trim() && attachments.length === 0) {
           // On a free model these commands leave no switch on: clearing the
           // draft would drop the command with nothing to show it was typed.
@@ -3634,9 +3641,8 @@ const ChatComposerNewComponent = ({
           projectId: pickerActiveProjectId,
           webSearchEnabled: sendWebSearchEnabled,
           ...(sendSearchRequested ? { searchRequested: true } : {}),
-          thinkingEnabled:
-            sendThinkingEnabled &&
-            (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
+          thinkingEnabled: sendThinkingEnabled,
+          thinkingEffort: sendThinkingEffort,
           codeExecutionEnabled: sendCodeExecutionEnabled,
           officeCreationEnabled,
           ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
@@ -3767,8 +3773,8 @@ const ChatComposerNewComponent = ({
       responseLength,
       activeCustomStyleId,
       thinkingEnabled,
+      thinkingEffort,
       composerSelectedModelId,
-      modelSupportsThinkingCap,
       codeExecutionEnabled,
       officeCreationEnabled,
       officeOutputFormat,
@@ -4207,8 +4213,8 @@ const ChatComposerNewComponent = ({
       codeExecutionEnabled,
       officeCreationEnabled,
       ...(officeCreationEnabled && officeOutputFormat ? { officeOutputFormat } : {}),
-      thinkingEnabled:
-        thinkingEnabled && (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
+      thinkingEnabled,
+      thinkingEffort,
       styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
     };
     const toolsLabel = activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null;
@@ -4225,6 +4231,7 @@ const ChatComposerNewComponent = ({
     officeCreationEnabled,
     officeOutputFormat,
     thinkingEnabled,
+    thinkingEffort,
     composerSelectedModelId,
     modelSupportsThinkingCap,
     responseStyle,
@@ -6372,6 +6379,7 @@ const ChatComposerNewComponent = ({
               resolved video model as a read-only label is the follow-up. */}
               {!imageMode && !videoMode && (
                 <ComposerFooter
+                  conversationId={conversationId}
                   inline
                   className="min-w-0 shrink"
                   showModelSelector

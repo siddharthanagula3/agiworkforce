@@ -188,6 +188,40 @@ beforeEach(() => {
 });
 
 describe('tool-loop web_search integration', () => {
+  it.each([
+    'Write an email requesting leave today.',
+    'Prepare seven independent reusable prompts for image generation.',
+    'Render a UI gallery using the current chat components.',
+    'Visualize the supplied numbers in a chart: 1, 4, 9.',
+    'Calculate 19 * 27.',
+  ])(
+    'does not execute a model-selected search for self-contained output: %s',
+    async (userMessage) => {
+      factoryMocks.streamRequest
+        .mockResolvedValueOnce(
+          toolCallStream(
+            'web_search',
+            { query: 'render user interface examples' },
+            'unnecessary-search',
+          ),
+        )
+        .mockResolvedValueOnce(finalAnswerStream('Here is the requested response.'));
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const processed = makeProcessed([webSearchToolDef()]);
+        processed.chatRequest.messages = [{ role: 'user', content: userMessage }];
+        processed.llmRequest.messages = [{ role: 'user', content: userMessage }];
+        const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
+        expect(output).toContain('No web search was performed');
+        expect(output).toContain('Here is the requested response.');
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it('executes a model-emitted web_search call end-to-end and emits sources in the web_search shape', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(

@@ -10,6 +10,9 @@ import {
 } from '@/lib/agents/agent-turn-config';
 
 import { randomUUID } from 'node:crypto';
+import { isAppError } from '@agiworkforce/utils';
+import { assertAssistantContinuationSeed } from '@/lib/server/assistant-content-edits';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -26,6 +29,8 @@ import type {
 import { managedChatIdempotencyPurpose } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   IMAGE_CARD_KIND,
+  EDIT_IMAGE_TOOL_NAME,
+  GENERATE_IMAGE_TOOL_NAME,
   getPlanMaxAttachmentsPerMessage,
   normalizeResearchDeliverable,
   RESEARCH_GUIDANCE_MAX_CHARS,
@@ -123,6 +128,8 @@ import {
 import {
   imageChatToolDefinitions,
   imageChatToolOffer,
+  imageChatSourceAvailable,
+  latestTurnImage,
 } from '@/app/api/media/image/lib/image-chat-tools';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
@@ -136,7 +143,7 @@ import {
 import {
   hasExplicitWebFetchIntent,
   hasExplicitWebSearchIntent,
-  hasExplicitWebSearchOptOut,
+  hasExplicitWebSearchRequestOptOut as hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
 import { MEMORY_COMMAND_KINDS, extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
@@ -257,6 +264,8 @@ import {
   assessModelSwitchCache,
   classifyTaskFamily,
   classifyTaskLocally,
+  classifyImageToolIntent,
+  imageToolIntentAllows,
   detectIndicScript,
   emptyRuntimeState,
   estimateTokens,
@@ -1242,9 +1251,13 @@ export function imageToolsForTurn(
     surface: CloudChatSurface;
     toolsCapable: boolean;
     planTier: string | null | undefined;
+    userMessage: string;
+    hasSourceImage?: boolean;
   },
 ): ReturnType<typeof imageChatToolDefinitions> {
+  const intent = classifyImageToolIntent(params.userMessage);
   if (
+    intent === null ||
     !params.toolsCapable ||
     request.stream !== true ||
     request.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) !== true
@@ -1252,7 +1265,15 @@ export function imageToolsForTurn(
     return [];
   }
   const offer = imageChatToolOffer(params.planTier, params.surface);
-  return offer ? imageChatToolDefinitions(offer) : [];
+  return offer
+    ? imageChatToolDefinitions(offer).filter(
+        (tool) =>
+          (tool.function.name === GENERATE_IMAGE_TOOL_NAME &&
+            imageToolIntentAllows(intent, 'generate', params.hasSourceImage === true)) ||
+          (tool.function.name === EDIT_IMAGE_TOOL_NAME &&
+            imageToolIntentAllows(intent, 'edit', params.hasSourceImage === true)),
+      )
+    : [];
 }
 
 export function validationRefusalMessage(error: z.ZodError): string {
@@ -1363,6 +1384,8 @@ export type ProcessedRequest = {
   pastChatSources?: readonly PastChatCitation[];
   memoryCitations?: readonly ManagedMemoryCitation[];
   assistantMessageId?: string | undefined;
+  assistantContinuationSeed?: string;
+  assistantContentEditRevision?: string;
   assistantParentId?: string | undefined;
   userMessageId?: string | undefined;
   autoMemoryFacts?: string[];
@@ -3555,6 +3578,8 @@ async function processAdmittedRequest(
         studyInstruction: string | null;
         conversationInstruction: string | null;
         agentTurn: AgentTurnConfig | null;
+        assistantContinuationSeed?: string;
+        assistantContentEditRevision?: string;
       }
     | ProcessFailure
   > = chatRequest.conversation_id
@@ -3616,6 +3641,21 @@ async function processAdmittedRequest(
               ),
             };
           }
+
+          const lastAssistant = [...chatRequest.messages]
+            .reverse()
+            .find((message) => message.role === 'assistant');
+          const assistantContinuation =
+            chatRequest.assistant_message_id && !ownedRows[0].is_temporary
+              ? await assertAssistantContinuationSeed({
+                  db: scoped.db,
+                  userId,
+                  organizationId: scoped.organizationId ?? null,
+                  conversationId,
+                  messageId: chatRequest.assistant_message_id,
+                  seed: lastAssistant ? extractTextContent(lastAssistant.content) : null,
+                })
+              : null;
 
           if (ownedRows[0].project_id) {
             try {
@@ -3693,8 +3733,37 @@ async function processAdmittedRequest(
             studyInstruction,
             conversationInstruction: conversationInstructionBlock(ownedRows[0].instructions),
             agentTurn,
+            ...(assistantContinuation !== null
+              ? {
+                  assistantContinuationSeed: assistantContinuation.content,
+                  assistantContentEditRevision: assistantContinuation.editRevision,
+                }
+              : {}),
           };
         } catch (error) {
+          const details = isAppError(error) ? error.details : null;
+          if (
+            isAppError(error) &&
+            typeof details === 'object' &&
+            details !== null &&
+            'reason' in details &&
+            details.reason === ASSISTANT_CONTENT_CHANGED_REASON
+          ) {
+            return {
+              ok: false,
+              response: NextResponse.json(
+                {
+                  error: {
+                    message: error.message,
+                    type: 'invalid_request_error',
+                    code: ASSISTANT_CONTENT_CHANGED_REASON,
+                    details: { reason: ASSISTANT_CONTENT_CHANGED_REASON },
+                  },
+                },
+                { status: 409 },
+              ),
+            };
+          }
           logger.error(
             { error, userId, conversationId: chatRequest.conversation_id },
             'Managed conversation ownership lookup failed',
@@ -5949,6 +6018,7 @@ async function processAdmittedRequest(
     requirement: searchRequirement,
     modelPolicy: webSearchToolOfferPolicy,
     surface: chatSurface,
+    userMessage: lastUserText,
     userOptOut:
       chatSurface === 'web' &&
       chatRequest.search_requested !== true &&
@@ -5998,6 +6068,22 @@ async function processAdmittedRequest(
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
+  const imageIntent = classifyImageToolIntent(lastUserText);
+  const imageSourceAvailable =
+    (imageIntent === 'edit' || imageIntent === 'continuation') &&
+    chatRequest.stream === true &&
+    imageCardsAsked &&
+    resolvedModelCaps?.tools !== false &&
+    canUseBillingPlanCapability(subscription.plan_tier, 'image_generation') &&
+    !imagesSwitchedOff &&
+    agentAllowsImageGeneration(ownership.agentTurn) &&
+    (await imageChatSourceAvailable({
+      userId,
+      db: (await scopedDbPromise).db,
+      conversationId: chatRequest.conversation_id ?? null,
+      latestAttachedImage: () =>
+        latestTurnImage({ turnAttachments, messages: chatRequest.messages }),
+    }));
   const imageTools =
     imagesSwitchedOff || !agentAllowsImageGeneration(ownership.agentTurn)
       ? []
@@ -6005,6 +6091,8 @@ async function processAdmittedRequest(
           surface: chatSurface,
           toolsCapable: resolvedModelCaps?.tools ?? true,
           planTier: subscription.plan_tier,
+          userMessage: lastUserText,
+          hasSourceImage: imageSourceAvailable,
         });
   if (imageTools.length > 0) {
     resolvedTools = [...(resolvedTools ?? []), ...imageTools];
@@ -6507,6 +6595,12 @@ async function processAdmittedRequest(
       ? { memoryCitations: sentCitations.memoryCitations }
       : {}),
     assistantMessageId: chatRequest.assistant_message_id,
+    ...(ownership.assistantContinuationSeed !== undefined
+      ? { assistantContinuationSeed: ownership.assistantContinuationSeed }
+      : {}),
+    ...(ownership.assistantContentEditRevision !== undefined
+      ? { assistantContentEditRevision: ownership.assistantContentEditRevision }
+      : {}),
     assistantParentId: chatRequest.assistant_parent_id,
     ...(chatRequest.user_message ? { userMessageId: chatRequest.user_message.id } : {}),
     autoMemoryFacts,

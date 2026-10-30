@@ -11,6 +11,7 @@ import {
 import type { LoadedProjectContext } from '@/lib/services/project-context-service';
 import { StatementScanPostgres } from '@/lib/services/__tests__/statement-scan-postgres';
 import { composeStudyInstruction } from '@/features/study/lib/study-session';
+import { assistantContentChangedError } from '@/lib/server/assistant-content-edits';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
 type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
@@ -32,6 +33,14 @@ const mocks = vi.hoisted(() => ({
   managedSkillCatalog: vi.fn(),
   enabledPluginIds: vi.fn(),
   loadProject: vi.fn(),
+  continuationSeed: vi.fn(),
+}));
+
+type OriginalAssistantContentEditsModule = typeof import('@/lib/server/assistant-content-edits');
+
+vi.mock('@/lib/server/assistant-content-edits', async (importOriginal) => ({
+  ...(await importOriginal<OriginalAssistantContentEditsModule>()),
+  assertAssistantContinuationSeed: mocks.continuationSeed,
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -207,6 +216,7 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
 
   mocks.enforceSafety.mockResolvedValue({ enabled: false, allowed: true });
+  mocks.continuationSeed.mockResolvedValue(null);
   mocks.hydrate.mockResolvedValue(undefined);
   mocks.loadPolicy.mockResolvedValue({
     enabled: false,
@@ -408,5 +418,62 @@ describe('a project turn whose context cannot be decided', () => {
     const joined = await assembledSystemText('loose-undecided');
 
     expect(joined).not.toContain(PROJECT_INSTRUCTION);
+  });
+});
+
+describe('edited assistant continuation admission', () => {
+  const assistantId = '00000000-0000-4000-8000-000000000099';
+
+  it('refuses a stale submitted seed before project loading or managed reservation', async () => {
+    mocks.continuationSeed.mockRejectedValue(assistantContentChangedError());
+    const result = await processRequest(
+      chatRequestFor('stale-edited-seed', {
+        assistant_message_id: assistantId,
+        messages: [
+          { role: 'assistant', content: 'Old source' },
+          { role: 'user', content: 'Continue' },
+        ],
+      }),
+      auth(),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('stale edit was admitted');
+    expect(result.response.status).toBe(409);
+    expect(await result.response.json()).toMatchObject({
+      error: { code: 'assistant_content_changed' },
+    });
+    expect(mocks.continuationSeed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-pro',
+        conversationId: CONVERSATION_ID,
+        messageId: assistantId,
+        seed: 'Old source',
+      }),
+    );
+    expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
+    expect(mocks.loadProject).not.toHaveBeenCalled();
+  });
+
+  it('carries the authoritative matching seed only on the internal processed request', async () => {
+    const source = '```writing\nSaved source\n```';
+    const editRevision = '00000000-0000-4000-8000-000000000033';
+    mocks.continuationSeed.mockResolvedValue({ content: source, editRevision });
+    const result = await processRequest(
+      chatRequestFor('matching-edited-seed', {
+        assistant_message_id: assistantId,
+        messages: [
+          { role: 'assistant', content: source },
+          { role: 'user', content: 'Continue' },
+        ],
+      }),
+      auth(),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('matching edit was refused');
+    expect(result.assistantContinuationSeed).toBe(source);
+    expect(result.assistantContentEditRevision).toBe(editRevision);
+    expect(result.chatRequest).not.toHaveProperty('assistantContinuationSeed');
+    expect(result.chatRequest).not.toHaveProperty('assistantContentEditRevision');
+    expect(mocks.continuationSeed).toHaveBeenCalledWith(expect.objectContaining({ seed: source }));
   });
 });

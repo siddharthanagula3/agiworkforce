@@ -47,6 +47,7 @@ export interface ChatTurnState {
   readonly memory?: ChatTurnMemory;
   /** Present when the surface renders artifacts, so the prompt can name their markers. */
   readonly artifactMarkers?: ArtifactMarkers;
+  readonly richInlineBlocks?: boolean;
   /** The window.agi runtime text; absent means sent, as every version before 7 assumed. */
   readonly artifactRuntime?: boolean;
   readonly artifactConnectors?: boolean;
@@ -169,7 +170,11 @@ export function assembleChatSystemPrompt(
         reactMarker: state.artifactMarkers.react,
         mermaidMarker: state.artifactMarkers.mermaid,
       }),
-      section('inline_blocks'),
+      section(
+        state.richInlineBlocks === false && sections['inline_blocks_unavailable'] !== undefined
+          ? 'inline_blocks_unavailable'
+          : 'inline_blocks',
+      ),
     );
   }
   if (state.artifactRuntime !== false) {

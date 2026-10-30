@@ -211,6 +211,7 @@ export interface GeneratedFileMetadataEntry {
   kind: string;
   /** SHA-256 of the stored bytes (integrity verification across surfaces). */
   checksumSha256?: string;
+  renderIdentity?: string;
   /** Server-owned UI classification: editable/renderable source vs byte deliverable. */
   surface?: 'artifact' | 'file';
   /** Whether the owning surface can offer an inline preview for this descriptor. */
@@ -218,6 +219,8 @@ export interface GeneratedFileMetadataEntry {
 }
 
 export interface MessageMetadata {
+  contentSaveConflict?: boolean;
+  assistantContentEdit?: string;
   artifactDerivation?: ArtifactDerivationPolicy;
   /**
    * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off

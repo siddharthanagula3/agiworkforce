@@ -697,7 +697,7 @@ describe('MessageBubble', () => {
       },
     );
 
-    it('keeps "Thinking..." for a pending free-quota chat turn', () => {
+    it('shows generation progress without claiming reasoning for a pending free-quota chat turn', () => {
       render(
         <MessageBubble
           message={makeMessage({
@@ -710,7 +710,8 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.getByText('Generating response…')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).toBeNull();
       expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
     });
 
@@ -1036,10 +1037,11 @@ describe('MessageBubble', () => {
   });
 
   describe('streaming state', () => {
-    it('shows "Thinking..." when streaming with empty content', () => {
+    it('shows generation progress when streaming with empty content', () => {
       const msg = makeMessage({ isStreaming: true, content: '' });
       render(<MessageBubble message={msg} />);
-      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.getByText('Generating response…')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).toBeNull();
     });
 
     it('shows a concrete response activity instead of the generic thinking fallback', () => {

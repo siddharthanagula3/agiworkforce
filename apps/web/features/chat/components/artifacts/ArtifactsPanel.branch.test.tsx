@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/react';
 import { ArtifactsPanel } from './ArtifactsPanel';
-import { useArtifactsStore } from '../../stores/artifacts-store';
+import { generatedFileArtifactId, useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 
@@ -69,6 +69,75 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ArtifactsPanel follows the visible branch', () => {
+  it('presents a restored same-figure file alias once while retaining unique charts and stored downloads', () => {
+    const identity = `matplotlib-v1:123e4567-e89b-12d3-a456-426614174000:${'a'.repeat(64)}`;
+    const files = [
+      {
+        id: 'saved',
+        fileName: 'monthly_sales_charts.png',
+        mimeType: 'image/png',
+        uri: '/api/files/saved',
+        byteCount: 100,
+        kind: 'image',
+        checksumSha256: 'a'.repeat(64),
+        renderIdentity: identity,
+      },
+      {
+        id: 'alias',
+        fileName: 'chart.png',
+        mimeType: 'image/png',
+        uri: '/api/files/alias',
+        byteCount: 200,
+        kind: 'image',
+        checksumSha256: 'b'.repeat(64),
+        renderIdentity: identity,
+      },
+      {
+        id: 'unique',
+        fileName: 'chart.png',
+        mimeType: 'image/png',
+        uri: '/api/files/unique',
+        byteCount: 300,
+        kind: 'image',
+        checksumSha256: 'c'.repeat(64),
+      },
+    ];
+    useChatStore
+      .getState()
+      .setActiveConversationWithMessages(
+        CONVERSATION_ID,
+        [ROWS[0]!, { ...ROWS[1]!, metadata: { generatedFiles: files } }, ROWS[2]!],
+        'a1',
+      );
+    files.forEach((file, index) =>
+      useArtifactsStore.getState().addArtifactForMessage(
+        'a1',
+        {
+          id: generatedFileArtifactId(file.id),
+          type: 'image',
+          language: 'png',
+          title: index === 2 ? 'Another chart' : file.fileName,
+          content: file.uri,
+        },
+        CONVERSATION_ID,
+      ),
+    );
+    useArtifactsStore.getState().selectArtifact(generatedFileArtifactId('saved'));
+    render(<ArtifactsPanel />);
+    expect(screen.getByRole('button', { name: 'Another chart' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'chart.png' })).toBeNull();
+    expect(
+      useArtifactsStore
+        .getState()
+        .getConversationArtifacts(CONVERSATION_ID)
+        .some((artifact) => artifact.id === generatedFileArtifactId('alias')),
+    ).toBe(true);
+    expect(
+      useChatStore.getState().messages.find((message) => message.id === 'a1')?.metadata
+        ?.generatedFiles,
+    ).toEqual(files);
+  });
+
   it('lists only the artifacts written by messages on the active path', () => {
     useArtifactsStore.getState().selectArtifact('artifact-first');
     render(<ArtifactsPanel />);

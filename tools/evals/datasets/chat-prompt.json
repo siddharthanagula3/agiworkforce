@@ -1,12 +1,12 @@
 {
   "suite": "chat-prompt",
-  "version": 2,
+  "version": 3,
   "priority": "P1",
   "provenance": {
     "kind": "authored",
     "source": "hand-written in this repository from a reported Free-plan turn (a model asked to search the web about the user's own resume, with tools but no search attached, refused with an invented privacy reason) and from the eval cases proposed in the 2026-10-10 chat system prompt research summary",
     "authoredOn": "2026-10-10",
-    "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-27 cover tool restraint, from a reported turn where a request to render UI inline ran web searches, page fetches, code and a file write and answered with generated pictures, with one control row per tool so restraint cannot pass by never calling it, and an email signed with the name the user gave."
+    "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-27 cover tool restraint, from a reported turn where a request to render UI inline ran web searches, page fetches, code and a file write and answered with generated pictures, with one control row per tool so restraint cannot pass by never calling it, and an email signed with the name the user gave. A row added on 2026-10-30 checks seven independently copyable writing blocks from the supplied QA checklist."
   },
   "passThreshold": 1,
   "promptId": "chat.system",
@@ -1430,6 +1430,102 @@
               "matches": "^docx$"
             }
           }
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/seven-independent-writing-blocks",
+      "family": "writing-blocks",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Create separate editable writing artifacts for a Slack message, social media post, project report, meeting summary, reusable AI prompt, business proposal, and product requirements document. Each artifact should have independent copy and editing controls where supported.",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "url_fetch",
+          "description": "Fetch a specific URL and read its contents.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"]
+          }
+        },
+        {
+          "name": "execute_code",
+          "description": "Run code in a sandboxed Linux environment with a real file system and a network connection, and return its output.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string",
+                "enum": ["python", "javascript", "bash"]
+              },
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": ["language", "code"]
+          }
+        },
+        {
+          "name": "write_file",
+          "description": "Write a file into the sandbox.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["path", "content"]
+          }
+        },
+        {
+          "name": "generate_image",
+          "description": "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "aspect_ratio": {
+                "type": "string",
+                "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+              }
+            },
+            "required": ["prompt"]
+          }
+        }
+      ],
+      "notes": "Owner-supplied RENDER-003 QA on 2026-10-30: seven independent text deliverables require seven writing blocks and no image generation or external search. This fixture verifies output structure and selected tools, not browser controls.",
+      "checks": [
+        {
+          "kind": "noToolCall",
+          "names": ["web_search", "url_fetch", "execute_code", "write_file", "generate_image"]
+        },
+        {
+          "kind": "matches",
+          "pattern": "^(?:(?!```(?:writing|document|message|post|prompt|snippet))[\\s\\S])*(?:```(?:writing|document|message|post|prompt|snippet)\\n(?:(?!```)[\\s\\S])+\\n```(?:(?!```(?:writing|document|message|post|prompt|snippet))[\\s\\S])*){7}$"
         }
       ]
     }

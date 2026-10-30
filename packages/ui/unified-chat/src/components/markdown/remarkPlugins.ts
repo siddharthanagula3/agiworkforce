@@ -2,6 +2,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkBreaks from 'remark-breaks';
 import type { Options } from 'react-markdown';
+import { remarkAssistantFenceIdentity } from './assistantFenceEdits';
 
 interface MarkdownAstNode {
   type: string;
@@ -27,6 +28,7 @@ export const REMARK_PLUGINS = [
   remarkGfm,
   remarkMath,
   remarkBreaks,
+  remarkAssistantFenceIdentity,
 ] satisfies Options['remarkPlugins'];
 
 export const LITERAL_HTML_REMARK_PLUGINS = [

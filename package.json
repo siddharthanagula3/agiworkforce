@@ -25,7 +25,7 @@
     },
     "overrides": {
       "devalue@<5.9.3": "5.9.3",
-      "decode-uri-component@<0.5.0": "^0.5.0",
+      "decode-uri-component@<0.5.1": "^0.5.1",
       "postcss-selector-parser@>=6.1.0 <6.1.5": "6.1.5",
       "browserslist@<4.28.7": "^4.28.7",
       "shell-quote": ">=1.11.0 <2",
@@ -117,7 +117,8 @@
       "detox@20.51.4": "patches/detox@20.51.4.patch",
       "bunyamin@1.6.3": "patches/bunyamin@1.6.3.patch",
       "braces@3.0.3": "patches/braces@3.0.3.patch",
-      "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch"
+      "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch",
+      "query-string@7.1.3": "patches/query-string@7.1.3.patch"
     }
   },
   "scripts": {
@@ -415,7 +416,7 @@
     "check:secrets:history": "node scripts/check-secrets.mjs --history",
     "check:vacuous-e2e": "node scripts/check-vacuous-e2e.mjs",
     "check:doc-registry": "node scripts/check-doc-registry.mjs",
-    "check:script-tests": "node --test --test-concurrency=1 scripts/check-clerk-bot-protection.test.mjs scripts/check-node-version.test.mjs scripts/prepare-linux-sandbox.test.mjs scripts/check-codeowners-contract.test.mjs scripts/check-env-drift.test.mjs scripts/check-executable-docs.test.mjs scripts/check-documentation-guards.test.mjs scripts/check-llm-failure-guardrails.test.mjs scripts/check-module-reachability-ratchet.test.mjs scripts/check-release-gates.test.mjs scripts/check-rust-egress-boundary.test.mjs scripts/check-scan-findings.test.mjs scripts/check-security-gates.test.mjs scripts/braces-hardening.test.cjs scripts/http-cache-hardening.test.cjs scripts/check-theme-only-text-colours.test.mjs scripts/check-raw-error-to-user.test.mjs scripts/check-policy-gate-scope.test.mjs scripts/check-em-dash-in-copy.test.mjs scripts/clean-repo.test.mjs scripts/generate-sbom.test.mjs scripts/scan-skills-with-vetting.test.mjs scripts/verify-desktop-upgrade.test.mjs scripts/check-protocol-types.test.mjs scripts/release/rollback.test.mjs scripts/lib/ci-prerequisites.test.mjs scripts/lib/third-party-notices.test.mjs apps/cli/scripts/generate-third-party-notices.test.mjs scripts/run-live-evals.test.mjs scripts/run-cross-surface-chain.test.mjs scripts/report-unreleased-pairs.test.mjs scripts/public-runtime/build-evidence.test.mjs scripts/public-runtime/containers.test.mjs scripts/public-runtime/database-authority.test.mjs scripts/public-runtime/database.test.mjs scripts/public-runtime/lifecycle.test.mjs scripts/public-runtime/proof.test.mjs scripts/public-runtime/shutdown.test.mjs scripts/compliance/collect-soc2-evidence.test.mjs",
+    "check:script-tests": "node --test --test-concurrency=1 scripts/check-clerk-bot-protection.test.mjs scripts/check-node-version.test.mjs scripts/prepare-linux-sandbox.test.mjs scripts/check-codeowners-contract.test.mjs scripts/check-env-drift.test.mjs scripts/check-executable-docs.test.mjs scripts/check-documentation-guards.test.mjs scripts/check-llm-failure-guardrails.test.mjs scripts/check-module-reachability-ratchet.test.mjs scripts/check-release-gates.test.mjs scripts/check-rust-egress-boundary.test.mjs scripts/check-scan-findings.test.mjs scripts/check-security-gates.test.mjs scripts/braces-hardening.test.cjs scripts/http-cache-hardening.test.cjs scripts/query-string-compatibility.test.cjs scripts/check-theme-only-text-colours.test.mjs scripts/check-raw-error-to-user.test.mjs scripts/check-policy-gate-scope.test.mjs scripts/check-em-dash-in-copy.test.mjs scripts/clean-repo.test.mjs scripts/generate-sbom.test.mjs scripts/scan-skills-with-vetting.test.mjs scripts/verify-desktop-upgrade.test.mjs scripts/check-protocol-types.test.mjs scripts/release/rollback.test.mjs scripts/lib/ci-prerequisites.test.mjs scripts/lib/third-party-notices.test.mjs apps/cli/scripts/generate-third-party-notices.test.mjs scripts/run-live-evals.test.mjs scripts/run-cross-surface-chain.test.mjs scripts/report-unreleased-pairs.test.mjs scripts/public-runtime/build-evidence.test.mjs scripts/public-runtime/containers.test.mjs scripts/public-runtime/database-authority.test.mjs scripts/public-runtime/database.test.mjs scripts/public-runtime/lifecycle.test.mjs scripts/public-runtime/proof.test.mjs scripts/public-runtime/shutdown.test.mjs scripts/compliance/collect-soc2-evidence.test.mjs",
     "check:doc-freshness": "node scripts/check-doc-freshness.mjs",
     "check:agent-docs": "node scripts/check-agent-docs.mjs",
     "generate:doc-matrices": "node scripts/generate-doc-matrices.mjs",

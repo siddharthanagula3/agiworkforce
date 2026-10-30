@@ -16,6 +16,12 @@ import {
   type ChatStatusInput,
 } from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
+import { persistAssistantFenceEdit } from '../lib/assistant-fence-persistence';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '../lib/assistant-content-edit-contract';
+import {
+  applyAssistantFenceEdit,
+  type AssistantFenceEdit,
+} from '@agiworkforce/unified-chat/assistant-fence-edits';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import {
   completionNotificationBody,
@@ -127,6 +133,7 @@ import {
   resolveMessageVariantsEnabled,
 } from '../lib/message-variants-gate';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { resolveThinkingSendPolicy, type Effort } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   isSelectableModelId,
@@ -343,6 +350,7 @@ import {
   getByokTargetProviderLabel,
   resolveRegenerateBoundaryRefusal,
   routeLocalToByokSend,
+  getProviderModeForModel,
   type WebHandoffContextCandidate,
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
@@ -405,7 +413,7 @@ import {
   type MediaPaywallRecoveryAction,
 } from '@/lib/hooks/useMediaGeneration';
 import type { VideoInputImages } from '@features/media/services/media-api-service';
-import { classifyTaskLocally } from '@agiworkforce/routing';
+import { classifyTaskLocally, requestsSeparateImageResources } from '@agiworkforce/routing';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import { explicitlyRequestsArtifact } from '@features/chat/lib/visual-intent';
 import {
@@ -447,6 +455,7 @@ type SendMeta = {
   /** `/search` on this turn: the server makes the search mandatory. */
   searchRequested?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
   officeOutputFormat?: ChatOutputFormat;
@@ -1731,7 +1740,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
   const workModeByConversation = useChatStore((s) => s.workModeByConversation);
   const isAgiWorkConversation = useChatStore(selectIsAgiWorkConversation(displayedConversationId));
-  const thinkingEnabled = useThinkingStore((s) => s.enabled);
+  const globalThinkingEnabled = useThinkingStore((s) => s.enabled);
+  const globalThinkingEffort = useThinkingStore((s) => s.effort);
+  const conversationThinking = useThinkingStore(
+    (s) => s.byConversation?.[displayedConversationId ?? PENDING_CONVERSATION_KEY],
+  );
+  const thinkingEnabled = resolveThinkingSendPolicy({
+    modelId: activeModelId,
+    requestedThinking: promotedModelActive
+      ? false
+      : (conversationThinking?.enabled ?? globalThinkingEnabled),
+    requestedEffort: promotedModelActive
+      ? undefined
+      : (conversationThinking?.effort ?? globalThinkingEffort),
+  }).thinkingEnabled;
   const sendPreviewToolNames = useMemo(() => {
     const names: string[] = [];
     if (composerToggles?.workMode === AGI_WORK_MODE) names.push(AGI_WORK_LABEL);
@@ -1788,6 +1810,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     (conversationId: string) => {
       adoptPendingChatToggles(conversationId);
       useStyleStore.getState().adoptSelection(PENDING_CONVERSATION_KEY, conversationId);
+      useThinkingStore
+        .getState()
+        .adoptConversationPreference(PENDING_CONVERSATION_KEY, conversationId);
     },
     [adoptPendingChatToggles],
   );
@@ -2403,6 +2428,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           // render, and without this the collision check above would miss it.
           sendingConversationsRef.current.add(clientConvId);
           inFlightSendFingerprintsRef.current.set(clientConvId, sendFingerprint);
+          useThinkingStore
+            .getState()
+            .adoptConversationPreference(PENDING_CONVERSATION_KEY, clientConvId);
           setActiveConversation(clientConvId);
           if (!urlConversationId) setBareChatSessionId(clientConvId);
         }
@@ -2480,6 +2508,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             searchRequested: options.meta?.searchRequested,
             webFetch: options.meta?.webSearchEnabled,
             thinkingEnabled: options.meta?.thinkingEnabled,
+            thinkingEffort: options.meta?.thinkingEffort,
             codeExecution: options.meta?.codeExecutionEnabled,
             officeCreation: options.meta?.officeCreationEnabled,
             officeFormat: options.meta?.officeOutputFormat,
@@ -4008,7 +4037,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...resolvedMeta,
             artifactInstruction: visualRoute.target.directive,
           };
-        } else if (!freeQuotaSelection(targetModelId)) {
+        } else if (
+          !requestsSeparateImageResources(content) &&
+          !conversationHoldsLocalTurns(displayedMessages) &&
+          (getProviderModeForModel(targetModelId) === 'ManagedGateway' ||
+            getProviderModeForModel(targetModelId) === 'ManagedNative') &&
+          !freeQuotaSelection(targetModelId)
+        ) {
           const defaultImageModel = IMAGE_MODELS[0];
           if (defaultImageModel) {
             handleGenerateImage(content, { aspectRatio: 'auto', modelId: defaultImageModel.id });
@@ -5906,6 +5941,65 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const pendingFenceEdits = useRef(new Set<string>());
+  const handleFenceEdit = useCallback(
+    async (messageId: string, edit: AssistantFenceEdit) => {
+      const conversationId = displayedConversationId;
+      if (!conversationId) throw new Error('Open the chat before editing.');
+      if (pendingFenceEdits.current.has(messageId)) {
+        throw new Error('Another block in this message is saving. Try again when it finishes.');
+      }
+      const current = selectConversationMessages(conversationId)(useChatStore.getState()).find(
+        (message) => message.id === messageId,
+      );
+      if (!current || current.role !== 'assistant' || current.isStreaming) {
+        throw new Error('Wait for this response to finish before editing.');
+      }
+      const editedContent = applyAssistantFenceEdit(current.content, edit);
+      if (editedContent === null) {
+        throw new Error('This block changed. Reopen it before saving your edit.');
+      }
+      pendingFenceEdits.current.add(messageId);
+      try {
+        const conversation = useChatStore
+          .getState()
+          .conversations.find((item) => item.id === conversationId);
+        const localEdit = conversation?.isTemporary || current.metadata?.privacyMode === 'local';
+        const authToken = localEdit ? null : await getToken();
+        if (!localEdit && !authToken) throw new Error('Sign in again to save this edit.');
+        const saved = localEdit
+          ? { content: editedContent, editRevision: null }
+          : await persistAssistantFenceEdit({
+              conversationId,
+              messageId,
+              edit,
+              authToken: authToken!,
+            });
+        const latest = selectConversationMessages(conversationId)(useChatStore.getState()).find(
+          (message) => message.id === messageId,
+        );
+        updateMessage(
+          messageId,
+          {
+            content: saved.content,
+            ...(saved.editRevision
+              ? {
+                  metadata: {
+                    ...latest?.metadata,
+                    [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: saved.editRevision,
+                  },
+                }
+              : {}),
+          },
+          conversationId,
+        );
+      } finally {
+        pendingFenceEdits.current.delete(messageId);
+      }
+    },
+    [displayedConversationId, getToken, updateMessage],
+  );
+
   const handleReactMessage = useCallback(
     async (id: string, reactionType: 'up' | 'down' | null) => {
       if (!displayedConversationId) return;
@@ -7067,6 +7161,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                                 retryingResearchMessageId={retryingResearchMessageId}
                                 onContinue={handleContinueMessage}
                                 onEdit={handleEditMessage}
+                                onFenceEdit={handleFenceEdit}
                                 onDelete={handleDeleteMessage}
                                 onDeleteVariant={handleDeleteVariant}
                                 countVariantFollowers={countVariantFollowers}

@@ -101,6 +101,24 @@ describe('MessageBubble timestamp (CLR-03)', () => {
     );
   });
 
+  it('keeps the conversational attribution when an image tool used another model', () => {
+    const imageModel = getModels({
+      modelTypes: ['image'],
+      requireCapabilities: { imageGen: true },
+    }).find(isModelLive);
+    if (!imageModel) throw new Error('The canonical model catalog must expose an image model');
+    render(
+      <MessageBubble
+        message={{
+          ...message('assistant'),
+          model: SERVED_MODEL.id,
+          metadata: { model: SERVED_MODEL.id, imageGenModel: imageModel.id },
+        }}
+      />,
+    );
+    expect(screen.getByTestId('message-answered-by')).toHaveTextContent(SERVED_LABEL);
+  });
+
   it('reveals the chip on hover or focus and keeps it on a coarse pointer', () => {
     render(
       <MessageBubble message={{ ...message('assistant'), metadata: { model: SERVED_MODEL.id } }} />,

@@ -13,6 +13,7 @@ import {
 } from '@agiworkforce/artifacts';
 import {
   ARTIFACT_PANEL_OVERLAY_QUERY,
+  generatedFileArtifactId,
   useArtifactsStore,
   type Artifact,
 } from '../../stores/artifacts-store';
@@ -30,6 +31,7 @@ import { uploadProjectKnowledgeFile } from '@features/projects/services/project-
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { NewArtifactMenu } from './templates/NewArtifactMenu';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
+import { groupGeneratedImageOutputs } from '../../utils/turn-artifacts';
 import {
   createWebCloudPublisher,
   fetchArtifactPublication,
@@ -126,6 +128,28 @@ export async function publishableArtifact(
     type: artifact.type,
     ...(artifact.language ? { language: artifact.language } : {}),
   };
+}
+
+function generatedImageAliasArtifacts(
+  artifacts: readonly Artifact[],
+  messages: readonly Message[],
+): ReadonlySet<string> {
+  const sources = new Map(
+    artifacts
+      .filter((artifact) => artifact.type === 'image')
+      .map((artifact) => [artifact.id, artifact.content]),
+  );
+  const aliases = new Set<string>();
+  for (const message of messages) {
+    const files =
+      message.metadata?.generatedFiles?.filter(
+        (file) =>
+          file.kind === 'image' && sources.get(generatedFileArtifactId(file.id)) === file.uri,
+      ) ?? [];
+    for (const file of groupGeneratedImageOutputs(files).aliases)
+      aliases.add(generatedFileArtifactId(file.id));
+  }
+  return aliases;
 }
 
 function ArtifactsEmptyState() {
@@ -341,6 +365,7 @@ export function ArtifactsPanel({
   const conversationArtifacts = activeConversationId
     ? getConversationArtifacts(activeConversationId)
     : [];
+  const imageAliases = generatedImageAliasArtifacts(conversationArtifacts, conversationMessages);
   const loadedMessageIds = useMemo(
     () => new Set(conversationMessages.map((message) => message.id)),
     [conversationMessages],
@@ -352,13 +377,15 @@ export function ArtifactsPanel({
   // An artifact written by an abandoned variant is not part of the answer on
   // screen. A row the transcript has not loaded yet is not evidence either way,
   // and a deep link names the one artifact the reader asked for by id.
-  const artifacts = conversationArtifacts.filter(
-    (artifact) =>
-      !artifact.messageId ||
-      artifact.id === deepLinkId ||
-      !loadedMessageIds.has(artifact.messageId) ||
-      visibleMessageIds.has(artifact.messageId),
-  );
+  const artifacts = conversationArtifacts
+    .filter((artifact) => artifact.id === deepLinkId || !imageAliases.has(artifact.id))
+    .filter(
+      (artifact) =>
+        !artifact.messageId ||
+        artifact.id === deepLinkId ||
+        !loadedMessageIds.has(artifact.messageId) ||
+        visibleMessageIds.has(artifact.messageId),
+    );
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
 
@@ -659,11 +686,18 @@ export function ArtifactsPanel({
 export function ArtifactsToggleButton({ onToggle }: { onToggle?: () => void } = {}) {
   const { getConversationArtifacts, panelOpen, togglePanel } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const messages = useChatStore((state) =>
+    activeConversationId
+      ? (state.messagesByConversation[activeConversationId] ?? state.messages)
+      : state.messages,
+  );
 
   // Shift+Cmd/Ctrl+A is claimed by the single useKeyboardShortcuts call in
   // WebChatPage, which calls this same store's togglePanel; a second
   // instance here would double-fire and cancel itself out.
-  const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
+  const allArtifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
+  const imageAliases = generatedImageAliasArtifacts(allArtifacts, messages);
+  const artifacts = allArtifacts.filter((artifact) => !imageAliases.has(artifact.id));
 
   return (
     <button

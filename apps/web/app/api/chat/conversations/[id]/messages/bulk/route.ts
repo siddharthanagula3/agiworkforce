@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { refuseEditedAssistantOverwrite } from '@/lib/server/assistant-content-edits';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -111,7 +112,10 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
     if (!carriesThread) {
       for (const msg of messages) {
         const [row] = await db.query<ChatMessageRow>(INSERT_MESSAGE_SQL, insertParams(msg, null));
-        if (!row) throw createError.validation('Message id belongs to another conversation');
+        if (!row) {
+          await refuseEditedAssistantOverwrite({ db, ...threadScope, messageId: msg.id });
+          throw createError.validation('Message id belongs to another conversation');
+        }
         saved.push(row);
       }
     } else {
@@ -136,7 +140,10 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
             INSERT_MESSAGE_SQL,
             insertParams(msg, resolveParentId(msg.parentId, leafMessageId)),
           );
-          if (!row) throw createError.validation('Message id belongs to another conversation');
+          if (!row) {
+            await refuseEditedAssistantOverwrite({ db: tx, ...threadScope, messageId: msg.id });
+            throw createError.validation('Message id belongs to another conversation');
+          }
           saved.push(row);
           leafMessageId = row.id;
         }

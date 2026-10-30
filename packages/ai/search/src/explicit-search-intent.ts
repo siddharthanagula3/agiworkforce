@@ -72,6 +72,8 @@ const CITATION_PHRASES: readonly string[] = [
   'provide sources',
   'include sources',
   'source it',
+  'using official documentation',
+  'using official sources',
 ];
 
 const LINK_REQUEST_PHRASES: readonly string[] = ['give me the link', 'send me the link'];
@@ -248,6 +250,81 @@ const URL_FETCH_ACTION_PATTERN =
   /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
 const URL_FETCH_OPT_OUT_PATTERN =
   /\b(?:do\s+not|don't|dont|never|avoid)\s+(?:fetch|open|read)\s+(?:(?:this|that|the|these|those|any)\s+)?(?:url|link|page|https?:\/\/)/iu;
+const REQUEST_FENCE_START = /^\s*(`{3,}|~{3,})/u;
+const REQUEST_QUOTED_MATERIAL =
+  /"[^"\n]*"|“[^”\n]*”|`[^`\n]*`|(?<![\p{L}\p{N}])'[^'\n]+'(?![\p{L}\p{N}])/gu;
+const UI_SEARCH_LABEL =
+  /^[^\S\n]*(?:(?:and|or)\s+|,\s*)?(?:[\p{L}\p{N}_-]+\s+){0,3}(?:checkbox(?:es)?|check\s+boxes?|toggles?|switch(?:es)?|options?|fields?|labels?|controls?)\b/iu;
+const EXPLICIT_LOOKUP_PREFIX = /\b(?:use|run|perform|do|call)\s+(?:(?:a|an|the)\s+)?$/iu;
+export const WEB_SEARCH_REQUEST_EDGE_CHARS = 280;
+export const WEB_SEARCH_LONG_MESSAGE_CHARS = WEB_SEARCH_REQUEST_EDGE_CHARS * 3;
+const REQUEST_PARAGRAPH_BREAK = /\n\s*\n/u;
+
+function searchRequestText(text: string): string {
+  const lines: string[] = [];
+  let fence = '';
+  for (const line of text.split('\n')) {
+    const marker = REQUEST_FENCE_START.exec(line)?.[1] ?? '';
+    if (fence) {
+      if (
+        marker[0] === fence[0] &&
+        marker.length >= fence.length &&
+        line.trimStart().slice(marker.length).trim() === ''
+      )
+        fence = '';
+    } else if (marker) {
+      fence = marker;
+    } else {
+      lines.push(line);
+    }
+  }
+  return lines.join('\n').replace(REQUEST_QUOTED_MATERIAL, '');
+}
+
+export function webSearchRequestText(text: string): string {
+  const request = searchRequestText(text);
+  if (request.length <= WEB_SEARCH_LONG_MESSAGE_CHARS) return request;
+  const paragraphs = request
+    .split(REQUEST_PARAGRAPH_BREAK)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return `${(paragraphs[0] ?? '').slice(0, WEB_SEARCH_REQUEST_EDGE_CHARS)}\n${(paragraphs[paragraphs.length - 1] ?? '').slice(-WEB_SEARCH_REQUEST_EDGE_CHARS)}`;
+}
+
+function asksForWebLookup(text: string): boolean {
+  let cursor = 0;
+  while (cursor < text.length) {
+    const match = SEARCH_VERB_PATTERN.exec(text.slice(cursor));
+    if (!match) return false;
+    const start = cursor + match.index;
+    cursor = start + match[0].length;
+    if (text[start - 1] === '-' || text[start - 1] === '_') continue;
+    const ambiguousLabel = /^web\s+search(?:es)?$|^search\s+and$/iu.test(match[0]);
+    if (
+      ambiguousLabel &&
+      UI_SEARCH_LABEL.test(text.slice(cursor)) &&
+      !EXPLICIT_LOOKUP_PREFIX.test(text.slice(Math.max(0, start - 40), start))
+    )
+      continue;
+    return true;
+  }
+  return false;
+}
+
+export function explicitWebSearchRequestSignals(text: string): ExplicitSearchIntentSignal[] {
+  if (!text) return [];
+  const request = webSearchRequestText(text);
+  if (!request || hasExplicitWebSearchOptOut(request)) return [];
+  const signals: ExplicitSearchIntentSignal[] = [];
+  if (asksForWebLookup(request)) signals.push('search_verb');
+  if (RECENCY_PATTERN.test(request)) signals.push('recency');
+  if (asksForWebSources(request)) signals.push('sources');
+  return signals;
+}
+
+export function hasExplicitWebSearchRequestOptOut(text: string): boolean {
+  return hasExplicitWebSearchOptOut(webSearchRequestText(text));
+}
 
 export type ExplicitSearchIntentSignal = 'search_verb' | 'recency' | 'sources';
 

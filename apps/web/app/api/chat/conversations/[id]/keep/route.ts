@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { refuseEditedAssistantOverwrite } from '@/lib/server/assistant-content-edits';
 import { z } from 'zod';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -108,7 +109,10 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
           JSON.stringify(normalizeMessageMetadata(message.metadata) ?? {}),
           parentId,
         ]);
-        if (!row) throw createError.validation('Message id belongs to another conversation');
+        if (!row) {
+          await refuseEditedAssistantOverwrite({ db: tx, ...scope, messageId: message.id });
+          throw createError.validation('Message id belongs to another conversation');
+        }
         saved.push(row);
         parentId = row.id;
       }

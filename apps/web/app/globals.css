@@ -1097,13 +1097,19 @@
   @apply mt-0;
 }
 
-.message-text h1,
-.message-text h2 {
-  @apply text-xl font-semibold mt-6 mb-2;
+.message-text h1:where([data-markdown-heading]) {
+  @apply text-h2 mt-6 mb-4;
 }
 
-.message-text h1 + *,
-.message-text h2 + * {
+.message-text h2:where([data-markdown-heading]) {
+  @apply text-h3 mt-5 mb-3;
+}
+
+.message-text h3:where([data-markdown-heading]) {
+  @apply text-h4 mt-4 mb-2;
+}
+
+.message-text :is(h1, h2, h3):where([data-markdown-heading]) + * {
   @apply mt-2;
 }
 

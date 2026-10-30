@@ -28,6 +28,8 @@ import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-sessio
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import { SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL } from '@/lib/server/assistant-content-edits';
 import {
   lockConversationThread,
   setActiveLeaf,
@@ -207,7 +209,7 @@ const PUSH_MESSAGES_SQL = `
                    provider = case when incoming.has_provider then incoming.provider else existing.provider end,
                    input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end,
                    output_tokens = case when incoming.has_output_tokens then incoming.output_tokens else existing.output_tokens end,
-                   metadata = case when incoming.has_metadata then incoming.metadata else existing.metadata end,
+                   metadata = ${SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL},
                    updated_at = now()
               from input as incoming, web_conversations as parent
              where not incoming.should_delete
@@ -225,7 +227,7 @@ const PUSH_MESSAGES_SQL = `
                  or (incoming.has_provider and existing.provider is distinct from incoming.provider)
                  or (incoming.has_input_tokens and existing.input_tokens is distinct from incoming.input_tokens)
                  or (incoming.has_output_tokens and existing.output_tokens is distinct from incoming.output_tokens)
-                 or (incoming.has_metadata and coalesce(existing.metadata, '{}'::jsonb) is distinct from incoming.metadata)
+                   or (incoming.has_metadata and coalesce(existing.metadata, '{}'::jsonb) is distinct from ${SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL})
                )
             returning existing.id, existing.server_version
           ), inserted as (
@@ -234,7 +236,10 @@ const PUSH_MESSAGES_SQL = `
                output_tokens, metadata, created_at, updated_at, deleted_at, parent_id)
             select incoming.id, incoming.conversation_id, incoming.role, incoming.content,
                    incoming.model, incoming.provider, incoming.input_tokens,
-                   incoming.output_tokens, incoming.metadata,
+                   incoming.output_tokens,
+                   case when jsonb_typeof(incoming.metadata) = 'object'
+                     then incoming.metadata - '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}'
+                     else incoming.metadata end,
                    -- One now() for every row of a batch tied a question and its
                    -- answer, and readers order by created_at at millisecond precision.
                    now() + (incoming.position - 1) * interval '1 millisecond',
@@ -280,7 +285,7 @@ const PUSH_MESSAGES_SQL = `
                    and (not incoming.has_provider or existing.provider is not distinct from incoming.provider)
                    and (not incoming.has_input_tokens or existing.input_tokens = incoming.input_tokens)
                    and (not incoming.has_output_tokens or existing.output_tokens = incoming.output_tokens)
-                   and (not incoming.has_metadata or coalesce(existing.metadata, '{}'::jsonb) = incoming.metadata)
+                   and (not incoming.has_metadata or coalesce(existing.metadata, '{}'::jsonb) = ${SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL})
                  )
                )
           ), applied_rows as materialized (

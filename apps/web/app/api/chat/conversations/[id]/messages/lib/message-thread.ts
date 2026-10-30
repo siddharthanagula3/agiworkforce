@@ -7,6 +7,11 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 import { legalHoldExclusion, refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import {
+  ASSISTANT_CONTENT_PRESERVED_METADATA_SQL,
+  CLIENT_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL,
+} from '@/lib/server/assistant-content-edits';
 
 export type ThreadScope = {
   conversationId: string;
@@ -27,12 +32,14 @@ export type ThreadScope = {
 // that created the row.
 export const INSERT_MESSAGE_SQL = `
   insert into web_messages (id, conversation_id, role, content, model, metadata, parent_id)
-  values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb, $7::uuid)
+  values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5,
+          $6::jsonb - '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}', $7::uuid)
   on conflict (id) do update
     set content = excluded.content,
-        metadata = excluded.metadata,
+        metadata = ${ASSISTANT_CONTENT_PRESERVED_METADATA_SQL},
         model = excluded.model
     where web_messages.conversation_id = excluded.conversation_id
+      and ${CLIENT_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL}
   returning id, parent_id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
 `;
 

@@ -432,6 +432,7 @@ export async function getActiveWorkspaceMediaAssetById(
   userId: string,
   id: string,
   db: DatabaseAdapter,
+  options?: { conversationId: string },
 ): Promise<MediaAssetForServing | null> {
   const organizationId = await resolveActiveOrganizationId(db, userId);
   const rows = await db.query<Record<string, unknown>>(
@@ -441,9 +442,10 @@ export async function getActiveWorkspaceMediaAssetById(
       where id = $1
         and user_id = $2
         and organization_id is not distinct from $3::uuid
+        ${options ? 'and conversation_id = $4::uuid' : ''}
         and deleted_at is null
       limit 1`,
-    [id, userId, organizationId],
+    [id, userId, organizationId, ...(options ? [options.conversationId] : [])],
   );
   const row = rows[0];
   if (!row) return null;

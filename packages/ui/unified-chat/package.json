@@ -14,6 +14,8 @@
     "./agi-work-progress": "./src/lib/agi-work-progress.ts",
     "./task-display": "./src/components/tasks/task-display.ts",
     "./assistant-fence": "./src/components/markdown/assistantFence.ts",
+    "./assistant-fence-edits": "./src/components/markdown/assistantFenceEdits.ts",
+    "./continuation-seam": "./src/lib/continuation-seam.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
     "./shiki-highlighter": "./src/components/markdown/shikiHighlighter.ts",
     "./composer-editor": "./src/composer-editor/index.ts",

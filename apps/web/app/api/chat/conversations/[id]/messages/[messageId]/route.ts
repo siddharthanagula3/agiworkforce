@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import {
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH,
+} from '@agiworkforce/cloud-contracts';
+import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
+import { applyAssistantFenceEdit } from '@agiworkforce/unified-chat/assistant-fence-edits';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -7,6 +14,8 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { failUnboundVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { scheduleArtifactIndexing } from '../lib/index-artifacts';
+import { SAVE_ASSISTANT_CONTENT_EDIT_SQL } from '@/lib/server/assistant-content-edits';
 import {
   collectSubtree,
   deleteMessages,
@@ -20,6 +29,18 @@ import {
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
 const PatchMessageSchema = z.union([
+  z
+    .object({
+      fenceEdit: z
+        .object({
+          index: z.number().int().nonnegative(),
+          language: z.string().min(1).max(100),
+          source: z.string().max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH),
+          content: z.string().min(1).max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH),
+        })
+        .strict(),
+    })
+    .strict(),
   z.object({ reaction: z.enum(['thumbsUp', 'thumbsDown']).nullable() }).strict(),
   z
     .object({
@@ -67,6 +88,60 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Conversation not found');
   }
 
+  if ('fenceEdit' in patch) {
+    const [message] = await db.query<{
+      role: string;
+      content: string;
+      metadata: Record<string, unknown> | null;
+      busy: boolean;
+    }>(
+      `select role, content, metadata,
+              exists (
+                select 1 from cloud_agent_runs
+                where conversation_id = $2 and state != all($3::text[])
+              ) as busy
+         from web_messages
+        where id = $1 and conversation_id = $2 and deleted_at is null
+        limit 1`,
+      [messageId, conversationId, [...TERMINAL_AGENT_TASK_STATES]],
+    );
+    if (!message) throw createError.notFound('Message not found');
+    if (message.role !== 'assistant') {
+      throw createError.validation('Only assistant writing blocks can be edited here.');
+    }
+    if (message.busy)
+      throw createError.conflict('Wait for this response to finish before editing.');
+    const content = applyAssistantFenceEdit(message.content, patch.fenceEdit);
+    if (content === null) {
+      throw createError.conflict('This block changed. Reopen the chat before saving your edit.');
+    }
+    if (content.length > MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH) {
+      throw createError.validation('The edited message is too long.');
+    }
+    const [saved] = await db.query<{ content: string; edit_revision: string }>(
+      SAVE_ASSISTANT_CONTENT_EDIT_SQL,
+      [content, messageId, conversationId, message.content, crypto.randomUUID()],
+    );
+    if (!saved) {
+      throw createError.conflict('This block changed while saving. Reopen the chat and try again.');
+    }
+    scheduleArtifactIndexing({
+      db,
+      userId,
+      conversationId,
+      messageId,
+      content: saved.content,
+      ...(message.metadata?.['artifactDerivation'] === EXPLICIT_ARTIFACT_DERIVATION_POLICY
+        ? { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY }
+        : {}),
+    });
+    return NextResponse.json({
+      ok: true,
+      content: saved.content,
+      editRevision: saved.edit_revision,
+    });
+  }
+
   if ('videoStartFailure' in patch) {
     const projection = await failUnboundVideoGenerationTranscript({
       db,
@@ -94,15 +169,15 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Message not found');
   }
 
-  const merged = { ...(row.metadata ?? {}), ...patch };
-
   const count = await db.execute(
-    'update web_messages set metadata = $1::jsonb where id = $2 and conversation_id = $3',
-    [JSON.stringify(merged), messageId, conversationId],
+    `update web_messages
+        set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
+      where id = $2 and conversation_id = $3 and deleted_at is null`,
+    [JSON.stringify(patch), messageId, conversationId],
   );
 
   if (count < 1) {
-    throw createError.internal('Failed to update message');
+    throw createError.notFound('Message not found');
   }
 
   return NextResponse.json({ ok: true });

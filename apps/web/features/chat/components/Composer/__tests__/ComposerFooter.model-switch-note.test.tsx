@@ -3,6 +3,8 @@ type ScanModule0 = typeof import('@shared/config/llm');
 type ScanModule1 = typeof import('@agiworkforce/ui');
 type ScanModule2 = typeof import('zustand/middleware');
 
+type OriginalWebChatStoreModule = typeof import('@shared/stores/web-chat-store');
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
   usePathname: () => '/chat',
@@ -74,7 +76,8 @@ const chatStoreState = vi.hoisted(() => ({
   messages: [] as { role: string; isStreaming?: boolean }[],
 }));
 
-vi.mock('@shared/stores/web-chat-store', () => ({
+vi.mock('@shared/stores/web-chat-store', async (importOriginal) => ({
+  ...(await importOriginal<OriginalWebChatStoreModule>()),
   useChatStore: (selector: (s: typeof chatStoreState) => unknown) => selector(chatStoreState),
 }));
 

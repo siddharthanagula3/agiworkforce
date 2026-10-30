@@ -18,6 +18,7 @@ export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
     code: [
       ...(defaultSchema.attributes?.['code'] ?? []),
       ['className', /^language-./, 'math-inline', 'math-display'],
+      ['dataAssistantFenceIndex', /^\d+$/],
     ],
     span: [
       ...(defaultSchema.attributes?.['span'] ?? []),

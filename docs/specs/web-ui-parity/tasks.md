@@ -1,73 +1,79 @@
-# Web UI parity: tasks
+# Web chat rendering: tasks
 
 Status: In progress
 Owner: Web chat
-Last updated: 2026-10-27
+Last updated: 2026-10-30
 
-The order to work in, from the owner's reports of 2026-10-27. Each task lands with tests and,
-for anything visible, a check in the local web app at desktop, narrow-panel and phone widths
-(390, 360 and 320 px). Evals run on an OpenAI model only: the owner does not want Anthropic models
-used for tests. See `spec.md` for the design and `contracts/rendering-elements.md` for every
-element.
+This existing checklist now reflects the October 30 local implementation.
+Checked items describe the stated implementation or bounded verification, not
+production deployment or complete surface parity. The [spec](spec.md) owns the
+contract; the [live-check record](../../../audit/live-check/chat-rendering-2026-10-30.md)
+owns evidence and current acceptance gaps.
 
-## 1. Broken now
+## 1. Narrow chat layout
 
-- [x] 1.1 Composer controls overlapped when the chat column was narrow ("Balanced" drawn over
-      the microphone): the footer could shrink while the effort control could not. Labels now
-      collapse into their icons by composer width (effort below 32rem, model name below
-      26rem, palette below 24rem).
-- [x] 1.2 The chat header kept its desktop layout, with labels, whenever the window was wide,
-      so with the Artifacts panel open the title was squeezed out. The header switches layout
-      by its own width (compact below 40rem, labels from 52rem).
-- [x] 1.3 Dragging the Artifacts panel stopped where the chat column hit 360px. The chat may
-      now narrow to 320px, where every composer control still fits as an icon.
+- [x] 1.1 Collapse composer labels by composer width, retaining icons/accessibility.
+- [x] 1.2 Switch header layout by its width as the artifact panel narrows the chat.
+- [x] 1.3 Permit a 320px chat column beside the artifact panel.
+- [ ] 1.4 Finish consolidated narrow-panel/phone verification; individual probes
+      are not an all-route sweep.
 
-## 2. Tool misuse and rendering choice
+## 2. Tool choice and rendered output
 
-- [x] 2.0 Rendering fixes found on the way: math keeps KaTeX's layout styles; links are
-      underlined with an arrow when they open a new tab; a one-line fence is a code block;
-      a chart fence written as a full definition is plotted; gallery images pass the image
-      trust gate.
-- [x] 2.1 The server forced a web search when "latest", "today", a current year and similar
-      words appeared anywhere in a message, including pasted material and requests to
-      rewrite, echo or translate it. A long message is read only in its first and last
-      paragraphs, where only an explicit ask for a search or sources forces one; a request to
-      write, rewrite, echo or translate never forces one on hints. The tool stays offered.
-- [ ] 2.2 Document every rendering element: what ChatGPT shows, what we render, the exact
-      syntax, behavior and surfaces (`contracts/rendering-elements.md`), and record the
-      observed ChatGPT elements in `docs/research/competitor-surfaces-2026-10-24.md`.
-- [ ] 2.3 Renderers to match ChatGPT, on web and desktop, Chrome and VS Code, and mobile:
-      text-syntax charts drawn like JSON charts (axes, grid, tooltip; bar, line, pie, donut);
-      `stats`; `card` (Markdown body, tags); `form`; `carousel`; titled command list with a
-      Copy per row; status notes and icons; timeline dates; checklist progress bar; actions
-      that send; citation "Visit host" link; tags.
-- [ ] 2.4 chat.system@15: chat.system@14 plus the full element catalog and when to use inline
-      versus an artifact, and a refusal rule for fiction and role-play frames. Eval against
-      chat.system@6 on the OpenAI eval model, three samples; move the pin only if refusal and jailbreak
-      hold.
+- [x] 2.0 Preserve valid KaTeX source/layout and exact Copy; wrap code and scope
+      compact headings. Individual math browser runs passed at 1440/1024/390/320px
+      in both themes.
+- [x] 2.1 Route by output purpose. Unknown/text/functional requests authorize no
+      images; edits/continuations require source context. Withhold unnecessary
+      search for self-contained requests and recheck execution.
+- [x] 2.2 Document current syntax, host capabilities and honest fallbacks in the
+      spec; keep writing artifacts independent with a scoped host save contract.
+- [x] 2.3 Implement React card/stats/form/carousel/gallery behavior, native bar/
+      line/pie/donut charts, timeline dates and separate safe diagram SVG/source.
+      Exercise individual local workflows and deterministic failure/permissions.
+- [x] 2.4 Register @15 internally with its digest and seven-block eval fixture;
+      preserve published prompt text and pin @6.
+- [x] 2.5 Use one image resource per call. Four ordered stubbed calls/cards and
+      a gallery fence retain four distinct resources.
+- [x] 2.6 Group matching Matplotlib exports by validated render identity; retain
+      downloads and distinct data, labels and figures.
+- [ ] 2.7 Finish per-command Copy, status notes, actions that send, semantic tag
+      tones and other remaining catalog controls. Do not advertise them as built.
+- [ ] 2.8 Verify Chrome/VS Code projections and mobile fallbacks in real hosts;
+      verify retained Tauri controls and host persistence separately.
+- [ ] 2.9 Measure @15 against @6 through prompt governance. Promote only on
+      accepted quality evidence; offline replay is not that evidence.
 
-## 3. Every screen on a phone
+## 3. Real conversation acceptance
 
-- [ ] 3.1 Inventory every web route.
-- [ ] 3.2 Automated sweep, signed in, at 390, 360 and 320 px and at 768 and 1024 px:
-      horizontal overflow, overlapping controls, clipped text, screenshots of each route.
-- [ ] 3.3 Fix each finding, collapsing labels into icons rather than wrapping or clipping, and
-      re-run the sweep until clean.
+- [x] 3.1 Add localhost-only authenticated conversation coverage with stubbed
+      responses, image-generation interception and test-auth/local-database guards.
+- [x] 3.2 Verify actual conversation creation, response persistence, fence-edit
+      PATCH, Save and reopen in fourteen independent local chats. Two-tab late
+      continuation acceptance also preserves the authoritative saved edit.
+- [x] 3.3 Fresh consolidated browser run passed 29 checks; the additional
+      two-tab conflict/reopen check passed separately. Exact evidence and
+      remaining release boundaries are in the live-check record.
 
-## 4. Registered defects from the screenshots
+## 4. Earlier screenshot work still tracked
 
-- [ ] 4.1 A user's own message renders Markdown headings; show it as written, like ChatGPT.
-- [ ] 4.2 A turn waiting on approvals looks finished.
-- [ ] 4.3 "Stopping…" and "Preparing" show at once.
-- [ ] 4.4 An answer that generated an image is credited to the image model.
-- [ ] 4.5 Long replies and artifacts end early; find where the output budget cuts them.
-- [ ] 4.6 Sources chip under answers with no text; "?" and "F" step icons; request JSON cut
-      off in error details; follow-up styling; no rating on image-only or failed answers;
-      unlabeled header badges; Recents Today empty; Enterprise usage 0%; Projects twice.
+- [ ] 4.1 Verify literal user Markdown through authenticated conversations.
+- [ ] 4.2 Waiting approvals: `WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01`.
+- [ ] 4.3 Concurrent Stopping/Preparing: `WEB-CHAT-STOP-SHOWS-PREPARING-01`.
+- [ ] 4.4 Finish persisted/live acceptance for `WEB-CHAT-IMAGE-MODEL-CREDIT-01`;
+      local stream identity and stubbed tool-loop checks are corrected.
+- [ ] 4.5 Reproduce long-reply/artifact truncation at the output-budget boundary.
+- [ ] 4.6 Keep unrelated sources, step icons, error details, follow-ups, ratings,
+      badges, Recents, usage and duplicate Projects work in the existing
+      `WEB-CHAT-UI-POLISH-2026-10-27` compound row.
 
-## 5. Needs the owner
+## 5. Broader scope and owner decisions
 
-- [ ] 5.1 Table style: ChatGPT draws row rules only, no grid or header fill, numbers
-      right-aligned; ours has a grid and the grey header the owner liked for code blocks.
-- [ ] 5.2 Claude answer lost after a denied tool (provider rejected the request). Needs a Claude
-      chat; the Anthropic key is held by its spend limit until 2026-11-01.
+- [ ] 5.1 Inventory every web route and run the original authenticated responsive
+      sweep at 390/360/320px and 768/1024px; fix/recheck its findings.
+- [ ] 5.2 Decide the earlier table styling preference.
+
+The provider-denial continuation issue remains in
+`WEB-CHAT-DENIED-TOOL-PROVIDER-400-01`, outside this rendering slice. Production
+deployment and prompt promotion retain their existing release process; neither
+has occurred in this task.

@@ -1,6 +1,6 @@
 import React, { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Copy, ExternalLink, Mail } from 'lucide-react';
-import { Button, useUiTranslation } from '@agiworkforce/ui';
+import { Check, Copy, ExternalLink, Mail, SquarePen } from 'lucide-react';
+import { Button, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
   RICH_BLOCK_ACTION_CLASS,
@@ -15,6 +15,7 @@ import {
   type EmailField,
   type ParsedEmailBlock,
 } from './richBlocks';
+import { useRichBlockEdit } from './RichBlockEdit';
 
 const FIELD_INPUT_CLASS =
   'min-w-0 flex-1 bg-transparent py-2 text-[var(--chat-text-primary)] outline-none placeholder:text-[var(--chat-text-placeholder)] read-only:cursor-default';
@@ -42,15 +43,20 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
   const { t } = useUiTranslation('chat');
   const idPrefix = useId();
   const [edits, setEdits] = useState<Partial<EmailDraft>>({});
+  const [dirty, setDirty] = useState(false);
+  const { confirm, dialog: discardDialog } = useConfirmAction();
   const [mailNotice, setMailNotice] = useState<'copied' | 'failed' | null>(null);
   const { copyState, copy } = useRichBlockCopy();
+  const { save, saving, error: saveError, canPersist } = useRichBlockEdit();
   const draft: EmailDraft = { ...parsed.draft, ...edits };
   const bodyRef = useAutoHeight(draft.body);
 
   const edit = useCallback(
     (field: keyof EmailDraft) =>
-      (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        setEdits((current) => ({ ...current, [field]: event.target.value })),
+      (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setEdits((current) => ({ ...current, [field]: event.target.value }));
+        setDirty(true);
+      },
     [],
   );
 
@@ -91,6 +97,17 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
         type="button"
         variant="ghost"
         size="sm"
+        className={RICH_BLOCK_ACTION_CLASS}
+        aria-label={t('richBlock.editEmail', 'Edit email')}
+        onClick={() => document.getElementById(`${idPrefix}-subject`)?.focus()}
+      >
+        <SquarePen className="h-4 w-4" aria-hidden="true" />
+        {t('richBlock.edit', 'Edit')}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => void copy(emailPlainText(draft))}
         className={RICH_BLOCK_ICON_ACTION_CLASS}
         aria-label={copyLabel}
@@ -119,28 +136,33 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
   );
 
   const status =
-    copyState === 'failed' || mailNotice ? (
+    copyState === 'failed' || mailNotice || saveError ? (
       <p
         role="status"
         aria-live="polite"
         className={cn(
           'border-b border-[var(--chat-border-subtle)] px-4 py-2 text-sm',
-          copyState === 'failed' || mailNotice === 'failed'
+          copyState === 'failed' || mailNotice === 'failed' || saveError
             ? 'text-[var(--chat-destructive-text)]'
             : 'text-[var(--chat-text-secondary)]',
         )}
       >
-        {mailNotice === 'failed'
+        {saveError
           ? t(
-              'richBlock.mailCopyFailed',
-              'This message is too long for a mail link and could not be copied, so the mail app was not opened. Try again.',
+              'richBlock.saveFailed',
+              'Changes could not be saved. Your draft is kept here; try again.',
             )
-          : copyState === 'failed'
-            ? copyLabel
-            : t(
-                'richBlock.bodyCopiedForMail',
-                'This message is too long for a mail link, so it was copied. Paste it into the new email.',
-              )}
+          : mailNotice === 'failed'
+            ? t(
+                'richBlock.mailCopyFailed',
+                'This message is too long for a mail link and could not be copied, so the mail app was not opened. Try again.',
+              )
+            : copyState === 'failed'
+              ? copyLabel
+              : t(
+                  'richBlock.bodyCopiedForMail',
+                  'This message is too long for a mail link, so it was copied. Paste it into the new email.',
+                )}
       </p>
     ) : null;
 
@@ -163,7 +185,7 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
             inputMode={field === 'subject' ? 'text' : 'email'}
             value={draft[field]}
             onChange={edit(field)}
-            readOnly={streaming}
+            readOnly={streaming || saving}
             spellCheck={field === 'subject'}
             autoComplete="off"
             className={cn(FIELD_INPUT_CLASS, field === 'subject' && 'font-medium')}
@@ -178,10 +200,61 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
         ref={bodyRef}
         value={draft.body}
         onChange={edit('body')}
-        readOnly={streaming}
+        readOnly={streaming || saving}
         rows={1}
         className="block w-full resize-none overflow-hidden bg-transparent px-4 py-3 text-[var(--chat-text-primary)] outline-none read-only:cursor-default focus-visible:bg-[var(--chat-surface-hover)]"
       />
+      {dirty && !streaming ? (
+        <div className="flex items-center gap-2 border-t border-[var(--chat-border-subtle)] px-4 py-3">
+          {canPersist ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving}
+              onClick={() =>
+                void save(emailPlainText(draft)).then((saved) => {
+                  if (saved) setDirty(false);
+                })
+              }
+            >
+              {saving
+                ? t('richBlock.saving', 'Saving…')
+                : t('richBlock.saveChanges', 'Save changes')}
+            </Button>
+          ) : (
+            <p className="text-xs text-[var(--chat-text-secondary)]">
+              {t('richBlock.temporaryEdits', 'Edits are temporary in this view.')}
+            </p>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={saving}
+            onClick={() =>
+              confirm({
+                title: t('richBlock.discardTitle', 'Discard unsaved changes?'),
+                description: t(
+                  'richBlock.discardDescription',
+                  'Your unsaved changes to this draft will be lost.',
+                ),
+                confirmLabel: t('richBlock.discardChanges', 'Discard changes'),
+                cancelLabel: t('richBlock.keepEditing', 'Keep editing'),
+                onConfirm: () => {
+                  setEdits({});
+                  setDirty(false);
+                  requestAnimationFrame(() =>
+                    document.getElementById(`${idPrefix}-subject`)?.focus(),
+                  );
+                },
+              })
+            }
+          >
+            {t('richBlock.cancelEdit', 'Cancel')}
+          </Button>
+        </div>
+      ) : null}
+      {discardDialog}
     </RichBlockCard>
   );
 }

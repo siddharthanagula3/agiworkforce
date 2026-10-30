@@ -1,0 +1,10 @@
+[data-markdown-math-display] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+[data-markdown-math-display] > .katex {
+  width: max-content;
+  min-width: 100%;
+}

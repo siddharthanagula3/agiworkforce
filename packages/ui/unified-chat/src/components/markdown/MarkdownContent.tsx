@@ -19,6 +19,11 @@ import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import { EmailBlock } from './EmailBlock';
 import { WritingBlock } from './WritingBlock';
+import {
+  RichBlockEditContext,
+  RichBlockEditScope,
+  type AssistantFenceEditHandler,
+} from './RichBlockEdit';
 import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './richBlocks';
 import { AnswerSurface } from './AnswerSurface';
 import { isAnswerSurfaceLanguage, liftAnswerBadges } from './answerSurfaces';
@@ -43,6 +48,7 @@ import type { CitationItem, MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
 import { ArrowUpRight, Check, Image as ImageIcon, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
+import './math-layout.css';
 import { approvedImageKeys, NO_TRUSTED_IMAGES, TrustedImagesContext } from './ImageTrust';
 
 const IMAGE_LOADING_PLACEHOLDER_CLASS = 'aspect-[4/3] w-full max-w-sm';
@@ -580,7 +586,7 @@ interface HastNode {
   type?: string;
   tagName?: string;
   value?: string;
-  properties?: { className?: unknown };
+  properties?: { className?: unknown; dataAssistantFenceIndex?: unknown };
   children?: readonly HastNode[];
 }
 
@@ -599,7 +605,15 @@ function fenceLanguage(node: HastNode | undefined): string {
     (value): value is string =>
       typeof value === 'string' && value.startsWith(LANGUAGE_CLASS_PREFIX),
   );
-  return languageClass ? languageClass.slice(LANGUAGE_CLASS_PREFIX.length) : '';
+  return languageClass ? languageClass.slice(LANGUAGE_CLASS_PREFIX.length).toLowerCase() : '';
+}
+
+function editableFenceIndex(node: HastNode | undefined): number | null {
+  const code = node?.children?.find((child) => child.type === 'element');
+  const value = code?.properties?.dataAssistantFenceIndex;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const index = Number(value);
+  return Number.isSafeInteger(index) && index >= 0 ? index : null;
 }
 
 const renderWritingBody = (text: string) => <MarkdownContent content={text} />;
@@ -614,13 +628,23 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
       <MarkdownContent content={source} />
     );
   }
-  if (language === 'message' || language === 'document' || language === 'post') {
+  if (
+    language === 'message' ||
+    language === 'document' ||
+    language === 'post' ||
+    language === 'prompt' ||
+    language === 'snippet'
+  ) {
     const label =
       language === 'message'
         ? 'Chat message'
         : language === 'document'
           ? 'Document'
-          : 'Social post';
+          : language === 'post'
+            ? 'Social post'
+            : language === 'prompt'
+              ? 'Prompt'
+              : 'Snippet';
     return (
       <WritingBlock
         source={source}
@@ -628,7 +652,6 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
         renderBody={renderWritingBody}
         kind={language}
         label={label}
-        inline
       />
     );
   }
@@ -637,7 +660,14 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
     if (classified.kind === 'fallback') {
       return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
     }
-    return <AnswerSurface language={language} source={source} />;
+    return (
+      <AnswerSurface
+        language={language}
+        source={source}
+        streaming={streaming}
+        renderBody={renderWritingBody}
+      />
+    );
   }
   return <WritingBlock source={source} streaming={streaming} renderBody={renderWritingBody} />;
 };
@@ -650,7 +680,15 @@ const MarkdownPre = ({
   const language = fenceLanguage(node);
   const source = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
   if (isRichBlockLanguage(language)) {
-    return <RichFence language={language} source={source} />;
+    const index = editableFenceIndex(node);
+    const fence = <RichFence language={language} source={source} />;
+    return index === null ? (
+      fence
+    ) : (
+      <RichBlockEditScope index={index} language={language} source={source}>
+        {fence}
+      </RichBlockEditScope>
+    );
   }
   const classified = classifyAssistantFence(language, source);
   if (classified.kind === 'fallback') {
@@ -666,41 +704,61 @@ const MarkdownPre = ({
   return <pre {...rest}>{children}</pre>;
 };
 
+const MarkdownSpan: Components['span'] = ({ node: _node, className, children, ...rest }) => {
+  const streaming = useIsStreamTail();
+  const names = Array.isArray(className)
+    ? className
+    : typeof className === 'string'
+      ? className.split(' ')
+      : [];
+  if (streaming && names.includes('katex-error')) return null;
+  if (names.includes('answer-badge')) {
+    return (
+      <span
+        data-answer-badge=""
+        className="mx-0.5 inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--chat-success-text)]"
+      >
+        {children}
+      </span>
+    );
+  }
+  const classText = Array.isArray(className) ? className.join(' ') : className;
+  return (
+    <span
+      {...rest}
+      className={classText}
+      data-markdown-math-display={names.includes('katex-display') ? '' : undefined}
+    >
+      {children}
+    </span>
+  );
+};
+
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
   pre: MarkdownPre as Components['pre'],
   img: MarkdownImage as Components['img'],
-  h1: ({ children }) => <h1 className="mb-4 mt-6 text-h2">{children}</h1>,
-  h2: ({ children }) => <h2 className="mb-3 mt-5 text-h3">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-2 mt-4 text-h4">{children}</h3>,
+  h1: ({ children }) => (
+    <h1 data-markdown-heading="" className="mb-4 mt-6 wrap-anywhere text-h2">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 data-markdown-heading="" className="mb-3 mt-5 wrap-anywhere text-h3">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 data-markdown-heading="" className="mb-2 mt-4 wrap-anywhere text-h4">
+      {children}
+    </h3>
+  ),
   p: MarkdownParagraph as Components['p'],
   ul: MarkdownUnorderedList as Components['ul'],
   ol: MarkdownOrderedList as Components['ol'],
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
-  span: ({ node: _node, className, children, ...rest }) => {
-    const names = Array.isArray(className)
-      ? className
-      : typeof className === 'string'
-        ? className.split(' ')
-        : [];
-    if (names.includes('answer-badge')) {
-      return (
-        <span
-          data-answer-badge=""
-          className="mx-0.5 inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--chat-success-text)]"
-        >
-          {children}
-        </span>
-      );
-    }
-    const classText = Array.isArray(className) ? className.join(' ') : className;
-    return (
-      <span {...rest} className={classText}>
-        {children}
-      </span>
-    );
-  },
+  span: MarkdownSpan,
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-s-2 border-border ps-4 text-muted-foreground [&>:last-child]:mb-0">
       {children}
@@ -741,6 +799,8 @@ export interface MarkdownContentProps {
   onTaskToggle?: (index: number) => void;
   onFollowUp?: (text: string) => void;
   footnoteScope?: string;
+  onFenceEdit?: AssistantFenceEditHandler;
+  fenceIndexOffset?: number;
 }
 
 /**
@@ -781,6 +841,8 @@ function MarkdownContentImpl({
   onTaskToggle,
   onFollowUp,
   footnoteScope,
+  onFenceEdit,
+  fenceIndexOffset = 0,
 }: MarkdownContentProps) {
   // The sanitizer prefixes every id itself, so footnote ids are generated
   // without that prefix; MarkdownLink adds it to in-page hrefs.
@@ -813,6 +875,13 @@ function MarkdownContentImpl({
       onTaskToggle && !isStreaming ? { source: processedContent, onToggle: onTaskToggle } : null,
     [onTaskToggle, isStreaming, processedContent],
   );
+  const editHandler = useMemo<AssistantFenceEditHandler | undefined>(
+    () =>
+      onFenceEdit
+        ? (edit) => onFenceEdit({ ...edit, index: edit.index + fenceIndexOffset })
+        : undefined,
+    [onFenceEdit, fenceIndexOffset],
+  );
   return (
     <FollowUpActionProvider onFollowUp={onFollowUp}>
       <TaskToggleContext.Provider value={taskToggle}>
@@ -823,15 +892,17 @@ function MarkdownContentImpl({
                 {svgSlides.slides.length > 0 ? (
                   <SvgConceptGallery slides={svgSlides.slides} />
                 ) : null}
-                <ReactMarkdown
-                  remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
-                  remarkRehypeOptions={remarkRehypeOptions}
-                  rehypePlugins={REHYPE_PLUGINS}
-                  urlTransform={markdownUrlTransform}
-                  components={markdownComponents}
-                >
-                  {processedContent}
-                </ReactMarkdown>
+                <RichBlockEditContext.Provider value={editHandler}>
+                  <ReactMarkdown
+                    remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
+                    remarkRehypeOptions={remarkRehypeOptions}
+                    rehypePlugins={REHYPE_PLUGINS}
+                    urlTransform={markdownUrlTransform}
+                    components={markdownComponents}
+                  >
+                    {processedContent}
+                  </ReactMarkdown>
+                </RichBlockEditContext.Provider>
               </Tooltip.Provider>
             </TrustedImagesContext.Provider>
           </CitationsContext.Provider>

@@ -9,6 +9,7 @@ vi.mock('sonner', () => ({ toast: { error: toastError } }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: async () => 'tok' }) }));
 
 import { saveMessageToDb, notifyPersistenceFailure } from '../useChatStream';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
 
 const MSG = { id: 'client-id-1', role: 'assistant', content: 'hi', model: 'm' };
 const FAST = { retryDelayMs: 0 };
@@ -90,6 +91,26 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
 
     await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(/save message to DB/i);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('preserves an actionable saved-edit conflict without retrying the stale write', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(409, {
+          error: {
+            message: 'Reopen the saved answer.',
+            code: 'CONFLICT',
+            details: { reason: ASSISTANT_CONTENT_CHANGED_REASON },
+          },
+        }),
+      ),
+    );
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toMatchObject({
+      status: 409,
+      reason: ASSISTANT_CONTENT_CHANGED_REASON,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('THROWS immediately on a non-retryable 4xx (e.g. 404), no retry', async () => {

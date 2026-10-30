@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Button, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { useRichBlockCopy } from './RichBlockCard';
 import {
-  chartAxisMax,
   parseActions,
-  parseCards,
+  parseCardGrid,
+  parseRichCard,
+  parseStats,
+  parseForm,
+  parseCarousel,
   parseChartSurface,
   parseChecks,
   parseChecklist,
@@ -25,14 +28,14 @@ import {
   parseTool,
   parseTranscript,
   toolStateLabel,
-  type ChartSurface,
   type CheckItem,
-  type GalleryItem,
   type MapStop,
   type StatusRow,
 } from './answerSurfaces';
 import { useFollowUpAction } from './FollowUpAction';
-import { GatedImage } from './ImageTrust';
+import { AnswerForm } from './AnswerForm';
+import { AnswerCarousel, AnswerGallery } from './AnswerGallery';
+import { ChartArtifact } from '../artifact-components/ChartArtifact';
 
 const PANEL_CLASS =
   'my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]';
@@ -147,60 +150,6 @@ function CheckList({
   );
 }
 
-function Gallery({ items }: { items: GalleryItem[] }) {
-  const { t } = useUiTranslation('chat');
-  const [index, setIndex] = useState(0);
-  if (items.length === 0) return null;
-  return (
-    <section
-      className={PANEL_CLASS}
-      data-answer-surface="gallery"
-      aria-label={t('answerSurface.gallery', 'Gallery')}
-    >
-      <div className="grid gap-3 p-4 sm:grid-cols-2">
-        {items.map((item, itemIndex) => (
-          <figure
-            key={`${item.caption}-${itemIndex}`}
-            data-gallery-slide={itemIndex === index ? 'current' : 'idle'}
-            className="min-w-0"
-          >
-            {item.color ? (
-              <div
-                role="img"
-                aria-label={item.caption}
-                data-gallery-swatch={item.color}
-                className="aspect-square w-full rounded-lg border border-[var(--chat-border-subtle)]"
-                style={{ backgroundColor: item.color }}
-              />
-            ) : (
-              <GatedImage
-                src={item.src}
-                alt={item.caption}
-                className="aspect-video w-full rounded-lg object-cover"
-              />
-            )}
-            <figcaption className="mt-2 text-sm text-[var(--chat-text-secondary)]">
-              {item.caption}
-            </figcaption>
-          </figure>
-        ))}
-      </div>
-      {items.length > 1 ? (
-        <div className="flex justify-end border-t border-[var(--chat-border-subtle)] px-4 py-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIndex((currentIndex) => (currentIndex + 1) % items.length)}
-          >
-            {t('answerSurface.next', 'Next')}
-          </Button>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 function mapTile(lat: number, lon: number): string {
   const zoom = 5;
   const n = 2 ** zoom;
@@ -251,76 +200,123 @@ function MapCard({ stops }: { stops: MapStop[] }) {
   );
 }
 
-function ChartCard({ chart }: { chart: ChartSurface }) {
-  const axis = chartAxisMax(chart.points);
-  return (
-    <figure
-      className={PANEL_CLASS}
-      data-answer-surface="chart"
-      data-answer-chart="1"
-      aria-label={chart.title || chart.yLabel}
-    >
-      {chart.title ? (
-        <figcaption className="px-4 pt-3 text-sm font-medium">{chart.title}</figcaption>
-      ) : null}
-      <div className="flex h-52 items-end gap-3 px-4 pt-6" data-chart-axis={axis}>
-        {chart.points.map((point) => (
-          <div key={point.label} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1">
-            <div
-              className="w-full rounded-t-[var(--chat-radius-sm)] bg-[var(--chat-info)]"
-              style={{ height: `${Math.max(4, (point.value / axis) * 100)}%` }}
-              title={`${point.label}: ${point.value}`}
-              data-chart-bar={point.label}
-              data-chart-value={point.value}
-            />
-            <span className="truncate text-center text-xs text-[var(--chat-text-secondary)]">
-              {point.label}
-            </span>
-          </div>
-        ))}
-      </div>
-      <table className="mt-3 w-full border-t border-[var(--chat-border-subtle)] text-sm">
-        <thead>
-          <tr>
-            <th className="px-4 py-2 text-left font-medium">{chart.xLabel}</th>
-            <th className="px-4 py-2 text-left font-medium">{chart.yLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {chart.points.map((point) => (
-            <tr key={point.label}>
-              <td className="px-4 py-1.5">{point.label}</td>
-              <td className="px-4 py-1.5">{point.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </figure>
-  );
-}
-
-export function AnswerSurface({ language, source }: { language: string; source: string }) {
+export function AnswerSurface({
+  language,
+  source,
+  renderBody,
+  streaming = false,
+}: {
+  language: string;
+  source: string;
+  renderBody?: (text: string) => ReactNode;
+  streaming?: boolean;
+}) {
   const { t } = useUiTranslation('chat');
-  const parsed = useMemo(() => source, [source]);
+  const parsed = source;
 
-  if (language === 'cards' || language === 'modes') {
-    const cards = language === 'modes' ? parseModes(parsed) : parseCards(parsed);
-    if (cards.length === 0) return null;
+  if (language === 'form') {
+    const spec = parseForm(parsed);
+    return spec ? (
+      <AnswerForm key={source} spec={spec} className={PANEL_CLASS} streaming={streaming} />
+    ) : null;
+  }
+  if (language === 'carousel') {
+    const spec = parseCarousel(parsed);
+    return spec ? <AnswerCarousel key={source} spec={spec} className={PANEL_CLASS} /> : null;
+  }
+  if (language === 'card') {
+    const spec = parseRichCard(parsed);
+    if (!spec) return null;
+    return (
+      <article className={PANEL_CLASS} data-answer-surface="card" aria-label={spec.title}>
+        <div className="border-b border-[var(--chat-border-subtle)] px-4 py-3">
+          <h3 className="text-sm font-medium">{spec.title}</h3>
+          {spec.subtitle ? (
+            <p className="mt-1 text-sm text-[var(--chat-text-secondary)]">{spec.subtitle}</p>
+          ) : null}
+          {spec.tags.length > 0 ? (
+            <ul aria-label={t('answerSurface.tags', 'Tags')} className="mt-2 flex flex-wrap gap-2">
+              {spec.tags.map((tag, index) => (
+                <li
+                  key={`${index}-${tag}`}
+                  className="rounded-md bg-[var(--chat-surface-hover)] px-2 py-1 text-xs text-[var(--chat-text-secondary)]"
+                >
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <div className="px-4 pt-3 pb-1">
+          {renderBody ? renderBody(spec.body) : <p className="whitespace-pre-wrap">{spec.body}</p>}
+        </div>
+      </article>
+    );
+  }
+  if (language === 'stats') {
+    const spec = parseStats(parsed);
+    if (!spec) return null;
     return (
       <section
         className={PANEL_CLASS}
+        data-answer-surface="stats"
+        aria-label={spec.title || t('answerSurface.stats', 'Statistics')}
+      >
+        {spec.title ? (
+          <h3 className="border-b border-[var(--chat-border-subtle)] px-4 py-3 text-sm font-medium">
+            {spec.title}
+          </h3>
+        ) : null}
+        <dl className="grid gap-4 p-4 sm:grid-cols-2">
+          {spec.items.map((item, index) => (
+            <div key={`${index}-${item.label}`} className="min-w-0">
+              <dt className="text-sm text-[var(--chat-text-secondary)]">{item.label}</dt>
+              <dd className="mt-1 break-words text-xl font-medium">{item.value}</dd>
+              {item.caption ? (
+                <dd className="mt-1 text-sm text-[var(--chat-text-secondary)]">{item.caption}</dd>
+              ) : null}
+              {item.tag ? (
+                <dd className="mt-1 text-xs text-[var(--chat-text-secondary)]">{item.tag}</dd>
+              ) : null}
+            </div>
+          ))}
+        </dl>
+      </section>
+    );
+  }
+
+  if (language === 'cards' || language === 'modes') {
+    const grid = language === 'cards' ? parseCardGrid(parsed) : null;
+    const cards = language === 'modes' ? parseModes(parsed) : (grid?.cards ?? []);
+    if (cards.length === 0) return null;
+    return (
+      <section
+        className={cn(PANEL_CLASS, '@container')}
         data-answer-surface={language}
         aria-label={
-          language === 'modes'
+          grid?.title ||
+          (language === 'modes'
             ? t('answerSurface.modes', 'Display modes')
-            : t('answerSurface.cards', 'Cards')
+            : t('answerSurface.cards', 'Cards'))
         }
       >
-        <div className="grid gap-3 p-4 sm:grid-cols-2">
+        {grid?.title ? (
+          <h3 className="border-b border-[var(--chat-border-subtle)] px-4 py-3 text-sm font-medium">
+            {grid.title}
+          </h3>
+        ) : null}
+        <div
+          className={cn(
+            'grid gap-3 p-4',
+            (grid?.columns ?? 2) > 1 && '@lg:grid-cols-2',
+            grid?.columns === 3 && '@2xl:grid-cols-3',
+          )}
+          data-card-grid-columns={grid?.columns ?? 2}
+        >
           {cards.map((card) => (
             <article
               key={card.title}
-              className="rounded-lg border border-[var(--chat-border-subtle)] p-3"
+              className="min-w-0 rounded-lg border border-[var(--chat-border-subtle)] p-3"
             >
               <h3 className="text-sm font-medium">{card.title}</h3>
               <p className="mt-1 text-sm text-[var(--chat-text-secondary)]">{card.body}</p>
@@ -372,7 +368,7 @@ export function AnswerSurface({ language, source }: { language: string; source: 
   if (language === 'gallery') {
     const items = parseGallery(parsed);
     if (items.length === 0) return null;
-    return <Gallery items={items} />;
+    return <AnswerGallery items={items} className={PANEL_CLASS} />;
   }
 
   if (language === 'details') {
@@ -560,6 +556,11 @@ export function AnswerSurface({ language, source }: { language: string; source: 
               <span className="font-medium">
                 {index + 1}. {step.title}
               </span>
+              {step.date ? (
+                <span className="mt-1 block text-xs text-[var(--chat-text-secondary)]">
+                  {step.date}
+                </span>
+              ) : null}
               {step.detail ? (
                 <span className="mt-1 block text-sm text-[var(--chat-text-secondary)]">
                   {step.detail}
@@ -613,7 +614,27 @@ export function AnswerSurface({ language, source }: { language: string; source: 
 export function InlineChart({ source }: { source: string }) {
   const chart = parseChartSurface(source);
   if (!chart) return null;
-  return <ChartCard chart={chart} />;
+  const content = JSON.stringify({
+    type: chart.kind ?? 'bar',
+    title: chart.title,
+    x_axis: { label: chart.xLabel, data_key: 'label' },
+    y_axis: { label: chart.yLabel },
+    xKey: 'label',
+    series: [{ dataKey: 'value', name: chart.yLabel }],
+    data: chart.points,
+  });
+  return (
+    <div data-answer-surface="chart" data-answer-chart="1">
+      <ChartArtifact
+        artifact={{
+          id: 'inline-chart',
+          type: 'chart',
+          title: chart.title || chart.yLabel,
+          content,
+        }}
+      />
+    </div>
+  );
 }
 
 function FollowUpList({ source }: { source: string }) {
@@ -658,6 +679,7 @@ function RadioCard({ spec }: { spec: NonNullable<ReturnType<typeof parseRadio>> 
   const { t } = useUiTranslation('chat');
   const initial = spec.options.find((option) => option.selected)?.label ?? spec.options[0]!.label;
   const [selected, setSelected] = useState(initial);
+  const groupId = useId();
   return (
     <fieldset className={PANEL_CLASS} data-answer-surface="radio">
       {spec.prompt ? (
@@ -668,7 +690,7 @@ function RadioCard({ spec }: { spec: NonNullable<ReturnType<typeof parseRadio>> 
           <label key={option.label} className="flex items-center gap-2">
             <input
               type="radio"
-              name={spec.prompt || 'answer-radio'}
+              name={groupId}
               checked={selected === option.label}
               onChange={() => setSelected(option.label)}
             />
@@ -685,10 +707,11 @@ function RadioCard({ spec }: { spec: NonNullable<ReturnType<typeof parseRadio>> 
 
 function SliderCard({ spec }: { spec: NonNullable<ReturnType<typeof parseSlider>> }) {
   const [value, setValue] = useState(spec.value);
+  const id = useId();
   return (
     <section className={PANEL_CLASS} data-answer-surface="slider" aria-label={spec.label}>
       <div className="flex items-center justify-between gap-3 px-4 pt-3">
-        <label htmlFor="answer-slider" className="text-sm">
+        <label htmlFor={id} className="text-sm">
           {spec.label}
         </label>
         <span className="text-lg font-medium" data-slider-value="">
@@ -697,7 +720,7 @@ function SliderCard({ spec }: { spec: NonNullable<ReturnType<typeof parseSlider>
         </span>
       </div>
       <input
-        id="answer-slider"
+        id={id}
         className="mx-4 mb-4 w-[calc(100%-2rem)]"
         type="range"
         min={spec.min}
@@ -712,12 +735,13 @@ function SliderCard({ spec }: { spec: NonNullable<ReturnType<typeof parseSlider>
 function DropdownCard({ spec }: { spec: NonNullable<ReturnType<typeof parseDropdown>> }) {
   const { t } = useUiTranslation('chat');
   const [selected, setSelected] = useState(spec.selected);
+  const id = useId();
   return (
     <section className={PANEL_CLASS} data-answer-surface="dropdown">
-      <label className="flex flex-col gap-2 px-4 py-3 text-sm" htmlFor="answer-dropdown">
+      <label className="flex flex-col gap-2 px-4 py-3 text-sm" htmlFor={id}>
         {spec.label}
         <select
-          id="answer-dropdown"
+          id={id}
           value={selected}
           onChange={(event) => setSelected(event.target.value)}
           className="rounded-md border border-[var(--chat-border)] bg-transparent px-2 py-2"

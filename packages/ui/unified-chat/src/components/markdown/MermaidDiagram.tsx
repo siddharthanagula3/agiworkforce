@@ -1,10 +1,20 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { MermaidConfig } from 'mermaid';
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+  useUiTranslation,
+} from '@agiworkforce/ui';
 
 import { reportClientFailure } from '../../lib/client-failures';
 import { sanitizeSvg } from '../../lib/sanitize-svg';
 import { renderMermaidInOwnedHost } from './mermaid-render';
 import { mermaidExternalResource } from './mermaidExternalResources';
+import { useRichBlockCopy } from './RichBlockCard';
 
 type RenderState =
   | { phase: 'idle' }
@@ -163,11 +173,16 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   interactive = true,
   onRenderResult,
 }) => {
+  const { t } = useUiTranslation('chat');
+  const { copy, copyState } = useRichBlockCopy();
   const [state, setState] = useState<RenderState>(() => {
     const cached = svgCache.get(source);
     return cached ? { phase: 'ready', svg: cached } : { phase: 'idle' };
   });
   const [showSource, setShowSource] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [inlineHeight, setInlineHeight] = useState(0);
+  const inlineHostRef = useRef<HTMLDivElement>(null);
   const reactId = useId();
   const diagramId = useMemo(() => `mermaid-${reactId.replace(/[:]/g, '')}`, [reactId]);
   const renderHostRef = useRef<HTMLDivElement>(null);
@@ -243,26 +258,93 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     </pre>
   );
   const renderHost = <div ref={renderHostRef} aria-hidden="true" className="sr-only" />;
+  const copySource = interactive ? (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={() => void copy(source)}
+      aria-label={t('markdown.copyDiagramSource', 'Copy diagram source')}
+    >
+      {copyState === 'copied'
+        ? t('markdown.diagramCopied', 'Source copied')
+        : copyState === 'failed'
+          ? t('markdown.diagramCopyFailed', 'Copy failed')
+          : t('markdown.copyDiagramSource', 'Copy diagram source')}
+    </Button>
+  ) : null;
 
   if (state.phase === 'ready') {
+    const drawing = (
+      <div
+        className="mermaid-diagram"
+        // llm-guardrail-allow: Mermaid output is passed through the package sanitizeSvg before entering state.svg.
+        dangerouslySetInnerHTML={{ __html: state.svg }}
+      />
+    );
     return (
       <figure className={className} data-mermaid="ready">
         {renderHost}
         <div
-          className="mermaid-diagram"
-          // llm-guardrail-allow: the markup is mermaid output passed through the
-          // package's own sanitizeSvg, which is the canonical owner of SVG
-          // stripping for this surface. Diagram source is model output, so
-          // mermaid's securityLevel is not relied on as the only defence.
-          // llm-guardrail-allow: mermaid output, passed through the package sanitizeSvg
-          dangerouslySetInnerHTML={{ __html: state.svg }}
-        />
+          ref={inlineHostRef}
+          aria-hidden={expanded || undefined}
+          style={expanded && inlineHeight > 0 ? { height: inlineHeight } : undefined}
+        >
+          {expanded ? null : drawing}
+        </div>
         {interactive ? (
           <>
-            <figcaption className="mermaid-caption">
+            <figcaption className="mermaid-caption flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => setShowSource((v) => !v)}>
                 {showSource ? 'Hide source' : 'Show source'}
               </button>
+              {copySource}
+              <Dialog open={expanded} onOpenChange={setExpanded}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setInlineHeight(
+                        inlineHostRef.current?.getBoundingClientRect().height ||
+                          cachedDiagramHeight(source) ||
+                          0,
+                      )
+                    }
+                  >
+                    {t('markdown.expandDiagram', 'Expand diagram')}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent
+                  hideCloseButton
+                  disableAnimation
+                  aria-describedby={undefined}
+                  className="inset-4 mx-auto flex w-auto max-w-6xl max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border border-[var(--chat-border)] bg-[var(--chat-bg)] p-0 backdrop-blur-none"
+                >
+                  <div className="flex min-h-12 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-4 py-2">
+                    <DialogTitle className="text-sm font-medium">
+                      {t('markdown.diagramTitle', 'Diagram')}
+                    </DialogTitle>
+                    <div className="flex items-center gap-2">
+                      {copySource}
+                      <DialogClose asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label={t('markdown.closeExpandedDiagram', 'Close expanded diagram')}
+                        >
+                          {t('markdown.closeDiagram', 'Close')}
+                        </Button>
+                      </DialogClose>
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-4">
+                    {expanded ? drawing : null}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </figcaption>
             {showSource ? sourceBlock : null}
           </>
@@ -278,6 +360,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         <p role="status" className="mermaid-error">
           This diagram could not be drawn: {state.reason}. Its source is kept below.
         </p>
+        {copySource}
         {sourceBlock}
       </figure>
     );

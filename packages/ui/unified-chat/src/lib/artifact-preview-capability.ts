@@ -38,6 +38,13 @@
 
 export type ArtifactPreviewScriptSupport = 'unknown' | 'allowed' | 'blocked';
 
+const DECLARED_HTML_SCRIPT =
+  /<script\b|\bon[a-z][a-z0-9]*\s*=|(?:href|src)\s*=\s*["']?\s*javascript:/i;
+
+export function htmlDeclaresScripts(source: string): boolean {
+  return DECLARED_HTML_SCRIPT.test(source);
+}
+
 const PROBE_FLAG = '__agiArtifactInlineScriptProbe';
 
 const PROBE_MARKER_ATTR = 'data-agi-artifact-probe';

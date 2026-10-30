@@ -2,6 +2,11 @@ import {
   checklistProgress,
   parseActions,
   parseCards,
+  parseCardGrid,
+  parseRichCard,
+  parseStats,
+  parseForm,
+  parseCarousel,
   parseChartSurface,
   parseChecks,
   parseChecklist,
@@ -24,11 +29,16 @@ import {
   type CheckItem,
   type StatusRow,
   type ToolState,
+  type RichCardSpec,
+  type StatsSpec,
+  type FormSpec,
+  type CarouselSpec,
 } from './answerSurfaces';
 import { emailPlainText, parseEmailBlock, WRITING_KIND_LANGUAGES } from './richBlocks';
 import { parseChartArtifact } from '@agiworkforce/types/chart-spec';
 
 export { checklistProgress };
+export type { AssistantFenceEdit } from './assistantFenceEdits';
 
 export const UNKNOWN_STRUCTURED_LANGUAGE = 'unknown';
 
@@ -62,6 +72,10 @@ export type AssistantFence =
       notice: string;
     }
   | { kind: 'cards'; cards: { title: string; body: string }[] }
+  | { kind: 'card'; spec: RichCardSpec }
+  | { kind: 'stats'; spec: StatsSpec }
+  | { kind: 'form'; spec: FormSpec; source: string }
+  | { kind: 'carousel'; spec: CarouselSpec }
   | { kind: 'checklist'; title: string; items: CheckItem[]; progress: string }
   | ({ kind: 'chart' } & ChartSurfaceFields)
   | { kind: 'citation'; title: string; source: string; href: string; summary: string }
@@ -135,6 +149,7 @@ function writingLabel(language: string): string {
   if (language === 'message') return 'Chat message';
   if (language === 'document') return 'Document';
   if (language === 'post') return 'Social post';
+  if (language === 'snippet') return 'Snippet';
   return 'Writing';
 }
 
@@ -157,8 +172,8 @@ export function classifyAssistantFence(language: string, source: string): Assist
     };
   }
   if (WRITING_KIND_LANGUAGES.has(normalized) && normalized !== 'email') {
-    const text = source.trim();
-    if (!text) return fallback('invalid', normalized, source);
+    const text = source;
+    if (!text.trim()) return fallback('invalid', normalized, source);
     return {
       kind: 'writing',
       language: normalized,
@@ -166,10 +181,26 @@ export function classifyAssistantFence(language: string, source: string): Assist
       copyText: text,
     };
   }
+  if (normalized === 'card') {
+    const spec = parseRichCard(source);
+    return spec ? { kind: 'card', spec } : fallback('invalid', normalized, source);
+  }
+  if (normalized === 'stats') {
+    const spec = parseStats(source);
+    return spec ? { kind: 'stats', spec } : fallback('invalid', normalized, source);
+  }
+  if (normalized === 'form') {
+    const spec = parseForm(source);
+    return spec ? { kind: 'form', spec, source } : fallback('invalid', normalized, source);
+  }
+  if (normalized === 'carousel') {
+    const spec = parseCarousel(source);
+    return spec ? { kind: 'carousel', spec } : fallback('invalid', normalized, source);
+  }
   if (normalized === 'chart') {
     const chart = parseChartSurface(source) ?? chartFromSpec(source);
     if (!chart) return fallback('invalid', normalized, source);
-    return { kind: 'chart', ...chart };
+    return { ...chart, kind: 'chart' };
   }
   if (normalized === 'tool') {
     const tool = parseTool(source);
@@ -211,7 +242,8 @@ export function classifyAssistantFence(language: string, source: string): Assist
     };
   }
   if (normalized === 'cards' || normalized === 'modes') {
-    const cards = parseCards(source);
+    const cards =
+      normalized === 'cards' ? (parseCardGrid(source)?.cards ?? []) : parseCards(source);
     if (cards.length === 0) return fallback('invalid', normalized, source);
     return { kind: 'cards', cards };
   }
@@ -351,6 +383,30 @@ export function renderClassifiedFenceHtml(
   if (fence.kind === 'code') return null;
   if (fence.kind === 'fallback') {
     return `<p data-answer-fallback="${fence.reason}">${escapeHtml(fence.text)}</p>`;
+  }
+  if (fence.kind === 'card') {
+    return `${sectionOpen(mode, 'card', fence.spec.title)}<h3>${escapeHtml(fence.spec.title)}</h3><p>${escapeHtml(fence.spec.subtitle)}</p><p>${escapeHtml(fence.spec.tags.join(', '))}</p>${copyBody(fence.spec.body)}</section>`;
+  }
+  if (fence.kind === 'stats') {
+    const items = fence.spec.items
+      .map(
+        (item) =>
+          `<dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml([item.value, item.caption, item.tag].filter(Boolean).join(' · '))}</dd>`,
+      )
+      .join('');
+    return `${sectionOpen(mode, 'stats', fence.spec.title || 'Statistics')}<h3>${escapeHtml(fence.spec.title)}</h3><dl>${items}</dl></section>`;
+  }
+  if (fence.kind === 'form') {
+    return `${sectionOpen(mode, 'form', fence.spec.title)}<h3>${escapeHtml(fence.spec.title)}</h3><p>Form controls are unavailable in this surface.</p>${copyBody(fence.source)}${copyButton(mode, 'Copy form definition')}</section>`;
+  }
+  if (fence.kind === 'carousel') {
+    const items = fence.spec.items
+      .map(
+        (item) =>
+          `<article><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.text)}</p></article>`,
+      )
+      .join('');
+    return `${sectionOpen(mode, 'carousel', fence.spec.title)}<h3>${escapeHtml(fence.spec.title)}</h3>${items}</section>`;
   }
   if (fence.kind === 'email') {
     const fields = [

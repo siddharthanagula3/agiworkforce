@@ -6,6 +6,7 @@ import {
   SYNC_PROTOCOL_VERSION,
 } from '@agiworkforce/cloud-contracts';
 import { ERROR_CODE_TO_HTTP_STATUS, ErrorCode } from '@agiworkforce/types';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const CLIENT_UPDATE_REQUIRED_STATUS = ERROR_CODE_TO_HTTP_STATUS[ErrorCode.CLIENT_UPDATE_REQUIRED];
@@ -471,8 +472,12 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(sql).toContain('content = incoming.content');
     expect(sql).toContain("item ? 'metadata' as has_metadata");
     expect(sql).toContain(
-      'metadata = case when incoming.has_metadata then incoming.metadata else existing.metadata end',
+      'case when incoming.has_metadata then incoming.metadata else existing.metadata end',
     );
+    expect(sql).toContain(`- '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}'`);
+    expect(sql).toContain(`existing.metadata -> '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}'`);
+    expect(sql).toContain('case when existing.content is distinct from incoming.content');
+    expect(sql).toContain('then to_jsonb(gen_random_uuid()::text)');
     expect(sql).toContain(
       'input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end',
     );

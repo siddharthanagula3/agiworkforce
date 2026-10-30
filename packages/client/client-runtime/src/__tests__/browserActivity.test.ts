@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BROWSER_ACTIVITY_IDLE_MS, createBrowserActivityTracker } from '../browserActivity';
+import * as activity from '../browserActivity';
+import * as desktopRuntime from '../desktop-index';
 
 function browser() {
   const page = Object.assign(new EventTarget(), { visibilityState: 'visible' });
@@ -15,6 +17,13 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('browser activity', () => {
+  it('exposes the same activity implementation through the desktop bundle entry point', () => {
+    expect(desktopRuntime.isBrowserUserActive).toBe(activity.isBrowserUserActive);
+    expect(desktopRuntime.subscribeBrowserActivity).toBe(activity.subscribeBrowserActivity);
+    expect(desktopRuntime.createBrowserActivityTracker).toBe(activity.createBrowserActivityTracker);
+    expect(desktopRuntime.BROWSER_ACTIVITY_IDLE_MS).toBe(activity.BROWSER_ACTIVITY_IDLE_MS);
+  });
+
   it('expires by elapsed time even before a delayed idle timer runs, then notifies on return', () => {
     const { page, tracker } = browser();
     const changed = vi.fn();

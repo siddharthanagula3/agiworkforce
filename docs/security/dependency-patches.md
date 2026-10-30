@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-10-03
+Last updated: 2026-10-30
 
 The npm audit registry reports these advisories against the locked package
 versions, and neither package has a published fixed version at the time of this
@@ -35,3 +35,20 @@ When an upstream fixed version is available, upgrade and run the same behavior
 and compatibility tests, then remove the source patch, exact advisory exception,
 and its package-specific guard binding together. Keep all other high-severity
 advisories blocking.
+
+## Query parser interoperability
+
+The root override installs `decode-uri-component` 0.5.1 or newer for
+[GHSA-qr28-fpjm-wq7f](https://github.com/advisories/GHSA-qr28-fpjm-wq7f).
+That release is ESM-only. Expo Router's `query-string@7.1.3` still requires a
+CommonJS callable, so `patches/query-string@7.1.3.patch` selects the decoder's
+default export. The patch keeps the upstream patched decoder and does not add
+an audit exception. The project's Node 24 toolchain supports the synchronous
+require of this ESM module; Metro bundles the same default export.
+
+`scripts/query-string-compatibility.test.cjs` exercises the actual Expo dependency
+path, Unicode and single-pass query parsing, and a bounded malformed-input
+case. Reversing the patch against the installed parser reproduces its
+`decodeComponent is not a function` failure. Remove this interoperability patch
+when the Expo dependency graph consumes a parser that supports the ESM decoder
+directly, retaining the installed-package compatibility checks.

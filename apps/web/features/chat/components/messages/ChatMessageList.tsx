@@ -20,6 +20,7 @@ import {
   type RowComponentProps,
 } from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { AssistantFenceEdit } from '@agiworkforce/unified-chat/assistant-fence';
 import { settledActivityStatus } from '@agiworkforce/unified-chat';
 import { hasUnavailableWebSearch, type AgentActivityState } from '@agiworkforce/client-runtime';
 import {
@@ -191,6 +192,7 @@ export interface ChatMessageListProps {
   countVariantFollowers?: (messageId: string) => number;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (messageId: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
@@ -405,6 +407,7 @@ interface MessageGroupRowProps {
   countVariantFollowers?: (id: string) => number;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
@@ -456,6 +459,7 @@ interface MessageRowProps {
   countVariantFollowers?: (id: string) => number;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   branchGroup?: MessageBranchGroup;
   isBranching: boolean;
   onBranch?: (messageId: string) => void;
@@ -655,6 +659,7 @@ const MessageRow = memo(function MessageRow({
   countVariantFollowers,
   onReact,
   onPin,
+  onFenceEdit,
   branchGroup,
   isBranching,
   onBranch,
@@ -840,6 +845,7 @@ const MessageRow = memo(function MessageRow({
       countVariantFollowers={countVariantFollowers}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
       onPin={onPin}
+      onFenceEdit={onFenceEdit}
       onBranch={onBranch ? handleBranch : undefined}
       isBranching={isBranching}
       branchNavigation={branchNavigation}
@@ -900,6 +906,7 @@ const MessageGroupRow = memo(
     countVariantFollowers,
     onReact,
     onPin,
+    onFenceEdit,
     branchGroupsByMessageId,
     branchingMessageId,
     onBranch,
@@ -947,6 +954,7 @@ const MessageGroupRow = memo(
             countVariantFollowers={countVariantFollowers}
             onReact={onReact}
             onPin={onPin}
+            onFenceEdit={onFenceEdit}
             branchGroup={branchGroupsByMessageId?.[message.id]}
             isBranching={branchingMessageId === message.id}
             onBranch={onBranch}
@@ -986,6 +994,7 @@ const MessageGroupRow = memo(
       prev.countVariantFollowers === next.countVariantFollowers &&
       prev.onReact === next.onReact &&
       prev.onPin === next.onPin &&
+      prev.onFenceEdit === next.onFenceEdit &&
       prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
       prev.branchingMessageId === next.branchingMessageId &&
       prev.onBranch === next.onBranch &&
@@ -1193,6 +1202,7 @@ const ChatMessageListComponent = ({
   countVariantFollowers,
   onReact,
   onPin,
+  onFenceEdit,
   branchGroupsByMessageId,
   branchingMessageId = null,
   onBranch,
@@ -1854,6 +1864,7 @@ const ChatMessageListComponent = ({
       countVariantFollowers,
       onReact: handleReact,
       onPin,
+      onFenceEdit,
       branchGroupsByMessageId,
       branchingMessageId,
       onBranch,
@@ -1897,6 +1908,7 @@ const ChatMessageListComponent = ({
       onBranch,
       onDeleteVariant,
       onPin,
+      onFenceEdit,
       onRegenerateImage,
       onResumeVideo,
       onRetryVideo,
@@ -2166,6 +2178,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onPaywallDismiss === next.onPaywallDismiss &&
     prev.onEdit === next.onEdit &&
     prev.onPin === next.onPin &&
+    prev.onFenceEdit === next.onFenceEdit &&
     prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
     prev.branchingMessageId === next.branchingMessageId &&
     prev.onBranch === next.onBranch &&

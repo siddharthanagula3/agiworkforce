@@ -77,6 +77,7 @@ export interface PersistedTurnGeneratedFile {
   byteCount: number;
   kind: string;
   checksumSha256?: string;
+  renderIdentity?: string;
   surface: 'artifact' | 'file';
   previewable: boolean;
 }
@@ -189,7 +190,7 @@ function readDeltaBlocks(event: unknown, key: string): Record<string, unknown>[]
 export class AssistantTurnSourceCollector {
   private readonly byId = new Map<string, PersistedTurnSource>();
   private readonly citationsById = new Map<string, PersistedTurnCitation>();
-  private readonly filesByName = new Map<string, PersistedTurnGeneratedFile>();
+  private readonly filesById = new Map<string, PersistedTurnGeneratedFile>();
   private codeExecution: PersistedTurnCodeExecution | undefined;
   private readonly now: () => Date;
 
@@ -289,21 +290,19 @@ export class AssistantTurnSourceCollector {
   }
 
   /**
-   * The files this turn attached, keyed by name the way the client keys them so
-   * a re-emitted file replaces its earlier entry in place instead of appearing
-   * twice. The wire shape is parsed by the shared contract parser, so a file the
-   * client would have rejected is rejected here for the same reason.
+   * Replayed descriptors update the same resource ID. Distinct resources may
+   * share a filename, so names cannot identify a saved output.
    */
   private ingestGeneratedFiles(event: unknown): void {
     for (const block of readDeltaBlocks(event, GENERATED_FILES_DELTA_KEY)) {
       for (const file of parseGeneratedFilesDelta(block)) {
         if (
-          !this.filesByName.has(file.file_name) &&
-          this.filesByName.size >= MAX_PERSISTED_TURN_GENERATED_FILES
+          !this.filesById.has(file.id) &&
+          this.filesById.size >= MAX_PERSISTED_TURN_GENERATED_FILES
         ) {
           continue;
         }
-        this.filesByName.set(file.file_name, {
+        this.filesById.set(file.id, {
           id: file.id,
           fileName: file.file_name,
           mimeType: file.mime_type,
@@ -311,6 +310,7 @@ export class AssistantTurnSourceCollector {
           byteCount: file.byte_count,
           kind: file.kind,
           ...(file.checksum_sha256 ? { checksumSha256: file.checksum_sha256 } : {}),
+          ...(file.render_identity ? { renderIdentity: file.render_identity } : {}),
           surface: file.surface,
           previewable: file.previewable,
         });
@@ -335,6 +335,6 @@ export class AssistantTurnSourceCollector {
 
   /** The files the turn attached, or undefined when it attached none. */
   generatedFilesSnapshot(): readonly PersistedTurnGeneratedFile[] | undefined {
-    return this.filesByName.size > 0 ? [...this.filesByName.values()] : undefined;
+    return this.filesById.size > 0 ? [...this.filesById.values()] : undefined;
   }
 }

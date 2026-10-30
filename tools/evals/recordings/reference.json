@@ -987,6 +987,12 @@
           }
         ]
       }
+    },
+    "chat-prompt/seven-independent-writing-blocks": {
+      "fingerprint": "533cf8bd2d65b5f9f464522b2fc0ec5853e9dd64fc9644debc3275ac374a68ab",
+      "response": {
+        "text": "```message\nHi team, the launch review is ready. Please add your final comments before our planning meeting.\n```\n\n```post\nOur product launch is approaching. We are building clear, useful tools for teams.\n```\n\n```document\n# Project report\n\nThe implementation is ready for internal review. Next, confirm the acceptance criteria.\n```\n\n```document\n# Meeting summary\n\nThe team agreed to review the launch checklist and assign each remaining task.\n```\n\n```prompt\nTurn the supplied meeting notes into decisions, owners, and next actions. Use only the notes.\n```\n\n```document\n# Business proposal\n\nRun a small internal pilot, gather feedback, and review the results before expanding.\n```\n\n```document\n# Product requirements\n\nUsers must be able to create a project, assign an owner, and see its current state.\n```"
+      }
     }
   }
 }

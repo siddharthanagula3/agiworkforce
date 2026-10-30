@@ -188,6 +188,10 @@ export { restoreHyphenatedLabels } from './components/markdown/checklistLabels';
 export { chartHoverText } from './components/artifact-components/chart-spec';
 export { richBlocksAsPlainText } from './components/markdown/richBlocks';
 export {
+  AnswerImageRendererContext,
+  type AnswerImageRenderer,
+} from './components/markdown/AnswerImage';
+export {
   StreamingMarkdownContent,
   type StreamingMarkdownContentProps,
 } from './components/markdown/StreamingMarkdownContent';

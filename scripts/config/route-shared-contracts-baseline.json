@@ -40,7 +40,6 @@
     "billing/receipts",
     "billing/refunds",
     "billing/resume-cancellation",
-    "chat/conversations/[id]/messages/[messageId]",
     "chat/conversations/[id]/messages/[messageId]/follow-ups",
     "chat/conversations/[id]/restore",
     "chat/conversations/bulk",

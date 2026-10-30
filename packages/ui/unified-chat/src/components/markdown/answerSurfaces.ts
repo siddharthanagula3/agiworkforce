@@ -1,5 +1,9 @@
 export const ANSWER_SURFACE_LANGUAGES: ReadonlySet<string> = new Set([
   'cards',
+  'card',
+  'stats',
+  'form',
+  'carousel',
   'radio',
   'slider',
   'checks',
@@ -75,7 +79,60 @@ export interface GalleryItem {
   caption: string;
   src: string;
   color: string;
+  detail?: string;
 }
+
+export interface RichCardSpec {
+  title: string;
+  subtitle: string;
+  tags: string[];
+  body: string;
+}
+
+export interface CardGridSpec {
+  title: string;
+  columns: 1 | 2 | 3;
+  cards: TitledBody[];
+}
+
+export interface StatsSpec {
+  title: string;
+  items: { label: string; value: string; caption: string; tag: string }[];
+}
+
+export interface CarouselSpec {
+  title: string;
+  items: { title: string; text: string; src: string }[];
+}
+
+export type FormField =
+  | { kind: 'text' | 'date' | 'textarea'; label: string; value: string; required: boolean }
+  | {
+      kind: 'select' | 'radio' | 'checks';
+      label: string;
+      options: RadioOption[];
+      required: boolean;
+    }
+  | {
+      kind: 'slider';
+      label: string;
+      min: number;
+      max: number;
+      value: number;
+      unit: string;
+      required: boolean;
+    };
+
+export interface FormSpec {
+  title: string;
+  fields: FormField[];
+  submit: string;
+  send?: boolean;
+}
+
+const STRUCTURED_SURFACE_SOURCE_CAP = 100_000;
+const STRUCTURED_SURFACE_ITEM_CAP = 64;
+const FORM_FIELD_CAP = 32;
 
 export interface DetailsSpec {
   summary: string;
@@ -115,6 +172,7 @@ export interface TimelineStep {
   title: string;
   detail: string;
   state: 'complete' | 'progress' | 'todo';
+  date?: string;
 }
 
 export interface CitationSpec {
@@ -131,6 +189,8 @@ export interface ChartPoint {
 
 export interface ChartSurface {
   title: string;
+  kind?: 'bar' | 'line' | 'pie' | 'donut';
+  subtitle?: string;
   xLabel: string;
   yLabel: string;
   points: ChartPoint[];
@@ -236,6 +296,138 @@ export function parseCards(source: string): TitledBody[] {
   });
 }
 
+export function parseCardGrid(source: string): CardGridSpec | null {
+  if (source.length > STRUCTURED_SURFACE_SOURCE_CAP) return null;
+  const { fields, rest } = fieldMap(source);
+  const columns = Number(fields.get('columns') ?? '2');
+  if (columns !== 1 && columns !== 2 && columns !== 3) return null;
+  if (rest.length === 0 || rest.length > STRUCTURED_SURFACE_ITEM_CAP) return null;
+  const cards = parseCards(rest.join('\n'));
+  return cards.length === rest.length ? { title: fields.get('title') ?? '', columns, cards } : null;
+}
+
+export function parseRichCard(source: string): RichCardSpec | null {
+  if (source.length > STRUCTURED_SURFACE_SOURCE_CAP) return null;
+  const lines = linesOf(source);
+  const headers = new Map<string, string>();
+  let index = 0;
+  for (; index < lines.length; index += 1) {
+    const line = (lines[index] ?? '').trim();
+    if (!line) {
+      index += 1;
+      break;
+    }
+    const field = fieldKey(line);
+    if (!field || !['title', 'subtitle', 'tags'].includes(field.key)) break;
+    headers.set(field.key, field.value);
+  }
+  const title = headers.get('title') ?? '';
+  const body = lines.slice(index).join('\n').trim();
+  if (!title || !body) return null;
+  const tags = (headers.get('tags') ?? '')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  if (tags.length > STRUCTURED_SURFACE_ITEM_CAP) return null;
+  return {
+    title,
+    subtitle: headers.get('subtitle') ?? '',
+    tags,
+    body,
+  };
+}
+
+export function parseStats(source: string): StatsSpec | null {
+  if (source.length > STRUCTURED_SURFACE_SOURCE_CAP) return null;
+  const { fields, rest } = fieldMap(source);
+  if (rest.length === 0 || rest.length > STRUCTURED_SURFACE_ITEM_CAP) return null;
+  const items: StatsSpec['items'] = [];
+  for (const line of rest) {
+    const [label, value, caption = '', tag = ''] = splitFields(line);
+    if (!label || !value) return null;
+    items.push({ label, value, caption, tag });
+  }
+  return { title: fields.get('title') ?? '', items };
+}
+
+export function parseCarousel(source: string): CarouselSpec | null {
+  if (source.length > STRUCTURED_SURFACE_SOURCE_CAP) return null;
+  const { fields, rest } = fieldMap(source);
+  if (rest.length === 0 || rest.length > STRUCTURED_SURFACE_ITEM_CAP) return null;
+  const items: CarouselSpec['items'] = [];
+  for (const line of rest) {
+    const [title, text = '', src = ''] = splitFields(line);
+    if (!title || (!text && !src)) return null;
+    items.push({ title, text, src });
+  }
+  return { title: fields.get('title') ?? 'Carousel', items };
+}
+
+export function parseForm(source: string): FormSpec | null {
+  if (source.length > STRUCTURED_SURFACE_SOURCE_CAP) return null;
+  let title = 'Form';
+  let submit = 'Apply';
+  let send = false;
+  const fields: FormField[] = [];
+  const labels = new Set<string>();
+  for (const line of trimmedLines(source)) {
+    const colon = line.indexOf(':');
+    if (colon < 1) return null;
+    const kind = line.slice(0, colon).trim().toLowerCase();
+    const value = line.slice(colon + 1).trim();
+    if (kind === 'title' || kind === 'submit') {
+      if (!value) return null;
+      if (kind === 'title') title = value;
+      else {
+        const [label = '', action = ''] = splitFields(value);
+        if (!label || (action && action !== 'send')) return null;
+        submit = label;
+        send = action === 'send';
+      }
+      continue;
+    }
+    const parts = splitFields(value);
+    const rawLabel = parts.shift() ?? '';
+    const required =
+      rawLabel.endsWith('*') || parts[parts.length - 1]?.toLowerCase() === 'required';
+    if (parts[parts.length - 1]?.toLowerCase() === 'required') parts.pop();
+    const label = rawLabel.replace(/\*$/, '').trim();
+    if (!label || labels.has(label) || fields.length >= FORM_FIELD_CAP) return null;
+    labels.add(label);
+    if (kind === 'text' || kind === 'date' || kind === 'textarea') {
+      if (parts.length > 1) return null;
+      const initial = parts[0] ?? '';
+      if (kind === 'date' && initial && !/^\d{4}-\d{2}-\d{2}$/.test(initial)) return null;
+      fields.push({ kind, label, value: initial, required });
+    } else if (kind === 'select' || kind === 'radio' || kind === 'checks') {
+      if (parts.length < 2 || parts.length > STRUCTURED_SURFACE_ITEM_CAP) return null;
+      const options = parts.map((option) => ({
+        label: option.replace(/^\*\s*/, '').trim(),
+        selected: option.startsWith('*'),
+      }));
+      if (options.some((option) => !option.label)) return null;
+      if (new Set(options.map((option) => option.label)).size !== options.length) return null;
+      if (kind !== 'checks' && options.filter((option) => option.selected).length > 1) return null;
+      fields.push({ kind, label, options, required });
+    } else if (kind === 'slider') {
+      const [rawMin, rawMax, rawValue, unit = ''] = parts;
+      if (parts.length < 3 || parts.length > 4 || !rawMin || !rawMax || !rawValue) return null;
+      const min = Number(rawMin);
+      const max = Number(rawMax);
+      const initial = Number(rawValue);
+      if (
+        ![min, max, initial].every(Number.isFinite) ||
+        max <= min ||
+        initial < min ||
+        initial > max
+      )
+        return null;
+      fields.push({ kind, label, min, max, value: initial, unit, required });
+    } else return null;
+  }
+  return fields.length > 0 ? { title, fields, submit, ...(send ? { send } : {}) } : null;
+}
+
 function afterBullet(line: string): string | null {
   if (line[0] !== '-' && line[0] !== '*') return null;
   const rest = skipSpaces(line, 1);
@@ -321,10 +513,10 @@ export function parseGallery(source: string): GalleryItem[] {
       items.push({ caption: image[1]!.trim() || 'Image', src: image[2]!.trim(), color: '' });
       continue;
     }
-    const [caption, second] = splitFields(line);
+    const [caption, second, detail] = splitFields(line);
     if (!caption || !second) continue;
     if (HEX_COLOR.test(second)) items.push({ caption, src: '', color: second });
-    else items.push({ caption, src: second, color: '' });
+    else items.push({ caption, src: second, color: '', ...(detail ? { detail } : {}) });
   }
   return items;
 }
@@ -372,7 +564,7 @@ export function parseMap(source: string): MapStop[] {
 }
 
 export function parsePrompt(source: string): string {
-  return source.trim();
+  return source.trim() ? source : '';
 }
 
 export function parseStatus(source: string): StatusRow[] {
@@ -427,8 +619,10 @@ export function parseTimeline(source: string): TimelineStep[] {
   return trimmedLines(source).flatMap((line) => {
     const parts = splitFields(line);
     const title = (parts[0] ?? '').replace(/^\d+[.)]\s+/, '').trim();
-    const detail = parts[1] ?? '';
-    const raw = (parts[2] ?? parts[1] ?? '').toLowerCase();
+    const dated = parts.length >= 4;
+    const date = dated ? (parts[1] ?? '') : '';
+    const detail = parts[dated ? 2 : 1] ?? '';
+    const raw = (parts[dated ? 3 : 2] ?? parts[1] ?? '').toLowerCase();
     if (!title) return [];
     const state: TimelineStep['state'] =
       raw === 'complete' || raw === 'completed'
@@ -437,7 +631,7 @@ export function parseTimeline(source: string): TimelineStep[] {
           ? 'progress'
           : 'todo';
     const stepDetail = parts.length >= 3 ? detail : '';
-    return [{ title, detail: stepDetail, state }];
+    return [{ title, detail: stepDetail, state, ...(date ? { date } : {}) }];
   });
 }
 
@@ -535,6 +729,7 @@ export function parseCitation(source: string): CitationSpec | null {
 }
 
 export function parseChartSurface(source: string): ChartSurface | null {
+  if (source.length > STRUCTURED_SURFACE_SOURCE_CAP) return null;
   const trimmed = source.trim();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
@@ -553,8 +748,17 @@ export function parseChartSurface(source: string): ChartSurface | null {
         return [{ label, value }];
       });
       if (points.length === 0) return null;
-      const titled = record as { title?: unknown; x?: unknown; y?: unknown };
+      const titled = record as {
+        title?: unknown;
+        x?: unknown;
+        y?: unknown;
+        type?: unknown;
+        kind?: unknown;
+      };
+      const kind = titled.type ?? titled.kind ?? 'bar';
+      if (kind !== 'bar' && kind !== 'line' && kind !== 'pie' && kind !== 'donut') return null;
       return {
+        kind,
         title: typeof titled.title === 'string' ? titled.title : '',
         xLabel: typeof titled.x === 'string' ? titled.x : 'Label',
         yLabel: typeof titled.y === 'string' ? titled.y : 'Value',
@@ -565,28 +769,23 @@ export function parseChartSurface(source: string): ChartSurface | null {
     }
   }
   const { fields, rest } = fieldMap(source);
+  const kind = fields.get('type') ?? fields.get('kind') ?? 'bar';
+  if (kind !== 'bar' && kind !== 'line' && kind !== 'pie' && kind !== 'donut') return null;
   const points = rest.flatMap((line) => {
     const [label, raw] = splitFields(line);
     const value = Number(raw);
-    if (!label || !Number.isFinite(value)) return [];
+    if (!label || !raw || !Number.isFinite(value)) return [];
     return [{ label, value }];
   });
-  if (points.length === 0) return null;
+  if (points.length === 0 || points.length !== rest.length) return null;
   return {
+    kind,
     title: fields.get('title') ?? '',
+    subtitle: fields.get('subtitle') ?? '',
     xLabel: fields.get('x') ?? 'Label',
     yLabel: fields.get('y') ?? 'Value',
     points,
   };
-}
-
-export function chartAxisMax(points: readonly ChartPoint[]): number {
-  const peak = points.reduce((max, point) => Math.max(max, point.value), 0);
-  if (peak <= 0) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(peak));
-  const normalized = peak / magnitude;
-  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-  return step * magnitude;
 }
 
 export function answerSurfacePlainText(language: string, source: string): string {

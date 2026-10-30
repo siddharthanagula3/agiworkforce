@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 const renderMock = vi.fn();
 const initializeMock = vi.fn();
@@ -21,6 +22,30 @@ describe('MermaidDiagram', () => {
     renderMock.mockReset();
     initializeMock.mockReset();
     clearMermaidSvgCache();
+  });
+
+  it('expands the same sanitized SVG in one dialog mount and returns focus without rerendering the diagram', async () => {
+    renderMock.mockResolvedValue({
+      svg: '<svg id="expanded-diagram" viewBox="0 0 240 100"><g><text>Start</text></g></svg>',
+    });
+    const view = render(<MermaidDiagram source={FLOWCHART} />);
+    await waitFor(() =>
+      expect(view.container.querySelector('[data-mermaid="ready"] svg')).toBeTruthy(),
+    );
+    const trigger = screen.getByRole('button', { name: 'Expand diagram' });
+    const user = userEvent.setup();
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Diagram' });
+    expect(dialog.querySelector('svg#expanded-diagram')).toBeTruthy();
+    expect(view.container.querySelector('[data-mermaid="ready"] svg')).toBeNull();
+    expect(document.querySelectorAll('#expanded-diagram')).toHaveLength(1);
+    expect(renderMock).toHaveBeenCalledTimes(1);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(view.container.querySelector('[data-mermaid="ready"] svg')).toBeTruthy();
+    expect(document.querySelectorAll('#expanded-diagram')).toHaveLength(1);
+    expect(document.activeElement).toBe(trigger);
+    expect(renderMock).toHaveBeenCalledTimes(1);
   });
 
   it('draws a diagram when the source parses', async () => {

@@ -17,6 +17,7 @@ import {
 import { chartHoverText, formatChartShare, type ChartChrome, type ChartSpec } from './chart-spec';
 
 const AXIS_FONT_SIZE_PX = 11;
+const LABELED_X_AXIS_HEIGHT_PX = 48;
 const GRID_DASH = '3 3';
 const LINE_STROKE_WIDTH = 2;
 const PIE_OUTER_RADIUS = '75%';
@@ -36,13 +37,33 @@ function ChartHover({
   active,
   label,
   payload,
+  chrome,
 }: {
   active?: boolean;
   label?: string | number;
-  payload?: ReadonlyArray<{ value?: string | number }>;
+  payload?: ReadonlyArray<{
+    value?: string | number;
+    name?: string | number;
+    dataKey?: string | number;
+  }>;
+  chrome: ChartChrome;
 }) {
   if (!active || !payload?.length) return null;
-  return <div data-testid="chart-hover">{chartHoverText(label, payload[0]?.value)}</div>;
+  return (
+    <div
+      data-testid="chart-hover"
+      className="rounded-md border px-3 py-2 text-xs"
+      style={{ backgroundColor: chrome.surface, borderColor: chrome.border, color: chrome.text }}
+    >
+      {payload.length === 1
+        ? chartHoverText(label, payload[0]?.value)
+        : payload.map((entry, index) => (
+            <p key={entry.dataKey ?? index}>
+              {chartHoverText(`${label ?? ''} · ${entry.name ?? entry.dataKey ?? ''}`, entry.value)}
+            </p>
+          ))}
+    </div>
+  );
 }
 
 export interface ChartCanvasProps {
@@ -58,6 +79,23 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
     override ?? palette[index % palette.length]!;
 
   const axisTick = { fill: chrome.axis, fontSize: AXIS_FONT_SIZE_PX };
+  const xLabel = spec.xLabel
+    ? {
+        value: spec.xLabel,
+        position: 'insideBottom' as const,
+        fill: chrome.axis,
+        fontSize: AXIS_FONT_SIZE_PX,
+      }
+    : undefined;
+  const yLabel = spec.yLabel
+    ? {
+        value: spec.yLabel,
+        position: 'insideLeft' as const,
+        angle: -90,
+        fill: chrome.axis,
+        fontSize: AXIS_FONT_SIZE_PX,
+      }
+    : undefined;
   const tooltipStyles = {
     contentStyle: {
       background: chrome.surface,
@@ -88,9 +126,25 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
     kind === 'bar' ? (
       <BarChart data={rows}>
         <CartesianGrid strokeDasharray={GRID_DASH} stroke={chrome.grid} />
-        <XAxis dataKey={xKey} tick={axisTick} stroke={chrome.grid} />
-        <YAxis tick={axisTick} stroke={chrome.grid} domain={[0, yDomain]} allowDecimals={false} />
-        <Tooltip {...tooltipStyles} content={<ChartHover />} cursor={{ fill: chrome.hover }} />
+        <XAxis
+          dataKey={xKey}
+          tick={axisTick}
+          stroke={chrome.grid}
+          label={xLabel}
+          height={xLabel ? LABELED_X_AXIS_HEIGHT_PX : undefined}
+        />
+        <YAxis
+          tick={axisTick}
+          stroke={chrome.grid}
+          label={yLabel}
+          domain={[0, yDomain]}
+          allowDecimals={false}
+        />
+        <Tooltip
+          {...tooltipStyles}
+          content={<ChartHover chrome={chrome} />}
+          cursor={{ fill: chrome.hover }}
+        />
         {showLegend && <Legend wrapperStyle={legendStyle} />}
         {series.map((entry, index) => (
           <Bar
@@ -106,9 +160,21 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
     ) : kind === 'line' ? (
       <LineChart data={rows}>
         <CartesianGrid strokeDasharray={GRID_DASH} stroke={chrome.grid} />
-        <XAxis dataKey={xKey} tick={axisTick} stroke={chrome.grid} />
-        <YAxis tick={axisTick} stroke={chrome.grid} domain={[0, yDomain]} allowDecimals={false} />
-        <Tooltip {...tooltipStyles} content={<ChartHover />} />
+        <XAxis
+          dataKey={xKey}
+          tick={axisTick}
+          stroke={chrome.grid}
+          label={xLabel}
+          height={xLabel ? LABELED_X_AXIS_HEIGHT_PX : undefined}
+        />
+        <YAxis
+          tick={axisTick}
+          stroke={chrome.grid}
+          label={yLabel}
+          domain={[0, yDomain]}
+          allowDecimals={false}
+        />
+        <Tooltip {...tooltipStyles} content={<ChartHover chrome={chrome} />} />
         {showLegend && <Legend wrapperStyle={legendStyle} />}
         {series.map((entry, index) => (
           <Line

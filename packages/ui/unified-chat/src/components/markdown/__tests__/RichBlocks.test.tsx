@@ -159,7 +159,8 @@ describe('email blocks', () => {
     const { container } = render(<MarkdownContent content={EMAIL_FENCE} />);
     const card = emailCard(container);
     expect(within(card).queryByRole('button', { name: /send/i })).toBeNull();
-    expect(within(card).getAllByRole('button')).toHaveLength(1);
+    expect(within(card).getByRole('button', { name: 'Copy email' })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Edit email' })).toBeTruthy();
   });
 
   it('renders several fences as separate cards', () => {

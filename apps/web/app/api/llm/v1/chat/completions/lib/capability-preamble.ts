@@ -333,6 +333,7 @@ function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): strin
         ? { attachmentSandboxPaths: input.attachmentSandboxPaths }
         : {}),
       ...(input.memory ? { memory: input.memory } : {}),
+      richInlineBlocks: input.surface === 'web' || input.surface === 'desktop',
       ...(input.artifacts
         ? {
             artifactMarkers: {

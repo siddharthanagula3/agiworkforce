@@ -6,6 +6,8 @@ type ScanModule3 = typeof import('@agiworkforce/routing');
 type ScanModule4 = typeof import('@agiworkforce/ui');
 type ScanModule5 = typeof import('zustand/middleware');
 
+type OriginalWebChatStoreModule = typeof import('@shared/stores/web-chat-store');
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
   usePathname: () => '/chat',
@@ -91,6 +93,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-six-level': {
         capable: true,
         control: 'effort_levels',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
         defaultEffort: 'medium',
         canDisableThinking: true,
@@ -98,6 +101,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-always-on': {
         capable: true,
         control: 'always_on',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['low', 'medium', 'high'],
         defaultEffort: 'medium',
         canDisableThinking: false,
@@ -105,6 +109,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-fast-mode': {
         capable: true,
         control: 'always_on',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['low', 'medium', 'high'],
         defaultEffort: 'medium',
         canDisableThinking: false,
@@ -112,6 +117,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-four-level': {
         capable: true,
         control: 'always_on',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['minimal', 'low', 'medium', 'high'],
         defaultEffort: 'medium',
         canDisableThinking: false,
@@ -125,6 +131,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-five-level': {
         capable: true,
         control: 'effort_levels',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
         defaultEffort: 'medium',
         canDisableThinking: true,
@@ -132,6 +139,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-standard': {
         capable: true,
         control: 'effort_levels',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['low', 'medium', 'high'],
         defaultEffort: 'medium',
         canDisableThinking: true,
@@ -139,6 +147,7 @@ const REASONING_BY_MODEL = vi.hoisted(
       'fixture-four-level-secondary': {
         capable: true,
         control: 'always_on',
+        request: { api: 'chat', effortPath: 'reasoning_effort' },
         supportedEfforts: ['minimal', 'low', 'medium', 'high'],
         defaultEffort: 'medium',
         canDisableThinking: false,
@@ -276,7 +285,8 @@ vi.mock('@features/chat/lib/use-model-favourites', () => ({
   useModelFavourites: () => ({ favouriteModelIds: [], toggleFavourite: vi.fn() }),
 }));
 
-vi.mock('@shared/stores/web-chat-store', () => ({
+vi.mock('@shared/stores/web-chat-store', async (importOriginal) => ({
+  ...(await importOriginal<OriginalWebChatStoreModule>()),
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ activeConversationId: null, conversations: [], messages: [] }),
 }));
@@ -478,10 +488,24 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     thinking.enabled = false;
     render(<ComposerFooter />);
 
-    expect(screen.getByText('Always on for this model')).toBeInTheDocument();
-    expect(effortTrigger()).toBeInTheDocument();
+    expect(screen.getByText(/Off is not supported by this model/)).toBeInTheDocument();
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.low);
+    expect(thinking.enabled).toBe(false);
     expect(screen.queryByTestId('switch')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Toggle extended thinking')).not.toBeInTheDocument();
+  });
+
+  it('maps global Off to Direct only when the provider supports none', () => {
+    sel.id = 'fixture-six-level';
+    thinking.enabled = false;
+    thinking.effort = 'high';
+    render(<ComposerFooter />);
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.none);
+    expect(effortLevel()).toBe(EFFORT_LABEL.none);
+    expect(screen.getByText(/Global default: Off/)).toHaveTextContent(
+      'Direct means no extra reasoning',
+    );
+    expect(thinking).toEqual({ enabled: false, effort: 'high' });
   });
 
   it('(f) Six-Level Fixture is live, selected, and has no stale availability badge', () => {

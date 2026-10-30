@@ -163,6 +163,15 @@ describe('preprocessMath, scanner parity with the expression it replaced', () =>
 });
 
 describe('preprocessMath code ranges', () => {
+  it.each([
+    '~~~latex\n\\[x+y\\]\n~~~',
+    '~~~latex\n$$x+y$$\n~~~',
+    '~~~latex\n\\(x+y\\)',
+    '~~~~latex\n~~~\n\\[x+y\\]\n~~~~',
+  ])('preserves math source inside tilde code fences: %s', (source) => {
+    expect(preprocessMath(source)).toBe(source);
+  });
+
   it('leaves one-line display math inside a fenced block untouched', () => {
     const fenced = '```latex\n$$x+y$$\n```';
     expect(preprocessMath(fenced)).toBe(fenced);
@@ -180,5 +189,10 @@ describe('preprocessMath code ranges', () => {
 
   it('still lifts one-line display math outside code', () => {
     expect(preprocessMath('```\ncode\n```\n$$x+y$$')).toBe('```\ncode\n```\n\n$$\nx+y\n$$\n');
+  });
+
+  it('does not combine separate double-dollar expressions on the same line', () => {
+    const source = '$$E = mc^2$$ and $$x = 2$$';
+    expect(preprocessMath(source)).toBe(source);
   });
 });

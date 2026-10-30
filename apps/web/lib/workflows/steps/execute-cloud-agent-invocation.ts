@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { GENERATED_FILE_SURFACES, parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import {
+  GENERATED_FILE_SURFACES,
+  GENERATED_FIGURE_IDENTITY_PATTERN,
+  parseInteractiveCardDelta,
+} from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
@@ -192,6 +196,7 @@ const GeneratedFileWireSchema = z
     byte_count: z.number().nonnegative(),
     kind: z.string(),
     checksum_sha256: z.string(),
+    render_identity: z.string().regex(GENERATED_FIGURE_IDENTITY_PATTERN).optional(),
     surface: z.enum(GENERATED_FILE_SURFACES),
     previewable: z.boolean(),
   })
