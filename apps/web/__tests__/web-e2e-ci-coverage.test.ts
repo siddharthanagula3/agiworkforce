@@ -89,6 +89,10 @@ describe('web CI runs every browser spec that does not need an account', () => {
     expect(job?.env?.['PLAYWRIGHT_REUSE_RUNNING_SERVER']).toBeUndefined();
     expect(job?.env?.['PLAYWRIGHT_BASE_URL']).toBe('http://localhost:3000');
     expect(job?.env?.['NEXT_PUBLIC_SANDBOX_ORIGIN']).toBe('http://localhost:3001');
+    expect(job?.env?.['QA_RENDER_EVIDENCE_DIR']).toBeUndefined();
+    for (const value of Object.values(job?.env ?? {})) {
+      expect(value).not.toMatch(/\$\{\{\s*(?:runner|job|steps|env)\./);
+    }
     expect(new URL(job?.env?.['DATABASE_URL'] ?? '').hostname).toBe('localhost');
     const config = readFileSync(resolve(repoRoot, 'apps/web/playwright.config.ts'), 'utf8');
     expect(config).toMatch(/command:\s*'pnpm dev'/);
@@ -101,6 +105,7 @@ describe('web CI runs every browser spec that does not need an account', () => {
       (step) => step.name === 'Run deterministic renderer fixtures',
     );
     expect(execution?.run).toContain('pnpm exec playwright test');
+    expect(execution?.env?.['QA_RENDER_EVIDENCE_DIR']).toBe('${{ runner.temp }}/renderer-evidence');
     expect(execution?.run).not.toMatch(/--(?:list|grep|grep-invert)\b/);
     expect(execution?.['continue-on-error']).not.toBe(true);
     expect(jobs['ci-complete']?.needs).toContain('web-renderer-e2e');

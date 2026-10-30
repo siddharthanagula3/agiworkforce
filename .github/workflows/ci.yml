@@ -1024,7 +1024,6 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_SANDBOX_ORIGIN: http://localhost:3001
       PLAYWRIGHT_BASE_URL: http://localhost:3000
-      QA_RENDER_EVIDENCE_DIR: ${{ runner.temp }}/renderer-evidence
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1063,6 +1062,8 @@ jobs:
       # The probe is deliberately 404 in production; Playwright starts next dev in this fresh job.
       - name: Run deterministic renderer fixtures
         working-directory: apps/web
+        env:
+          QA_RENDER_EVIDENCE_DIR: ${{ runner.temp }}/renderer-evidence
         run: |
           pnpm exec playwright test \
             chat-rendering-regression.spec.ts \
