@@ -273,8 +273,12 @@
 }
 
 .mermaid-diagram svg {
-  max-width: none;
+  max-width: 100%;
   height: auto;
+}
+
+.mermaid-diagram[data-interactive='true'] svg {
+  max-width: none;
 }
 
 .mermaid-diagram svg .node rect,

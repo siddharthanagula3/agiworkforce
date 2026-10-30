@@ -281,6 +281,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     const drawing = (
       <div
         className="mermaid-diagram"
+        data-interactive={interactive}
         role={interactive ? 'region' : undefined}
         aria-label={interactive ? t('markdown.diagramTitle', 'Diagram') : undefined}
         tabIndex={interactive ? 0 : undefined}

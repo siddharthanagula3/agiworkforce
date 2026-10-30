@@ -136,6 +136,13 @@ nothing, or a version with no changelog entry fails the build. Both deploy
 workflows print the roster with its versions into the run summary, so a
 deployment record says which component versions it carries.
 
+The repository-guard jobs in `ci.yml` and `repo-operability.yml` each have a
+45-minute job budget, including setup and the full blocking
+`pnpm check:llm-operability` chain. The finite budget accommodates cold Cargo
+protocol generation and variable runner speed. It does not skip checks or turn
+failures into warnings; `scripts/ci-infrastructure.test.mjs` verifies the chain
+remains unconditional and blocking in both jobs.
+
 ## Path and cancellation policy
 
 `scripts/production-deploy-scope.mjs` is the shared path classifier:

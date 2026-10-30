@@ -241,6 +241,44 @@ checks, ten coverage-assignment checks and the workflow guards passed.
 - Changed non-ignored source ESLint (zero warnings), Prettier and diff checks
   passed. The full repository guard run is recorded at commit/push completion.
 
+GitHub's blocking Rust audit exposed `RUSTSEC-2026-0418` in transitive
+`libz-sys` 1.1.30 through `libgit2-sys` and `git2`. Cargo generated the update
+to 1.1.31, whose [upstream correction](https://github.com/rust-lang/libz-sys/pull/280)
+removes build-environment output. Cargo also selected already-locked compatible
+`syn` and `getrandom` dependency edges within the published manifests' ranges;
+no other package version changed. The patched crate compiled with `--locked`;
+the existing blocking advisory command and bans/sources/licenses check passed.
+No audit exception was added for the vulnerability.
+
+The same GitHub run surfaced three low-confidence script-tag findings in two
+negative renderer test files. The literals exercise error non-disclosure and
+nested-fence preservation; they never execute in the parent DOM. The existing
+Semgrep registry records these exact test paths, owner, expiry and reviewed
+reason. The scanner and unsafe fixtures are unchanged. The pinned rule still
+reports all three findings; 11 affected renderer tests and 92 gate tests pass.
+Independent allowlist accounting against the original CI report passes; removing
+the new entry restores the same three unaccepted findings. Full provenance
+replay correctly rejects the subsequently modified checkout; a new CI scan
+must regenerate its own source binding before accepting the new revision.
+
+CI run `41138065885` also exhausted its 30-minute repository-job budget near the
+end of the still-progressing guard chain. Its cold protocol generation took
+267 seconds and account-route analysis took 398 seconds. The independent job
+ran the same chain successfully in 13m33s, demonstrating runner variability.
+Both jobs now have a finite 45-minute budget. Their regression test requires
+the complete chain to remain unconditional and blocking; no check was removed.
+
+The signed-out browser lane exposed a shared-renderer regression: natural-width
+SVG sizing also applied to noninteractive gallery thumbnails, overflowing their
+390px and 360px cards. `MermaidDiagram.tsx` now exposes its existing
+`interactive` state to trusted CSS; `packages/ui/design-tokens/src/chat.css`
+limits embedded SVGs to their container while interactive chat diagrams retain
+natural-size local scrolling. The unchanged thumbnail geometry checks pass at
+1180px, 390px and 360px. The full chat-diagram browser case passes again in
+9.6 seconds across four widths and both themes, including source Copy, reopen,
+contrast, readable labels, local keyboard scrolling and Expand/Escape/focus.
+All 24 Mermaid unit tests pass; sanitizer behavior is unchanged.
+
 The package-runtime inventory declares both new pure entrypoints universal;
 its actual import-graph check retains client/server restrictions. The service
 ownership inventory explicitly includes the canonical search dependency and
