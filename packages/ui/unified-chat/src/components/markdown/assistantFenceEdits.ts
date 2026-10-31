@@ -114,8 +114,9 @@ export function applyAssistantFenceEdit(markdown: string, edit: AssistantFenceEd
   const prefix = markdown.slice(lineStart, start);
   if (!/^[ >\t]*$/.test(prefix)) return null;
   const marker = opening[1][0]!;
+  const markerRun = marker === '`' ? /`+/g : /~+/g;
   let longest = 0;
-  for (const match of edit.content.matchAll(new RegExp(`${marker}+`, 'g')))
+  for (const match of edit.content.matchAll(markerRun))
     longest = Math.max(longest, match[0].length);
   const fence = marker.repeat(Math.max(opening[1].length, longest + 1));
   const newline = original.includes('\r\n') ? '\r\n' : '\n';

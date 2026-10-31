@@ -117,4 +117,35 @@ describe('assistant fence edits', () => {
     });
     expect(next).toBe('Before\r\n~~~snippet\r\nFirst\r\nSecond\r\n~~~\r\nAfter');
   });
+
+  it.each([
+    ['```', '````'],
+    ['~~~', '~~~~~'],
+  ])('counts only literal %s marker runs while preserving URL text', (originalFence, nextFence) => {
+    const markdown = `Before\n${originalFence}document\nOriginal\n${originalFence}\nAfter`;
+    const content = [
+      'https://developer.mozilla.org/en-US/docs/Glossary/SSR',
+      'https://developerXmozilla.org/en-US/docs/Glossary/SSR',
+      'Literal pattern text: [a-z]+(value).*',
+      '```',
+      '~~~~',
+      'Separated ` markers ` and ~ markers ~ stay separate.',
+    ].join('\n');
+    const next = applyAssistantFenceEdit(markdown, {
+      index: 0,
+      language: 'document',
+      source: 'Original',
+      content,
+    });
+    expect(next).toBe(`Before\n${nextFence}document\n${content}\n${nextFence}\nAfter`);
+    expect(countEditableAssistantFences(next!)).toBe(1);
+    expect(
+      applyAssistantFenceEdit(next!, {
+        index: 0,
+        language: 'document',
+        source: content,
+        content: 'Reopened',
+      }),
+    ).toBe(`Before\n${nextFence}document\nReopened\n${nextFence}\nAfter`);
+  });
 });

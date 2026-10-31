@@ -42,6 +42,19 @@ export const QA_WRITING_SOURCES = [
   ['document', '# Product requirements\n\nUsers can configure and review a project.'],
 ] as const;
 
+export const QA_CITATION_SOURCES = [
+  {
+    url: 'https://developer.mozilla.org/en-US/docs/Glossary/SSR',
+    title: 'MDN: Server-side rendering',
+    snippet: 'Server-side rendering produces initial HTML on the server.',
+  },
+  {
+    url: 'https://nextjs.org/docs/app/getting-started/server-and-client-components',
+    title: 'Next.js: Server and Client Components',
+    snippet: 'Client components support browser interactions.',
+  },
+] as const;
+
 export const QA_FORM_SOURCE = `title: Project configuration
 text: Project name* |
 select: Fictional model* | *Atlas | Nova | Comet
@@ -236,8 +249,17 @@ export const CHAT_RENDERING_FIXTURES = [
     title: 'Citations',
     prompt:
       'Explain the difference between client-side rendering and server-side rendering, using official documentation as sources. Display clickable citations near the relevant claims and provide a source reference section.',
-    content:
-      'Server-side rendering creates the initial HTML on the server. [1]\n\nClient components handle browser interactions. [2]\n\n### Sources\n\n1. [MDN: Server-side rendering](https://developer.mozilla.org/en-US/docs/Glossary/SSR)\n2. [Next.js: Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components)',
+    content: [
+      'Server-side rendering creates the initial HTML on the server. [1]',
+      '',
+      'Client components handle browser interactions. [2]',
+      '',
+      '### Sources',
+      '',
+      ...QA_CITATION_SOURCES.map(
+        (source, index) => `${index + 1}. [${source.title}](${source.url})`,
+      ),
+    ].join('\n'),
   },
 ] as const;
 

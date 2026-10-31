@@ -4,6 +4,7 @@ import {
   CHAT_RENDERING_FIXTURES,
   QA_EMAIL_SOURCE,
   QA_WRITING_SOURCES,
+  QA_CITATION_SOURCES,
 } from '../test/fixtures/chat-rendering';
 import { signIn, apiCall } from './qa-capability-harness';
 import { ASSISTANT_CONTENT_CHANGED_REASON } from '../features/chat/lib/assistant-content-edit-contract';
@@ -40,18 +41,6 @@ for (const fixture of CHAT_RENDERING_FIXTURES.filter(
       const request = route.request().postDataJSON() as Record<string, unknown>;
       requests.push(request);
       const chunks = fixture.content.match(/[\s\S]{1,80}/g) ?? [];
-      const citationSources = [
-        {
-          url: 'https://developer.mozilla.org/en-US/docs/Glossary/SSR',
-          title: 'MDN: Server-side rendering',
-          snippet: 'Server-side rendering produces initial HTML on the server.',
-        },
-        {
-          url: 'https://nextjs.org/docs/app/getting-started/server-and-client-components',
-          title: 'Next.js: Server and Client Components',
-          snippet: 'Client components support browser interactions.',
-        },
-      ];
       const prelude =
         fixture.id === 'citations'
           ? [
@@ -61,7 +50,7 @@ for (const fixture of CHAT_RENDERING_FIXTURES.filter(
                     delta: {
                       x_search_results: {
                         tool: 'web_search',
-                        content: citationSources.map((source) => ({
+                        content: QA_CITATION_SOURCES.map((source) => ({
                           type: 'web_search_result',
                           url: source.url,
                           title: source.title,
@@ -72,7 +61,7 @@ for (const fixture of CHAT_RENDERING_FIXTURES.filter(
                   },
                 ],
               },
-              ...citationSources.map((source) => ({
+              ...QA_CITATION_SOURCES.map((source) => ({
                 choices: [{ delta: { x_citation: { url: source.url, title: source.title } } }],
               })),
             ]
@@ -193,12 +182,43 @@ for (const fixture of CHAT_RENDERING_FIXTURES.filter(
       const sources = page.getByRole('button', { name: 'Show sources', exact: true });
       await expect(sources).toBeVisible();
       await sources.click();
-      await expect(
-        page.getByText('MDN: Server-side rendering', { exact: true }).last(),
-      ).toBeVisible();
-      await expect(
-        page.getByRole('link', { name: /Next.js: Server and Client Components/ }).first(),
-      ).toHaveAttribute('href', /nextjs.org/);
+      const panel = page.getByLabel('Research panel', { exact: true });
+      await expect(panel).toBeVisible();
+      const reopenedAssistant = page.locator('[data-role="assistant"]').last();
+      for (const [index, source] of QA_CITATION_SOURCES.entries()) {
+        await expect(
+          reopenedAssistant.getByRole('link', {
+            name: `Source ${index + 1}: ${source.title}`,
+            exact: true,
+          }),
+        ).toHaveAttribute('href', source.url);
+        const sourceLink = panel.getByRole('link').filter({
+          has: page.getByText(source.title, { exact: true }),
+        });
+        await expect(sourceLink).toBeVisible();
+        const assertExactHref = async () =>
+          expect(await sourceLink.getAttribute('href')).toBe(source.url);
+        await assertExactHref();
+        const differentHost = new URL(source.url);
+        differentHost.hostname = differentHost.hostname.replaceAll('.', 'x');
+        const hostileSuffix = new URL(source.url);
+        hostileSuffix.hostname += '.attacker.example';
+        for (const rejected of [differentHost.href, hostileSuffix.href]) {
+          try {
+            await sourceLink.evaluate(
+              (element, href) => element.setAttribute('href', href),
+              rejected,
+            );
+            await expect(assertExactHref()).rejects.toThrow();
+          } finally {
+            await sourceLink.evaluate(
+              (element, href) => element.setAttribute('href', href),
+              source.url,
+            );
+          }
+        }
+        await assertExactHref();
+      }
     }
     expect(generationCalls).toBe(0);
     await apiCall(page, `/api/chat/conversations/${conversationId}`, { method: 'DELETE' });
