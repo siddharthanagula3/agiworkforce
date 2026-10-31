@@ -37,6 +37,7 @@ minimumReleaseAgeExclude:
   - 'electron@44.9.3'
   - 'fast-uri@3.1.9'
   - 'next@16.4.3'
+  - 'node-forge@1.4.1'
   - 'postcss-selector-parser@6.1.5'
   - 'rolldown@1.2.15'
   - 'serialize-javascript@7.1.3'

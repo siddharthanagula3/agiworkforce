@@ -250,6 +250,36 @@ no other package version changed. The patched crate compiled with `--locked`;
 the existing blocking advisory command and bans/sources/licenses check passed.
 No audit exception was added for the vulnerability.
 
+A subsequent registry audit reported five high-severity findings in
+`node-forge` 1.4.0, reached through Expo's CLI and certificate helper. The
+[upstream patch](https://github.com/advisories/GHSA-hqq3-7jhf-c5jx) is 1.4.1.
+The root override and pnpm-generated lock now resolve that release in both
+contexts. The existing documented release-age process admits only
+`node-forge@1.4.1` before its seventh day, justified by those security fixes;
+the seven-day default and audit exceptions are unchanged. The only other
+generated lock delta normalizes an existing Vitest coverage peer reference;
+no other package version or importer changes.
+
+Frozen install, actual installed-module resolution, the previously failing
+5,000-record TLS input, 50,000-record variants and Expo certificate parsing/
+validation/signing passed. Malformed PEM remains rejected. The blocking high
+audit passes, with four moderate findings remaining. An actual Vitest 4 coverage
+provider compatibility smoke passed three tests without threshold overrides;
+this is not complete coverage acceptance. Lifecycle scripts and a local full
+mobile build were not run for this dependency patch.
+
+The JavaScript lane also recorded one redaction timing case at 50.891ms wall
+time against its 50ms budget. Its exact cause remains unknown: no algorithm or
+JIT regression reproduced, and 30 isolated samples used approximately 9–11ms
+of thread CPU. The test now measures synchronous user+system thread CPU using
+[Node's thread clock](https://nodejs.org/docs/latest-v24.x/api/process.html#processthreadcpuusagepreviousvalue),
+retaining 50ms, every 50,000-character input and the original warmup. A real
+off-CPU suspension control passes, while a bounded historical-regex control on
+the identical input exceeds the budget and is rejected. Replacing the clock
+with wall time in a temporary test copy makes the suspension control fail.
+All 299 utils tests, type checking, lint and test hygiene passed. Production
+redaction rules and behavior are unchanged.
+
 The same GitHub run surfaced three low-confidence script-tag findings in two
 negative renderer test files. The literals exercise error non-disclosure and
 nested-fence preservation; they never execute in the parent DOM. The existing
