@@ -382,7 +382,7 @@ export function renderClassifiedFenceHtml(
 ): string | null {
   if (fence.kind === 'code') return null;
   if (fence.kind === 'fallback') {
-    return `<p data-answer-fallback="${fence.reason}">${escapeHtml(fence.text)}</p>`;
+    return `<p data-answer-fallback="${escapeHtml(fence.reason)}">${escapeHtml(fence.text)}</p>`;
   }
   if (fence.kind === 'card') {
     return `${sectionOpen(mode, 'card', fence.spec.title)}<h3>${escapeHtml(fence.spec.title)}</h3><p>${escapeHtml(fence.spec.subtitle)}</p><p>${escapeHtml(fence.spec.tags.join(', '))}</p>${copyBody(fence.spec.body)}</section>`;
@@ -484,7 +484,7 @@ export function renderClassifiedFenceHtml(
   }
   if (fence.kind === 'slider') {
     const shown = `${fence.prefix}${fence.value}`;
-    return `${sectionOpen(mode, 'slider', fence.label)}<h3>${escapeHtml(fence.label)}</h3><p>${escapeHtml(shown)} (${fence.min} to ${fence.max})</p></section>`;
+    return `${sectionOpen(mode, 'slider', fence.label)}<h3>${escapeHtml(fence.label)}</h3><p>${escapeHtml(shown)} (${escapeHtml(String(fence.min))} to ${escapeHtml(String(fence.max))})</p></section>`;
   }
   if (fence.kind === 'checks') {
     const items = fence.items
