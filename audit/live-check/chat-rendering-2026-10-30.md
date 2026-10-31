@@ -280,6 +280,14 @@ with wall time in a temporary test copy makes the suspension control fail.
 All 299 utils tests, type checking, lint and test hygiene passed. Production
 redaction rules and behavior are unchanged.
 
+The next full JavaScript run passed 5,228 mobile tests and found one notice
+fixture that never established an active app state. The existing production
+guard correctly withheld its cloud read in that fixture. The test now supplies
+and restores foreground state explicitly, and adds background/inactive cases
+that remain silent until the actual active-state callback runs. All 23 related
+notice, heartbeat, task and usage-limit tests, mobile type checks and lint pass.
+No production polling or Local Mode boundary was changed.
+
 The same GitHub run surfaced three low-confidence script-tag findings in two
 negative renderer test files. The literals exercise error non-disclosure and
 nested-fence preservation; they never execute in the parent DOM. The existing
