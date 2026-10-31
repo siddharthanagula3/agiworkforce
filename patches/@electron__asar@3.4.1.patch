@@ -1,0 +1,13 @@
+diff --git a/lib/asar.js b/lib/asar.js
+index fd94e84b62e474470f1dee1f7e5e96d66e3723e7..40e91a61fa367d4290c6bf97ab39518b056ee012 100644
+--- a/lib/asar.js
++++ b/lib/asar.js
+@@ -41 +41 @@ const path = __importStar(require("path"));
+-const minimatch_1 = __importDefault(require("minimatch"));
++const minimatch_1 = require("minimatch");
+@@ -54 +54 @@ function isUnpackedDir(dirPath, pattern, unpackDirs) {
+-    if (dirPath.startsWith(pattern) || (0, minimatch_1.default)(dirPath, pattern)) {
++    if (dirPath.startsWith(pattern) || (0, minimatch_1.minimatch)(dirPath, pattern)) {
+@@ -147 +147 @@ async function createPackageFromFiles(src, dest, filenames, metadata = {}, optio
+-                shouldUnpack = (0, minimatch_1.default)(filename, unpack, { matchBase: true });
++                shouldUnpack = (0, minimatch_1.minimatch)(filename, unpack, { matchBase: true });

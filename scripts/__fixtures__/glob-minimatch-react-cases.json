@@ -1,0 +1,114 @@
+[
+  [
+    "jsx-pascal-case",
+    "const value = <WidgetCard />;",
+    [
+      {
+        "ignore": ["Widget*"]
+      }
+    ],
+    0
+  ],
+  [
+    "jsx-pascal-case",
+    "const value = <Other_card />;",
+    [
+      {
+        "ignore": ["Widget*"]
+      }
+    ],
+    1
+  ],
+  [
+    "forbid-component-props",
+    "const value = <WidgetCard badThing />;",
+    [
+      {
+        "forbid": [
+          {
+            "propNamePattern": "bad*",
+            "allowedForPatterns": ["Widget*"]
+          }
+        ]
+      }
+    ],
+    0
+  ],
+  [
+    "forbid-component-props",
+    "const value = <OtherCard badThing />;",
+    [
+      {
+        "forbid": [
+          {
+            "propNamePattern": "bad*",
+            "allowedForPatterns": ["Widget*"]
+          }
+        ]
+      }
+    ],
+    1
+  ],
+  [
+    "jsx-handler-names",
+    "const value = <WidgetCard onClick={badName} />;",
+    [
+      {
+        "ignoreComponentNames": ["Widget*"],
+        "checkLocalVariables": true
+      }
+    ],
+    0
+  ],
+  [
+    "jsx-handler-names",
+    "const value = <OtherCard onClick={badName} />;",
+    [
+      {
+        "ignoreComponentNames": ["Widget*"],
+        "checkLocalVariables": true
+      }
+    ],
+    1
+  ],
+  [
+    "no-danger",
+    "const value = <WidgetCard dangerouslySetInnerHTML={{__html: \"x\"}} />;",
+    [
+      {
+        "customComponentNames": ["Widget*"]
+      }
+    ],
+    1
+  ],
+  [
+    "no-danger",
+    "const value = <OtherCard dangerouslySetInnerHTML={{__html: \"x\"}} />;",
+    [
+      {
+        "customComponentNames": ["Widget*"]
+      }
+    ],
+    0
+  ],
+  [
+    "no-unstable-nested-components",
+    "function App(){ return <WidgetCard renderThing={() => <div />} />; }",
+    [
+      {
+        "propNamePattern": "render*"
+      }
+    ],
+    0
+  ],
+  [
+    "no-unstable-nested-components",
+    "function App(){ return <WidgetCard thing={() => <div />} />; }",
+    [
+      {
+        "propNamePattern": "render*"
+      }
+    ],
+    1
+  ]
+]

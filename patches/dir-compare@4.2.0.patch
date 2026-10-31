@@ -1,0 +1,10 @@
+diff --git a/build/src/FilterHandler/defaultFilterHandler.js b/build/src/FilterHandler/defaultFilterHandler.js
+index b71877eb239ebb0a5d649bc15f88d0127d116ba6..877f0d0b0d8b33f31515889faab04814c4f4c450 100644
+--- a/build/src/FilterHandler/defaultFilterHandler.js
++++ b/build/src/FilterHandler/defaultFilterHandler.js
+@@ -8 +8 @@ const path_1 = __importDefault(require("path"));
+-const minimatch_1 = __importDefault(require("minimatch"));
++const minimatch_1 = require("minimatch");
+@@ -30 +30 @@ function match(path, pattern) {
+-        if ((0, minimatch_1.default)(path, pat, { dot: true, matchBase: true })) { //nocase
++        if ((0, minimatch_1.minimatch)(path, pat, { dot: true, matchBase: true })) { //nocase
