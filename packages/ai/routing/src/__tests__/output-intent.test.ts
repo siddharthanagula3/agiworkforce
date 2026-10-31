@@ -46,6 +46,21 @@ const QA_RENDERING_REQUESTS = [
 ] as const;
 
 describe('response output intent', () => {
+  it('preserves output purpose around curly quotes and mixed unclosed quotes', () => {
+    for (const message of [
+      'Render a form with a “generate an image” label.',
+      'Write a document containing “search the web”.',
+      'Write a document: “unclosed label with "generate an image" inside',
+    ]) {
+      expect(requestsNonImageOutput(message)).toBe(true);
+      expect(isSelfContainedResponseRequest(message)).toBe(true);
+    }
+    expect(classifyImageToolIntent('Generate an image of a “moonlit forest”.')).toBe('generate');
+    expect(
+      isSelfContainedResponseRequest('Write a “web search” label, then check the web for facts.'),
+    ).toBe(false);
+  });
+
   it.each([...NON_IMAGE_REQUESTS, ...QA_RENDERING_REQUESTS])(
     'keeps %s out of image generation and external search',
     (message) => {

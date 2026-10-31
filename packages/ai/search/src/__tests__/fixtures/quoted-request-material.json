@@ -1,0 +1,58 @@
+[
+  {
+    "input": "plain text",
+    "expected": "plain text"
+  },
+  {
+    "input": "",
+    "expected": ""
+  },
+  {
+    "input": "before \"quoted\" after",
+    "expected": "before  after"
+  },
+  {
+    "input": "before “quoted” after",
+    "expected": "before  after"
+  },
+  {
+    "input": "before `quoted` after",
+    "expected": "before  after"
+  },
+  {
+    "input": "\"\"``“”",
+    "expected": ""
+  },
+  {
+    "input": "“““",
+    "expected": "“““"
+  },
+  {
+    "input": "“outer “inner” tail”",
+    "expected": " tail”"
+  },
+  {
+    "input": "“unclosed \"paired\" tail",
+    "expected": "“unclosed  tail"
+  },
+  {
+    "input": "\"unclosed “paired” tail",
+    "expected": "\"unclosed  tail"
+  },
+  {
+    "input": "`unclosed \"paired\" tail",
+    "expected": "`unclosed  tail"
+  },
+  {
+    "input": "“a\nb” \"c\"",
+    "expected": "“a\nb” "
+  },
+  {
+    "input": "“a\rb” “c d” “e f”",
+    "expected": "  "
+  },
+  {
+    "input": "“one” \"two\" `three`",
+    "expected": "  "
+  }
+]

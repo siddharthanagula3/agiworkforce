@@ -14,6 +14,8 @@
  * @packageDocumentation
  */
 
+import { withoutQuotedRequestMaterial } from './quoted-request-material';
+
 const SEARCH_VERB_PHRASES: readonly string[] = [
   'search the web',
   'search on the web',
@@ -251,8 +253,6 @@ const URL_FETCH_ACTION_PATTERN =
 const URL_FETCH_OPT_OUT_PATTERN =
   /\b(?:do\s+not|don't|dont|never|avoid)\s+(?:fetch|open|read)\s+(?:(?:this|that|the|these|those|any)\s+)?(?:url|link|page|https?:\/\/)/iu;
 const REQUEST_FENCE_START = /^\s*(`{3,}|~{3,})/u;
-const REQUEST_QUOTED_MATERIAL =
-  /"[^"\n]*"|“[^”\n]*”|`[^`\n]*`|(?<![\p{L}\p{N}])'[^'\n]+'(?![\p{L}\p{N}])/gu;
 const UI_SEARCH_LABEL =
   /^[^\S\n]*(?:(?:and|or)\s+|,\s*)?(?:[\p{L}\p{N}_-]+\s+){0,3}(?:checkbox(?:es)?|check\s+boxes?|toggles?|switch(?:es)?|options?|fields?|labels?|controls?)\b/iu;
 const EXPLICIT_LOOKUP_PREFIX = /\b(?:use|run|perform|do|call)\s+(?:(?:a|an|the)\s+)?$/iu;
@@ -278,7 +278,7 @@ function searchRequestText(text: string): string {
       lines.push(line);
     }
   }
-  return lines.join('\n').replace(REQUEST_QUOTED_MATERIAL, '');
+  return withoutQuotedRequestMaterial(lines.join('\n'), { singleQuotes: true });
 }
 
 export function webSearchRequestText(text: string): string {

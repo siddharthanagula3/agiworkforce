@@ -1,4 +1,8 @@
-import { explicitWebSearchRequestSignals, webSearchRequestText } from '@agiworkforce/search';
+import {
+  explicitWebSearchRequestSignals,
+  webSearchRequestText,
+  withoutQuotedRequestMaterial,
+} from '@agiworkforce/search';
 
 export type ResponseOutputIntent = 'image' | 'rendered' | 'text' | 'calculation' | 'unknown';
 export type ImageToolIntent = 'generate' | 'edit' | 'continuation' | null;
@@ -11,7 +15,6 @@ const REQUEST_CONTEXT =
 const DESIRED_OUTPUT_PREFIX = /^(?:i\s+(?:need|want)|i['’]d\s+like)\s+(?:you\s+to\s+)?/iu;
 const STRUCTURED_FORMAT = /^(?:use\s+)?(?:html|react|svg|mermaid)\b/iu;
 const FENCE_START = /^\s*(`{3,}|~{3,})/u;
-const QUOTED_MATERIAL = /"[^"\n]*"|“[^”\n]*”|`[^`\n]*`/gu;
 const IMAGE_COMMAND = /^\/(?:image|imagine|draw|generate)\b/iu;
 const OUTPUT_ACTION =
   /^(?:show|display|render|present|demonstrate|typeset|create|make|generate|design|build|draw|paint|illustrate|visuali[sz]e|write|draft|compose|prepare|provide|give|produce|rewrite|re-write|translate|summari[sz]e|paraphrase|proofread|edit|polish|format|reformat|convert|turn|repeat|echo|respond|reply)\b[\s,:-]*/iu;
@@ -70,8 +73,7 @@ function withoutFencedMaterial(message: string): string {
 }
 
 function requestText(message: string): string {
-  return withoutFencedMaterial(message)
-    .replace(QUOTED_MATERIAL, '')
+  return withoutQuotedRequestMaterial(withoutFencedMaterial(message))
     .trimStart()
     .replace(REQUEST_LABEL, '')
     .replace(REQUEST_CONTEXT, '')

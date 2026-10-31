@@ -1069,7 +1069,6 @@ mod tests {
             ("DESIRED_OUTPUT_PREFIX", &*DESIRED_OUTPUT_PREFIX),
             ("STRUCTURED_FORMAT", &*STRUCTURED_FORMAT),
             ("FENCE_START", &*FENCE_START),
-            ("QUOTED_MATERIAL", &*QUOTED_MATERIAL),
             ("IMAGE_COMMAND", &*IMAGE_COMMAND),
             ("OUTPUT_ACTION", &*OUTPUT_ACTION),
             ("OUTPUT_FILLER", &*OUTPUT_FILLER),
@@ -1103,6 +1102,19 @@ mod tests {
                 r"((?:render|show|display|create|make|generate|calculate)\b)"
             )
         );
+        let quote_fixtures: serde_json::Value = serde_json::from_str(&canonical_source_at(
+            "../../packages/ai/search/src/__tests__/fixtures/quoted-request-material.json",
+        ))
+        .expect("canonical quote fixtures");
+        for fixture in quote_fixtures.as_array().expect("quote fixture list") {
+            let input = fixture["input"].as_str().expect("quote input");
+            let expected = fixture["expected"].as_str().expect("quote output");
+            assert_eq!(
+                QUOTED_MATERIAL.replace_all(input, ""),
+                expected,
+                "{input:?}"
+            );
+        }
     }
 
     fn canonical_phrases(source: &str, name: &str) -> Vec<String> {

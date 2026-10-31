@@ -45,6 +45,20 @@ describe('explicit lookup requests', () => {
     ).toContain('search_verb');
   });
 
+  it('keeps quoted curly labels inert and a later lookup explicit', () => {
+    expect(explicitWebSearchRequestSignals('Render a form with a “search the web” label.')).toEqual(
+      [],
+    );
+    expect(
+      explicitWebSearchRequestSignals(
+        'Render a “search the web” label, then check the web for facts.',
+      ),
+    ).toContain('search_verb');
+    expect(explicitWebSearchRequestSignals('“Unclosed label with "search the web" inside')).toEqual(
+      [],
+    );
+  });
+
   it('recognizes official source requests through the canonical source phrases', () => {
     expect(
       explicitWebSearchRequestSignals('Write a report using official documentation as sources.'),
