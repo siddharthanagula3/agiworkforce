@@ -34,6 +34,19 @@ function assertOrder(text: string, parts: readonly string[]): void {
 }
 
 describe('chrome mixed assistant reply', () => {
+  it.each(['  keep <tag> & "quotes"  ', 'first\nsecond  \n\n'])(
+    'copies the exact prompt body without the fence separator: %j',
+    async (body) => {
+      const root = await render(['```prompt', body, '```'].join('\n'));
+      const copy = [...root.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Copy full prompt',
+      );
+      expect(copy).toBeTruthy();
+      copy?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(navigator.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(body);
+    },
+  );
+
   it('renders one mixed reply in order, with a chart table, fallbacks, copy, follow-up, and one email after growth', async () => {
     const partial = await render(MIXED_REPLY_THROUGH_EMAIL);
     expect(partial.querySelectorAll('section[data-lang="surface:email"]')).toHaveLength(1);

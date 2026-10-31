@@ -186,6 +186,10 @@ export function closeUnterminatedCodeFence(content: string): string {
   return content;
 }
 
+export function markdownItFenceSource(content: string): string {
+  return content.replace(/\n$/, '');
+}
+
 export function normalizeMarkdownSource(content: string): string {
   return normalizeMathDelimiters(closeUnterminatedCodeFence(content));
 }

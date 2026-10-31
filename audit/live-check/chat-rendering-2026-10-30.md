@@ -279,6 +279,50 @@ natural-size local scrolling. The unchanged thumbnail geometry checks pass at
 contrast, readable labels, local keyboard scrolling and Expand/Escape/focus.
 All 24 Mermaid unit tests pass; sanitizer behavior is unchanged.
 
+The broader JavaScript lane then exposed a parser-adapter copy mismatch:
+Markdown-it includes the newline separating a fence body from its closing
+delimiter, while the shared content contract expects the body alone. Chrome
+and VS Code passed the token directly to classification. The existing
+`@agiworkforce/utils/markdown-source` entrypoint now owns
+`markdownItFenceSource`; both adapters use it to remove exactly that separator.
+New integration cases preserve indentation, literal markup and intentional
+trailing blank lines. The original mixed-reply assertions remain unchanged.
+All 50 focused Chrome tests, 296 VS Code webview tests, three affected package
+type checks, the VS Code project-reference build and real Chromium extension
+smoke passed. The unrestricted local full Chrome run was interrupted under
+heavy load, so its timing failures are not recorded as confirmed product bugs.
+The subsequent bounded run passed 3,050 tests and exposed four loopback-listener
+permission failures. Those four passed separately with listener permission;
+no transport test or assertion was removed.
+
+The complete coverage run measured 79.64% repository line coverage against its
+unchanged 75% floor. It also caught two stale test fixtures, rather than new
+product defects: `chat-tenant-isolation.test.ts` omitted the new tenant-scoped
+revision lookup's empty result; `public-landmarks.test.ts` still allowlisted a
+page wrapper after its child owned the correct `main-content` landmark. The
+fixture now checks the third query's message/conversation/user/organization
+scope and the intended 400 response. The stale allowlist entry was removed;
+no nested main or production-route change was added. All 35 focused web checks
+passed, including the content-edit and QA-gate regressions.
+
+Native CI caught the CLI mirror still reading removed image-regex declarations
+from `classify.ts`. Its image and research behavior also retained the obsolete
+keyword rules. `apps/cli/src/routing/classify.rs` now mirrors the current output
+intent, search-purpose and browser-action owners. Pattern, phrase and threshold
+checks retain their mechanical source comparison; 55 behavior prompts also
+match the actual TypeScript classifier. The frozen-source, locked/offline Cargo
+routing run passed all 16 tests.
+Scoped locked/offline CLI Clippy also passed with warnings and unsafe code
+denied; package formatting passed and the lockfile was unchanged.
+
+The Windows Explorer fixture slept and enumerated only once. Its address-bar
+case could pass without observing a window, so that earlier pass was not
+readiness evidence. The test-only `integration_fixture.rs` polls within the
+existing five-probe/500ms policy and propagates enumeration errors; both native
+cases now require their actual fixtures. All five deterministic helper tests
+pass on macOS. Production automation and process lifecycle are unchanged;
+actual Windows UI acceptance remains a CI check.
+
 The package-runtime inventory declares both new pure entrypoints universal;
 its actual import-graph check retains client/server restrictions. The service
 ownership inventory explicitly includes the canonical search dependency and

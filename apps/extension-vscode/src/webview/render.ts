@@ -1,5 +1,8 @@
 import markdownit from 'markdown-it';
-import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  markdownItFenceSource,
+  normalizeMarkdownSource,
+} from '@agiworkforce/utils/markdown-source';
 import {
   classifyAssistantFence,
   renderClassifiedFenceHtml,
@@ -53,7 +56,7 @@ md.renderer.rules.fence = (tokens, index) => {
   const info = token.info ? md.utils.unescapeAll(token.info).trim() : '';
   const language = info ? info.split(/\s+/u, 1)[0] : '';
   const surface = renderClassifiedFenceHtml(
-    classifyAssistantFence(language ?? '', token.content),
+    classifyAssistantFence(language ?? '', markdownItFenceSource(token.content)),
     'vscode',
   );
   if (surface !== null) return surface;

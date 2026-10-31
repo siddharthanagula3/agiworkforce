@@ -30,6 +30,19 @@ function chartCells(root: ParentNode): string[] {
 }
 
 describe('vscode mixed assistant reply', () => {
+  it.each(['  keep <tag> & "quotes"  ', 'first\nsecond  \n\n'])(
+    'copies the exact prompt body without the fence separator: %j',
+    (body) => {
+      const doc = parse(['```prompt', body, '```'].join('\n'));
+      const copy = vi.fn();
+      bindAnswerSurfaces(doc, { copy, onFollowUp: vi.fn() });
+      const button = doc.querySelector<HTMLButtonElement>('.answer-surface-prompt .surface-copy');
+      expect(button).not.toBeNull();
+      button?.click();
+      expect(copy).toHaveBeenCalledExactlyOnceWith(body);
+    },
+  );
+
   it('renders one mixed reply in order, with a chart table, fallbacks, copy, follow-up, and one email after growth', () => {
     const partial = parse(MIXED_REPLY_THROUGH_EMAIL);
     expect(partial.querySelectorAll('.answer-surface-email')).toHaveLength(1);

@@ -2,7 +2,10 @@ import DOMPurify from 'dompurify';
 import markdownit from 'markdown-it';
 import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
-import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  markdownItFenceSource,
+  normalizeMarkdownSource,
+} from '@agiworkforce/utils/markdown-source';
 import {
   classifyAssistantFence,
   renderClassifiedFenceHtml,
@@ -174,7 +177,7 @@ md.renderer.rules['fence'] = (tokens, index) => {
   const token = tokens[index];
   const language = codeLanguage(token?.info);
   const surface = renderClassifiedFenceHtml(
-    classifyAssistantFence(language ?? '', token?.content ?? ''),
+    classifyAssistantFence(language ?? '', markdownItFenceSource(token?.content ?? '')),
     'chrome',
   );
   if (surface !== null) return surface;
