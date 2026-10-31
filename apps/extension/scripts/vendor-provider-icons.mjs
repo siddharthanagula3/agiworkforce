@@ -9,8 +9,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(__dirname, '../icons/providers');
 const simpleIconsDir = resolve(__dirname, '../../../node_modules/simple-icons/icons');
 
-mkdirSync(outDir, { recursive: true });
-
 const PROVIDER_ICONS = [
   { id: 'anthropic', simpleId: 'anthropic', color: '#D4A27F' },
   { id: 'google', simpleId: 'google', color: '#4285F4' },
@@ -22,14 +20,23 @@ const PROVIDER_ICONS = [
   { id: 'mistral', simpleId: 'mistralai', color: '#F7A41D' },
   { id: 'openai', simpleId: null, color: '#10A37F' },
   { id: 'xai', simpleId: null, color: '#1A1A1A' },
-  { id: 'zhipu', simpleId: null, color: '#3B82F6' },
-  { id: 'lmstudio', simpleId: null, color: '#7C3AED' },
+  { id: 'zhipu', simpleId: 'zdotai', color: '#3B82F6' },
+  { id: 'lmstudio', simpleId: 'lmstudio', color: '#7C3AED' },
   { id: 'custom-openai-compatible', simpleId: null, color: '#71717A' },
   { id: 'managed_cloud', simpleId: null, color: '#F59E0B', shape: 'cloud' },
   { id: 'open_router', simpleId: null, color: '#71717A', letter: 'OR' },
   { id: 'nvidia_nim', simpleId: null, color: '#71717A', letter: 'N' },
   { id: 'runway', simpleId: null, color: '#71717A', letter: 'R' },
 ];
+
+const args = process.argv.slice(2);
+const check = args.includes('--check');
+const selected = new Set(args.filter((arg) => arg !== '--check'));
+for (const id of selected) {
+  if (!PROVIDER_ICONS.some((provider) => provider.id === id))
+    throw new Error(`Unknown provider: ${id}`);
+}
+if (!check) mkdirSync(outDir, { recursive: true });
 
 function makeCircleSvg(color) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
@@ -56,7 +63,8 @@ function wrapSimpleIconSvg(raw, color) {
     .replace(/fill="currentColor"/g, `fill="${color}"`)
     .replace(/(<svg[^>]*?)>/, (_m, tag) => {
       const noWH = tag.replace(/\s+width="[^"]*"/, '').replace(/\s+height="[^"]*"/, '');
-      return `${noWH} width="16" height="16">`;
+      const fill = /\sfill=/.test(noWH) ? '' : ` fill="${color}"`;
+      return `${noWH}${fill} width="16" height="16">`;
     });
 }
 
@@ -70,27 +78,40 @@ function makeGeneratedSvg({ color, letter, shape }) {
 }
 
 for (const { id, simpleId, color, letter, shape } of PROVIDER_ICONS) {
+  if (selected.size > 0 && !selected.has(id)) continue;
   const outPath = resolve(outDir, `${id}.svg`);
+  let svg;
 
   if (simpleId !== null) {
     const srcPath = resolve(simpleIconsDir, `${simpleId}.svg`);
     if (existsSync(srcPath)) {
       const raw = readFileSync(srcPath, 'utf8');
-      writeFileSync(outPath, wrapSimpleIconSvg(raw, color), 'utf8');
-      console.log(`[copy]    ${id}.svg  (from simple-icons/${simpleId}.svg)`);
+      svg = wrapSimpleIconSvg(raw, color);
       copied++;
     } else {
-      writeFileSync(outPath, makeGeneratedSvg({ color, letter, shape }), 'utf8');
-      console.log(`[fallback] ${id}.svg  (simple-icons/${simpleId}.svg not found)`);
+      if (selected.size > 0) {
+        console.error(`simple-icons/${simpleId}.svg not found for ${id}`);
+        process.exitCode = 1;
+        continue;
+      }
+      svg = makeGeneratedSvg({ color, letter, shape });
       generated++;
     }
   } else {
-    writeFileSync(outPath, makeGeneratedSvg({ color, letter, shape }), 'utf8');
-    console.log(
-      `[generate] ${id}.svg  (${shape ?? (letter ? `letter ${letter}` : 'circle')} ${color})`,
-    );
+    svg = makeGeneratedSvg({ color, letter, shape });
     generated++;
+  }
+  if (check) {
+    if (!existsSync(outPath) || readFileSync(outPath, 'utf8') !== svg) {
+      console.error(`[outdated] ${id}.svg`);
+      process.exitCode = 1;
+    } else {
+      console.log(`[checked] ${id}.svg`);
+    }
+  } else {
+    writeFileSync(outPath, svg, 'utf8');
+    console.log(`[wrote] ${id}.svg`);
   }
 }
 
-console.log(`\nDone: ${copied} copied, ${generated} generated, ${PROVIDER_ICONS.length} total`);
+console.log(`\nDone: ${copied} official, ${generated} generated, ${check ? 'checked' : 'written'}`);

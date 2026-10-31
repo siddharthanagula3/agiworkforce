@@ -3,6 +3,7 @@ import {
   siClaude,
   siDeepseek,
   siGooglegemini,
+  siLmstudio,
   siMeta,
   siMinimax,
   siMistralai,
@@ -12,6 +13,7 @@ import {
   siPerplexity,
   siQwen,
   siX,
+  siZdotai,
 } from 'simple-icons';
 
 const ICON_BY_PROVIDER: Record<string, SimpleIcon> = {
@@ -20,6 +22,7 @@ const ICON_BY_PROVIDER: Record<string, SimpleIcon> = {
   deepseek: siDeepseek,
   google: siGooglegemini,
   gemini: siGooglegemini,
+  lmstudio: siLmstudio,
   minimax: siMinimax,
   mistral: siMistralai,
   moonshot: siMoonshotai,
@@ -31,6 +34,7 @@ const ICON_BY_PROVIDER: Record<string, SimpleIcon> = {
   qwen: siQwen,
   xai: siX,
   grok: siX,
+  zhipu: siZdotai,
 };
 
 const OPENAI_PATH =

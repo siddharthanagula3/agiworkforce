@@ -1,8 +1,8 @@
 # Neon Free plan readiness
 
-Status: Source changes implemented; production quota validation pending
+Status: Source changes verified; owner-authorized production release in progress
 Owner: Web + mobile + signaling maintainers
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 Purpose: Track measured transfer/compute causes and the remaining live checks for Free allowances.
 Retention: Delete this tracker when the production acceptance checks pass; the original chat retains the dated diagnostic bundle.
 
@@ -154,3 +154,29 @@ Remaining production checks:
 The screenshot's CSP-blocked external font and unused stylesheet preloads are
 browser asset warnings. They do not prove Neon request volume, and weakening
 CSP is not a database optimization.
+
+## October 31 release preparation
+
+The owner explicitly authorized shipping the Neon optimizations and related
+branding/icon changes to production. The previously serving release predates
+the committed cache/activity fixes. Its missing canonical symbol and older PWA
+mark match that older source; publishing the verified newer source addresses
+that release staleness. Two active provider placeholders and the Neon connector
+monogram now use official vectors from the existing dependency, with bounded
+generator and consumer regressions.
+
+A fresh management-only pre-downgrade capture preserves paid history and
+configuration outside Git; no SQL keepalive or customer-content export was used.
+Legacy user-account limits do not establish organization/project quotas. The
+production low-power flag is confirmed enabled. Endpoint suspension value zero
+means the plan default, not disabled suspension. Editing an autoscaling maximum
+requires a compute restart, so that separate resource change awaits the owner's
+timing choice rather than silently disconnecting production connections.
+
+The release retains exact-commit CI/security, staging, relay and environment
+review gates. Existing web workflow activation was enabled for this authorized
+release and will return to its prior state after live verification. Billing,
+credit, role and customer-row mutations are excluded. Remaining Free allowances,
+downgrade carry-over treatment and sustained post-release savings remain
+unverified; deployment alone cannot establish them. The final live commit and
+operational proof are recorded in the original chat's release evidence.
