@@ -796,6 +796,15 @@ const MessageBubbleComponent = function MessageBubble({
   onFollowUp,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyFeedbackMounted = useRef(true);
+  useEffect(() => {
+    copyFeedbackMounted.current = true;
+    return () => {
+      copyFeedbackMounted.current = false;
+      if (copyFeedbackTimer.current !== null) clearTimeout(copyFeedbackTimer.current);
+    };
+  }, []);
   const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useState(false);
   // D-2026-09-05-06. A receipt, not an alert: Auto moved off this
   // conversation's model, so the turn says so once and stays put.
@@ -2235,9 +2244,14 @@ const MessageBubbleComponent = function MessageBubble({
     await navigator.clipboard.writeText(
       isUser ? message.content : richBlocksAsPlainText(message.content),
     );
+    if (!copyFeedbackMounted.current) return;
     setCopied(true);
     toast.success('Copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
+    if (copyFeedbackTimer.current !== null) clearTimeout(copyFeedbackTimer.current);
+    copyFeedbackTimer.current = setTimeout(() => {
+      copyFeedbackTimer.current = null;
+      if (copyFeedbackMounted.current) setCopied(false);
+    }, 2000);
   }, [isUser, message.content]);
 
   const handleShare = useCallback(async () => {

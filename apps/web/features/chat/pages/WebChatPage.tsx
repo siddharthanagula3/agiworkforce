@@ -213,6 +213,9 @@ import {
   Sidebar,
   keepOpenForMenuEscape,
   useConfirmAction,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   type SidebarSession,
   type SidebarNavItem,
   type SidebarProject,
@@ -6739,7 +6742,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             <header
               data-app-header=""
               className={cn(
-                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11',
+                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -6756,7 +6759,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 chevron menu carries the row actions (rename, move, share,
                 print, export, branch, delete); Share keeps its own control in
                 the trailing cluster beside the drawer toggles. */}
-              <div className="flex min-w-0 flex-1 items-center gap-1">
+              <div className="flex min-w-0 flex-1 items-center gap-1 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11">
                 {isNarrowViewport && (
                   <Button
                     ref={mobileNavTriggerRef}
@@ -6868,12 +6871,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               in the title menu; they keep their own state and labels, so
               nothing is lost but the width.
             */}
-              <div className="flex shrink-0 items-center gap-1.5 @min-[40rem]:hidden">
+              <div className="flex shrink-0 items-center gap-1.5 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11 @min-[40rem]:hidden">
                 {hasMessages && (
                   <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
                 )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Popover>
+                  <PopoverTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -6882,8 +6885,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     >
                       <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="flex w-auto flex-row gap-1.5 p-1.5">
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    aria-label={t('chat:openPanels', 'Panels')}
+                    className="flex w-auto flex-row gap-1.5 p-1.5 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11"
+                  >
                     {hasMessages && showWorkSession && (
                       <WorkSessionToggleButton
                         messages={displayedMessages}
@@ -6903,11 +6910,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     ) : null}
                     <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              <div className="hidden shrink-0 items-center gap-1.5 @min-[40rem]:flex">
+              <div className="hidden shrink-0 items-center gap-1.5 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11 @min-[40rem]:flex">
                 {hasMessages && (
                   <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
                 )}

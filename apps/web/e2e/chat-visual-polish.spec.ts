@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { signIn } from './qa-capability-harness';
-import { CHAT_RENDERING_FIXTURES } from '../test/fixtures/chat-rendering';
+import { CHAT_RENDERING_FIXTURES, QA_CITATION_SOURCES } from '../test/fixtures/chat-rendering';
 import { THEME_STORAGE_KEY } from '../shared/components/ThemeConstants';
 import { settleConsent } from './lib/settle-consent';
 import {
@@ -95,11 +95,33 @@ for (const appearance of ['light', 'dark'] as const) {
         await page.route('**/api/llm/v1/chat/completions', async (route) => {
           inferenceCalls++;
           const payload = route.request().postDataJSON() as { model: string };
+          const content = inferenceCalls === 1 ? MARKDOWN.content : 'Second fixture turn.';
           await route.fulfill({
             contentType: 'text/event-stream',
             body:
               [
-                { model: payload.model, choices: [{ delta: { content: MARKDOWN.content } }] },
+                ...(inferenceCalls === 1
+                  ? [
+                      {
+                        choices: [
+                          {
+                            delta: {
+                              x_search_results: {
+                                tool: 'web_search',
+                                content: QA_CITATION_SOURCES.map((source) => ({
+                                  type: 'web_search_result',
+                                  url: source.url,
+                                  title: source.title,
+                                  encrypted_content: source.snippet,
+                                })),
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
+                { model: payload.model, choices: [{ delta: { content } }] },
                 { choices: [{ delta: {}, finish_reason: 'stop' }] },
               ]
                 .map((event) => `data: ${JSON.stringify(event)}\n\n`)
@@ -120,6 +142,9 @@ for (const appearance of ['light', 'dark'] as const) {
         ).toBeVisible();
         await expect(page).toHaveURL(/\/chat\/[a-f0-9-]+/);
         await expect(page.locator('html')).toHaveAttribute('data-theme', appearance);
+        expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(touch);
+        const firstMessageId = await assistant.getAttribute('data-message-id');
+        expect(firstMessageId).not.toBeNull();
 
         for (const viewport of VIEWPORTS) {
           await page.setViewportSize(viewport);
@@ -160,6 +185,8 @@ for (const appearance of ['light', 'dark'] as const) {
               return { left: rect.left, right: rect.right, width: rect.width };
             };
             const actions = assistant.querySelector('[data-testid="message-action-row"]')!;
+            const header = document.querySelector('[data-app-header]')!;
+            const headerBounds = header.getBoundingClientRect();
             return {
               pageWidth: document.documentElement.scrollWidth,
               viewport: innerWidth,
@@ -171,6 +198,27 @@ for (const appearance of ['light', 'dark'] as const) {
               column: box(column),
               composer: box(composerColumn),
               actionsVisible: parseFloat(getComputedStyle(actions).opacity),
+              header: {
+                height: headerBounds.height,
+                top: headerBounds.top,
+                bottom: headerBounds.bottom,
+                left: headerBounds.left,
+                right: headerBounds.right,
+                controls: [...header.querySelectorAll('button')]
+                  .map((button) => {
+                    const rect = button.getBoundingClientRect();
+                    return {
+                      name: button.getAttribute('aria-label'),
+                      width: rect.width,
+                      height: rect.height,
+                      top: rect.top,
+                      bottom: rect.bottom,
+                      left: rect.left,
+                      right: rect.right,
+                    };
+                  })
+                  .filter((control) => control.width > 0 && control.height > 0),
+              },
               targets: [...actions.querySelectorAll('button')].map((button) => {
                 const rect = button.getBoundingClientRect();
                 return {
@@ -191,6 +239,18 @@ for (const appearance of ['light', 'dark'] as const) {
           expect(geometry.font).toBe(16);
           expect(geometry.line).toBe(26);
           expect(geometry.headings.slice(0, 3)).toEqual([20, 18, 16]);
+          expect(geometry.header.height).toBe(48);
+          expect(geometry.header.controls.length).toBeGreaterThanOrEqual(2);
+          for (const control of geometry.header.controls) {
+            expect(control.top, control.name ?? '').toBeGreaterThanOrEqual(geometry.header.top);
+            expect(control.bottom, control.name ?? '').toBeLessThanOrEqual(geometry.header.bottom);
+            expect(control.left, control.name ?? '').toBeGreaterThanOrEqual(geometry.header.left);
+            expect(control.right, control.name ?? '').toBeLessThanOrEqual(geometry.header.right);
+            if (touch) {
+              expect(control.width, control.name ?? '').toBeGreaterThanOrEqual(44);
+              expect(control.height, control.name ?? '').toBeGreaterThanOrEqual(44);
+            }
+          }
           expect(geometry.column.width).toBeLessThanOrEqual(768);
           expect(Math.abs(geometry.column.left - geometry.composer.left)).toBeLessThanOrEqual(1);
           expect(Math.abs(geometry.column.right - geometry.composer.right)).toBeLessThanOrEqual(1);
@@ -205,6 +265,72 @@ for (const appearance of ['light', 'dark'] as const) {
           if (touch) expect(geometry.actionsVisible).toBe(1);
           expect(geometry.noticeBottom).toBeDefined();
           expect(geometry.transcriptTop).toBeGreaterThanOrEqual(geometry.noticeBottom! - 1);
+          if (viewport.width === 320 || viewport.width === 390) {
+            const panels = page
+              .locator('[data-app-header]')
+              .getByRole('button', { name: 'Panels', exact: true });
+            await panels.focus();
+            await panels.press('Enter');
+            const sources = page.getByRole('button', { name: 'Open sources panel', exact: true });
+            await expect(sources).toBeVisible();
+            const popup = page.getByRole('dialog', { name: 'Panels', exact: true });
+            await popup.evaluate(async (element) => {
+              const animations = element
+                .getAnimations({ subtree: true })
+                .filter((animation) =>
+                  Number.isFinite(animation.effect?.getComputedTiming().endTime),
+                );
+              await Promise.all(
+                animations.map((animation) => animation.finished.catch(() => undefined)),
+              );
+            });
+            const controls = popup.getByRole('button');
+            const focus = await popup.evaluate((element) => ({
+              role: element.getAttribute('role'),
+              active: {
+                tag: document.activeElement?.tagName,
+                role: document.activeElement?.getAttribute('role'),
+                label: document.activeElement?.getAttribute('aria-label'),
+              },
+              controls: [...element.querySelectorAll('button')].map((control) => ({
+                label: control.getAttribute('aria-label'),
+                focused: control === document.activeElement,
+              })),
+            }));
+            if (EVIDENCE_DIR) {
+              mkdirSync(EVIDENCE_DIR, { recursive: true });
+              writeFileSync(
+                path.join(
+                  EVIDENCE_DIR,
+                  `header-popup-${appearance}-${touch}-${viewport.width}.json`,
+                ),
+                JSON.stringify(focus, null, 2),
+              );
+            }
+            const count = await controls.count();
+            expect(count).toBeGreaterThanOrEqual(2);
+            for (let index = 0; index < count; index++) {
+              if (index > 0) await page.keyboard.press('Tab');
+              await expect(controls.nth(index)).toBeFocused();
+              if (touch) {
+                const bounds = await controls.nth(index).boundingBox();
+                expect(bounds!.width).toBeGreaterThanOrEqual(44);
+                expect(bounds!.height).toBeGreaterThanOrEqual(44);
+              }
+              expect(
+                await controls.nth(index).evaluate((element) => {
+                  const rect = element.getBoundingClientRect();
+                  return (
+                    document
+                      .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+                      ?.closest('button') === element
+                  );
+                }),
+              ).toBe(true);
+            }
+            await page.keyboard.press('Escape');
+            await expect(panels).toBeFocused();
+          }
           if (EVIDENCE_DIR) {
             mkdirSync(EVIDENCE_DIR, { recursive: true });
             await page.screenshot({
@@ -259,7 +385,93 @@ for (const appearance of ['light', 'dark'] as const) {
             });
           }
         }
-        expect(inferenceCalls).toBe(1);
+        await composer.fill('A second fixture request to inspect earlier response actions.');
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(assistant).toContainText('Second fixture turn.');
+        const latestMessageId = await assistant.getAttribute('data-message-id');
+        expect(latestMessageId).not.toBeNull();
+        expect(latestMessageId).not.toBe(firstMessageId);
+        const earlier = page.locator(`[data-message-id="${firstMessageId}"]`);
+        const latest = page.locator(`[data-message-id="${latestMessageId}"]`);
+        for (const width of [320, 390, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          const row = earlier.getByTestId('message-action-row');
+          await expect(row.getByRole('button', { name: 'Show sources', exact: true })).toHaveCount(
+            1,
+          );
+          await row.scrollIntoViewIfNeeded();
+          await page.locator('[data-app-header] button:visible').first().focus();
+          await page.mouse.move(0, 0);
+          const opacity = () =>
+            row.evaluate((element) => Number(getComputedStyle(element).opacity));
+          await expect.poll(opacity).toBe(touch ? 1 : 0);
+          await row.hover();
+          await expect.poll(opacity).toBe(1);
+          await page.mouse.move(0, 0);
+          await expect.poll(opacity).toBe(touch ? 1 : 0);
+          await row.getByRole('button', { name: 'Copy message', exact: true }).focus();
+          await expect.poll(opacity).toBe(1);
+          const more = row.getByRole('button', { name: 'More message actions', exact: true });
+          await more.click();
+          const menu = page.getByRole('menu');
+          await expect(menu).toBeVisible();
+          await menu.getByRole('menuitem').first().focus();
+          await page.mouse.move(0, 0);
+          await expect.poll(opacity).toBe(1);
+          await page.keyboard.press('Escape');
+          await expect(more).toBeFocused();
+          const latestRow = latest.getByTestId('message-action-row');
+          await latestRow.scrollIntoViewIfNeeded();
+          await page.locator('[data-app-header] button:visible').first().focus();
+          await page.mouse.move(0, 0);
+          await expect
+            .poll(() => latestRow.evaluate((element) => Number(getComputedStyle(element).opacity)))
+            .toBe(1);
+          for (const actions of [row, latestRow]) {
+            for (const name of [
+              'Copy message',
+              'Good response',
+              'Bad response',
+              'More message actions',
+            ])
+              await expect(actions.getByRole('button', { name, exact: true })).toHaveCount(1);
+            const bounds = await actions.evaluate((element) => {
+              const style = getComputedStyle(element);
+              const controls = [...element.querySelectorAll('button')].map((button) => {
+                const rect = button.getBoundingClientRect();
+                return {
+                  left: rect.left,
+                  right: rect.right,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                };
+              });
+              return {
+                width: element.getBoundingClientRect().width,
+                gap: parseFloat(style.columnGap),
+                controls,
+              };
+            });
+            expect(bounds.controls.length).toBeGreaterThanOrEqual(5);
+            for (const control of bounds.controls) {
+              expect(control.left).toBeGreaterThanOrEqual(0);
+              expect(control.right).toBeLessThanOrEqual(width);
+              if (touch) {
+                expect(control.width).toBeGreaterThanOrEqual(44);
+                expect(control.height).toBeGreaterThanOrEqual(44);
+              }
+            }
+            const requiredWidth =
+              bounds.controls.reduce((sum, control) => sum + control.width, 0) +
+              bounds.gap * (bounds.controls.length - 1);
+            if (requiredWidth > bounds.width + 1)
+              expect(
+                new Set(bounds.controls.map((control) => Math.round(control.top))).size,
+              ).toBeGreaterThan(1);
+          }
+        }
+        expect(inferenceCalls).toBe(2);
         expect(imageCalls).toBe(0);
       });
     });

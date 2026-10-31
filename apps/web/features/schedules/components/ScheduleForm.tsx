@@ -154,8 +154,8 @@ export function ScheduleForm({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pe-3">
         <div className="space-y-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p>
-            Scheduled runs use Managed Cloud and return text. Choose below what each run can read
-            and which connectors it can use.
+            Scheduled runs use Managed Cloud and return text. Choose the sources each run can read
+            below.
           </p>
           <p>
             When a run reaches an action your Tool approvals setting asks about, it pauses and
@@ -229,7 +229,8 @@ export function ScheduleForm({
               aria-describedby={describedBy('prompt', errors, 'schedule-prompt-helper')}
             />
             <p id="schedule-prompt-helper" className="text-xs text-muted-foreground">
-              Write a self-contained instruction. Scheduled runs do not see your chats.
+              Write a self-contained instruction. Recent chats are included only when selected below
+              and Search past chats is on in Settings.
             </p>
             <FieldError field="prompt" errors={errors} />
           </div>

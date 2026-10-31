@@ -1,6 +1,6 @@
 # Neon Free plan readiness
 
-Status: Source changes verified; owner-authorized production release in progress
+Status: Web optimizations deployed; Fly services stopped by the owner; Free allowance acceptance remains open
 Owner: Web + mobile + signaling maintainers
 Last verified: 2026-10-31
 Purpose: Track measured transfer/compute causes and the remaining live checks for Free allowances.
@@ -175,10 +175,34 @@ requires a compute restart. The owner explicitly chose to leave that adjustment
 for the Free-plan downgrade, avoiding an additional restart; no endpoint change
 was applied.
 
-The release retains exact-commit CI/security, staging, relay and environment
-review gates. Existing web workflow activation was enabled for this authorized
-release and will return to its prior state after live verification. Billing,
-credit, role and customer-row mutations are excluded. Remaining Free allowances,
-downgrade carry-over treatment and sustained post-release savings remain
-unverified; deployment alone cannot establish them. The final live commit and
-operational proof are recorded in the original chat's release evidence.
+The owner authorized a direct Vercel release once the exact commit's JavaScript
+lint, typecheck, test and build job passed, without waiting for Rust or Priority
+Level 1. Production now serves `e09cac0f627372df0a1e931bd3074d20dfa8834c`.
+The production and staging workflows were restored to their original disabled
+states. The migration ledger has 391 applied migrations, none pending and no
+checksum drift. Billing, credit, role and customer-row mutations are excluded.
+Remaining Free allowances, downgrade carry-over treatment and sustained
+post-release savings remain unverified; deployment alone cannot establish them.
+
+## Owner-requested Fly shutdown
+
+The October 31 cost explorer displayed $37.36 for October 2–31, excluding the
+current day. The upload scanner accounted for $29.86 and the relay for $7.50.
+Actual machine configuration showed a shared two-CPU, 4 GB scanner and a shared
+one-CPU, 1 GB relay. Both had automatic stopping disabled and a minimum of one
+running machine. These resources incur CPU/RAM charges while running even
+without end users. This Fly bill is separate from Neon's public transfer usage.
+
+The owner cancelled the pending Fly optimization deployment and requested
+immediate shutdown. Both machines were stopped. After explicit approval,
+their live service settings were changed to disable automatic startup, enable
+automatic stopping, keep zero minimum running machines and use restart policy
+`no`. Fresh Fly inventories confirmed both remain stopped; neither app has a
+persistent volume. Preserved machine root filesystems can still incur storage
+charges. No app, machine, image, secret or customer data was deleted.
+
+Do not redeploy or restart either Fly app without a new owner request. The
+repository's serving-topology configuration is not evidence that these paused
+production resources should be started. The relay's new idle-probe code was not
+deployed before shutdown. The original chat holds the live configuration and
+shutdown evidence outside Git.

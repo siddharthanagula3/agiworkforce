@@ -1,6 +1,6 @@
 # Chat rendering and selected UI/UX repairs
 
-Status: Local acceptance passed; owner-authorized production release in progress; governed prompt and deployed acceptance remain open
+Status: Initial web repairs deployed; owner follow-up fixes in local verification; governed prompt acceptance remains open
 Owner: Web chat + shared rendering + settings/agents maintainers
 Last verified: 2026-10-31
 Purpose: Track the owner's rendering QA and selected notification/agent recommendations, verified causes, evidence and release boundaries.
@@ -186,6 +186,39 @@ Cropped evidence is under the rendering artifact's `settings-agent-ux/` folder,
 including the final 320px selection/footer capture. Source checks also passed
 52 notification tests, 34 final editor/selector tests, 6 contract tests and a
 100-test catalog/API/older-consumer compatibility packet; these scopes overlap.
+
+## October 31 follow-up checks
+
+The supplied Three Site Comparison reuses October 30 AGI failures and records
+new competitor observations separately; it is not a fresh reproduction of the
+AGI defects. Current local evidence covers items 1–16 using actual rendered
+controls, with deterministic model/tool outputs and real local persistence for
+chat edits. The notification/agent browser fixtures intercept preference and
+creation writes; they do not establish notification delivery or a completed
+external Agent creation.
+
+Item 17 remained in `ScheduleForm.tsx`: its introduction promised connector
+selection while the canonical release gate hid it, and its instruction helper
+denied chat access while the form offered optional Recent chats. The executor
+requires both explicit source selection and the Search past chats setting.
+The copy now describes sources without promising unavailable connector controls
+and states the two chat-access conditions. Three focused cases failed before
+the correction; the final packet passed 20 tests, including existing connector
+and executor context checks. Two authenticated browser cases exercised the form
+at 1440, 1024, 390 and 320 pixels in both themes, keyboard source selection,
+Cancel and overflow checks. No schedule was created or executed.
+
+The remaining Priority Level 1 failures were a header guard interpreting a
+descendant touch-size variant as header minimum height, and an obsolete nowrap
+assertion on the responsive action row. Scoped touch rules now live on the child
+groups; the 48-pixel header guard is unchanged. Keyboard inspection also
+reproduced unreachable ordinary buttons inside the narrow Panels menu; the
+existing Popover primitive supplies the appropriate focus behavior. Copy's
+untracked feedback timer could outlive unmount or be created after a late
+clipboard completion; both races now have cleanup and regression coverage.
+The focused packet passed 137 tests, and four real-browser cases covered both
+themes, both pointer modes and eight viewports. The full current GitHub run
+remains required before claiming that workflow green.
 
 ## Diagram and CI acceptance refinement
 

@@ -1122,6 +1122,52 @@ describe('MessageBubble', () => {
         expect(screen.getByLabelText('Message copied')).toBeInTheDocument();
       });
     });
+
+    it('cancels the pending copy-feedback reset when the turn unmounts', async () => {
+      vi.useFakeTimers();
+      const timeout = vi.spyOn(globalThis, 'setTimeout');
+      const clear = vi.spyOn(globalThis, 'clearTimeout');
+      const view = render(<MessageBubble message={makeMessage({ content: 'copy me' })} />);
+      try {
+        await act(async () => fireEvent.click(screen.getByLabelText('Copy message')));
+        expect(screen.getByLabelText('Message copied')).toBeInTheDocument();
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('copy me');
+        const index = timeout.mock.calls.findLastIndex(([, delay]) => delay === 2000);
+        expect(index).toBeGreaterThanOrEqual(0);
+        const handle = timeout.mock.results[index]!.value;
+        view.unmount();
+        expect(clear).toHaveBeenCalledWith(handle);
+      } finally {
+        view.unmount();
+        timeout.mockRestore();
+        clear.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not schedule feedback if the clipboard completes after the turn unmounts', async () => {
+      vi.useFakeTimers();
+      let finishCopy!: () => void;
+      const writeText = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishCopy = resolve;
+          }),
+      );
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const view = render(<MessageBubble message={makeMessage({ content: 'copy me' })} />);
+      try {
+        fireEvent.click(screen.getByLabelText('Copy message'));
+        expect(writeText).toHaveBeenCalledWith('copy me');
+        view.unmount();
+        const pending = vi.getTimerCount();
+        await act(async () => finishCopy());
+        expect(vi.getTimerCount()).toBe(pending);
+      } finally {
+        view.unmount();
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('pin indicator', () => {
@@ -1141,13 +1187,17 @@ describe('MessageBubble', () => {
   describe('action row visibility', () => {
     const HOVER_GATE = 'group-hover:opacity-100';
 
-    it('hides the row on an earlier assistant turn until hover or focus', () => {
+    it('hides the row on an earlier assistant turn until hover or focus', async () => {
+      const user = userEvent.setup();
       render(<MessageBubble message={makeMessage({ role: 'assistant', content: 'Earlier' })} />);
       const row = screen.getByTestId('message-action-row');
       expect(row).toHaveClass('opacity-0');
       expect(row).toHaveClass(HOVER_GATE);
       expect(row).toHaveClass('group-focus-within:opacity-100');
-      expect(row).toHaveClass('flex-nowrap');
+      const copy = screen.getByRole('button', { name: 'Copy message' });
+      await user.tab();
+      expect(copy).toHaveFocus();
+      expect(row).toContainElement(document.activeElement as HTMLElement);
     });
 
     it('keeps the row visible on the latest assistant turn', () => {

@@ -8,6 +8,8 @@ import {
   MANAGED_CLOUD_CONNECTORS_PATH,
   MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
   ManagedCloudAgentListResponseSchema,
+  ManagedCloudScheduleListResponseSchema,
+  ManagedCloudScheduleRecentRunListResponseSchema,
   ManagedSkillsResponseSchema,
   SERVICE_NOTICES_PATH,
   ServiceNoticeListSchema,
@@ -16,6 +18,7 @@ import {
 
 import { settleConsent } from './lib/settle-consent';
 import { signIn } from './qa-capability-harness';
+import { THEME_STORAGE_KEY } from '../shared/components/ThemeConstants';
 
 const EVIDENCE_DIR = mkdtempSync('/tmp/agi-qa-settings-agent-ux-');
 const CAPTURED_AGENT_MESSAGE = 'QA intercepted this request. No agent was created.';
@@ -160,6 +163,7 @@ async function preparePage(
   baseURL: string | undefined,
   permission: BrowserPermission = 'default',
   registered = false,
+  appearance?: 'light' | 'dark',
 ): Promise<QaTraffic> {
   const origin = requireLocalTestEnvironment(baseURL);
   const traffic: QaTraffic = {
@@ -172,7 +176,15 @@ async function preparePage(
     preferenceReads: 0,
     skillReads: 0,
   };
-  const settings: Record<string, unknown> = { notifications: { ...INITIAL_NOTIFICATIONS } };
+  const settings: Record<string, unknown> = {
+    notifications: { ...INITIAL_NOTIFICATIONS },
+    ...(appearance ? { appearance: { theme: appearance } } : {}),
+  };
+  if (appearance)
+    await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+      key: THEME_STORAGE_KEY,
+      value: appearance,
+    });
   await installNotificationFixture(page, permission, registered, traffic.notificationActivity);
   await page.route('**/api/**', async (route) => {
     const request = route.request();
@@ -334,6 +346,93 @@ for (const fixture of [
     expect(traffic.pushRefreshWrites).toEqual([]);
     assertNoNewNotificationDelivery(traffic);
     await recordEvidence(page, testInfo, page.getByTestId('notification-preferences'));
+  });
+}
+
+for (const appearance of ['light', 'dark'] as const) {
+  test(`schedule access guidance matches available controls in ${appearance}`, async ({
+    page,
+    baseURL,
+  }, testInfo) => {
+    const traffic = await preparePage(page, baseURL, 'default', false, appearance);
+    await page.route('**/api/schedules**', (route) => {
+      const request = route.request();
+      if (request.method() !== 'GET') {
+        traffic.blockedMutations.push(`${request.method()} ${new URL(request.url()).pathname}`);
+        return route.fulfill({
+          status: 409,
+          json: { error: 'Schedule writes are blocked in QA.' },
+        });
+      }
+      const pathname = new URL(request.url()).pathname;
+      if (pathname === '/api/schedules')
+        return route.fulfill({
+          json: ManagedCloudScheduleListResponseSchema.parse({
+            schedules: [],
+            pagination: { limit: 20, offset: 0 },
+          }),
+        });
+      if (pathname === '/api/schedules/runs')
+        return route.fulfill({
+          json: ManagedCloudScheduleRecentRunListResponseSchema.parse({
+            runs: [],
+            nextCursor: null,
+          }),
+        });
+      return route.continue();
+    });
+    await page.goto('/chat/schedules', { waitUntil: 'domcontentloaded' });
+    const create = page.getByRole('button', { name: 'New task', exact: true });
+    await expect(create).toBeVisible();
+    await settleConsent(page);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', appearance);
+
+    for (const width of [1440, 1024, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await create.click();
+      const dialog = page.getByRole('dialog', { name: 'Create Schedule', exact: true });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText(/which connectors it can use/)).toHaveCount(0);
+      await expect(dialog.getByText(/Scheduled runs do not see your chats/)).toHaveCount(0);
+      const instructions = dialog.getByLabel('Task Instructions', { exact: true });
+      await expect(instructions).toHaveAccessibleDescription(
+        /Recent chats.*only when selected below.*Search past chats.*Settings/,
+      );
+      await instructions.focus();
+      await expect(instructions).toBeFocused();
+      await dialog.screenshot({
+        path: path.join(EVIDENCE_DIR, `schedule-guidance-${appearance}-${width}-instructions.png`),
+      });
+      const recent = dialog.getByRole('checkbox', { name: 'Recent chats', exact: true });
+      await recent.scrollIntoViewIfNeeded();
+      await expect(recent).toHaveAttribute('aria-checked', 'false');
+      await recent.focus();
+      await recent.press('Space');
+      await expect(recent).toHaveAttribute('aria-checked', 'true');
+      await recent.press('Space');
+      await expect(recent).toHaveAttribute('aria-checked', 'false');
+      await expect(dialog.getByText('Connectors are coming soon.', { exact: true })).toBeVisible();
+      await dialog.screenshot({
+        path: path.join(EVIDENCE_DIR, `schedule-guidance-${appearance}-${width}-sources.png`),
+      });
+      const geometry = await dialog.evaluate((element) => ({
+        width: element.getBoundingClientRect().width,
+        scrollWidth: element.scrollWidth,
+        pageWidth: document.documentElement.scrollWidth,
+        viewport: innerWidth,
+      }));
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(Math.ceil(geometry.width));
+      expect(geometry.pageWidth).toBeLessThanOrEqual(geometry.viewport);
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toBeHidden();
+    }
+    expect(traffic.blockedMutations).toEqual([]);
+    expect(traffic.agentSubmissions).toEqual([]);
+    assertNoNewNotificationDelivery(traffic);
+    await testInfo.attach('schedule-guidance-evidence', {
+      body: EVIDENCE_DIR,
+      contentType: 'text/plain',
+    });
   });
 }
 

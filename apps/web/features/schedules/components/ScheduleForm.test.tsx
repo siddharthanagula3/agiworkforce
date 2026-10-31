@@ -97,3 +97,27 @@ describe('ScheduleForm agent choice', () => {
     expect(screen.getByLabelText('Run as agent')).toHaveAccessibleDescription(/^Each run follows/);
   });
 });
+
+describe('ScheduleForm access guidance', () => {
+  it('does not promise connector selection while connectors are unavailable', () => {
+    renderForm({});
+
+    expect(screen.getByText(/Connectors are coming soon/i)).toBeInTheDocument();
+    expect(screen.queryByText(/which connectors it can use/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Connect one' })).not.toBeInTheDocument();
+  });
+
+  it.each([false, true])('describes optional chat access when selected=%s', (recentChats) => {
+    const sources = { ...INITIAL_SCHEDULE_DRAFT.sources, recentChats };
+    const onChange = renderForm({ sources });
+    const recent = screen.getByRole('checkbox', { name: 'Recent chats' });
+
+    expect(recent).toHaveAttribute('aria-checked', String(recentChats));
+    expect(screen.getByLabelText('Task Instructions')).toHaveAccessibleDescription(
+      /Recent chats.*only when selected below.*Search past chats.*Settings/,
+    );
+    expect(screen.queryByText(/Scheduled runs do not see your chats/)).not.toBeInTheDocument();
+    fireEvent.click(recent);
+    expect(onChange).toHaveBeenCalledWith({ sources: { ...sources, recentChats: !recentChats } });
+  });
+});
