@@ -118,9 +118,10 @@ field. Existing socket, revocation and authorization paths remain enforced.
 The repository configures 45 crons. Frequent jobs already call
 `lowPowerCronSkip()` except the security-anomaly route, whose Redis marker
 avoids an idle database read. Hourly/daily jobs align with the first 15 minutes
-of the hour. The production Vercel configuration contains an encrypted
-`AGI_DB_LOW_POWER` variable; its value and presence in the serving deployment
-were not retrieved. No production variable was changed by this work.
+of the hour. The production Vercel configuration has `AGI_DB_LOW_POWER` enabled, confirmed
+during the October 31 release preparation. The new serving deployment and
+sustained idle behavior still require live acceptance. No production variable
+was changed by this work.
 
 An hourly 15-minute maintenance window plus the five-minute suspension tail
 means about eight awake hours/day before real traffic: 62 CU-hours/month at
@@ -170,8 +171,9 @@ configuration outside Git; no SQL keepalive or customer-content export was used.
 Legacy user-account limits do not establish organization/project quotas. The
 production low-power flag is confirmed enabled. Endpoint suspension value zero
 means the plan default, not disabled suspension. Editing an autoscaling maximum
-requires a compute restart, so that separate resource change awaits the owner's
-timing choice rather than silently disconnecting production connections.
+requires a compute restart. The owner explicitly chose to leave that adjustment
+for the Free-plan downgrade, avoiding an additional restart; no endpoint change
+was applied.
 
 The release retains exact-commit CI/security, staging, relay and environment
 review gates. Existing web workflow activation was enabled for this authorized

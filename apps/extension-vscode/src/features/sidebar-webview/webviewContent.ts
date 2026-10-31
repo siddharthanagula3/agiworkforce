@@ -2533,7 +2533,7 @@ export function getWebviewContent(
       border: 1px solid var(--vscode-input-border, var(--border));
       border-radius: var(--corner-field);
       background: var(--vscode-input-background, var(--bg-elevated));
-      color: var(--text-primary);
+      color: var(--vscode-input-foreground, var(--text-primary));
       font: inherit;
       line-height: var(--type-body-height);
     }

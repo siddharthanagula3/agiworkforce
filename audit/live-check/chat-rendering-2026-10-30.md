@@ -1,6 +1,6 @@
 # Chat rendering and selected UI/UX repairs
 
-Status: Local browser and persistence acceptance passed; governed prompt and deployed acceptance remain open
+Status: Local acceptance passed; owner-authorized production release in progress; governed prompt and deployed acceptance remain open
 Owner: Web chat + shared rendering + settings/agents maintainers
 Last verified: 2026-10-31
 Purpose: Track the owner's rendering QA and selected notification/agent recommendations, verified causes, evidence and release boundaries.
@@ -418,7 +418,7 @@ Existing defect owners are reused:
 
 No duplicate defect rows or separate execution plan were created.
 
-## Publication without deployment
+## Earlier publication hold
 
 Read-only release inspection found that successful main CI automatically starts
 staging, its staging environment has no reviewer gate, and its required
@@ -429,7 +429,10 @@ prevents automatic staging/production/sandbox/signaling publication and queue
 cleanup for that candidate; CI remains mandatory. No environment permission,
 secret value or billing setting was changed. Existing manual release paths and
 all prior release checks remain. The [canonical procedure](../../docs/development/ci-and-deploys.md)
-documents the hold and later release behavior.
+documents the hold and later release behavior. The owner subsequently authorized
+shipping the Neon optimizations and related UI/branding changes. The release
+candidate proceeds through the existing exact-commit CI, staging, relay and
+protected environment gates; earlier checkpoints retain their hold trailers.
 
 ## October 31 visual polish
 
@@ -525,4 +528,15 @@ preview editing retain their existing honest capability limits. Fresh native
 builds, Android runtime, native keyboard, VoiceOver/TalkBack, installed VS Code
 theme/host behavior and physical TV/monitor checks are not claimed. The public
 Electron renderer follows hosted Web; no retained Tauri-only change is counted
-as a public Desktop release. The per-commit deployment hold remains required.
+as a public Desktop release. The owner authorized the later production release;
+its serving-commit proof is recorded with the candidate in the original chat.
+
+The final VS Code package sweep reproduced a writing-input palette mismatch:
+the background followed the host input role while the foreground used generic
+text. Both now follow the paired host input roles with the existing fallbacks.
+The palette guard was unchanged; the three generated structural snapshots
+changed only that foreground declaration. All **1,493 tests / 125 files**,
+package lint and typecheck passed locally. The emitted renderer also passed
+24 browser states with a distinct custom host input foreground, exact edited
+Copy and contained responsive controls. Color measurement waits for the
+computed style to settle before comparison.
