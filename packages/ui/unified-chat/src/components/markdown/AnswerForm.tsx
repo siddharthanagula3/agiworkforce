@@ -1,12 +1,12 @@
 import { useId, useRef, useState } from 'react';
-import { Button, useUiTranslation } from '@agiworkforce/ui';
+import { Button, Checkbox, Input, Label, Textarea, useUiTranslation } from '@agiworkforce/ui';
 import { useFollowUpAction } from './FollowUpAction';
 import type { FormField, FormSpec } from './answerSurfaces';
 
 type FormValue = string | string[];
 
 const INPUT_CLASS =
-  'min-h-10 w-full rounded-md border border-[var(--chat-border)] bg-[var(--chat-bg)] px-3 py-2 text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11';
+  'h-auto min-h-11 w-full rounded-md border border-[var(--chat-border)] bg-[var(--chat-bg)] px-3 py-2 text-base leading-6 text-[var(--chat-text-primary)] shadow-none aria-invalid:border-[var(--chat-destructive-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] focus-visible:ring-offset-0';
 
 function initialValue(field: FormField): FormValue {
   if (field.kind === 'checks')
@@ -78,8 +78,9 @@ export function AnswerForm({
         setInvalid(errors);
         if (errors.length > 0) {
           formRef.current
+            ?.querySelector<HTMLElement>(`[data-form-field="${errors[0]}"]`)
             ?.querySelector<HTMLElement>(
-              `[data-form-field="${errors[0]}"] input, [data-form-field="${errors[0]}"] select, [data-form-field="${errors[0]}"] textarea`,
+              '[role="radio"], [role="checkbox"], input:not([type="hidden"]):not([aria-hidden="true"]), select, textarea',
             )
             ?.focus();
           return;
@@ -94,10 +95,10 @@ export function AnswerForm({
         setApplied(values.map((value) => (Array.isArray(value) ? [...value] : value)));
       }}
     >
-      <h3 className="border-b border-[var(--chat-border-subtle)] px-4 py-3 text-sm font-medium">
+      <h3 className="mb-4 wrap-anywhere text-base font-semibold leading-relaxed text-[var(--chat-text-primary)]">
         {spec.title}
       </h3>
-      <fieldset disabled={streaming} className="flex flex-col gap-4 px-4 py-3">
+      <fieldset disabled={streaming} className="flex min-w-0 flex-col gap-5">
         {spec.fields.map((field, index) => {
           const fieldId = `${id}-${index}`;
           const errorId = `${fieldId}-error`;
@@ -116,50 +117,81 @@ export function AnswerForm({
           };
           const choices = field.kind === 'radio' || field.kind === 'checks';
           return (
-            <div key={field.label} data-form-field={index} className="min-w-0 text-sm">
+            <div
+              key={field.label}
+              data-form-field={index}
+              className="min-w-0 wrap-anywhere text-sm leading-6"
+            >
               {choices ? (
                 <fieldset {...a11y}>
-                  <legend className="mb-2 font-medium">{label}</legend>
-                  <div className="flex flex-col gap-2">
-                    {field.options.map((option, optionIndex) => (
-                      <label
-                        key={option.label}
-                        className="flex min-h-8 items-center gap-2 pointer-coarse:min-h-11"
-                      >
-                        <input
-                          type={field.kind === 'radio' ? 'radio' : 'checkbox'}
-                          name={`${id}-${index}`}
-                          value={option.label}
-                          checked={
-                            field.kind === 'radio'
-                              ? value === option.label
-                              : Array.isArray(value) && value.includes(option.label)
-                          }
-                          {...(optionIndex === 0 ? a11y : {})}
-                          onChange={(event) => {
-                            if (field.kind === 'radio') change(index, option.label);
-                            else {
+                  <legend id={`${fieldId}-label`} className="mb-1 font-medium">
+                    {label}
+                  </legend>
+                  {field.kind === 'radio' ? (
+                    <div
+                      role="radiogroup"
+                      aria-labelledby={`${fieldId}-label`}
+                      {...a11y}
+                      className="grid gap-1"
+                    >
+                      {field.options.map((option, optionIndex) => (
+                        <Label
+                          key={option.label}
+                          htmlFor={`${fieldId}-${optionIndex}`}
+                          className="flex min-h-11 cursor-pointer items-center gap-3 break-words font-normal leading-6"
+                        >
+                          <input
+                            id={`${fieldId}-${optionIndex}`}
+                            type="radio"
+                            name={`${id}-${index}`}
+                            value={option.label}
+                            checked={value === option.label}
+                            disabled={streaming}
+                            onChange={() => change(index, option.label)}
+                            {...a11y}
+                            className="h-4 min-h-0 w-4 min-w-0 shrink-0 accent-[var(--chat-accent-primary)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                          />
+                          <span className="min-w-0 flex-1 wrap-anywhere">{option.label}</span>
+                        </Label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {field.options.map((option, optionIndex) => (
+                        <Label
+                          key={option.label}
+                          htmlFor={`${fieldId}-${optionIndex}`}
+                          className="flex min-h-11 cursor-pointer items-center gap-3 break-words font-normal leading-6"
+                        >
+                          <Checkbox
+                            id={`${fieldId}-${optionIndex}`}
+                            name={`${id}-${index}`}
+                            value={option.label}
+                            checked={Array.isArray(value) && value.includes(option.label)}
+                            disabled={streaming}
+                            {...(optionIndex === 0 ? a11y : {})}
+                            onCheckedChange={(checked) => {
                               const current = Array.isArray(value) ? value : [];
                               change(
                                 index,
-                                event.target.checked
+                                checked === true
                                   ? [...current, option.label]
                                   : current.filter((choice) => choice !== option.label),
                               );
-                            }
-                          }}
-                          className="focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
-                        />
-                        {option.label}
-                      </label>
-                    ))}
-                  </div>
+                            }}
+                            className="min-h-0 min-w-0 aria-invalid:border-[var(--chat-destructive-text)]"
+                          />
+                          <span className="min-w-0 flex-1 wrap-anywhere">{option.label}</span>
+                        </Label>
+                      ))}
+                    </div>
+                  )}
                 </fieldset>
               ) : (
                 <>
-                  <label htmlFor={fieldId} className="mb-2 block font-medium">
+                  <Label htmlFor={fieldId} className="mb-2 block font-medium leading-6">
                     {label}
-                  </label>
+                  </Label>
                   {field.kind === 'select' ? (
                     <select
                       id={fieldId}
@@ -179,7 +211,7 @@ export function AnswerForm({
                       ))}
                     </select>
                   ) : field.kind === 'textarea' ? (
-                    <textarea
+                    <Textarea
                       id={fieldId}
                       {...a11y}
                       required={field.required}
@@ -189,7 +221,7 @@ export function AnswerForm({
                       className={INPUT_CLASS}
                     />
                   ) : field.kind === 'slider' ? (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <input
                         id={fieldId}
                         {...a11y}
@@ -198,14 +230,14 @@ export function AnswerForm({
                         max={field.max}
                         value={typeof value === 'string' ? value : ''}
                         onChange={(event) => change(index, event.target.value)}
-                        className="min-h-10 min-w-0 flex-1 focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                        className="min-h-11 min-w-0 flex-1 accent-[var(--chat-accent-primary)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
                       />
-                      <output htmlFor={fieldId}>
+                      <output htmlFor={fieldId} className="min-w-0 break-words tabular-nums">
                         {value} {field.unit}
                       </output>
                     </div>
                   ) : (
-                    <input
+                    <Input
                       id={fieldId}
                       {...a11y}
                       required={field.required}
@@ -218,7 +250,11 @@ export function AnswerForm({
                 </>
               )}
               {error ? (
-                <p id={errorId} role="alert" className="mt-1 text-[var(--chat-destructive-text)]">
+                <p
+                  id={errorId}
+                  role="alert"
+                  className="mt-2 text-sm leading-6 text-[var(--chat-destructive-text)]"
+                >
                   {t('answerSurface.invalidField', 'Enter a valid value for {{label}}.', {
                     label: field.label,
                   })}
@@ -228,14 +264,19 @@ export function AnswerForm({
           );
         })}
       </fieldset>
-      <div className="flex flex-wrap items-center gap-3 border-t border-[var(--chat-border-subtle)] px-4 py-3">
-        <Button type="submit" size="sm" disabled={streaming || (spec.send && !onFollowUp)}>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          size="sm"
+          className="min-h-11 max-w-full whitespace-normal"
+          disabled={streaming || (spec.send && !onFollowUp)}
+        >
           {spec.send
             ? t('answerSurface.sendFormLabel', '{{label}} (send to chat)', { label: spec.submit })
             : spec.submit}
         </Button>
         {spec.send ? (
-          <p className="text-xs text-[var(--chat-text-secondary)]">
+          <p className="text-sm leading-6 text-[var(--chat-text-secondary)]">
             {t(
               'answerSurface.formSendsValues',
               'Selected values will be sent as your next message.',
@@ -243,7 +284,7 @@ export function AnswerForm({
           </p>
         ) : null}
         {spec.send && !onFollowUp ? (
-          <p className="text-xs text-[var(--chat-text-secondary)]">
+          <p className="text-sm leading-6 text-[var(--chat-text-secondary)]">
             {t('answerSurface.formReadOnly', 'Submitting to chat is unavailable in this view.')}
           </p>
         ) : null}
@@ -252,7 +293,7 @@ export function AnswerForm({
         <section
           role="status"
           aria-label={t('answerSurface.formResult', 'Applied values')}
-          className="border-t border-[var(--chat-border-subtle)] px-4 py-3 text-sm"
+          className="mt-5 border-t border-[var(--chat-border-subtle)] pt-4 text-sm leading-6"
         >
           <h4 className="font-medium">{t('answerSurface.formResult', 'Applied values')}</h4>
           <dl className="mt-2 flex flex-col gap-2">

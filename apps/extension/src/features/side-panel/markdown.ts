@@ -487,7 +487,13 @@ function decorateAssistantSurfaces(root: HTMLElement, onFollowUp?: (text: string
               : 'Copy';
       const button = el('button', { type: 'button' }, label);
       button.addEventListener('click', () => {
-        void navigator.clipboard?.writeText(code.textContent ?? '');
+        const draft =
+          kind === 'surface:writing'
+            ? section.querySelector<HTMLElement>('pre[contenteditable]')
+            : null;
+        const text =
+          kind === 'surface:writing' ? (draft ? draft.innerText : '') : (code.textContent ?? '');
+        void navigator.clipboard?.writeText(text);
       });
       section.append(button);
     }
@@ -511,7 +517,7 @@ function decorateAssistantSurfaces(root: HTMLElement, onFollowUp?: (text: string
     }
     if (kind === 'surface:writing') {
       const draft = section.querySelector('pre');
-      if (draft) draft.setAttribute('contenteditable', 'true');
+      if (draft) draft.setAttribute('contenteditable', 'plaintext-only');
     }
     if (kind === 'surface:followups' && send) {
       for (const item of section.querySelectorAll<HTMLElement>(

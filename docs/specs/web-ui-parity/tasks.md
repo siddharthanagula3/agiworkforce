@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Web chat
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 This existing checklist now reflects the October 30 local implementation.
 Checked items describe the stated implementation or bounded verification, not
@@ -100,3 +100,31 @@ The provider-denial continuation issue remains in
 `WEB-CHAT-DENIED-TOOL-PROVIDER-400-01`, outside this rendering slice. Production
 deployment and prompt promotion retain their existing release process; neither
 has occurred in this task.
+
+## 7. October 31 visual polish
+
+- [x] 7.1 Apply shared chat typography, compact writing/form presentation,
+      touch targets, safe notice placement and restrained transitions.
+- [x] 7.2 Verify 43 local web cases, including real saved edits/reopening,
+      cancellation/conflicts and eight viewport sizes through 3840px, both
+      themes and fine/coarse input. Inference remains stubbed.
+- [x] 7.3 Verify 23 retained desktop renderer cases, including 16 responsive
+      combinations, workspace context, Send/Stop, keyboard menus and focus.
+      This is Chromium with Cloud/IPC fixtures, not native host validation.
+- [x] 7.4 Verify native mobile type/lint and bounded control/copy/accessibility
+      regressions; inspect current JavaScript in the cached iOS Debug shell,
+      including drawer and Settings in both themes.
+- [x] 7.5 Verify public contrast, first-screen actions and narrow coded previews
+      through the existing 33-case browser packet.
+- [x] 7.6 Finish extension browser verification: 24 emitted VS Code viewport
+      states, 12 Chrome renderer states, 12 unpacked Chrome states and the
+      existing extension smoke runner. Keep the deployment hold and report
+      repository/publication outcomes with the final candidate evidence.
+- [ ] 7.7 Obtain fresh native-build, Android, native keyboard and assistive
+      traversal proof. The current simulator instrument omits the composer
+      text target, and its Debug overlay obstructs Close Settings.
+
+The owner clarified that TV means the website on a large display. No native TV
+application or remote-navigation behavior is claimed. Current source, evidence,
+intentional fallbacks and validation limits remain in the existing live-check
+record linked above.

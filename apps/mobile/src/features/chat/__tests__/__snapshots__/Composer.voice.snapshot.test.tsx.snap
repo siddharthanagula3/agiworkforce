@@ -28,7 +28,6 @@ exports[`Composer, voice scaffolding snapshots VoiceInputButton locks disabled m
     accessible={true}
     collapsable={false}
     focusable={true}
-    hitSlop={8}
     onBlur={[Function]}
     onClick={[Function]}
     onFocus={[Function]}
@@ -41,9 +40,13 @@ exports[`Composer, voice scaffolding snapshots VoiceInputButton locks disabled m
     style={
       [
         {
+          "alignItems": "center",
           "backgroundColor": "transparent",
           "borderRadius": 8,
+          "height": 44,
+          "justifyContent": "center",
           "padding": 6,
+          "width": 44,
         },
         {
           "opacity": 0.5,
@@ -89,7 +92,6 @@ exports[`Composer, voice scaffolding snapshots VoiceInputButton locks idle mic b
     accessible={true}
     collapsable={false}
     focusable={true}
-    hitSlop={8}
     onBlur={[Function]}
     onClick={[Function]}
     onFocus={[Function]}
@@ -102,9 +104,13 @@ exports[`Composer, voice scaffolding snapshots VoiceInputButton locks idle mic b
     style={
       [
         {
+          "alignItems": "center",
           "backgroundColor": "transparent",
           "borderRadius": 8,
+          "height": 44,
+          "justifyContent": "center",
           "padding": 6,
+          "width": 44,
         },
         undefined,
       ]

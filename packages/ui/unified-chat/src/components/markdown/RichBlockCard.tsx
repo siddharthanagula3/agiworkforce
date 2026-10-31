@@ -40,48 +40,42 @@ export function useRichBlockCopy(): {
 }
 
 export const RICH_BLOCK_ACTION_CLASS =
-  'h-8 gap-1.5 px-2.5 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] [@media(pointer:coarse)]:h-11';
+  'h-9 gap-1.5 px-2.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] pointer-coarse:min-h-11 pointer-coarse:min-w-11';
 export const RICH_BLOCK_ICON_ACTION_CLASS =
-  'h-8 w-8 p-0 text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11';
+  'h-9 w-9 p-0 text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] pointer-coarse:min-h-11 pointer-coarse:min-w-11';
 
 interface RichBlockCardProps {
   kind: string;
-  icon: React.ReactNode;
   label: string;
   actions?: React.ReactNode;
   status?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function RichBlockCard({
-  kind,
-  icon,
-  label,
-  actions,
-  status,
-  children,
-}: RichBlockCardProps) {
+export function RichBlockCard({ kind, label, actions, status, children }: RichBlockCardProps) {
   return (
     <section
       aria-label={label}
       data-rich-block={kind}
-      className="my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]"
+      className={cn(
+        'my-4 min-w-0 overflow-clip border-[var(--chat-border-subtle)] bg-[var(--chat-bg)]',
+        kind === 'email' ? 'rounded-[var(--chat-radius-lg)] border' : 'border-y',
+      )}
     >
       <div
         data-rich-block-header=""
         className={cn(
           'sticky top-0 z-[var(--z-content-raised)]',
-          'flex min-h-11 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)]',
-          'bg-[var(--chat-bg)] py-1 ps-4 pe-1.5',
+          'flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1',
+          'bg-[var(--chat-bg)] py-1 ps-5 pe-2',
         )}
       >
-        <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-[var(--chat-text-secondary)]">
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
-            {icon}
-          </span>
-          <span className="truncate">{label}</span>
+        <span className="min-w-0 wrap-anywhere text-xs text-[var(--chat-text-secondary)]">
+          {label}
         </span>
-        <div className="flex shrink-0 items-center gap-0.5">{actions}</div>
+        <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-0.5">
+          {actions}
+        </div>
       </div>
       {status}
       {children}

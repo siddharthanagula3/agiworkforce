@@ -272,16 +272,29 @@ test('email Copy and Edit act on real text and Save survives reload', async ({ p
   const card = page.locator('[data-rich-block="email"]');
   await expect(card).toBeVisible();
   await expect(card.getByRole('button', { name: /^Send/i })).toHaveCount(0);
+  await expect(card.getByLabel('To', { exact: true })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Edit email', exact: true }).click();
+  await expect(card.getByLabel('To', { exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'Edit email', exact: true }).click();
+  await expect(card.getByLabel('To', { exact: true })).toHaveCount(0);
   await card.getByRole('button', { name: 'Copy email' }).click();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied.replace(/\r\n/g, '\n')).toBe(QA_EMAIL_SOURCE);
   const subject = card.getByLabel('Subject', { exact: true });
-  await subject.fill('Reviewed launch subject');
+  const reviewedSubject = 'Reviewed launch subject that wraps cleanly on a narrow screen';
+  await subject.fill(reviewedSubject);
   await card.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.reload();
   await expect(
     page.locator('[data-rich-block="email"]').getByLabel('Subject', { exact: true }),
-  ).toHaveValue('Reviewed launch subject');
+  ).toHaveValue(reviewedSubject);
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() => subject.evaluate((element) => element.scrollHeight - element.clientHeight))
+      .toBeLessThanOrEqual(1);
+    await assertNoPageOverflow(page);
+  }
   await evidence(page, 'email-saved');
 });
 
@@ -291,6 +304,12 @@ test('seven writing artifacts copy independently and persist only the saved bloc
   await openFixture(page, 'writing');
   const blocks = page.locator('[data-rich-block]');
   await expect(blocks).toHaveCount(7);
+  await blocks.nth(2).getByRole('button', { name: 'Edit text', exact: true }).click();
+  await expect(
+    blocks.nth(2).getByRole('button', { name: 'Save changes', exact: true }),
+  ).toBeDisabled();
+  await blocks.nth(2).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(blocks.nth(2).getByRole('textbox')).toHaveCount(0);
   for (let index = 0; index < QA_WRITING_SOURCES.length; index++) {
     const block = blocks.nth(index);
     await block
@@ -316,9 +335,34 @@ test('seven writing artifacts copy independently and persist only the saved bloc
 });
 
 test('project form validates, applies locally and supports keyboard controls', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
   await openFixture(page, 'form');
   const form = page.getByRole('form', { name: 'Project configuration' });
   await expect(form).toBeVisible();
+  for (const appearance of ['light', 'dark']) {
+    await theme(page, appearance);
+    const choices = await form
+      .locator('input[type="radio"], button[role="checkbox"]')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const glyph = button.getBoundingClientRect();
+          const target = button.closest('label')!.getBoundingClientRect();
+          return {
+            width: glyph.width,
+            height: glyph.height,
+            targetWidth: target.width,
+            targetHeight: target.height,
+          };
+        }),
+      );
+    expect(choices.length).toBe(4);
+    for (const choice of choices) {
+      expect(choice.width).toBe(16);
+      expect(choice.height).toBe(16);
+      expect(choice.targetWidth).toBeGreaterThanOrEqual(44);
+      expect(choice.targetHeight).toBeGreaterThanOrEqual(44);
+    }
+  }
   let completions = 0;
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.includes('/api/llm/')) completions++;
@@ -328,8 +372,11 @@ test('project form validates, applies locally and supports keyboard controls', a
   await expect(form.getByLabel('Project name', { exact: false })).toBeFocused();
   await form.getByLabel('Project name', { exact: false }).fill('Northstar');
   await form.getByLabel('Fictional model', { exact: false }).selectOption('Nova');
-  await form.getByRole('radio', { name: 'Detailed', exact: true }).check();
-  await form.getByRole('checkbox', { name: 'Web search', exact: true }).check();
+  await form.getByRole('radio', { name: 'Concise', exact: true }).focus();
+  await form.getByRole('radio', { name: 'Concise', exact: true }).press('ArrowDown');
+  await expect(form.getByRole('radio', { name: 'Detailed', exact: true })).toBeChecked();
+  await form.getByRole('checkbox', { name: 'Web search', exact: true }).focus();
+  await form.getByRole('checkbox', { name: 'Web search', exact: true }).press('Space');
   await form.getByRole('checkbox', { name: 'Code generation', exact: true }).check();
   const budget = form.getByRole('slider', { name: 'Monthly budget', exact: true });
   await budget.focus();

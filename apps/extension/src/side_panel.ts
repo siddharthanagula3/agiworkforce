@@ -23,7 +23,12 @@ import {
   dataTransferCarriesFiles,
   filesFromDataTransfer,
 } from '@agiworkforce/utils/composer-paste';
-import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
+import {
+  agiChatTypographyCssVars,
+  agiCornerCssVars,
+  agiMotionCssVars,
+  cssVarsToString,
+} from '@agiworkforce/design-tokens';
 import { getExtensionTokensCssAuto } from './tokens';
 import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
@@ -1664,6 +1669,7 @@ function injectStyles(): void {
     ${TAB_CONTEXT_PICKER_CSS}
 
     :root {
+      ${cssVarsToString(agiChatTypographyCssVars)}
       ${cssVarsToString(agiCornerCssVars)}
       ${cssVarsToString(agiMotionCssVars)}
     }
@@ -2598,9 +2604,10 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
       margin: 6px 0 3px;
     }
-    .sp-bubble-assistant h1 { font-size: var(--type-title-size); line-height: var(--type-title-height); }
-    .sp-bubble-assistant h2 { font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
-    .sp-bubble-assistant h3, .sp-bubble-assistant h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-bubble-assistant h1 { font-size: var(--type-h1-size); line-height: var(--type-h1-height); }
+    .sp-bubble-assistant h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); }
+    .sp-bubble-assistant h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); }
+    .sp-bubble-assistant h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     .sp-bubble-assistant h5, .sp-bubble-assistant h6 { font-size: var(--type-label-size); line-height: var(--type-label-height); }
     .sp-bubble-assistant blockquote {
       border-left: 3px solid var(--agi-ext-accent);
@@ -4290,11 +4297,8 @@ function injectStyles(): void {
        Trust state remains visible, but secondary controls no longer compete
        with the message field. */
     body {
-      color-scheme: dark;
+      color-scheme: inherit;
       letter-spacing: -0.005em;
-    }
-    @media (prefers-color-scheme: light) {
-      body { color-scheme: light; }
     }
     #sp-header {
       min-height: 48px;
@@ -4597,12 +4601,12 @@ function injectStyles(): void {
     }
 
     #sp-composer-shell {
-      min-height: 104px;
-      padding: 10px 12px 9px;
+      min-height: 0;
+      padding: 8px 10px;
       border-radius: var(--corner-panel);
-      gap: 2px;
+      gap: 4px;
     }
-    #sp-input { min-height: 46px; font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
+    #sp-input { min-height: 28px; font-size: var(--type-body-large-size); line-height: var(--type-body-large-height); }
     #sp-composer-bar {
       padding: 0;
       gap: 4px;
@@ -4709,7 +4713,7 @@ function injectStyles(): void {
       color: var(--agi-ext-accent-text);
     }
 
-    .sp-model-option { font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-model-option { min-height: 48px; font-size: var(--type-body-size); line-height: var(--type-body-height); }
     .sp-model-option.selected {
       background: var(--agi-ext-hover);
       color: var(--agi-ext-text);
@@ -5085,6 +5089,74 @@ function injectStyles(): void {
       line-height: var(--type-caption-height);
     }
     .sp-title-status:empty { display: none; }
+
+    .sp-bubble-assistant section:is([data-lang='surface:email'], [data-lang='surface:writing']) {
+      min-width: 0;
+      margin-block: 12px;
+    }
+    .sp-bubble-assistant section:is([data-lang='surface:email'], [data-lang='surface:writing']) > h3 {
+      margin: 0 0 8px;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      font-weight: 500;
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-assistant section[data-lang='surface:email'] > p {
+      font-size: var(--type-body-large-size);
+      line-height: var(--type-body-large-height);
+    }
+    .sp-bubble-assistant section:is([data-lang='surface:email'], [data-lang='surface:writing']) pre {
+      max-width: 100%;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      font-family: inherit;
+      font-size: var(--type-prose-size);
+      line-height: var(--type-prose-height);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: normal;
+    }
+    .sp-bubble-assistant section:is([data-lang='surface:email'], [data-lang='surface:writing']) pre code {
+      padding: 0;
+      background: transparent;
+      font: inherit;
+      white-space: inherit;
+    }
+    .sp-bubble-assistant section[data-lang='surface:writing'] [contenteditable]:not([contenteditable='false']):focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
+    .sp-bubble-assistant section[data-lang='surface:writing'] > p {
+      margin: 8px 0 0;
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-bubble-assistant section:is([data-lang='surface:email'], [data-lang='surface:writing']) > button {
+      min-height: var(--control-sm);
+      margin-top: 8px;
+      padding: 4px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      cursor: pointer;
+    }
+
+    @media (pointer: coarse) {
+      :root { --control-sm: 44px; --control-md: 44px; --control-lg: 44px; }
+      button, [role='button'] { min-block-size: 44px; min-inline-size: 44px; }
+      .sp-copy-btn { min-width: 44px; min-height: 44px; margin-block: 0; }
+      #sp-project-chip-clear, #sp-recents-close { width: 44px; height: 44px; }
+      .sp-autonomy-chip::after { display: none; }
+      .sp-composer-controls-end .sp-model-selector-wrap { flex: 1 1 0; }
+      #sp-model-selector-btn { width: 100%; }
+      #sp-model-badge { max-width: 100%; }
+    }
   `;
   const stylesheet = [
     cssText,

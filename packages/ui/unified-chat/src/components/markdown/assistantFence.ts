@@ -409,19 +409,15 @@ export function renderClassifiedFenceHtml(
     return `${sectionOpen(mode, 'carousel', fence.spec.title)}<h3>${escapeHtml(fence.spec.title)}</h3>${items}</section>`;
   }
   if (fence.kind === 'email') {
-    const fields = [
-      fence.to ? `<p>To: ${escapeHtml(fence.to)}</p>` : '',
-      fence.cc ? `<p>Cc: ${escapeHtml(fence.cc)}</p>` : '',
-      fence.bcc ? `<p>Bcc: ${escapeHtml(fence.bcc)}</p>` : '',
-      fence.subject ? `<p>Subject: ${escapeHtml(fence.subject)}</p>` : '',
-    ].join('');
-    return `${sectionOpen(mode, 'email', 'Email')}<h3>Email</h3>${fields}${copyBody(fence.copyText)}${copyButton(mode, 'Copy email')}</section>`;
+    return `${sectionOpen(mode, 'email', 'Email')}<h3>Email</h3>${copyBody(fence.copyText)}${copyButton(mode, 'Copy email')}</section>`;
   }
   if (fence.kind === 'writing') {
+    const notice =
+      '<p class="answer-preview-note">Edits stay in this preview. Copy to keep them.</p>';
     if (mode === 'vscode') {
-      return `${sectionOpen(mode, 'writing', fence.label)}<h3>${escapeHtml(fence.label)}</h3><textarea aria-label="${escapeHtml(fence.label)}">${escapeHtml(fence.copyText)}</textarea>${copyButton(mode, 'Copy draft')}</section>`;
+      return `${sectionOpen(mode, 'writing', fence.label)}<h3>${escapeHtml(fence.label)}</h3><textarea aria-label="${escapeHtml(fence.label)}">${escapeHtml(fence.copyText)}</textarea>${copyButton(mode, 'Copy draft')}${notice}</section>`;
     }
-    return `${sectionOpen(mode, 'writing', fence.label)}<h3>${escapeHtml(fence.label)}</h3>${copyBody(fence.copyText)}</section>`;
+    return `${sectionOpen(mode, 'writing', fence.label)}<h3>${escapeHtml(fence.label)}</h3>${copyBody(fence.copyText)}${notice}</section>`;
   }
   if (fence.kind === 'copy') {
     const copyLabel =

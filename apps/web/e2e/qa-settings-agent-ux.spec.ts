@@ -14,7 +14,7 @@ import {
   type AgentCreateRequest,
 } from '@agiworkforce/cloud-contracts';
 
-import { COOKIE_CONSENT_STORAGE_KEY, COOKIE_NOTICE_VERSION } from '../shared/lib/cookie-consent';
+import { settleConsent } from './lib/settle-consent';
 import { signIn } from './qa-capability-harness';
 
 const EVIDENCE_DIR = mkdtempSync('/tmp/agi-qa-settings-agent-ux-');
@@ -243,31 +243,6 @@ async function preparePage(
   });
   await signIn(page);
   return traffic;
-}
-
-async function settleConsent(page: Page) {
-  const banner = page.getByRole('region', { name: 'Cookie consent', exact: true });
-  await expect
-    .poll(
-      async () => {
-        if (await banner.isVisible()) return true;
-        return page.evaluate(
-          ({ key, version }) => {
-            const record = localStorage.getItem(key);
-            return (
-              record !== null &&
-              (JSON.parse(record) as { noticeVersion?: string }).noticeVersion === version
-            );
-          },
-          { key: COOKIE_CONSENT_STORAGE_KEY, version: COOKIE_NOTICE_VERSION },
-        );
-      },
-      { timeout: 15_000 },
-    )
-    .toBe(true);
-  if (await banner.isVisible())
-    await banner.getByRole('button', { name: 'Necessary only', exact: true }).click();
-  await expect(banner).toBeHidden();
 }
 
 async function openNotifications(page: Page) {

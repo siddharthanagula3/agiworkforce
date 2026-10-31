@@ -66,7 +66,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
@@ -866,7 +866,8 @@ ${current}`
           accessibilityLabel={`Skill ${selectedSkillName} selected for the next Cloud message`}
           testID="chat.composer.skill"
           style={{
-            minHeight: 32,
+            minHeight: 44,
+            maxWidth: '100%',
             marginBottom: 8,
             alignSelf: 'flex-start',
             flexDirection: 'row',
@@ -883,7 +884,12 @@ ${current}`
           <Sparkles size={13} color={themeColors.teal} />
           <Text
             numberOfLines={1}
-            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: typeScale.caption }}
+            style={{
+              maxWidth: 220,
+              flexShrink: 1,
+              color: themeColors.textSecondary,
+              fontSize: typeScale.caption,
+            }}
           >
             {selectedSkillName}
           </Text>
@@ -891,8 +897,7 @@ ${current}`
             onPress={onClearSelectedSkill}
             accessibilityRole="button"
             accessibilityLabel="Clear selected Skill"
-            hitSlop={8}
-            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={14} color={themeColors.textMuted} />
           </PressableBox>
@@ -1024,10 +1029,9 @@ ${current}`
                 accessibilityLabel="Edit queued message"
                 accessibilityHint="Takes this message out of the queue and puts it back in the message box"
                 accessibilityRole="button"
-                hitSlop={8}
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1041,10 +1045,9 @@ ${current}`
                 accessibilityLabel="Cancel queued message"
                 accessibilityHint="Removes this message from the queue so it is not sent"
                 accessibilityRole="button"
-                hitSlop={8}
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1079,14 +1082,13 @@ ${current}`
           <PressableBox
             onPress={handleDictationCancel}
             style={{
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               borderRadius: radii.full,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: themeColors.inputSurface,
             }}
-            hitSlop={6}
             testID="chat.composer.dictation-cancel"
             accessibilityLabel="Cancel recording"
             accessibilityHint="Discards the dictation without adding it to the message"
@@ -1110,7 +1112,7 @@ ${current}`
             borderColor: themeColors.composerBorder,
             paddingLeft: stacked ? 16 : 6,
             paddingRight: stacked ? 10 : 6,
-            paddingVertical: stacked ? 10 : 4,
+            paddingVertical: stacked ? 10 : 3,
             minHeight: 44,
           }}
         >
@@ -1126,13 +1128,12 @@ ${current}`
                 position: 'absolute',
                 top: 6,
                 right: 6,
-                width: 28,
-                height: 28,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
-              hitSlop={10}
               testID="chat.composer.expand"
               accessibilityLabel="Expand message"
               accessibilityHint="Opens the message in a full-screen editor"
@@ -1153,13 +1154,12 @@ ${current}`
               testID="chat.composer.plus"
               onPress={handlePlusPress}
               style={{
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
-              hitSlop={8}
               accessibilityLabel="Add to chat"
               accessibilityHint="Opens attachment, mode, and feature options"
               accessibilityRole="button"
@@ -1225,11 +1225,11 @@ ${current}`
             ref={inputRef}
             testID="chat.composer.input"
             style={{
-              ...(stacked ? { alignSelf: 'stretch', paddingRight: 28 } : { flex: 1 }),
+              ...(stacked ? { alignSelf: 'stretch', paddingRight: 44 } : { flex: 1, minWidth: 0 }),
               color: themeColors.textPrimary,
-              fontSize: typeScale.body,
+              ...chatTypography.body,
               paddingVertical: 0,
-              minHeight: 24,
+              minHeight: stacked ? 44 : 24,
               maxHeight: 160,
               display: isRecording || isTranscribing ? 'none' : 'flex',
             }}
@@ -1281,14 +1281,13 @@ ${current}`
                     testID="chat.composer.plus.stacked"
                     onPress={handlePlusPress}
                     style={{
-                      width: 34,
-                      height: 34,
+                      width: 44,
+                      height: 44,
                       borderRadius: radii.full,
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: themeColors.inputSurface,
                     }}
-                    hitSlop={6}
                     accessibilityLabel="Add to chat"
                     accessibilityHint="Opens attachment, mode, and feature options"
                     accessibilityRole="button"
@@ -1345,8 +1344,8 @@ ${current}`
                 importantForAccessibility="no-hide-descendants"
                 accessibilityElementsHidden
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1359,14 +1358,13 @@ ${current}`
               <PressableBox
                 onPress={handleDictationStop}
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: themeColors.inputSurface,
                 }}
-                hitSlop={6}
                 testID="chat.composer.dictation-stop"
                 accessibilityLabel="Stop recording"
                 accessibilityHint="Stops recording and transcribes it into the message"
@@ -1382,15 +1380,14 @@ ${current}`
               onPress={isRecording ? handleDictationSend : undefined}
               disabled={!isRecording}
               style={{
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: themeColors.textPrimary,
                 opacity: isRecording ? 1 : 0.5,
               }}
-              hitSlop={6}
               testID="chat.composer.dictation-send"
               accessibilityLabel="Send recording"
               accessibilityHint="Stops recording, transcribes it, and sends the message"
@@ -1418,14 +1415,13 @@ ${current}`
                 <PressableBox
                   onPress={onOpenVoiceMode}
                   style={{
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     borderRadius: radii.full,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: themeColors.textPrimary,
                   }}
-                  hitSlop={6}
                   accessibilityLabel="Start voice mode"
                   accessibilityHint="Opens hands-free voice conversation"
                   accessibilityRole="button"

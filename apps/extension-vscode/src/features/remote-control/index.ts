@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import QRCode from 'qrcode';
+import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { RemoteControlState } from '@agiworkforce/local-runtime-contract';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { t, tPlural } from '../../l10n';
@@ -82,12 +83,13 @@ function renderPage(state: RemoteControlState, qrSvg: string | null): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title}</title>
 <style nonce="${nonce}">
+:root { ${cssVarsToString(agiVsCodeCssVars)} }
 body { color: var(--vscode-foreground); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); padding: 16px 24px; }
 main { max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
 h1 { font-size: 1.4em; font-weight: 600; margin: 0; }
 p { margin: 0; line-height: 1.5; }
 .intro { color: var(--vscode-descriptionForeground); }
-.qr { width: 220px; height: 220px; padding: 8px; background: #ffffff; border-radius: 6px; }
+.qr { width: 220px; height: 220px; padding: 8px; background: var(--agi-vscode-qr-background); border-radius: 6px; }
 .qr svg { width: 100%; height: 100%; display: block; }
 .code { font-family: var(--vscode-editor-font-family); font-size: 1.3em; letter-spacing: 0.2em; }
 .error { color: var(--vscode-errorForeground); }

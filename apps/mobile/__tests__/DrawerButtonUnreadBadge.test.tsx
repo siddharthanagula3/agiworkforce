@@ -45,6 +45,7 @@ describe('DrawerButton unread badge', () => {
     const { queryByTestId, getByLabelText } = render(<DrawerButton onPress={jest.fn()} />);
 
     expect(getByLabelText('Open navigation drawer')).toBeTruthy();
+    expect(getByLabelText('Open navigation drawer')).toHaveStyle({ width: 44, height: 44 });
     expect(queryByTestId('drawer-unread-badge', { includeHiddenElements: true })).toBeNull();
   });
 
@@ -69,7 +70,7 @@ describe('DrawerButton unread badge', () => {
       <DrawerButton onPress={onPress} />,
     );
 
-    // The pip is 17pt at the corner of a 36pt button. It cannot reach the 44pt
+    // The pip is 17pt at the corner of the drawer button. It cannot reach the 44pt
     // minimum without swallowing the drawer's taps, so it is an indicator and
     // Notifications has its own drawer row.
     expect(queryByLabelText('1 unread notification')).toBeNull();

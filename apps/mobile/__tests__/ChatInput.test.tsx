@@ -311,6 +311,29 @@ describe('ChatInput', () => {
     mockGetDraft.mockReturnValue('');
   });
 
+  it('gives compact composer controls separate physical touch targets', () => {
+    const { getByRole, getByLabelText } = renderInput();
+
+    expect(getByRole('button', { name: 'Add to chat' })).toHaveStyle({ width: 44, height: 44 });
+    expect(getByRole('button', { name: 'Start voice mode' })).toHaveStyle({
+      width: 44,
+      height: 44,
+    });
+    expect(getByLabelText('Message input')).toHaveStyle({ fontSize: 16, minWidth: 0 });
+  });
+
+  it('reserves input space for the expanded-editor target above the control row', () => {
+    const { getByLabelText, getByRole } = renderInput();
+    stackComposer(getByLabelText);
+
+    expect(getByRole('button', { name: 'Expand message' })).toHaveStyle({
+      width: 44,
+      height: 44,
+    });
+    expect(getByRole('button', { name: 'Add to chat' })).toHaveStyle({ width: 44, height: 44 });
+    expect(getByLabelText('Message input')).toHaveStyle({ minHeight: 44, paddingRight: 44 });
+  });
+
   describe('account-scoped drafts', () => {
     it('reloads text and writes with explicit provenance when the Cloud owner changes', async () => {
       mockGetDraft.mockImplementation(() => 'Account A draft');

@@ -1,15 +1,6 @@
-import { Pressable } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-  interpolateColor,
-  useSharedValue,
-} from 'react-native-reanimated';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { ArrowUp, Square, Clock } from 'lucide-react-native';
-import { useEffect } from 'react';
-import { useThemeColors, radii, type ColorScheme } from '@/src/ui/theme';
-import { motion } from '@/src/ui/theme/tokens';
+import { useThemeColors, radii } from '@/src/ui/theme';
 
 type SendButtonState = 'idle' | 'streaming' | 'queued';
 
@@ -18,16 +9,6 @@ interface SendButtonProps {
   onPress: () => void;
   disabled?: boolean;
   accessibilityLabel?: string;
-}
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-function stateColors(colors: ColorScheme): Record<SendButtonState, string> {
-  return {
-    idle: colors.teal,
-    streaming: colors.agentError,
-    queued: colors.agentWarning,
-  };
 }
 
 function iconForState(state: SendButtonState) {
@@ -42,57 +23,35 @@ function fillForState(state: SendButtonState, color: string) {
 
 export function SendButton({ state, onPress, disabled, accessibilityLabel }: SendButtonProps) {
   const colors = useThemeColors();
-  const palette = stateColors(colors);
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withTiming(state === 'idle' ? 0 : state === 'streaming' ? 1 : 2, {
-      duration: motion.quick,
-      easing: Easing.out(Easing.ease),
-    });
-  }, [state, progress]);
-
-  const isDisabled = useSharedValue(disabled ?? false);
-
-  useEffect(() => {
-    isDisabled.value = disabled ?? false;
-  }, [disabled, isDisabled]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const bgColor =
-      progress.value <= 1
-        ? interpolateColor(progress.value, [0, 1], [palette.idle, palette.streaming])
-        : interpolateColor(progress.value - 1, [0, 1], [palette.streaming, palette.queued]);
-
-    return {
-      backgroundColor: isDisabled.value ? colors.neutralSurface : bgColor,
-    };
-  });
-
-  const iconColor = disabled ? colors.textSecondary : colors.accentText;
+  const isDisabled = Boolean(disabled && state === 'idle');
+  const iconColor = isDisabled ? colors.textSecondary : colors.surfaceBase;
   const Icon = iconForState(state);
 
   return (
-    <AnimatedPressable
+    <PressableBox
       onPress={onPress}
-      disabled={disabled && state === 'idle'}
-      hitSlop={12}
-      style={[
-        {
-          padding: 8,
-          borderRadius: radii.full,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        animatedStyle,
-      ]}
+      disabled={isDisabled}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        flexShrink: 0,
+        borderRadius: radii.full,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: isDisabled
+          ? colors.neutralSurface
+          : pressed
+            ? colors.textSecondary
+            : colors.textPrimary,
+      })}
       accessibilityLabel={
         accessibilityLabel ??
         (state === 'idle' ? 'Send message' : state === 'streaming' ? 'Stop generating' : 'Queued')
       }
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
     >
       <Icon size={16} color={iconColor} fill={fillForState(state, iconColor)} />
-    </AnimatedPressable>
+    </PressableBox>
   );
 }

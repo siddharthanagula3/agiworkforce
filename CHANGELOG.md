@@ -2,9 +2,28 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, chat and surface polish], 2026-10-31
+
+### Fixed
+
+- Chat keeps readable typography on small screens, distinct headings, selectable
+  underline, and aligned reading and composer columns on large displays.
+- Writing and email controls use quieter framing, hide empty recipients, return
+  cleanly from editing, and resize long subjects. Form validation and keyboard
+  choices retain usable touch targets.
+- Service notices reserve space above content and scroll below navigation.
+  Buttons and fields no longer inherit transitions on layout properties.
+- Mobile uses shared chat typography, neutral Stop controls, larger touch
+  targets and wrapping message actions. Assistant content exposes its own
+  accessibility elements; draft Copy/Share preserves visible edits and email
+  recipients. Local preview editors explain how to keep changes.
+- Extension writing views preserve copy content, avoid repeated email headers,
+  and follow their host themes. Retained desktop row menus are keyboard
+  reachable, and workspace controls have room above the primary composer row.
 
 ## [Unreleased, database transfer and idle activity], 2026-10-30
 

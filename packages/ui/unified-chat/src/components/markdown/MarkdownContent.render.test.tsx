@@ -170,6 +170,20 @@ describe('MarkdownContent table alignment', () => {
 });
 
 describe('MarkdownContent literal HTML', () => {
+  it('preserves underline while stripping its executable attributes and arbitrary styles', () => {
+    const { container } = render(
+      <MarkdownContent
+        content={'Select <u onclick="alert(1)" style="position:fixed">this text</u>.'}
+      />,
+    );
+
+    const underline = container.querySelector('u');
+    expect(underline?.textContent).toBe('this text');
+    expect(underline?.hasAttribute('onclick')).toBe(false);
+    expect(underline?.hasAttribute('style')).toBe(false);
+    expect(container.textContent).toBe('Select this text.');
+  });
+
   it('keeps an angle-bracket placeholder visible as text', () => {
     const { container } = render(
       <MarkdownContent content={'**Result:** FINAL=<number>'} literalHtml />,

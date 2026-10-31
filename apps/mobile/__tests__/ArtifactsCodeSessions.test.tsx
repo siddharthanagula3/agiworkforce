@@ -144,7 +144,11 @@ describe('Artifacts gallery', () => {
     });
     const drawer = getByTestId('artifacts-open-drawer');
     expect(drawer.props.accessibilityLabel).toBe('Open navigation drawer');
-    expect(StyleSheet.flatten(drawer.props.style).borderRadius).toBe(18);
+    expect(StyleSheet.flatten(drawer.props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+    });
   });
 
   it('tints the empty-state disc apart from the page background', () => {

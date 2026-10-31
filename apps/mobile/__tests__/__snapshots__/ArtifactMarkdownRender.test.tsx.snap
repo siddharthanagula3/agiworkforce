@@ -249,14 +249,15 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           testID="artifact-fullscreen-markdown"
         >
           <Text
+            accessibilityRole="header"
             className="text-sm text-white "
             selectable={true}
             style={
               {
                 "color": "#111111",
-                "fontSize": 22,
-                "fontWeight": "700",
-                "lineHeight": 29.700000000000003,
+                "fontSize": 20,
+                "fontWeight": "600",
+                "lineHeight": 28,
                 "marginBottom": 4,
                 "marginTop": 8,
               }
@@ -277,8 +278,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             style={
               {
                 "color": "#111111",
-                "fontSize": 15,
-                "lineHeight": 23,
+                "fontSize": 16,
+                "fontWeight": "400",
+                "lineHeight": 26,
               }
             }
           >
@@ -304,14 +306,15 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             }
           />
           <Text
+            accessibilityRole="header"
             className="text-sm text-white "
             selectable={true}
             style={
               {
                 "color": "#111111",
-                "fontSize": 19,
-                "fontWeight": "700",
-                "lineHeight": 25.650000000000002,
+                "fontSize": 18,
+                "fontWeight": "600",
+                "lineHeight": 28,
                 "marginBottom": 4,
                 "marginTop": 8,
               }
@@ -348,8 +351,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                 style={
                   {
                     "color": "#111111",
-                    "fontSize": 15,
-                    "lineHeight": 22,
+                    "fontSize": 16,
+                    "fontWeight": "400",
+                    "lineHeight": 26,
                     "textAlign": "center",
                     "width": 12,
                   }
@@ -364,8 +368,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                   {
                     "color": "#111111",
                     "flex": 1,
-                    "fontSize": 15,
-                    "lineHeight": 22,
+                    "fontSize": 16,
+                    "fontWeight": "400",
+                    "lineHeight": 26,
                   }
                 }
               >
@@ -386,8 +391,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                 style={
                   {
                     "color": "#111111",
-                    "fontSize": 15,
-                    "lineHeight": 22,
+                    "fontSize": 16,
+                    "fontWeight": "400",
+                    "lineHeight": 26,
                     "textAlign": "center",
                     "width": 12,
                   }
@@ -402,8 +408,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                   {
                     "color": "#111111",
                     "flex": 1,
-                    "fontSize": 15,
-                    "lineHeight": 22,
+                    "fontSize": 16,
+                    "fontWeight": "400",
+                    "lineHeight": 26,
                   }
                 }
               >

@@ -9,6 +9,7 @@ import {
   agiCoolPalette,
   agiBrandScale,
   agiChatCssVars,
+  agiChatTypographyCssVars,
   agiExtensionCssVars,
   agiElevation,
   agiMobileAccentSwatches,
@@ -16,6 +17,7 @@ import {
   agiMobileHighContrastColors,
   agiRadii,
   agiRadiiVar,
+  agiVsCodeCssVars,
   agiShadows,
   brandScaleVar,
   type AgiBrandFamily,
@@ -1075,7 +1077,26 @@ describe('design-token palettes consumed by extension, mobile and VS Code', () =
 });
 
 describe('the two emitters of the --chat-* contract agree', () => {
+  it('keeps the QR canvas light and high contrast independently of the host theme', () => {
+    expect(agiVsCodeCssVars['--agi-vscode-qr-background']).toBe(agiPalette.light.surface.base);
+    expect(
+      contrastRatio(agiPalette.light.text.primary, agiVsCodeCssVars['--agi-vscode-qr-background']),
+    ).toBeGreaterThanOrEqual(7);
+  });
+
   const chatCssLight = baseThemeBlocks(chatCss).light;
+
+  for (const [name, nativeValue] of Object.entries(agiChatTypographyCssVars)) {
+    it(`${name} keeps native and stylesheet chat typography aligned`, () => {
+      const declared = token(chatCssLight, name);
+      const reference = declared.match(/^var\((--[a-z0-9-]+)\)$/);
+      const cssValue = reference ? token(foundationLight, reference[1]!) : declared;
+      const normalized = cssValue.endsWith('rem') ? `${parseFloat(cssValue) * 16}px` : cssValue;
+      expect(normalized).toBe(nativeValue);
+      expect(Object.entries(agiChatCssVars.light)).toContainEqual([name, nativeValue]);
+      expect(Object.entries(agiChatCssVars.dark)).toContainEqual([name, nativeValue]);
+    });
+  }
 
   const sharedLightTokens = {
     '--chat-bg': agiChatCssVars.light['--chat-bg'],

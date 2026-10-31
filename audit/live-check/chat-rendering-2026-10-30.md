@@ -2,7 +2,7 @@
 
 Status: Local browser and persistence acceptance passed; governed prompt and deployed acceptance remain open
 Owner: Web chat + shared rendering + settings/agents maintainers
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 Purpose: Track the owner's rendering QA and selected notification/agent recommendations, verified causes, evidence and release boundaries.
 Retention: Delete when pending acceptance is completed or transferred to existing defect owners; Git and the original chat retain dated evidence.
 
@@ -430,3 +430,99 @@ cleanup for that candidate; CI remains mandatory. No environment permission,
 secret value or billing setting was changed. Existing manual release paths and
 all prior release checks remain. The [canonical procedure](../../docs/development/ci-and-deploys.md)
 documents the hold and later release behavior.
+
+## October 31 visual polish
+
+The owner requested professional visual polish across the existing surfaces and
+clarified that TV means the website on a large display. The authorized ChatGPT
+reference was inspected again read-only: ordinary headings were 20/28, 18/28
+and 16/26px at weight 600; email subject/body were 16/24 and 16/26px. These are
+account observations, not general availability or pixel-parity claims. Private
+reference content and identifiers remain outside Git. No new UI stack or image
+generation was used.
+
+| Finding                                                                              | Changed owners                                                                     | Correction                                                                                                                                |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Tiny-screen prose became 14px; surface typography differed                           | `design-tokens/src/index.ts`, `chat.css`, web `globals.css`, mobile theme/renderer | Shared chat roles, stylesheet/native equality checks and compact distinct headings; retain font preferences and readable column limits    |
+| Repeated writing chrome, empty recipients and no clean Edit return                   | shared `RichBlockCard`, `EmailBlock`, `WritingBlock`, answer form/gallery/surface  | Quiet framing, auto-growing subject, conditional recipient rows, reachable Copy/Edit/Cancel and unchanged scoped Save                     |
+| Radio focus moved without selection after a fast key press                           | `AnswerForm`, installed Radix roving-focus/radio event path                        | Native form radios retain browser ArrowDown/Tab semantics; shared labels keep 44px targets and compact 16px glyphs                        |
+| Notices covered content; their scrollable padding could enter the header             | web `ProductNotice`, `WebChatPage`, `WebAppShell`                                  | Measured content reservation, bounded scrolling and header clearance outside the scrollport; preserve actual warnings and dismiss actions |
+| Global transitions animated layout changes                                           | web `globals.css`                                                                  | Limit default button/field transitions to visual feedback properties                                                                      |
+| Underline was removed by the default sanitizer                                       | shared `markdownSanitizeSchema`, real renderer tests                               | Allow the inert `u` element; strip executable attributes and arbitrary styles as before                                                   |
+| Mobile touch targets were small and action rows could overflow                       | mobile composer, SendButton, message actions, drawer and thread header             | Neutral Stop, physical 44pt targets, wrapping controls and unchanged handlers                                                             |
+| Mobile writing Copy used the original source; recipients/newlines could be lost      | mobile `AssistantSurface`, renderer message/artifact identity keys                 | Controlled local drafts, exact live Copy/Share, preserved Cc/Bcc and body-only Copy with empty headers; explicit preview boundary         |
+| Assistant grouping obscured native descendants behind a raw truncated label          | mobile `MessageBubble`                                                             | Non-grouping assistant container and real More action with existing action/confirmation handlers; retain user grouping                    |
+| Native webview editor was narrow and Copy looked only for a code node                | VS Code `webviewContent`, `render`                                                 | Responsive host-styled editor and exact current textarea Copy                                                                             |
+| Native email repeated headers and local writing implied retention                    | shared `assistantFence` native HTML projection                                     | Show full selectable email source once; keep the preview-only notice outside copied content                                               |
+| Chrome ignored explicit theme preference in native controls                          | Chrome panel CSS/injection and published typography roles                          | Inherit the root color scheme; preserve explicit preference over opposite OS appearance                                                   |
+| Retained desktop menus were omitted before hover; host context shared a squeezed row | Tauri conversation/project rows, composer context and shared `ChatInput`           | Mounted keyboard/focus/touch actions, bounded menus and a separate full-width host-context row above unchanged primary actions            |
+| QR canvas used an existing raw white literal                                         | VS Code remote-control view and design tokens                                      | Fixed light canvas role with contrast verification; retain QR scanning background                                                         |
+
+The earlier response routing, reasoning precedence, server edit revisions,
+sanitizers, tool approvals, data isolation and multi-model contracts are not
+changed by this polish pass. Claude/Haiku availability and exhausted credits
+remain excluded. Nothing was deployed or changed in billing, account
+permissions or production user data.
+
+Fresh bounded acceptance:
+
+- Web: **43/43** in 5.2 minutes. Fourteen independent local conversations use
+  real loopback persistence and reopen; email/document Save and two-tab late
+  continuation conflict are exercised. Renderer controls, six math expressions,
+  diagrams, gallery failures, code copying and sandbox isolation remain green.
+- The web visual matrix covers 320, 390, 844, 1024, 1440, 1920, 2560 and 3840px
+  in both themes with fine/coarse input. It exercises a tall notice stack,
+  keyboard scrolling, header hit-testing and releasing reserved space. Cookie
+  state is settled through the actual record parser or visible banner before
+  measurement. Model responses are stubbed and image calls remain zero.
+- Public pages: **33/33** existing contrast, first-viewport and narrow-preview
+  checks passed. This is not a complete route/functionality or hardware sweep.
+- Retained desktop: **23/23**, including sixteen width/theme/pointer combinations,
+  actual folder/policy controls, focus and inactive-row menus. Cloud API/IPC are
+  disposable fixtures; exact read-only run discovery is separated from
+  generation traffic. No inference request occurred. This is not native Tauri
+  or public Electron host-integration proof.
+- Mobile: the 237-test layout packet and later 29-test accessibility/copy packet
+  passed, with package typecheck and lint exit 0. Their scopes overlap.
+  Installed React Native source confirms how accessible grouping hides or
+  overrides descendants; RNTL queries alone do not prove native traversal.
+- Current mobile JavaScript ran in an existing cached Debug shell on a new
+  isolated iPhone simulator. Real drawer and Settings controls worked with
+  calibrated 200ms touches; light/dark screenshots were inspected. Default
+  zero-duration taps were inconsistent, and the Debug gear intercepted Close
+  Settings. The instrument exposes no valid typeable composer target. These
+  are runtime limits, not confirmed app interaction defects. The simulator was
+  restored to light and shut down after evidence capture.
+
+Final extension browser checks passed: 24 emitted VS Code viewport states with
+exact edited clipboard content and Queue/Stop bridge actions, 12 actual Chrome
+renderer states with real Enter/newline/whitespace editing, and 12 unpacked
+Chrome panel states. The latter applies emulation to the active extension
+renderer after navigation and asserts actual pointer and opposite-OS theme
+media; context options alone had not applied to the privileged target. These
+are isolated profiles/component fixtures, not installed VS Code host or
+authenticated Chrome-history parity. The existing unpacked extension smoke
+runner passed after replacing its stale 100px empty-height check with readable
+input, ordered rows, usable contained controls and visible history.
+
+The complete mobile suite passed **5,277 tests / 562 suites / 23 snapshots**
+with sufficient Node heap. Its initial default-heap abort and stale 36pt drawer
+radius expectation were diagnosed separately; the test now asserts the
+intentional 44pt circle. The full shared suite passed **2,578/2,578**; after
+final typography consumer alignment, affected message/composer tests passed
+**58/58** and web rendering **19/19**. All 63 workspace typechecks passed after
+adding the explicit DOM test receiver type. Scoped web tests passed 728 with
+one optional recorded-envelope replay initially absent; replaying the original
+captured stubbed tool envelope then passed all eight functional-block cases.
+Counts overlap and must not be added as a unique total. Existing ESLint
+configuration excludes the browser-test files; those were exercised in real
+Chromium rather than reported as linted.
+
+Final repository guards and publication evidence are reported with the
+candidate in the original chat. Evidence lives outside Git in the original chat's
+`visual-polish-2026-10-31` folder. Native forms/cards/carousels and durable local
+preview editing retain their existing honest capability limits. Fresh native
+builds, Android runtime, native keyboard, VoiceOver/TalkBack, installed VS Code
+theme/host behavior and physical TV/monitor checks are not claimed. The public
+Electron renderer follows hosted Web; no retained Tauri-only change is counted
+as a public Desktop release. The per-commit deployment hold remains required.

@@ -853,17 +853,59 @@ try {
     const composerMetrics = await page.evaluate(() => {
       const shell = document.getElementById('sp-composer-shell');
       const history = document.getElementById('sp-history-btn');
+      const input = document.getElementById('sp-input');
+      const toolbar = document.getElementById('sp-composer-bar');
+      const bounds = shell?.getBoundingClientRect();
+      const inputBounds = input?.getBoundingClientRect();
+      const toolbarBounds = toolbar?.getBoundingClientRect();
+      const controls = [...(shell?.querySelectorAll('button') ?? [])].filter((button) => {
+        const box = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return (
+          box.width > 0 &&
+          box.height > 0 &&
+          style.visibility !== 'hidden' &&
+          Number(style.opacity) > 0
+        );
+      });
+      const minimumTarget = matchMedia('(pointer: coarse)').matches ? 44 : 24;
       return {
-        shellHeight: shell?.getBoundingClientRect().height ?? 0,
+        shellHeight: bounds?.height ?? 0,
+        inputReadable: Boolean(
+          inputBounds && inputBounds.height >= parseFloat(getComputedStyle(input).lineHeight),
+        ),
+        rowsOrdered: Boolean(
+          inputBounds && toolbarBounds && inputBounds.bottom <= toolbarBounds.top + 1,
+        ),
+        controlsUsable: Boolean(
+          bounds &&
+          controls.length >= 3 &&
+          controls.every((button) => {
+            const box = button.getBoundingClientRect();
+            return (
+              box.width >= minimumTarget &&
+              box.height >= minimumTarget &&
+              box.left >= bounds.left - 1 &&
+              box.right <= bounds.right + 1 &&
+              box.top >= bounds.top - 1 &&
+              box.bottom <= bounds.bottom + 1
+            );
+          }),
+        ),
         historyVisible:
           !!history &&
           getComputedStyle(history).display !== 'none' &&
           getComputedStyle(history).visibility !== 'hidden',
       };
     });
-    if (composerMetrics.shellHeight < 100 || !composerMetrics.historyVisible) {
+    if (
+      !composerMetrics.inputReadable ||
+      !composerMetrics.rowsOrdered ||
+      !composerMetrics.controlsUsable ||
+      !composerMetrics.historyVisible
+    ) {
       fail(
-        `chat surface: expected a full composer and visible history, got ${JSON.stringify(composerMetrics)}`,
+        `chat surface: expected readable input, contained toolbar controls and visible history, got ${JSON.stringify(composerMetrics)}`,
       );
     }
     await captureScreenshot(page, 'agi-chrome-exact-side-panel-signed-out-local.png');

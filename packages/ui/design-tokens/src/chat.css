@@ -40,6 +40,21 @@
     --chat-font-mono:
       var(--font-jetbrains, 'JetBrains Mono'), 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace,
       'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --chat-type-body-size: var(--type-body-size);
+    --chat-type-body-height: 1.625;
+    --chat-type-body-weight: var(--type-body-weight);
+    --chat-type-heading-1-size: var(--type-h2-size);
+    --chat-type-heading-1-height: 1.4;
+    --chat-type-heading-1-weight: var(--type-h2-weight);
+    --chat-type-heading-2-size: var(--type-h3-size);
+    --chat-type-heading-2-height: 1.5555555555555556;
+    --chat-type-heading-2-weight: var(--type-h3-weight);
+    --chat-type-heading-3-size: var(--type-h4-size);
+    --chat-type-heading-3-height: 1.625;
+    --chat-type-heading-3-weight: var(--type-h4-weight);
+    --chat-type-writing-subject-size: var(--type-body-size);
+    --chat-type-writing-subject-height: 1.5;
+    --chat-type-writing-subject-weight: var(--type-body-weight);
     --chat-bg: #ffffff;
     --chat-fg: #0d0d0d;
     --chat-surface-base: #ffffff;
@@ -385,6 +400,29 @@
 .chat-quiet-field:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.chat-response-body {
+  font-size: var(--chat-type-body-size);
+  line-height: var(--chat-type-body-height);
+}
+
+h1[data-markdown-heading] {
+  font-size: var(--chat-type-heading-1-size);
+  line-height: var(--chat-type-heading-1-height);
+  font-weight: var(--chat-type-heading-1-weight);
+}
+
+h2[data-markdown-heading] {
+  font-size: var(--chat-type-heading-2-size);
+  line-height: var(--chat-type-heading-2-height);
+  font-weight: var(--chat-type-heading-2-weight);
+}
+
+h3[data-markdown-heading] {
+  font-size: var(--chat-type-heading-3-size);
+  line-height: var(--chat-type-heading-3-height);
+  font-weight: var(--chat-type-heading-3-weight);
 }
 
 .artifact-document-editor__content {

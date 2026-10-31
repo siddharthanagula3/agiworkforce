@@ -59,6 +59,7 @@ function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
     <button
       type="button"
       role="menuitem"
+      data-v3-sidebar-menu-item
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={onClick}
@@ -72,13 +73,13 @@ function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
         border: 'none',
         background: hover ? 'var(--chat-surface-hover)' : 'transparent',
         cursor: 'pointer',
-        color: danger ? 'var(--chat-destructive)' : 'var(--chat-text-secondary)',
+        color: danger ? 'var(--chat-destructive-text)' : 'var(--chat-text-secondary)',
         fontSize: 13,
         textAlign: 'left',
       }}
     >
-      <Icon size={14} />
-      <span>{label}</span>
+      <Icon size={14} aria-hidden="true" style={{ flexShrink: 0 }} />
+      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{label}</span>
     </button>
   );
 }
@@ -96,7 +97,6 @@ export function ConversationRow({
   onMoveToProject,
 }: ConversationRowProps) {
   const { t } = useTranslation('v3');
-  const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [editing, setEditing] = useState(false);
@@ -111,7 +111,6 @@ export function ConversationRow({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const title = conversation.title || t('common.untitled');
-  const showActions = hovered || menuOpen || active;
 
   const openMenu = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -194,8 +193,7 @@ export function ConversationRow({
       data-testid="conversation-row"
       data-conversation-id={conversation.id}
       data-conversation-active={active}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      data-row-menu-open={menuOpen}
       style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
     >
       {editing ? (
@@ -237,7 +235,8 @@ export function ConversationRow({
             alignItems: 'center',
             gap: 6,
             padding: '5px 10px',
-            paddingRight: showActions ? 30 : 10,
+            paddingRight: 'calc(var(--v3-row-action-size, 24px) + 12px)',
+            minHeight: 'var(--v3-row-height, 34px)',
             borderRadius: 6,
             border: 'none',
             background: active ? 'var(--chat-surface-hover)' : 'transparent',
@@ -263,11 +262,14 @@ export function ConversationRow({
         </button>
       )}
 
-      {!editing && showActions && (
+      {!editing && (
         <button
           ref={triggerRef}
           type="button"
+          data-v3-row-actions
           aria-label={t('sidebar.actions.more')}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           onClick={(e) => {
             e.stopPropagation();
             if (menuOpen) setMenuOpen(false);
@@ -281,8 +283,8 @@ export function ConversationRow({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 22,
-            height: 22,
+            width: 'var(--v3-row-action-size, 24px)',
+            height: 'var(--v3-row-action-size, 24px)',
             borderRadius: 5,
             border: 'none',
             background: menuOpen ? 'var(--chat-border)' : 'transparent',
@@ -305,6 +307,9 @@ export function ConversationRow({
               top: menuPos.top,
               left: menuPos.left,
               width: MENU_WIDTH,
+              maxWidth: 'calc(100vw - 16px)',
+              maxHeight: 'calc(100dvh - 16px)',
+              overflowY: 'auto',
               zIndex: 1000,
               background: 'var(--chat-surface-elevated)',
               border: '1px solid var(--chat-border)',

@@ -336,6 +336,42 @@ export const agiTypography = {
   mono: `'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace, ${EMOJI_FACES}`,
 } as const;
 
+export const agiChatTypography = {
+  body: { fontSize: 16, lineHeight: 26, fontWeight: '400' },
+  heading1: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
+  heading2: { fontSize: 18, lineHeight: 28, fontWeight: '600' },
+  heading3: { fontSize: 16, lineHeight: 26, fontWeight: '600' },
+  writingSubject: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
+} as const;
+
+export const agiChatTypographyCssVars = {
+  '--chat-type-body-size': `${agiChatTypography.body.fontSize}px`,
+  '--chat-type-body-height': String(
+    agiChatTypography.body.lineHeight / agiChatTypography.body.fontSize,
+  ),
+  '--chat-type-body-weight': agiChatTypography.body.fontWeight,
+  '--chat-type-heading-1-size': `${agiChatTypography.heading1.fontSize}px`,
+  '--chat-type-heading-1-height': String(
+    agiChatTypography.heading1.lineHeight / agiChatTypography.heading1.fontSize,
+  ),
+  '--chat-type-heading-1-weight': agiChatTypography.heading1.fontWeight,
+  '--chat-type-heading-2-size': `${agiChatTypography.heading2.fontSize}px`,
+  '--chat-type-heading-2-height': String(
+    agiChatTypography.heading2.lineHeight / agiChatTypography.heading2.fontSize,
+  ),
+  '--chat-type-heading-2-weight': agiChatTypography.heading2.fontWeight,
+  '--chat-type-heading-3-size': `${agiChatTypography.heading3.fontSize}px`,
+  '--chat-type-heading-3-height': String(
+    agiChatTypography.heading3.lineHeight / agiChatTypography.heading3.fontSize,
+  ),
+  '--chat-type-heading-3-weight': agiChatTypography.heading3.fontWeight,
+  '--chat-type-writing-subject-size': `${agiChatTypography.writingSubject.fontSize}px`,
+  '--chat-type-writing-subject-height': String(
+    agiChatTypography.writingSubject.lineHeight / agiChatTypography.writingSubject.fontSize,
+  ),
+  '--chat-type-writing-subject-weight': agiChatTypography.writingSubject.fontWeight,
+} as const satisfies CssVariableMap;
+
 /**
  * The four elevation rungs foundation.css owns, per theme. Three separate sets
  * of shadow literals used to describe the same rungs and disagreed with each
@@ -367,6 +403,7 @@ export const agiShadows = {
 
 export const agiChatCssVars = {
   light: {
+    ...agiChatTypographyCssVars,
     '--chat-bg': agiPalette.light.surface.base,
     '--chat-fg': agiPalette.light.text.primary,
     '--chat-surface-base': agiPalette.light.surface.base,
@@ -411,6 +448,7 @@ export const agiChatCssVars = {
     '--chat-shadow-lg': agiShadows.lg,
   },
   dark: {
+    ...agiChatTypographyCssVars,
     '--chat-bg': agiPalette.dark.surface.base,
     '--chat-fg': agiPalette.dark.text.primary,
     '--chat-surface-base': agiPalette.dark.surface.base,
@@ -870,6 +908,7 @@ export const agiExtensionCssVars = {
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 
 export const agiVsCodeCssVars = {
+  '--agi-vscode-qr-background': agiPalette.light.surface.base,
   // 2026-06-13 (#09090b / #5e6ad2) with {@link agiCoolPalette}, so this panel,
   '--agi-vscode-bg': agiCoolPalette.dark.surface.base,
   '--agi-vscode-surface': agiCoolPalette.dark.surface.sidebar,

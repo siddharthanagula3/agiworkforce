@@ -65,6 +65,68 @@ function emailCard(container: HTMLElement): HTMLElement {
 }
 
 describe('email blocks', () => {
+  it('can collapse empty optional recipients without creating an edit', () => {
+    const { container } = render(
+      <MarkdownContent content={'```email\nSubject: Notes\n\nBody.\n```'} />,
+    );
+    const card = emailCard(container);
+    const edit = within(card).getByRole('button', { name: 'Edit email' });
+    fireEvent.click(edit);
+    expect(within(card).getByLabelText('To')).toBeTruthy();
+    fireEvent.click(edit);
+    expect(within(card).queryByLabelText('To')).toBeNull();
+    expect(within(card).queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
+  it('keeps empty optional recipients quiet and reveals editable fields on demand', async () => {
+    const { container } = render(
+      <MarkdownContent content={'```email\nTo:\nCc:\nBcc:\nSubject: Notes\n\nDraft body.\n```'} />,
+    );
+    const card = emailCard(container);
+    expect(within(card).queryByLabelText('To')).toBeNull();
+    expect(within(card).queryByLabelText('Cc')).toBeNull();
+    expect(within(card).queryByLabelText('Bcc')).toBeNull();
+    expect(within(card).getByLabelText('Subject').tagName).toBe('TEXTAREA');
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit email' }));
+    expect(document.activeElement).toBe(within(card).getByLabelText('Subject'));
+    expect(within(card).getByLabelText('Cc')).toHaveProperty('value', '');
+    expect(within(card).getByLabelText('Bcc')).toHaveProperty('value', '');
+    fireEvent.change(within(card).getByLabelText('To'), {
+      target: { value: 'reviewer@example.com' },
+    });
+    await act(async () =>
+      fireEvent.click(within(card).getByRole('button', { name: 'Copy email' })),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      'To: reviewer@example.com\nSubject: Notes\n\nDraft body.',
+    );
+  });
+
+  it('keeps a focused recipient available when its value is cleared', () => {
+    const { container } = render(<MarkdownContent content={EMAIL_FENCE} />);
+    const card = emailCard(container);
+    const recipient = within(card).getByLabelText('To');
+    act(() => recipient.focus());
+    fireEvent.change(recipient, { target: { value: '' } });
+    expect(document.activeElement).toBe(recipient);
+    expect(within(card).getByLabelText('To')).toBe(recipient);
+  });
+
+  it('retains the existing single-line header contract with a textarea subject', async () => {
+    const { container } = render(<MarkdownContent content={EMAIL_FENCE} />);
+    const card = emailCard(container);
+    const subject = within(card).getByLabelText('Subject');
+    fireEvent.change(subject, { target: { value: 'Quarterly\nreview' } });
+    expect(subject).toHaveProperty('value', 'Quarterlyreview');
+    await act(async () =>
+      fireEvent.click(within(card).getByRole('button', { name: 'Copy email' })),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('Subject: Quarterlyreview\n\nHi Jane,'),
+    );
+  });
+
   it('renders the fence as an email card with editable fields, not as code', () => {
     const { container } = render(<MarkdownContent content={EMAIL_FENCE} />);
     const card = emailCard(container);
@@ -195,6 +257,22 @@ describe('email blocks', () => {
 });
 
 describe('writing blocks', () => {
+  it('leaves a clean inline editor without a discard prompt or persistence write', () => {
+    const persist = vi.fn();
+    const { container } = render(<MarkdownContent content={WRITING_FENCE} onFenceEdit={persist} />);
+    const card = container.querySelector<HTMLElement>('[data-rich-block="writing"]')!;
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit text' }));
+    expect(within(card).getByRole('button', { name: 'Save changes' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }));
+    expect(within(card).queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(card.querySelector('h2')?.textContent).toBe('Launch note');
+    expect(persist).not.toHaveBeenCalled();
+  });
+
   it('renders the text as formatted prose inside a labelled card', () => {
     const { container } = render(<MarkdownContent content={WRITING_FENCE} />);
     const card = container.querySelector<HTMLElement>('[data-rich-block="writing"]');

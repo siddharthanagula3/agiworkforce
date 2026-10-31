@@ -20,9 +20,20 @@ const fence = (language: string, source: string) => `\`\`\`${language}\n${source
 beforeEach(() => {
   writeText.mockReset().mockResolvedValue(undefined);
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   approvedImageKeys.clear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('functional answer blocks', () => {
   it('recognizes an already loaded image without waiting for another load event', () => {
@@ -247,6 +258,42 @@ describe('functional answer blocks', () => {
     await user.keyboard('{Enter}');
     expect(onFollowUp).not.toHaveBeenCalled();
   });
+
+  it.each(['radio', 'checks'] as const)(
+    'focuses and operates a required %s control from the keyboard',
+    async (kind) => {
+      const user = userEvent.setup();
+      render(
+        <MarkdownContent
+          content={fence(
+            'form',
+            `title: Choices\n${kind}: Delivery* | Standard | Express\nsubmit: Apply`,
+          )}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Apply' }));
+      const control = screen.getByRole(kind === 'radio' ? 'radio' : 'checkbox', {
+        name: 'Standard',
+      });
+      expect(document.activeElement).toBe(control);
+      expect(screen.getByRole('alert').textContent).toContain('Delivery');
+      if (kind === 'radio') {
+        expect(control).toHaveProperty('checked', false);
+        await user.keyboard('{ArrowDown}');
+        expect(screen.getByRole('radio', { name: 'Express' })).toHaveProperty('checked', true);
+        await user.tab();
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Apply' }));
+        expect(screen.getByRole('radio', { name: 'Express' })).toHaveProperty('checked', true);
+      } else {
+        await user.keyboard(' ');
+      }
+      await user.click(screen.getByRole('button', { name: 'Apply' }));
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.getByRole('status', { name: 'Applied values' }).textContent).toContain(
+        kind === 'radio' ? 'Express' : 'Standard',
+      );
+    },
+  );
 
   it('discloses a form send action and requires its host send capability', () => {
     const source = fence('form', 'title: Choices\ntext: Name | Sample\nsubmit: Continue | send');

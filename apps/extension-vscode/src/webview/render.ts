@@ -103,8 +103,12 @@ export function bindAnswerSurfaces(root: ParentNode, actions: AnswerSurfaceActio
     if (button.dataset['bound'] === '1') return;
     button.dataset['bound'] = '1';
     button.addEventListener('click', () => {
-      const code = button.closest('.answer-surface')?.querySelector('.answer-copy code');
-      const text = code?.textContent ?? '';
+      const surface = button.closest('.answer-surface');
+      const draft = surface?.classList.contains('answer-surface-writing')
+        ? surface.querySelector<HTMLTextAreaElement>('textarea')
+        : null;
+      const code = surface?.querySelector('.answer-copy code');
+      const text = draft ? draft.value : (code?.textContent ?? '');
       void actions.copy?.(text);
     });
   });

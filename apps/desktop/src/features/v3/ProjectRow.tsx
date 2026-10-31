@@ -41,6 +41,7 @@ function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
     <button
       type="button"
       role="menuitem"
+      data-v3-sidebar-menu-item
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={onClick}
@@ -54,13 +55,13 @@ function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
         border: 'none',
         background: hover ? 'var(--chat-surface-hover)' : 'transparent',
         cursor: 'pointer',
-        color: danger ? 'var(--chat-destructive)' : 'var(--chat-text-secondary)',
+        color: danger ? 'var(--chat-destructive-text)' : 'var(--chat-text-secondary)',
         fontSize: 13,
         textAlign: 'left',
       }}
     >
-      <Icon size={14} />
-      <span>{label}</span>
+      <Icon size={14} aria-hidden="true" style={{ flexShrink: 0 }} />
+      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{label}</span>
     </button>
   );
 }
@@ -76,7 +77,6 @@ export function ProjectRow({
   onArchive,
 }: ProjectRowProps) {
   const { t } = useTranslation('v3');
-  const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [editing, setEditing] = useState(false);
@@ -88,7 +88,6 @@ export function ProjectRow({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const name = project.name || t('common.untitled');
-  const showActions = hovered || menuOpen || active;
   const emoji = project.iconEmoji ?? null;
 
   const openMenu = useCallback(() => {
@@ -96,7 +95,8 @@ export function ProjectRow({
     if (!rect) return;
     const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
     const openUp = rect.bottom + MENU_EST_HEIGHT > window.innerHeight;
-    const top = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
+    const preferredTop = openUp ? rect.top - MENU_EST_HEIGHT - 4 : rect.bottom + 4;
+    const top = Math.max(8, Math.min(preferredTop, window.innerHeight - MENU_EST_HEIGHT - 8));
     setMenuPos({ top, left });
     setMenuOpen(true);
   }, []);
@@ -148,8 +148,7 @@ export function ProjectRow({
       data-testid="project-row"
       data-project-id={project.id}
       data-project-active={active}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      data-row-menu-open={menuOpen}
       style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
     >
       {editing ? (
@@ -191,7 +190,8 @@ export function ProjectRow({
             alignItems: 'center',
             gap: 8,
             padding: '5px 10px',
-            paddingRight: showActions ? 52 : 10,
+            paddingRight: 'calc(var(--v3-row-action-size, 24px) * 2 + 14px)',
+            minHeight: 'var(--v3-row-height, 34px)',
             borderRadius: 6,
             border: 'none',
             background: active ? 'var(--chat-surface-hover)' : 'transparent',
@@ -219,8 +219,9 @@ export function ProjectRow({
         </button>
       )}
 
-      {!editing && showActions && (
+      {!editing && (
         <div
+          data-v3-row-actions
           style={{
             position: 'absolute',
             right: 4,
@@ -243,8 +244,8 @@ export function ProjectRow({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 22,
-              height: 22,
+              width: 'var(--v3-row-action-size, 24px)',
+              height: 'var(--v3-row-action-size, 24px)',
               borderRadius: 5,
               border: 'none',
               background: 'transparent',
@@ -258,6 +259,8 @@ export function ProjectRow({
             ref={triggerRef}
             type="button"
             aria-label={t('sidebar.actions.more')}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
             onClick={(e) => {
               e.stopPropagation();
               if (menuOpen) setMenuOpen(false);
@@ -267,8 +270,8 @@ export function ProjectRow({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 22,
-              height: 22,
+              width: 'var(--v3-row-action-size, 24px)',
+              height: 'var(--v3-row-action-size, 24px)',
               borderRadius: 5,
               border: 'none',
               background: menuOpen ? 'var(--chat-border)' : 'transparent',
@@ -292,6 +295,9 @@ export function ProjectRow({
               top: menuPos.top,
               left: menuPos.left,
               width: MENU_WIDTH,
+              maxWidth: 'calc(100vw - 16px)',
+              maxHeight: 'calc(100dvh - 16px)',
+              overflowY: 'auto',
               zIndex: 1000,
               background: 'var(--chat-surface-elevated)',
               border: '1px solid var(--chat-border)',

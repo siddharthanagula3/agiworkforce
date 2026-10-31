@@ -4,8 +4,10 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import type { ColorScheme } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, radii, spacing, typeScale } from '@/src/ui/theme/tokens';
 import { checklistProgress, type AssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
+
+const PREVIEW_EDIT_NOTICE = 'Edits stay in this preview. Copy or share to keep them.';
 
 type MobileAssistantFence = Exclude<
   AssistantFence,
@@ -33,17 +35,33 @@ function CopyControl({ label, text, color }: { label: string; text: string; colo
     });
   };
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.md }}>
       <PressableBox
         onPress={() => void copy(text)}
         accessibilityRole="button"
         accessibilityLabel={copyControlLabel(status, label)}
+        style={{
+          minWidth: 44,
+          minHeight: 44,
+          justifyContent: 'center',
+          paddingHorizontal: spacing.sm,
+        }}
       >
         <Text style={{ color, fontSize: typeScale.footnote }}>
           {copyControlLabel(status, label)}
         </Text>
       </PressableBox>
-      <PressableBox onPress={share} accessibilityRole="button" accessibilityLabel="Share">
+      <PressableBox
+        onPress={share}
+        accessibilityRole="button"
+        accessibilityLabel="Share"
+        style={{
+          minWidth: 44,
+          minHeight: 44,
+          justifyContent: 'center',
+          paddingHorizontal: spacing.sm,
+        }}
+      >
         <Text style={{ color, fontSize: typeScale.footnote }}>Share</Text>
       </PressableBox>
     </View>
@@ -60,22 +78,68 @@ function EmailDraft({
   const [to, setTo] = useState(fence.to);
   const [subject, setSubject] = useState(fence.subject);
   const [body, setBody] = useState(fence.body);
-  const copyText = [to ? `To: ${to}` : null, subject ? `Subject: ${subject}` : null, '', body]
-    .filter((line): line is string => line !== null)
-    .join('\n');
+  const headers = [
+    to ? `To: ${to}` : null,
+    fence.cc ? `Cc: ${fence.cc}` : null,
+    fence.bcc ? `Bcc: ${fence.bcc}` : null,
+    subject ? `Subject: ${subject}` : null,
+  ].filter((line): line is string => line !== null);
+  const copyText = headers.length > 0 ? `${headers.join('\n')}\n\n${body}` : body;
   return (
-    <View testID="answer-surface-email" accessibilityLabel="Email">
+    <View
+      testID="answer-surface-email"
+      accessibilityLabel="Email"
+      style={{
+        padding: spacing.xl,
+        gap: spacing.sm,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radii.xl,
+        backgroundColor: colors.surfaceElevated,
+      }}
+    >
       <TextInput
         accessibilityLabel="To"
         value={to}
         onChangeText={setTo}
-        style={{ color: colors.textPrimary }}
+        style={{
+          ...chatTypography.writingSubject,
+          color: colors.textPrimary,
+          minHeight: 44,
+          paddingVertical: spacing.sm,
+        }}
       />
+      {(
+        [
+          ['Cc', fence.cc],
+          ['Bcc', fence.bcc],
+        ] as const
+      ).map(([label, value]) =>
+        value ? (
+          <Text
+            key={label}
+            selectable
+            numberOfLines={3}
+            style={{
+              ...chatTypography.writingSubject,
+              color: colors.textSecondary,
+              maxWidth: '100%',
+            }}
+          >
+            {`${label}: ${value}`}
+          </Text>
+        ) : null,
+      )}
       <TextInput
         accessibilityLabel="Subject"
         value={subject}
         onChangeText={setSubject}
-        style={{ color: colors.textPrimary }}
+        style={{
+          ...chatTypography.writingSubject,
+          color: colors.textPrimary,
+          minHeight: 44,
+          paddingVertical: spacing.sm,
+        }}
       />
       <TextInput
         accessibilityLabel="Message"
@@ -83,9 +147,62 @@ function EmailDraft({
         onChangeText={setBody}
         editable
         multiline
-        style={{ color: colors.textPrimary }}
+        style={{
+          ...chatTypography.body,
+          color: colors.textPrimary,
+          minHeight: 44,
+          textAlignVertical: 'top',
+        }}
       />
       <CopyControl label="Copy email" text={copyText} color={colors.textSecondary} />
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+        {PREVIEW_EDIT_NOTICE}
+      </Text>
+    </View>
+  );
+}
+
+function WritingDraft({
+  fence,
+  colors,
+}: {
+  fence: Extract<AssistantFence, { kind: 'writing' }>;
+  colors: ColorScheme;
+}) {
+  const [text, setText] = useState(fence.copyText);
+  return (
+    <View
+      testID="answer-surface-writing"
+      accessibilityLabel={fence.label}
+      style={{
+        padding: spacing.xl,
+        gap: spacing.sm,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radii.xl,
+        backgroundColor: colors.surfaceElevated,
+      }}
+    >
+      <Text style={{ ...chatTypography.writingSubject, color: colors.textSecondary }}>
+        {fence.label}
+      </Text>
+      <TextInput
+        accessibilityLabel={fence.label}
+        value={text}
+        onChangeText={setText}
+        editable
+        multiline
+        style={{
+          ...chatTypography.body,
+          color: colors.textPrimary,
+          minHeight: 44,
+          textAlignVertical: 'top',
+        }}
+      />
+      <CopyControl label="Copy draft" text={text} color={colors.textSecondary} />
+      <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+        {PREVIEW_EDIT_NOTICE}
+      </Text>
     </View>
   );
 }
@@ -176,22 +293,10 @@ export function AssistantSurface({
     );
   }
   if (fence.kind === 'email') {
-    return <EmailDraft fence={fence} colors={colors} />;
+    return <EmailDraft key={fence.copyText} fence={fence} colors={colors} />;
   }
   if (fence.kind === 'writing') {
-    return (
-      <View testID="answer-surface-writing" accessibilityLabel={fence.label}>
-        <Text style={{ color: colors.textPrimary }}>{fence.label}</Text>
-        <TextInput
-          accessibilityLabel={fence.label}
-          defaultValue={fence.copyText}
-          editable
-          multiline
-          style={{ color: colors.textPrimary }}
-        />
-        <CopyControl label="Copy draft" text={fence.copyText} color={colors.textSecondary} />
-      </View>
-    );
+    return <WritingDraft key={fence.copyText} fence={fence} colors={colors} />;
   }
   if (fence.kind === 'copy') {
     const label =

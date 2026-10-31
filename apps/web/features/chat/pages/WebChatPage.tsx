@@ -6707,17 +6707,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           id="main-content"
           role="main"
           tabIndex={-1}
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[320px]"
+          className={cn(
+            'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[320px]',
+            compact && !urlConversationId && 'pt-[var(--agi-product-notice-inset,0px)]',
+          )}
         >
           {compact ? (
             urlConversationId ? (
               <header
                 data-quick-ask-header=""
-                className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3"
+                className="mb-[var(--agi-product-notice-inset,0px)] flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3 pointer-coarse:h-12"
               >
                 <a
                   href={conversationHref(urlConversationId)}
-                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
                 >
                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
                   {t('chat:quickAsk.openFullChat', 'Open full chat')}
@@ -6726,7 +6729,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   href={QUICK_ASK_PATH}
                   aria-label={t('chat:quickAsk.newChat', 'New chat')}
                   title={t('chat:quickAsk.newChat', 'New chat')}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:w-11"
                 >
                   <SquarePen className="h-4 w-4" aria-hidden="true" />
                 </a>
@@ -6736,7 +6739,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             <header
               data-app-header=""
               className={cn(
-                '@container relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -6763,7 +6766,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ms-1 h-8 w-8 shrink-0 p-0"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0 pointer-coarse:h-11 pointer-coarse:w-11"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>

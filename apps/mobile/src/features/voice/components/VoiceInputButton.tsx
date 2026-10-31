@@ -413,11 +413,14 @@ export function VoiceInputButton({
         onLongPress={onLongPress ? handleLongPress : undefined}
         delayLongPress={LONG_PRESS_DELAY_MS}
         disabled={isDisabled}
-        hitSlop={8}
         style={[
           {
+            width: 44,
+            height: 44,
             padding: 6,
             borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
             backgroundColor: colors.transparent,
           },
           isDisabled ? { opacity: 0.5 } : undefined,

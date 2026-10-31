@@ -992,7 +992,7 @@ export function ArtifactFullScreen({
                 <ReportChart chart={chartArtifact} colors={colors} />
               </View>
             ) : (
-              <View testID="artifact-fullscreen-markdown">
+              <View key={artifact.id} testID="artifact-fullscreen-markdown">
                 {renderMarkdownContent(activeContent, colors)}
               </View>
             )}

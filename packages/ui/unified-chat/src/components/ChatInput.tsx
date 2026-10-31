@@ -1271,7 +1271,7 @@ export function ChatInput({
             disabled={disabled}
             className={cn(
               'w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1',
-              'text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]',
+              '[font-size:var(--chat-type-body-size)] [line-height:var(--chat-type-body-height)] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]',
               'focus:outline-none',
               'min-h-[28px]',
               disabled && 'cursor-not-allowed opacity-50',
@@ -1281,15 +1281,17 @@ export function ChatInput({
           />
         )}
 
-        {/* Bottom toolbar.
-            SINGLE non-wrapping control row (flex-nowrap), mirrors web's
-            ChatComposerNew, which deliberately avoids flex-wrap so the send
-            button can never drop to a second line as the column narrows.
-            The min-w-0 shrink chain lets the left group (plus + AgentControl
-            chips) and the model selector collapse first, while the voice + send
-            buttons stay shrink-0 and pinned to the right edge. */}
+        {/* Host context can wrap without displacing the pinned primary actions. */}
         <div className="flex flex-col gap-1 px-3 pt-1.5 pb-2">
-          <div className="flex flex-nowrap items-center gap-1 sm:gap-2">
+          {hostControls && (
+            <div data-composer-host-controls className="w-full min-w-0 max-w-full">
+              {hostControls}
+            </div>
+          )}
+          <div
+            data-composer-primary-controls
+            className="flex flex-nowrap items-center gap-1 sm:gap-2"
+          >
             <div className="flex min-w-0 flex-1 items-center gap-2">
               {/* Left: Plus button, opens attachment menu */}
               <div className="flex shrink-0 items-center">
@@ -1386,8 +1388,6 @@ export function ChatInput({
                   ))}
                 </div>
               )}
-
-              {hostControls}
 
               {conversationId && (
                 <ContextUsageMeter

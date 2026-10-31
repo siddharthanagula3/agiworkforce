@@ -73,6 +73,7 @@ describe('VoiceInputButton long-press handoff', () => {
     );
 
     const button = getByTestId('voice-input-button');
+    expect(button).toHaveStyle({ width: 44, height: 44 });
 
     await act(async () => {
       fireEvent(button, 'pressIn');

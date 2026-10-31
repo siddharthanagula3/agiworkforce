@@ -3606,7 +3606,7 @@ const MessageBubbleComponent = function MessageBubble({
               <div
                 data-testid="message-action-row"
                 className={cn(
-                  'flex flex-nowrap items-center gap-1 transition-opacity',
+                  'flex min-w-0 max-w-full flex-wrap items-center gap-1 transition-opacity',
                   ACTION_ROW_MIN_HEIGHT,
                   isUser || !isLatestTurn
                     ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100'

@@ -86,13 +86,13 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        minHeight: 30,
+        minHeight: 44,
+        minWidth: 44,
         flexShrink: 1,
         paddingHorizontal: 6,
         borderRadius: radii.full,
         backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
       })}
-      hitSlop={8}
       testID="chat.composer.model"
       accessibilityLabel={
         accessibilityDetail ? `Model: ${label}, ${accessibilityDetail}` : `Model: ${label}`

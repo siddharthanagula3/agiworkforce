@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Button, useUiTranslation } from '@agiworkforce/ui';
+import { cn } from '../../lib/utils';
 import { AnswerImage } from './AnswerImage';
 import { markdownImageSource } from './markdownImageSources';
 import { useRichBlockCopy } from './RichBlockCard';
@@ -12,23 +13,26 @@ function ResourceActions({ src, caption }: { src: string; caption: string }) {
   if (!source) return null;
   const navigable = source.kind === 'same-origin' || source.kind === 'cross-origin';
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+    <div className="mt-1 flex flex-wrap items-center gap-1 text-sm">
       {navigable ? (
-        <a
-          href={source.src}
-          target="_blank"
-          rel="noopener noreferrer"
-          referrerPolicy="no-referrer"
-          className="rounded-sm text-[var(--chat-info-text)] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
-          aria-label={t('answerSurface.openGalleryImage', 'Open image: {{caption}}', { caption })}
-        >
-          {t('answerSurface.openImage', 'Open image')}
-        </a>
+        <Button asChild variant="ghost" size="sm" className="min-h-11 px-2.5">
+          <a
+            href={source.src}
+            target="_blank"
+            rel="noopener noreferrer"
+            referrerPolicy="no-referrer"
+            className="text-[var(--chat-text-secondary)]"
+            aria-label={t('answerSurface.openGalleryImage', 'Open image: {{caption}}', { caption })}
+          >
+            {t('answerSurface.openImage', 'Open image')}
+          </a>
+        </Button>
       ) : null}
       <Button
         type="button"
         variant="ghost"
-        size="xs"
+        size="sm"
+        className="min-h-11 px-2.5 text-[var(--chat-text-secondary)]"
         aria-label={t('answerSurface.copyGalleryUrl', 'Copy image URL: {{caption}}', { caption })}
         onClick={() => void copy(source.src)}
       >
@@ -47,11 +51,11 @@ export function AnswerGallery({ items, className }: { items: GalleryItem[]; clas
   const { t } = useUiTranslation('chat');
   return (
     <section
-      className={className}
+      className={cn(className, '@container')}
       data-answer-surface="gallery"
       aria-label={t('answerSurface.gallery', 'Gallery')}
     >
-      <div className="grid gap-4 p-4 sm:grid-cols-2">
+      <div className="grid gap-5 @lg:grid-cols-2">
         {items.map((item, index) => (
           <figure
             key={`${index}-${item.src || item.color}`}
@@ -73,7 +77,7 @@ export function AnswerGallery({ items, className }: { items: GalleryItem[]; clas
                 className="aspect-video w-full rounded-lg object-contain"
               />
             )}
-            <figcaption className="mt-2 text-sm text-[var(--chat-text-primary)]">
+            <figcaption className="mt-3 break-words text-sm leading-6 text-[var(--chat-text-primary)]">
               {item.caption}
               {item.detail ? (
                 <span className="mt-1 block text-[var(--chat-text-secondary)]">{item.detail}</span>
@@ -97,7 +101,10 @@ export function AnswerCarousel({ spec, className }: { spec: CarouselSpec; classN
   const move = (next: number) => setIndex(Math.max(0, Math.min(spec.items.length - 1, next)));
   return (
     <section
-      className={`${className} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]`}
+      className={cn(
+        className,
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
+      )}
       data-answer-surface="carousel"
       aria-roledescription="carousel"
       aria-label={spec.title}
@@ -121,12 +128,10 @@ export function AnswerCarousel({ spec, className }: { spec: CarouselSpec; classN
         );
       }}
     >
-      <h3 className="border-b border-[var(--chat-border-subtle)] px-4 py-3 text-sm font-medium">
-        {spec.title}
-      </h3>
+      <h3 className="mb-3 wrap-anywhere text-base font-semibold leading-relaxed">{spec.title}</h3>
       <div
         id={id}
-        className="px-4 py-3"
+        className="min-w-0"
         role="group"
         aria-roledescription="slide"
         aria-label={`${current + 1} of ${spec.items.length}`}
@@ -140,17 +145,20 @@ export function AnswerCarousel({ spec, className }: { spec: CarouselSpec; classN
             className="aspect-video w-full rounded-lg object-contain"
           />
         ) : null}
-        <h4 className="mt-2 text-sm font-medium">{item.title}</h4>
+        <h4 className="mt-3 break-words text-sm font-medium leading-6">{item.title}</h4>
         {item.text ? (
-          <p className="mt-1 text-sm text-[var(--chat-text-secondary)]">{item.text}</p>
+          <p className="mt-1 break-words text-sm leading-6 text-[var(--chat-text-secondary)]">
+            {item.text}
+          </p>
         ) : null}
         {item.src ? <ResourceActions src={item.src} caption={item.title} /> : null}
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-[var(--chat-border-subtle)] px-4 py-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--chat-border-subtle)] pt-3">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="min-h-11 max-w-full whitespace-normal"
           aria-controls={id}
           disabled={current === 0}
           onClick={() => move(current - 1)}
@@ -160,7 +168,7 @@ export function AnswerCarousel({ spec, className }: { spec: CarouselSpec; classN
         <span
           role="status"
           aria-live="polite"
-          className="text-xs text-[var(--chat-text-secondary)]"
+          className="text-sm tabular-nums text-[var(--chat-text-secondary)]"
         >
           {t('answerSurface.slideCount', '{{current}} of {{total}}', {
             current: current + 1,
@@ -169,8 +177,9 @@ export function AnswerCarousel({ spec, className }: { spec: CarouselSpec; classN
         </span>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="min-h-11 max-w-full whitespace-normal"
           aria-controls={id}
           disabled={current === spec.items.length - 1}
           onClick={() => move(current + 1)}

@@ -1630,10 +1630,9 @@ export default function ChatScreen() {
         >
           <Pressable
             onPress={handleOpenDrawer}
-            hitSlop={6}
             style={({ pressed }) => ({
-              width: 32,
-              height: 32,
+              width: 44,
+              height: 44,
               borderRadius: radii.full,
               alignItems: 'center',
               justifyContent: 'center',
@@ -1653,16 +1652,16 @@ export default function ChatScreen() {
                   params: { id: activeProjectId },
                 })
               }
-              hitSlop={6}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
                 paddingHorizontal: 12,
-                height: 32,
+                height: 44,
                 borderRadius: radii.full,
                 backgroundColor: colors.inputSurface,
                 maxWidth: 120,
+                minWidth: 44,
                 flexShrink: 1,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
@@ -1680,7 +1679,13 @@ export default function ChatScreen() {
           <Pressable
             onPress={handleMenuPress}
             disabled={!conversation}
-            style={{ flex: 1, minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 }}
+            style={{
+              flex: 1,
+              minWidth: 44,
+              minHeight: 44,
+              justifyContent: 'center',
+              paddingHorizontal: 4,
+            }}
             accessibilityLabel={`${title}. Open conversation menu`}
             accessibilityRole="button"
             accessibilityState={{ disabled: !conversation }}
@@ -1697,14 +1702,13 @@ export default function ChatScreen() {
             </Text>
           </Pressable>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', flexShrink: 0, alignItems: 'center', gap: 4 }}>
             <ProjectSourcesButton projectId={conversation?.projectId} />
             <Pressable
               onPress={handleNewChat}
-              hitSlop={6}
               style={({ pressed }) => ({
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1718,10 +1722,9 @@ export default function ChatScreen() {
             <Pressable
               onPress={handleMenuPress}
               disabled={!conversation}
-              hitSlop={6}
               style={({ pressed }) => ({
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',

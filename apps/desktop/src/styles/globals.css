@@ -1320,3 +1320,42 @@
     animation-iteration-count: infinite !important;
   }
 }
+
+[data-v3-row-actions] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-quick);
+}
+
+:is([data-conversation-id], [data-project-id]):is(
+    :hover,
+    :focus-within,
+    [data-conversation-active='true'],
+    [data-project-active='true'],
+    [data-row-menu-open='true']
+  )
+  [data-v3-row-actions] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  [data-v3-row-actions] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  [data-v3-composer-context] button,
+  [data-v3-sidebar-menu-item] {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+
+  [data-conversation-id],
+  [data-project-id] {
+    --v3-row-action-size: 44px;
+    --v3-row-height: 44px;
+  }
+}

@@ -1,4 +1,5 @@
 import { getExtensionTokensCssAuto } from '../../../tokens';
+import { agiChatTypographyCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 
 export const PANEL_SLIDE_MS = 240;
 
@@ -7,7 +8,7 @@ export function buildPanelStyles(): string {
     /* ── AGI design tokens follow the browser/OS colour scheme ── */
     ${getExtensionTokensCssAuto(':host')}
 
-    :host { display:block; }
+    :host { ${cssVarsToString(agiChatTypographyCssVars)} display:block; }
 
     .agi-panel {
       position:fixed;
@@ -33,7 +34,7 @@ export function buildPanelStyles(): string {
     /* ── Header ──────────────────────────────────────────────────────────── */
     .agi-header {
       display:flex; align-items:center;
-      padding:12px 14px;
+      min-height:48px; padding:8px 12px; gap:6px;
       border-bottom:1px solid var(--agi-ext-border);
       background:var(--agi-ext-surface);
       color:var(--agi-ext-text);
@@ -49,7 +50,7 @@ export function buildPanelStyles(): string {
     }
 
     .agi-provider-pill {
-      font-size:14px; font-weight:600;
+      font-size:12px; font-weight:600;
       background:var(--agi-ext-surface);
       border:1px solid var(--agi-ext-border);
       color:var(--agi-ext-text-muted);
@@ -57,7 +58,8 @@ export function buildPanelStyles(): string {
       padding:3px 8px;
       margin-right:8px;
       white-space:nowrap;
-      flex-shrink:0;
+      flex-shrink:1;
+      min-width:0; max-width:50%; overflow:hidden; text-overflow:ellipsis;
       cursor:default;
     }
 
@@ -112,7 +114,7 @@ export function buildPanelStyles(): string {
     .agi-response-area {
       flex:1; overflow-y:auto;
       padding:14px;
-      font-size:14px; line-height:1.6; color:var(--agi-ext-text);
+      font-size:var(--chat-type-body-size); line-height:var(--chat-type-body-height); color:var(--agi-ext-text);
       word-break:break-word;
     }
 
@@ -190,6 +192,7 @@ export function buildPanelStyles(): string {
 
     .agi-textarea {
       flex:1;
+      min-width:0;
       resize:none; border:1px solid var(--agi-ext-border-control);
       border-radius:16px; padding:10px 12px;
       font-size:14px; font-family:inherit; color:var(--agi-ext-text);
@@ -247,6 +250,12 @@ export function buildPanelStyles(): string {
       .agi-panel { top:0; bottom:0; border-radius:0; }
       .agi-actions-row { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
       .agi-action-chip { flex:0 0 auto; }
+    }
+
+    @media (pointer:coarse) {
+      button { min-width:44px; min-height:44px; }
+      .agi-actions-row { padding-block:4px; scroll-padding-inline:8px; }
+      .agi-action-chip { white-space:normal; }
     }
 
     @media (prefers-reduced-motion: reduce) {

@@ -854,9 +854,9 @@
   }
 
   .message-text {
-    @apply text-base;
+    font-size: var(--chat-type-body-size);
     color: var(--chat-text-primary);
-    line-height: 1.625;
+    line-height: var(--chat-type-body-height);
   }
 
   .message-text.user-bubble {
@@ -993,21 +993,10 @@
     animation: fade-in var(--duration-moved) var(--curve-standard) forwards;
   }
 
-  /* Mobile: max-width constraints for message bubbles */
-  @media (max-width: 375px) {
-    .prose {
-      font-size: 14px; /* Smaller text on tiny screens */
-    }
-  }
-
-  /* Tablet (768px): adjust message widths */
-
-  /* Desktop (1024px+): full-width with max constraint */
-
   /* Responsive button sizing */
   button,
   [role='button'] {
-    @apply transition-all;
+    @apply transition-colors;
   }
 
   @media (max-width: 640px) {
@@ -1021,7 +1010,7 @@
   textarea,
   input[type='text'],
   input[type='search'] {
-    @apply w-full transition-all;
+    @apply w-full transition-[color,background-color,border-color,box-shadow];
   }
 
   @media (max-width: 375px) {
@@ -1098,15 +1087,15 @@
 }
 
 .message-text h1:where([data-markdown-heading]) {
-  @apply text-h2 mt-6 mb-4;
+  @apply mt-6 mb-4;
 }
 
 .message-text h2:where([data-markdown-heading]) {
-  @apply text-h3 mt-5 mb-3;
+  @apply mt-5 mb-3;
 }
 
 .message-text h3:where([data-markdown-heading]) {
-  @apply text-h4 mt-4 mb-2;
+  @apply mt-4 mb-2;
 }
 
 .message-text :is(h1, h2, h3):where([data-markdown-heading]) + * {

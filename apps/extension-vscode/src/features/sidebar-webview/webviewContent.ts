@@ -241,7 +241,7 @@ export function getWebviewContent(
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 44px;
+      min-height: 48px;
       padding: 8px 10px;
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
@@ -653,6 +653,7 @@ export function getWebviewContent(
 
     .message-actions {
       display: flex;
+      flex-wrap: wrap;
       gap: 2px;
       margin-top: var(--message-actions-gap);
       white-space: normal;
@@ -665,7 +666,6 @@ export function getWebviewContent(
     .message-actions--user:focus-within { opacity: 1; }
     .message.user[data-delivery-state] .message-actions--user { display: none; }
     .message.assistant:hover .message-actions,
-    .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
       opacity: 1;
     }
@@ -2421,6 +2421,7 @@ export function getWebviewContent(
     /* ── Composer status line ── */
     .composer-status {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
       padding: 6px 4px 0;
@@ -2499,6 +2500,79 @@ export function getWebviewContent(
       /* Both chips stay reachable: min-width keeps each clickable and the mode
          chip gives up its width four times faster than the model name. */
       .controls-summary { max-width: 46px; }
+    }
+
+    .answer-surface-email, .answer-surface-writing { min-width: 0; margin-block: 12px; }
+    .answer-surface-email > h3, .answer-surface-writing > h3 {
+      margin: 0 0 8px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      font-weight: 500;
+      line-height: var(--type-caption-height);
+    }
+    .answer-surface-email .answer-copy {
+      max-width: 100%;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      font: inherit;
+      line-height: var(--type-body-height);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: normal;
+    }
+    .answer-surface-email .answer-copy code { padding: 0; background: transparent; font: inherit; white-space: inherit; }
+    .answer-surface-writing textarea {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      min-height: 8em;
+      padding: 8px 10px;
+      resize: vertical;
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      background: var(--vscode-input-background, var(--bg-elevated));
+      color: var(--text-primary);
+      font: inherit;
+      line-height: var(--type-body-height);
+    }
+    .answer-surface-writing textarea:focus-visible { outline: 2px solid var(--vscode-focusBorder, var(--accent-teal)); outline-offset: 2px; }
+    .answer-surface-writing > .answer-preview-note {
+      margin: 8px 0 0;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .answer-surface-email > .surface-copy, .answer-surface-writing > .surface-copy {
+      min-height: var(--control-md);
+      margin-top: 8px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--text-secondary);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      cursor: pointer;
+    }
+
+    @media (hover: none) {
+      .message-actions, .copy-btn, .apply-btn, .explain-btn { opacity: 1; }
+    }
+
+    @media (pointer: coarse) {
+      :root { --control-sm: 44px; --control-md: 44px; --control-lg: 44px; }
+      button, [role='menuitem'] { min-block-size: 44px; min-inline-size: 44px; }
+      .header { gap: 8px; }
+      .header-left { flex: 1 1 0; max-width: none; }
+      .header-actions { gap: 2px; }
+      .header-actions .icon-btn { flex-shrink: 0; }
+      .composer-bottom { flex-wrap: wrap; row-gap: 6px; }
+      .controls-summary { min-width: 44px; }
+      .code-block-actions { position: static; justify-content: flex-end; flex-wrap: wrap; padding: 4px; }
+      .code-block-wrapper pre { padding-top: 8px; }
+      .code-lang { position: static; display: block; padding: 4px 8px; }
     }
 
     @media (prefers-reduced-motion: reduce) {

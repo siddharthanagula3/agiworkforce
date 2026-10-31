@@ -31,6 +31,31 @@ function chartCells(root: ParentNode): string[] {
 
 describe('vscode mixed assistant reply', () => {
   it.each(['  keep <tag> & "quotes"  ', 'first\nsecond  \n\n'])(
+    'copies the edited writing value within its own block: %j',
+    (edited) => {
+      const doc = parse(
+        ['```writing', 'First draft.', '```', '', '```document', 'Second draft.', '```'].join('\n'),
+      );
+      const drafts = doc.querySelectorAll<HTMLTextAreaElement>('.answer-surface-writing textarea');
+      expect(drafts).toHaveLength(2);
+      const copy = vi.fn();
+      bindAnswerSurfaces(doc, { copy });
+
+      drafts[0]!.value = edited;
+      drafts[0]!.dispatchEvent(new Event('input', { bubbles: true }));
+      const buttons = doc.querySelectorAll<HTMLButtonElement>(
+        '.answer-surface-writing .surface-copy',
+      );
+      buttons[0]?.click();
+      expect(copy).toHaveBeenNthCalledWith(1, edited);
+      expect(drafts[1]?.value).toBe('Second draft.');
+      buttons[1]?.click();
+      expect(copy).toHaveBeenNthCalledWith(2, 'Second draft.');
+      expect(copy).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each(['  keep <tag> & "quotes"  ', 'first\nsecond  \n\n'])(
     'copies the exact prompt body without the fence separator: %j',
     (body) => {
       const doc = parse(['```prompt', body, '```'].join('\n'));

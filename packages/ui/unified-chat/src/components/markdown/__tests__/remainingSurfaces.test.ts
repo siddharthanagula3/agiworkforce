@@ -24,6 +24,39 @@ const FENCES: ReadonlyArray<{ language: string; body: string; text: string }> = 
 ];
 
 describe('remaining answer surfaces', () => {
+  it.each(['chrome', 'vscode'] as const)(
+    'shows email headers once and preserves exact copy text in %s',
+    (mode) => {
+      const fence = classifyAssistantFence(
+        'email',
+        'To: team@example.com\nCc: review@example.com\nSubject: Review\n\nHello team.',
+      );
+      if (fence.kind !== 'email') throw new Error('The email fixture did not classify as email.');
+      const template = document.createElement('template');
+      template.innerHTML = renderClassifiedFenceHtml(fence, mode)!;
+      expect(template.content.textContent?.match(/Subject: Review/g)).toHaveLength(1);
+      expect(template.content.textContent?.match(/To: team@example.com/g)).toHaveLength(1);
+      expect(template.content.querySelector('pre code')?.textContent).toBe(fence.copyText);
+    },
+  );
+
+  it.each(['chrome', 'vscode'] as const)(
+    'keeps the local-edit notice outside the copy body in %s',
+    (mode) => {
+      const fence = classifyAssistantFence('writing', 'Draft for review.');
+      if (fence.kind !== 'writing')
+        throw new Error('The writing fixture did not classify as writing.');
+      const template = document.createElement('template');
+      template.innerHTML = renderClassifiedFenceHtml(fence, mode)!;
+      expect(template.content.querySelector('.answer-preview-note')?.textContent).toBe(
+        'Edits stay in this preview. Copy to keep them.',
+      );
+      expect(template.content.querySelector('textarea, pre code')?.textContent).toBe(
+        fence.copyText,
+      );
+    },
+  );
+
   it.each(FENCES)(
     'renders $language as a surface instead of a code card',
     ({ language, body, text }) => {

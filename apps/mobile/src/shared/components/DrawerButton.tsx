@@ -6,7 +6,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useNotificationCenter } from '@/services/notifications';
 
-const BUTTON_SIZE = 36;
+const BUTTON_SIZE = 44;
 
 export function DrawerButton({ onPress, testID }: { onPress: () => void; testID?: string }) {
   const colors = useThemeColors();
@@ -23,7 +23,6 @@ export function DrawerButton({ onPress, testID }: { onPress: () => void; testID?
             : 'Open navigation drawer'
         }
         accessibilityRole="button"
-        hitSlop={8}
         style={({ pressed }) => ({
           width: BUTTON_SIZE,
           height: BUTTON_SIZE,

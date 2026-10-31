@@ -39,6 +39,7 @@ import { ChartArtifact } from '../artifact-components/ChartArtifact';
 
 const PANEL_CLASS =
   'my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]';
+const GROUP_CLASS = 'my-4 min-w-0 text-[var(--chat-text-primary)]';
 const BODY_CLASS = 'px-4 py-3 text-sm text-[var(--chat-text-primary)]';
 
 function statusClass(state: StatusRow['state'] | 'complete' | 'progress' | 'todo'): string {
@@ -217,20 +218,20 @@ export function AnswerSurface({
   if (language === 'form') {
     const spec = parseForm(parsed);
     return spec ? (
-      <AnswerForm key={source} spec={spec} className={PANEL_CLASS} streaming={streaming} />
+      <AnswerForm key={source} spec={spec} className={GROUP_CLASS} streaming={streaming} />
     ) : null;
   }
   if (language === 'carousel') {
     const spec = parseCarousel(parsed);
-    return spec ? <AnswerCarousel key={source} spec={spec} className={PANEL_CLASS} /> : null;
+    return spec ? <AnswerCarousel key={source} spec={spec} className={GROUP_CLASS} /> : null;
   }
   if (language === 'card') {
     const spec = parseRichCard(parsed);
     if (!spec) return null;
     return (
       <article className={PANEL_CLASS} data-answer-surface="card" aria-label={spec.title}>
-        <div className="border-b border-[var(--chat-border-subtle)] px-4 py-3">
-          <h3 className="text-sm font-medium">{spec.title}</h3>
+        <div className="px-5 pt-4">
+          <h3 className="wrap-anywhere text-base font-semibold leading-relaxed">{spec.title}</h3>
           {spec.subtitle ? (
             <p className="mt-1 text-sm text-[var(--chat-text-secondary)]">{spec.subtitle}</p>
           ) : null}
@@ -247,7 +248,7 @@ export function AnswerSurface({
             </ul>
           ) : null}
         </div>
-        <div className="px-4 pt-3 pb-1">
+        <div className="min-w-0 wrap-anywhere px-5 pb-4 pt-2">
           {renderBody ? renderBody(spec.body) : <p className="whitespace-pre-wrap">{spec.body}</p>}
         </div>
       </article>
@@ -258,20 +259,20 @@ export function AnswerSurface({
     if (!spec) return null;
     return (
       <section
-        className={PANEL_CLASS}
+        className={GROUP_CLASS}
         data-answer-surface="stats"
         aria-label={spec.title || t('answerSurface.stats', 'Statistics')}
       >
         {spec.title ? (
-          <h3 className="border-b border-[var(--chat-border-subtle)] px-4 py-3 text-sm font-medium">
+          <h3 className="mb-4 wrap-anywhere text-base font-semibold leading-relaxed">
             {spec.title}
           </h3>
         ) : null}
-        <dl className="grid gap-4 p-4 sm:grid-cols-2">
+        <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
           {spec.items.map((item, index) => (
             <div key={`${index}-${item.label}`} className="min-w-0">
               <dt className="text-sm text-[var(--chat-text-secondary)]">{item.label}</dt>
-              <dd className="mt-1 break-words text-xl font-medium">{item.value}</dd>
+              <dd className="mt-1 break-words text-xl font-medium tabular-nums">{item.value}</dd>
               {item.caption ? (
                 <dd className="mt-1 text-sm text-[var(--chat-text-secondary)]">{item.caption}</dd>
               ) : null}
@@ -291,7 +292,7 @@ export function AnswerSurface({
     if (cards.length === 0) return null;
     return (
       <section
-        className={cn(PANEL_CLASS, '@container')}
+        className={cn(GROUP_CLASS, '@container')}
         data-answer-surface={language}
         aria-label={
           grid?.title ||
@@ -301,13 +302,13 @@ export function AnswerSurface({
         }
       >
         {grid?.title ? (
-          <h3 className="border-b border-[var(--chat-border-subtle)] px-4 py-3 text-sm font-medium">
+          <h3 className="mb-3 wrap-anywhere text-base font-semibold leading-relaxed">
             {grid.title}
           </h3>
         ) : null}
         <div
           className={cn(
-            'grid gap-3 p-4',
+            'grid gap-3',
             (grid?.columns ?? 2) > 1 && '@lg:grid-cols-2',
             grid?.columns === 3 && '@2xl:grid-cols-3',
           )}
@@ -316,10 +317,12 @@ export function AnswerSurface({
           {cards.map((card) => (
             <article
               key={card.title}
-              className="min-w-0 rounded-lg border border-[var(--chat-border-subtle)] p-3"
+              className="min-w-0 rounded-[var(--chat-radius-md)] border border-[var(--chat-border-subtle)] p-4"
             >
-              <h3 className="text-sm font-medium">{card.title}</h3>
-              <p className="mt-1 text-sm text-[var(--chat-text-secondary)]">{card.body}</p>
+              <h3 className="wrap-anywhere text-sm font-medium leading-6">{card.title}</h3>
+              <p className="mt-1 wrap-anywhere text-sm leading-6 text-[var(--chat-text-secondary)]">
+                {card.body}
+              </p>
             </article>
           ))}
         </div>
@@ -368,7 +371,7 @@ export function AnswerSurface({
   if (language === 'gallery') {
     const items = parseGallery(parsed);
     if (items.length === 0) return null;
-    return <AnswerGallery items={items} className={PANEL_CLASS} />;
+    return <AnswerGallery items={items} className={GROUP_CLASS} />;
   }
 
   if (language === 'details') {
