@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { buildPanelStyles } from '../src/features/content/in-page-panel/panelStyles';
 
 const FLOOR_PX = 14;
 const here = dirname(fileURLToPath(import.meta.url));
@@ -111,5 +112,14 @@ describe('Chrome extension type floor', () => {
       ),
     );
     expect(offenders).toEqual([]);
+  });
+
+  it('inherits existing readable type roles instead of defining smaller text', () => {
+    const panelCss = readFileSync(join(srcRoot, 'side_panel.css'), 'utf8');
+    for (const role of ['label', 'caption']) {
+      expect(panelCss).toContain(`--type-${role}-size: var(--type-body-small-size)`);
+    }
+    const providerPillStyle = buildPanelStyles().match(/\.agi-provider-pill\s*\{([^}]+)\}/)?.[1];
+    expect(providerPillStyle).toContain('font-size:inherit');
   });
 });

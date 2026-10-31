@@ -56,9 +56,9 @@ body {
   --type-body-height: 1.5;
   --type-body-small-size: 14px;
   --type-body-small-height: 1.5;
-  --type-label-size: 13px;
+  --type-label-size: var(--type-body-small-size);
   --type-label-height: 1.3;
-  --type-caption-size: 12px;
+  --type-caption-size: var(--type-body-small-size);
   --type-caption-height: 1.4;
   --type-code-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
   --type-code-size: 14px;

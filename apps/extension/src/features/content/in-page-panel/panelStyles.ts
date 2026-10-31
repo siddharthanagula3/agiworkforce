@@ -50,7 +50,7 @@ export function buildPanelStyles(): string {
     }
 
     .agi-provider-pill {
-      font-size:12px; font-weight:600;
+      font-size:inherit; font-weight:600;
       background:var(--agi-ext-surface);
       border:1px solid var(--agi-ext-border);
       color:var(--agi-ext-text-muted);
