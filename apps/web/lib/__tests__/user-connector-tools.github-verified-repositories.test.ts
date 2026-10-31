@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 vi.mock('server-only', () => ({}));

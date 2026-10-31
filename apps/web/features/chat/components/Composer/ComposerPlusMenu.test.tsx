@@ -11,11 +11,18 @@ import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin
 
 type TypesModule = typeof import('@agiworkforce/types');
 
-const connectorRelease = vi.hoisted(() => ({ released: true }));
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => connectorRelease.released,
-}));
+const connectorRelease = vi.hoisted(() => ({ released: true, selective: false }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) =>
+      connectorRelease.released || (connectorRelease.selective && original.connectorReleased(id)),
+    hasReleasedConnectors: () =>
+      connectorRelease.released || (connectorRelease.selective && original.hasReleasedConnectors()),
+  };
+});
 
 const TRIGGER_LABEL = 'Open composer menu';
 
@@ -733,5 +740,30 @@ describe('ComposerPlusMenu, adding a file from the library', () => {
     expect(await screen.findByText(`${CAP_REASON} Resets in 5 hours.`)).toBeInTheDocument();
     expect(screen.queryByText('That file could not be added. Try again.')).not.toBeInTheDocument();
     expect(props.onAttachLibraryFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('ComposerPlusMenu with selective release', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+    connectorRelease.selective = true;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+    connectorRelease.selective = false;
+  });
+  it('offers only the released connector while keeping custom setup locked', () => {
+    const { props } = renderMenu({ connectorsSubmenuOpen: true });
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Gmail' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Notion' }));
+    expect(props.onSetConnectorEnabled).toHaveBeenCalledWith('notion', false);
+    expect(screen.getByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Add custom connector' })).toBeNull();
+  });
+  it('filters unreleased connectors out of the work palette', () => {
+    renderMenu({ workPalette: true });
+    expect(screen.queryByTestId('composer-palette-connector-gmail')).toBeNull();
+    expect(screen.getByTestId('composer-palette-connector-notion')).toBeTruthy();
+    expect(within(palette()).getByRole('menuitem', { name: 'Manage in Settings' })).toBeTruthy();
   });
 });

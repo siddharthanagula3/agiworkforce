@@ -58,10 +58,12 @@ async function handleGet(
     throw createError.validation('Invalid connector identifier');
   }
 
-  const { userId } = await getUserScopedDb(request);
-  const resolved = await loadUserConnectorCapabilityCatalog(userId, connectorRef).catch(
-    rethrowConnectorUnreachable,
-  );
+  const { userId, organizationId } = await getUserScopedDb(request);
+  const resolved = await loadUserConnectorCapabilityCatalog(userId, connectorRef, {
+    organizationId,
+    request,
+    allowSelective: true,
+  }).catch(rethrowConnectorUnreachable);
   if (!resolved) throw createError.notFound('Connected connector not found');
 
   const server = resolved.catalog.servers[resolved.connectorId];

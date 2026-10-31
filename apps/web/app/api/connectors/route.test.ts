@@ -1,3 +1,4 @@
+import { SELECTIVELY_RELEASED_CONNECTOR_IDS } from '@agiworkforce/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
@@ -54,12 +55,19 @@ const mocks = vi.hoisted(() => ({
   cacheToolNames: vi.fn(),
 }));
 
-const connectorRelease = vi.hoisted(() => ({ released: true }));
+const connectorRelease = vi.hoisted(() => ({ released: true, selective: false }));
 
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => connectorRelease.released,
-}));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) =>
+      connectorRelease.released || (connectorRelease.selective && original.connectorReleased(id)),
+    hasReleasedConnectors: () =>
+      connectorRelease.released || (connectorRelease.selective && original.hasReleasedConnectors()),
+  };
+});
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -1221,5 +1229,43 @@ describe('GET /api/connectors unfinished authorizations', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { pending: string[] };
     expect(body.pending).toEqual([]);
+  });
+});
+
+describe('selective connector offerings', () => {
+  beforeEach(() => {
+    resetMocks();
+    connectorRelease.released = false;
+    connectorRelease.selective = true;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+    connectorRelease.selective = false;
+  });
+  it('offers only released ready IDs and preserves legacy rows for disconnection', async () => {
+    mocks.operatorIds = new Set(['notion', 'gmail', 'huggingface', 'unknown']);
+    mocks.query.mockResolvedValue(
+      ['notion', 'gmail'].map((connectorId) => ({
+        id: `row-${connectorId}`,
+        connector_id: connectorId,
+        auth_type: 'oauth',
+        connected_at: '2026-10-31T00:00:00.000Z',
+        updated_at: '2026-10-31T00:00:00.000Z',
+      })),
+    );
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as {
+      available: string[];
+      connectors: Array<{ connectorId: string }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.available.sort()).toEqual([...SELECTIVELY_RELEASED_CONNECTOR_IDS].sort());
+    expect(body.connectors.map((connector) => connector.connectorId).sort()).toEqual([
+      'gmail',
+      'notion',
+    ]);
+    expect(mocks.probe).not.toHaveBeenCalled();
   });
 });

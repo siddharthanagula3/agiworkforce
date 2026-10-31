@@ -677,10 +677,6 @@ export function useConnectorsSettingsAdapter({
         await startCustomConnectorSignIn(row.shortId, row.name);
         return;
       }
-      // Web has no working per-provider authorization flow yet, so the catalog
-      // is mapped with canConnect: false and the shared panel never invokes
-      // this. Kept non-optimistic for when a real flow lands: POST first, only
-      // reflect state the server confirmed, surface failures to the panel.
       const connector = SETTINGS_CONNECTORS.find((c) => c.id === id);
       const name = connector?.name ?? id;
       const csrfToken = await getCsrfToken();

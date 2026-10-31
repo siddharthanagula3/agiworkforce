@@ -7,6 +7,14 @@ import {
 } from '../connector-release-lock';
 
 const DETAILS: Record<string, DirectoryDetail> = {
+  notion: {
+    kind: 'connector',
+    id: 'notion',
+    name: 'Notion',
+    summary: 'Documents',
+    connectableMode: 'connect',
+    related: [{ id: 'gmail', name: 'Gmail', description: 'Mail', connectableMode: 'connect' }],
+  },
   gmail: {
     kind: 'connector',
     id: 'gmail',
@@ -63,6 +71,13 @@ function adapter(): DirectoryAdapter {
           statusLabel: 'Connectors are unavailable right now',
           installNotice: 'Grants read access',
         },
+        {
+          id: 'notion',
+          name: 'Notion',
+          description: 'Documents',
+          connectableMode: 'connect',
+          installNotice: 'Grants read access',
+        },
       ],
     },
     plugins: { installable: true, entries: [] },
@@ -74,19 +89,23 @@ function adapter(): DirectoryAdapter {
 }
 
 describe('lockConnectorDirectory', () => {
-  it('locks the connectors section and every entry in it, without the stale unavailable copy', () => {
+  it('keeps selected entries available and locks unreleased entries without stale unavailable copy', () => {
     const locked = lockConnectorDirectory(adapter());
 
-    expect(locked.connectors?.locked).toEqual({
-      label: 'Coming soon',
-      message: 'Connecting Gmail, Google Drive, Calendar and other apps is coming soon.',
-    });
+    expect(locked.connectors?.locked).toBeUndefined();
     expect(locked.connectors?.entries).toEqual([
       { id: 'gmail', name: 'Gmail', description: 'Mail', connectableMode: 'coming-soon' },
+      {
+        id: 'notion',
+        name: 'Notion',
+        description: 'Documents',
+        connectableMode: 'connect',
+        installNotice: 'Grants read access',
+      },
     ]);
   });
 
-  it('refuses every connector action but leaves the other sections working', async () => {
+  it('refuses unreleased and custom actions while leaving the other sections working', async () => {
     const source = adapter();
     const locked = lockConnectorDirectory(source);
 
@@ -154,5 +173,52 @@ describe('lockConnectorDirectory', () => {
     await expect(locked.loadDetail?.('plugins', 'plain')).resolves.not.toHaveProperty(
       'connectorsLocked',
     );
+  });
+});
+
+describe('selective connector directory actions', () => {
+  it('delegates only exact released installs and retains the native connection path', async () => {
+    const source = adapter();
+    const locked = lockConnectorDirectory(source);
+    await locked.install?.('connectors', 'notion');
+    expect(source.install).toHaveBeenCalledExactlyOnceWith('connectors', 'notion');
+    await expect(locked.loadDetail?.('connectors', 'notion')).resolves.toMatchObject({
+      kind: 'connector',
+      id: 'notion',
+      connectableMode: 'connect',
+      related: [{ id: 'gmail', connectableMode: 'coming-soon' }],
+    });
+    locked.requestCredentials?.('connectors', 'notion');
+    locked.createEntry?.('connectors');
+    expect(source.requestCredentials).not.toHaveBeenCalled();
+    expect(source.createEntry).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'huggingface',
+    'stripe',
+    'io.notion/mcp',
+    'dir-notion',
+    'custom-notion',
+    'orgmcp-abc123def0',
+    'Notion',
+    ' notion',
+  ])('refuses %s instead of accepting an alias or unknown entry', async (connectorId) => {
+    const source = adapter();
+    await expect(lockConnectorDirectory(source).install?.('connectors', connectorId)).resolves.toBe(
+      'Connectors are coming soon.',
+    );
+    expect(source.install).not.toHaveBeenCalled();
+  });
+
+  it('preserves an existing capability lock and the selected entry state', () => {
+    const source = adapter();
+    source.connectors = {
+      ...source.connectors!,
+      locked: { label: 'Unavailable', message: 'Account availability could not be checked.' },
+    };
+    const locked = lockConnectorDirectory(source);
+    expect(locked.connectors?.locked).toEqual(source.connectors.locked);
+    expect(locked.connectors?.entries[1]).toBe(source.connectors.entries[1]);
   });
 });

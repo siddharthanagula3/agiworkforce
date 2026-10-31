@@ -64,6 +64,8 @@ vi.mock('@/lib/agents/agent-turn-config', async (importOriginal) => ({
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -677,6 +679,7 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: undefined,
       planTier: 'max',
+      allowSelective: true,
       organizationId: undefined,
       isConnectorDenied: expect.any(Function),
       isToolDenied: expect.any(Function),

@@ -3,6 +3,8 @@ import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import {
   AgentCreateRequestSchema,
+  ConnectConflictResponseSchema,
+  ConnectRequestSchema,
   ListConnectorsResponseSchema,
   MANAGED_CLOUD_AGENTS_PATH,
   MANAGED_CLOUD_CONNECTORS_PATH,
@@ -19,6 +21,8 @@ import {
 import { settleConsent } from './lib/settle-consent';
 import { signIn } from './qa-capability-harness';
 import { THEME_STORAGE_KEY } from '../shared/components/ThemeConstants';
+import { SELECTIVELY_RELEASED_CONNECTOR_IDS } from '@agiworkforce/types';
+import { CONNECTORS } from '../features/connectors/data/connectors';
 
 const EVIDENCE_DIR = mkdtempSync('/tmp/agi-qa-settings-agent-ux-');
 const CAPTURED_AGENT_MESSAGE = 'QA intercepted this request. No agent was created.';
@@ -350,6 +354,85 @@ for (const fixture of [
 }
 
 for (const appearance of ['light', 'dark'] as const) {
+  test(`selective connector controls and consent cancellation work in ${appearance}`, async ({
+    page,
+    baseURL,
+  }) => {
+    const traffic = await preparePage(page, baseURL, 'default', false, appearance);
+    let authorizationStarts = 0;
+    const connectRequests: string[] = [];
+    await page.route(`**${MANAGED_CLOUD_CONNECTORS_PATH}`, (route) => {
+      if (route.request().method() === 'GET')
+        return route.fulfill({
+          json: ListConnectorsResponseSchema.parse({
+            connectors: [],
+            available: [...SELECTIVELY_RELEASED_CONNECTOR_IDS],
+            setup: {},
+          }),
+        });
+      if (route.request().method() === 'POST') {
+        const { connectorId } = ConnectRequestSchema.parse(route.request().postDataJSON());
+        expect(SELECTIVELY_RELEASED_CONNECTOR_IDS).toContain(connectorId);
+        connectRequests.push(connectorId);
+        return route.fulfill({
+          status: 409,
+          json: ConnectConflictResponseSchema.parse({
+            connectorId,
+            error: 'oauth_required',
+            oauthStartPath: `/api/connectors/oauth/start?connectorId=${encodeURIComponent(connectorId)}`,
+          }),
+        });
+      }
+      return route.fallback();
+    });
+    await page.route('**/api/connectors/oauth/start**', (route) => {
+      authorizationStarts++;
+      return route.fulfill({ status: 409, json: { error: 'Authorization blocked in local QA.' } });
+    });
+    await page.goto('/connectors', { waitUntil: 'domcontentloaded' });
+    await settleConsent(page);
+    const search = page.getByPlaceholder('Search connectors', { exact: true });
+    await expect(search).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', appearance);
+
+    for (const width of [1440, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const id of SELECTIVELY_RELEASED_CONNECTOR_IDS) {
+        const connector = CONNECTORS.find((entry) => entry.id === id);
+        expect(connector).toBeDefined();
+        const name = connector!.name;
+        await search.fill(name);
+        const connect = page.getByRole('button', { name: `Connect ${name}`, exact: true });
+        await expect(connect).toBeEnabled();
+        await connect.focus();
+        await connect.press('Enter');
+        const consent = page.getByRole('alertdialog', { name: `Connect ${name}?`, exact: true });
+        await expect(consent).toBeVisible();
+        await expect(consent.getByRole('button', { name: 'Allow', exact: true })).toBeEnabled();
+        await consent.getByRole('button', { name: 'Deny', exact: true }).click();
+        await expect(consent).toBeHidden();
+        await expect(connect).toBeEnabled();
+      }
+      for (const id of ['gmail', 'slack', 'stripe', 'huggingface']) {
+        const name = CONNECTORS.find((entry) => entry.id === id)!.name;
+        await search.fill(name);
+        await expect(
+          page.getByRole('button', { name: `${name}, Coming soon`, exact: true }),
+        ).toBeDisabled();
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+    expect(authorizationStarts).toBe(0);
+    expect(connectRequests).toHaveLength(SELECTIVELY_RELEASED_CONNECTOR_IDS.length * 2);
+    expect(traffic.blockedMutations).toEqual([]);
+    expect(traffic.agentSubmissions).toEqual([]);
+    assertNoNewNotificationDelivery(traffic);
+  });
+}
+
+for (const appearance of ['light', 'dark'] as const) {
   test(`schedule access guidance matches available controls in ${appearance}`, async ({
     page,
     baseURL,
@@ -411,7 +494,9 @@ for (const appearance of ['light', 'dark'] as const) {
       await expect(recent).toHaveAttribute('aria-checked', 'true');
       await recent.press('Space');
       await expect(recent).toHaveAttribute('aria-checked', 'false');
-      await expect(dialog.getByText('Connectors are coming soon.', { exact: true })).toBeVisible();
+      await expect(
+        dialog.getByText('Connectors for scheduled runs are coming soon.', { exact: true }),
+      ).toBeVisible();
       await dialog.screenshot({
         path: path.join(EVIDENCE_DIR, `schedule-guidance-${appearance}-${width}-sources.png`),
       });

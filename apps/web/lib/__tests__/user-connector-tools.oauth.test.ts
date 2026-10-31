@@ -1,10 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SELECTIVELY_RELEASED_CONNECTOR_IDS } from '@agiworkforce/types';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 import { CONNECTOR_CAPABILITIES } from '@/lib/connectors/catalog';
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => true,
-}));
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) => connectorRelease.released || original.connectorReleased(id),
+    hasReleasedConnectors: () => connectorRelease.released || original.hasReleasedConnectors(),
+  };
+});
 
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
@@ -663,3 +670,65 @@ describe('a token refresh that failed for a moment, outside the chat catalog', (
     await expect(withUserConnectorMcpHandle('user-1', 'linear', vi.fn())).resolves.toBeNull();
   });
 });
+
+describe('selective OAuth connector discovery', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('discovers the canonical released IDs while withholding all other grants before refresh', async () => {
+    const blocked = ['gmail', 'huggingface', 'stripe', 'io.notion/mcp'];
+    const ids = [...SELECTIVELY_RELEASED_CONNECTOR_IDS, ...blocked];
+    mockConfiguredIds.mockReturnValue(new Set(ids));
+    mockGrantSummaries.mockResolvedValue(ids.map((connectorId) => ({ connectorId })));
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'test-access',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+    });
+    mockBuildMcpToolCatalog.mockImplementation(async (servers: Record<string, unknown>) => {
+      const id = Object.keys(servers)[0]!;
+      return catalogWith(id, `${id}_read_records`);
+    });
+
+    const tools = await loadUserConnectorToolDefs('user-selective-all', {
+      planTier: 'pro',
+      allowSelective: true,
+    });
+
+    expect(tools.map((tool) => tool.serverId).sort()).toEqual(
+      [...SELECTIVELY_RELEASED_CONNECTOR_IDS].sort(),
+    );
+    expect(mockResolveAccessToken.mock.calls.map((call) => call[1]).sort()).toEqual(
+      [...SELECTIVELY_RELEASED_CONNECTOR_IDS].sort(),
+    );
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(
+      SELECTIVELY_RELEASED_CONNECTOR_IDS.length,
+    );
+  });
+
+  it('keeps a per-chat connector denial ahead of token refresh and discovery', async () => {
+    mockGrantSummaries.mockResolvedValue([{ connectorId: 'linear' }]);
+
+    await expect(
+      loadUserConnectorToolDefs('user-selective-denied', {
+        planTier: 'pro',
+        allowSelective: true,
+        isConnectorDenied: (id) => id === 'linear',
+      }),
+    ).resolves.toEqual([]);
+
+    expect(mockResolveAccessToken).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+});
+
+type DiscoveryPolicyGateModule = typeof import('@/lib/services/connector-policy-gate');
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<DiscoveryPolicyGateModule>()),
+  evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
+}));

@@ -80,6 +80,7 @@ export async function readResearchConnectorSources(input: {
   userId: string;
   organizationId: string | null;
   planTier: string | null;
+  allowSelective?: boolean;
   connectorIds: readonly string[];
   queries: readonly string[];
   isToolDenied: (connectorId: string, toolName: string) => boolean;
@@ -94,6 +95,7 @@ export async function readResearchConnectorSources(input: {
   const catalog = await loadUserConnectorToolCatalog(input.userId, {
     customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
     planTier: input.planTier,
+    allowSelective: input.allowSelective === true,
     organizationId: input.organizationId,
     isToolDenied: input.isToolDenied,
     isConnectorDenied: (connectorId) => !picked.has(connectorId),

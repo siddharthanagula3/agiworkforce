@@ -177,7 +177,7 @@ was applied.
 
 The owner authorized a direct Vercel release once the exact commit's JavaScript
 lint, typecheck, test and build job passed, without waiting for Rust or Priority
-Level 1. Production now serves `e09cac0f627372df0a1e931bd3074d20dfa8834c`.
+Level 1. Production now serves `28260a8d5e6f37da432d21e6fe8edc37eb845e26`.
 The production and staging workflows were restored to their original disabled
 states. The migration ledger has 391 applied migrations, none pending and no
 checksum drift. Billing, credit, role and customer-row mutations are excluded.
@@ -199,7 +199,13 @@ their live service settings were changed to disable automatic startup, enable
 automatic stopping, keep zero minimum running machines and use restart policy
 `no`. Fresh Fly inventories confirmed both remain stopped; neither app has a
 persistent volume. Preserved machine root filesystems can still incur storage
-charges. No app, machine, image, secret or customer data was deleted.
+charges. Apps, machines, images and secrets were retained; no customer database
+rows were changed.
+
+A management-only observation at 18:29 UTC reported production compute `idle`,
+with last activity at 18:10 UTC and no started-at timestamp. No SQL probe was
+used for that observation. This confirms an idle state after the shutdown;
+monthly Free-allowance fit still needs representative consumption measurements.
 
 Do not redeploy or restart either Fly app without a new owner request. The
 repository's serving-topology configuration is not evidence that these paused

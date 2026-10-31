@@ -3,7 +3,9 @@ import 'server-only';
 import {
   CONNECTORS_COMING_SOON_MESSAGE,
   canUseBillingPlanCapability,
+  connectorReleased,
   connectorsReleased,
+  hasReleasedConnectors,
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 
@@ -46,9 +48,12 @@ export async function connectorsAllowedForTurn(
     organizationId?: string | null;
     subscriptionTier?: string | undefined;
     chatSurface: string;
+    allowSelective?: boolean;
   },
 ): Promise<boolean> {
-  if (!connectorsReleased()) return false;
+  if (!(turn.allowSelective === true ? hasReleasedConnectors() : connectorsReleased())) {
+    return false;
+  }
   if (!planIncludesConnectors(turn.subscriptionTier)) return false;
   return connectorSwitchOpen(
     buildFlagSubject(request, {
@@ -66,8 +71,9 @@ export async function connectorsAllowedWithoutRequest(input: {
   organizationId: string | null | undefined;
   planTier: string | null | undefined;
   surface?: string | null;
+  connectorId?: string | null;
 }): Promise<boolean> {
-  if (!connectorsReleased()) return false;
+  if (!connectorsReleased() && !connectorReleased(input.connectorId)) return false;
   if (!planIncludesConnectors(input.planTier)) return false;
   return connectorSwitchOpen({
     userId: input.userId,

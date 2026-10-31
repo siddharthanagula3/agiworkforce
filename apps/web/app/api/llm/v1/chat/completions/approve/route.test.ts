@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 type ScanModule0 = typeof import('@/lib/services/cloud-agent-run-service');
@@ -407,6 +409,8 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
     expect(toolMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: 25,
       planTier: 'pro',
+      organizationId: undefined,
+      allowSelective: true,
       isToolDenied: expect.any(Function),
       isConnectorDenied: expect.any(Function),
       googleUserDataRouted: false,

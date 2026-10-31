@@ -22,11 +22,18 @@ import {
 
 type TypesModule = typeof import('@agiworkforce/types');
 
-const connectorRelease = vi.hoisted(() => ({ released: true }));
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => connectorRelease.released,
-}));
+const connectorRelease = vi.hoisted(() => ({ released: true, selective: false }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) =>
+      connectorRelease.released || (connectorRelease.selective && original.connectorReleased(id)),
+    hasReleasedConnectors: () =>
+      connectorRelease.released || (connectorRelease.selective && original.hasReleasedConnectors()),
+  };
+});
 
 const BASE_INPUT = {
   userId: 'user_1',
@@ -517,5 +524,30 @@ describe('the exclusions /api/me and the chat prompt both hand the handshake', (
     ]);
     expect(userDisabledCapabilities({ allowed: false, reason: 'unavailable' })).toEqual([]);
     expect(userDisabledCapabilities({ allowed: true })).toEqual([]);
+  });
+});
+
+describe('selective connector capability discovery', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+    connectorRelease.selective = true;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+    connectorRelease.selective = false;
+  });
+  it('advertises subset discovery while preserving tier and operator decisions', () => {
+    const paid = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    const free = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free' });
+    const closed = buildMeCapabilityHandshake({
+      ...BASE_INPUT,
+      tier: 'pro',
+      closedCapabilities: ['canUseConnectors'],
+    });
+    expect(resolveCapabilityDecision(paid, 'canUseConnectors').allowed).toBe(true);
+    expect(resolveCapabilityDecision(free, 'canUseConnectors').allowed).toBe(false);
+    expect(free.deniedBy.canUseConnectors).toContain('tier');
+    expect(resolveCapabilityDecision(closed, 'canUseConnectors').allowed).toBe(false);
+    expect(closed.deniedBy.canUseConnectors).toContain('settings');
   });
 });

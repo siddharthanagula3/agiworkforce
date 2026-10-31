@@ -4065,8 +4065,8 @@ async function processAdmittedRequest(
 
   if (chatRequest.mcp_context) {
     try {
+      const scoped = await scopedDbPromise;
       if (chatRequest.conversation_id) {
-        const scoped = await scopedDbPromise;
         if (
           await connectorIdsReadGoogleUserData(
             scoped.db,
@@ -4078,7 +4078,11 @@ async function processAdmittedRequest(
           await markConversationGoogleUserData(scoped.db, userId, chatRequest.conversation_id);
         }
       }
-      const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
+      const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context, {
+        organizationId: scoped.organizationId,
+        request,
+        allowSelective: !ownership.agentTurn,
+      });
       if (context) {
         chatRequest.messages.unshift({ role: 'system', content: context });
         dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'untrusted_context');
@@ -6227,6 +6231,7 @@ async function processAdmittedRequest(
                 organizationId,
                 subscriptionTier: subscription.plan_tier,
                 chatSurface,
+                allowSelective: !ownership.agentTurn,
               }),
             ),
           ])

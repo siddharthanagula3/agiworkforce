@@ -189,6 +189,12 @@ including the final 320px selection/footer capture. Source checks also passed
 
 ## October 31 follow-up checks
 
+The JavaScript-green UI checkpoint `28260a8d5e` is deployed to the production
+domain. Protected canary and public serving checks confirmed its full commit,
+healthy status, unauthenticated API refusals and the production-only boundary
+around development probes. The production migration ledger remains at 391 with
+no pending migration or checksum drift. Fly stays owner-disabled.
+
 The supplied Three Site Comparison reuses October 30 AGI failures and records
 new competitor observations separately; it is not a fresh reproduction of the
 AGI defects. Current local evidence covers items 1–16 using actual rendered
@@ -219,6 +225,38 @@ clipboard completion; both races now have cleanup and regression coverage.
 The focused packet passed 137 tests, and four real-browser cases covered both
 themes, both pointer modes and eight viewports. The full current GitHub run
 remains required before claiming that workflow green.
+
+## Selective connector follow-up
+
+The owner authorized enabling and testing low-setup connectors, excluding Google
+and operator-heavy setup. The canonical release owner now admits selected exact
+IDs in ordinary account chat and Settings, while generic/full-launch contexts
+stay closed. The authenticated local setup DTO confirms the selected self-service
+candidates are configured; the checked preregistered candidates and GitHub App
+still require setup in that context. No credential values were collected.
+
+Opening the dormant paths exposed policy-ordering defects. Callback completion
+did not recheck current account/workspace policy before exchange. Capability and
+MCP-handle helpers refreshed credentials before their policy check. An unreadable
+execution gate logged and continued. The existing evaluator now runs before
+those external operations, the execution path fails closed, and trusted MCP URLs
+reach the existing custom-host decision at start/completion. Classification and
+tool approvals were preserved rather than replaced.
+
+The final complete web packet passed 794 tests in 42 files, with two unchanged
+registry-dependent adapter skips. Separate auth/host, release-contract and native
+skill packets passed 85, 32 and 8 tests. Web/shared/mobile typing, scoped lint and
+static ownership/security guards passed. The aggregate trust check is blocked
+locally by the mobile release plist parser and a retained Tauri native-messaging
+resource; direct mobile trust tests passed separately. These are check
+prerequisites, not demonstrated product failures.
+
+The actual localhost UI exposes selected Connect actions and keeps excluded
+services disabled. Notion reaches the real app consent dialog. Automatic approval
+review rejected clicking Allow without recipient-specific approval; that approval
+has been requested. No live provider grant or read has completed, so this is not
+an end-to-end connector pass. Schedule copy explicitly says its own connector
+support remains coming soon.
 
 ## Diagram and CI acceptance refinement
 

@@ -47,6 +47,8 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   return {
     ...actual,
     connectorsReleased: () => connectorRelease.released,
+    connectorReleased: () => connectorRelease.released,
+    hasReleasedConnectors: () => connectorRelease.released,
     getVideoQualityOptionsForModel: (modelId?: string, aspectRatio?: string) =>
       videoQualityCatalog.override?.(modelId, aspectRatio) ??
       actual.getVideoQualityOptionsForModel(modelId, aspectRatio),

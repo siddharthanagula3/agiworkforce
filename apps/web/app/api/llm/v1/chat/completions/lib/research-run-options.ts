@@ -135,6 +135,7 @@ export function buildResearchRunOptions(context: ResearchRunContext): ResearchLo
               userId,
               organizationId: processed.organizationId ?? null,
               planTier: processed.subscriptionTier ?? null,
+              allowSelective: !processed.agentTurn,
               connectorIds,
               queries,
               isToolDenied: context.connectorPermissions.isConnectorToolDenied,

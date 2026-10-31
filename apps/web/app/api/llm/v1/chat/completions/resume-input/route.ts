@@ -302,7 +302,10 @@ async function handleToolInputResume(
         );
         const connectorsAllowed =
           processed.chatRequest.connector_tools_enabled !== false &&
-          (await connectorsAllowedForTurn(request, userId, processed));
+          (await connectorsAllowedForTurn(request, userId, {
+            ...processed,
+            allowSelective: !processed.agentTurn,
+          }));
         const [operatorTools, connectorTools] = await Promise.all([
           loadMcpToolDefs(),
           connectorsAllowed
@@ -310,6 +313,8 @@ async function handleToolInputResume(
                 customConnectorLimit:
                   getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
                 planTier: processed.subscriptionTier,
+                organizationId: processed.organizationId,
+                allowSelective: !processed.agentTurn,
                 isToolDenied: permissions.isConnectorToolDenied,
                 isConnectorDenied: permissions.isConnectorDenied,
                 googleUserDataRouted: processed.googleUserData === true,

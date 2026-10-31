@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 type Row = Record<string, unknown>;

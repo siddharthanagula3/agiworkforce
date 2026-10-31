@@ -593,7 +593,10 @@ async function dispatchChatCompletions(
       const requestedResearchConnectorIds = researchConnectors.connectorIds;
       const researchConnectorIds =
         requestedResearchConnectorIds.length > 0 &&
-        (await connectorsAllowedForTurn(request, userId, processed))
+        (await connectorsAllowedForTurn(request, userId, {
+          ...processed,
+          allowSelective: !processed.agentTurn,
+        }))
           ? requestedResearchConnectorIds
           : [];
       const researchFileSources = processed.researchSources?.files
@@ -763,7 +766,11 @@ async function dispatchChatCompletions(
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
     const userConnectorToolsEnabled =
       processed.chatRequest.connector_tools_enabled !== false &&
-      (processed.connectorsAllowed ?? (await connectorsAllowedForTurn(request, userId, processed)));
+      (processed.connectorsAllowed ??
+        (await connectorsAllowedForTurn(request, userId, {
+          ...processed,
+          allowSelective: !processed.agentTurn,
+        })));
     const operatorTools = modelSupportsTools
       ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () => loadMcpToolDefs())
       : [];
@@ -814,6 +821,7 @@ async function dispatchChatCompletions(
               customConnectorLimit:
                 getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
               planTier: processed.subscriptionTier,
+              allowSelective: !processed.agentTurn,
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
               isConnectorDenied: (connectorId) =>

@@ -4,6 +4,8 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 type ScanModule0 = typeof import('@/lib/server/terms');

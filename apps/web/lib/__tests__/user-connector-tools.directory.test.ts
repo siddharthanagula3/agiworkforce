@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
@@ -339,3 +341,9 @@ describe('directory records in the connector tool catalog', () => {
     ).toBeNull();
   });
 });
+
+type DiscoveryPolicyGateModule = typeof import('@/lib/services/connector-policy-gate');
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<DiscoveryPolicyGateModule>()),
+  evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
+}));

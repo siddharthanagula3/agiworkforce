@@ -62,7 +62,9 @@ import { cn } from '@shared/lib/utils';
 import {
   CONNECTORS_COMING_SOON_LABEL,
   CONNECTORS_COMING_SOON_MESSAGE,
+  connectorReleased,
   connectorsReleased,
+  hasReleasedConnectors,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
@@ -1145,6 +1147,9 @@ function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?
 }
 
 function ChatMenu(props: MenuProps) {
+  const connectors = props.connectors.filter((connector) =>
+    connectorReleased(connectorToggleId(connector)),
+  );
   const { t } = useTranslation('v3');
   const enabledConnector = (connector: ComposerPlusMenuConnector) =>
     !props.disabledConnectorIds.includes(connectorToggleId(connector));
@@ -1291,7 +1296,7 @@ function ChatMenu(props: MenuProps) {
         </div>
       )}
 
-      {connectorsReleased() ? (
+      {hasReleasedConnectors() ? (
         <button
           type="button"
           onClick={props.onToggleConnectorsSubmenu}
@@ -1321,14 +1326,14 @@ function ChatMenu(props: MenuProps) {
           <span className="shrink-0 text-caption">{CONNECTORS_COMING_SOON_LABEL}</span>
         </button>
       )}
-      {connectorsReleased() && props.connectorsSubmenuOpen && (
+      {hasReleasedConnectors() && props.connectorsSubmenuOpen && (
         <div role="group" aria-label={ROW_LABEL_CONNECTORS} className="space-y-0.5 pb-1">
-          {props.connectors.length === 0 ? (
+          {connectors.length === 0 ? (
             <p className="px-3 py-2 ps-8 text-caption text-muted-foreground">
               {CONNECTORS_EMPTY_COPY}
             </p>
           ) : (
-            props.connectors.map((connector) => (
+            connectors.map((connector) => (
               <ConnectorToggleRow
                 key={connector.id}
                 indented
@@ -1352,14 +1357,16 @@ function ChatMenu(props: MenuProps) {
           >
             {ROW_LABEL_BROWSE_CONNECTORS}
           </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => openCustomConnectorForm(props)}
-            className={SUBMENU_MANAGE_CLASS}
-          >
-            {ROW_LABEL_ADD_CUSTOM_CONNECTOR}
-          </button>
+          {connectorsReleased() ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openCustomConnectorForm(props)}
+              className={SUBMENU_MANAGE_CLASS}
+            >
+              {ROW_LABEL_ADD_CUSTOM_CONNECTOR}
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -1534,7 +1541,12 @@ function WorkPalette(props: MenuProps) {
   );
 
   const visibleConnectors = useMemo(
-    () => props.connectors.filter((connector) => matches(connector.label, connector.description)),
+    () =>
+      props.connectors.filter(
+        (connector) =>
+          connectorReleased(connectorToggleId(connector)) &&
+          matches(connector.label, connector.description),
+      ),
     [props.connectors, matches],
   );
 
@@ -1665,7 +1677,7 @@ function WorkPalette(props: MenuProps) {
 
       <div className={DIVIDER_CLASS} />
       <p className={SECTION_HEADING_CLASS}>{t('agiWork.compose.palette.connectorsHeading')}</p>
-      {!connectorsReleased() ? (
+      {!hasReleasedConnectors() ? (
         <ConnectorsComingSoonMenuItem compact label={ROW_LABEL_CONNECTORS} />
       ) : props.connectorsLoading ? (
         <div className="flex items-center gap-3 px-3 py-2">
@@ -1693,7 +1705,7 @@ function WorkPalette(props: MenuProps) {
           />
         ))
       )}
-      {connectorsReleased() ? (
+      {hasReleasedConnectors() ? (
         <button
           type="button"
           role="menuitem"

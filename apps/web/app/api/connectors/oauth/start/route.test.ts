@@ -5,6 +5,8 @@ const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
+  connectorReleased: () => connectorRelease.released,
+  hasReleasedConnectors: () => connectorRelease.released,
 }));
 
 const mocks = vi.hoisted(() => ({

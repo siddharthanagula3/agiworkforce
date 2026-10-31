@@ -102,7 +102,7 @@ describe('ScheduleForm access guidance', () => {
   it('does not promise connector selection while connectors are unavailable', () => {
     renderForm({});
 
-    expect(screen.getByText(/Connectors are coming soon/i)).toBeInTheDocument();
+    expect(screen.getByText('Connectors for scheduled runs are coming soon.')).toBeInTheDocument();
     expect(screen.queryByText(/which connectors it can use/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Connect one' })).not.toBeInTheDocument();
   });

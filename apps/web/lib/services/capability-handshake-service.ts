@@ -19,9 +19,9 @@
  *     execution specifically, the deployment's E2B loop is reachable (the
  *     SAME `e2bCutoverEnabled()` value `route.ts` already computes for
  *     `feature_flags.code_execution`, passed in, not re-resolved, so the
- *     two can never disagree). Connectors are withheld here, before the tier
- *     layer, while `CONNECTOR_RELEASE_STATE` says they have not launched, so
- *     every plan reads `feature_coming_soon` rather than an upgrade.
+ *     two can never disagree). Connector discovery is available when the
+ *     release policy offers a subset; authorization and execution still
+ *     require its exact-ID decision.
  *   - `tier`, `getTierPolicy(tier)` from `@agiworkforce/types`, the SAME
  *     entitlement source `route.ts` already calls via
  *     `canAccessManualModelSelection`. No new entitlement source invented.
@@ -50,7 +50,7 @@ import {
   buildEffectiveCapabilityDocument,
   canUseBillingPlanCapability,
   computeCapabilityDocumentVersion,
-  connectorsReleased,
+  hasReleasedConnectors,
   getTierPolicy,
   isCapabilityDocumentStale,
   modelsCatalog,
@@ -99,7 +99,7 @@ function buildModelLayerGrant(cloudExecutionDeploymentEnabled: boolean): Capabil
   if (!catalogHasModelWithCapability('agentic')) granted.delete('canUseAgiWork');
   if (!catalogHasModelWithCapability('videoGen')) granted.delete('canUseVideoGeneration');
   const sourceId = `models.json@${modelsCatalog.version}`;
-  if (connectorsReleased()) return { layer: 'model', sourceId, granted };
+  if (hasReleasedConnectors()) return { layer: 'model', sourceId, granted };
   granted.delete('canUseConnectors');
   return {
     layer: 'model',

@@ -291,7 +291,7 @@ describe('POST /api/connectors/[connectorId]/mcp', () => {
       'user-1',
       CONNECTOR,
       expect.any(Function),
-      { organizationId: 'org-1' },
+      { organizationId: 'org-1', request: expect.any(NextRequest), allowSelective: true },
     );
     expect(mocks.callTool).toHaveBeenCalledWith(
       'create_page',
