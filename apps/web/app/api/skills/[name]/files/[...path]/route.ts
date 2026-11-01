@@ -14,6 +14,7 @@ import {
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { hashSkillContent } from '@agiworkforce/skills';
+import type { ManagedSkillFilePreviewResponse } from '@agiworkforce/cloud-contracts';
 import { requireSkillName } from '../../../skill-name-param';
 
 export const runtime = 'nodejs';
@@ -119,7 +120,7 @@ async function handleReadFile(
       size: Buffer.byteLength(result.content, 'utf8'),
       content: result.content,
     },
-  });
+  } satisfies ManagedSkillFilePreviewResponse);
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleReadFile));

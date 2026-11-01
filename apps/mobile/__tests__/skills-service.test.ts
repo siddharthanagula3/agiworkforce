@@ -1,7 +1,9 @@
-import { ApiHttpError, api } from '@/services/api';
+import { Buffer } from 'node:buffer';
+import { ApiHttpError, api, apiFetch } from '@/services/api';
 import {
   fetchInstalledSkillNames,
   fetchManagedSkills,
+  fetchSkillFileText,
   fetchSkillCatalog,
   installSkill,
   isPluginOwnedSkill,
@@ -26,15 +28,79 @@ jest.mock('@/services/api', () => {
       post: jest.fn(),
       delete: jest.fn(),
     },
+    apiFetch: jest.fn(),
     ApiHttpError,
   };
 });
 
 const apiMock = api as jest.Mocked<typeof api>;
+const apiFetchMock = apiFetch as jest.MockedFunction<typeof apiFetch>;
 
 describe('mobile Skills service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each(['line one\nline two\n', '', 'Résumé: λ = 2\n{"literal": true}'])(
+    'returns exact companion text from the preview envelope: %j',
+    async (content) => {
+      const path = 'references/release notes.md';
+      const payload = { file: { path, size: Buffer.byteLength(content, 'utf8'), content } };
+      apiFetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => payload,
+        text: async () => JSON.stringify(payload),
+      } as Response);
+
+      await expect(fetchSkillFileText('fixture skill', path)).resolves.toBe(content);
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/skills/fixture%20skill/files/references/release%20notes.md',
+        { method: 'GET' },
+      );
+    },
+  );
+
+  it.each([
+    null,
+    {},
+    { file: { path: 'references/guide.md', size: 0 } },
+    { file: { path: 'references/guide.md', size: -1, content: 'unexpected' } },
+    { file: { path: 'references/guide.md', size: 1, content: null } },
+    { file: { path: 'references/other.md', size: 1, content: 'unexpected' } },
+  ])('refuses a malformed or mismatched companion preview: %j', async (payload) => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => payload,
+      text: async () => JSON.stringify(payload),
+    } as Response);
+
+    await expect(fetchSkillFileText('fixture', 'references/guide.md')).rejects.toThrow(
+      'Skills returned an invalid response.',
+    );
+  });
+
+  it('preserves the status when a companion cannot be previewed', async () => {
+    apiFetchMock.mockResolvedValueOnce({ ok: false, status: 415 } as Response);
+
+    await expect(fetchSkillFileText('fixture', 'assets/sample.bin')).rejects.toMatchObject({
+      status: 415,
+    });
+  });
+
+  it('reports an invalid preview without exposing a malformed response body', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('server-response-body');
+      },
+    } as Response);
+
+    await expect(fetchSkillFileText('fixture', 'references/guide.md')).rejects.toThrow(
+      'Skills returned an invalid response.',
+    );
   });
 
   it('loads and validates the authenticated Managed Cloud catalog', async () => {

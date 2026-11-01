@@ -117,7 +117,7 @@ async fn fetch_skill(
             .collect::<Vec<_>>()
             .join("/");
         let (bytes, _) = client
-            .get_bytes_with_header(&format!("{base}/files/{path}"), None)
+            .get_bytes_with_header(&format!("{base}/files/{path}?download=1"), None)
             .await?;
         if bytes.len() as u64 <= MAX_SKILL_FILE_BYTES {
             files.push((entry.path.clone(), bytes));

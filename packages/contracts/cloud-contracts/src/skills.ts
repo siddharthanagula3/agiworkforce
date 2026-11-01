@@ -92,11 +92,20 @@ export const ManagedSkillsResponseSchema = z.object({
   skills: z.array(ManagedSkillSummarySchema),
 });
 
+export const ManagedSkillFilePreviewResponseSchema = z.object({
+  file: z.object({
+    path: z.string().min(1),
+    size: z.number().int().nonnegative(),
+    content: z.string(),
+  }),
+});
+
 export type ManagedSkillSource = z.infer<typeof ManagedSkillSourceSchema>;
 export type ManagedSkillLifecycle = z.infer<typeof ManagedSkillLifecycleSchema>;
 export type ManagedSkillOrigin = z.infer<typeof ManagedSkillOriginSchema>;
 export type ManagedSkillSummary = z.infer<typeof ManagedSkillSummarySchema>;
 export type ManagedSkillsResponse = z.infer<typeof ManagedSkillsResponseSchema>;
+export type ManagedSkillFilePreviewResponse = z.infer<typeof ManagedSkillFilePreviewResponseSchema>;
 
 export function parseManagedSkillsResponse(data: unknown): ManagedSkillsResponse {
   return ManagedSkillsResponseSchema.parse(data);

@@ -1,12 +1,32 @@
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 
 import {
   MANAGED_SKILL_TITLE_MAX_CHARS,
   ManagedSkillsResponseSchema,
+  ManagedSkillFilePreviewResponseSchema,
   parseManagedSkillsResponse,
 } from '../skills';
 
 describe('Managed Skills directory contract', () => {
+  it.each(['', 'first\nsecond\n', 'Résumé: λ = 2\n{"literal": true}'])(
+    'preserves exact companion content in a preview response: %j',
+    (content) => {
+      const payload = {
+        file: { path: 'references/guide.md', size: Buffer.byteLength(content, 'utf8'), content },
+      };
+      expect(ManagedSkillFilePreviewResponseSchema.parse(payload)).toEqual(payload);
+    },
+  );
+
+  it.each([
+    { file: { path: 'references/guide.md', size: 0 } },
+    { file: { path: '', size: 0, content: '' } },
+    { file: { path: 'references/guide.md', size: -1, content: '' } },
+  ])('refuses an incomplete companion preview: %j', (payload) => {
+    expect(ManagedSkillFilePreviewResponseSchema.safeParse(payload).success).toBe(false);
+  });
+
   it('accepts an optional friendly title while retaining canonical IDs and old summaries', () => {
     const base = {
       name: 'triage-nda',

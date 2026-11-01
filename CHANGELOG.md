@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Mobile skill previews show the companion text itself, and account skill sync
+  downloads original file bytes, including binary resources.
 - Managed chats keep the model's tool list aligned with the tools offered on
   each step, including discovered connectors and approval continuations.
 - Web connector tools remain available after approval and interrupted turns;

@@ -663,4 +663,93 @@ mod tests {
         }
         .is_boundary());
     }
+
+    #[tokio::test]
+    async fn account_skill_sync_preserves_companion_bytes_instead_of_preview_envelopes() {
+        use std::collections::HashMap;
+
+        use axum::extract::{Path, Query};
+        use axum::http::{header, StatusCode};
+        use axum::response::IntoResponse;
+        use axum::routing::get;
+        use axum::{Json, Router};
+        use serde_json::json;
+
+        async fn companion(
+            Path(path): Path<String>,
+            Query(query): Query<HashMap<String, String>>,
+        ) -> axum::response::Response {
+            let (bytes, binary) = match path.as_str() {
+                "references/a guide.md" => (b"first\nsecond\n".to_vec(), false),
+                "assets/sample.bin" => (vec![0, 255, 1, 13, 10], true),
+                _ => return StatusCode::NOT_FOUND.into_response(),
+            };
+            if query.get("download").map(String::as_str) == Some("1") {
+                return ([(header::CONTENT_TYPE, "application/octet-stream")], bytes)
+                    .into_response();
+            }
+            if binary {
+                return StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response();
+            }
+            Json(json!({
+                "file": {
+                    "path": path,
+                    "size": bytes.len(),
+                    "content": String::from_utf8(bytes).unwrap()
+                }
+            }))
+            .into_response()
+        }
+
+        let router = Router::new()
+            .route(
+                "/api/skills",
+                get(|| async {
+                    Json(json!({
+                        "skills": [{
+                            "name": "fixture-sync",
+                            "description": "Read the bundled references.",
+                            "lifecycle": "included"
+                        }]
+                    }))
+                }),
+            )
+            .route(
+                "/api/skills/fixture-sync",
+                get(|| async { Json(json!({ "body": "Read the companion resources." })) }),
+            )
+            .route(
+                "/api/skills/fixture-sync/files",
+                get(|| async {
+                    Json(json!({
+                        "files": [
+                            { "path": "references/a guide.md", "size": 13 },
+                            { "path": "assets/sample.bin", "size": 5 }
+                        ]
+                    }))
+                }),
+            )
+            .route("/api/skills/fixture-sync/files/{*path}", get(companion));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = CloudClient {
+            base: format!("http://{}", listener.local_addr().unwrap()),
+            jwt: "fixture-token".to_string(),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let result = crate::cloud::skills::fetch_account_skills(&client).await;
+        server.abort();
+        let synced = result.expect("companion files must use the raw download contract");
+        let dir = tempfile::tempdir().unwrap();
+        crate::cloud::skills::write_account_skills(dir.path(), &synced).unwrap();
+
+        assert_eq!(
+            (
+                std::fs::read(dir.path().join("fixture-sync/references/a guide.md")).unwrap(),
+                std::fs::read(dir.path().join("fixture-sync/assets/sample.bin")).unwrap(),
+            ),
+            (b"first\nsecond\n".to_vec(), vec![0, 255, 1, 13, 10])
+        );
+    }
 }
