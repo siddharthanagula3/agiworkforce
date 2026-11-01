@@ -140,7 +140,6 @@
     "skills/[name]",
     "skills/[name]/download",
     "skills/[name]/files",
-    "skills/[name]/files/[...path]",
     "skills/installs",
     "skills/installs/[name]",
     "study/sessions",
