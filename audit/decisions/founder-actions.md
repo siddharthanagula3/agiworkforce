@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-10-23
+Last updated: 2026-11-01
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -943,29 +943,6 @@ after the probe fix deploys, or the failing step is written down here and the
 checkout result is recorded.
 **What remains after founder action** The probe fix that stops a retired Price failing the check ships as code; audit row FR09 in `audit/prior-audits/public-website-audit-2026-10-03.md` is narrowed, not deleted, until this is recorded.
 **Impact** FEATURE-BLOCKING (upgrades, if checkout is failing)
-**Status** FOUNDER ACTION REQUIRED
-
-## [Security] Three audit exceptions expire on 2026-10-31
-
-**Why founder assistance is required**
-`.github/security-gate-policy.json` waives three dependency advisories until
-2026-10-31: `node-forge-pkcs1-digest-algorithm` (GHSA-86w9-cpqp-85rv),
-`http-cache-semantics-stale-policy-patch` (GHSA-ch52-4w7c-c8xp) and
-`braces-recursive-depth-patch` (GHSA-vfj7-8cjw-p6xm). After that date
-`scripts/check-security-gates.mjs` fails every CI run, which blocks every merge,
-including the fixes for the public website audit. Accepting a known advisory for
-another period is a risk call the owner makes. `NODE-FORGE-PKCS1-DIGEST-ALGORITHM-01` in `audit/registers/known-flaws.md` already carries the node-forge one.
-**Exact action** For each of the three, check whether a fixed upstream release
-now exists. If it does, remove the patch, the `pnpm.auditConfig` ignore and the
-policy exception together (`docs/security/dependency-patches.md`). If it does
-not, approve a new expiry with a written reason, in its own small commit before
-2026-10-31 and independent of the website fixes.
-**Where** `.github/security-gate-policy.json`, `package.json`, `docs/security/dependency-patches.md`.
-**Needed input** The decision per advisory and about thirty minutes.
-**How to verify completion** `node scripts/check-security-gates.mjs` passes with
-the new dates, or with the exceptions removed.
-**What remains after founder action** Nothing; the guard and the regression tests exist.
-**Impact** RELEASE-BLOCKING after 2026-10-31
 **Status** FOUNDER ACTION REQUIRED
 
 ## [Production env] Email sender and purge switch (L10-D12)

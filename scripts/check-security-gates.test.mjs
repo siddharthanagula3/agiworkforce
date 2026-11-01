@@ -603,6 +603,9 @@ function runPatchFileScenario(t, mutate) {
   const root = path.join(temporary, 'repository');
   const scenario = patchedScenario();
   scenario.policy.workflow = '.github/ci.yml';
+  scenario.policy.exclusions[0].expires = new Date(Date.now() + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
   const patchPath = scenario.policy.exclusions[0].patch.path;
   for (const [relativePath, contents] of [
     ['.github/security-gate-policy.json', JSON.stringify(scenario.policy)],
@@ -631,6 +634,16 @@ function runPatchFileScenario(t, mutate) {
 test('the main wrapper reads a regular in-root patch into the pure guard', (t) => {
   const result = runPatchFileScenario(t);
   assert.equal(result.status, 0, result.stderr);
+});
+
+test('the main wrapper rejects a fixture expired against the real UTC date', (t) => {
+  const result = runPatchFileScenario(t, ({ scenario }) => {
+    scenario.policy.exclusions[0].expires = new Date(Date.now() - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /exclusion patched-advisory expired on/u);
 });
 
 test('the main wrapper rejects missing patch files', (t) => {

@@ -107,13 +107,6 @@
       "@wdio/mocha-framework>mocha": "11.8.0",
       "test-exclude@<8": "8.0.0"
     },
-    "auditConfig": {
-      "ignoreGhsas": [
-        "GHSA-86w9-cpqp-85rv",
-        "GHSA-ch52-4w7c-c8xp",
-        "GHSA-vfj7-8cjw-p6xm"
-      ]
-    },
     "patchedDependencies": {
       "next-themes@0.4.6": "patches/next-themes@0.4.6.patch",
       "detox@20.51.4": "patches/detox@20.51.4.patch",
