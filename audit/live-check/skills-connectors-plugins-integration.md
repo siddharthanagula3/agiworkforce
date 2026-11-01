@@ -20,7 +20,7 @@ The existing authentication, authorization, routing, entitlements, usage and tru
 
 ## Current baseline
 
-`50c73df51db8fae99cb858b08af368f57ba3961c` remains the verified production release. Main now contains the inventory repair through `43c6bccaa3903e5b504c1f514ab435f584af53ad`, with 263 focused tests, web typechecking and the full pre-push chain passed. Its exact JS job is still running; no new production deployment has been created. Automatic approval review rejected an early staging attempt until that job passes. The prior release’s exact JS job and pre-push chain passed. Earlier verified coverage is retained in [the chat/integration tracker](chat-rendering-2026-10-30.md) and its release evidence; it is not treated as proof of the broader objective.
+`50c73df51db8fae99cb858b08af368f57ba3961c` remains the verified production release. The inventory and companion-resource repair milestone `3db39a943a7302cb2a3fef7f6ecdcf380ed55457` is on main; both normal pre-push chains passed. The earlier inventory commit’s exact JS job passed, while the resource milestone’s exact JS job is still running. No new production deployment has been created. Automatic approval review rejected staging before the JS prerequisite was met. The prior release’s exact JS job and pre-push chain passed. Earlier verified coverage is retained in [the chat/integration tracker](chat-rendering-2026-10-30.md) and its release evidence; it is not treated as proof of the broader objective.
 
 Current source separates plugin installation, skill resolution and connector authorization. Relevant owners include:
 
@@ -90,6 +90,16 @@ Mobile consumed the preview endpoint’s entire JSON response as text. CLI accou
 The Mobile regression first failed nine exact-content/invalid-envelope cases with the original service. The CLI regression first failed against a loopback HTTP server that implements the real preview/download distinction, then passed after requesting raw bytes. It writes and reads both a spaced-path text file and a binary resource containing non-UTF-8 bytes through the actual sync functions. The cloud suite passed 127 tests; one pre-existing test remains ignored because it touches the real OS credential store. Mobile service/detail tests passed 35 cases, and preview-contract fixtures passed 12 cases. Web producer tests, typechecking and final hygiene receipts are recorded with the candidate’s evidence, not inferred from the fixture passes. Device and configured-account execution are not claimed by these automated checks.
 
 The Notion capability probe separately confirms 65 tools after the shared MCP gate, including page creation and update. Both are then refused by the web-side eight-level schema check. Its schema-node counting and the shared 16-level/512-key/64-reference admission boundary require investigation without raising budgets or removing poisoning protection. The three shared-gate rejections concern comment creation and two query tools; they do not explain the page-operation refusals.
+
+## Owner-reported offline-eval and Priority CI failures
+
+The owner queued these repairs after the current integration milestone. Both failures were verified against commit `43c6bccaa3903e5b504c1f514ab435f584af53ad`: offline run `41326541833`, job `124907568366`; Priority run `41326541863`, job `124907566985`. The Priority L1 tests passed. Its subsequent whole-repository coverage step failed because the same offline reference case failed; aggregate line coverage was 79.69% against the unchanged 75% floor.
+
+The handwritten `chat-prompt/what-can-you-do-pro` answer omitted connected apps after the ordinary-account selective-connector policy changed. This is an explicitly synthetic reference (`source: reference`, no model key, cost or latency), rather than a live model measurement. Its one answer now describes supported connected apps subject to connection and required approval. Corpus checks, thresholds, request fingerprints and measured recordings were not edited.
+
+The original suites test reproduced the failure. The corrected full offline harness and the formerly failing coverage project each passed 329 tests with three pre-existing skips; the project measured 88.43% line coverage. All remaining offline workflow checks passed, including replay, prompt coverage, PII scanning, baseline auditing and measurement integrity. The entire 102-minute repository coverage run was not repeated locally; the next push reruns that workflow. The JS job remains the owner’s production gate. `deferred-ci-repair-verification.json` and the preserved owner screenshot record the case.
+
+The separate Notion schema-admission proposal was rejected by automatic approval review because broader schema acceptance lacked comprehensive security validation. The persistent guard was not changed. Its red tests are preserved in an off-tree patch, and their temporary repository changes were removed. The current settings panel inspects tool parameters and attaches resources/prompts to chat; it does not provide a manual tool runner. No private Notion QA page has been created.
 
 ## Live access and remaining investigation
 

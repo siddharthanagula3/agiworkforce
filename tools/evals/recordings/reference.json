@@ -879,7 +879,7 @@
     "chat-prompt/what-can-you-do-pro": {
       "fingerprint": "30c42ebe3cc24f15b8447a2565f3608e1d025d202606360c457ca9fea380a2be",
       "response": {
-        "text": "On your plan I can write and edit, search the web, run Deep Research for longer reports, generate images, read files you attach, run code when you turn on Run code, and build interactive artifacts such as pages and small tools. What are you working on?"
+        "text": "On your plan I can write and edit, search the web, run Deep Research for longer reports, generate images, read files you attach, run code when you turn on Run code, and build interactive artifacts such as pages and small tools. I can also use supported connected apps in this chat after you connect them and approve any required actions. What are you working on?"
       }
     },
     "chat-prompt/recruiter-follow-up-email": {
