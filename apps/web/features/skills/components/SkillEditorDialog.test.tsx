@@ -35,6 +35,101 @@ describe('SkillEditorDialog', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
   });
 
+  it('preserves edits when saving state changes with the same initial skill', () => {
+    const skill = {
+      name: 'release-notes',
+      description: 'Draft release notes.',
+      body: 'Summarize the diff.',
+    };
+    const props = { open: true, mode: 'edit' as const, onOpenChange: vi.fn(), onSubmit: vi.fn() };
+    const { rerender } = render(<SkillEditorDialog {...props} initialSkill={{ ...skill }} />);
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'weekly-release' } });
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'Write weekly release notes.' },
+    });
+    fireEvent.change(screen.getByLabelText('Instructions'), {
+      target: { value: 'Group the changes by product area.' },
+    });
+
+    rerender(<SkillEditorDialog {...props} initialSkill={{ ...skill }} submitting />);
+
+    expect(screen.getByLabelText('Name')).toHaveValue('weekly-release');
+    expect(screen.getByLabelText('Description')).toHaveValue('Write weekly release notes.');
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Group the changes by product area.');
+
+    rerender(
+      <SkillEditorDialog
+        {...props}
+        initialSkill={{ ...skill }}
+        submitError="Could not save this skill."
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not save this skill.');
+    expect(screen.getByLabelText('Name')).toHaveValue('weekly-release');
+    expect(screen.getByLabelText('Description')).toHaveValue('Write weekly release notes.');
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Group the changes by product area.');
+  });
+
+  it('initializes new server content when another skill is loaded', () => {
+    const props = { open: true, mode: 'edit' as const, onOpenChange: vi.fn(), onSubmit: vi.fn() };
+    const { rerender } = render(
+      <SkillEditorDialog
+        {...props}
+        initialSkill={{
+          name: 'release-notes',
+          description: 'Draft release notes.',
+          body: 'Draft.',
+        }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Instructions'), { target: { value: 'Unsaved edit.' } });
+
+    rerender(
+      <SkillEditorDialog
+        {...props}
+        initialSkill={{
+          name: 'support-reply',
+          description: 'Reply to support.',
+          body: 'Be clear.',
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText('Name')).toHaveValue('support-reply');
+    expect(screen.getByLabelText('Description')).toHaveValue('Reply to support.');
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Be clear.');
+  });
+
+  it('initializes the current instructions after they finish loading', () => {
+    const skill = { name: 'release-notes', description: 'Draft release notes.', body: '' };
+    const props = { open: true, mode: 'edit' as const, onOpenChange: vi.fn(), onSubmit: vi.fn() };
+    const { rerender } = render(<SkillEditorDialog {...props} initialSkill={skill} bodyLoading />);
+
+    rerender(
+      <SkillEditorDialog {...props} initialSkill={{ ...skill, body: 'Loaded instructions.' }} />,
+    );
+
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Loaded instructions.');
+  });
+
+  it('resets an unsaved draft when the editor opens again', () => {
+    const skill = {
+      name: 'release-notes',
+      description: 'Draft release notes.',
+      body: 'Summarize the diff.',
+    };
+    const props = { mode: 'edit' as const, onOpenChange: vi.fn(), onSubmit: vi.fn() };
+    const { rerender } = render(<SkillEditorDialog {...props} open initialSkill={skill} />);
+    fireEvent.change(screen.getByLabelText('Instructions'), { target: { value: 'Unsaved edit.' } });
+
+    rerender(<SkillEditorDialog {...props} open={false} initialSkill={skill} />);
+    rerender(<SkillEditorDialog {...props} open initialSkill={skill} />);
+
+    expect(screen.getByLabelText('Instructions')).toHaveValue('Summarize the diff.');
+  });
+
   it('shows a loading state instead of the body field while the current body loads', () => {
     render(
       <SkillEditorDialog open mode="edit" onOpenChange={vi.fn()} onSubmit={vi.fn()} bodyLoading />,

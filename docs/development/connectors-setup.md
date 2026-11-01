@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-14
+Last updated: 2026-10-31
 
 What a deployment must hold before each connector in the directory can be
 connected from the browser, with the exact environment variable names. Values
@@ -57,7 +57,7 @@ is deployed, because the connector list reads `sign_in_required`.
 | Name                                    | Production                                                     | Local                                                                                       |
 | --------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `CONNECTOR_OAUTH_REDIRECT_BASE_URL`     | The public HTTPS origin, for example `https://app.example.com` | `http://localhost:3100` is accepted outside production; falls back to `NEXT_PUBLIC_APP_URL` |
-| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex characters, required                                    | Optional; a throwaway key is generated per process when unset                               |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex characters, required                                    | Required; preserve the key ring across development restarts                                 |
 | `CONNECTOR_OAUTH_PROVIDERS_JSON`        | Descriptor list for pre-registered OAuth apps (non-secret)     | Same shape                                                                                  |
 | `CONNECTOR_OAUTH_<ID>_CLIENT_ID`        | Client id for one descriptor                                   | Same                                                                                        |
 | `CONNECTOR_OAUTH_<ID>_CLIENT_SECRET`    | Client secret for one descriptor                               | Same                                                                                        |
@@ -65,6 +65,11 @@ is deployed, because the connector list reads `sign_in_required`.
 `<ID>` is the connector id upper-cased with `-` replaced by `_`, so
 `google-calendar` reads `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID`. A
 descriptor whose pair is missing is treated as absent, never advertised.
+
+Token storage must be configured before authorization in every environment.
+All instances sharing connector storage must use the same persistent key ring.
+Grants encrypted with a lost development key require reconnection; restarting
+the server cannot recover that key.
 
 Four URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL`:
 

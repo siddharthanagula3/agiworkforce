@@ -1,4 +1,5 @@
 import 'server-only';
+import { withoutToolSchemaState, type ToolSchemaState } from './tool-schema-state';
 import { resolveUsageCreditsNotice } from '@/lib/server/usage-credits-notice';
 import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 import {
@@ -779,6 +780,14 @@ export const ChatCompletionRequestSchema = z
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 
+export function parseChatCompletionRequestBody(body: unknown) {
+  return ChatCompletionRequestSchema.safeParse(
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? withoutToolSchemaState(body as Record<string, unknown>)
+      : body,
+  );
+}
+
 /**
  * The tool fields as the caller sent them, before the server adds tools or
  * infers a tool flag from the wording, so a resumed turn starts from what the
@@ -1358,6 +1367,7 @@ export function resolveManagedUsageLeaseSeconds(
 }
 
 export type ProcessedRequest = {
+  toolSchemaState?: ToolSchemaState;
   requestId: string;
   chatSurface: CloudChatSurface;
   /**
@@ -3323,7 +3333,7 @@ async function processAdmittedRequest(
       }
     }
   }
-  const validationResult = ChatCompletionRequestSchema.safeParse(body);
+  const validationResult = parseChatCompletionRequestBody(body);
   if (!validationResult.success) {
     return {
       ok: false,

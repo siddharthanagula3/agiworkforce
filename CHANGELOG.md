@@ -10,6 +10,14 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Web connector tools remain available after approval and interrupted turns;
+  completed or refused actions reach a terminal activity state. Authorization
+  now requires persistent secure token storage in development as well as production.
+- Skill editors retain drafts after failed saves and keep mobile error messages,
+  keyboard focus and footer controls inside the scrolling form.
+- Plugin installation and enablement refresh available skills immediately.
+  Readiness repair reloads metadata without reinstalling, and plugin-owned
+  connector toggles change only the rows requiring a transition.
 - Chat keeps readable typography on small screens, distinct headings, selectable
   underline, and aligned reading and composer columns on large displays.
 - Writing and email controls use quieter framing, hide empty recipients, return

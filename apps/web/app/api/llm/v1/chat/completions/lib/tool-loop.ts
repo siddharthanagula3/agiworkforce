@@ -162,6 +162,11 @@ import {
   toolDirectoryToolDef,
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
+import {
+  createToolSchemaState,
+  ToolSchemaStateSchema,
+  type ToolSchemaState,
+} from './tool-schema-state';
 import { stageTurnAttachments, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
@@ -539,6 +544,7 @@ export interface ResumeApproval {
 }
 
 export interface ToolLoopApprovalCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -554,6 +560,7 @@ export interface ToolLoopApprovalCheckpoint {
 }
 
 export interface ToolLoopInputCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -572,6 +579,7 @@ export interface ToolLoopInputCheckpoint {
 }
 
 export interface ToolLoopDeviceCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -596,6 +604,7 @@ export interface ResumeFromPause {
 }
 
 export interface ToolLoopPauseCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -605,6 +614,7 @@ export interface ToolLoopPauseCheckpoint {
 }
 
 export interface ToolLoopInvocationCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -628,6 +638,7 @@ export interface ToolLoopInvocationCheckpoint {
  * a second time, so the pause can never become a spin.
  */
 export interface ToolLoopStepBudgetCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -954,6 +965,7 @@ export function canonicalToolSummary(
   const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return server ? `Using ${server} connector` : 'Using connector';
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
+  if (toolName === TOOL_DIRECTORY_TOOL_NAME) return 'Load connector tools';
 
   if (toolName === 'generate_image' || toolName === 'edit_image') {
     const phrase = toolStatusPhrase(toolName) ?? 'Creating image';
@@ -2868,7 +2880,16 @@ export function isToolOffered(
   qualifiedName: string,
   mcpTools: WebMcpToolDef[],
   availableTools: ReadonlySet<string>,
+  hostToolDefs?: readonly WebMcpToolDef[],
 ): boolean {
+  if (
+    qualifiedName === TOOL_DIRECTORY_TOOL_NAME ||
+    qualifiedName === TOOL_RESULT_READER_TOOL_NAME
+  ) {
+    return hostToolDefs
+      ? hostToolDefs.some((tool) => tool.qualifiedName === qualifiedName)
+      : availableTools.has(qualifiedName);
+  }
   if (qualifiedName === SKILL_TOOL_NAME) return availableTools.has(SKILL_TOOL_NAME);
   if (isManagedOfficeFileTool(qualifiedName)) {
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
@@ -3636,15 +3657,29 @@ export async function* runToolLoop(
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const turnToolProhibition = processed.turnToolProhibition;
   const mcpTools = turnToolProhibition?.allTools ? [] : (options.mcpTools ?? []);
+  const connectorPermissions = processed.toolLockdown
+    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
+    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
+  const schemaTools = mcpTools.filter(
+    (tool) =>
+      !connectorPermissions.isDenied(tool.qualifiedName) &&
+      !connectorPermissions.isConnectorDenied(tool.serverId),
+  );
+  const currentSchemaNames = new Set(schemaTools.map((tool) => tool.qualifiedName));
+  const restoredSchemaState = ToolSchemaStateSchema.safeParse(processed.toolSchemaState);
   const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
   const toolSchemaSelection = selectToolSchemas({
-    tools: mcpTools,
+    tools: schemaTools,
     turnText: lastUserTurnText(processed.chatRequest?.messages),
+    pinnedQualifiedNames: restoredSchemaState.success
+      ? restoredSchemaState.data.loadedQualifiedNames.filter((name) => currentSchemaNames.has(name))
+      : [],
   });
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
+  processed.toolSchemaState = createToolSchemaState(loadedToolNames);
   let deferredToolSchemas = toolSchemaSelection.deferred;
   const toolResultOwner = toolResultOwnerForTurn({
     userId: options.userId,
@@ -3653,7 +3688,7 @@ export async function* runToolLoop(
   });
   const earlierStoredResults = await listConversationToolResults(toolResultOwner);
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
-    const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
+    const loaded = schemaTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
     const directory = toolDirectoryToolDef(deferredToolSchemas);
     const storedResults =
       earlierStoredResults.length > 0 ||
@@ -3672,13 +3707,25 @@ export async function* runToolLoop(
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
     const query = typeof args['query'] === 'string' ? args['query'] : '';
-    const matched = query ? searchToolsByKeyword(mcpTools, query) : [];
+    const matched = query ? searchToolsByKeyword(schemaTools, query) : [];
     const requested = [
       ...(Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : []),
       ...matched.map((tool) => tool.qualifiedName),
     ];
-    const loaded = expandDeferredToolSchemas(mcpTools, requested);
+    const loaded = expandDeferredToolSchemas(schemaTools, requested);
+    const nextState = ToolSchemaStateSchema.safeParse({
+      loadedQualifiedNames: [
+        ...new Set([...loadedToolNames, ...loaded.map((tool) => tool.qualifiedName)]),
+      ],
+    });
+    if (!nextState.success) {
+      return {
+        content: 'The loaded tool schema state exceeds this turn’s metadata limit.',
+        isError: true,
+      };
+    }
     for (const tool of loaded) loadedToolNames.add(tool.qualifiedName);
+    processed.toolSchemaState = createToolSchemaState(loadedToolNames);
     deferredToolSchemas = deferredToolSchemas.filter(
       (entry) => !loadedToolNames.has(entry.qualifiedName),
     );
@@ -3708,6 +3755,7 @@ export async function* runToolLoop(
   const availableTools = new Set([
     ...mcpTools.map((tool) => tool.qualifiedName),
     ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
+    ...(deferredToolSchemas.length > 0 ? [TOOL_DIRECTORY_TOOL_NAME] : []),
   ]);
   const externalToolSchemas = new Map<string, unknown>(
     mcpTools.map((tool) => [tool.qualifiedName, tool.inputSchema]),
@@ -3750,9 +3798,6 @@ export async function* runToolLoop(
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  const connectorPermissions = processed.toolLockdown
-    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
-    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   function decisionTimeLevel(qualifiedName: string): ConnectorToolPermissionLevel | undefined {
@@ -4980,9 +5025,21 @@ export async function* runToolLoop(
         });
       }
       if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
+        if (!isToolOffered(tc.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())) {
+          return Promise.resolve({
+            content: 'The connector tool directory is not available on this turn.',
+            isError: true,
+          });
+        }
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
       }
       if (tc.qualifiedName === TOOL_RESULT_READER_TOOL_NAME) {
+        if (!isToolOffered(tc.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())) {
+          return Promise.resolve({
+            content: 'Stored tool results are not available on this turn.',
+            isError: true,
+          });
+        }
         return readStoredToolResult(toolResultOwner, tc.args);
       }
       const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
@@ -5465,6 +5522,7 @@ export async function* runToolLoop(
 
       await recordGroundingSpend(true);
       await options.onInputCheckpoint?.({
+        toolSchemaState: createToolSchemaState(loadedToolNames),
         sessionId,
         turnId,
         nextEventSequence: eventStream.nextSequence(),
@@ -5713,6 +5771,26 @@ export async function* runToolLoop(
 
       const toRun: PendingToolCall[] = [];
       let requiredSearchCouldNotRun = false;
+      function* finishUnexecutedResumeTool(
+        call: PendingToolCall,
+        content: string,
+        legacyIsError: boolean,
+      ): Generator<Uint8Array> {
+        yield encoder.encode(
+          toolResultEvent(call.id, call.qualifiedName, content, legacyIsError, responseModel),
+        );
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'tool-execution-end',
+            toolCallId: call.id,
+            name: call.qualifiedName,
+            output: toAgentEventJson(content),
+            isError: true,
+            elapsedMs: 0,
+          }),
+        );
+        messages.push({ role: 'tool', content, tool_call_id: call.id });
+      }
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
         const deviceResult = resumeDeviceByCallId.get(p.id);
@@ -5767,15 +5845,10 @@ export async function* runToolLoop(
               p.qualifiedName,
               blockedToolResultMessage(p.qualifiedName),
             );
-            yield encoder.encode(
-              toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-            );
-            messages.push({
-              role: 'tool',
-              content,
-              tool_call_id: p.id,
-            });
-          } else if (isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
+            yield* finishUnexecutedResumeTool(p, content, true);
+          } else if (
+            isToolOffered(p.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())
+          ) {
             toRun.push(p);
           } else {
             const content = await applyToolResultSecretPolicy(
@@ -5783,14 +5856,7 @@ export async function* runToolLoop(
               p.qualifiedName,
               `Tool "${p.qualifiedName}" is not available and was not executed.`,
             );
-            yield encoder.encode(
-              toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-            );
-            messages.push({
-              role: 'tool',
-              content,
-              tool_call_id: p.id,
-            });
+            yield* finishUnexecutedResumeTool(p, content, true);
           }
           continue;
         }
@@ -5817,17 +5883,10 @@ export async function* runToolLoop(
             p.qualifiedName,
             blockedToolResultMessage(p.qualifiedName),
           );
-          yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-          );
-          messages.push({
-            role: 'tool',
-            content,
-            tool_call_id: p.id,
-          });
+          yield* finishUnexecutedResumeTool(p, content, true);
         } else if (
           decision === 'approved' &&
-          isToolOffered(p.qualifiedName, mcpTools, availableTools)
+          isToolOffered(p.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())
         ) {
           toRun.push(p);
         } else if (decision === 'approved') {
@@ -5839,14 +5898,7 @@ export async function* runToolLoop(
             p.qualifiedName,
             `Tool "${p.qualifiedName}" is not available and was not executed.`,
           );
-          yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-          );
-          messages.push({
-            role: 'tool',
-            content,
-            tool_call_id: p.id,
-          });
+          yield* finishUnexecutedResumeTool(p, content, true);
         } else {
           if (searchRequired && isWebSearchTool(p.qualifiedName)) {
             requiredSearchCouldNotRun = true;
@@ -5856,14 +5908,7 @@ export async function* runToolLoop(
             p.qualifiedName,
             TOOL_DENIED_MESSAGE,
           );
-          yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, content, false, responseModel),
-          );
-          messages.push({
-            role: 'tool',
-            content,
-            tool_call_id: p.id,
-          });
+          yield* finishUnexecutedResumeTool(p, content, false);
         }
       }
 
@@ -5960,6 +6005,7 @@ export async function* runToolLoop(
         pauseChunks.push(encoder.encode(pausedEmitted.sse));
         await recordGroundingSpend(true);
         await options.onPauseCheckpoint({
+          toolSchemaState: createToolSchemaState(loadedToolNames),
           sessionId,
           turnId,
           nextEventSequence: eventStream.nextSequence(),
@@ -5985,6 +6031,7 @@ export async function* runToolLoop(
           }
           await recordGroundingSpend(true);
           await options.onInvocationCheckpoint({
+            toolSchemaState: createToolSchemaState(loadedToolNames),
             sessionId,
             turnId,
             nextEventSequence: eventStream.nextSequence(),
@@ -6907,6 +6954,7 @@ export async function* runToolLoop(
 
           await recordGroundingSpend(true);
           await options.onDeviceCheckpoint({
+            toolSchemaState: createToolSchemaState(loadedToolNames),
             sessionId,
             turnId,
             nextEventSequence: eventStream.nextSequence(),
@@ -6987,6 +7035,7 @@ export async function* runToolLoop(
 
         await recordGroundingSpend(true);
         await options.onApprovalCheckpoint?.({
+          toolSchemaState: createToolSchemaState(loadedToolNames),
           sessionId,
           turnId,
           nextEventSequence: eventStream.nextSequence(),
@@ -7055,6 +7104,7 @@ export async function* runToolLoop(
       );
       await recordGroundingSpend(true);
       await options.onStepBudgetCheckpoint({
+        toolSchemaState: createToolSchemaState(loadedToolNames),
         sessionId,
         turnId,
         nextEventSequence: eventStream.nextSequence(),

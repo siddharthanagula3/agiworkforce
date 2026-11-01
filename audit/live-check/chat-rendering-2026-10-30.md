@@ -1,6 +1,6 @@
 # Chat rendering and selected UI/UX repairs
 
-Status: Initial web repairs deployed; owner follow-up fixes in local verification; governed prompt acceptance remains open
+Status: Web and integration repairs verified; remaining provider, prompt and surface acceptance open
 Owner: Web chat + shared rendering + settings/agents maintainers
 Last verified: 2026-10-31
 Purpose: Track the owner's rendering QA and selected notification/agent recommendations, verified causes, evidence and release boundaries.
@@ -252,11 +252,75 @@ resource; direct mobile trust tests passed separately. These are check
 prerequisites, not demonstrated product failures.
 
 The actual localhost UI exposes selected Connect actions and keeps excluded
-services disabled. Notion reaches the real app consent dialog. Automatic approval
-review rejected clicking Allow without recipient-specific approval; that approval
-has been requested. No live provider grant or read has completed, so this is not
-an end-to-end connector pass. Schedule copy explicitly says its own connector
-support remains coming soon.
+services disabled. The owner approved Notion setup and reuse of the existing
+OpenAI key for bounded local tests. Notion authorization, real capability
+discovery, tool loading, one-time approval, execution and history reopening now
+pass. A correlated execution span and the actual tool receipt confirm exactly
+one `notion-get-self` call returned workspace and user objects. Evidence retains
+field names rather than returned identities. Schedule copy still describes its
+own connector support as coming soon.
+
+## Connector, skill and plugin acceptance follow-up
+
+These local repairs were reproduced through the running app and deterministic
+regressions. Context7 supplied the installed MCP SDK's
+[OAuth storage contract](https://github.com/modelcontextprotocol/typescript-sdk/blob/v2.3.1/docs/clients/oauth.md)
+and React's
+[primitive effect dependencies](https://react.dev/learn/removing-effect-dependencies#read-primitive-values-from-objects).
+Neither reference substitutes for the app checks below.
+
+| Issue                                                  | Verified cause                                                                                                                                                                                            | Changed owner                                                                                                                                                                  |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Connection lost after local restart                    | Development generated a volatile, module-local encryption key while reporting storage ready. Configured OAuth pairs also bypassed the storage readiness check.                                            | `lib/custom-connector-crypto.ts`, `lib/connectors/oauth-setup.ts`, their tests and the explicit test-only key fixture.                                                         |
+| Connector loader stalled or disappeared after approval | The local metadata loader inherited unknown-write risk, was omitted from resumed host-tool admission, and lost loaded schema names between invocations. Refused resumes omitted terminal activity events. | Completion `tool-metadata`, `tool-schema-loader`, `tool-schema-state`, `tool-loop`, `request-processor`, `approval-checkpoint-request`, route and workflow checkpoint writers. |
+| Edited skill draft reset while saving                  | The effect depended on the identity of a freshly recreated object prop.                                                                                                                                   | `SkillEditorDialog.tsx` and its component/browser regressions.                                                                                                                 |
+| Mobile editor error and focus ring clipped             | The instruction wrapper could shrink below its textarea; the scrolling form left no gutter for keyboard focus.                                                                                            | The existing editor's minimum-content wrapper and token-based padding/scroll padding.                                                                                          |
+| Plugin-owned connectors did not change enabled state   | The SQL selected rows already in the requested state rather than rows needing the transition.                                                                                                             | `lib/connectors/plugin-connectors.ts` and the executed SQL regression.                                                                                                         |
+| Installed plugin showed missing skills until refresh   | The directory retained its preinstall private catalog, ignored the canonical change event, and used stale enablement for readiness. Its repair action reinstalled instead of refreshing metadata.         | `useDirectoryAdapter.ts`, its regressions and the canonical `Reload skills` label.                                                                                             |
+
+Persistent configured encryption is now required in every environment; lost old
+volatile ciphertext still requires reconnection. Envelope purposes and rotation
+remain enforced. Loaded schema names are bounded, private, stripped from initial
+client requests and replay bodies, restored only from claimed server
+checkpoints, and intersected with the current catalog and denied permissions.
+The actual Notion read still required its own approval. No connector execution
+permission was relaxed.
+
+The live skill check selected `interview-prep` using the keyboard, recorded a
+real skill load, produced the requested scorecard and retained the result and
+selection metadata after refresh. An earlier QA prompt prohibited all tools;
+its correct-looking answer was excluded from skill-execution acceptance.
+
+The live Research Pack check began with no installed plugins. Installation,
+per-skill and whole-plugin off/on controls, composer exclusion/reappearance,
+actual `literature-review` loading, answer generation, reopening, uninstall and
+reinstall were exercised. Reinstall now updates the description/readiness
+without a page reload. The initial no-plugins state was restored afterward.
+Only supplied fictitious excerpts were used for the writing check.
+
+Four isolated browser cases cover the real Settings adapter at 320 and 1440
+pixels in both themes: pending/failed saves retain all fields, retry persists
+fixture state across reload, invalid input sends nothing, and both footer
+controls and complete focus rings remain reachable. All skill writes are
+intercepted. The harness uses development Clerk authentication, and its strict
+application-mutation ledger distinguishes intercepted consent from skill PUTs.
+The plugin transition query also passes an independent temporary PostgreSQL
+probe; the cluster was stopped and removed.
+
+Web typecheck, scoped ESLint, formatting and the final consolidated 69-file packet
+pass: 1,281 tests, no failures or skips. The four final browser cases and staged
+boundary/security checks also pass. Release checks are tracked with the
+integration release artifacts. The evidence folder is
+`connector-release-2026-10-31` in the task's visualization directory, including
+`notion-read-reopened.png`, `skill-loaded.png`, `plugin-skill-loaded.png` and
+`plugin-reinstall-after.png`.
+
+This verifies Notion and representative first-party skill/plugin flows. The
+other selected providers have not each completed an account-specific live
+grant. Google, operator-heavy setup and generic/plugin-bundled custom MCP remain
+outside this selective release. Three large Notion schemas remain explicitly
+refused by the existing depth/key budgets; those tools were not certified.
+This follow-up does not establish native-platform or full competitor parity.
 
 ## Diagram and CI acceptance refinement
 

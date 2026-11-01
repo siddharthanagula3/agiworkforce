@@ -515,6 +515,7 @@ function workflowContinuation(
   input: CloudAgentWorkflowInput,
   serving: ProcessedRequest,
   checkpoint: {
+    toolSchemaState?: ProcessedRequest['toolSchemaState'];
     sessionId: string;
     turnId: string;
     nextEventSequence: number;
@@ -529,6 +530,7 @@ function workflowContinuation(
         ...input,
         processed: {
           ...processed,
+          toolSchemaState: checkpoint.toolSchemaState,
           llmRequest: {
             ...processed.llmRequest,
             messages: retargetMessagesToModel(
@@ -753,6 +755,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
           ),
           messages: checkpoint.messages,
           events: checkpoint.events,
@@ -773,6 +776,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -794,6 +798,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -817,6 +822,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,

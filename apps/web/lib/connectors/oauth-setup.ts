@@ -100,9 +100,9 @@ function clientPairRequirement(
   connectorId: string,
   displayName: string,
 ): ConnectorSetupRequirement | null {
-  if (isConnectorOAuthConfigured(connectorId)) return null;
   const storage = tokenStorageRequirement(connectorId, displayName);
   if (storage) return storage;
+  if (isConnectorOAuthConfigured(connectorId)) return null;
   const names = connectorOAuthCredentialEnvNames(connectorId);
   const missingEnv: string[] = [];
   if (!hasConnectorOAuthDescriptor(connectorId)) missingEnv.push(CONNECTOR_OAUTH_PROVIDERS_ENV);

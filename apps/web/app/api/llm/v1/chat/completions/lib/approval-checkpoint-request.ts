@@ -11,6 +11,12 @@ import type {
   ProcessedRequest,
 } from './request-processor';
 import { TurnToolProhibitionSchema, type TurnToolProhibition } from './turn-tool-prohibition';
+import {
+  ToolSchemaStateSchema,
+  TOOL_SCHEMA_STATE_CHECKPOINT_KEY,
+  withoutToolSchemaState,
+  type ToolSchemaState,
+} from './tool-schema-state';
 
 const CHECKPOINT_TURN_ATTACHMENTS_KEY = 'x_turn_attachments';
 const CHECKPOINT_MODEL_SELECTION_KEY = 'x_model_selection';
@@ -19,6 +25,7 @@ const CHECKPOINT_PRIVATE_KEYS: readonly string[] = [
   CHECKPOINT_TURN_ATTACHMENTS_KEY,
   CHECKPOINT_MODEL_SELECTION_KEY,
   CHECKPOINT_TURN_TOOL_PROHIBITION_KEY,
+  TOOL_SCHEMA_STATE_CHECKPOINT_KEY,
 ];
 
 const CheckpointTurnAttachmentsSchema = z.array(
@@ -45,6 +52,7 @@ export function buildApprovalCheckpointRequest(
   turnAttachments: readonly TurnAttachment[] = [],
   modelSelection?: ModelSelection,
   turnToolProhibition?: TurnToolProhibition | null,
+  toolSchemaState?: ToolSchemaState,
 ): Record<string, unknown> {
   const {
     messages: _messages,
@@ -53,13 +61,16 @@ export function buildApprovalCheckpointRequest(
     code_execution: _serverOrCallerCodeExecution,
     ...request
   } = chatRequest;
+  const publicRequest = withoutToolSchemaState(request);
+  const schemaState = ToolSchemaStateSchema.safeParse(toolSchemaState);
   return {
-    ...request,
+    ...publicRequest,
     ...callerToolFields,
     stream: true,
     ...(turnAttachments.length > 0 ? { [CHECKPOINT_TURN_ATTACHMENTS_KEY]: turnAttachments } : {}),
     ...(modelSelection ? { [CHECKPOINT_MODEL_SELECTION_KEY]: modelSelection } : {}),
     ...(turnToolProhibition ? { [CHECKPOINT_TURN_TOOL_PROHIBITION_KEY]: turnToolProhibition } : {}),
+    ...(schemaState.success ? { [TOOL_SCHEMA_STATE_CHECKPOINT_KEY]: schemaState.data } : {}),
   };
 }
 
@@ -102,6 +113,10 @@ export function restoreCheckpointedTurn(
   processed: ProcessedRequest,
   checkpoint: Pick<CloudAgentApprovalCheckpoint, 'request' | 'messages'>,
 ): void {
+  const schemaState = ToolSchemaStateSchema.safeParse(
+    checkpoint.request[TOOL_SCHEMA_STATE_CHECKPOINT_KEY],
+  );
+  processed.toolSchemaState = schemaState.success ? schemaState.data : undefined;
   processed.turnAttachments = checkpointTurnAttachments(checkpoint.request);
   const renderedModel = checkpoint.request['model'];
   const selection = CheckpointModelSelectionSchema.safeParse(

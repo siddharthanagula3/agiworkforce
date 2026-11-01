@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   AgentCreateRequestSchema,
@@ -20,12 +20,22 @@ import {
 
 import { settleConsent } from './lib/settle-consent';
 import { signIn } from './qa-capability-harness';
-import { THEME_STORAGE_KEY } from '../shared/components/ThemeConstants';
+import { DEFAULT_THEME, THEME_STORAGE_KEY } from '../shared/components/ThemeConstants';
 import { SELECTIVELY_RELEASED_CONNECTOR_IDS } from '@agiworkforce/types';
+import { DEFAULT_LANGUAGE } from '@agiworkforce/i18n/languages';
 import { CONNECTORS } from '../features/connectors/data/connectors';
+import type { SkillDraft } from '@agiworkforce/skills/validation';
+import { useSettingsStore } from '../shared/stores/web-settings-store';
+import {
+  APPEARANCE_NAMESPACE,
+  LANGUAGE_NAMESPACE,
+  toAppearanceNamespace,
+} from '../features/settings/lib/appearance-namespace';
 
 const EVIDENCE_DIR = mkdtempSync('/tmp/agi-qa-settings-agent-ux-');
 const CAPTURED_AGENT_MESSAGE = 'QA intercepted this request. No agent was created.';
+const SKILL_EDITOR_SAVE_ERROR = 'The local skill fixture is temporarily unavailable. Retry saving.';
+const SKILL_EDITOR_CSRF_TOKEN = 'qa-skill-editor-csrf';
 const CHANNEL_NAMES = ['Reply ready', 'Scheduled task finished', 'Security alerts', 'Usage'];
 const INITIAL_NOTIFICATIONS = {
   browserReplyReady: true,
@@ -66,6 +76,7 @@ const SKILLS = ManagedSkillsResponseSchema.parse({
 type BrowserPermission = NotificationPermission | 'unsupported';
 type NotificationActivity = 'permission' | 'subscribe' | 'unsubscribe' | 'register' | 'display';
 interface QaTraffic {
+  applicationMutations: string[];
   preferenceWrites: unknown[];
   backgroundPreferenceWrites: unknown[];
   agentSubmissions: AgentCreateRequest[];
@@ -74,6 +85,33 @@ interface QaTraffic {
   notificationActivity: NotificationActivity[];
   preferenceReads: number;
   skillReads: number;
+}
+
+interface QaSkillEditorFixture {
+  saved: SkillDraft;
+  firstSaveResponse: Promise<void>;
+  bodyReads: string[];
+  submissions: Array<{ path: string; draft: SkillDraft; hasFixtureCsrf: boolean }>;
+}
+
+function skillEditorCatalog(fixture: QaSkillEditorFixture) {
+  return {
+    ...ManagedSkillsResponseSchema.parse({
+      skills: [
+        ...SKILLS.skills,
+        {
+          name: fixture.saved.name,
+          description: fixture.saved.description,
+          source: 'personal',
+          lifecycle: 'included',
+          downloadable: false,
+          editable: true,
+          origin: { kind: 'personal' },
+        },
+      ],
+    }),
+    canAuthorSkills: true,
+  };
 }
 
 test.use({
@@ -168,9 +206,11 @@ async function preparePage(
   permission: BrowserPermission = 'default',
   registered = false,
   appearance?: 'light' | 'dark',
+  skillEditor?: QaSkillEditorFixture,
 ): Promise<QaTraffic> {
   const origin = requireLocalTestEnvironment(baseURL);
   const traffic: QaTraffic = {
+    applicationMutations: [],
     preferenceWrites: [],
     backgroundPreferenceWrites: [],
     agentSubmissions: [],
@@ -182,7 +222,17 @@ async function preparePage(
   };
   const settings: Record<string, unknown> = {
     notifications: { ...INITIAL_NOTIFICATIONS },
-    ...(appearance ? { appearance: { theme: appearance } } : {}),
+    ...(skillEditor
+      ? {
+          [APPEARANCE_NAMESPACE]: toAppearanceNamespace({
+            ...useSettingsStore.getInitialState(),
+            theme: appearance ?? DEFAULT_THEME,
+          }),
+          [LANGUAGE_NAMESPACE]: { locale: DEFAULT_LANGUAGE },
+        }
+      : appearance
+        ? { [APPEARANCE_NAMESPACE]: { theme: appearance } }
+        : {}),
   };
   if (appearance)
     await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
@@ -195,6 +245,8 @@ async function preparePage(
     const url = new URL(request.url());
     if (url.origin !== origin) return route.continue();
     const method = request.method();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method))
+      traffic.applicationMutations.push(`${method} ${url.pathname}`);
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
     if (url.pathname === MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH) {
       if (method === 'GET') {
@@ -227,7 +279,51 @@ async function preparePage(
     }
     if (url.pathname === '/api/skills' && method === 'GET') {
       traffic.skillReads++;
-      return json(SKILLS);
+      return json(skillEditor ? skillEditorCatalog(skillEditor) : SKILLS);
+    }
+    if (skillEditor) {
+      if (url.pathname === '/api/csrf' && method === 'GET') {
+        return json({ token: SKILL_EDITOR_CSRF_TOKEN, expiresIn: 3_600_000 });
+      }
+      if (url.pathname === '/api/settings/organization/plugins' && method === 'GET') {
+        return json({ canManage: false, plugins: [] });
+      }
+      if (url.pathname === '/api/skills/installs' && method === 'GET') {
+        return json({
+          installed: skillEditorCatalog(skillEditor).skills.map((skill) => skill.name),
+        });
+      }
+      if (url.pathname.startsWith('/api/skills/')) {
+        const skillPath = `/api/skills/${encodeURIComponent(skillEditor.saved.name)}`;
+        if (url.pathname === skillPath && method === 'GET') {
+          skillEditor.bodyReads.push(skillEditor.saved.name);
+          return json({ body: skillEditor.saved.body });
+        }
+        if (url.pathname === `${skillPath}/files` && method === 'GET') {
+          return json({
+            files: [{ path: 'SKILL.md', size: Buffer.byteLength(skillEditor.saved.body) }],
+          });
+        }
+        if (url.pathname === skillPath && method === 'PUT') {
+          const draft = request.postDataJSON() as SkillDraft;
+          skillEditor.submissions.push({
+            path: url.pathname,
+            draft,
+            hasFixtureCsrf: request.headers()['x-csrf-token'] === SKILL_EDITOR_CSRF_TOKEN,
+          });
+          if (skillEditor.submissions.length === 1) {
+            await skillEditor.firstSaveResponse;
+            return json({ error: { message: SKILL_EDITOR_SAVE_ERROR } }, 503);
+          }
+          skillEditor.saved = { ...draft };
+          return json({ skill: skillEditorCatalog(skillEditor).skills.at(-1) });
+        }
+        if (method !== 'GET') traffic.blockedMutations.push(`${method} ${url.pathname}`);
+        return json(
+          { error: { message: 'No matching skill operation in the local fixture.' } },
+          404,
+        );
+      }
     }
     if (url.pathname === SERVICE_NOTICES_PATH && method === 'GET') {
       return json(ServiceNoticeListSchema.parse({ notices: [] }));
@@ -306,6 +402,358 @@ async function recordEvidence(page: Page, testInfo: TestInfo, content: Locator) 
 function assertNoNewNotificationDelivery(traffic: QaTraffic) {
   expect(traffic.notificationActivity.filter((event) => event !== 'register')).toEqual([]);
   expect(traffic.blockedMutations).toEqual([]);
+}
+
+async function expectSkillEditorFieldsDoNotOverlap(editor: Locator) {
+  const instructions = await editor
+    .getByRole('textbox', { name: 'Instructions', exact: true })
+    .boundingBox();
+  const footer = await editor.locator('button[type="submit"]').locator('..').boundingBox();
+  expect(instructions).not.toBeNull();
+  expect(footer).not.toBeNull();
+  const error = editor.getByRole('alert');
+  if (await error.count()) {
+    const bounds = await error.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.y).toBeGreaterThanOrEqual(instructions!.y + instructions!.height - 1);
+    expect(footer!.y).toBeGreaterThanOrEqual(bounds!.y + bounds!.height - 1);
+  } else {
+    expect(footer!.y).toBeGreaterThanOrEqual(instructions!.y + instructions!.height - 1);
+  }
+}
+
+async function expectSkillEditorReady(editor: Locator) {
+  await expect(editor).toBeVisible();
+  await editor.evaluate(async (element) => {
+    await document.fonts.ready;
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
+}
+
+async function expectSkillEditorControlReachable(
+  control: Locator,
+  testInfo: TestInfo,
+  label: string,
+) {
+  await expect(control).toBeInViewport();
+  const geometry = await control.evaluate((element) => {
+    const form = element.closest('form');
+    const dialog = element.closest('[role="dialog"]');
+    if (!(form instanceof HTMLFormElement) || !(dialog instanceof HTMLElement)) {
+      throw new Error('The editor control must belong to its form and dialog.');
+    }
+    const bounds = element.getBoundingClientRect();
+    const formBounds = form.getBoundingClientRect();
+    const dialogBounds = dialog.getBoundingClientRect();
+    const viewport = {
+      left: Math.max(formBounds.left + form.clientLeft, dialogBounds.left + dialog.clientLeft, 0),
+      top: Math.max(formBounds.top + form.clientTop, dialogBounds.top + dialog.clientTop, 0),
+      right: Math.min(
+        formBounds.left + form.clientLeft + form.clientWidth,
+        dialogBounds.left + dialog.clientLeft + dialog.clientWidth,
+        innerWidth,
+      ),
+      bottom: Math.min(
+        formBounds.top + form.clientTop + form.clientHeight,
+        dialogBounds.top + dialog.clientTop + dialog.clientHeight,
+        innerHeight,
+      ),
+    };
+    const target = document.elementFromPoint(
+      bounds.x + bounds.width / 2,
+      bounds.y + bounds.height / 2,
+    );
+    const focusStyle = getComputedStyle(element);
+    const focused = document.activeElement === element;
+    const shadowLengths = [...focusStyle.boxShadow.matchAll(/(-?[\d.]+)px/g)].map((match) =>
+      Number(match[1]),
+    );
+    let shadowOutset = 0;
+    for (let index = 0; index < shadowLengths.length; index += 4) {
+      const [x = 0, y = 0, blur = 0, spread = 0] = shadowLengths.slice(index, index + 4);
+      shadowOutset = Math.max(
+        shadowOutset,
+        Math.abs(x) + blur + spread,
+        Math.abs(y) + blur + spread,
+      );
+    }
+    const outlineOutset =
+      focusStyle.outlineStyle === 'none'
+        ? 0
+        : parseFloat(focusStyle.outlineWidth) + parseFloat(focusStyle.outlineOffset);
+    const focusOutset = focused ? Math.max(0, shadowOutset, outlineOutset) : 0;
+    return {
+      label: element.textContent?.trim(),
+      bounds: { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom },
+      viewport,
+      form: {
+        top: formBounds.top,
+        bottom: formBounds.bottom,
+        scrollTop: form.scrollTop,
+        clientHeight: form.clientHeight,
+        scrollHeight: form.scrollHeight,
+        overflowY: getComputedStyle(form).overflowY,
+      },
+      dialog: { top: dialogBounds.top, bottom: dialogBounds.bottom },
+      focused,
+      focusOutset,
+      centerReceivesPointer: target !== null && element.contains(target),
+      focusStyle: {
+        outlineStyle: focusStyle.outlineStyle,
+        outlineWidth: focusStyle.outlineWidth,
+        boxShadow: focusStyle.boxShadow,
+      },
+    };
+  });
+  const geometryPath = testInfo.outputPath(`${label}.json`);
+  writeFileSync(geometryPath, JSON.stringify(geometry, null, 2));
+  await testInfo.attach(label, { path: geometryPath, contentType: 'application/json' });
+  expect(geometry.bounds.left).toBeGreaterThanOrEqual(geometry.viewport.left - 1);
+  expect(geometry.bounds.top).toBeGreaterThanOrEqual(geometry.viewport.top - 1);
+  expect(geometry.bounds.right).toBeLessThanOrEqual(geometry.viewport.right + 1);
+  expect(geometry.bounds.bottom).toBeLessThanOrEqual(geometry.viewport.bottom + 1);
+  expect(geometry.bounds.left - geometry.focusOutset).toBeGreaterThanOrEqual(
+    geometry.viewport.left - 1,
+  );
+  expect(geometry.bounds.top - geometry.focusOutset).toBeGreaterThanOrEqual(
+    geometry.viewport.top - 1,
+  );
+  expect(geometry.bounds.right + geometry.focusOutset).toBeLessThanOrEqual(
+    geometry.viewport.right + 1,
+  );
+  expect(geometry.bounds.bottom + geometry.focusOutset).toBeLessThanOrEqual(
+    geometry.viewport.bottom + 1,
+  );
+  expect(geometry.centerReceivesPointer).toBe(true);
+  return geometry;
+}
+
+for (const appearance of ['light', 'dark'] as const) {
+  for (const width of [1440, 320]) {
+    test(`skill editor retains a failed save and reopens saved fields in ${appearance} at ${width}px`, async ({
+      page,
+      baseURL,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      const runtimeErrors: string[] = [];
+      page.on('pageerror', (error) => runtimeErrors.push(error.message));
+      let finishFailedSave: (() => void) | undefined;
+      const original = {
+        name: 'qa-editor-original',
+        description: 'Draft a local release note.',
+        body: 'Summarize the supplied changes.',
+      };
+      const draft = {
+        name: 'qa-editor-retained',
+        description: 'Keep typed release details after a temporary save failure.',
+        body: 'Write a concise release note. Preserve the supplied facts and mark unknowns.',
+      };
+      const fixture: QaSkillEditorFixture = {
+        saved: { ...original },
+        firstSaveResponse: new Promise<void>((resolve) => {
+          finishFailedSave = resolve;
+        }),
+        bodyReads: [],
+        submissions: [],
+      };
+      const traffic = await preparePage(page, baseURL, 'default', false, appearance, fixture);
+      await page.goto(`/chat#settings/customize-skills/browse/${original.name}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await settleConsent(page);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance);
+      const edit = page.getByRole('button', { name: `Settings ${original.name}`, exact: true });
+      await expect(edit).toBeVisible();
+      await edit.focus();
+      await expect(edit).toBeFocused();
+      await edit.press('Enter');
+      const editor = page.getByRole('dialog', { name: 'Edit skill', exact: true });
+      await expectSkillEditorReady(editor);
+      const name = editor.getByRole('textbox', { name: 'Name', exact: true });
+      const description = editor.getByRole('textbox', { name: 'Description', exact: true });
+      const instructions = editor.getByRole('textbox', { name: 'Instructions', exact: true });
+      const save = editor.locator('button[type="submit"]');
+      await expect(name).toHaveValue(original.name);
+      await expect(description).toHaveValue(original.description);
+      await expect(instructions).toHaveValue(original.body);
+      await name.fill('Invalid Name');
+      await description.fill('');
+      await instructions.fill('');
+      await save.focus();
+      await save.press('Enter');
+      await expect(editor.getByRole('alert')).toContainText('Name must be lowercase');
+      await expect(editor.getByRole('alert')).toContainText('Description is required.');
+      await expect(editor.getByRole('alert')).toContainText('Skill instructions are required.');
+      expect(fixture.submissions).toEqual([]);
+      await name.focus();
+      await name.fill(draft.name);
+      await name.press('Tab');
+      await expect(description).toBeFocused();
+      await description.fill(draft.description);
+      await description.press('Tab');
+      await expect(instructions).toBeFocused();
+      await instructions.fill(draft.body);
+      await instructions.press('Tab');
+      const cancel = editor.getByRole('button', { name: 'Cancel', exact: true });
+      await expect(cancel).toBeFocused();
+      const initialCancelFocus = await expectSkillEditorControlReachable(
+        cancel,
+        testInfo,
+        'initial-cancel-focus',
+      );
+      await cancel.press('Tab');
+      await expect(save).toBeFocused();
+      const initialSaveFocus = await expectSkillEditorControlReachable(
+        save,
+        testInfo,
+        'initial-save-focus',
+      );
+      await save.press('Enter');
+      try {
+        await expect.poll(() => fixture.submissions.length).toBe(1);
+        await expect(save).toHaveText('Saving…');
+        await expect(save).toBeDisabled();
+        await expect(name).toHaveValue(draft.name);
+        await expect(description).toHaveValue(draft.description);
+        await expect(instructions).toHaveValue(draft.body);
+      } finally {
+        finishFailedSave?.();
+      }
+      await expect(editor.getByRole('alert')).toHaveText(SKILL_EDITOR_SAVE_ERROR);
+      await expect(name).toHaveValue(draft.name);
+      await expect(description).toHaveValue(draft.description);
+      await expect(instructions).toHaveValue(draft.body);
+      await expect(save).toBeEnabled();
+      expect(fixture.saved).toEqual(original);
+      expect(fixture.submissions).toEqual([
+        { path: `/api/skills/${original.name}`, draft, hasFixtureCsrf: true },
+      ]);
+      const geometry = await editor.evaluate((element) => ({
+        width: element.getBoundingClientRect().width,
+        scrollWidth: element.scrollWidth,
+        pageWidth: document.documentElement.scrollWidth,
+        viewport: innerWidth,
+      }));
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(Math.ceil(geometry.width));
+      expect(geometry.pageWidth).toBeLessThanOrEqual(geometry.viewport);
+      const failedSaveImage = testInfo.outputPath('skill-editor-failed-save.png');
+      await editor.screenshot({ path: failedSaveImage });
+      await testInfo.attach('skill-editor-failed-save', {
+        path: failedSaveImage,
+        contentType: 'image/png',
+      });
+      await expectSkillEditorFieldsDoNotOverlap(editor);
+      const form = editor.locator('form');
+      await form.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      const failedFooterAtBottom = {
+        save: await expectSkillEditorControlReachable(save, testInfo, 'failed-footer-save'),
+        cancel: await expectSkillEditorControlReachable(cancel, testInfo, 'failed-footer-cancel'),
+      };
+      await save.focus();
+      await save.press('Shift+Tab');
+      await expect(cancel).toBeFocused();
+      const failedCancelFocus = await expectSkillEditorControlReachable(
+        cancel,
+        testInfo,
+        'failed-cancel-focus',
+      );
+      const footerImage = testInfo.outputPath('skill-editor-footer-keyboard.png');
+      await editor.screenshot({ path: footerImage });
+      await testInfo.attach('skill-editor-footer-keyboard', {
+        path: footerImage,
+        contentType: 'image/png',
+      });
+      await cancel.press('Tab');
+      await expect(save).toBeFocused();
+      const failedSaveFocus = await expectSkillEditorControlReachable(
+        save,
+        testInfo,
+        'failed-save-focus',
+      );
+      await save.press('Enter');
+      await expect(editor).toBeHidden();
+      expect(fixture.saved).toEqual(draft);
+      expect(fixture.submissions).toEqual([
+        { path: `/api/skills/${original.name}`, draft, hasFixtureCsrf: true },
+        { path: `/api/skills/${original.name}`, draft, hasFixtureCsrf: true },
+      ]);
+      await page.goto(`/chat#settings/customize-skills/browse/${draft.name}`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      const reopen = page.getByRole('button', { name: `Settings ${draft.name}`, exact: true });
+      await expect(reopen).toBeVisible();
+      await reopen.focus();
+      await reopen.press('Enter');
+      await expectSkillEditorReady(editor);
+      await expect(name).toHaveValue(draft.name);
+      await expect(description).toHaveValue(draft.description);
+      await expect(instructions).toHaveValue(draft.body);
+      expect(fixture.bodyReads).toContain(draft.name);
+      const savedImage = testInfo.outputPath('skill-editor-reopened.png');
+      await editor.screenshot({ path: savedImage });
+      await testInfo.attach('skill-editor-reopened', {
+        path: savedImage,
+        contentType: 'image/png',
+      });
+      await expectSkillEditorFieldsDoNotOverlap(editor);
+      await form.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      const reopenedFooterAtBottom = {
+        save: await expectSkillEditorControlReachable(save, testInfo, 'reopened-footer-save'),
+        cancel: await expectSkillEditorControlReachable(cancel, testInfo, 'reopened-footer-cancel'),
+      };
+      await cancel.click();
+      await expect(editor).toBeHidden();
+      expect(fixture.submissions).toHaveLength(2);
+      expect(fixture.saved).toEqual(draft);
+      await reopen.focus();
+      await reopen.press('Enter');
+      await expectSkillEditorReady(editor);
+      await page.keyboard.press('Escape');
+      await expect(editor).toBeHidden();
+      expect(fixture.submissions).toHaveLength(2);
+      expect(fixture.saved).toEqual(draft);
+      expect(traffic.skillReads).toBeGreaterThan(0);
+      expect(traffic.agentSubmissions).toEqual([]);
+      expect(traffic.preferenceWrites).toEqual([]);
+      expect(traffic.backgroundPreferenceWrites).toEqual([]);
+      expect(traffic.pushRefreshWrites).toEqual([]);
+      expect(traffic.applicationMutations.filter((entry) => entry !== 'POST /api/consent')).toEqual(
+        [`PUT /api/skills/${original.name}`, `PUT /api/skills/${original.name}`],
+      );
+      expect(runtimeErrors).toEqual([]);
+      assertNoNewNotificationDelivery(traffic);
+      const proofPath = testInfo.outputPath('skill-editor-scroll-and-focus.json');
+      writeFileSync(
+        proofPath,
+        JSON.stringify(
+          {
+            appearance,
+            width,
+            initialCancelFocus,
+            initialSaveFocus,
+            failedFooterAtBottom,
+            failedCancelFocus,
+            failedSaveFocus,
+            reopenedFooterAtBottom,
+            applicationMutations: traffic.applicationMutations,
+            skillMutationCount: fixture.submissions.length,
+            savedFixtureFields: Object.keys(fixture.saved),
+          },
+          null,
+          2,
+        ),
+      );
+      await testInfo.attach('skill-editor-scroll-and-focus', {
+        path: proofPath,
+        contentType: 'application/json',
+      });
+    });
+  }
 }
 
 for (const fixture of [

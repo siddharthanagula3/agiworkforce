@@ -1,9 +1,8 @@
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { MAX_CONNECTOR_TOOLS_PER_USER } from '@/lib/user-connector-tools';
+import { DEFAULT_TOOL_SCHEMA_BYTES, TOOL_DIRECTORY_TOOL_NAME } from './tool-schema-state';
 
-export const TOOL_DIRECTORY_TOOL_NAME = 'load_connector_tools';
-
-export const DEFAULT_TOOL_SCHEMA_BYTES = 24_000;
+export { DEFAULT_TOOL_SCHEMA_BYTES, TOOL_DIRECTORY_TOOL_NAME } from './tool-schema-state';
 
 const MIN_RELEVANT_SCORE = 1;
 const NAME_MATCH_WEIGHT = 3;

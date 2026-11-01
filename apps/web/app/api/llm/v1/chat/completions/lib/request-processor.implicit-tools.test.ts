@@ -77,6 +77,18 @@ function request(overrides: Partial<ChatCompletionRequest> = {}): ChatCompletion
 }
 
 describe('implicit managed-tool intent', () => {
+  it('strips client-supplied private schema state at the HTTP body parse boundary', () => {
+    const body = {
+      ...request(),
+      x_tool_schema_state: { loadedQualifiedNames: ['mcp__untrusted__execute'] },
+    };
+    const parsed = requestProcessor.parseChatCompletionRequestBody(body);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty('x_tool_schema_state');
+    expect(body).toHaveProperty('x_tool_schema_state');
+  });
+
   it('offers code execution for an explicit Pro execution request', () => {
     const chatRequest = request();
 

@@ -85,13 +85,16 @@ export function SkillEditorDialog({
   const nameId = useId();
   const descriptionId = useId();
   const bodyId = useId();
+  const initialName = initialSkill?.name ?? '';
+  const initialDescription = initialSkill?.description ?? '';
+  const initialBody = initialSkill?.body ?? '';
 
   useEffect(() => {
     if (!open) return;
-    setDraft(initialSkill ? { ...initialSkill } : EMPTY_DRAFT);
+    setDraft({ name: initialName, description: initialDescription, body: initialBody });
     setTouched(false);
     setImportErrors([]);
-  }, [open, initialSkill]);
+  }, [open, mode, initialName, initialDescription, initialBody]);
 
   const importSkillFile = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -170,7 +173,7 @@ export function SkillEditorDialog({
           </DialogHeader>
           <form
             onSubmit={handleSubmit}
-            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+            className="flex min-h-0 flex-1 scroll-p-1 flex-col gap-4 overflow-y-auto p-1"
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               <Button
@@ -223,7 +226,7 @@ export function SkillEditorDialog({
                 maxLength={SKILL_DRAFT_DESCRIPTION_MAX_LENGTH}
               />
             </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+            <div className="flex flex-1 flex-col gap-1.5">
               <Label htmlFor={bodyId}>Instructions</Label>
               {bodyLoading ? (
                 <p className="text-xs text-muted-foreground">Loading current instructions…</p>

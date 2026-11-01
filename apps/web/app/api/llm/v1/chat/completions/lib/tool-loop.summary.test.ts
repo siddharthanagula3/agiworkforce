@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { chatImageModelLabel } from '@/app/api/media/image/lib/image-generation-provider';
 
 import { canonicalApprovalSummary, canonicalToolSummary } from './tool-loop';
+import { TOOL_DIRECTORY_TOOL_NAME } from './tool-schema-state';
 
 describe('canonicalToolSummary, MCP connectors', () => {
+  it('gives the metadata loader a neutral label that remains valid after completion', () => {
+    expect(canonicalToolSummary(TOOL_DIRECTORY_TOOL_NAME, 'other')).toBe('Load connector tools');
+  });
+
   it('uses a named connector server label', () => {
     expect(canonicalToolSummary('mcp__github__get_pull_request_diff', 'connector')).toBe(
       'Using GitHub connector',

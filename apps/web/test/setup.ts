@@ -41,6 +41,10 @@ process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
 process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
 process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_test_secret';
 process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
+process.env['AGI_KEY_PROVIDER'] = 'env';
+process.env['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY'] = '11'.repeat(32);
+process.env['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_ID'] = '1';
+process.env['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_RETIRED'] = '';
 
 // A unit test must never reach the real database. `getNeonDb()` builds its
 // client from AGI_DATABASE_URL ?? DATABASE_URL with no test-mode guard, and
