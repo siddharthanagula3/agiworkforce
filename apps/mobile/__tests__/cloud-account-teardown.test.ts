@@ -70,6 +70,18 @@ jest.mock('../src/lib/Capabilities', () => ({
   useRemoteCapabilityStore: { getState: jest.fn() },
 }));
 
+jest.mock('../src/features/model-picker/freeQuotaCatalogue', () => ({
+  useFreeQuotaCatalogueStore: { getState: jest.fn() },
+}));
+
+jest.mock('../src/features/model-picker/store', () => ({
+  useModelStore: { getState: jest.fn() },
+}));
+
+jest.mock('../src/features/model-picker/service', () => ({
+  DEFAULT_LOCAL_MODEL_ID: 'fixture-local-model',
+}));
+
 jest.mock('../src/features/schedules/store', () => ({
   useScheduleStore: { getState: jest.fn() },
 }));
@@ -172,6 +184,13 @@ const { useTierStore } = require('../src/features/billing/store') as {
 const { useRemoteCapabilityStore } = require('../src/lib/Capabilities') as {
   useRemoteCapabilityStore: { getState: jest.Mock };
 };
+const { useFreeQuotaCatalogueStore } =
+  require('../src/features/model-picker/freeQuotaCatalogue') as {
+    useFreeQuotaCatalogueStore: { getState: jest.Mock };
+  };
+const { useModelStore } = require('../src/features/model-picker/store') as {
+  useModelStore: { getState: jest.Mock };
+};
 const { useScheduleStore } = require('../src/features/schedules/store') as {
   useScheduleStore: { getState: jest.Mock };
 };
@@ -221,6 +240,7 @@ describe('clearLocalCloudAccountState', () => {
   const clearCloudAgentControls = jest.fn();
   const clearEntitlements = jest.fn();
   const clearCapabilitySwitches = jest.fn();
+  const clearPromotionalCatalogue = jest.fn();
   const clearSchedules = jest.fn();
   const clearCloudSearch = jest.fn();
   const clearManagedCloudAccess = jest.fn();
@@ -256,6 +276,8 @@ describe('clearLocalCloudAccountState', () => {
       clearAccountEntitlements: clearEntitlements,
     });
     useRemoteCapabilityStore.getState.mockReturnValue({ clear: clearCapabilitySwitches });
+    useFreeQuotaCatalogueStore.getState.mockReturnValue({ clear: clearPromotionalCatalogue });
+    useModelStore.getState.mockReturnValue({ selectedModel: 'fixture-local-model' });
     useScheduleStore.getState.mockReturnValue({ clearAccountSchedules: clearSchedules });
     useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
@@ -263,9 +285,13 @@ describe('clearLocalCloudAccountState', () => {
   });
 
   it('clears account A Cloud data before account B while preserving Local data', () => {
+    const warning = jest.spyOn(console, 'warn');
     clearLocalCloudAccountState();
 
     expect(stopCloudSyncLoop).toHaveBeenCalledTimes(1);
+    expect(clearPromotionalCatalogue).toHaveBeenCalledTimes(1);
+    expect(warning).not.toHaveBeenCalled();
+    warning.mockRestore();
     expect(resetCloudSync).toHaveBeenCalledTimes(1);
     expect(clearCloudExecutionState).toHaveBeenCalledTimes(1);
     expect(clearCloudImageGenerationState).toHaveBeenCalledTimes(1);

@@ -573,6 +573,13 @@ export default function ChatScreen() {
         return started;
       }
 
+      const skillNameForTurn =
+        conversationExecutionMode === 'cloud' &&
+        clerkUserId &&
+        skillSelection?.ownerId === clerkUserId
+          ? skillSelection.name
+          : undefined;
+
       if (!isOnline && conversationExecutionMode === 'cloud') {
         if (!clerkUserId) {
           Alert.alert(
@@ -589,6 +596,7 @@ export default function ChatScreen() {
             conversationId: id,
             content: finalText,
             model: selectedModel,
+            ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
             provenance: { scope: 'cloud', ownerId: clerkUserId },
           });
         } catch {
@@ -599,15 +607,10 @@ export default function ChatScreen() {
           return false;
         }
         enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
+        if (skillNameForTurn) clearSelectedSkill();
         return true;
       }
 
-      const skillNameForTurn =
-        conversationExecutionMode === 'cloud' &&
-        clerkUserId &&
-        skillSelection?.ownerId === clerkUserId
-          ? skillSelection.name
-          : undefined;
       const sendOptions = skillNameForTurn ? { skillName: skillNameForTurn } : {};
 
       quotedMessageScopeRef.current = null;

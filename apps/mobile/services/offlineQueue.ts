@@ -12,6 +12,7 @@ export interface QueuedMessage {
   conversationId: string;
   content: string;
   model: string;
+  skillName?: string;
   queuedAt: string;
   retryCount: number;
   provenance: OfflineQueueProvenance;
@@ -34,6 +35,7 @@ interface PersistedQueueEntry {
   conversationId: string;
   content: string;
   model: string;
+  skillName?: string;
   queuedAt: string;
   retryCount: number;
   provenance: OfflineQueueProvenance;
@@ -60,8 +62,14 @@ function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
     Number.isInteger(entry.retryCount) &&
     entry.retryCount >= 0 &&
     entry.retryCount <= MAX_RETRY_COUNT &&
-    isOfflineQueueProvenance(entry.provenance)
+    isOfflineQueueProvenance(entry.provenance) &&
+    (entry.skillName === undefined ||
+      (entry.provenance.scope === 'cloud' && isQueuedSkillName(entry.skillName)))
   );
+}
+
+function isQueuedSkillName(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function normalizedOwnerId(ownerId: unknown): string | null {
@@ -144,11 +152,12 @@ class OfflineMessageQueue {
     this.notify();
     try {
       const entries: PersistedQueueEntry[] = this.queue.map(
-        ({ id, conversationId, content, model, queuedAt, retryCount, provenance }) => ({
+        ({ id, conversationId, content, model, skillName, queuedAt, retryCount, provenance }) => ({
           id,
           conversationId,
           content,
           model,
+          skillName,
           queuedAt,
           retryCount,
           provenance,
@@ -186,8 +195,6 @@ class OfflineMessageQueue {
 
   /**
    * Add a message to the end of the queue.
-   * Ignores duplicates by conversationId + content to prevent double-queuing
-   * the same message on rapid reconnect cycles.
    *
    * @param onSuccess - Called after the message is successfully sent.
    * @param onFailure - Called if the message is dropped after exhausting retries.
@@ -196,11 +203,20 @@ class OfflineMessageQueue {
     msg: Omit<QueuedMessage, 'id' | 'queuedAt' | 'retryCount' | 'onSuccess' | 'onFailure'>,
     callbacks?: { onSuccess?: () => void; onFailure?: (error: Error) => void },
   ): QueuedMessage {
+    const provenance = requireOfflineQueueProvenance(msg.provenance);
+    if (
+      msg.skillName !== undefined &&
+      (provenance.scope !== 'cloud' || !isQueuedSkillName(msg.skillName))
+    ) {
+      throw new Error('A queued account skill requires Cloud scope and a non-empty name');
+    }
     const duplicate = this.queue.find(
       (q) =>
         q.conversationId === msg.conversationId &&
         q.content === msg.content &&
-        hasSameProvenance(q.provenance, msg.provenance),
+        q.model === msg.model &&
+        q.skillName === msg.skillName &&
+        hasSameProvenance(q.provenance, provenance),
     );
     if (duplicate) return duplicate;
 
@@ -211,7 +227,7 @@ class OfflineMessageQueue {
 
     const entry: QueuedMessage = {
       ...msg,
-      provenance: requireOfflineQueueProvenance(msg.provenance),
+      provenance,
       id: `qmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       queuedAt: new Date().toISOString(),
       retryCount: 0,

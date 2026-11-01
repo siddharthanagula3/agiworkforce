@@ -46,6 +46,7 @@ export function useNetworkStatus(): NetworkStatus {
         let accepted = false;
         try {
           await sendMessage(msg.conversationId, msg.content, msg.model, undefined, {
+            ...(msg.skillName ? { skillName: msg.skillName } : {}),
             onAccepted: () => {
               accepted = true;
               resolveOfflineMessage(msg.conversationId, msg.id);
