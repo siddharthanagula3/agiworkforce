@@ -7,6 +7,11 @@ describe('SkillEditorDialog', () => {
     render(<SkillEditorDialog open mode="create" onOpenChange={vi.fn()} onSubmit={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'New skill' })).toBeTruthy();
+    const form = screen.getByRole('form', { name: 'New skill' });
+    const actions = screen.getByRole('group', { name: 'Skill actions' });
+    expect(form).toContainElement(screen.getByLabelText('Name'));
+    expect(form).toContainElement(actions);
+    expect(actions).toContainElement(screen.getByRole('button', { name: 'Create skill' }));
     expect(screen.getByLabelText('Name')).toHaveValue('');
     expect(screen.getByLabelText('Description')).toHaveValue('');
     expect(screen.getByLabelText('Instructions')).toHaveValue('');
@@ -29,6 +34,9 @@ describe('SkillEditorDialog', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Edit skill' })).toBeTruthy();
+    const form = screen.getByRole('form', { name: 'Edit skill' });
+    expect(form).toContainElement(screen.getByLabelText('Instructions'));
+    expect(form).toContainElement(screen.getByRole('group', { name: 'Skill actions' }));
     expect(screen.getByLabelText('Name')).toHaveValue('release-notes');
     expect(screen.getByLabelText('Description')).toHaveValue('Draft release notes.');
     expect(screen.getByLabelText('Instructions')).toHaveValue('Summarize the diff.');

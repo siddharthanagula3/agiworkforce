@@ -408,7 +408,9 @@ async function expectSkillEditorFieldsDoNotOverlap(editor: Locator) {
   const instructions = await editor
     .getByRole('textbox', { name: 'Instructions', exact: true })
     .boundingBox();
-  const footer = await editor.locator('button[type="submit"]').locator('..').boundingBox();
+  const footer = await editor
+    .getByRole('group', { name: 'Skill actions', exact: true })
+    .boundingBox();
   expect(instructions).not.toBeNull();
   expect(footer).not.toBeNull();
   const error = editor.getByRole('alert');
@@ -437,7 +439,7 @@ async function expectSkillEditorControlReachable(
 ) {
   await expect(control).toBeInViewport();
   const geometry = await control.evaluate((element) => {
-    const form = element.closest('form');
+    const form = element instanceof HTMLButtonElement ? element.form : null;
     const dialog = element.closest('[role="dialog"]');
     if (!(form instanceof HTMLFormElement) || !(dialog instanceof HTMLElement)) {
       throw new Error('The editor control must belong to its form and dialog.');
@@ -572,7 +574,8 @@ for (const appearance of ['light', 'dark'] as const) {
       const name = editor.getByRole('textbox', { name: 'Name', exact: true });
       const description = editor.getByRole('textbox', { name: 'Description', exact: true });
       const instructions = editor.getByRole('textbox', { name: 'Instructions', exact: true });
-      const save = editor.locator('button[type="submit"]');
+      const actions = editor.getByRole('group', { name: 'Skill actions', exact: true });
+      const save = actions.getByRole('button', { name: /^(Save changes|Saving…)$/ });
       await expect(name).toHaveValue(original.name);
       await expect(description).toHaveValue(original.description);
       await expect(instructions).toHaveValue(original.body);
@@ -594,7 +597,7 @@ for (const appearance of ['light', 'dark'] as const) {
       await expect(instructions).toBeFocused();
       await instructions.fill(draft.body);
       await instructions.press('Tab');
-      const cancel = editor.getByRole('button', { name: 'Cancel', exact: true });
+      const cancel = actions.getByRole('button', { name: 'Cancel', exact: true });
       await expect(cancel).toBeFocused();
       const initialCancelFocus = await expectSkillEditorControlReachable(
         cancel,
@@ -643,7 +646,7 @@ for (const appearance of ['light', 'dark'] as const) {
         contentType: 'image/png',
       });
       await expectSkillEditorFieldsDoNotOverlap(editor);
-      const form = editor.locator('form');
+      const form = editor.getByRole('form', { name: 'Edit skill', exact: true });
       await form.evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });

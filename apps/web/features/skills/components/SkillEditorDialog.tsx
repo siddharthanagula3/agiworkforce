@@ -88,6 +88,7 @@ export function SkillEditorDialog({
   const initialName = initialSkill?.name ?? '';
   const initialDescription = initialSkill?.description ?? '';
   const initialBody = initialSkill?.body ?? '';
+  const editorTitle = mode === 'create' ? 'New skill' : 'Edit skill';
 
   useEffect(() => {
     if (!open) return;
@@ -165,13 +166,14 @@ export function SkillEditorDialog({
       <Dialog open={open} onOpenChange={requestClose}>
         <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{mode === 'create' ? 'New skill' : 'Edit skill'}</DialogTitle>
+            <DialogTitle>{editorTitle}</DialogTitle>
             <DialogDescription>
               A skill is a set of instructions the model follows once your prompt matches its
               description.
             </DialogDescription>
           </DialogHeader>
           <form
+            aria-label={editorTitle}
             onSubmit={handleSubmit}
             className="flex min-h-0 flex-1 scroll-p-1 flex-col gap-4 overflow-y-auto p-1"
           >
@@ -304,7 +306,7 @@ export function SkillEditorDialog({
                 </div>
               </section>
             ) : null}
-            <DialogFooter>
+            <DialogFooter role="group" aria-label="Skill actions">
               <Button type="button" variant="ghost" onClick={() => requestClose(false)}>
                 Cancel
               </Button>
