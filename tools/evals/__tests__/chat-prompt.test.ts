@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { loadArtifactsPackage } from '../src/artifacts-package';
 import { chatPromptStamp, loadChatPromptRenderer, withChatPrompt } from '../src/chat-prompt';
 import { loadDataset } from '../src/dataset';
+import { gradeCheck } from '../src/grader';
 import { resolveLiveTarget, type RegistryLike } from '../src/live';
 import { buildRequest, fingerprintRequest } from '../src/request';
 import { CHAT_PROMPT_REQUIRED_REASON, runLive } from '../src/run';
@@ -113,7 +114,24 @@ describe('rendering version 7 for a web chat turn', () => {
     expect(free).not.toContain('- generate images');
     expect(pro).toContain('- generate images');
     expect(pro).toContain('- run Deep Research');
+    expect(free).not.toContain('- work with apps the user has connected');
+    expect(pro).toContain('- work with apps the user has connected');
+    expect(pro).not.toContain('window.agi.complete(prompt, { connectors:');
     expect(v7.render(row('chat-prompt/make-a-calculator'))).not.toContain('- generate images');
+  });
+
+  it('grades the Pro overview for selective chat apps without requiring unreleased integrations', () => {
+    const pro = row('chat-prompt/what-can-you-do-pro');
+    const answer =
+      'I can generate images, run Deep Research, build interactive artifacts, and work with connected apps.';
+    expect(pro.checks.map((check) => gradeCheck(check, { text: answer }).passed)).not.toContain(
+      false,
+    );
+    const withoutConnectors =
+      'I can generate images, run Deep Research, and build interactive artifacts.';
+    expect(
+      pro.checks.map((check) => gradeCheck(check, { text: withoutConnectors }).passed),
+    ).toContain(false);
   });
 
   it('renders versions before 7 exactly as their runs measured them', async () => {

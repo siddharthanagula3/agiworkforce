@@ -1,5 +1,5 @@
 {
-  "_comment": "Capability ids the capability handshake grants on the web surface with sandboxes deployed, as apps/web/lib/prompts/product-capability-facts.ts returns them. The chat-prompt corpus renders the product capabilities section from these; apps/web/lib/prompts/__tests__/product-capability-facts.test.ts fails when they drift from the product.",
+  "_comment": "Capability ids the capability handshake grants for ordinary account chat on the web surface with sandboxes deployed and selective connectors enabled, as apps/web/lib/prompts/product-capability-facts.ts returns them. The chat-prompt corpus renders the product capabilities section from these; apps/web/lib/prompts/__tests__/product-capability-facts.test.ts fails when they drift from the product. This does not enable connectors for artifacts or other full-release contexts.",
   "free": [
     "canChat",
     "canUploadFiles",
@@ -25,6 +25,7 @@
     "canUseWebSearch",
     "canUseDeepResearch",
     "canUseAgiWork",
+    "canUseConnectors",
     "canUsePlugins",
     "canUseSkills",
     "canUseCamera"

@@ -5,6 +5,7 @@ import {
   policyAutoApprovesTool,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { TOOL_CALL_GATE_RANKS } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
+import { TOOL_DIRECTORY_TOOL_NAME } from '@/app/api/llm/v1/chat/completions/lib/tool-schema-state';
 import {
   TOOL_APPROVAL_POLICIES,
   WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
@@ -16,6 +17,7 @@ import {
   toolApprovalPolicySentence,
   TOOL_APPROVAL_PRECEDENCE,
 } from '@/lib/tool-approval-view';
+import { toolApprovalLabel } from '@/lib/tool-copy';
 
 describe('the published precedence order is the gate order', () => {
   it('publishes every rank the gate applies, in the gate order and under its number', () => {
@@ -63,6 +65,20 @@ describe('the published tool table is the platform tool table', () => {
       expect(row.label, row.name).not.toBe(row.name);
       expect(row.description.length, row.name).toBeGreaterThan(40);
     }
+  });
+
+  it('describes local schema loading without granting approval to the loaded tools', () => {
+    const row = buildToolApprovalToolRows().find((tool) => tool.name === TOOL_DIRECTORY_TOOL_NAME);
+
+    expect(row?.label).toBe('Load connector tools');
+    expect(toolApprovalLabel(TOOL_DIRECTORY_TOOL_NAME)).toBe(row?.label);
+    expect(row?.description).toContain('does not call a connected app or change its data');
+    expect(row?.description).toContain('own permissions and approval checks');
+    expect(row?.runsWithoutAsking).toEqual(['auto_approve_read_only', 'autonomous']);
+    expect(policyAutoApprovesTool('ask_every_time', TOOL_DIRECTORY_TOOL_NAME)).toBe(false);
+    expect(
+      policyAutoApprovesTool('auto_approve_read_only', `mcp__other__${TOOL_DIRECTORY_TOOL_NAME}`),
+    ).toBe(false);
   });
 
   it('names no two tools alike, so no row reads as a repeat of another', () => {

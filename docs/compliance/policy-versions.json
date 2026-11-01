@@ -25,6 +25,12 @@
       "served": "4bab0f222015650c2f49bca3b343e60a2df60e5b",
       "main": "6e450460b042402081aea754697f84f81e3d2b2d",
       "note": "On 18 October 2026 agiworkforce.com/privacy printed Last updated 2026-10-15, the date POLICY_LAST_UPDATED gives at 4bab0f2220, the commit production served. 6e450460b0 moves the privacy date to 2026-10-18 for the Chrome extension wording, so the 2026-10-15 version applied until this release replaces it."
+    },
+    {
+      "checkedOn": "2026-11-01",
+      "served": "28260a8d5e6f37da432d21e6fe8edc37eb845e26",
+      "main": "78990d6147176cbdb197d258389a0567516ce437",
+      "note": "On 1 November 2026 fresh public reads of /api/version and /agent-permissions both returned 200. Production served 28260a8d5e6f37da432d21e6fe8edc37eb845e26, and the approvals page printed Last updated 2026-10-08 and said no connector could be connected yet. Main was at 78990d6147176cbdb197d258389a0567516ce437; that candidate was not promoted, and the targeted correction dated 2026-11-01 was not yet published. The Oct8 archive must retain the rendered source production actually served, including its then-current imported tool table."
     }
   ],
   "documents": {
@@ -1019,6 +1025,12 @@
           "date": "2026-10-08",
           "digest": "4045373434688e72",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The lede sentence saying some of the page is less flattering than a marketing page would write it now says the page states the limits of these protections as well as what they do, and the Honest limits eyebrow reads Limits; the section anchor stays honest-limits so existing links keep working. Every limit of the injection escalation is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-11-01",
+          "digest": "2c35ab49bd5f3f61",
+          "note": "Targeted factual correction for selective connector release. Availability now follows hasReleasedConnectors() and connectorsReleased(), with plan, region and provider setup still required. The page also describes loading existing connected-tool schemas as local metadata access. Provider scopes, consent, revocation and individual tool approvals are unchanged; this is not a fresh review of the whole page.",
+          "summary": "Corrects connector availability for selective release and describes the local metadata loader. Connecting still depends on plan, region and provider setup. Provider scopes, consent, revocation and per-tool approval rules are unchanged."
         }
       ]
     },

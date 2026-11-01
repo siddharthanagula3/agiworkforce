@@ -20,6 +20,8 @@ import {
 import { PROMPT_FLAG_PREFIX, promptFlagKey, promptFlagVariant } from '@/lib/prompts/prompt-flags';
 import type { FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 import { capabilityKillSwitchKey } from '@/lib/feature-flags/kill-switches';
+import * as agentTurnConfig from '@/lib/agents/agent-turn-config';
+import { AGENT_ID, agentConfig } from '@/lib/agents/__tests__/agent-fixtures';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
 type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
@@ -800,6 +802,44 @@ describe('the product overview chat prompt v7 renders for the turn (PC-F05)', ()
     for (const capability of ['canUseDeepResearch', 'canUseWebSearch', 'canUseCloudExecution']) {
       expect(joined).toContain(overviewLine(capability));
     }
+  });
+
+  it('describes ordinary-chat connected apps without enabling artifact connector guidance', async () => {
+    const joined = await systemText('chat-system-prompt-selective-connectors');
+
+    expect(joined).toContain(overviewLine('canUseConnectors'));
+    expect(joined).not.toContain(
+      chatSystemPromptSection(chatSystemPromptSections(7), 'artifact_runtime_connectors'),
+    );
+  });
+
+  it('withholds selective connector overview claims from a registered agent turn', async () => {
+    const loadAgent = vi.spyOn(agentTurnConfig, 'loadAgentTurnConfig').mockResolvedValue({
+      ok: true,
+      turn: { agentId: AGENT_ID, config: agentConfig(), files: [] },
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      temporaryConversationRows(sql).map((row) => ({ ...row, agent_id: AGENT_ID })),
+    );
+
+    const result = await processRequest(
+      chatRequestFor('chat-system-prompt-agent-connectors', { conversation_id: CONVERSATION_ID }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(loadAgent).toHaveBeenCalledWith(expect.anything(), 'user-pro', AGENT_ID);
+    expect(result.agentTurn?.agentId).toBe(AGENT_ID);
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    expect(joined).not.toContain(overviewLine('canUseConnectors'));
+    expect(joined).not.toContain(
+      chatSystemPromptSection(chatSystemPromptSections(7), 'artifact_runtime_connectors'),
+    );
+    expect(joined).toContain(overviewLine('canUseWebSearch'));
   });
 
   it('leaves out a feature the workspace administrator turned off', async () => {

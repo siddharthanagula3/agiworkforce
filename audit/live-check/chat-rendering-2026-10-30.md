@@ -2,7 +2,7 @@
 
 Status: Web and integration repairs verified; remaining provider, prompt and surface acceptance open
 Owner: Web chat + shared rendering + settings/agents maintainers
-Last verified: 2026-10-31
+Last verified: 2026-11-01
 Purpose: Track the owner's rendering QA and selected notification/agent recommendations, verified causes, evidence and release boundaries.
 Retention: Delete when pending acceptance is completed or transferred to existing defect owners; Git and the original chat retain dated evidence.
 
@@ -27,18 +27,19 @@ NEW-UX-01 through NEW-UX-04 alongside the chat repair. The pack distinguishes
 recommendations. The remaining historical/public-site/SEO cards were not added
 to this implementation scope and are not asserted to be current defects.
 
-Read-only Vercel/production inspection in the parent chat confirmed deployment
+The initial October 30 read-only Vercel/production inspection confirmed deployment
 `dpl_B6PcJBTtasH479W26iDuKFaWDEgV` serves commit
 `8a0899345b3bda355dcf6cb1ff42b5b80664043d`, timestamped 2026-10-27
 07:23:03 -05. The math fix `ec9ed8dfe8c60f043c0cf649124556c4529107e4` is
 timestamped 21:07:18 -05 that day. The deployed span renderer drops generated
-`style` and `aria-hidden`. This is both a source and deployment gap; this branch
-has not been deployed.
+`style` and `aria-hidden`. This established the original source and deployment gap;
+later release checks are tracked separately below.
 
-@15 is internal; stable pin @6 and published @1–14 remain unchanged. No live
-prompt-quality evaluation, prompt promotion or paid provider/search/image call
-was performed. Production inspection was read-only; no production conversation,
-billing or database mutation was made.
+In that initial rendering pass, @15 was internal; stable pin @6 and published
+@1–14 were unchanged. No live prompt-quality evaluation, prompt promotion or
+paid provider/search/image call was performed in that pass. The later authorized
+local integration calls are recorded below. Production inspection was read-only;
+no production conversation, billing or database mutation was made.
 
 ## Causes and owners
 
@@ -321,6 +322,41 @@ grant. Google, operator-heavy setup and generic/plugin-bundled custom MCP remain
 outside this selective release. Three large Notion schemas remain explicitly
 refused by the existing depth/key budgets; those tools were not certified.
 This follow-up does not establish native-platform or full competitor parity.
+
+### Integration CI follow-up, November 1
+
+The complete JS job for `78990d6147` failed eight tests across six files.
+The new local schema loader lacked canonical approval-page copy and a row in
+the published tool posture table. A scheduled-agent test fixture omitted a
+required permission method, and one exact checkpoint expectation omitted the
+new schema state. Those fixtures now follow the full production contracts;
+runtime validation and the exact checkpoint assertion remain intact.
+
+The capability overview inherited coarse connector discovery without the
+ordinary-account turn restriction, while artifact guidance checked entitlement
+without the full-release gate. `product-capability-facts.ts` now defaults closed
+for selective connectors, the request processor explicitly opts in ordinary
+account turns, and artifact guidance retains the full-release requirement.
+The eval fixture and checks now describe that ordinary-chat context. The
+handshake, exact connector authorization, plan and workspace gates are unchanged.
+The approval page's statement that no connectors could be connected was also
+reproduced in the running UI; its factual correction follows the policy's normal
+dated history and archive process.
+
+The final combined web packet passes 308 tests across 16 files, with 11
+additional offline eval tests. Red controls reproduce the original failures and
+the added context restrictions. Web and eval typechecks, scoped lint, formatting,
+policy and browser-structure guards pass. All 12 policy browser checks pass,
+including eight independent viewport/theme cases with the effective theme
+asserted, and opening the old approvals version and returning to the current
+one. An ambiguous test date filter was corrected after it also matched a
+replacement-date note; this was a harness failure, not a product defect.
+
+Production promotion requires the exact release commit's JS
+lint/typecheck/test/build success. CI's Test step now streams task logs; a
+dry-run comparison confirmed identical task identities, commands and hashes
+for grouped and streamed output. Setting this in the workflow preserves the
+affected web test selection without changing the root package manifest.
 
 ## Diagram and CI acceptance refinement
 

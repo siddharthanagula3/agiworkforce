@@ -300,6 +300,7 @@ jobs:
           AGI_LIVE_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
           AGI_TEST_LIVE_CONVERSATION_DRAFTS: '1'
           NODE_OPTIONS: --max-old-space-size=8192
+          TURBO_LOG_ORDER: stream
         run: pnpm test:affected
 
       - name: Test (webview HTML rendering, jsdom)

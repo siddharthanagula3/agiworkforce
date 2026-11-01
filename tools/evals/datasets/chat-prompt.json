@@ -652,7 +652,7 @@
           }
         }
       ],
-      "notes": "Pro on web: the overview adds image generation and Deep Research, and still claims no connected apps while connectors are unreleased.",
+      "notes": "Pro ordinary account chat on web: the overview adds image generation, Deep Research and selective connected apps. This does not grant artifact connector integrations or connectors outside the release policy.",
       "checks": [
         {
           "kind": "matches",
@@ -667,8 +667,8 @@
           "pattern": "artifact|interactive|preview"
         },
         {
-          "kind": "excludesAll",
-          "values": ["connected apps", "connectors"]
+          "kind": "matches",
+          "pattern": "connected apps|connectors"
         }
       ]
     },

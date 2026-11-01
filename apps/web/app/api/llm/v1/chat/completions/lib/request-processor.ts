@@ -6217,6 +6217,7 @@ async function processAdmittedRequest(
           tier: subscription.plan_tier,
           surface: chatSurface,
           cloudExecutionDeploymentEnabled: e2bProvisioningReady(),
+          allowSelectiveConnectors: !ownership.agentTurn,
           exclusions: await productCapabilityExclusions({
             request,
             userId,

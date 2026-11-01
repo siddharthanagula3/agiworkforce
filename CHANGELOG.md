@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -13,6 +13,9 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 - Web connector tools remain available after approval and interrupted turns;
   completed or refused actions reach a terminal activity state. Authorization
   now requires persistent secure token storage in development as well as production.
+- Chat capability summaries describe selective connectors only in eligible
+  account turns. Artifact and registered-agent connector guidance stays closed,
+  and the approvals page explains the current selective availability.
 - Skill editors retain drafts after failed saves and keep mobile error messages,
   keyboard focus and footer controls inside the scrolling form.
 - Plugin installation and enablement refresh available skills immediately.

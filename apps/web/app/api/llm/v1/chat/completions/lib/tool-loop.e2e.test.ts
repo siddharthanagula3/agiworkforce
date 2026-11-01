@@ -1274,6 +1274,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       nextEventSequence: 3,
       completedSteps: 0,
       messages: [{ role: 'user', content: 'run print(1+1)' }],
+      toolSchemaState: { loadedQualifiedNames: [] },
     });
     expect(output).not.toContain('agent_time_budget_reached');
     expect(output).not.toContain('data: [DONE]');

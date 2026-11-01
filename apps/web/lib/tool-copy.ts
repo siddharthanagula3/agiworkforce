@@ -1,4 +1,11 @@
+import { TOOL_DIRECTORY_TOOL_NAME } from '@/app/api/llm/v1/chat/completions/lib/tool-schema-state';
+
 export const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>> = {
+  [TOOL_DIRECTORY_TOOL_NAME]: {
+    label: 'Load connector tools',
+    description:
+      'Loads input schemas from the connected-tool catalog already available to this turn. Loading does not call a connected app or change its data. Each loaded tool still follows its own permissions and approval checks.',
+  },
   web_search: {
     label: 'Web search',
     description:

@@ -121,6 +121,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
+import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { executeScheduledAgent } from './scheduled-agent-executor';
 import type { ScheduleTask } from './schedule-service';
 import { createWorkspaceMemberDatabaseFake } from '@/test/database-adapter-fake';
@@ -207,13 +208,11 @@ const CONNECTOR_TOOL = {
 };
 
 function permissions(level?: 'allow' | 'ask' | 'deny') {
-  return {
-    levelFor: () => level,
-    levelForConnectorTool: () => level,
-    isDenied: () => level === 'deny',
-    isConnectorToolDenied: () => level === 'deny',
-    size: level ? 1 : 0,
-  };
+  return connectorToolPermissionsFromEntries(
+    level
+      ? [{ connectorId: CONNECTOR_TOOL.serverId, toolName: CONNECTOR_TOOL.toolName, level }]
+      : [],
+  );
 }
 
 function routeTo(model: ModelMetadata) {
