@@ -21,6 +21,8 @@ pub struct AccountSkill {
     pub description: String,
     #[serde(default)]
     pub lifecycle: Option<String>,
+    #[serde(default)]
+    pub downloadable: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,12 +96,30 @@ fn path_segment(value: &str) -> String {
         .collect()
 }
 
+fn decode_skill_document(bytes: Vec<u8>) -> Result<String, CloudError> {
+    if bytes.is_empty() || bytes.len() as u64 > MAX_SKILL_FILE_BYTES {
+        return Err(CloudError::Decode(
+            "the downloaded skill entry is empty or exceeds the file limit".to_string(),
+        ));
+    }
+    String::from_utf8(bytes)
+        .map_err(|_| CloudError::Decode("the downloaded skill entry is not UTF-8".to_string()))
+}
+
 async fn fetch_skill(
     client: &CloudClient,
     skill: &AccountSkill,
 ) -> Result<SyncedSkill, CloudError> {
     let base = format!("{SKILLS_PATH}/{}", path_segment(&skill.name));
-    let body: SkillBody = client.get(&base, &[]).await?;
+    let document = if skill.downloadable {
+        let (bytes, _) = client
+            .get_bytes_with_header(&format!("{base}/files/{SKILL_ENTRY_FILE}?download=1"), None)
+            .await?;
+        decode_skill_document(bytes)?
+    } else {
+        let body: SkillBody = client.get(&base, &[]).await?;
+        skill_document(skill, &body.body)
+    };
     let listed: SkillFiles = client.get(&format!("{base}/files"), &[]).await?;
     let mut files = Vec::new();
     for entry in listed
@@ -125,7 +145,7 @@ async fn fetch_skill(
     }
     Ok(SyncedSkill {
         name: skill.name.clone(),
-        document: skill_document(skill, &body.body),
+        document,
         files,
     })
 }
@@ -185,6 +205,30 @@ pub fn write_account_skills(dir: &Path, skills: &[SyncedSkill]) -> std::io::Resu
 mod tests {
     use super::*;
 
+    #[test]
+    fn downloaded_skill_entry_rejects_non_utf8_instead_of_replacing_bytes() {
+        assert!(matches!(
+            decode_skill_document(vec![0xff]),
+            Err(CloudError::Decode(_))
+        ));
+    }
+
+    #[test]
+    fn downloaded_skill_entry_rejects_empty_content() {
+        assert!(matches!(
+            decode_skill_document(Vec::new()),
+            Err(CloudError::Decode(_))
+        ));
+    }
+
+    #[test]
+    fn downloaded_skill_entry_rejects_content_over_the_existing_file_limit() {
+        assert!(matches!(
+            decode_skill_document(vec![b'x'; MAX_SKILL_FILE_BYTES as usize + 1]),
+            Err(CloudError::Decode(_))
+        ));
+    }
+
     fn skill(name: &str, document: &str) -> SyncedSkill {
         SyncedSkill {
             name: name.to_string(),
@@ -200,6 +244,7 @@ mod tests {
                 name: "pdf-forms".to_string(),
                 description: "Fill PDF forms:\n  read fields, then write them".to_string(),
                 lifecycle: None,
+                downloadable: false,
             },
             "Read the form first.\n",
         );

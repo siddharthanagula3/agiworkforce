@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Account skill sync retains the original entry file and its declared requirements
+  for downloadable bundled skills; authored skills keep their existing body path.
 - Malformed generated tables with extra cells retain their complete selectable
   source, with working copy and expand controls, instead of losing trailing text.
 - Chat respects refusals of public web search inside lists of disallowed actions

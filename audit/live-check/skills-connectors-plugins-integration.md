@@ -125,6 +125,14 @@ Regressions reproduced the original lost-cell and copy failure, then passed afte
 
 The same saved chat was reopened without another model call. Its fallback copied all 458 characters exactly in both themes; the original table-copy result had dropped the final rule. Expand and Escape worked. Keyboard focus reached the code area and Right scrolled it horizontally; the page stayed at its 1280-pixel viewport width. The QA account's original dark theme and clipboard were restored. Narrower viewport checks and native application runs are not established by this desktop-browser case. `table-fallback-verification.json` records source hashes, before/after screenshots and these limits.
 
+## Downloadable skill entry metadata on CLI sync
+
+CLI account sync reconstructed every `SKILL.md` from the body endpoint, dropping the original frontmatter. For skills the existing API marks downloadable, it now reads the original entry through the same authenticated raw-file representation used for companions. The downloaded text is preserved exactly and is rejected if empty, over the existing file limit, or invalid UTF-8. Authored skills remain on their existing body path and do not require an original-file endpoint. There is no permissive fallback after a failed original-entry request.
+
+The real loopback HTTP/filesystem regression failed with the prior implementation, then passed with the original entry, version, explicit-only selection flag, required tools, environment and connector names intact. A separate loopback case covers an authored skill with no entry-file endpoint. The full CLI cloud suite passed 131 tests; its existing OS-credential-store test remains ignored. CLI Clippy passed with warnings and unsafe code denied. The first exact-name test command selected zero tests and is not evidence; the corrected fully matched red/green runs each executed the intended test.
+
+This repairs preservation of downloadable bundled entries. It does not establish live account sync, VS Code extension execution, complete native support for every optional frontmatter field, or metadata preservation in the separate imported-plugin and authored-skill producers. Those acceptance paths remain open.
+
 The separate Notion schema-admission proposal was rejected by automatic approval review because broader schema acceptance lacked comprehensive security validation. The persistent guard was not changed. Its red tests are preserved in an off-tree patch, and their temporary repository changes were removed. The current settings panel inspects tool parameters and attaches resources/prompts to chat; it does not provide a manual tool runner. No private Notion QA page has been created.
 
 ## Live access and remaining investigation

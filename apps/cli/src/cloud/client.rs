@@ -675,11 +675,14 @@ mod tests {
         use axum::{Json, Router};
         use serde_json::json;
 
+        const ORIGINAL_SKILL: &str = "---\nname: fixture-sync\ndescription: Read the bundled references.\nversion: 1.2.3\nallow_implicit: false\nrequires:\n  tools: [fixture-read]\n  env: [FIXTURE_SKILL_TOKEN]\n  mcp: [notion]\n---\n\nRead the original companion resources.\n";
+
         async fn companion(
             Path(path): Path<String>,
             Query(query): Query<HashMap<String, String>>,
         ) -> axum::response::Response {
             let (bytes, binary) = match path.as_str() {
+                "SKILL.md" => (ORIGINAL_SKILL.as_bytes().to_vec(), false),
                 "references/a guide.md" => (b"first\nsecond\n".to_vec(), false),
                 "assets/sample.bin" => (vec![0, 255, 1, 13, 10], true),
                 _ => return StatusCode::NOT_FOUND.into_response(),
@@ -709,6 +712,7 @@ mod tests {
                         "skills": [{
                             "name": "fixture-sync",
                             "description": "Read the bundled references.",
+                            "downloadable": true,
                             "lifecycle": "included"
                         }]
                     }))
@@ -723,6 +727,7 @@ mod tests {
                 get(|| async {
                     Json(json!({
                         "files": [
+                            { "path": "SKILL.md", "size": ORIGINAL_SKILL.len() },
                             { "path": "references/a guide.md", "size": 13 },
                             { "path": "assets/sample.bin", "size": 5 }
                         ]
@@ -744,12 +749,70 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         crate::cloud::skills::write_account_skills(dir.path(), &synced).unwrap();
 
+        let entry = dir.path().join("fixture-sync/SKILL.md");
+        assert_eq!(std::fs::read_to_string(&entry).unwrap(), ORIGINAL_SKILL);
+        let loaded = crate::skills::load_skill(&entry).expect("the original entry loads");
+        assert_eq!(loaded.version.as_deref(), Some("1.2.3"));
+        assert!(!loaded.allow_implicit);
+        assert_eq!(loaded.required_tools, vec!["fixture-read"]);
+        assert_eq!(loaded.required_env_vars, vec!["FIXTURE_SKILL_TOKEN"]);
+        assert_eq!(loaded.required_connections, vec!["notion"]);
+
         assert_eq!(
             (
                 std::fs::read(dir.path().join("fixture-sync/references/a guide.md")).unwrap(),
                 std::fs::read(dir.path().join("fixture-sync/assets/sample.bin")).unwrap(),
             ),
             (b"first\nsecond\n".to_vec(), vec![0, 255, 1, 13, 10])
+        );
+    }
+
+    #[tokio::test]
+    async fn authored_skill_sync_keeps_the_body_path_without_an_original_entry_file() {
+        use axum::routing::get;
+        use axum::{Json, Router};
+        use serde_json::json;
+
+        let router = Router::new()
+            .route(
+                "/api/skills",
+                get(|| async {
+                    Json(json!({
+                        "skills": [{
+                            "name": "fixture-authored",
+                            "description": "Keep the authored instructions.",
+                            "lifecycle": "included",
+                            "downloadable": false
+                        }]
+                    }))
+                }),
+            )
+            .route(
+                "/api/skills/fixture-authored",
+                get(|| async { Json(json!({"body": "Authored instructions.\n"})) }),
+            )
+            .route(
+                "/api/skills/fixture-authored/files",
+                get(|| async { Json(json!({"files": [{"path": "SKILL.md", "size": 23}]})) }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = CloudClient {
+            base: format!("http://{}", listener.local_addr().unwrap()),
+            jwt: "fixture-token".to_string(),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let result = crate::cloud::skills::fetch_account_skills(&client).await;
+        server.abort();
+        let synced = result.expect("authored skills need no original entry download");
+        assert_eq!(
+            (synced[0].name.as_str(), synced[0].document.as_str(), &synced[0].files),
+            (
+                "fixture-authored",
+                "---\nname: fixture-authored\ndescription: Keep the authored instructions.\n---\n\nAuthored instructions.\n",
+                &Vec::<(String, Vec<u8>)>::new()
+            )
         );
     }
 }
