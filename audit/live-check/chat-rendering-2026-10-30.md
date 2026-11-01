@@ -331,6 +331,9 @@ the published tool posture table. A scheduled-agent test fixture omitted a
 required permission method, and one exact checkpoint expectation omitted the
 new schema state. Those fixtures now follow the full production contracts;
 runtime validation and the exact checkpoint assertion remain intact.
+`lib/tool-copy.ts`, the security document and `security-claims.json` now name
+and prove the same loader policy, including schema loading without a connector
+call.
 
 The capability overview inherited coarse connector discovery without the
 ordinary-account turn restriction, while artifact guidance checked entitlement
@@ -351,6 +354,9 @@ including eight independent viewport/theme cases with the effective theme
 asserted, and opening the old approvals version and returning to the current
 one. An ambiguous test date filter was corrected after it also matched a
 replacement-date note; this was a harness failure, not a product defect.
+An additional policy/changelog and connector-proof packet passes 192 web tests
+across eight separate files, with 32 connector-contract tests. The security
+claims checker and its 13 selftests pass without changing proof requirements.
 
 Production promotion requires the exact release commit's JS
 lint/typecheck/test/build success. CI's Test step now streams task logs; a
