@@ -22,6 +22,7 @@ export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
       ...(defaultSchema.attributes?.['code'] ?? []),
       ['className', /^language-./, 'math-inline', 'math-display'],
       ['dataAssistantFenceIndex', /^\d+$/],
+      ['dataMarkdownSource', 'readonly'],
     ],
     span: [
       ...(defaultSchema.attributes?.['span'] ?? []),

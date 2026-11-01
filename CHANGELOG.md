@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Malformed generated tables with extra cells retain their complete selectable
+  source, with working copy and expand controls, instead of losing trailing text.
 - Chat respects refusals of public web search inside lists of disallowed actions
   while keeping a requested connector available.
 - Mobile keeps an explicitly selected skill when a Cloud message is queued

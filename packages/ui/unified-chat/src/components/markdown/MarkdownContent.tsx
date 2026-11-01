@@ -13,6 +13,7 @@ import { reactNodeText } from './reactNodeText';
 import { MarkdownTable } from './MarkdownTable';
 import { restoreHyphenatedLabels } from './checklistLabels';
 import { CodeBlock } from './CodeBlock';
+import { CodeBlockEditorContext } from './codeBlockEditor';
 import { extractSvgSlides } from './svgGallery';
 import { SvgConceptGallery } from './SvgConceptGallery';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
@@ -586,7 +587,11 @@ interface HastNode {
   type?: string;
   tagName?: string;
   value?: string;
-  properties?: { className?: unknown; dataAssistantFenceIndex?: unknown };
+  properties?: {
+    className?: unknown;
+    dataAssistantFenceIndex?: unknown;
+    dataMarkdownSource?: unknown;
+  };
   children?: readonly HastNode[];
 }
 
@@ -677,6 +682,13 @@ const MarkdownPre = ({
   children,
   ...rest
 }: React.ComponentPropsWithoutRef<'pre'> & { node?: HastNode }) => {
+  if (node?.children?.some((child) => child.properties?.dataMarkdownSource === 'readonly')) {
+    return (
+      <CodeBlockEditorContext.Provider value={null}>
+        <pre {...rest}>{children}</pre>
+      </CodeBlockEditorContext.Provider>
+    );
+  }
   const language = fenceLanguage(node);
   const source = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
   if (isRichBlockLanguage(language)) {
