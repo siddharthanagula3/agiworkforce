@@ -25,7 +25,7 @@ import {
 import {
   assembleChatSystemPrompt,
   CODE_EXECUTION_TOOL_NAMES,
-  TOOL_SECTION_PREFIX,
+  renderChatToolInventory,
   type ChatTurnMemory,
 } from '@/lib/prompts/chat-system-prompt-assembly';
 import { resolvePrompt, type ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
@@ -109,6 +109,7 @@ export function settingsGuidanceFor(surface: PreambleSurface): SettingsGuidance 
 
 export interface CapabilityPreambleInput {
   tools: unknown[] | undefined;
+  includeToolInventory?: boolean;
   surface?: PreambleSurface;
   timeZone?: string;
   now?: Date;
@@ -327,6 +328,7 @@ function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): strin
     sections,
     {
       toolNames: extractToolNames(input.tools),
+      ...(input.includeToolInventory === false ? { includeToolInventory: false } : {}),
       ...(input.codeExecutionUnavailable ? { codeExecutionUnavailable: true } : {}),
       ...(input.researchUnavailable ? { researchUnavailable: true } : {}),
       ...(input.attachmentSandboxPaths
@@ -354,11 +356,6 @@ function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): strin
     },
   );
   return `${body}${SYSTEM_PROMPT_CACHE_BOUNDARY}${time}`;
-}
-
-function describeTool(sections: ChatSystemPromptSections, name: string): string {
-  const description = chatSystemPromptSection(sections, `${TOOL_SECTION_PREFIX}${name}`);
-  return description ? `- ${name}, ${description}` : `- ${name}`;
 }
 
 type SectionReader = (key: string, values?: Readonly<Record<string, string>>) => string;
@@ -543,12 +540,8 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   ];
 
   if (toolNames.length > 0) {
-    blocks.push(
-      [section('tools_heading'), ...toolNames.map((name) => describeTool(sections, name))].join(
-        '\n',
-      ),
-      section('tools_reality'),
-    );
+    if (input.includeToolInventory !== false)
+      blocks.push(renderChatToolInventory(sections, toolNames));
 
     if (hasSearch) blocks.push(section('search'));
     if (hasSearch || hasFetch) blocks.push(section('citations'));
@@ -566,7 +559,8 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
 
     if (hasFileCreation) blocks.push(section('file_creation'));
   } else {
-    blocks.push(section('no_tools'));
+    if (input.includeToolInventory !== false)
+      blocks.push(renderChatToolInventory(sections, toolNames));
   }
 
   const guidance = settingsGuidanceFor(input.surface ?? 'unknown');

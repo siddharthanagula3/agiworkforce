@@ -322,7 +322,11 @@ import {
   isRequiredExecutionToolChoice,
   resolveCodeExecutionRequirement,
 } from '@/lib/code-execution/required-execution';
-import { extractTextContent, type ProcessedRequest } from './request-processor';
+import {
+  extractTextContent,
+  managedToolInventoryProviderView,
+  type ProcessedRequest,
+} from './request-processor';
 import {
   addToolSpend,
   createObservedProviderUsage,
@@ -6109,6 +6113,12 @@ export async function* runToolLoop(
           freeModelPromotionStepSizing(stepRequest.tools),
         );
       }
+      stepRequest.messages = managedToolInventoryProviderView(
+        messages,
+        stepRequest.tools,
+        processed.chatSurface === 'api' ? undefined : processed.managedToolInventoryVersion,
+        callerOwnedTools,
+      );
       if (processed.freeTrial) {
         const spent = freeTurnCost();
         const fitted = freeTrialSpend?.exhausted()

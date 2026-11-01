@@ -1,3 +1,4 @@
+import { createManagedToolInventoryMessage } from './request-processor';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import { applyAgentActivityEvent } from '@agiworkforce/client-runtime';
@@ -46,6 +47,9 @@ import {
   restoreCheckpointedTurn,
 } from './approval-checkpoint-request';
 import type { ProcessedRequest } from './request-processor';
+import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from './managed-tool-inventory';
+import { CHAT_SYSTEM_PROMPT_PINNED_VERSION } from '@/lib/prompts/chat-system-prompt';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 const PULL_REQUEST_TOOL = 'mcp__github__get_pull_request_diff';
 const SLACK_TOOL = 'mcp__slack__post_channel_message';
@@ -189,6 +193,8 @@ function restoreApproval(
     restored,
     JSON.parse(JSON.stringify({ request, messages: checkpoint.messages })),
   );
+  if (prior.managedToolInventoryVersion !== undefined)
+    restored.managedToolInventoryVersion = CHAT_SYSTEM_PROMPT_PINNED_VERSION;
   return restored;
 }
 
@@ -206,6 +212,48 @@ beforeEach(() => {
 });
 
 describe('connector tool schemas are loaded against a budget, not sent whole', () => {
+  it('renders the exact offered schema names in each provider inventory without editing its source', async () => {
+    const processed = makeProcessed('read the pull request diff for me');
+    processed.managedToolInventoryVersion = CHAT_SYSTEM_PROMPT_PINNED_VERSION;
+    processed.llmRequest.messages.unshift(
+      { role: 'system', content: `Stable policy.${SYSTEM_PROMPT_CACHE_BOUNDARY}Turn context.` },
+      {
+        role: 'system',
+        name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+        __managedToolInventoryVersion: CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+        content: 'Initial inventory snapshot.',
+      },
+    );
+    const originalMessages = structuredClone(processed.llmRequest.messages);
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        toolCallStream('inventory-loader-call', TOOL_DIRECTORY_TOOL_NAME, { names: [SLACK_TOOL] }),
+      )
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Schema ready.' }), chunk({}, 'stop')]),
+      );
+
+    await drain(runToolLoop(processed, { approvalMode: 'auto', mcpTools: connectorToolDefs() }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    for (let step = 0; step < 2; step++) {
+      const request = mockBuildToolLoopStream.mock.calls[
+        step
+      ]?.[2] as ProcessedRequest['llmRequest'];
+      const inventory = request.messages.find(
+        (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+      );
+      const names = [...(inventory?.content ?? '').matchAll(/^- ([a-zA-Z0-9_-]+)/gm)].map(
+        (match) => match[1],
+      );
+      expect(names.sort()).toEqual(offeredNames(step).sort());
+      expect(inventory?.content).not.toContain('Post a message into a channel.');
+    }
+    expect(offeredNames(0)).not.toContain(SLACK_TOOL);
+    expect(offeredNames(1)).toContain(SLACK_TOOL);
+    expect(processed.llmRequest.messages).toEqual(originalMessages);
+  });
+
   it('classifies the local metadata loader without granting a connector call approval', () => {
     expect(resolveToolMetadata(TOOL_DIRECTORY_TOOL_NAME)).toMatchObject({
       actionClass: 'read',
@@ -264,6 +312,11 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
         sseStreamFrom([chunk({ content: 'Fixture read complete.' }), chunk({}, 'stop')]),
       );
     const first = makeProcessed('read the pull request diff for me');
+    first.managedToolInventoryVersion = CHAT_SYSTEM_PROMPT_PINNED_VERSION;
+    first.llmRequest.messages.unshift(
+      createManagedToolInventoryMessage([], { variants: { 'chat.system': 2 } }),
+    );
+    const sourceMessages = structuredClone(first.llmRequest.messages);
     const firstOutput = await drain(runToolLoop(first, options));
     expect(checkpoints).toHaveLength(1);
     expect(connectorExecutor).not.toHaveBeenCalled();
@@ -296,6 +349,21 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
     );
     expect(offeredNames(2)).toContain(NOTION_SELF_TOOL);
     expect(toolExecutor).toHaveBeenCalledTimes(1);
+    for (let step = 0; step < 3; step++) {
+      const request = mockBuildToolLoopStream.mock.calls[
+        step
+      ]?.[2] as ProcessedRequest['llmRequest'];
+      const inventory = request.messages.find(
+        (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+      );
+      expect(inventory?.__managedToolInventoryVersion).toBe(2);
+      if (step > 0) expect(inventory?.content).toContain(`- ${NOTION_SELF_TOOL}`);
+    }
+    expect(first.llmRequest.messages).toEqual(sourceMessages);
+    for (const checkpoint of checkpoints)
+      expect(
+        checkpoint.messages.find((message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME),
+      ).toEqual(sourceMessages[0]);
     let activity;
     for (const event of agentEvents(firstOutput + secondOutput + thirdOutput))
       activity = applyAgentActivityEvent(activity, event);

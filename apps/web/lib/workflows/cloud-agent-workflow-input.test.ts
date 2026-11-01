@@ -1,3 +1,4 @@
+import { createManagedToolInventoryMessage } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { describe, expect, it } from 'vitest';
 
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
@@ -17,6 +18,7 @@ import {
   connectorToolPermissionsFromEntries,
   withWorkspaceToolRules,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from '@/app/api/llm/v1/chat/completions/lib/managed-tool-inventory';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 
@@ -101,6 +103,69 @@ const tools: WebMcpToolDef[] = [
 ];
 
 describe('cloud agent workflow input', () => {
+  it('round-trips the captured managed inventory slot and trusted context through the strict transport', () => {
+    const processed = makeProcessed();
+    processed.managedToolInventoryVersion = 2;
+    const slot = createManagedToolInventoryMessage([], { variants: { 'chat.system': 2 } });
+    processed.llmRequest.messages.unshift(slot);
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: tools,
+      approvalMode: 'manual',
+    });
+    const restored = parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)));
+    expect(restored.processed.managedToolInventoryVersion).toBe(2);
+    expect(restored.processed.llmRequest.messages[0]).toEqual(slot);
+    expect(processed.llmRequest.messages[0]).toEqual(slot);
+  });
+
+  it.each([999, '2'])('refuses an invalid trusted inventory context %s', (invalidVersion) => {
+    const input = JSON.parse(
+      JSON.stringify(
+        buildCloudAgentWorkflowInput({
+          runId: RUN_ID,
+          userId: 'user-1',
+          processed: makeProcessed(),
+          mcpTools: tools,
+          approvalMode: 'manual',
+        }),
+      ),
+    );
+    input.processed.managedToolInventoryVersion = invalidVersion;
+    expect(() => parseCloudAgentWorkflowInput(input)).toThrow();
+  });
+
+  it.each([
+    { role: 'system', name: 'caller-inventory', __managedToolInventoryVersion: 2 },
+    {
+      role: 'system',
+      name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+      __managedToolInventoryVersion: 999,
+    },
+    { role: 'system', name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME },
+    { role: 'user', name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME, __managedToolInventoryVersion: 2 },
+    { role: 'system', unrelatedField: true },
+  ])('refuses invalid slot metadata without widening ordinary message fields', (invalidFields) => {
+    const input = JSON.parse(
+      JSON.stringify(
+        buildCloudAgentWorkflowInput({
+          runId: RUN_ID,
+          userId: 'user-1',
+          processed: makeProcessed(),
+          mcpTools: tools,
+          approvalMode: 'manual',
+        }),
+      ),
+    );
+    input.processed.llmRequest.messages.unshift({
+      content: 'Invalid transport input.',
+      ...invalidFields,
+    });
+    expect(() => parseCloudAgentWorkflowInput(input)).toThrow();
+  });
+
   it('removes live database handles and round-trips trusted execution state', () => {
     const input = buildCloudAgentWorkflowInput({
       runId: RUN_ID,

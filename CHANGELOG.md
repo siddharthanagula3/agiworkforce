@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Managed chats keep the model's tool list aligned with the tools offered on
+  each step, including discovered connectors and approval continuations.
 - Web connector tools remain available after approval and interrupted turns;
   completed or refused actions reach a terminal activity state. Authorization
   now requires persistent secure token storage in development as well as production.

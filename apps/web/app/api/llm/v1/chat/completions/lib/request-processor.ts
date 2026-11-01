@@ -1,5 +1,10 @@
 import 'server-only';
 import { withoutToolSchemaState, type ToolSchemaState } from './tool-schema-state';
+import {
+  isManagedToolInventoryVersion,
+  MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+  type ManagedToolInventoryFields,
+} from './managed-tool-inventory';
 import { resolveUsageCreditsNotice } from '@/lib/server/usage-credits-notice';
 import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 import {
@@ -320,9 +325,16 @@ import {
   productArtifactConnectors,
   productCapabilityFacts,
 } from '@/lib/prompts/product-capability-facts';
-import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
-import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
-import type { ChatTurnMemory } from '@/lib/prompts/chat-system-prompt-assembly';
+import {
+  promptStampsFor,
+  resolvePromptText,
+  type ResolvePromptOptions,
+} from '@/lib/prompts/prompt-registry';
+import { CHAT_SYSTEM_PROMPT_ID, chatSystemPromptSections } from '@/lib/prompts/chat-system-prompt';
+import {
+  renderChatToolInventory,
+  type ChatTurnMemory,
+} from '@/lib/prompts/chat-system-prompt-assembly';
 import type { PromptId } from '@/lib/prompts/prompt-manifest';
 import {
   orderInstructionBlocks,
@@ -454,6 +466,8 @@ import {
   buildCapabilityPreamble,
   chatSystemPromptDescribesProductCapabilities,
   chatSystemPromptDescribesSetup,
+  extractToolNames,
+  resolveChatSystemPrompt,
   servingModelFor,
   type ChatSetup,
   type ModelSelection,
@@ -1442,6 +1456,7 @@ export type ProcessedRequest = {
   fallbackReason: string | undefined;
   originalModel: string;
   modelSelection?: ModelSelection;
+  managedToolInventoryVersion?: number;
   /**
    * The model Auto left, and why, when this turn escalated off
    * the conversation's pinned model. Null on every turn that did not move.
@@ -1549,14 +1564,16 @@ export type ProcessedRequest = {
   routeAffinity?: ServedRouteAffinity;
   llmRequest: {
     model: string;
-    messages: Array<{
-      role: 'system' | 'user' | 'assistant' | 'tool';
-      content: string;
-      multimodal_content?: unknown[];
-      tool_calls?: unknown[];
-      tool_call_id?: string;
-      __canonicalThinking?: ThinkingBlock[];
-    }>;
+    messages: Array<
+      ManagedToolInventoryFields & {
+        role: 'system' | 'user' | 'assistant' | 'tool';
+        content: string;
+        multimodal_content?: unknown[];
+        tool_calls?: unknown[];
+        tool_call_id?: string;
+        __canonicalThinking?: ThinkingBlock[];
+      }
+    >;
     temperature?: number;
     max_tokens: number;
     stream?: boolean;
@@ -1819,6 +1836,97 @@ export function composeManagedSystemPreamble(input: {
   return dynamicBlock
     ? `${stableBlock}${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicBlock}`
     : stableBlock;
+}
+
+interface InventorySourceMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  name?: string;
+  __managedToolInventoryVersion?: unknown;
+}
+
+export interface ManagedToolInventoryMessage extends ManagedToolInventoryFields {
+  role: 'system';
+  content: string;
+  name: typeof MANAGED_TOOL_INVENTORY_MESSAGE_NAME;
+  __managedToolInventoryVersion: number;
+}
+
+function inventoryForVersion(
+  version: number,
+  tools: unknown[] | undefined,
+  bareToolNames?: ReadonlySet<string>,
+): string {
+  if (!isManagedToolInventoryVersion(version))
+    throw new Error('Invalid managed tool inventory prompt version');
+  return renderChatToolInventory(
+    chatSystemPromptSections(version),
+    extractToolNames(tools),
+    bareToolNames,
+  );
+}
+
+export function createManagedToolInventoryMessage(
+  tools: unknown[] | undefined,
+  promptSelection?: ResolvePromptOptions,
+  bareToolNames?: ReadonlySet<string>,
+): ManagedToolInventoryMessage {
+  const { version } = resolveChatSystemPrompt(promptSelection);
+  return {
+    role: 'system',
+    name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    __managedToolInventoryVersion: version,
+    content: inventoryForVersion(version, tools, bareToolNames),
+  };
+}
+
+export function managedToolInventoryProviderView<T extends InventorySourceMessage>(
+  messages: T[],
+  tools: unknown[] | undefined,
+  managedVersion: number | undefined,
+  bareToolNames?: ReadonlySet<string>,
+): Array<T | ManagedToolInventoryMessage> {
+  if (managedVersion === undefined) return messages;
+  if (!isManagedToolInventoryVersion(managedVersion))
+    throw new Error('Invalid managed tool inventory prompt version');
+  const slots = messages
+    .map((message, index) => ({ message, index }))
+    .filter(
+      ({ message }) =>
+        message.role === 'system' && message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    );
+  if (slots.length > 1) throw new Error('Duplicate managed tool inventory messages');
+  const slot = slots[0];
+  if (slot) {
+    const version = slot.message.__managedToolInventoryVersion;
+    if (typeof version !== 'number')
+      throw new Error('Missing managed tool inventory prompt version');
+    const content = inventoryForVersion(version, tools, bareToolNames);
+    return messages.map((message, index) =>
+      index === slot.index
+        ? {
+            ...message,
+            content: message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY)
+              ? `${SYSTEM_PROMPT_CACHE_BOUNDARY}${content}`
+              : content,
+          }
+        : message,
+    );
+  }
+
+  const firstNonSystem = messages.findIndex((message) => message.role !== 'system');
+  const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
+  const hasCacheBoundary = messages
+    .slice(0, insertAt)
+    .some((message) => message.content.includes(SYSTEM_PROMPT_CACHE_BOUNDARY));
+  const content = inventoryForVersion(managedVersion, tools, bareToolNames);
+  const inventory: ManagedToolInventoryMessage = {
+    role: 'system',
+    name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    __managedToolInventoryVersion: managedVersion,
+    content: hasCacheBoundary ? content : `${SYSTEM_PROMPT_CACHE_BOUNDARY}${content}`,
+  };
+  return [...messages.slice(0, insertAt), inventory, ...messages.slice(insertAt)];
 }
 
 export interface ManagedMemoryPolicyRead {
@@ -5997,13 +6105,15 @@ async function processAdmittedRequest(
   const staticSourceMessages = chatRequest.messages.filter(
     (msg) => !dynamicSystemMessageRefs.has(msg),
   );
-  const internalMessages = staticSourceMessages.map((msg) => ({
-    role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
-    content: extractTextContent(msg.content),
-    multimodal_content: Array.isArray(msg.content) ? (msg.content as unknown[]) : undefined,
-    tool_calls: msg.tool_calls as unknown[] | undefined,
-    tool_call_id: msg.tool_call_id,
-  }));
+  const internalMessages: ProcessedRequest['llmRequest']['messages'] = staticSourceMessages.map(
+    (msg) => ({
+      role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
+      content: extractTextContent(msg.content),
+      multimodal_content: Array.isArray(msg.content) ? (msg.content as unknown[]) : undefined,
+      tool_calls: msg.tool_calls as unknown[] | undefined,
+      tool_call_id: msg.tool_call_id,
+    }),
+  );
   const dynamicSkillMemoryText = orderInstructionBlocks(dynamicSystemBlocks)
     .map((block) => block.text)
     .filter((text) => text.length > 0)
@@ -6197,6 +6307,7 @@ async function processAdmittedRequest(
   }
 
   let connectorsAllowed: boolean | undefined;
+  let managedToolInventoryVersion: number | undefined;
   if (chatSurface !== 'api') {
     const turnMemory = chatTurnMemoryFor({
       read: managedMemoryPolicyRead,
@@ -6248,8 +6359,15 @@ async function processAdmittedRequest(
           ])
         : [false, undefined];
     connectorsAllowed = allowedForTurn;
+    const toolInventory = createManagedToolInventoryMessage(
+      resolvedTools,
+      promptSelection,
+      new Set(extractToolNames(callerToolFields.tools)),
+    );
+    managedToolInventoryVersion = toolInventory.__managedToolInventoryVersion;
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
+      includeToolInventory: false,
       surface: chatSurface,
       researchUnavailable,
       timeZone: chatRequest.client_timezone,
@@ -6261,7 +6379,12 @@ async function processAdmittedRequest(
         productCapabilities !== undefined &&
         productArtifactConnectors(subscription.plan_tier, productCapabilities),
       ...(productCapabilities ? { productCapabilities } : {}),
-      promptSelection,
+      promptSelection: {
+        variants: {
+          ...promptSelection.variants,
+          [CHAT_SYSTEM_PROMPT_ID]: managedToolInventoryVersion,
+        },
+      },
       servingModel: servingModelFor(chatRequest.model, modelSelection),
       chatSetup: chatSetupFor({
         chatRequest,
@@ -6319,6 +6442,12 @@ async function processAdmittedRequest(
         tool_call_id: undefined,
       });
     }
+    const firstNonSystemIndex = internalMessages.findIndex((message) => message.role !== 'system');
+    internalMessages.splice(
+      firstNonSystemIndex === -1 ? internalMessages.length : firstNonSystemIndex,
+      0,
+      toolInventory,
+    );
   } else {
     if (dynamicTurnInstruction) {
       internalMessages.unshift({
@@ -6630,6 +6759,7 @@ async function processAdmittedRequest(
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
     ...(toolLockdown ? { toolLockdown: true } : {}),
     ...(connectorsAllowed === undefined ? {} : { connectorsAllowed }),
+    ...(managedToolInventoryVersion === undefined ? {} : { managedToolInventoryVersion }),
     ...(ownership.agentTurn ? { agentTurn: ownership.agentTurn } : {}),
     requestedModel,
     ...(selectedModel ? { selectedModel } : {}),

@@ -37,6 +37,10 @@ import type {
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import type { RequestedParameters } from '@/app/api/llm/v1/chat/completions/lib/request-parameters';
 import type { SameKeys } from '@/lib/schema-key-guard';
+import {
+  isManagedToolInventoryVersion,
+  MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+} from '@/app/api/llm/v1/chat/completions/lib/managed-tool-inventory';
 
 const ThinkingConfigSchema = z
   .object({ type: z.string().min(1), budget_tokens: z.number().int().positive().optional() })
@@ -47,6 +51,12 @@ const thinkingConfigSchemaCoversLlmRequest: SameKeys<
 > = true;
 void thinkingConfigSchemaCoversLlmRequest;
 
+const ManagedToolInventoryVersionSchema = z
+  .number()
+  .int()
+  .positive()
+  .refine(isManagedToolInventoryVersion, 'Unregistered managed tool inventory prompt version');
+
 const MessageSchema = z
   .object({
     role: z.enum(['system', 'user', 'assistant', 'tool']),
@@ -55,8 +65,17 @@ const MessageSchema = z
     tool_calls: z.array(z.unknown()).optional(),
     tool_call_id: z.string().optional(),
     __canonicalThinking: z.array(z.unknown()).optional(),
+    name: z.literal(MANAGED_TOOL_INVENTORY_MESSAGE_NAME).optional(),
+    __managedToolInventoryVersion: ManagedToolInventoryVersionSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (message) =>
+      message.name === undefined
+        ? message.__managedToolInventoryVersion === undefined
+        : message.role === 'system' && message.__managedToolInventoryVersion !== undefined,
+    'Managed tool inventory metadata requires a complete system slot',
+  );
 const messageSchemaCoversLlmRequest: SameKeys<
   z.infer<typeof MessageSchema>,
   ProcessedRequest['llmRequest']['messages'][number]
@@ -160,6 +179,7 @@ const ProcessedRequestSchema = z
     usedFallback: z.boolean(),
     fallbackReason: z.string().optional(),
     originalModel: z.string().min(1),
+    managedToolInventoryVersion: ManagedToolInventoryVersionSchema.optional(),
     fallbackModels: z.array(z.string().min(1)).optional(),
     subscriptionTier: z.string().min(1).optional(),
     resolvedTaskType: z.string().min(1),

@@ -24,7 +24,8 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 }));
 
 const mockProcessRequest = vi.fn();
-vi.mock('../lib/request-processor', () => ({
+vi.mock('../lib/request-processor', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/request-processor')>()),
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
   toManagedSkillFromUserSkill: vi.fn(),
   resolveNativeSearchMaxUses: () => 3,

@@ -8,7 +8,10 @@ import {
   ROUTING_PROFILE_CHOICE_OPTIONS,
 } from '@agiworkforce/types';
 import type { Skill } from '@agiworkforce/skills';
-import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+import {
+  SYSTEM_PROMPT_CACHE_BOUNDARY,
+  splitSystemPromptCacheBoundary,
+} from '@agiworkforce/provider-protocol';
 
 import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
 import {
@@ -167,6 +170,7 @@ vi.mock('./context-compaction', async (importOriginal) => {
 import { CreditService } from '@/lib/services/credit-service';
 import { processRequest } from './request-processor';
 import type { AuthGateSuccess } from './auth-gate';
+import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from './managed-tool-inventory';
 
 type RlsDbModule = typeof import('@/lib/server/rls-db');
 
@@ -304,6 +308,113 @@ afterEach(() => {
 });
 
 describe('the chat system prompt version a prompt flag selects', () => {
+  it('keeps a captured initial inventory on a non-loop managed request after the cache boundary', async () => {
+    mocks.promptFlags.mockResolvedValue(chatSystemFlag(PRECEDENCE_VERSION));
+    const result = await processRequest(
+      chatRequestFor('managed-inventory-non-loop', {
+        stream: false,
+        tools: [{ type: 'function', function: { name: 'fixture_read' } }],
+        messages: [
+          {
+            role: 'system',
+            name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+            __managedToolInventoryVersion: 999,
+            content: 'Caller-owned system text remains intact.',
+          },
+          { role: 'user', content: 'Reply briefly.' },
+        ],
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const inventory = result.llmRequest.messages.filter(
+      (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    );
+    expect(inventory).toHaveLength(1);
+    expect(inventory[0]).toMatchObject({
+      role: 'system',
+      __managedToolInventoryVersion: PRECEDENCE_VERSION,
+    });
+    expect(result.managedToolInventoryVersion).toBe(PRECEDENCE_VERSION);
+    expect(inventory[0]?.content).toContain('- fixture_read');
+    expect(
+      result.llmRequest.messages.find((message) => message.content.startsWith('Caller-owned')),
+    ).not.toHaveProperty('name');
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    expect(joined.indexOf(SYSTEM_PROMPT_CACHE_BOUNDARY)).toBeLessThan(
+      joined.indexOf(inventory[0]!.content),
+    );
+    expect(joined.match(/Tools available to you on this turn:/g)).toHaveLength(1);
+  });
+
+  it('leaves raw API messages without a managed inventory or trusted inventory context', async () => {
+    const content = 'The API caller owns this system text.';
+    const result = await processRequest(
+      chatRequestFor(
+        'raw-api-inventory',
+        {
+          managedToolInventoryVersion: 999,
+          messages: [
+            { role: 'system', name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME, content },
+            { role: 'user', content: 'Reply briefly.' },
+          ],
+        },
+        { 'x-agi-surface': 'api' },
+      ),
+      { ...auth(), token: 'sk_test_inventory_fixture' },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.managedToolInventoryVersion).toBeUndefined();
+    expect(result.llmRequest.messages.some((message) => message.name)).toBe(false);
+    expect(result.llmRequest.messages.find((message) => message.content === content)).toEqual({
+      role: 'system',
+      content,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  });
+
+  it('keeps the cacheable prefix unchanged when only inventory names differ', async () => {
+    const first = await systemText('inventory-prefix-a', {
+      tools: [{ type: 'function', function: { name: 'fixture_one' } }],
+    });
+    const second = await systemText('inventory-prefix-b', {
+      tools: [{ type: 'function', function: { name: 'fixture_two' } }],
+    });
+    expect(first).toContain('- fixture_one');
+    expect(second).toContain('- fixture_two');
+    expect(splitSystemPromptCacheBoundary(first)?.stablePrefix).toBe(
+      splitSystemPromptCacheBoundary(second)?.stablePrefix,
+    );
+  });
+
+  it('does not describe a CLI caller-owned file tool as a managed sandbox tool', async () => {
+    const result = await processRequest(
+      chatRequestFor(
+        'cli-inventory',
+        { tools: [{ type: 'function', function: { name: 'write_file' } }] },
+        { 'x-agi-surface': 'cli' },
+      ),
+      { ...auth(), surfaceClass: 'developer' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.chatSurface).toBe('cli');
+    const inventory = result.llmRequest.messages.find(
+      (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    );
+    expect(inventory?.content).toContain('\n- write_file\n');
+    expect(inventory?.content).not.toContain('write a file into that sandbox');
+  });
+
   it('serves a customer the pinned version when the flag selects one kept on internal', async () => {
     vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, '');
     mocks.promptFlags.mockResolvedValue(chatSystemFlag(IDENTITY_VERSION));

@@ -40,6 +40,7 @@ export interface ArtifactMarkers {
 
 export interface ChatTurnState {
   readonly toolNames: readonly string[];
+  readonly includeToolInventory?: boolean;
   readonly codeExecutionUnavailable?: boolean;
   readonly researchUnavailable?: boolean;
   readonly attachmentSandboxPaths?: readonly string[];
@@ -89,6 +90,25 @@ function describeTool(sections: ChatSystemPromptSections, name: string): string 
   return description ? `- ${name}, ${description}` : `- ${name}`;
 }
 
+export function renderChatToolInventory(
+  sections: ChatSystemPromptSections,
+  toolNames: readonly string[],
+  bareToolNames?: ReadonlySet<string>,
+): string {
+  if (toolNames.length === 0) return chatSystemPromptSection(sections, 'no_tools');
+  return [
+    [
+      chatSystemPromptSection(sections, 'tools_heading'),
+      ...toolNames.map((name) =>
+        bareToolNames?.has(name) ? `- ${name}` : describeTool(sections, name),
+      ),
+    ].join('\n'),
+    chatSystemPromptSection(sections, 'tools_reality'),
+  ]
+    .filter((block) => block.length > 0)
+    .join('\n\n');
+}
+
 export function assembleChatSystemPrompt(
   sections: ChatSystemPromptSections,
   state: ChatTurnState,
@@ -133,12 +153,8 @@ export function assembleChatSystemPrompt(
   ];
 
   if (toolNames.length > 0) {
-    blocks.push(
-      [section('tools_heading'), ...toolNames.map((name) => describeTool(sections, name))].join(
-        '\n',
-      ),
-      section('tools_reality'),
-    );
+    if (state.includeToolInventory !== false)
+      blocks.push(renderChatToolInventory(sections, toolNames));
 
     blocks.push(hasSearch ? section('search') : section('search_unavailable'));
     blocks.push(hasSearch || hasFetch ? section('citations') : section('citations_none'));
@@ -156,7 +172,9 @@ export function assembleChatSystemPrompt(
 
     if (hasFileCreation) blocks.push(section('file_creation'));
   } else {
-    blocks.push(section('no_tools'), section('citations_none'));
+    if (state.includeToolInventory !== false)
+      blocks.push(renderChatToolInventory(sections, toolNames));
+    blocks.push(section('citations_none'));
   }
 
   blocks.push(section('user_documents'), section('people_and_privacy'), section('refusal_style'));
