@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Chat respects refusals of public web search inside lists of disallowed actions
+  while keeping a requested connector available.
 - Mobile keeps an explicitly selected skill when a Cloud message is queued
   offline and sent after reconnecting or restarting the app.
 - Mobile skill previews show the companion text itself, and account skill sync
