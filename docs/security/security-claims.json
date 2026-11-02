@@ -52,6 +52,28 @@
       ]
     },
     {
+      "id": "mcp-admission-preserves-schema-and-tool-authority",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "Admission does not rewrite the original schema or grant execution permission.",
+      "implementation": [
+        "apps/web/lib/security/mcp-tool-inspection.ts#inspectConnectorToolDefs",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts#resolveToolCallGate"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/security/__tests__/mcp-tool-inspection.test.ts",
+          "name": "counts nested schemas without counting property maps as extra schema levels"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.permission-matrix.test.ts",
+          "name": "still asks for an undeclared connector tool under every policy"
+        }
+      ]
+    },
+    {
       "id": "memory-tools-offered-only-on-the-apps",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "prose",
@@ -1817,7 +1839,7 @@
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/managed-usage-request-service.artifact-cap.test.ts",
-          "name": "rechecks the app’s ceiling on every later provider step"
+          "name": "rechecks the app\u2019s ceiling on every later provider step"
         },
         {
           "kind": "test",
@@ -1899,12 +1921,12 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/artifacts/runtime/[token]/storage/__tests__/route.handler.test.ts",
-          "name": "refuses a viewer’s write to data the publisher can read, without writing"
+          "name": "refuses a viewer\u2019s write to data the publisher can read, without writing"
         },
         {
           "kind": "test",
           "file": "apps/web/app/api/artifacts/runtime/[token]/complete/__tests__/route.test.ts",
-          "name": "refuses a viewer’s connected apps before any gate or billing"
+          "name": "refuses a viewer\u2019s connected apps before any gate or billing"
         }
       ]
     },

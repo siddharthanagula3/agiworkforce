@@ -83,7 +83,8 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
     (globalThis.fetch as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init),
 }));
 
-vi.mock('@agiworkforce/mcp', () => {
+type McpModule = typeof import('@agiworkforce/mcp');
+vi.mock('@agiworkforce/mcp', async (importOriginal) => {
   const catalog = {
     version: 1,
     generatedAt: 0,
@@ -120,6 +121,7 @@ vi.mock('@agiworkforce/mcp', () => {
     };
   };
   return {
+    ...(await importOriginal<McpModule>()),
     connectMcpServer: async ({
       serverName,
       config,

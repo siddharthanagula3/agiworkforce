@@ -163,6 +163,14 @@ Every declared platform tool, and what each policy does with it. The rows are
 already available to the turn. It does not call a connected app or change its
 data. Each loaded tool retains its own permissions and approval checks.
 
+External tool schemas retain the shared MCP raw-depth, key-count and reference
+budgets before Web inspection. The Web depth budget counts child schema
+definitions, rather than property-map containers or literal default/example
+values. Unknown nested object metadata remains conservative. Descriptive
+schema annotations pass the same poisoning and length checks as the tool
+description. Admission does not rewrite the original schema or grant execution
+permission.
+
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
 egress, which no policy auto-approves, so it asks under every policy. The three
