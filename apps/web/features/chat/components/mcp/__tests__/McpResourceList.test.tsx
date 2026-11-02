@@ -92,11 +92,13 @@ describe('McpResourceList', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
-  it('separates a server with nothing to read from one that failed to say', () => {
+  it('separates absent attachable content from failed discovery', () => {
     state({ catalog: catalog({ resources: [] }) });
     render(<McpResourceList connectorId="orgmcp-p0123456789" />);
 
-    expect(screen.getByText('Acme Gateway offers tools but nothing to read.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Acme Gateway has no resources or prompts to attach.'),
+    ).toBeInTheDocument();
   });
 
   it('announces loading rather than rendering a bare spinning div', () => {

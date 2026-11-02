@@ -1,3 +1,4 @@
+import { expectSdkBearerCredential } from '../connectors/__tests__/mcp-auth-contract';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
@@ -229,12 +230,13 @@ describe('directory records in the connector tool catalog', () => {
     expect(defs[0]).toMatchObject({ serverId: OAUTH_SERVER_ID, serverLabel: 'Cowork24' });
     expect(mockResolveAccessToken).toHaveBeenCalledWith('user-1', OAUTH_ID, { discovered: true });
     const [servers] = mockBuildMcpToolCatalog.mock.calls[0] as [
-      Record<string, { url: string; headers: Record<string, string> }>,
+      Record<string, Parameters<McpModule['connectMcpServer']>[0]['config']>,
     ];
     expect(servers[OAUTH_SERVER_ID]).toMatchObject({
       url: OAUTH_URL,
-      headers: { Authorization: 'Bearer live-token' },
+      authProvider: { token: expect.any(Function) },
     });
+    await expectSdkBearerCredential(servers[OAUTH_SERVER_ID], 'live-token');
   });
 
   it('routes a call to a directory server id through the stored grant', async () => {
@@ -256,9 +258,13 @@ describe('directory records in the connector tool catalog', () => {
         serverName: OAUTH_SERVER_ID,
         config: expect.objectContaining({
           url: OAUTH_URL,
-          headers: { Authorization: 'Bearer live-token' },
+          authProvider: { token: expect.any(Function) },
         }),
       }),
+    );
+    await expectSdkBearerCredential(
+      (mockConnectMcpServer.mock.calls[0]?.[0] as { config: unknown }).config,
+      'live-token',
     );
     expect(handle.close).toHaveBeenCalled();
   });

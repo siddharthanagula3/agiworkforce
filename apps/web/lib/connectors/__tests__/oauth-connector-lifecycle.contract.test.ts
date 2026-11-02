@@ -1,3 +1,4 @@
+import { expectSdkBearerCredential } from './mcp-auth-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -452,9 +453,10 @@ describe('CRIT-001, an available connector completes the whole lifecycle', () =>
     expect(names).toContain('mcp__acme__create_record');
 
     const connect = mocks.mcpConnects.find((c) => c.serverName === 'acme');
+    await expectSdkBearerCredential(connect?.config, 'acme-access-1');
     expect(connect?.config).toMatchObject({
       url: 'https://acme.example.com/mcp',
-      headers: expect.objectContaining({ Authorization: 'Bearer acme-access-1' }),
+      authProvider: { token: expect.any(Function) },
     });
   });
 

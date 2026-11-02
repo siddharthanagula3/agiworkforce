@@ -1102,7 +1102,11 @@ export function useConnectorsSettingsAdapter({
           <>
             {renderAccountSwitch(connectorId, detail.name)}
             <ConnectorAccountSummary connectorId={connectorId} />
-            <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
+            <ConnectorCapabilitiesPanel
+              connectorRef={connectorId}
+              connected
+              onUnavailable={loadConnectors}
+            />
             <McpResourceList connectorId={connectorId} />
             {connectorId === 'github' && githubInstallations.length > 0 ? (
               <div

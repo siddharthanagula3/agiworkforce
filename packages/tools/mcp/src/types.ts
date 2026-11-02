@@ -1,4 +1,5 @@
 import type {
+  AuthProvider,
   DiscoverResult,
   OAuthClientProvider,
   PriorDiscovery,
@@ -15,7 +16,7 @@ export interface McpServerConfig {
   url?: string;
   transport?: McpServerTransport;
   headers?: Record<string, string | number | boolean>;
-  authProvider?: OAuthClientProvider;
+  authProvider?: OAuthClientProvider | AuthProvider;
   connectionTimeoutMs?: number;
 }
 

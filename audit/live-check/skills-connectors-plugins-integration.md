@@ -2,7 +2,7 @@
 
 Status: In progress; controlled Notion create/read/edit/read and reopening verified; other connector lifecycles remain
 Owner: Shared capabilities + application maintainers
-Last verified: 2026-11-01
+Last verified: 2026-11-02
 Purpose: Track the complete integration goal, current implementation evidence, live checks, repairs and exact blockers across exposing application surfaces.
 Retention: Delete only when the full integration objective is verified or its remaining requirements have an explicit successor owned by the same goal.
 
@@ -20,7 +20,7 @@ The existing authentication, authorization, routing, entitlements, usage and tru
 
 ## Current baseline
 
-`1950ccaaa30f61eafcd6fe724f9550591b40e94a` is the verified production release, deployment `dpl_2erMUQGzwLEynFpqDgFk37sJxMQ1`. Its exact JavaScript job `125046576402` passed before staging and promotion. The protected canary, canonical site and API checks passed; the canonical version identifies that commit and deployment. The development probe returns HTTP 404, authentication remains enforced, and Neon is at migration 391 with nothing pending or drifted. `production-release-1950.json` records the release and rollback identity. The later MCP admission repair described below is locally verified and is not yet deployed. Earlier verified coverage remains in [the chat/integration tracker](chat-rendering-2026-10-30.md); it does not establish the broader objective.
+`1950ccaaa30f61eafcd6fe724f9550591b40e94a` is the verified production release, deployment `dpl_2erMUQGzwLEynFpqDgFk37sJxMQ1`. Its exact JavaScript job `125046576402` passed before staging and promotion. The protected canary, canonical site and API checks passed; the canonical version identifies that commit and deployment. The development probe returns HTTP 404, authentication remains enforced, and Neon is at migration 391 with nothing pending or drifted. `production-release-1950.json` records the release and rollback identity. The MCP admission repair described below is pushed to main as `5f215aabba2a4d6e78b4b84760a323f0590655e7`; it is not yet deployed. Its full isolated pre-push chain passed, including the required security-claim proof index. Earlier verified coverage remains in [the chat/integration tracker](chat-rendering-2026-10-30.md); it does not establish the broader objective.
 
 Current source separates plugin installation, skill resolution and connector authorization. Relevant owners include:
 
@@ -151,7 +151,63 @@ The ordinary Chat surface completed conversation `74bbe45d-381e-4c9d-b9cb-e4ad58
 
 Evidence lives in `integrated-capabilities-2026-11-01`: `notion-private-create-approval.png`, `notion-private-edit-readback.txt`, `notion-private-edit-readback.png`, `notion-private-lifecycle-complete.png`, `notion-external-private-page.png`, `notion-lifecycle-after-reopen.png`, `provider-tool-offers.jsonl` frames 32–40, and `notion-private-lifecycle-verification.json`. The owner requested skipping routine QA permission prompts; the existing Notion Fetch approval was set to Allow for this chat in this localhost conversation. No global or production approval policy was disabled.
 
-The current selective-release owner advertises 13 connectors. Live connection entry checks reached provider sign-in for Airtable, Canva and ClickUp. The owner declined Jira connection; it remains disconnected. Linear completed OAuth and AGI labels it Connected, but its capability discovery receives HTTP 401 and is displayed as an empty legacy catalog. That state mismatch is under investigation; no Linear operation is counted as passing. Cloudflare, Confluence, Datadog, Monday.com, PostHog, Sentry and Todoist still need entry-flow and configured-account checks. `connector-lifecycle-progress.json` records current operation status. This is partial connector verification, not completion of the full lifecycle goal.
+The current selective-release owner advertises 13 connectors. Live connection entry checks reached provider sign-in for Airtable, Canva and ClickUp. The owner declined Jira connection; it remains disconnected. Linear is now verified for authenticated account and team reads. Its valid OAuth response used lowercase `bearer`; the prior adapter copied that token type directly into the HTTP header. A same-credential live comparison, with cache disabled, rejected the raw lowercase header both before and after successful canonical-header and native-SDK controls. The runtime now uses the official SDK AuthProvider for bearer credentials. Linear discovers 70 tools and the real whoami/list_teams calls returned the authenticated account and one team with hasNextPage false. Transport failures retain valid OAuth credentials; existing invalid-grant and disconnect paths own revocation. Cloudflare, Confluence, Datadog, Monday.com, PostHog, Sentry and Todoist still need entry-flow and configured-account checks. `connector-lifecycle-progress.json` records current operation status. This is partial connector verification, not completion of the full lifecycle goal.
+
+## SDK authentication and readiness repair
+
+The observed Linear 401 was an adapter interoperability defect. The OAuth grant
+was unexpired, had read/write scope and matched the issuer/resource URI. Its
+`token_type` was lowercase `bearer`, which the adapter inserted literally into
+Authorization. Using the same credential and fresh SDK clients without cache,
+the raw header failed before and after the controls; canonical Bearer and native
+SDK AuthProvider both succeeded. No tool was executed by those controls.
+`linear-auth-variant-proof.json` records the independent live comparison.
+
+Bearer credentials now go through the installed official SDK AuthProvider. The
+shared config accepts that public SDK interface, and the SDK constructs the
+header. Existing non-bearer header handling is retained. No provider-specific
+runtime exception, SDK fork, new auth engine, storage schema or migration is
+included. The temporary development-only comparison was removed. A proposed
+local metadata migration was never applied and was removed; the unrelated
+migration 392 already in the shared local QA database was not modified.
+
+Catalog aggregation also forwards original typed SDK connection failures to
+the existing account broker. It refreshes at most once on the same account;
+forbidden requests do not expand scopes, and account changes do not silently
+move the operation elsewhere. Failed handshakes are unavailable rather than
+successful empty catalogs. A transport rejection alone does not delete a valid
+OAuth grant. Existing token-lifecycle and explicit-disconnect paths retain
+revocation authority. The settings adapter refreshes its account state after
+failed discovery. Empty attachable resources/prompts no longer imply that a
+connector's read tools are unavailable.
+
+Conversation `c84fc6c7-3668-47f4-9683-99ae920694b0` completed actual Linear whoami
+and list_teams calls through chat after one-call approvals. The inspected raw
+responses identify account display name agiautomationllc, workspace Siddhartha
+Nagula and one team, with hasNextPage false. No issue content, other connector
+or write operation was requested. The model unnecessarily loaded the private
+QA Notion skill, but made no Notion connector call; automatic skill selection
+is not counted as verified. Discovery lists 70 tools with no shared-schema
+rejections. Evidence: `linear-live-capabilities.json`,
+`linear-native-read-verification.json` and `linear-native-read-result.png`.
+
+The lowercase-header real-SDK fixture and credential-retention regression both
+failed before their respective corrections and passed afterward. The final auth
+candidate passed 437 Web tests in 37 files and 107 shared MCP tests; shared/Web
+typechecks and lint passed. The former
+runs the actual SDK through discovery, initialization, listing and a controlled
+read. Boundary tests continue to assert the exact credential through the SDK
+provider. The final combined test/type/lint receipts identify the current
+candidate; earlier 430-Web/107-SDK totals describe the preceding candidate.
+
+Public OAuth discovery using the installed SDK read metadata for all 13
+selectively released endpoints. All advertise S256 PKCE. This used no
+credential, client registration, grant or tool call and is not counted as an
+authenticated operation. `connector-public-oauth-metadata.json` preserves the
+results. The owner declined Jira and Sentry. Other observed flows stop at
+provider login, project-region choice or sensitive-access disclosure; those
+operation lifecycles remain unverified. Current source boundaries are recorded
+in `ARCHITECTURE.md`.
 
 ## Live access and remaining investigation
 

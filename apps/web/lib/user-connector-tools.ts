@@ -1309,13 +1309,15 @@ function oauthConnectorMcpConfig(
   accessToken: string,
   tokenType: string,
 ): McpServerConfig {
+  const bearer = !tokenType || tokenType.toLowerCase() === 'bearer';
   return {
     url: target.mcpUrl,
     transport: target.transport,
     headers: {
       ...target.optionHeaders,
-      Authorization: `${tokenType || 'Bearer'} ${accessToken}`,
+      ...(!bearer ? { Authorization: `${tokenType} ${accessToken}` } : {}),
     },
+    ...(bearer ? { authProvider: { token: async () => accessToken } } : {}),
     connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
@@ -1403,24 +1405,44 @@ async function buildOAuthConnectorCatalog(
   }
 
   try {
-    const { catalog, handles } = await buildMcpToolCatalog(
-      {
-        [target.serverId]: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
-      },
-      MCP_EGRESS_POLICY,
-      {
-        resolveRuntime: () =>
-          getMcpStatelessRuntime(
-            target.mcpUrl,
-            mcpAuthorizationContext.userOauthConnector(
-              userId,
-              target.connectorId,
-              access.accountKey,
-            ),
+    const discover = async (credential: ReadyConnectorAccess) => {
+      let connectionError: unknown;
+      const { catalog, handles } = await buildMcpToolCatalog(
+        {
+          [target.serverId]: oauthConnectorMcpConfig(
+            target,
+            credential.accessToken,
+            credential.tokenType,
           ),
-      },
-    );
-    await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
+        },
+        MCP_EGRESS_POLICY,
+        {
+          onConnectionError: (_serverName, error) => {
+            connectionError = error;
+          },
+          resolveRuntime: () =>
+            getMcpStatelessRuntime(
+              target.mcpUrl,
+              mcpAuthorizationContext.userOauthConnector(
+                userId,
+                target.connectorId,
+                credential.accountKey,
+              ),
+            ),
+        },
+      );
+      await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
+      return { catalog, connectionError };
+    };
+
+    let discovery = await discover(access);
+    if (detectConnectorAuthChallenge(discovery.connectionError)?.status === 401) {
+      await evictConnectorOAuthCaches(userId, target.connectorId);
+      const refreshed = await resolveTargetAccess(userId, target, true);
+      if (refreshed.status !== 'ready' || refreshed.accountKey !== access.accountKey) return null;
+      discovery = await discover(refreshed);
+    }
+    const catalog = discovery.catalog;
     const ttl = isOAuthServerUnreachable(catalog, target.serverId)
       ? OAUTH_CATALOG_UNREACHABLE_TTL_MS
       : OAUTH_CATALOG_TTL_MS;
@@ -2171,6 +2193,12 @@ export async function loadUserConnectorCapabilityCatalog(
     result.source === 'organization' ||
     isDirectoryServerId(result.connectorId);
   if (!(await connectorPolicyAllows(result.connectorId, organizationId, isCustom))) return null;
+  if (
+    result.catalog.servers[result.connectorId] &&
+    isOAuthServerUnreachable(result.catalog, result.connectorId)
+  ) {
+    throw new ConnectorUnreachableError(result.connectorLabel);
+  }
   return {
     ...result,
     catalog: filterCapabilityCatalogTools(result.catalog, options.isToolDenied),

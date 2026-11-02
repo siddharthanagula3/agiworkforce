@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Transport } from '@modelcontextprotocol/client';
+import { SdkErrorCode, SdkHttpError, type Transport } from '@modelcontextprotocol/client';
 
-import { connectMcpServer } from '../connect';
+import { buildMcpToolCatalog, connectMcpServer } from '../connect';
 import * as transportModule from '../transport';
 
 interface JsonRpcMessage {
@@ -168,5 +168,29 @@ describe('connection lifecycle with the installed MCP SDK', () => {
     });
     expect(assertAllowedUrl).toHaveBeenCalledWith('https://mcp.example.test/mcp');
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('catalog failure ownership with the installed MCP SDK', () => {
+  it('preserves the actual typed authentication failure for the host', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const onConnectionError = vi.fn();
+    const fetch = vi.fn(async () => new Response('invalid credential', { status: 401 }));
+    const result = await buildMcpToolCatalog(
+      { protected: { url: 'https://mcp.example.test/mcp' } },
+      { fetch },
+      { onConnectionError },
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onConnectionError).toHaveBeenCalledTimes(1);
+    expect(onConnectionError.mock.calls[0]?.[0]).toBe('protected');
+    expect(onConnectionError.mock.calls[0]?.[1]).toBeInstanceOf(SdkHttpError);
+    expect(onConnectionError.mock.calls[0]?.[1]).toMatchObject({
+      code: SdkErrorCode.ClientHttpAuthentication,
+      status: 401,
+    });
+    expect(result.handles).toEqual([]);
+    expect(result.catalog.tools).toEqual([]);
   });
 });
