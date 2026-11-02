@@ -152,6 +152,9 @@ const REFUSED_LIST_PATTERN = new RegExp(
 const REFUSED_LIST_SEPARATOR = /,\s*(?:(?:or|nor)\s+)?|\s(?:or|nor)\s+/giu;
 const WHITESPACE_CHARACTER = /\s/u;
 const LIST_CLOSING_CONJUNCTION = /\b(?:or|nor)\b/iu;
+const DIRECT_LIST_PROHIBITION = /\b(?:do[^\S\n]+not|don['\u2019]?t|never)[^\S\n]*$/iu;
+const EPISTEMIC_CAUTION =
+  /^(?:guess(?:ing)?|speculat(?:e|ing)|assum(?:e|ing)|hallucinat(?:e|ing)|improvis(?:e|ing)|invent(?:ing)?|make\s+(?:guesses|assumptions|things\s+up))\b/iu;
 const REFUSED_ITEM_TRAILING_QUALIFIER =
   /(?:\s+(?:at\s+all|this\s+time|for\s+(?:this(?:\s+one)?|now)|here|today|now|please|either|again))+$/u;
 const REFUSED_ITEM_LEADING_FILLER =
@@ -172,12 +175,15 @@ function normalizeRefusedItem(item: string): string {
 }
 
 /**
- * A refusal governs a list only when the list is unambiguous: "a or b", or a
- * comma list closed by ", or". "Don't guess, check the docs or search the web"
- * refuses the guess and asks for the rest, so a comma list without that closing
- * comma refuses its first item alone.
+ * Direct action prohibitions also govern lists without an Oxford comma.
+ * An introductory constraint or caution against guessing does not negate the
+ * subsequent lookup commands in "Don't guess, check the docs or search the web".
  */
-function refusedItemsOfClause(clause: string, offset: number): RefusedItem[] {
+function refusedItemsOfClause(
+  clause: string,
+  offset: number,
+  directProhibition: boolean,
+): RefusedItem[] {
   const segments: RefusedItem[] = [];
   const separators: string[] = [];
   let cursor = 0;
@@ -205,7 +211,10 @@ function refusedItemsOfClause(clause: string, offset: number): RefusedItem[] {
     if (LIST_CLOSING_CONJUNCTION.test(separator)) lastOr = index;
   });
   const closedList =
-    lastOr === 0 || (lastOr > 0 && separators[lastOr]!.trimStart().startsWith(','));
+    lastOr === 0 ||
+    (lastOr > 0 &&
+      (separators[lastOr]!.trimStart().startsWith(',') ||
+        (directProhibition && !EPISTEMIC_CAUTION.test(segments[0]?.text.trim() ?? ''))));
   const refused = closedList ? segments.slice(0, lastOr + 2) : segments.slice(0, 1);
   return refused
     .map((segment) => ({
@@ -221,7 +230,11 @@ function refusedItemsOf(text: string): RefusedItem[] {
   for (const match of text.matchAll(REFUSED_LIST_PATTERN)) {
     const clause = match[1] ?? '';
     const clauseStart = match.index + match[0].length - clause.length;
-    items.push(...refusedItemsOfClause(clause, clauseStart));
+    const prefixEnd = match[0].length - clause.length;
+    const directProhibition = DIRECT_LIST_PROHIBITION.test(
+      match[0].slice(Math.max(0, prefixEnd - 80), prefixEnd),
+    );
+    items.push(...refusedItemsOfClause(clause, clauseStart, directProhibition));
   }
   return items;
 }

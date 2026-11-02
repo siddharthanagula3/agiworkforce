@@ -209,6 +209,33 @@ provider login, project-region choice or sensitive-access disclosure; those
 operation lifecycles remain unverified. Current source boundaries are recorded
 in `ARCHITECTURE.md`.
 
+## Coordinated refusal follow-up
+
+The post-auth Notion smoke request exposed a separate search-routing edge:
+its direct prohibition listed several actions and ended with an ordinary
+non-Oxford or-list. The existing parser treated only the first item as refused,
+so the prohibited search phrase became a required native web search. Provider
+frames 48–53 exposed web_search and the UI displayed an inappropriate empty-web
+fallback despite the successful connected-page read.
+
+The bounded shared parser now carries direct action prohibitions across those
+lists while preserving introductory constraints, cautions against guessing and
+separate affirmative lookups. Four new negative cases failed before the fix;
+the full shared suite passed 320 tests afterward. Web tool-gate/loop integration
+passed 26 tests in two files. No retry, timeout, coverage threshold or security
+guard was weakened.
+
+The same Notion request in fresh conversation
+`e64053d8-29f5-4c52-9f48-fe607735619a` then performed only connector discovery and
+the requested fetch, returning the actual QA marker completed. No public-search
+or image-generation tool was offered in time-correlated provider frames 54–56;
+the inspected activity contains no public search and the empty-web fallback is
+absent. `notion-native-clean-fetch-proof.txt`,
+`notion-native-clean-verification.json`, `notion-native-clean-result.png` and
+`provider-tool-offers.jsonl` preserve the evidence. The temporary private QA
+plugin was disabled after its lifecycle checks so its test skills do not pollute
+ordinary chats; the user's connected Notion and Linear grants remain independent.
+
 ## Live access and remaining investigation
 
 - The delegated private Notion QA page was created and its edit verified through both chat tool records and the real Notion UI; see the controlled-write evidence below. Other provider/resource writes remain unverified.
