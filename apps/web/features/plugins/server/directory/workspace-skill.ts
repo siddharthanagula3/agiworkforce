@@ -2,7 +2,9 @@ import type { Skill } from '@agiworkforce/skills';
 
 const FRONTMATTER_WORKSPACE_PLUGIN_KEY = 'workspace_plugin';
 
-export function workspacePluginFrontmatter(pluginName: string): Record<string, string> {
+export function workspacePluginFrontmatter(
+  pluginName: string | undefined,
+): Record<string, string | undefined> {
   return { [FRONTMATTER_WORKSPACE_PLUGIN_KEY]: pluginName };
 }
 

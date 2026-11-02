@@ -15,7 +15,7 @@ function asStringArray(value: unknown): string[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
-function extractMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
+export function readSkillMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
   const meta: SkillMetadata = {};
   if (typeof frontmatter['always'] === 'boolean') meta.always = frontmatter['always'];
   const skillKey = asString(frontmatter['skillKey']);
@@ -91,7 +91,7 @@ async function loadSkillFile(
     contentHash: hashSkillContent(bytes),
     filePath,
     source,
-    metadata: extractMetadata(data),
+    metadata: readSkillMetadata(data),
     frontmatter: data,
   };
   if (version !== undefined) skill.version = version;

@@ -131,9 +131,15 @@ CLI account sync reconstructed every `SKILL.md` from the body endpoint, dropping
 
 The real loopback HTTP/filesystem regression failed with the prior implementation, then passed with the original entry, version, explicit-only selection flag, required tools, environment and connector names intact. A separate loopback case covers an authored skill with no entry-file endpoint. The full CLI cloud suite passed 131 tests; its existing OS-credential-store test remains ignored. CLI Clippy passed with warnings and unsafe code denied. The first exact-name test command selected zero tests and is not evidence; the corrected fully matched red/green runs each executed the intended test.
 
-This repairs preservation of downloadable bundled entries. It does not establish live account sync, VS Code extension execution, complete native support for every optional frontmatter field, or metadata preservation in the separate imported-plugin and authored-skill producers. Those acceptance paths remain open.
+This CLI repair covers preservation of downloadable bundled entries. It does not establish live account sync, VS Code extension execution, complete native support for every optional frontmatter field or authored-skill metadata. The separate imported-plugin correction is recorded below; its running-UI acceptance remains open.
 
 Automatic approval review initially rejected broader schema admission. The later immutable four-file proposal was tested off-tree, explicitly approved by the owner, and then applied unchanged. Its scope and live verification are recorded below. The settings panel inspects tool parameters and attaches resources/prompts to chat; it does not provide a manual tool runner.
+
+## Imported plugin skill metadata
+
+The imported-plugin path now retains parsed frontmatter, the declared version and the hash of the original source file through its cache and runtime conversion. It uses the shared Skill metadata reader rather than reconstructing empty metadata in Web. Trusted installation and workspace labels override document-supplied labels; tool authorization remains with the existing runtime owner.
+
+The installed-skill cache has a new namespace and refuses structurally incomplete records. The regression tests reproduce missing requirements, unchanged identity after header edits and stale cache replay on the original implementation. They also exercise dependency enforcement after a cache round trip. No schema migration, production data deletion or connector grant change is required. Authored-skill metadata, CLI synchronization of non-downloadable plugin entries and running-UI import/refresh acceptance remain separate open checks.
 
 ## Subsequent JavaScript release gate
 

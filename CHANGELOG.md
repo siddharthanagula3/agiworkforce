@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Imported plugin skills preserve declared requirements, version and source identity;
+  cached records without their declarations are refreshed before use.
 - Account skill sync retains the original entry file and its declared requirements
   for downloadable bundled skills; authored skills keep their existing body path.
 - Malformed generated tables with extra cells retain their complete selectable

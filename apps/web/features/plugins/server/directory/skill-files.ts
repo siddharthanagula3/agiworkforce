@@ -1,4 +1,4 @@
-import { parseFrontmatter } from '@agiworkforce/skills';
+import { hashSkillContent, parseFrontmatter } from '@agiworkforce/skills';
 import { PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES } from '@agiworkforce/cloud-contracts';
 import {
   GITHUB_API_USER_AGENT,
@@ -52,6 +52,8 @@ export function parseSkillFile(path: string, source: string): InstalledDirectory
     description: frontmatterString(parsed.data, 'description') ?? '',
     body,
     path,
+    frontmatter: parsed.data,
+    contentHash: hashSkillContent(Buffer.from(source, 'utf8')),
   };
 }
 

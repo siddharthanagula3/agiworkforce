@@ -1,7 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { hashSkillContent, type Skill, type SkillWithFileAccess } from '@agiworkforce/skills';
+import {
+  readSkillMetadata,
+  readSkillVersion,
+  type Skill,
+  type SkillWithFileAccess,
+} from '@agiworkforce/skills';
 
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import {
@@ -61,18 +66,22 @@ export function toSkill(
   skill: InstalledDirectorySkill,
   workspacePluginName?: string,
 ): Skill {
+  const frontmatter = {
+    ...skill.frontmatter,
+    [FRONTMATTER_PLUGIN_KEY]: pluginKey,
+    ...workspacePluginFrontmatter(workspacePluginName),
+  };
+  const version = readSkillVersion(frontmatter);
   return {
     name: skill.name,
     description: skill.description,
     body: skill.body,
-    contentHash: hashSkillContent(Buffer.from(skill.body, 'utf8')),
+    contentHash: skill.contentHash,
     filePath: `${SKILL_FILE_PATH_PREFIX}/${pluginKey}/${skill.path}`,
     source: SKILL_SOURCE_EXTRA,
-    metadata: {},
-    frontmatter: {
-      [FRONTMATTER_PLUGIN_KEY]: pluginKey,
-      ...(workspacePluginName ? workspacePluginFrontmatter(workspacePluginName) : {}),
-    },
+    metadata: readSkillMetadata(frontmatter),
+    frontmatter,
+    ...(version === undefined ? {} : { version }),
   };
 }
 
