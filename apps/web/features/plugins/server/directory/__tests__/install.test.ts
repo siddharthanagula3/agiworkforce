@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { hashSkillContent } from '@agiworkforce/skills';
 
 import { directoryEntry, SHA } from './fixtures';
 
@@ -126,6 +127,8 @@ describe('installDirectoryPlugin', () => {
           description: 'Remove backgrounds',
           body: 'Do it.',
           path: 'skills/background-removal/SKILL.md',
+          frontmatter: { name: 'background-removal', description: 'Remove backgrounds' },
+          contentHash: hashSkillContent(Buffer.from(SKILL)),
         },
       ],
     );

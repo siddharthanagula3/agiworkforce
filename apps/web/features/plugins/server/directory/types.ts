@@ -104,6 +104,8 @@ export interface InstalledDirectorySkill {
   description: string;
   body: string;
   path: string;
+  frontmatter: Record<string, unknown>;
+  contentHash: string;
 }
 
 export interface SkillCompanionFile {

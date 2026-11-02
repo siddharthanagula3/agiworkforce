@@ -151,8 +151,23 @@ export async function readInstalledSkills(
   params: string,
 ): Promise<readonly InstalledDirectorySkill[] | null> {
   const entry = await cacheStore.get(key(INSTALLED_SKILLS_CACHE_METHOD, params));
-  const parsed = parseJson<InstalledDirectorySkill[]>(entry?.value);
-  return Array.isArray(parsed) ? parsed : null;
+  const parsed = parseJson<unknown>(entry?.value);
+  return Array.isArray(parsed) && parsed.every(isInstalledSkillSnapshot) ? parsed : null;
+}
+
+function isInstalledSkillSnapshot(value: unknown): value is InstalledDirectorySkill {
+  if (value === null || typeof value !== 'object') return false;
+  const skill = value as Record<string, unknown>;
+  return (
+    typeof skill['name'] === 'string' &&
+    typeof skill['description'] === 'string' &&
+    typeof skill['body'] === 'string' &&
+    typeof skill['path'] === 'string' &&
+    typeof skill['contentHash'] === 'string' &&
+    skill['frontmatter'] !== null &&
+    typeof skill['frontmatter'] === 'object' &&
+    !Array.isArray(skill['frontmatter'])
+  );
 }
 
 export async function writeInstalledSkills(

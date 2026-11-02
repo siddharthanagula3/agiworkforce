@@ -44,7 +44,7 @@ export {
   SKILL_HASH_ALGORITHM,
   SKILL_TREE_HASH_PREFIX,
 } from './integrity';
-export { loadSkillsFromDir, loadSkillsFromLayers } from './loader';
+export { loadSkillsFromDir, loadSkillsFromLayers, readSkillMetadata } from './loader';
 export { mergeSkills } from './merge';
 export {
   createSkillToolDefinition,

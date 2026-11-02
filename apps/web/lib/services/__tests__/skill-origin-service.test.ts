@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { hashSkillContent } from '@agiworkforce/skills';
 
 import { toSkill } from '@/features/plugins/server/directory/installed-skills';
 import { loadSkillOrigins } from '@/lib/services/skill-origin-service';
@@ -12,6 +13,8 @@ const SKILL = {
   description: 'Writes a brief.',
   body: 'Write it.',
   path: 'skills/fixture-brief/SKILL.md',
+  frontmatter: {},
+  contentHash: hashSkillContent(Buffer.from('Write it.')),
 };
 
 function recordingDb(rows: unknown[] = []) {

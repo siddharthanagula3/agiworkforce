@@ -35,7 +35,14 @@ vi.mock('../snapshot-cache', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { findInstalledDirectorySkill, listInstalledDirectorySkills } from '../installed-skills';
+import {
+  findInstalledDirectorySkill,
+  listInstalledDirectorySkills,
+  toSkill,
+} from '../installed-skills';
+import { parseSkillFile } from '../skill-files';
+import { executeSkillTool, hashSkillContent } from '@agiworkforce/skills';
+import { workspacePluginNameOf } from '../workspace-skill';
 
 const ROW = {
   plugin_key: 'adobe-for-creativity',
@@ -56,7 +63,11 @@ const CACHED = [
     body: 'Trace it.',
     path: 'skills/vectorize/SKILL.md',
   },
-];
+].map((skill) => ({
+  ...skill,
+  frontmatter: {},
+  contentHash: hashSkillContent(Buffer.from(skill.body)),
+}));
 
 function database(rows: unknown[]): DatabaseAdapter & { query: ReturnType<typeof vi.fn> } {
   const db = { query: vi.fn().mockResolvedValue(rows), execute: vi.fn() };
@@ -67,6 +78,60 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.readInstalledSkills.mockResolvedValue(CACHED);
   mocks.findRecord.mockResolvedValue(directoryEntry());
+});
+
+describe('imported skill requirements', () => {
+  const source =
+    '---\nname: guarded-skill\ndescription: Requires an available tool\nversion: 1.2.3\nplugin: forged-owner\nworkspace_plugin: Forged workspace\nallowed-tools: [fixture-tool]\nrequires:\n  tools: [fixture-tool]\n  mcp: [fixture-connector]\n---\nInstructions.';
+  function imported(text = source, workspaceName?: string) {
+    const parsed = parseSkillFile('skills/guarded/SKILL.md', text);
+    if (!parsed) throw new Error('The valid fixture must parse');
+    return toSkill('actual-owner', parsed, workspaceName);
+  }
+
+  it('refuses loading when imported requirements are unavailable', () => {
+    const skill = imported();
+    const result = executeSkillTool(
+      [skill],
+      { action: 'load', name: skill.name },
+      {
+        availableTools: new Set(),
+        availableMcpServers: new Set(),
+      },
+    );
+    expect(result.code).toBe('skill_dependencies_unavailable');
+  });
+
+  it('keeps the declared version and trusted installation owner', () => {
+    expect(imported()).toMatchObject({
+      version: '1.2.3',
+      frontmatter: { plugin: 'actual-owner' },
+      metadata: { requires: { tools: ['fixture-tool'], mcp: ['fixture-connector'] } },
+    });
+  });
+
+  it('does not trust a workspace label declared by a personal plugin', () => {
+    expect(workspacePluginNameOf(imported())).toBeNull();
+    expect(workspacePluginNameOf(imported(source, 'Actual workspace'))).toBe('Actual workspace');
+  });
+
+  it('loads only when the actual runtime supplies its declared requirements', () => {
+    const skill = imported();
+    const result = executeSkillTool(
+      [skill],
+      { action: 'load', name: skill.name },
+      {
+        availableTools: new Set(['fixture-tool', 'mcp__fixture-connector__fetch']),
+      },
+    );
+    expect(result.code).toBe('skill_loaded');
+  });
+
+  it('changes identity when only declared requirements change', () => {
+    expect(imported(source.replace('fixture-tool', 'other-fixture-tool')).contentHash).not.toBe(
+      imported().contentHash,
+    );
+  });
 });
 
 describe('listInstalledDirectorySkills', () => {

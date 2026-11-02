@@ -137,6 +137,10 @@ The separate Notion schema-admission proposal was rejected by automatic approval
 
 ## Live access and remaining investigation
 
+The imported-plugin conversion repair preserves valid frontmatter and uses the shared skill library's existing metadata reader, rather than reconstructing empty metadata in Web. Version and the hash of the complete original file survive conversion and cached JSON. Actual runtime tool names still determine availability; declaring `allowed-tools` grants nothing. Trusted installation and workspace provenance overwrite labels supplied by the file.
+
+The derived installed-skill cache uses a new namespace so old constraint-free records cannot be replayed. Structural cache validation refuses missing or malformed declaration payloads. No database schema, production data purge, cache expiry budget or connector permission is changed. The original parser/converter/execution regressions failed four cases before repair; the old cache namespace separately reproduced stale metadata replay. The first broader consumer run caught an install-receipt fixture that needed the enriched fields; its full assertion was updated. Running-UI import, refresh and activation checks for this repair remain pending. This does not resolve the separate authored-skill producer or CLI synchronization of non-downloadable plugin entries.
+
 - The owner answered the resource-selection request with “you choose.” A new private QA page is authorized for controlled write tests. Its actual creation and resulting page identity remain pending.
 - Other selected provider grants, native/extension/CLI execution and every remaining matrix cell need current-source inventory and proportionate runtime checks.
 - Plugin connector registration currently uses an `installed_by_plugin` owner key and ignores creation conflicts. Shared ownership and namespace collisions need a concrete regression before a defect or repair is claimed.

@@ -10,6 +10,8 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Imported plugin skills retain declared requirements, version and source identity;
+  cached records without their declarations are refreshed before use.
 - Account skill sync retains the original entry file and its declared requirements
   for downloadable bundled skills; authored skills keep their existing body path.
 - Malformed generated tables with extra cells retain their complete selectable
