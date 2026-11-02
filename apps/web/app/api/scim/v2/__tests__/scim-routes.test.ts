@@ -929,7 +929,7 @@ describe('SCIM listing reads memberships in one statement per page', () => {
     return resource;
   }
 
-  it('lists a full page of users with one membership statement, matching each user read', async () => {
+  it('lists a full page of users with one membership statement', async () => {
     const { rawToken, state, adapter } = await harness();
     seedDirectory(state);
     const query = vi.spyOn(adapter, 'query');
@@ -941,12 +941,6 @@ describe('SCIM listing reads memberships in one statement per page', () => {
     expect(body.Resources).toHaveLength(USER_COUNT);
     expect(membershipStatements(query)).toBe(1);
 
-    for (const resource of body.Resources) {
-      const single = await userGet(scimRequest(`/Users/${resource['id']}`, { token: rawToken }), {
-        params: Promise.resolve({ userId: String(resource['id']) }),
-      });
-      expect(resource['groups']).toEqual(((await single.json()) as Record<string, any>)['groups']);
-    }
     expect(resourceById(body.Resources, userId(0))['groups']).toEqual([
       { value: groupId(1), display: 'Design' },
       { value: groupId(2), display: 'Engineering' },
@@ -958,6 +952,28 @@ describe('SCIM listing reads memberships in one statement per page', () => {
     expect(resourceById(body.Resources, userId(4))['groups']).toEqual([]);
     expect(body.Resources.filter((resource) => resource['groups'].length === 0)).toHaveLength(5);
   });
+
+  it.each(Array.from({ length: USER_COUNT }, (_, index) => index))(
+    'matches listed memberships with the individual read for user %i',
+    async (index) => {
+      const { rawToken, state } = await harness();
+      seedDirectory(state);
+      const response = await usersGet(scimRequest('/Users?count=200', { token: rawToken }));
+      const body = (await response.json()) as { Resources: Array<Record<string, unknown>> };
+      const id = userId(index);
+      const single = await userGet(scimRequest(`/Users/${id}`, { token: rawToken }), {
+        params: Promise.resolve({ userId: id }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(single.status).toBe(200);
+      const listedGroups = resourceById(body.Resources, id)['groups'];
+      const singleGroups = ((await single.json()) as Record<string, unknown>)['groups'];
+      expect(Array.isArray(listedGroups)).toBe(true);
+      expect(Array.isArray(singleGroups)).toBe(true);
+      expect(listedGroups).toEqual(singleGroups);
+    },
+  );
 
   it('issues the same statements for a page of three users as for a page of twenty-five', async () => {
     const { rawToken, state, adapter } = await harness();

@@ -135,6 +135,12 @@ This repairs preservation of downloadable bundled entries. It does not establish
 
 The separate Notion schema-admission proposal was rejected by automatic approval review because broader schema acceptance lacked comprehensive security validation. The persistent guard was not changed. Its red tests are preserved in an off-tree patch, and their temporary repository changes were removed. The current settings panel inspects tool parameters and attaches resources/prompts to chat; it does not provide a manual tool runner. No private Notion QA page has been created.
 
+## Subsequent JavaScript release gate
+
+Commit `594d19a4aff5afb8c97d0b1ce41ab4b4eff555f9` passed the complete shared-chat suite locally: 2,604 tests in 221 files. Its push run `41360279698`, JavaScript job `125009089534`, failed one SCIM route test after 37,427 other Web tests passed. The failing test exceeded the unchanged five-second limit while comparing a page with 25 separately authenticated detail reads. Each read performs the real Argon2 verification. The entire original SCIM file passed its 47 tests in isolation, so this is a resource-sensitive test boundary rather than established broken provisioning behavior.
+
+The full-page query-count and tenant assertions remain together. All 25 detail comparisons now run as independently initialized cases with real authentication; none were sampled out. There is no timeout increase, cryptographic cost change, auth mock, retry or skip. The revised file passed 72 tests locally. The reported offline-eval and Priority failures remain fixed on the current production release. This subsequent failure blocks promotion of the newer renderer candidate; its immutable archive has not been deployed.
+
 ## Live access and remaining investigation
 
 - The owner answered the resource-selection request with “you choose.” A new private QA page is authorized for controlled write tests. Its actual creation and resulting page identity remain pending.
