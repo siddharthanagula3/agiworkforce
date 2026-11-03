@@ -24,11 +24,18 @@ export async function applyLlmEdit(
   selection: vscode.Selection,
   llmResponse: string,
   commandLabel: string,
-  options?: {
+  options: {
     autoApply?: boolean;
+    expectedDocument: Pick<vscode.TextDocument, 'uri' | 'version'>;
+    cancellationToken?: vscode.CancellationToken;
   },
 ): Promise<'accepted' | 'dismissed' | undefined> {
-  const lang = editor.document.languageId;
+  const document = editor.document;
+  const expectedDocument = options.expectedDocument;
+  const cancelled = (): boolean => options.cancellationToken?.isCancellationRequested === true;
+  if (cancelled()) return undefined;
+
+  const lang = document.languageId;
   const codeBlock = extractCodeBlock(llmResponse, lang);
 
   if (codeBlock === undefined || selection.isEmpty) {
@@ -36,16 +43,30 @@ export async function applyLlmEdit(
     return undefined;
   }
 
-  if (options?.autoApply === true) {
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(editor.document.uri, selection, codeBlock);
-    const applied = await vscode.workspace.applyEdit(edit);
-    if (!applied) {
-      vscode.window.showWarningMessage(t('applyEdit.autoApplyFailed'));
-      await openInNewTab(llmResponse, commandLabel);
-      return undefined;
+  const apply = async (): Promise<boolean> => {
+    if (
+      cancelled() ||
+      !vscode.workspace.isTrusted ||
+      document.isClosed ||
+      document.version !== expectedDocument.version ||
+      document.uri.toString() !== expectedDocument.uri.toString()
+    ) {
+      return false;
     }
-    return 'accepted';
+    try {
+      return await editor.edit((edit) => edit.replace(selection, codeBlock));
+    } catch {
+      return false;
+    }
+  };
+
+  if (options.autoApply === true) {
+    const applied = await apply();
+    if (applied) return 'accepted';
+    if (cancelled()) return undefined;
+    vscode.window.showWarningMessage(t('applyEdit.autoApplyFailed'));
+    await openInNewTab(llmResponse, commandLabel);
+    return undefined;
   }
 
   const applyInline = t('applyEdit.applyInline');
@@ -56,12 +77,12 @@ export async function applyLlmEdit(
     applyInline,
     viewInNewTab,
   );
+  if (cancelled()) return undefined;
 
   if (choice === applyInline) {
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(editor.document.uri, selection, codeBlock);
-    const applied = await vscode.workspace.applyEdit(edit);
+    const applied = await apply();
     if (applied) return 'accepted';
+    if (cancelled()) return undefined;
     vscode.window.showWarningMessage(t('applyEdit.applyFailed'));
     await openInNewTab(llmResponse, commandLabel);
     return undefined;

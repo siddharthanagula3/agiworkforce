@@ -221,6 +221,18 @@ exports.activate = function activate(context) {
       },
     }),
   );
+  return {
+    async verifySyntheticSecretStorage() {
+      const key = 'agi-e2e-synthetic-secret';
+      const value = 'disposable-test-value';
+      try {
+        await context.secrets.store(key, value);
+        return await context.secrets.get(key) === value;
+      } finally {
+        await context.secrets.delete(key);
+      }
+    },
+  };
 };
 
 exports.deactivate = function deactivate() {};
@@ -262,6 +274,7 @@ export function writeExtensionHostTestRunner(
   const compiledFiles = [
     'localModelFixture.js',
     path.join('suite', 'extension.smoke.test.js'),
+    path.join('suite', 'inlineEdit.test.js'),
     path.join('suite', 'index.js'),
   ];
   const copiedTestRoot = path.join(root, 'out', 'test');

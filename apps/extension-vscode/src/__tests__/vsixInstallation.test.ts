@@ -159,6 +159,7 @@ describe('installed VSIX verification', () => {
     fs.mkdirSync(path.join(compiledTests, 'suite'), { recursive: true });
     fs.writeFileSync(path.join(compiledTests, 'localModelFixture.js'), 'exports.fixture = true;\n');
     fs.writeFileSync(path.join(compiledTests, 'suite', 'extension.smoke.test.js'), 'test();\n');
+    fs.writeFileSync(path.join(compiledTests, 'suite', 'inlineEdit.test.js'), 'nativeTest();\n');
     fs.writeFileSync(path.join(compiledTests, 'suite', 'index.js'), 'exports.run = run;\n');
     const runner = writeExtensionHostTestRunner(path.join(root, 'runner'), compiledTests);
     const runnerManifest = JSON.parse(
@@ -173,6 +174,12 @@ describe('installed VSIX verification', () => {
     expect(fs.readFileSync(runner.extensionTestsPath, 'utf8')).toBe('exports.run = run;\n');
     expect(
       fs.readFileSync(
+        path.join(runner.extensionDevelopmentPath, 'out', 'test', 'suite', 'inlineEdit.test.js'),
+        'utf8',
+      ),
+    ).toBe('nativeTest();\n');
+    expect(
+      fs.readFileSync(
         path.join(runner.extensionDevelopmentPath, 'out', 'test', 'localModelFixture.js'),
         'utf8',
       ),
@@ -185,6 +192,7 @@ describe('installed VSIX verification', () => {
     fs.mkdirSync(path.join(compiledTests, 'suite'), { recursive: true });
     fs.writeFileSync(path.join(compiledTests, 'localModelFixture.js'), 'exports.fixture = true;\n');
     fs.writeFileSync(path.join(compiledTests, 'suite', 'extension.smoke.test.js'), 'test();\n');
+    fs.writeFileSync(path.join(compiledTests, 'suite', 'inlineEdit.test.js'), 'nativeTest();\n');
     fs.writeFileSync(path.join(compiledTests, 'suite', 'index.js'), 'exports.run = run;\n');
 
     const runner = writeExtensionHostTestRunner(path.join(root, 'runner'), compiledTests);

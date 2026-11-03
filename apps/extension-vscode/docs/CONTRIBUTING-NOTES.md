@@ -57,6 +57,18 @@ in.
 
 No AGI Cloud sign-in or extension API key is required for the local developer-session transport. Provider credentials and routing are owned by the local runtime configuration. Inline completions and older cloud-backed utility commands have separate credential requirements.
 
+Native extension tests can use an installed VS Code executable by passing
+`--vscode-executable=/absolute/path/to/Code` to `out/test/runTests.js` after the
+test build. Without that argument, the runner downloads its pinned test version.
+Set `AGI_VSCODE_E2E_VERSION` to the installed version when selecting another
+supported test host; the exact-version check remains active.
+`--vsix=/absolute/path/to/package.vsix --grep="native inline edit safety"`
+checks a private copy of the built package in an isolated profile with provider
+credentials cleared. It does not install into the normal editor profile.
+All test-host launches and extension CLI operations use memory-only secret
+storage in the private profile, so synthetic test credentials never require
+the macOS login Keychain. Native secure-storage behavior needs its own test.
+
 ## Cloud account and Web handoffs
 
 `AGI Code: Sign In to AGI Cloud` uses the shared browser-approved device
