@@ -74,42 +74,43 @@ function unsignedJwt(sub: string): string {
 }
 
 interface AdapterUnderTest {
-  provider: DatabaseProvider;
   skipReason: string | null;
-  create: (connectionString: string, poolSize: number) => DatabaseAdapter;
+  create: (
+    connectionString: string,
+    poolSize: number,
+    allowUnverified?: boolean,
+  ) => DatabaseAdapter;
 }
 
 const { url: contractUrl, reason: sharedSkipReason } = contractConnectionString();
 
-const adaptersUnderTest: AdapterUnderTest[] = [
-  {
-    provider: 'postgres',
+const adaptersUnderTest: Record<DatabaseProvider, AdapterUnderTest> = {
+  postgres: {
     skipReason: sharedSkipReason,
-    create: (connectionString, poolSize) =>
+    create: (connectionString, poolSize, allowUnverified = true) =>
       new PostgresDatabaseAdapter({
         connectionString,
         poolSize,
-        unsafeAllowUnverifiedJwtSubject: true,
+        unsafeAllowUnverifiedJwtSubject: allowUnverified,
       }),
   },
-  {
-    provider: 'neon',
+  neon: {
     skipReason:
       sharedSkipReason ??
       (process.env[WS_PROXY_ENV]?.trim()
         ? null
         : `${WS_PROXY_ENV} is unset, the neon driver cannot reach a plain postgres over TCP`),
-    create: (connectionString, poolSize) =>
+    create: (connectionString, poolSize, allowUnverified = true) =>
       new NeonDatabaseAdapter({
         connectionString,
         poolSize,
-        unsafeAllowUnverifiedJwtSubject: true,
+        unsafeAllowUnverifiedJwtSubject: allowUnverified,
       }),
   },
-];
+};
 
-for (const adapterUnderTest of adaptersUnderTest) {
-  const { provider, skipReason, create } = adapterUnderTest;
+for (const provider of Object.keys(adaptersUnderTest) as DatabaseProvider[]) {
+  const { skipReason, create } = adaptersUnderTest[provider];
   const title = skipReason
     ? `${provider} adapter contract (skipped: ${skipReason})`
     : `${provider} adapter contract`;
@@ -118,17 +119,27 @@ for (const adapterUnderTest of adaptersUnderTest) {
   // It fires only when no loopback database is reachable, and the title names why.
   describe.skipIf(skipReason !== null)(title, () => {
     const table = scratchTableName();
+    const tenantTable = scratchTableName();
     let db: DatabaseAdapter;
 
     beforeAll(async () => {
       db = create(contractUrl, SINGLE_CONNECTION_POOL);
       await db.execute(`create table ${table} (id text primary key, label text not null)`);
       await db.execute(`grant select, insert, update, delete on ${table} to ${RLS_ROLE}`);
+      await db.execute(
+        `create table ${tenantTable} (id text primary key, user_id text not null, label text not null)`,
+      );
+      await db.execute(`alter table ${tenantTable} enable row level security`);
+      await db.execute(`alter table ${tenantTable} force row level security`);
+      await db.execute(`grant select, insert, update, delete on ${tenantTable} to ${RLS_ROLE}`);
+      await db.execute(`create policy tenant_contract on ${tenantTable} for all to ${RLS_ROLE}
+        using (user_id = ${TENANT_FUNCTION}) with check (user_id = ${TENANT_FUNCTION})`);
     });
 
     afterAll(async () => {
       if (!db) return;
       await db.execute(`drop table if exists ${table}`);
+      await db.execute(`drop table if exists ${tenantTable}`);
       await db.dispose();
     });
 
@@ -239,14 +250,87 @@ for (const adapterUnderTest of adaptersUnderTest) {
       expect(rows[0]?.role).toBe(RLS_ROLE);
     });
 
-    it('refuses to bind an unverified subject without the explicit opt in', () => {
-      const guarded = create(contractUrl, SINGLE_CONNECTION_POOL) as unknown as {
-        config: { unsafeAllowUnverifiedJwtSubject?: boolean };
-      };
-      guarded.config.unsafeAllowUnverifiedJwtSubject = false;
-      expect(() => (guarded as unknown as DatabaseAdapter).withUser(unsignedJwt('denied'))).toThrow(
-        /unsafeAllowUnverifiedJwtSubject/,
+    it('isolates actual RLS rows and refuses cross-tenant writes', async () => {
+      const first = `rls-first-${randomUUID()}`;
+      const second = `rls-second-${randomUUID()}`;
+      await db.execute(
+        `insert into ${tenantTable} (id, user_id, label) values ($1, $2, $3), ($4, $5, $6)`,
+        ['first', first, 'first row', 'second', second, 'second row'],
       );
+      expect(await db.query(`select id from ${tenantTable} order by id`)).toHaveLength(2);
+      const firstScope = db.withUser(unsignedJwt(first));
+      const secondScope = db.withUser(unsignedJwt(second));
+      expect(await firstScope.query(`select id from ${tenantTable}`)).toEqual([{ id: 'first' }]);
+      expect(await secondScope.query(`select id from ${tenantTable}`)).toEqual([{ id: 'second' }]);
+      expect(
+        await firstScope.execute(`update ${tenantTable} set label = $1 where id = $2`, [
+          'changed',
+          'second',
+        ]),
+      ).toBe(0);
+      await expect(
+        firstScope.execute(`insert into ${tenantTable} (id, user_id, label) values ($1, $2, $3)`, [
+          'forbidden',
+          second,
+          'not permitted',
+        ]),
+      ).rejects.toMatchObject({ code: '42501' });
+      expect(
+        await secondScope.query(`select label from ${tenantTable} where id = $1`, ['second']),
+      ).toEqual([{ label: 'second row' }]);
+    });
+
+    it('reuses one physical backend without carrying the previous tenant', async () => {
+      const first = `backend-first-${randomUUID()}`;
+      const second = `backend-second-${randomUUID()}`;
+      const sql = `select pg_backend_pid() as pid, ${TENANT_FUNCTION} as tenant`;
+      const [left] = await db
+        .withUser(unsignedJwt(first))
+        .query<{ pid: number; tenant: string }>(sql);
+      const [right] = await db
+        .withUser(unsignedJwt(second))
+        .query<{ pid: number; tenant: string }>(sql);
+      expect(left?.pid).toBeGreaterThan(0);
+      expect(right?.pid).toBe(left?.pid);
+      expect(left?.tenant).toBe(first);
+      expect(right?.tenant).toBe(second);
+    });
+
+    it('rolls back scoped writes and restores the connection role and subject', async () => {
+      const subject = `rollback-${randomUUID()}`;
+      const [before] = await db.query<{ role: string }>('select current_user as role');
+      const id = randomUUID();
+      const failure = new Error('scoped rollback');
+      await expect(
+        db.withUser(unsignedJwt(subject)).transaction(async (tx) => {
+          await tx.execute(`insert into ${tenantTable} (id, user_id, label) values ($1, $2, $3)`, [
+            id,
+            subject,
+            'pending',
+          ]);
+          expect(await tx.query(`select id from ${tenantTable} where id = $1`, [id])).toEqual([
+            { id },
+          ]);
+          throw failure;
+        }),
+      ).rejects.toBe(failure);
+      expect(await db.query(`select id from ${tenantTable} where id = $1`, [id])).toEqual([]);
+      const [after] = await db.query<{ role: string; tenant: string | null }>(
+        `select current_user as role, ${TENANT_FUNCTION} as tenant`,
+      );
+      expect(after?.role).toBe(before?.role);
+      expect(NO_TENANT_IDENTITY.has(after?.tenant ?? null)).toBe(true);
+    });
+
+    it('refuses to bind an unverified subject without the explicit opt in', async () => {
+      const guarded = create(contractUrl, SINGLE_CONNECTION_POOL, false);
+      try {
+        expect(() => guarded.withUser(unsignedJwt('denied'))).toThrow(
+          /unsafeAllowUnverifiedJwtSubject/,
+        );
+      } finally {
+        await guarded.dispose();
+      }
     });
 
     it('rejects queries once disposed', async () => {

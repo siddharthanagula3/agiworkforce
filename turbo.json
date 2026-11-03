@@ -45,6 +45,8 @@
       "dependsOn": ["transit"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.base.json"],
       "env": [
+        "AGI_DATABASE_CONTRACT_TEST_URL",
+        "AGI_DATABASE_WS_PROXY",
         "AGI_LIVE_DATABASE_URL",
         "AGI_TEST_LIVE_CONVERSATION_DRAFTS",
         "CLERK_SECRET_KEY",

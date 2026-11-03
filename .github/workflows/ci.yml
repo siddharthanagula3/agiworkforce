@@ -249,6 +249,44 @@ jobs:
       - name: Prepare the test database
         run: pnpm db:migrate -- apply --target ci
 
+      - name: Verify both database driver contracts
+        env:
+          AGI_DATABASE_CONTRACT_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/agiworkforce_test?sslmode=disable
+          AGI_DATABASE_WS_PROXY: 127.0.0.1:5433
+          AGI_DATABASE_WS_PROXY_PORT: '5433'
+        run: |
+          set -euo pipefail
+          node scripts/dev-db-ws-proxy.mjs &
+          contract_proxy_pid=$!
+          trap 'contract_status=$?; kill "$contract_proxy_pid" 2>/dev/null || true; wait "$contract_proxy_pid" 2>/dev/null || true; exit "$contract_status"' EXIT
+          node --input-type=module <<'NODE'
+          import { connect } from 'node:net';
+          import { setTimeout } from 'node:timers/promises';
+          let ready = false;
+          for (let attempt = 0; attempt < 50 && !ready; attempt += 1) {
+            ready = await new Promise((resolve) => {
+              const socket = connect({ host: '127.0.0.1', port: Number(process.env.AGI_DATABASE_WS_PROXY_PORT) });
+              const finish = (result) => { socket.destroy(); resolve(result); };
+              socket.once('connect', () => finish(true));
+              socket.once('error', () => finish(false));
+              socket.setTimeout(200, () => finish(false));
+            });
+            if (!ready) await setTimeout(100);
+          }
+          if (!ready) throw new Error('The loopback database WebSocket proxy did not start');
+          NODE
+          contract_result="$RUNNER_TEMP/sql-driver-contract.json"
+          pnpm --filter @agiworkforce/data-layer exec vitest run src/__tests__/adapter-contract.test.ts --reporter=json --outputFile="$contract_result"
+          node --input-type=module - "$contract_result" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const result = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const cases = result.testResults.flatMap((suite) => suite.assertionResults);
+          if (!result.success || cases.length === 0 || cases.some((test) => test.status !== 'passed')) {
+            throw new Error('The database contract must execute every case with no skipped or failed tests');
+          }
+          console.log(`Verified ${cases.length} live database contract cases.`);
+          NODE
+
       - name: Install Chromium
         # apps/web/scripts/__tests__/a11y-audit.test.ts drives a real browser, so the
         # test step needs one even though this job is not the E2E job.

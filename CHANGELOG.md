@@ -10,6 +10,13 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 
 ### Fixed
 
+- Quiet-hours release times follow the actual timezone transition, including
+  daylight saving gaps and repeated hours, without delaying the boundary by
+  the current seconds or milliseconds.
+- VS Code inline proposals preserve text changed while generation or review is
+  pending, recheck trust and cancellation, and use versioned editor transactions.
+- Isolated VS Code test launches use memory-only secret storage, preventing
+  synthetic test credentials from prompting for a missing macOS login Keychain.
 - Imported plugin skills preserve declared requirements, version and source identity;
   cached records without their declarations are refreshed before use.
 - Account skill sync retains the original entry file and its declared requirements
