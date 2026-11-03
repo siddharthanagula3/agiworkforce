@@ -47,6 +47,11 @@ const WEEKDAY_BY_LABEL: Record<string, TimeFocusWeekday> = {
   Sat: 6,
 };
 
+const zonedFormatters = new Map<string, Intl.DateTimeFormat>();
+const MAX_TIME_ZONE_NAME_LENGTH = 64;
+const MINUTE_MS = 60_000;
+const QUIET_WINDOW_SEARCH_MINUTES = 3 * 24 * 60;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -75,7 +80,7 @@ export function isMinuteWithinQuietHours(
 }
 
 export function isValidIanaTimeZone(value: string): boolean {
-  if (!value || value.length > 64) return false;
+  if (!value || value.length > MAX_TIME_ZONE_NAME_LENGTH) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: value }).format(0);
     return true;
@@ -85,17 +90,30 @@ export function isValidIanaTimeZone(value: string): boolean {
 }
 
 function getZonedDateParts(date: Date, timezone: string): ZonedDateParts | null {
-  if (!Number.isFinite(date.getTime()) || !isValidIanaTimeZone(timezone)) return null;
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    weekday: 'short',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
+  if (
+    !Number.isFinite(date.getTime()) ||
+    typeof timezone !== 'string' ||
+    timezone.length > MAX_TIME_ZONE_NAME_LENGTH
+  ) {
+    return null;
+  }
+  const formatterKey = timezone.toLowerCase();
+  let formatter = zonedFormatters.get(formatterKey);
+  if (!formatter) {
+    if (!isValidIanaTimeZone(timezone)) return null;
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    zonedFormatters.set(formatterKey, formatter);
+  }
+  const parts = formatter.formatToParts(date);
   const read = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value;
   const weekday = WEEKDAY_BY_LABEL[read('weekday') ?? ''];
@@ -163,12 +181,20 @@ export function quietHoursRemainingMinutes(
   date: Date,
   schedule: QuietHoursPreferences,
 ): number | null {
+  const end = quietHoursEndAt(date, schedule);
+  return end === null ? null : (end.getTime() - date.getTime()) / MINUTE_MS;
+}
+
+export function quietHoursEndAt(date: Date, schedule: QuietHoursPreferences): Date | null {
   if (!isDateWithinQuietHours(date, schedule)) return null;
-  const end = clockTimeToMinutes(schedule.endTime);
-  const parts = getZonedDateParts(date, schedule.timezone);
-  if (end === null || !parts) return null;
-  const minutesInDay = 24 * 60;
-  return (end - parts.minuteOfDay + minutesInDay) % minutesInDay || minutesInDay;
+  const currentMinute = Math.floor(date.getTime() / MINUTE_MS);
+  // Include whole-day timezone jumps while keeping the eligibility search bounded.
+  for (let elapsed = 1; elapsed <= QUIET_WINDOW_SEARCH_MINUTES; elapsed += 1) {
+    const candidate = new Date((currentMinute + elapsed) * MINUTE_MS);
+    if (!Number.isFinite(candidate.getTime())) return null;
+    if (!isDateWithinQuietHours(candidate, schedule)) return candidate;
+  }
+  return null;
 }
 
 export function getQuietHoursWindowKey(date: Date, schedule: QuietHoursPreferences): string | null {
