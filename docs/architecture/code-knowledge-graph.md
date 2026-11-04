@@ -594,9 +594,28 @@ claiming effects were undone. This is not native cancellation, restart recovery,
 all-process exclusion or a guarantee that a rejected start had no effects.
 No native/event ordering or regression execution was performed.
 
+## VS Code approval lifetime and automatic Undo refusal
+
+Reconstructed commit: `db6186580e97c874789590220676ac6dc8696818` changes
+`ChatStateManager.ts` and one unexecuted regression source. Approval events capture
+original runtime, thread object, conversation epoch and turn before capability
+awaits. Resolution retains the exact pending entry while editing/RPC awaits run,
+rechecks the owner before publication and scopes session grants to the original
+thread/epoch. Late denied-guidance and interrupt outcomes cannot publish into a
+replacement turn. Proposed-edit review cleanup is fenced but not atomic with
+external editor operations.
+
+Automatic latest-reply Undo now refuses instead of assuming the newest checkpoint
+belongs to that turn. The actual `ThreadCheckpointList` lacks turn ownership;
+a distinct `TurnCheckpointSummary` contract is not an adapted authority for this
+path. Existing native rewind locking/counterguards remain, but cannot establish
+this missing client association. Explicit checkpoint picking, resend and branch
+operations are unchanged by this slice. No already-dispatched edit/approval/undo
+recall, complete cleanup transaction or runtime correctness is claimed.
+
 ## Reconstruction boundary
 
-Only the twenty-four accepted production slices traced above are represented as
+Only the twenty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
