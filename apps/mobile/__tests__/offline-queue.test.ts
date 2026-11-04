@@ -364,6 +364,130 @@ describe('isProcessing flag', () => {
   });
 });
 
+describe('processor ownership and readiness', () => {
+  it.each(['success', 'failure'] as const)(
+    'keeps a cleared processor locked until its late %s settles without changing replacement work',
+    async (outcome) => {
+      const onSuccess = jest.fn();
+      const onFailure = jest.fn();
+      const original = offlineQueue.enqueue(makeMsg(), { onSuccess, onFailure });
+      let finish!: () => void;
+      let fail!: (error: Error) => void;
+      const send = jest.fn().mockReturnValue(
+        new Promise<void>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+      );
+      const processing = offlineQueue.processQueue(send);
+
+      offlineQueue.clear();
+      const replacement = offlineQueue.enqueue(makeMsg({ content: 'replacement' }));
+      replacement.id = original.id;
+      const replacementSend = jest.fn().mockResolvedValue(undefined);
+      await offlineQueue.processQueue(replacementSend);
+
+      expect(offlineQueue.isProcessing).toBe(true);
+      expect(replacementSend).not.toHaveBeenCalled();
+      if (outcome === 'success') finish();
+      else fail(new Error('Old send failed'));
+      await processing;
+
+      expect(offlineQueue.getQueue()).toEqual([replacement]);
+      expect(replacement.retryCount).toBe(0);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(onFailure).toHaveBeenCalledTimes(1);
+      expect(offlineQueue.isProcessing).toBe(false);
+
+      await offlineQueue.processQueue(replacementSend);
+      expect(replacementSend).toHaveBeenCalledTimes(1);
+      expect(offlineQueue.getQueue()).toEqual([]);
+    },
+  );
+
+  it('does not release an old backoff owner when the queue is cleared', async () => {
+    offlineQueue.enqueue(makeMsg());
+    const send = jest.fn().mockRejectedValue(new Error('Network error'));
+    const processing = offlineQueue.processQueue(send);
+    await flushMicrotasks();
+    offlineQueue.clear();
+    const replacement = offlineQueue.enqueue(makeMsg({ content: 'new generation' }));
+    const replacementSend = jest.fn().mockResolvedValue(undefined);
+    await offlineQueue.processQueue(replacementSend);
+
+    expect(offlineQueue.isProcessing).toBe(true);
+    expect(replacementSend).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(1_000);
+    await processing;
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(offlineQueue.getQueue()).toEqual([replacement]);
+    expect(replacement.retryCount).toBe(0);
+    expect(offlineQueue.isProcessing).toBe(false);
+  });
+
+  it('leaves entries and retry counters unchanged while readiness is false', async () => {
+    const entry = offlineQueue.enqueue(makeMsg());
+    const send = jest.fn();
+    await offlineQueue.processQueue(send, () => false);
+
+    expect(send).not.toHaveBeenCalled();
+    expect(offlineQueue.getQueue()).toEqual([entry]);
+    expect(entry.retryCount).toBe(0);
+    expect(offlineQueue.isProcessing).toBe(false);
+  });
+
+  it('settles a successful in-flight entry but pauses before the next offline dispatch', async () => {
+    const first = offlineQueue.enqueue(makeMsg({ content: 'first' }));
+    const second = offlineQueue.enqueue(makeMsg({ content: 'second' }));
+    let online = true;
+    const send = jest.fn().mockImplementation(async () => {
+      online = false;
+    });
+
+    await offlineQueue.processQueue(send, () => online);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(first);
+    expect(offlineQueue.getQueue()).toEqual([second]);
+    expect(second.retryCount).toBe(0);
+  });
+
+  it('releases the processor when readiness throws without counting a send failure', async () => {
+    const entry = offlineQueue.enqueue(makeMsg());
+    const send = jest.fn();
+    const error = new Error('Readiness unavailable');
+
+    await expect(
+      offlineQueue.processQueue(send, () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
+
+    expect(send).not.toHaveBeenCalled();
+    expect(entry.retryCount).toBe(0);
+    expect(offlineQueue.isProcessing).toBe(false);
+    await offlineQueue.processQueue(jest.fn().mockResolvedValue(undefined));
+    expect(offlineQueue.getQueue()).toEqual([]);
+  });
+
+  it('keeps one failed attempt when connectivity changes during backoff', async () => {
+    const entry = offlineQueue.enqueue(makeMsg());
+    let online = true;
+    const send = jest.fn().mockRejectedValue(new Error('Network error'));
+    const processing = offlineQueue.processQueue(send, () => online);
+    await flushMicrotasks();
+    online = false;
+    jest.advanceTimersByTime(1_000);
+    await processing;
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(entry.retryCount).toBe(1);
+    expect(offlineQueue.getQueue()).toEqual([entry]);
+    expect(offlineQueue.isProcessing).toBe(false);
+  });
+});
+
 describe('subscribe (live badge)', () => {
   it('notifies subscribers on enqueue so the queued-count badge stays live', () => {
     let ticks = 0;
