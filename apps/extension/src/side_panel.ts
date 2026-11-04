@@ -7626,6 +7626,7 @@ function pageReference(source: PageContextSource): SidePanelPageReference {
 }
 
 const followUpQueue = createMessageQueue();
+let followUpSendInProgress = false;
 
 function canQueueFollowUp(text: string): boolean {
   return (
@@ -7643,8 +7644,7 @@ setAnswerFollowUpSender((text) => {
 
 function submitComposerText(text: string): boolean {
   if (canAdmitComposerMessage(text)) {
-    sendMessage(text);
-    return true;
+    return sendMessage(text);
   }
   if (!canQueueFollowUp(text)) return false;
   try {
@@ -7659,10 +7659,23 @@ function submitComposerText(text: string): boolean {
 }
 
 function sendNextFollowUp(): void {
+  if (followUpSendInProgress) return;
   const next = followUpQueue.peek();
   if (!next || typeof next.value !== 'string' || !canAdmitComposerMessage(next.value)) return;
-  followUpQueue.dequeueIf(next.id);
-  sendMessage(next.value);
+  followUpSendInProgress = true;
+  let admitted: boolean | undefined;
+  try {
+    admitted = sendMessage(next.value);
+  } finally {
+    try {
+      // Only an explicit refusal is safe to leave eligible for another automatic send.
+      if (admitted !== false) {
+        followUpQueue.dequeueAllMatching((command) => command.id === next.id);
+      }
+    } finally {
+      followUpSendInProgress = false;
+    }
+  }
 }
 
 function returnFollowUpsToComposer(): void {
@@ -12574,10 +12587,10 @@ function buildUI(): void {
       return;
     }
     const text = inputEl.value;
-    if (!canAdmitComposerMessage(text)) return;
+    if (!sendMessage(text)) return;
     inputEl.value = '';
     autoResizeInput(inputEl);
-    sendMessage(text);
+    updateSendButton();
   });
 
   const attachWrapper = el('div', { class: 'sp-attach-wrapper' });
