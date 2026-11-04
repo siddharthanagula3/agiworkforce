@@ -1483,26 +1483,33 @@ export const TOOL_LOOP_STREAM_LIMITS = {
   keepRecentToolResults: KEEP_RECENT_TOOL_RESULTS,
 } as const;
 
-/**
- * Bound a tool-call promise: resolve to an error result if it exceeds
- * `timeoutMs` (a hung tool can't wedge the turn) or if it rejects (one tool
- * can't crash the whole batch). Never rejects. Exported for unit tests.
- */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
+  options: { drainOnError?: boolean } = {},
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
+  let failed = false;
+  let firstError: unknown;
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
+    while (!failed && next < items.length) {
       const index = next++;
-      results[index] = await fn(items[index]!, index);
+      try {
+        results[index] = await fn(items[index]!, index);
+      } catch (error) {
+        if (!options.drainOnError) throw error;
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
+      }
     }
   };
   const workerCount = Math.max(1, Math.min(limit, items.length));
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (failed) throw firstError;
   return results;
 }
 
@@ -1596,18 +1603,18 @@ function timedOutWriteMessage(toolName: string, timeoutMs: number): string {
   );
 }
 
-/**
- * The deadline stops the call, not just the wait: `abort` is the controller
- * whose signal the executor was given. A write that ran out of time may still
- * have landed, so it is reported as unknown rather than as failed.
- */
+// Abort is cooperative: a timed-out write may still land, so its outcome is unknown.
 export function withToolTimeout(
   run: Promise<ToolLoopToolResult>,
   toolName: string,
   timeoutMs: number,
-  onTimeout: { abort?: AbortController; write?: boolean } = {},
+  onTimeout: {
+    abort?: AbortController;
+    write?: boolean;
+    shouldPropagateExecutionError?: (error: unknown) => boolean;
+  } = {},
 ): Promise<ToolLoopToolResult> {
-  return new Promise<ToolLoopToolResult>((resolve) => {
+  return new Promise<ToolLoopToolResult>((resolve, reject) => {
     const timer = setTimeout(() => {
       onTimeout.abort?.abort(new Error(`Tool ${toolName} exceeded its ${timeoutMs}ms deadline`));
       resolve({
@@ -1624,6 +1631,10 @@ export function withToolTimeout(
       },
       (err: unknown) => {
         clearTimeout(timer);
+        if (onTimeout.shouldPropagateExecutionError?.(err)) {
+          reject(err);
+          return;
+        }
         resolve({
           content: toolFailureMessage(toolName, err),
           isError: true,
@@ -5044,7 +5055,12 @@ export async function* runToolLoop(
             isError: true,
           });
         }
-        return readStoredToolResult(toolResultOwner, tc.args);
+        return withToolTimeout(
+          readStoredToolResult(toolResultOwner, tc.args),
+          tc.qualifiedName,
+          nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, maxDurationMs, now() - startedAt),
+          { shouldPropagateExecutionError: options.shouldPropagateExecutionError },
+        );
       }
       const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
       if (argumentProblem) {
@@ -5250,14 +5266,23 @@ export async function* runToolLoop(
         run,
         tc.qualifiedName,
         nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, maxDurationMs, now() - startedAt),
-        { abort: callAbort, write: !isReadOnlyTool(tc.qualifiedName) },
+        {
+          abort: callAbort,
+          write: !isReadOnlyTool(tc.qualifiedName),
+          shouldPropagateExecutionError: options.shouldPropagateExecutionError,
+        },
       );
     };
 
-    const parallelResults = await mapWithConcurrency(readOnly, readOnlyConcurrency, async (tc) => {
-      const result = await executeTool(tc);
-      return { tc, ...result };
-    });
+    const parallelResults = await mapWithConcurrency(
+      readOnly,
+      readOnlyConcurrency,
+      async (tc) => {
+        const result = await executeTool(tc);
+        return { tc, ...result };
+      },
+      { drainOnError: true },
+    );
     results.push(...parallelResults);
 
     for (const tc of mutating) {
@@ -5626,6 +5651,7 @@ export async function* runToolLoop(
             );
           }
         } catch (err) {
+          if (options.shouldPropagateExecutionError?.(err)) throw err;
           logger.error(
             {
               provider: processed.provider,

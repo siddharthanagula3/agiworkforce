@@ -261,6 +261,32 @@ describe('withToolTimeout, per-tool-call wall-clock bound', () => {
     expect(abort.signal.aborted).toBe(false);
   });
 
+  it('propagates selected execution errors unchanged and clears the deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const error = new Error('durable operation is leased');
+      const abort = new AbortController();
+      await expect(
+        withToolTimeout(Promise.reject(error), 'read_file', 1000, {
+          abort,
+          shouldPropagateExecutionError: (candidate) => candidate === error,
+        }),
+      ).rejects.toBe(error);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(abort.signal.aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps ordinary tool failures as results when propagation is configured', async () => {
+    const result = await withToolTimeout(Promise.reject(new Error('ordinary')), 'read_file', 1000, {
+      shouldPropagateExecutionError: () => false,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('ordinary');
+  });
+
   it('converts a rejection into an error result (one tool cannot crash the batch)', async () => {
     const r = await withToolTimeout(Promise.reject(new Error('boom')), 'bad_tool', 1000);
     expect(r.isError).toBe(true);
@@ -282,6 +308,72 @@ describe('mapWithConcurrency, bounded parallel tool fan-out', () => {
     });
     expect(peak).toBeLessThanOrEqual(4);
     expect(out).toEqual(items.map((n) => n * 2));
+  });
+
+  it.each([new Error('first failure'), undefined])(
+    'drains active work and stops dequeuing after the first rejection (%s)',
+    async (firstError) => {
+      let rejectFirst!: (error: unknown) => void;
+      let finishSibling!: (value: number) => void;
+      const first = new Promise<number>((_resolve, reject) => {
+        rejectFirst = reject;
+      });
+      const sibling = new Promise<number>((resolve) => {
+        finishSibling = resolve;
+      });
+      const started: number[] = [];
+      let settled = false;
+      const outcome = mapWithConcurrency(
+        [0, 1, 2, 3],
+        2,
+        async (item) => {
+          started.push(item);
+          return item === 0 ? first : sibling;
+        },
+        { drainOnError: true },
+      ).then(
+        () => {
+          settled = true;
+          return { rejected: false, error: undefined };
+        },
+        (error: unknown) => {
+          settled = true;
+          return { rejected: true, error };
+        },
+      );
+      rejectFirst(firstError);
+      await first.catch(() => undefined);
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      expect(started).toEqual([0, 1]);
+      finishSibling(1);
+      expect(await outcome).toEqual({ rejected: true, error: firstError });
+      expect(started).toEqual([0, 1]);
+    },
+  );
+
+  it('preserves fail-fast behavior by default without waiting for an active sibling', async () => {
+    const error = new Error('attachment failed');
+    let thirdStarted!: () => void;
+    const continued = new Promise<void>((resolve) => {
+      thirdStarted = resolve;
+    });
+    let finishSibling!: (value: number) => void;
+    const sibling = new Promise<number>((resolve) => {
+      finishSibling = resolve;
+    });
+    const started: number[] = [];
+    const run = mapWithConcurrency([0, 1, 2], 2, async (item) => {
+      started.push(item);
+      if (item === 0) throw error;
+      if (item === 2) thirdStarted();
+      return sibling;
+    });
+    await expect(run).rejects.toBe(error);
+    expect(started).toEqual([0, 1]);
+    finishSibling(1);
+    await continued;
+    expect(started).toEqual([0, 1, 2]);
   });
 
   it('handles an empty list and a single item', async () => {
