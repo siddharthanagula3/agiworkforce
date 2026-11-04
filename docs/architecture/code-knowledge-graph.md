@@ -1546,9 +1546,33 @@ workspace or native cancellation guarantees. Six authored fixture cases cover
 new title/body, unchanged success, reopen, retained pre-edit callback and stale
 failure; all are unexecuted, with no native or StrictMode/runtime acceptance.
 
+## Chrome Clerk acquisition retains exact cached-client ownership
+
+Accepted commit `4f35f70049d18b783569c39c7275359be065312b` changes
+`apps/extension/src/features/cloud-bridge/clerkAuth.ts` and its deferred fixture
+source. `getNativeClient` returns the exact cached Promise; a rejected creation
+evicts only that same entry, not a newer force-refresh replacement.
+`getFreshClerkAuthContext` refuses obsolete creation before reading even a null
+session. After initial token acquisition and renewal it verifies the cache
+Promise, session object, effective account ID and session ID before accepting
+any result, including null. Current null results and token retrieval failures
+retain their existing semantics; origin-bound credential validation remains.
+
+This narrows stale acquisition/cache-result ownership, not a demonstrated
+cross-account dispatch path. Existing background same-owner/retired-owner and
+computer-use checks, and side-panel refresh generations, remain counterguards.
+Force-refresh entry points are existing behavior, not new account observation.
+The `getManagedCloudAuthContext` wrapper still catches non-forced failures
+(production returns null; existing development fallback is unchanged). Foreground
+relay, sign-out and observer lifetimes, unobserved identity ABA, and authority
+across a later operation are not redesigned. Deferred fixture sources cover
+obsolete/current creation failure, late acquisition, token/renewal retirement,
+identity changes and current null/error outcomes; none were executed. No browser,
+credential, network or deployment acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the sixty-four accepted production slices traced above are represented as
+Only the sixty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
