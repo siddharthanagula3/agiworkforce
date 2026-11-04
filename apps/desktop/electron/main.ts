@@ -2061,7 +2061,12 @@ async function restartToUpdate(): Promise<HostRestartOutcome> {
   setTimeout(() => {
     quitConfirmed = false;
   }, UPDATE_RESTART_TIMEOUT_MS).unref?.();
-  installDownloadedUpdate();
+  try {
+    installDownloadedUpdate();
+  } catch (error) {
+    quitConfirmed = false;
+    throw error;
+  }
   return 'restarting';
 }
 

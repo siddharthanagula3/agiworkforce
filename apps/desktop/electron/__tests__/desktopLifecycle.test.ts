@@ -955,4 +955,26 @@ describe('the update buttons', () => {
       shellRuns = 0;
     }
   });
+
+  it('restores the live-work quit guard immediately when installation throws synchronously', async () => {
+    const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
+    if (!restart) throw new Error('the restart channel was never registered');
+    const failure = new Error('native restart failed');
+    showMessageBox.mockReset();
+    installDownloadedUpdate.mockImplementationOnce(() => { throw failure; });
+    downloadedVersion = '1.3.0';
+    shellRuns = 1;
+    try {
+      showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      await expect(restart(trustedCaller())).rejects.toBe(failure);
+      // No timer advancement: a failed restart must not authorize a later quit.
+      showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+      expect(beforeQuit().preventDefault).toHaveBeenCalledOnce();
+      await settle();
+    } finally {
+      downloadedVersion = null;
+      shellRuns = 0;
+    }
+  });
+
 });
