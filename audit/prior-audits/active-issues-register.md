@@ -9063,3 +9063,14 @@ continuous server-policy freshness. Old query data is not adopted. This supersed
 the Local cache/read exclusion only, not standalone legacy storage, logout purge,
 settings preference caches or forget-target semantics. Dedicated and compatibility
 fixture sources remain unexecuted; runtime/deployment acceptance stays OPEN.
+
+
+Preference scope clarification: separate commit `2edbdae2b9` adds owned account
+settings/version APIs and migrates capabilities and MemoryExclusions, with selected
+organization memory policy fetched separately. This narrowly supersedes the
+undifferentiated preference exclusion for those consumers only; it does not close
+this legacy memory finding. CloudSettingsSync has no committed change and remains
+on hold, and compatibility callers, derived indefinite memory-capability caching
+and billing refresh internals remain outside that migration. Existing local/offline
+settings and logout purge are preserved. All fixture sources are unexecuted; no
+universal settings or memory lifecycle closure is established.

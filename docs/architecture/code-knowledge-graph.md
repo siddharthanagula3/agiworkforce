@@ -2748,9 +2748,55 @@ canonical admission/query context for compatibility; they are not independent
 end-to-end SDK/navigation acceptance. All regression sources remain unexecuted;
 no browser/native, network, tests/checks or runtime validation was performed.
 
+## Capability and exclusion preferences separate account ownership from workspace policy
+
+Accepted commit `2edbdae2b9a9bb2770ceffd3b0173b313786edbb` changes twelve
+files. `preferences-client.ts` adds explicit owned APIs alongside compatibility
+APIs. PreferenceOwner captures a current session and incarnation; its separate
+snapshot shares one settings/version response, exact pending request and generation,
+with the existing 60-second freshness interval. Reads use RequestAuthority bearer,
+omitted cookies and no-store. Obsolete completion/rejection cannot replace or
+clear a newer owned entry. Writes clone their payload before awaits, retain merge,
+version and keepalive options, and check original authority through CSRF/token/body
+boundaries. Expiring a snapshot does not cancel its existing consumers; ownership
+retirement does. Legacy completion does not invalidate a newer owned read.
+
+Account-wide `user_settings` values and version remain keyed by user, not selected
+workspace. `use-capabilities-preferences.ts` uses an owner-bound queue, acknowledged
+values/version and same-owner 412 retry. Currentness gates queued dispatch, retry,
+publication and cleanup; newer pending choices overlay acknowledged results.
+The hook now lives above MemorySection's workspace-keyed subtree, so same-account
+workspace changes do not intentionally retire account preference writes. Selected
+organization memory policy is fetched separately with admitted workspace epoch,
+explicit Personal/organization header and original authority; missing/failed policy
+is denied. Existing all-governing-organization autonomy policy is unchanged.
+
+`use-preference-owner.ts` supplies view lifetimes. MemoryExclusions is keyed by
+preference incarnation and fences reads, saves, errors and finally cleanup.
+CapabilitiesSection and MemorySection disable controls until account preferences
+are loaded. This is a correction for these named consumers, not all settings.
+Existing local/offline settings and logout purge are not redesigned.
+
+CloudSettingsSync is explicitly HOLD and has no diff in this commit. Its appearance,
+language and command queues/unload flush still use compatibility APIs; no locale
+application/commit-order safety is established here. Legacy preference APIs remain
+available, and the indefinite derived `memory-capability.ts` promise cache and
+billing refresh internals remain outside this owner migration. A synchronous locale
+commit contract is not established by inspecting an older installed dependency
+rather than the locked version. These are separate unresolved dependencies, not
+claims of observed cross-account mutation or a completed sync correction.
+
+Owned-client fixtures cover generation replacement, late rejection, payload capture,
+CSRF retirement and settings/version pairing; consumer sources include exclusions
+retirement and capability 412 behavior. All are unexecuted. Dedicated integrated
+cases for a pending PUT/412 across same-account workspace switching, stale policy
+rejection, and an in-place consumer queue account change are not established by
+these fixtures. No runtime, deployment, SDK-event, cross-tab ordering, remote
+rollback or universal preference ownership guarantee is claimed.
+
 ## Reconstruction boundary
 
-Only the one hundred accepted production slices traced above are represented as
+Only the one hundred and one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
