@@ -3513,9 +3513,47 @@ unchanged. Mocked fixtures cover overlapping saves, dismissal, refresh/failure,
 direct open-project replacement and same/different-project reopen, all unexecuted.
 Neither slice was tested, checked or exercised against browser, network or storage.
 
+## Measured zero disk space refuses mobile model download admission
+
+Accepted commit `f8e68649d643abae00c4a3a475e8c2de9e81554c` changes
+`services/modelDownload.ts` and one fixture source. `assertFreeSpaceFor` now treats
+a finite measured zero as insufficient storage and returns `storage_full` against
+the existing required-size-plus-headroom budget. Exceptions, negative values and
+nonfinite readings retain their prior unavailable-measurement behavior. This is an
+admission correction, not reserved disk capacity or a guarantee against later disk
+changes. Boundary/unknown-reading fixtures are unexecuted; no device was queried.
+
+## Model removal refuses unverified SDK or unowned storage
+
+Accepted commit `0268b53765d14662acdd0e7736ffa16f802e0b0e` changes the
+model-download service, Storage screen and two fixture sources. Removal accepts
+only a Local GGUF record with a valid bounded model ID and the exact app-owned
+`modelFilePath` location. Capabilities must be absent or a parseable object whose
+optional manager is `llama.rn`; unsupported SDK/unknown ownership is refused before
+file deletion or install-record cleanup. The service rereads the installation and
+compares identity fields including installation time, path, checksum, size and
+capabilities against the confirmed snapshot; last-used changes alone do not reject.
+This is a pre-delete snapshot comparison, not atomic locking against later changes.
+
+Storage retains unsupported records/Ready state and gives an unavailable notice.
+For supported removal, file deletion precedes database/install-store cleanup; failures
+are reported rather than assumed successful. Totals are reloaded instead of subtracting
+catalogued bytes, and displayed model sizes are explicitly estimates. This sequence
+does not establish a transaction across files, database and UI or rollback after
+partial failure. The sole production `deleteDownloadedModel` caller is this screen.
+
+No SDK disk-deletion API or cache path was verified; none is inferred or removed.
+Existing `wipeAllLocalData` separately clears `installed_models` and the app model
+directory, but completeness for SDK-managed caches cannot be established from this
+source trace. Verified SDK ownership/removal and truthful completeness semantics are
+a remaining design constraint, not observed retention or permission to weaken existing
+wipe/logout behavior. Mocked fixtures cover unsupported ownership, stale installation
+snapshots, supported removal and retained state on failure; all are unexecuted. No
+native, database, disk deletion, tests, checks or network actions were performed.
+
 ## Reconstruction boundary
 
-Only the one hundred and nineteen accepted production slices traced above are represented as
+Only the one hundred and twenty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
