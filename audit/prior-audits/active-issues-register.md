@@ -8350,3 +8350,33 @@ Counterguards and ownership: The finally reliably schedules reset/revoke for fai
 Acceptance target: Ensure temporary privilege setup and every failure path are enclosed by cleanup/rollback that restores the intended pre-probe role and privilege state.
 
 Severity and limits: Medium conditional impact: setup failure after a successful shared-role UPDATE/DELETE grant can bypass the script's revoke. Runtime/database state is unknown; the peer's sealed Low recommendation remains historical, with this separate root disposition. No original operational module, SQL/database role, installer, authored test/fixture, network/browser/native process, production action or product acceptance was executed. No source fix was made.
+
+## MOBILE-OFFLINE-DELIVERY-UNCERTAINTY-01
+
+Severity: Medium. Status: OPEN source-backed delivery risk/design constraint,
+2026-11-04; no observed production loss or duplicate delivery established.
+
+`apps/mobile/hooks/useNetworkStatus.ts` treats `sendMessage`'s `onAccepted` as
+acceptance, resolves the queued UI row there, and treats later rejection as
+accepted completion. `chatExecutionStore.ts` emits this callback after pushing a
+busy conversation's request into the memory-only `deferredSends` map, or after
+creating local rows/queueing sync, not after server acknowledgement. Consequently
+a durable offline intent can be removed after only memory-local deferral. The
+processor's existing failure path increments retries, sleeps then breaks; another
+trigger is needed for a further attempt. Generic pre-callback rejection does not
+prove the server received nothing, so blindly changing this to automatic retry
+or dropping uncertain entries is not a safe correction.
+
+Accepted `6e313c52840c64ea39d339933661eaad3ae5634f` source-corrects processor
+ownership across clear/pending operations, exact-object settlement, observed
+network readiness and epoch-fenced callback cleanup. It does not change the
+acceptance contract, retry/eviction policy or durable schema. Its three regression
+sources are unexecuted; no delivery liveness or native/runtime acceptance follows.
+
+Required design decisions: distinguish proven pre-dispatch failure, accepted
+local/durable handoff, confirmed server outcome and unknown outcome. Define durable
+quarantine and user-visible manual resolution for unknown work, durable deferral
+handoff/receipt semantics, restart and old-record migration, and server-side
+idempotency/receipt authority where retries would otherwise duplicate work. No new
+schema, product semantics, automatic retry/refund, deletion policy or migration
+is implemented or approved by this note; the design is not implementation-ready.

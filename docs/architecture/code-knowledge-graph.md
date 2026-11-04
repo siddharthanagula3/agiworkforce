@@ -486,9 +486,48 @@ account-store restoration and cached transcript reconciliation semantics are
 unchanged. Entirely unobserved SDK identity ABA and runtime behavior remain
 unverified; the new fixture assertions were not executed.
 
+## Mobile offline processor ownership and unresolved delivery semantics
+
+Reconstructed commit: `6e313c52840c64ea39d339933661eaad3ae5634f` (five files,
+including three unexecuted regression sources). `offlineQueue.ts` replaces its
+boolean processor with exact processor/generation ownership. Clear invalidates
+the generation but retains the processing lock until outstanding send/sleep
+settles; old completion cannot remove or mutate a replacement entry. Settlement
+and failure removal require the exact queued object.
+
+`useNetworkStatus` shares observed connectivity across hook instances, checks it
+between dispatches and rejects stale initial network fetch observations. Hook
+cleanup detaches UI subscriptions without making its mount lifetime the queue's
+readiness. Local acceptance cleanup requires the exact queue object and original
+Cloud epoch. Any nonempty replay attempt, including an online listener attempt,
+consumes the startup latch so a later mount does not invent an extra launch retry.
+
+This deliberately retains the existing failure sleep-then-break and retry/eviction
+semantics. It adds no retry loop, durable quarantine or schema. `onAccepted` is
+local admission, including memory-only deferred sends, not server acknowledgement;
+queue retirement can therefore precede durable delivery. Unknown acceptance must
+not be inferred from generic rejection. The OPEN delivery-design constraint is
+recorded as `MOBILE-OFFLINE-DELIVERY-UNCERTAINTY-01` in the canonical audit register.
+No server idempotency, remote cancellation, eventual delivery or runtime proof.
+
+## CLI sync bundle import preflight
+
+Reconstructed commit: `a91320fdcf92a17bbc1814dd3f14a70db406a067` changes
+`apps/cli/src/sync.rs`, including fifteen unexecuted source regressions. Import
+validates every bundle key against the export allowlist and verifies all content
+hashes before mutation. Canonical-home resolution is required; manifest and every
+manifest input reject symlink/nonregular path components. A read-only write plan
+resolves merges/skips and validates only conflict-copy destinations actually used,
+so an unused `.imported` path does not incorrectly block an otherwise valid merge.
+
+Writes recheck paths before execution; existing merge/skip and regular conflict
+copy overwrite semantics remain. Preflight is not an atomic filesystem operation:
+concurrent replacement, hardlinks, partial multi-file failure and rollback remain
+outside its guarantee. No filesystem/runtime regression was executed.
+
 ## Reconstruction boundary
 
-Only the eighteen accepted production slices traced above are represented as
+Only the twenty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
