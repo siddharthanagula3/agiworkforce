@@ -1,3 +1,4 @@
+import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { api } from '@/services/api';
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -59,10 +60,13 @@ function asNullableCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-export async function fetchWorkspaceOverview(signal?: AbortSignal): Promise<WorkspaceOverview> {
+export async function fetchWorkspaceOverview(
+  signal?: AbortSignal,
+  accountEpoch?: CloudAccountEpoch,
+): Promise<WorkspaceOverview> {
   const response = await api.get<unknown>(
     '/api/settings/organization',
-    signal ? { signal } : undefined,
+    accountEpoch ? { signal, accountEpoch } : signal ? { signal } : undefined,
   );
   if (!isRecord(response)) {
     throw new Error('Workspace returned an invalid response.');
@@ -122,10 +126,11 @@ export async function setActiveWorkspace(organizationId: string | null): Promise
 export async function fetchWorkspaceMembers(
   organizationId: string,
   signal?: AbortSignal,
+  accountEpoch?: CloudAccountEpoch,
 ): Promise<WorkspaceMember[]> {
   const response = await api.get<unknown>(
     `/api/settings/team?organizationId=${encodeURIComponent(organizationId)}`,
-    signal ? { signal } : undefined,
+    accountEpoch ? { signal, accountEpoch } : signal ? { signal } : undefined,
   );
   if (!isRecord(response) || !Array.isArray(response['members'])) return [];
 
@@ -165,11 +170,12 @@ export async function transferWorkspaceOwnership(
   organizationId: string,
   toUserId: string,
   headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
 ): Promise<void> {
   await api.post(
     '/api/settings/organization/transfer-ownership',
     { organizationId, toUserId, outgoingOwnerRole: 'admin' },
-    { headers },
+    { headers, accountEpoch },
   );
 }
 

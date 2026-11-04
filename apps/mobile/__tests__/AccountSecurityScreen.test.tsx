@@ -16,11 +16,24 @@ const mockChangeAccountPassword = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockOwnerId = 'account-a';
+let mockEpoch = 1;
+const mockEpochListeners = new Set<() => void>();
+const mockRevokeAll = jest.fn();
+const mockTurnOffTwoFactor = jest.fn();
+const mockStartSetup = jest.fn();
+const mockCopySecret = jest.fn();
+const mockWithStepUp = jest.fn();
 let mockAuthState = {
   isClerkLoaded: true,
   isClerkSignedIn: true,
   clerkUserId: 'account-a' as string | null,
 };
+
+jest.mock('expo-clipboard', () => ({ setStringAsync: (...args: unknown[]) => mockCopySecret(...args) }));
+
+jest.mock('../src/features/auth/hooks/useStepUp', () => ({
+  useStepUp: () => ({ withStepUp: mockWithStepUp, modal: null }),
+}));
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -50,8 +63,12 @@ jest.mock('../src/features/auth/store', () => ({
 }));
 
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
-  captureCloudAccountEpoch: () => ({ ownerId: mockOwnerId, epoch: 1 }),
-  isCloudAccountEpochCurrent: (snapshot: { ownerId: string }) => snapshot.ownerId === mockOwnerId,
+  captureCloudAccountEpoch: () => ({ ownerId: mockOwnerId, epoch: mockEpoch }),
+  isCloudAccountEpochCurrent: (snapshot: { ownerId: string; epoch: number } | null) => Boolean(snapshot && snapshot.ownerId === mockOwnerId && snapshot.epoch === mockEpoch),
+  subscribeCloudAccountEpochChange: (listener: () => void) => {
+    mockEpochListeners.add(listener);
+    return () => mockEpochListeners.delete(listener);
+  },
 }));
 
 jest.mock('../src/features/chat/store/appModeStore', () => ({
@@ -70,7 +87,7 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
 }));
 
 jest.mock('@clerk/expo', () => ({
-  useUser: () => ({ user: { passwordEnabled: true, reload: mockReloadUser } }),
+  useUser: () => ({ user: { id: mockOwnerId, passwordEnabled: true, reload: mockReloadUser } }),
   useSession: () => ({ session: null }),
 }));
 
@@ -94,7 +111,11 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   WEB_SECURITY_URL: 'https://agiworkforce.com/settings/security',
   fetchLockdownMode: jest.fn(async () => false),
   saveLockdownMode: jest.fn(async () => undefined),
-  revokeAllAccountSessions: jest.fn(async () => undefined),
+  revokeAllAccountSessions: (...args: unknown[]) => mockRevokeAll(...args),
+  startAuthenticatorSetup: (...args: unknown[]) => mockStartSetup(...args),
+  verifyAuthenticatorCode: jest.fn(),
+  regenerateBackupCodes: jest.fn(),
+  turnOffTwoFactor: (...args: unknown[]) => mockTurnOffTwoFactor(...args),
   fetchSignInMethods: jest.fn(async () => ({
     identities: [],
     keys: [{ id: 'key-1', name: 'Work laptop', kind: 'passkey' }],
@@ -166,6 +187,10 @@ describe('Mobile Account Security screen', () => {
     jest.clearAllMocks();
     mockAppMode = 'cloud';
     mockOwnerId = 'account-a';
+    mockEpoch = 1;
+    mockEpochListeners.clear();
+    mockReloadUser.mockResolvedValue(undefined);
+    mockWithStepUp.mockImplementation(async (_action, _resource, send) => send({}));
     mockAuthState = {
       isClerkLoaded: true,
       isClerkSignedIn: true,
@@ -380,4 +405,107 @@ describe('Mobile Account Security screen', () => {
     expect(mockFetchStatus).not.toHaveBeenCalled();
     expect(mockFetchAccountSessions).not.toHaveBeenCalled();
   });
+  it('rejects an old revoke-all confirmation after A to B to A', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Log out of all devices')).toBeTruthy());
+    fireEvent.press(screen.getByText('Log out of all devices'));
+    const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Log out everywhere');
+    expect(confirm?.onPress).toBeDefined();
+    await act(async () => {
+      mockEpoch += 2;
+      mockEpochListeners.forEach((listener) => listener());
+      confirm?.onPress?.();
+    });
+    expect(mockRevokeAll).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('rejects an old disable-factor confirmation after account replacement', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Turn off two-factor')).toBeTruthy());
+    fireEvent.press(screen.getByText('Turn off two-factor'));
+    const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Turn off');
+    expect(confirm?.onPress).toBeDefined();
+    await act(async () => {
+      mockEpoch += 1;
+      mockEpochListeners.forEach((listener) => listener());
+      confirm?.onPress?.();
+    });
+    expect(mockTurnOffTwoFactor).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('closes password input rather than carrying it into a replacement epoch', async () => {
+    const screen = render(<AccountSecurityScreen />);
+    fireEvent.press(screen.getByText('Change password'));
+    fireEvent.changeText(screen.getByLabelText('New password'), 'fixture-password');
+    expect(screen.getByLabelText('New password').props.value).toBe('fixture-password');
+    await act(async () => {
+      mockEpoch += 2;
+      mockEpochListeners.forEach((listener) => listener());
+    });
+    expect(screen.queryByLabelText('New password')).toBeNull();
+    fireEvent.press(screen.getByText('Change password'));
+    expect(screen.getByLabelText('New password').props.value).toBe('');
+    expect(mockChangeAccountPassword).not.toHaveBeenCalled();
+  });
+
+  it('does not resend a factor mutation after its step-up wait crosses an epoch', async () => {
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    mockWithStepUp.mockImplementation(async (_action, _resource, send) => {
+      await gate;
+      return send({ 'x-step-up-token': 'fixture-grant' });
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Turn off two-factor')).toBeTruthy());
+    fireEvent.press(screen.getByText('Turn off two-factor'));
+    await act(async () => {
+      alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Turn off')?.onPress?.();
+    });
+    expect(mockWithStepUp).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      mockEpoch += 2;
+      mockEpochListeners.forEach((listener) => listener());
+      resume();
+      await gate;
+    });
+    expect(mockTurnOffTwoFactor).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('does not publish a setup secret returned to an obsolete account stage', async () => {
+    mockFetchStatus.mockResolvedValue({ twoFactorEnabled: false, backupCodesReady: false, enrollmentAvailable: true });
+    let finish!: (value: { secret: string; otpauthUrl: string }) => void;
+    mockStartSetup.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Set up authenticator app')).toBeTruthy());
+    fireEvent.press(screen.getByText('Set up authenticator app'));
+    await waitFor(() => expect(mockStartSetup).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      mockEpoch += 2;
+      mockEpochListeners.forEach((listener) => listener());
+      finish({ secret: 'fixture-setup-secret', otpauthUrl: 'fixture-url' });
+    });
+    expect(screen.queryByText('fixture-setup-secret')).toBeNull();
+    expect(screen.queryByLabelText('Authenticator code')).toBeNull();
+  });
+
+  it('does not copy a setup secret through an obsolete stage callback', async () => {
+    mockFetchStatus.mockResolvedValue({ twoFactorEnabled: false, backupCodesReady: false, enrollmentAvailable: true });
+    mockStartSetup.mockResolvedValueOnce({ secret: 'fixture-setup-secret', otpauthUrl: 'fixture-url' });
+    const screen = render(<AccountSecurityScreen />);
+    fireEvent.press(await screen.findByText('Set up authenticator app'));
+    const copy = (await screen.findByLabelText('Copy setup key')).props.onPress as () => void;
+    await act(async () => {
+      mockEpoch += 2;
+      mockEpochListeners.forEach((listener) => listener());
+      copy();
+    });
+    expect(mockCopySecret).not.toHaveBeenCalled();
+  });
+
 });

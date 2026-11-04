@@ -1,3 +1,4 @@
+import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { api } from '@/services/api';
 import {
   fetchAccountSettings,
@@ -151,8 +152,11 @@ export async function revokeAccountSession(sessionId: string): Promise<void> {
   await api.delete(`/api/settings/sessions/${encodeURIComponent(sessionId)}`);
 }
 
-export async function revokeAllAccountSessions(headers: Record<string, string>): Promise<void> {
-  await api.delete('/api/settings/sessions', { headers });
+export async function revokeAllAccountSessions(
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<void> {
+  await api.delete('/api/settings/sessions', { headers, accountEpoch });
 }
 
 export interface PasswordChange {
@@ -163,6 +167,7 @@ export interface PasswordChange {
 export async function changeAccountPassword(
   change: PasswordChange,
   headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
 ): Promise<void> {
   await api.post(
     '/api/settings/password',
@@ -170,7 +175,7 @@ export async function changeAccountPassword(
       newPassword: change.newPassword,
       ...(change.currentPassword === null ? {} : { currentPassword: change.currentPassword }),
     },
-    { headers },
+    { headers, accountEpoch },
   );
 }
 
@@ -281,8 +286,9 @@ function readBackupCodes(value: unknown): string[] {
 
 export async function startAuthenticatorSetup(
   headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
 ): Promise<{ secret: string; otpauthUrl: string }> {
-  const response = await api.post<unknown>('/api/settings/2fa/setup', {}, { headers });
+  const response = await api.post<unknown>('/api/settings/2fa/setup', {}, { headers, accountEpoch });
   const secret = isRecord(response) ? response['secret'] : null;
   const otpauthUrl = isRecord(response) ? response['otpauth_url'] : null;
   if (typeof secret !== 'string' || typeof otpauthUrl !== 'string') {
@@ -291,16 +297,25 @@ export async function startAuthenticatorSetup(
   return { secret, otpauthUrl };
 }
 
-export async function verifyAuthenticatorCode(code: string): Promise<string[]> {
-  return readBackupCodes(await api.post<unknown>('/api/settings/2fa/verify', { code }));
+export async function verifyAuthenticatorCode(
+  code: string,
+  accountEpoch: CloudAccountEpoch,
+): Promise<string[]> {
+  return readBackupCodes(await api.post<unknown>('/api/settings/2fa/verify', { code }, { accountEpoch }));
 }
 
-export async function regenerateBackupCodes(headers: Record<string, string>): Promise<string[]> {
+export async function regenerateBackupCodes(
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<string[]> {
   return readBackupCodes(
-    await api.post<unknown>('/api/settings/2fa/backup-codes', {}, { headers }),
+    await api.post<unknown>('/api/settings/2fa/backup-codes', {}, { headers, accountEpoch }),
   );
 }
 
-export async function turnOffTwoFactor(headers: Record<string, string>): Promise<void> {
-  await api.delete('/api/settings/2fa', { headers });
+export async function turnOffTwoFactor(
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<void> {
+  await api.delete('/api/settings/2fa', { headers, accountEpoch });
 }
