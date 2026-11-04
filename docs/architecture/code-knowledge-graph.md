@@ -3580,9 +3580,37 @@ Fixtures mock the resolver and generation, covering failed admission, system mod
 captured path/model, duplicate starts, aborted persistence and a different resident
 preset; all are unexecuted. No tests, checks or native/cache/network actions were run.
 
+## Translation publication belongs to the exact focused draft operation
+
+Accepted commit `4fc32b6ffa9ecbd84a3cbbe12992cbdff9d2d9d1` changes the
+Translate screen/service and two fixture sources. Canonical text/language-pair
+revision and an exact operation object synchronously admit one pending translation.
+The settled operation retains result identity for a valid swap. Editing, language
+changes, clear, Back, blur and unmount retire ownership; functional state updaters
+recheck it before tokens, success or errors publish. Swap without a current result
+preserves typed source text, and manual intent prevents late route prefill from
+replacing it. Refocus resets result state without discarding the retained source.
+
+`translateService` accepts an optional signal, checking before/after the native
+pair probe and translation, before Local fallback, around token delivery and before
+return. It forwards the signal to Local generation and rejects an aborted result
+rather than presenting partial output as success. A native call already dispatched
+cannot be cancelled through the existing bridge signature. Account requirements,
+default-model selection and native translation policy are unchanged.
+
+Separate unchanged source constraint: Android `AGITranslateModule.isPairDownloaded`
+calls `downloadModelIfNeeded(DownloadConditions.Builder().build())` despite its
+passive/no-network comment. The Android plugin copies native files only when absent,
+so source changes alone would not establish an updated generated app. This trace
+establishes neither actual network traffic, SDK-cache contents nor a privacy effect;
+readiness/download policy requires its own verified design, not a claim this lifecycle
+patch fixed it. Mocked fixtures cover duplicate admission, revision changes, swap,
+retirement, prefill and native/fallback cancellation boundaries; all are unexecuted.
+No tests, checks, native, network or storage actions were performed.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-two accepted production slices traced above are represented as
+Only the one hundred and twenty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
