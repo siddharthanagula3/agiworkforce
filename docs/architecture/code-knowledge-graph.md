@@ -769,12 +769,38 @@ It adds no general caller migration, remote cancellation, deadline or storage
 transaction guarantee. Fixtures include remaining-budget, cumulative refusal,
 unknown HEAD size, local stream cleanup and exact-cap/empty behavior, but were not
 run. Explicit zero-budget/nonempty and unsafe-integer fixture cases remain absent;
-no runtime or deployment acceptance follows. Pending shared-project work is not
-represented as corrected here.
+no runtime or deployment acceptance follows. This storage-budget slice does not change project authorization; the following
+section traces that separate correction.
+
+## Shared project source read authority
+
+Reconstructed commit: `a46ed1cfe00f5fe635d366a50a3de604ff644eae` changes five
+production files and six unexecuted fixture sources. New
+`lib/server/project-read-access.ts::READABLE_PROJECT_SCOPE_SQL` binds project ID,
+caller and original admitted organization in each consuming statement. It requires
+a live project and either same-scope ownership or an admitted-organization share
+with active membership, `content.read` and effective per-member/default read or
+write access. Personal admission stays owner-only; shared access permits a project
+root whose organization is null or the admitted organization, preserving legitimate
+organization shares of Personal-root projects without admitting another org root.
+
+The sources list uses the predicate both for preliminary project admission and
+its final joined metadata query, without re-reading saved workspace selection.
+Renamed `findReadableProjectKnowledgeFile` applies the same predicate in the final
+storage-URI lookup consumed by byte and text GET. List filtering still excludes
+superseded sources; individual readable-file lookup preserves existing historical
+version behavior. Writes and DELETE authorization are unchanged.
+
+Migration `0315`'s any-readable-organization sharing RLS remains a defense, while
+the new statement-local predicate additionally pins these reads to the admitted
+scope and current grant. It does not continuously revoke already-read bytes or
+serialize later storage streaming with membership/grant changes. Mocked route and
+SQL-source-contract fixtures are unexecuted, not live PostgreSQL/RLS proof. No
+billing or broader lifecycle correction is included in this slice.
 
 ## Reconstruction boundary
 
-Only the thirty-one accepted production slices traced above are represented as
+Only the thirty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
