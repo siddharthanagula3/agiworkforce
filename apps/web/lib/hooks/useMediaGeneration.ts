@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback } from 'react';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import {
   classifyManagedQuotaErrorCode,
@@ -24,11 +26,6 @@ import {
 } from '@features/media/services/media-api-service';
 import { IMAGE_GENERATION_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 
-async function getAuthToken(): Promise<string> {
-  const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
-  return (await getClerkToken()) || '';
-}
-
 function videoInputImageFields(
   inputImages: VideoInputImages | undefined,
 ): Pick<VideoGenerationRequest, 'first_frame_image' | 'reference_images'> {
@@ -40,6 +37,7 @@ function videoInputImageFields(
 }
 
 export interface GenerateVideoOptions {
+  authority?: RequestAuthority;
   durationSecs?: number;
   resolution?: ManagedMediaVideoResolution;
   aspectRatio?: ManagedMediaVideoAspectRatio;
@@ -97,6 +95,7 @@ const VIDEO_POLL_INTERVAL_MS = 5_000;
 const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
 export interface GenerateImageOptions {
+  authority?: RequestAuthority;
   aspectRatio?: ManagedMediaImageAspectRatio;
   size?: '1024x1024' | '1792x1024' | '1024x1792';
   provider?: 'google' | 'openai';
@@ -142,6 +141,7 @@ const IMAGE_CANCEL_ATTEMPTS = 5;
 const IMAGE_CANCEL_RETRY_MS = 1_000;
 
 interface ActiveImageGeneration {
+  authority: RequestAuthority;
   scope: string | null;
   controller: AbortController;
   idempotencyKey: string;
@@ -151,12 +151,12 @@ interface ActiveImageGeneration {
 
 const activeImageGenerations = new Map<string, ActiveImageGeneration>();
 
-async function requestImageJobCancellation(idempotencyKey: string): Promise<void> {
+async function requestImageJobCancellation(idempotencyKey: string, authority: RequestAuthority): Promise<void> {
   for (let attempt = 0; attempt < IMAGE_CANCEL_ATTEMPTS; attempt += 1) {
-    const authToken = await getAuthToken();
-    const response = await fetch('/api/media/image/cancel', {
+    if (!authority.isCurrent()) return;
+    const response = await authority.fetch('/api/media/image/cancel', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idempotency_key: idempotencyKey }),
     }).catch(() => null);
     if (response && response.status !== 404) return;
@@ -171,7 +171,7 @@ export function cancelImageGenerations(scope: string): boolean {
     generation.cancelled = true;
     generation.controller.abort();
     if (generation.requestStarted) {
-      void requestImageJobCancellation(generation.idempotencyKey);
+      void requestImageJobCancellation(generation.idempotencyKey, generation.authority);
     }
     cancelled = true;
   }
@@ -275,9 +275,20 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useMediaGeneration() {
   const { addJob, updateJob } = useMediaStore();
+  const captureSessionSnapshot = useSessionSnapshot();
+  const bindAuthority = useCallback((existing?: RequestAuthority): RequestAuthority => {
+    if (existing) {
+      existing.assertCurrent();
+      return existing;
+    }
+    const session = captureSessionSnapshot();
+    if (!session) throw new Error('Not authenticated');
+    return createRequestAuthority(session);
+  }, [captureSessionSnapshot]);
 
   const generateImage = useCallback(
     async (prompt: string, options: GenerateImageOptions = {}) => {
+      const authority = bindAuthority(options.authority);
       const jobId = crypto.randomUUID();
       const idempotencyKey = createManagedMediaIdempotencyKey({
         surface: 'web',
@@ -297,6 +308,7 @@ export function useMediaGeneration() {
       const deadline = new AbortController();
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
       const active: ActiveImageGeneration = {
+        authority,
         scope: options.cancelScope ?? null,
         controller: deadline,
         idempotencyKey,
@@ -305,20 +317,19 @@ export function useMediaGeneration() {
       };
       activeImageGenerations.set(jobId, active);
 
+      const dispatchAuthority = createRequestAuthority(
+        authority.session,
+        () => authority.isCurrent() && (!active.cancelled || active.requestStarted),
+        () => {
+          active.requestStarted = true;
+          deadlineTimer = setTimeout(() => deadline.abort(), IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+        },
+      );
       try {
-        const authToken = await getAuthToken();
-        if (active.cancelled) {
-          throw new MediaGenerationApiError(IMAGE_GENERATION_CANCELLED_MESSAGE, {
-            code: IMAGE_GENERATION_CANCELLED_CODE,
-          });
-        }
-        deadlineTimer = setTimeout(() => deadline.abort(), IMAGE_GENERATION_FUNCTION_LIMIT_MS);
-        active.requestStarted = true;
-        const response = await fetch('/api/media/image/generate', {
+        const response = await dispatchAuthority.fetch('/api/media/image/generate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
             'Idempotency-Key': idempotencyKey,
           },
           body: JSON.stringify({
@@ -347,6 +358,7 @@ export function useMediaGeneration() {
 
         if (!response.ok) {
           const err = await response.json().catch(() => ({ error: 'Generation failed' }));
+          dispatchAuthority.assertCurrent();
           const errorField = err?.error;
           const message =
             (typeof errorField === 'object' && errorField?.message) ||
@@ -386,6 +398,7 @@ export function useMediaGeneration() {
           provider?: unknown;
           catalog_model?: unknown;
         };
+        dispatchAuthority.assertCurrent();
         const first = data.images?.[0];
         const resultUrl = first?.url ?? objectUrlFromBase64(first?.b64_json);
 
@@ -413,6 +426,7 @@ export function useMediaGeneration() {
           model: catalogModel.id,
         } satisfies GeneratedImageResult;
       } catch (err) {
+        authority.assertCurrent();
         const error = active.cancelled
           ? new MediaGenerationApiError(IMAGE_GENERATION_CANCELLED_MESSAGE, {
               code: IMAGE_GENERATION_CANCELLED_CODE,
@@ -430,11 +444,12 @@ export function useMediaGeneration() {
         activeImageGenerations.delete(jobId);
       }
     },
-    [addJob, updateJob],
+    [addJob, updateJob, bindAuthority],
   );
 
   const startVideo = useCallback(
     async (prompt: string, options: GenerateVideoOptions = {}): Promise<StartedVideoGeneration> => {
+      const authority = bindAuthority(options.authority);
       const jobId = crypto.randomUUID();
       addJob({
         id: jobId,
@@ -458,10 +473,11 @@ export function useMediaGeneration() {
             ? { assistant_message_id: options.assistantMessageId }
             : {}),
           ...videoInputImageFields(options.inputImages),
-        }).catch((err: unknown) => {
+        }, authority).catch((err: unknown) => {
           throw toMediaGenerationError(err);
         });
 
+        authority.assertCurrent();
         const catalogModel = getModelMetadataById(started.model);
         const expectedProvider =
           catalogModel?.provider === 'open_router' ? 'openrouter' : catalogModel?.provider;
@@ -483,23 +499,26 @@ export function useMediaGeneration() {
           localJobId: jobId,
         };
       } catch (err) {
+        authority.assertCurrent();
         const message = err instanceof Error ? err.message : 'Unknown error';
         updateJob(jobId, { status: 'failed', errorMessage: message });
         throw err;
       }
     },
-    [addJob, updateJob],
+    [addJob, updateJob, bindAuthority],
   );
 
   const watchVideo = useCallback(
     async (
       taskId: string,
       options: {
+        authority?: RequestAuthority;
         localJobId?: string;
         timeoutMs?: number;
         onProgress?: (update: VideoProgressUpdate) => void;
       } = {},
     ): Promise<VideoWatchResult> => {
+      const authority = bindAuthority(options.authority);
       const localJobId = options.localJobId ?? taskId;
       const deadline = Date.now() + (options.timeoutMs ?? VIDEO_POLL_TIMEOUT_MS);
       let lastStatus: 'queued' | 'processing' = 'queued';
@@ -507,10 +526,12 @@ export function useMediaGeneration() {
 
       for (;;) {
         await sleep(VIDEO_POLL_INTERVAL_MS);
-        const status = await getVideoStatus(taskId).catch((err: unknown) => {
+        authority.assertCurrent();
+        const status = await getVideoStatus(taskId, authority).catch((err: unknown) => {
           throw toMediaGenerationError(err);
         });
 
+        authority.assertCurrent();
         if (status.status === 'completed') {
           if (!status.video_url) throw new Error('Video finished with no URL');
           const result: CompletedVideoGeneration = {
@@ -548,15 +569,16 @@ export function useMediaGeneration() {
         }
       }
     },
-    [updateJob],
+    [updateJob, bindAuthority],
   );
 
   const generateVideo = useCallback(
     async (prompt: string, options: GenerateVideoOptions = {}): Promise<VideoWatchResult> => {
-      const started = await startVideo(prompt, options);
-      return watchVideo(started.taskId, { localJobId: started.localJobId });
+      const authority = bindAuthority(options.authority);
+      const started = await startVideo(prompt, { ...options, authority });
+      return watchVideo(started.taskId, { localJobId: started.localJobId, authority });
     },
-    [startVideo, watchVideo],
+    [startVideo, watchVideo, bindAuthority],
   );
 
   return {

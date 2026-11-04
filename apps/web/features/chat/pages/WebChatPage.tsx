@@ -85,6 +85,7 @@ import {
 import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
+  mediaPersistenceToken,
   persistImageGenerationAssistantMessage,
   requireImageMessagePersistence,
   imageGenerationFailureMetadata,
@@ -495,6 +496,7 @@ type AttachmentUploadAttempt = ComposerAttachmentUploadAttempt & {
 
 type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'status'> & {
   temporary: boolean;
+  authority: RequestAuthority;
 };
 
 /**
@@ -1006,13 +1008,13 @@ async function persistDefiniteVideoStartFailure(params: {
   conversationId: string;
   messageId: string;
   publicError: string;
-  authToken: string;
+  authority: RequestAuthority;
 }): Promise<VideoStartFailureProjection> {
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${params.authToken}`,
+    Authorization: `Bearer ${await params.authority.getToken()}`,
   });
-  const response = await fetch(
+  const response = await params.authority.fetch(
     `/api/chat/conversations/${params.conversationId}/messages/${params.messageId}`,
     {
       method: 'PATCH',
@@ -1021,9 +1023,13 @@ async function persistDefiniteVideoStartFailure(params: {
     },
   );
   if (!response.ok) {
-    throw new Error(await readChatMutationError(response, 'Failed to recover video transcript'));
+    const message = await readChatMutationError(response, 'Failed to recover video transcript');
+    params.authority.assertCurrent();
+    throw new Error(message);
   }
-  return readVideoStartFailureProjection(await response.json());
+  const body = await response.json();
+  params.authority.assertCurrent();
+  return readVideoStartFailureProjection(body);
 }
 
 const MOBILE_NAV_DRAWER_ID = 'chat-mobile-navigation';
@@ -2853,14 +2859,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    */
   const executeNewImageGenerationTurn = useCallback(
     async (turn: NewImageGenerationTurn): Promise<void> => {
+      const authority = turn.authority;
+      authority.assertCurrent();
       let generatedImage: GeneratedImageResult | null = null;
-      const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+      const updateOwnMessage = (id: string, updates: Partial<Message>) => {
+        authority.assertCurrent();
         updateMessage(id, updates, turn.conversationId);
-      const getAuthToken = async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
       };
+      const getAuthToken = mediaPersistenceToken(authority);
       const resultMetadata = (imageUrl: string): MessageMetadata => ({
         toolType: 'image-generation',
         imageUrl,
@@ -2886,6 +2892,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
         },
         beforeGenerate: () => {
+          authority.assertCurrent();
           // A prompt-recovery notice has reached its commit point. Remove it
           // before the paid request starts; any later transcript failure gets
           // its own result-phase recovery using this same assistant UUID.
@@ -2910,6 +2917,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         generate: async () => {
           generatedImage = await generateImage(turn.prompt, {
             ...turn.imageRequest,
+            authority,
             cancelScope: turn.conversationId,
             conversationId: turn.conversationId,
           });
@@ -2936,8 +2944,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         },
       });
 
+      if (!authority.isCurrent()) return;
       if (outcome.status === 'prompt-persistence-failed') {
         setImageTranscriptRecovery({
+          authority,
           phase: 'prompt',
           status: 'failed',
           conversationId: turn.conversationId,
@@ -2967,8 +2977,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             getAuthToken,
             updateMessage: updateOwnMessage,
           });
+          if (!authority.isCurrent()) return;
           if (!persistence.ok) {
             setImageTranscriptRecovery({
+              authority,
               phase: 'result',
               kind: 'generation-failure',
               status: 'failed',
@@ -2988,6 +3000,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (outcome.status === 'result-persistence-failed') {
         const metadata = resultMetadata(outcome.imageUrl);
         setImageTranscriptRecovery({
+          authority,
           phase: 'result',
           status: 'failed',
           conversationId: turn.conversationId,
@@ -3004,7 +3017,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       addMessage,
       applyImageError,
       generateImage,
-      getToken,
       removeImageTranscriptRecovery,
       setImageTranscriptRecovery,
       updateMessage,
@@ -3031,6 +3043,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // Claim the window with a balanced, idempotent release and take the
       // reentrancy key for this conversation only, so an image generation in
       // one chat does not block sends in every other chat.
+      const session = captureSessionSnapshot();
+      if (!session) return;
+      const authority = createRequestAuthority(session);
       const imageGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(imageGuardKey)) return;
       sendingConversationsRef.current.add(imageGuardKey);
@@ -3053,14 +3068,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               IMAGE_GENERATION_TITLE,
               activeModelId,
               activeProjectId,
+              { authority },
             );
+            if (!authority.isCurrent()) return;
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
               router.replace(surfaceConversationHref(fresh.id));
             }
           }
-          if (!convId) return;
+          if (!convId || !authority.isCurrent()) return;
 
           const temporary = isTemporaryConversationById(
             useChatStore.getState().conversations,
@@ -3088,6 +3105,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               convId,
             );
             await executeNewImageGenerationTurn({
+              authority,
               conversationId: convId,
               userMessageId,
               assistantMessageId,
@@ -3100,6 +3118,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           } finally {
             releaseImageTranscriptMutation(mutationIds);
           }
+        } catch (error) {
+          if (authority.isCurrent()) toast.error(toUserMessage(error, 'Image generation could not be started.'));
         } finally {
           sendingConversationsRef.current.delete(imageGuardKey);
           releaseSendWindow();
@@ -3107,6 +3127,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       })();
     },
     [
+      captureSessionSnapshot,
       displayedConversationId,
       surfaceConversationHref,
       urlConversationId,
@@ -3130,6 +3151,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // ---------------------------------------------------------------------------
   const handleRegenerateImageInPlace = useCallback(
     async (messageId: string, opts: ImageRevisionRequest): Promise<string> => {
+      const session = captureSessionSnapshot();
+      if (!session) throw new Error('Not authenticated');
+      const authority = createRequestAuthority(session);
       let generatedImage: GeneratedImageResult | null = null;
       const imageRequest = resolveImageGenerationRequestOptions(
         opts.aspectRatio,
@@ -3173,11 +3197,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           },
           ownerConversationId,
         );
-        const getAuthToken = async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        const getAuthToken = mediaPersistenceToken(authority);
         const finalMetadata = (imageUrl: string): MessageMetadata =>
           mergeImageGenerationMetadata(previousMetadata, {
             toolType: 'image-generation',
@@ -3217,12 +3237,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           generate: async () => {
             generatedImage = await generateImage(opts.prompt, {
               ...imageRequest,
+              authority,
               cancelScope: ownerConversationId,
               conversationId: ownerConversationId,
             });
             return generatedImage.imageUrl;
           },
           onGenerated: (imageUrl) => {
+            authority.assertCurrent();
             updateMessage(
               messageId,
               {
@@ -3246,6 +3268,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           },
         });
 
+        authority.assertCurrent();
         if (outcome.status === 'completed') {
           removeImageTranscriptRecovery(messageId);
           void notifyJobComplete({
@@ -3259,6 +3282,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (outcome.status === 'result-persistence-failed') {
           const metadata = finalMetadata(outcome.imageUrl);
           setImageTranscriptRecovery({
+            authority,
             phase: 'result',
             status: 'failed',
             conversationId: ownerConversationId,
@@ -3289,8 +3313,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             getAuthToken,
             updateMessage: (id, updates) => updateMessage(id, updates, ownerConversationId),
           });
+          authority.assertCurrent();
           if (!persistence.ok) {
             setImageTranscriptRecovery({
+              authority,
               phase: 'result',
               kind: 'generation-failure',
               status: 'failed',
@@ -3306,8 +3332,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
         throw generationError;
       } finally {
-        // The spinner is cleared on EVERY exit, success or failure.
-        updateMessage(messageId, { isStreaming: false }, ownerConversationId);
+        // A retired session cannot settle a replacement transcript.
+        if (authority.isCurrent()) updateMessage(messageId, { isStreaming: false }, ownerConversationId);
         releaseImageTranscriptMutation([messageId]);
       }
     },
@@ -3316,7 +3342,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       applyImageError,
       generateImage,
       displayedConversationId,
-      getToken,
+      captureSessionSnapshot,
       readMessageMetadata,
       releaseImageTranscriptMutation,
       removeImageTranscriptRecovery,
@@ -3327,6 +3353,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRetryImageTranscriptRecovery = useCallback(
     async (recovery: ImageTranscriptRecovery): Promise<void> => {
+      // Legacy in-memory records can bind here, but an observed owner is never replaced.
+      const session = recovery.authority ? null : captureSessionSnapshot();
+      const authority = recovery.authority ?? (session ? createRequestAuthority(session) : null);
+      if (!authority?.isCurrent()) return;
+      recovery = { ...recovery, authority };
+      setImageTranscriptRecovery(recovery);
       const mutationKeys = imageTranscriptMutationKeys(recovery);
       const ownerMessages = selectConversationMessages(recovery.conversationId)(
         useChatStore.getState(),
@@ -3384,6 +3416,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       try {
         if (recovery.phase === 'prompt') {
           await executeNewImageGenerationTurn({
+            authority,
             conversationId: recovery.conversationId,
             userMessageId: recovery.userMessageId,
             assistantMessageId: recovery.assistantMessageId,
@@ -3396,11 +3429,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           return;
         }
 
-        const getAuthToken = async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        const getAuthToken = mediaPersistenceToken(authority);
         requireImageMessagePersistence(
           await persistImageGenerationAssistantMessage({
             conversationId: recovery.conversationId,
@@ -3412,11 +3441,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             updateMessage: (id, updates) => updateMessage(id, updates, recovery.conversationId),
           }),
         );
+        authority.assertCurrent();
         removeImageTranscriptRecovery(recovery.assistantMessageId);
       } catch {
         // The persistence mechanic already logs and toasts its exact error. Keep
         // the durable asset + same client UUID available for another safe retry.
-        setImageTranscriptRecovery({ ...recovery, status: 'failed' });
+        if (authority.isCurrent()) setImageTranscriptRecovery({ ...recovery, status: 'failed' });
       } finally {
         releaseImageTranscriptMutation(mutationKeys);
         if (recovery.phase === 'prompt') {
@@ -3428,7 +3458,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [
       claimSendWindow,
       executeNewImageGenerationTurn,
-      getToken,
+      captureSessionSnapshot,
       releaseImageTranscriptMutation,
       removeImageTranscriptRecovery,
       setImageTranscriptRecovery,
@@ -3437,6 +3467,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const videoMessageAuthoritiesRef = useRef<Map<string, RequestAuthority>>(new Map());
+  const videoTaskAuthoritiesRef = useRef<Map<string, RequestAuthority>>(new Map());
   const watchedVideoTasksRef = useRef<Set<string>>(new Set());
   const autoResumedVideoTasksRef = useRef<Set<string>>(new Set());
   const videoInputImagesRef = useRef<Map<string, VideoInputImages>>(new Map());
@@ -3448,7 +3480,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       messageId: string;
       taskId: string;
       localJobId?: string;
+      authority?: RequestAuthority;
     }) => {
+      const existing = videoTaskAuthoritiesRef.current.get(input.taskId) ?? input.authority ??
+        videoMessageAuthoritiesRef.current.get(input.messageId);
+      // A restored task is admitted for observation here, not assigned historical provenance.
+      const session = existing ? null : captureSessionSnapshot();
+      const authority = existing ?? (session ? createRequestAuthority(session) : null);
+      if (!authority?.isCurrent()) return;
+      autoResumedVideoTasksRef.current.add(input.taskId);
+      videoTaskAuthoritiesRef.current.set(input.taskId, authority);
+      videoMessageAuthoritiesRef.current.set(input.messageId, authority);
       if (watchedVideoTasksRef.current.has(input.taskId)) return;
       watchedVideoTasksRef.current.add(input.taskId);
 
@@ -3472,8 +3514,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
       try {
         const result = await watchVideoGeneration(input.taskId, {
+          authority,
           ...(input.localJobId ? { localJobId: input.localJobId } : {}),
           onProgress: (update) => {
+            if (!authority.isCurrent()) return;
             const running = readMessageMetadata(input.conversationId, input.messageId);
             updateMessage(
               input.messageId,
@@ -3493,6 +3537,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             );
           },
         });
+        if (!authority.isCurrent()) return;
         const current = readMessageMetadata(input.conversationId, input.messageId);
         if (result.status === 'completed') {
           videoInputImagesRef.current.delete(input.messageId);
@@ -3561,6 +3606,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       } catch (error) {
         // A status-network failure says nothing about the provider outcome.
         // Keep the task resumable and let Workflow continue unattended.
+        if (!authority.isCurrent()) return;
         const current = readMessageMetadata(input.conversationId, input.messageId);
         updateMessage(
           input.messageId,
@@ -3586,7 +3632,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         watchedVideoTasksRef.current.delete(input.taskId);
       }
     },
-    [readMessageMetadata, updateMessage, watchVideoGeneration],
+    [readMessageMetadata, updateMessage, watchVideoGeneration, captureSessionSnapshot],
   );
 
   // ---------------------------------------------------------------------------
@@ -3596,6 +3642,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     (
       prompt: string,
       videoOptions?: {
+        authority?: RequestAuthority;
         modelId?: string;
         aspectRatio?: string;
         resolution?: string;
@@ -3603,6 +3650,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         inputImages?: VideoInputImages;
       },
     ) => {
+      const session = videoOptions?.authority ? null : captureSessionSnapshot();
+      const authority = videoOptions?.authority ?? (session ? createRequestAuthority(session) : null);
+      if (!authority?.isCurrent()) return;
       const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(videoGuardKey)) return;
       sendingConversationsRef.current.add(videoGuardKey);
@@ -3615,26 +3665,26 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               VIDEO_GENERATION_TITLE,
               activeModelId,
               activeProjectId,
+              { authority },
             );
+            if (!authority.isCurrent()) return;
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
               router.replace(surfaceConversationHref(fresh.id));
             }
           }
-          if (!convId) return;
+          if (!convId || !authority.isCurrent()) return;
 
           const isTemporaryConversation = isTemporaryConversationById(
             useChatStore.getState().conversations,
             convId,
           );
-          const getAuthToken = async () => {
-            const token = await getToken();
-            if (!token) throw new Error('Not authenticated');
-            return token;
-          };
-          const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+          const getAuthToken = mediaPersistenceToken(authority);
+          const updateOwnMessage = (id: string, updates: Partial<Message>) => {
+            authority.assertCurrent();
             updateMessage(id, updates, convId);
+          };
 
           const userMessageId = crypto.randomUUID();
           addMessage(
@@ -3647,6 +3697,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             convId,
           );
           let assistantMessageId = crypto.randomUUID();
+          videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
@@ -3694,13 +3745,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     updateMessage: updateOwnMessage,
                   }),
                 );
+                authority.assertCurrent();
                 assistantMessageId = persisted.messageId;
+                videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
               },
               start: () => {
+                authority.assertCurrent();
                 if (videoOptions?.inputImages) {
                   videoInputImagesRef.current.set(assistantMessageId, videoOptions.inputImages);
                 }
                 return startVideoGeneration(prompt, {
+                  authority,
                   ...(videoOptions?.modelId ? { modelId: videoOptions.modelId } : {}),
                   // Composer's aspect/quality pills. Omitted when absent so the
                   // route keeps applying its own defaults for other callers.
@@ -3727,6 +3782,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 });
               },
             });
+            if (!authority.isCurrent()) return;
             if (!startResult.ok) {
               const message = `Video was not started because the ${startResult.phase} could not be saved. Try again to recover this turn.`;
               updateOwnMessage(assistantMessageId, {
@@ -3766,12 +3822,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             });
             autoResumedVideoTasksRef.current.add(started.taskId);
             await watchVideoMessage({
+              authority,
               conversationId: convId,
               messageId: assistantMessageId,
               taskId: started.taskId,
               localJobId: started.localJobId,
             });
           } catch (err) {
+            if (!authority.isCurrent()) return;
             // A tier refusal must land as an InlinePaywallCard, not a toast or
             // a raw error bubble: ChatMessageList swaps the whole row for the
             // card whenever `metadata.paywall` is present. `isPaywall` is the
@@ -3803,7 +3861,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   conversationId: convId,
                   messageId: assistantMessageId,
                   publicError,
-                  authToken: await getAuthToken(),
+                  authority,
                 });
                 updateOwnMessage(assistantMessageId, {
                   content: projection.content,
@@ -3820,6 +3878,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   (status === 'queued' || status === 'processing')
                 ) {
                   await watchVideoMessage({
+                    authority,
                     conversationId: convId,
                     messageId: assistantMessageId,
                     taskId,
@@ -3827,6 +3886,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 }
                 return;
               } catch (projectionError) {
+                if (!authority.isCurrent()) return;
                 console.warn(
                   '[video] Definite start failure could not be projected; reload recovery remains available.',
                   projectionError,
@@ -3865,6 +3925,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               });
             }
           }
+        } catch (error) {
+          if (authority.isCurrent()) toast.error(toUserMessage(error, 'Video generation could not be started.'));
         } finally {
           sendingConversationsRef.current.delete(videoGuardKey);
           releaseSendWindow();
@@ -3883,7 +3945,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       startVideoGeneration,
       watchVideoMessage,
       router,
-      getToken,
+      captureSessionSnapshot,
       claimSendWindow,
       subscriptionTier,
       managedUsageSummary,
@@ -3906,14 +3968,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ) {
         continue;
       }
-      autoResumedVideoTasksRef.current.add(taskId);
       void watchVideoMessage({
         conversationId: displayedConversationId,
         messageId: message.id,
         taskId,
       });
     }
-  }, [displayedConversationId, displayedMessages, watchVideoMessage]);
+  }, [displayedConversationId, displayedMessages, watchVideoMessage, authLoaded, userId]);
 
   const handleResumeVideo = useCallback(
     (messageId: string) => {
@@ -3948,10 +4009,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         handleOpenUpgradeDialog();
         return;
       }
+      const authority = videoMessageAuthoritiesRef.current.get(messageId);
+      if (authority && !authority.isCurrent()) return;
       const failed = assistantMessage.metadata;
       const inputImages = videoInputImagesRef.current.get(messageId);
       videoInputImagesRef.current.delete(messageId);
       handleGenerateVideo(userMessage.content, {
+        authority,
         ...(inputImages ? { inputImages } : {}),
         ...(typeof failed.videoModel === 'string' ? { modelId: failed.videoModel } : {}),
         ...(typeof failed.videoAspect === 'string' ? { aspectRatio: failed.videoAspect } : {}),
@@ -6351,8 +6415,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? failedImageRetryRequest(lastChatMessage.metadata, Date.now())
       : undefined;
   const retryFailedImage = (messageId: string, request: ImageRevisionRequest) => {
+    const session = captureSessionSnapshot();
+    if (!session) return;
     const conversationId = displayedConversationId;
     handleRegenerateImageInPlace(messageId, request).catch((error: unknown) => {
+      if (!session.isCurrent()) return;
       const failed = conversationId
         ? readMessageMetadata(conversationId, messageId)?.errorCode === IMAGE_GENERATION_FAILED_CODE
         : false;

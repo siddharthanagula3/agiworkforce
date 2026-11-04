@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import type { MessageMetadata } from '@shared/stores/web-chat-store';
 import type {
   ImageAspectRatio,
@@ -9,7 +10,9 @@ import type {
 
 export type ImageTranscriptRecoveryStatus = 'failed' | 'retrying';
 
+// Request authorities stay in this non-persisted store, never in message metadata.
 export type ImagePromptTranscriptRecovery = {
+  authority?: RequestAuthority;
   phase: 'prompt';
   status: ImageTranscriptRecoveryStatus;
   conversationId: string;
@@ -22,6 +25,7 @@ export type ImagePromptTranscriptRecovery = {
 };
 
 export type ImageResultTranscriptRecovery = {
+  authority?: RequestAuthority;
   phase: 'result';
   status: ImageTranscriptRecoveryStatus;
   kind?: 'asset' | 'generation-failure';

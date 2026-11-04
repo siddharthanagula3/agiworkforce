@@ -20,6 +20,8 @@ vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  sessionId: 'fixture-session',
+  userId: 'fixture-user',
   modelId: '',
   temporaryConversation: false,
   generateImage: vi.fn(),
@@ -60,9 +62,9 @@ vi.mock('@clerk/nextjs', async () => {
     () => ({
       getToken: async () => 'fixture-token',
       isLoaded: true,
-      userId: 'fixture-user',
+      userId: mocks.userId,
       isSignedIn: true,
-      sessionId: 'fixture-session',
+      sessionId: mocks.sessionId,
     }),
     { signOut: vi.fn() },
   );
@@ -441,6 +443,8 @@ describe('WebChatPage paid image transcript recovery', () => {
   beforeEach(() => {
     const executableModel = IMAGE_MODELS[0];
     if (!executableModel) throw new Error('Canonical image catalog fixture is missing');
+    mocks.sessionId = 'fixture-session';
+    mocks.userId = 'fixture-user';
     mocks.modelId = executableModel.id;
     mocks.temporaryConversation = false;
     mocks.generateImage.mockReset();
@@ -454,6 +458,110 @@ describe('WebChatPage paid image transcript recovery', () => {
     useChatStore.getState().reset();
     useChatStore.getState().setConversations([CONVERSATION]);
     useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, []);
+  });
+
+  it.each(['image', 'video'] as const)('does not start %s after its prompt save crosses a session change', async (kind) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      await gate;
+      return jsonResponse(200, { message: { id: body['id'] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const view = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    fireEvent.click(screen.getByRole('button', { name: `Trigger ${kind} generation` }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    mocks.sessionId = 'replacement-session';
+    view.rerender(<WebChatPage />);
+    await act(async () => { release(); await gate; });
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(mocks.startVideoGeneration).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useImageTranscriptRecoveryStore.getState().recoveries).toEqual({});
+  });
+
+  it('refuses video provider start after a placeholder save crosses sessions', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      if (body['role'] === 'assistant') await gate;
+      return jsonResponse(200, { message: { id: body['id'] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const view = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger video generation' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    mocks.sessionId = 'replacement-session';
+    view.rerender(<WebChatPage />);
+    await act(async () => { release(); await gate; });
+    expect(mocks.startVideoGeneration).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps same-session image work alive across a page remount', async () => {
+    let resolveImage!: (image: ReturnType<typeof generatedImageResult>) => void;
+    const image = new Promise<ReturnType<typeof generatedImageResult>>((resolve) => { resolveImage = resolve; });
+    mocks.generateImage.mockReturnValue(image);
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return jsonResponse(200, { message: { id: body['id'] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const first = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
+    await waitFor(() => expect(mocks.generateImage).toHaveBeenCalledTimes(1));
+    first.unmount();
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await act(async () => { resolveImage(generatedImageResult()); await image; });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(useChatStore.getState().messagesByConversation[CONVERSATION_ID]?.some((message) =>
+      message.metadata?.imageUrl === GENERATED_ASSET_URL)).toBe(true);
+    expect(mocks.generateImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a retired prompt recovery owner across a remount instead of recapturing', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(403, { error: { message: 'prompt refused' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
+    await screen.findByText('Image request was not sent');
+    const recovery = Object.values(useImageTranscriptRecoveryStore.getState().recoveries)[0];
+    expect(recovery?.authority).toBeDefined();
+    mocks.sessionId = 'replacement-session';
+    first.rerender(<WebChatPage />);
+    expect(recovery?.authority?.isCurrent()).toBe(false);
+    first.unmount();
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry save and create image' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.generateImage).not.toHaveBeenCalled();
+    expect(useImageTranscriptRecoveryStore.getState().recoveries[recovery!.assistantMessageId]?.authority)
+      .toBe(recovery!.authority);
+  });
+
+  it('suppresses late image publication and persistence after a replacement account', async () => {
+    let resolveImage!: (image: ReturnType<typeof generatedImageResult>) => void;
+    const image = new Promise<ReturnType<typeof generatedImageResult>>((resolve) => { resolveImage = resolve; });
+    mocks.generateImage.mockReturnValue(image);
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+      return jsonResponse(200, { message: { id: body['id'] } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const view = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
+    await waitFor(() => expect(mocks.generateImage).toHaveBeenCalledTimes(1));
+    mocks.userId = 'replacement-user';
+    mocks.sessionId = 'replacement-session';
+    view.rerender(<WebChatPage />);
+    await act(async () => { resolveImage(generatedImageResult()); await image; });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useChatStore.getState().messagesByConversation[CONVERSATION_ID]?.some((message) =>
+      message.metadata?.imageUrl === GENERATED_ASSET_URL)).toBe(false);
+    expect(useImageTranscriptRecoveryStore.getState().recoveries).toEqual({});
   });
 
   it('persists a definite video-start HTTP failure after both transcript rows and before reload', async () => {

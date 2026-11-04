@@ -14,6 +14,20 @@ vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(async () => 'web-auth-token'),
 }));
 
+const identity = vi.hoisted(() => ({ sessionId: 'media-session', userId: 'media-user' }));
+
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const { getAuthToken } = await import('@shared/lib/get-auth-token');
+  return createClerkSessionFixture(() => ({
+    getToken: getAuthToken,
+    isLoaded: true,
+    isSignedIn: true,
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+  }));
+});
+
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { isExecutableVideoModel, modelsCatalog } from '@agiworkforce/types';
 import type { VideoInputImages } from '@features/media/services/media-api-service';
@@ -87,6 +101,61 @@ describe('useMediaGeneration', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    identity.userId = 'media-user';
+    identity.sessionId = 'media-session';
+  });
+
+  it.each(['account', 'session'] as const)('does not dispatch an image after a replacement %s during authentication', async (kind) => {
+    const token = deferred<string | null>();
+    const entered = deferred<void>();
+    vi.mocked(getAuthToken).mockImplementationOnce(() => { entered.resolve(); return token.promise; });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected dispatch'));
+    const view = renderHook(() => useMediaGeneration());
+    const settled = view.result.current.generateImage('original private image').catch((error: unknown) => error);
+    await entered.promise;
+    if (kind === 'account') identity.userId = 'replacement-user';
+    identity.sessionId = 'replacement-session';
+    view.rerender();
+    token.resolve('original-token');
+    expect(await settled).toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mediaStoreMocks.updateJob).not.toHaveBeenCalled();
+  });
+
+  it('does not publish an image whose body arrives after the session changes', async () => {
+    const body = deferred<unknown>();
+    const entered = deferred<void>();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, json: () => { entered.resolve(); return body.promise; },
+    } as Response);
+    const view = renderHook(() => useMediaGeneration());
+    const settled = view.result.current.generateImage('original image').catch((error: unknown) => error);
+    await entered.promise;
+    identity.sessionId = 'replacement-session';
+    view.rerender();
+    body.resolve({ images: [{ url: '/original-image' }], provider: GOOGLE_IMAGE_MODEL.provider, catalog_model: GOOGLE_IMAGE_MODEL.id });
+    expect(await settled).toMatchObject({ name: 'AbortError' });
+    expect(mediaStoreMocks.updateJob).not.toHaveBeenCalled();
+  });
+
+  it('does not poll an old task after its observation sleep crosses sessions', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected poll'));
+      const view = renderHook(() => useMediaGeneration());
+      const progress = vi.fn();
+      const settled = view.result.current.watchVideoGeneration(VIDEO_TASK_ID, { onProgress: progress })
+        .catch((error: unknown) => error);
+      identity.sessionId = 'replacement-session';
+      view.rerender();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await settled).toMatchObject({ name: 'AbortError' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(progress).not.toHaveBeenCalled();
+      expect(mediaStoreMocks.updateJob).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('creates one stable managed-media identity for an image user action', async () => {
@@ -115,7 +184,7 @@ describe('useMediaGeneration', () => {
       expect.objectContaining({ id: operationId, type: 'image', prompt: 'draw a lighthouse' }),
     );
     const request = fetchMock.mock.calls[0]?.[1];
-    const key = (request?.headers as Record<string, string>)['Idempotency-Key'];
+    const key = new Headers(request?.headers).get('Idempotency-Key');
     if (!key) throw new Error('Image request did not include an Idempotency-Key');
     expect(parseManagedMediaIdempotencyKey(key)).toEqual({
       surface: 'web',
@@ -297,6 +366,57 @@ describe('useMediaGeneration', () => {
       },
     );
 
+    it('keeps a successful paid image body delivered after Stop in the same session', async () => {
+      const body = deferred<unknown>();
+      const reading = deferred<void>();
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+        if (input === '/api/media/image/cancel') return Promise.resolve({ status: 200 } as Response);
+        return Promise.resolve({
+          ok: true,
+          json: () => { reading.resolve(); return body.promise; },
+        } as Response);
+      });
+      const view = renderHook(() => useMediaGeneration());
+      const pending = view.result.current.generateImage('accepted image', { cancelScope: 'paid-delivery' });
+      await reading.promise;
+      expect(cancelImageGenerations('paid-delivery')).toBe(true);
+      body.resolve({ images: [{ url: '/paid-image' }], provider: GOOGLE_IMAGE_MODEL.provider, catalog_model: GOOGLE_IMAGE_MODEL.id });
+      await expect(pending).resolves.toMatchObject({ imageUrl: '/paid-image' });
+      expect(mediaStoreMocks.updateJob).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ status: 'completed' }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    });
+
+    it('does not retry durable cancellation under a replacement session', async () => {
+      vi.useFakeTimers();
+      try {
+        const dispatched = deferred<void>();
+        const cancelled = deferred<void>();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+          if (input === '/api/media/image/cancel') {
+            cancelled.resolve();
+            return Promise.resolve({ status: 404 } as Response);
+          }
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('Stopped', 'AbortError')));
+            dispatched.resolve();
+          });
+        });
+        const view = renderHook(() => useMediaGeneration());
+        const settled = view.result.current.generateImage('old image', { cancelScope: 'cancel-retry' })
+          .catch((error: unknown) => error);
+        await dispatched.promise;
+        expect(cancelImageGenerations('cancel-retry')).toBe(true);
+        await cancelled.promise;
+        expect(await settled).toMatchObject({ code: IMAGE_GENERATION_CANCELLED_CODE });
+        identity.sessionId = 'replacement-session';
+        view.rerender();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('cleans up ordinary authentication failures without issuing a media request', async () => {
       const failure = new Error('auth unavailable');
       vi.mocked(getAuthToken).mockRejectedValueOnce(failure);
@@ -342,7 +462,7 @@ describe('useMediaGeneration', () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
       const request = fetchMock.mock.calls[0]?.[1];
-      const key = (request?.headers as Record<string, string>)['Idempotency-Key'];
+      const key = new Headers(request?.headers).get('Idempotency-Key');
       expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/media/image/cancel');
       expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
         idempotency_key: key,
