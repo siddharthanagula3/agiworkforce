@@ -10,6 +10,7 @@ export interface TranslateResult {
 }
 
 export interface TranslateOptions {
+  signal?: AbortSignal;
   onToken?: (token: string) => void;
 }
 
@@ -60,12 +61,20 @@ async function checkPairCached(source: string, target: string): Promise<boolean>
   }
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error('Translation cancelled.');
+  error.name = 'AbortError';
+  throw error;
+}
+
 export async function translate(
   text: string,
   sourceLanguage: string,
   targetLanguage: string,
   opts?: TranslateOptions,
 ): Promise<TranslateResult> {
+  throwIfAborted(opts?.signal);
   if (!text.trim()) {
     return {
       translatedText: '',
@@ -77,11 +86,13 @@ export async function translate(
   }
 
   const pairCached = await checkPairCached(sourceLanguage, targetLanguage);
+  throwIfAborted(opts?.signal);
   const mod = getNativeTranslate();
 
   if (mod) {
     try {
       const result = await mod.translate(text, sourceLanguage, targetLanguage);
+      throwIfAborted(opts?.signal);
       const backend =
         Platform.OS === 'ios' ? ('apple_translate' as const) : ('mlkit_translate' as const);
       return {
@@ -92,10 +103,12 @@ export async function translate(
         pairCached,
       };
     } catch (err) {
+      throwIfAborted(opts?.signal);
       void err;
     }
   }
 
+  throwIfAborted(opts?.signal);
   const sourceLang =
     SUPPORTED_LANGUAGES.find((l) => l.code === sourceLanguage)?.label ?? sourceLanguage;
   const targetLang =
@@ -110,12 +123,21 @@ export async function translate(
   let tokens = '';
   const result = await localGenerate(defaultModel.id, {
     modelId: defaultModel.id,
+    signal: opts?.signal,
     prompt,
     onToken: (token: string) => {
+      if (opts?.signal?.aborted) return;
       tokens += token;
       opts?.onToken?.(token);
     },
   });
+
+  throwIfAborted(opts?.signal);
+  if (result.aborted) {
+    const error = new Error('Translation cancelled.');
+    error.name = 'AbortError';
+    throw error;
+  }
 
   return {
     translatedText: result.text || tokens,
