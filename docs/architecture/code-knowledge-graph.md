@@ -199,7 +199,8 @@ owner errors while rejecting stale publication and subsequent work.
 This is canonical runtime-epoch ownership, not proof that SDK/token identity
 cannot change before canonical account activation observes it. It does not
 promise upstream body cancellation, provider cancellation or rollback: the
-unchanged shared SSE reader's `finally` only releases its reader lock. No native,
+shared SSE reader at this slice only released its reader lock; the later SSE
+cleanup section records the separate early-exit cancellation correction. No native,
 network or runtime acceptance is established by the source fixtures.
 
 ## Mobile Local reply settlement ownership
@@ -1207,9 +1208,29 @@ receipt mapping, concurrent duplicate insertion and exactly-once completion are
 not solved. Fixtures were source-read only; no runtime/storage acceptance or
 remote rollback guarantee is claimed.
 
+## Shared SSE reader retires unread bodies on exit
+
+Accepted commit `0ccab6eff4c24956a23d29526d2e85d111f5dc4d` changes
+`packages/client/client-runtime/src/sse.ts` and seven unexecuted real-stream
+regression cases. `readServerSentEvents` records `reachedEnd` only after an actual
+`reader.read()` result reports `done`. Its `finally` requests cancellation on
+non-EOF exit, catches cancellation rejection without awaiting it, and releases
+the reader lock. A stalled or rejected cancel therefore does not delay or replace
+the original consumer/read/parser outcome; normal EOF retains decoder flushing.
+
+Concrete consumers include mobile `services/streaming.ts`, whose terminal frame
+returns early and whose `onChunk` account guard may throw. Guest chat continues
+on normal `[DONE]`, while `useChatStream.ts` uses this shared reader for its replay
+leg, not the main reader. This does not interrupt an already pending iterator
+`next()` or establish server/provider stop, upstream cancellation completion or
+changes to other provider parsers. The EOF fixture's underlying-source cancel spy
+alone cannot prove absence of `reader.cancel()` on an already closed stream; the
+source `reachedEnd` guard establishes that narrower call-path claim. Fixtures were
+read but not run; no transport/browser/native runtime acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the forty-nine accepted production slices traced above are represented as
+Only the fifty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
