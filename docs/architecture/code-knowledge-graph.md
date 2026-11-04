@@ -721,9 +721,33 @@ shared grants, deletion/provenance redesign or continuous revocation after the
 checks. Fixtures cover source-level scope behavior only; no provider, storage,
 SQL/RLS, deployment or runtime acceptance is claimed.
 
+## Gmail draft attachment workspace authority
+
+Reconstructed commit: `b97c1deeadb5ad447e334da3b3f6ee33262a5e77` changes
+`lib/user-connector-tools.ts` and `lib/connectors/gmail-actions.ts`, with two
+unexecuted fixture sources. The connector executor now forwards its original
+organization into Gmail draft attachment handling. Existing executor call sites
+for chat, durable/startup workflows, scheduled execution, research, artifacts and
+voice supply scope; this patch changes the Gmail forwarding edge rather than
+introducing new caller admission.
+
+For attachment drafts, explicit null remains Personal; undefined resolves active
+workspace once for the draft. A non-null organization must match
+`resolveOrganizationMembershipId`'s active membership result before asset lookup.
+Each file uses owner+organization SQL and repeats owner/organization/deleted/path
+checks before storage reads and the eventual Gmail draft POST. The prior owner
+check already refused cross-account files; this correction addresses same-owner
+wrong-workspace attachment reads, not a proven cross-account exposure.
+
+OAuth resolution can precede this refusal. Membership is checked at admission,
+not continuously or transactionally through later storage/network awaits. Existing
+send-draft and read-attachment behavior is unchanged, as are remote POST outcome
+uncertainty and storage-size behavior. No retention, all-connector scope, runtime
+or deployment acceptance is claimed; fixtures remain source-only.
+
 ## Reconstruction boundary
 
-Only the twenty-nine accepted production slices traced above are represented as
+Only the thirty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
