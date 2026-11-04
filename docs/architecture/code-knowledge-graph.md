@@ -2421,6 +2421,41 @@ failure injection, and the inference fixture does not exercise full auth-reading
 was unavailable/uninspected here. No network, native, session/credential access,
 tests, checks or deployment acceptance is claimed.
 
+## OPEN design constraint: Local picker identity must survive the start pipeline
+
+Source-only review after `207ac4394e` finds a separate end-to-end representation
+gap, not an accepted implementation slice. `features/code/local-code.ts` projects
+`localModelChoices` into an ID-keyed map without provider/trust identity.
+`use-local-sessions.ts`, `runtime-client.ts`, Electron `runtime/dispatcher.ts` and
+both normal/worktree `developerSessionService.ts` start requests forward the model
+but no explicit provider. CLI `model_reachability.rs::host_models` inserts catalog
+IDs before discovered Local IDs and deduplicates by ID, hiding collisions; the
+separate runtime model inventory still carries provider information.
+
+This does not prove live cloud egress. Existing explicit-provider resolution
+refuses catalog/provider mismatch, Local session privacy validation remains, and
+turn setup restores its snapshot on refusal before spawning work. Auto expansion
+and shared `run_spec` catalog wire-ID translation are additional dependencies:
+a hypothetical raw Local/catalog collision cannot be declared reachable past the
+existing catalog guard merely because wire translation exists.
+
+A coherent correction needs distinct known Local provider/model identity through
+picker, start IPC and host inventory; explicit visible refusal for ambiguous,
+unknown, catalog-colliding or Auto Local choices; and raw Local wire IDs without
+changing Managed/BYOK routing. New shell and CLI capability admission must refuse
+unsupported older hosts before worktree creation and verify the child capability,
+not silently fall back to ID-only start. Existing-session selection and stored
+unknown provenance need consistent compatibility decisions as well.
+
+The capability is Rust-owned with generated TypeScript bindings
+(`crates/agiworkforce-protocol/tests/export_bindings.rs` and the protocol generator).
+The required regeneration is outside the current no-Rust-execution/no-checks
+constraint; hand-editing generated contracts or applying only a frontend subset
+would not complete this boundary. Partial exploratory edits are not an accepted
+or implementation-ready patch. No production correction, runtime reproduction,
+new permission behavior or live leak is claimed; the separate existing trust-
+classification audit owner is not replaced by this pipeline design constraint.
+
 ## Reconstruction boundary
 
 Only the ninety-one accepted production slices traced above are represented as
