@@ -241,8 +241,13 @@ export async function exportPngImage(base64Png: string, title: string): Promise<
  * @param uri - The file URI to share
  * @throws {Error} If sharing is not available on the device
  */
-export async function shareFile(uri: string): Promise<void> {
+export async function shareFile(
+  uri: string,
+  options: { isCurrent?: () => boolean } = {},
+): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const available = await Sharing.isAvailableAsync();
+  if (options.isCurrent?.() === false) return;
   if (!available) {
     throw new Error('Sharing is not available on this device');
   }
@@ -278,6 +283,7 @@ export async function shareFile(uri: string): Promise<void> {
     jpeg: 'image/jpeg',
     zip: 'application/zip',
   };
+  if (options.isCurrent?.() === false) return;
   await Sharing.shareAsync(uri, {
     UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
     mimeType: mimeMap[ext ?? ''] ?? 'text/plain',

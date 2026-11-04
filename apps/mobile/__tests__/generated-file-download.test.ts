@@ -29,7 +29,7 @@ jest.mock('@/services/authSession', () => ({
 }));
 
 import * as Sharing from 'expo-sharing';
-import { downloadGeneratedFile, prepareLocalVideoPlayer, shareGeneratedImage } from '@/services/fileCreation';
+import { downloadGeneratedFile, prepareLocalVideoPlayer, shareFile, shareGeneratedImage } from '@/services/fileCreation';
 
 class FakeFileReader {
   onload: (() => void) | null = null;
@@ -172,6 +172,26 @@ describe('downloadGeneratedFile', () => {
       expect.stringContaining('<video src="video-video-1.mp4"'),
       { encoding: 'utf8' },
     );
+  });
+
+
+  it.each([true, false])('does not share or throw after retired availability resolves %s', async (available) => {
+    let resolve!: (value: boolean) => void;
+    (Sharing.isAvailableAsync as jest.Mock).mockReturnValueOnce(
+      new Promise<boolean>((done) => { resolve = done; }),
+    );
+    let current = true;
+    const sharing = shareFile('file:///docs/video.mp4', { isCurrent: () => current });
+    current = false;
+    resolve(available);
+    await expect(sharing).resolves.toBeUndefined();
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not check sharing availability for an already retired action', async () => {
+    await shareFile('file:///docs/video.mp4', { isCurrent: () => false });
+    expect(Sharing.isAvailableAsync).not.toHaveBeenCalled();
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
 
 });

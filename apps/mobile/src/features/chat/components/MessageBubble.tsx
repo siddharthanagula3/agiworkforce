@@ -1528,6 +1528,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {isAssistant && (message.type === 'video' || message.videoUrl) && message.videoUrl && (
               <GeneratedVideo
+                key={`${message.id}:${message.videoUrl}`}
                 videoUrl={message.videoUrl}
                 thumbnailUrl={message.videoThumbnailUrl}
                 width={imageWidth}
