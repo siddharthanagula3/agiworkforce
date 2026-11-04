@@ -2356,11 +2356,44 @@ writer is not redesigned. Source fixtures cover independent clones/reads, damage
 JSONL, unique recovery copies, known disappearance, deserialization/different
 paths, equal-length changes and nonregular targets. All are unexecuted; no actual
 session, credential, cache, environment or DB data, Rust execution, tests or checks
-were used. Pending host identity work is outside this snapshot slice.
+were used. Host identity is a separate correction traced in the following section.
+
+## CLI host separates prefix convenience from exact mutation identity
+
+Accepted commit `36b6680d5ad90358750aa9b005ba7d527a4a8589` changes
+`app_server/developer_host.rs` and exposes the existing session-summary projection
+within the crate. Read/resume conveniences still resolve prefixes, but read the
+captured path and verify its loaded session ID against the resolved summary.
+Resume builds its returned summary from that same snapshot and caches the agent
+under the canonical ID, not the supplied alias. Read/checkpoint paths likewise
+avoid a second alias lookup between resolution and load.
+
+Execution/mutation admission requires the full loaded ID, with existing workspace
+checks retained. Actual later operation and lease-path resolution also require
+an exact summary ID, so an earlier successful validation cannot authorize a new
+longer prefix match after the exact target disappears. Fork, archive, unarchive
+and delete pass captured Path references to the store; execution, compact, side
+question, rewind, plan and checkpoint mutation paths use exact admission and/or
+execution-agent loading. Rename passes a canonicalized captured path to the
+existing rename helper, preserving relative-store compatibility and explicitly
+refusing a non-UTF-8 path rather than reinterpreting it as an ID.
+
+Disk refresh validates the exact requested ID and held path before adoption;
+post-turn workspace refresh also resolves exact identity and loads that captured
+path. This preserves prefix read/resume compatibility while refusing prefix
+execution/mutation, not a migration of old checkpoint namespaces or a broad
+permission change. Existing locks, writer checks and agent freshness behavior
+remain counterguards. Same-path replacement, cross-process races and atomic
+filesystem compare-and-swap are not solved by these ID/path comparisons.
+
+Four fixture sources exercise captured paths/changed identities, missing exact
+IDs with longer matches, canonical cache sharing and prefix mutation refusal.
+They are unexecuted; no real sessions, credentials, caches, DB or native host
+operations were accessed, and no Rust/tests/checks were run.
 
 ## Reconstruction boundary
 
-Only the eighty-nine accepted production slices traced above are represented as
+Only the ninety accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
