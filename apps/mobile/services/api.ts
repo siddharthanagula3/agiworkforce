@@ -254,6 +254,7 @@ function handleUnrecoverableAuth(): void {
 }
 
 interface RequestOptions {
+  accountEpoch?: CloudAccountEpoch | null;
   timeout?: number;
   signal?: AbortSignal;
   /**
@@ -302,6 +303,7 @@ async function sendRequest(
   accountGeneration: number,
 ): Promise<SentRequest> {
   assertApiAccountGeneration(accountGeneration);
+  if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
   const authHeaders = await getAuthHeaders();
   const headers = {
     'Content-Type': 'application/json',
@@ -310,6 +312,7 @@ async function sendRequest(
     ...authHeaders,
   };
   assertApiAccountGeneration(accountGeneration);
+  if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
   if (
     path === TERMS_ACCEPTANCE_PATH &&
     options.baseUrl === undefined &&
@@ -348,11 +351,13 @@ async function sendRequest(
       },
     );
     assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
 
     if (response.status === 401) {
       if (!options._skipAuthRetry) {
         const refreshed = await tryRefreshToken();
         assertApiAccountGeneration(accountGeneration);
+        if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
         if (refreshed) {
           release();
           return sendRequest(path, init, { ...options, _skipAuthRetry: true }, accountGeneration);
@@ -366,6 +371,7 @@ async function sendRequest(
     if (response.status === 403) {
       const passkeyRequired = await refusedForPasskey(response);
       assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
       if (passkeyRequired) {
         release();
         announcePasskeyRequired();
@@ -374,6 +380,7 @@ async function sendRequest(
 
       const refusal = await readAccountUnavailable(response);
       assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
       if (refusal) {
         release();
         handleAccountUnavailable(refusal);
@@ -406,6 +413,7 @@ export async function apiFetch(
   try {
     const body = BODYLESS_STATUSES.has(response.status) ? '' : await response.text();
     assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
     return new Response(body.length > 0 ? body : null, {
       status: response.status,
       statusText: response.statusText,
@@ -435,6 +443,7 @@ export async function apiFetchBinary(
       ? new ArrayBuffer(0)
       : await response.arrayBuffer();
     assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
     return {
       ok: response.ok,
       status: response.status,
@@ -458,6 +467,7 @@ async function request<T>(
     if (response.status === 429) {
       const bodyText = await response.text();
       assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
       const parsed = parseJsonBody(bodyText);
 
       const rateLimitError = rateLimitErrorFrom(parsed);
@@ -474,6 +484,7 @@ async function request<T>(
     if (!response.ok) {
       const body = await response.text();
       assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
 
       if (response.status === 403) {
         try {
@@ -518,6 +529,7 @@ async function request<T>(
 
     const result = (await response.json()) as T;
     assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
     return result;
   } finally {
     release();

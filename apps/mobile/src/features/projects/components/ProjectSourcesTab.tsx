@@ -24,6 +24,11 @@ import {
   ProjectSourceCancelledError,
   ProjectSourceError,
 } from '@/src/features/projects/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -80,11 +85,8 @@ function SourceRow({
   const colors = useThemeColors();
 
   const handleRemove = useCallback(() => {
-    Alert.alert('Remove source', `Remove "${source.name}" from this project?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => onRemove(source.id) },
-    ]);
-  }, [source.id, source.name, onRemove]);
+    onRemove(source.id);
+  }, [source.id, onRemove]);
 
   return (
     <View
@@ -209,15 +211,77 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const [cloudSources, setCloudSources] = useState<DisplaySource[]>(EMPTY_SOURCES);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [, setAccountRevision] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [textEditorOpen, setTextEditorOpen] = useState(false);
+  const [textTitle, setTextTitle] = useState('');
+  const [textBody, setTextBody] = useState('');
   const mounted = useRef(true);
+  const lifetimeRef = useRef(0);
   const requestRef = useRef(0);
   const uploadRef = useRef<AbortController | null>(null);
+  const viewRef = useRef({ projectId, target, generation: 0 });
+  if (viewRef.current.projectId !== projectId || viewRef.current.target !== target) {
+    viewRef.current = { projectId, target, generation: viewRef.current.generation + 1 };
+  }
+  const renderedGeneration = viewRef.current.generation;
+  const account = target === 'cloud' ? captureCloudAccountEpoch() : null;
+  const ownerId = account?.ownerId;
+  const epoch = account?.epoch;
+  const renderedAccount = useMemo(() => {
+    if (target !== 'cloud') return undefined;
+    return ownerId !== undefined && epoch !== undefined ? { ownerId, epoch } : null;
+  }, [target, ownerId, epoch]);
+  const captureContext = useCallback(() => {
+    const lifetime = lifetimeRef.current;
+    const accountEpoch = renderedAccount;
+    return {
+      accountEpoch,
+      isCurrent: () =>
+        mounted.current &&
+        lifetime === lifetimeRef.current &&
+        renderedGeneration === viewRef.current.generation &&
+        projectId === viewRef.current.projectId &&
+        target === viewRef.current.target &&
+        (target !== 'cloud' || isCloudAccountEpochCurrent(accountEpoch)),
+    };
+  }, [projectId, target, renderedGeneration, renderedAccount]);
+
+  useEffect(() => {
+    return subscribeCloudAccountEpochChange(() => {
+      if (viewRef.current.target !== 'cloud') return;
+      viewRef.current.generation += 1;
+      setAccountRevision((revision) => revision + 1);
+      requestRef.current += 1;
+      uploadRef.current?.abort();
+      uploadRef.current = null;
+      setCloudSources(EMPTY_SOURCES);
+      setLoadError(null);
+      setUploadProgress(null);
+      setTextEditorOpen(false);
+      setTextTitle('');
+      setTextBody('');
+      setBusy(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    uploadRef.current?.abort();
+    uploadRef.current = null;
+    setUploadProgress(null);
+    setTextEditorOpen(false);
+    setTextTitle('');
+    setTextBody('');
+    return () => {
+      uploadRef.current?.abort();
+    };
+  }, [projectId, target]);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      lifetimeRef.current += 1;
       uploadRef.current?.abort();
     };
   }, []);
@@ -238,11 +302,13 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   );
 
   const refreshCloudSources = useCallback(async () => {
+    const context = captureContext();
+    if (!context.isCurrent()) return;
     const request = ++requestRef.current;
     setBusy(true);
     try {
-      const files = await cloudProjectSources.list(projectId);
-      if (!mounted.current || requestRef.current !== request) return;
+      const files = await cloudProjectSources.list(projectId, context.accountEpoch);
+      if (!context.isCurrent() || requestRef.current !== request) return;
       setCloudSources(
         files.map((file) => ({
           id: file.id,
@@ -253,14 +319,14 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       );
       setLoadError(null);
     } catch (error) {
-      if (!mounted.current || requestRef.current !== request) return;
+      if (!context.isCurrent() || requestRef.current !== request) return;
       setLoadError(
         projectSourceErrorMessage(error, 'Could not load this project’s sources. Retry.'),
       );
     } finally {
-      if (mounted.current && requestRef.current === request) setBusy(false);
+      if (context.isCurrent() && requestRef.current === request) setBusy(false);
     }
-  }, [projectId]);
+  }, [projectId, captureContext]);
 
   useEffect(() => {
     if (target !== 'cloud') {
@@ -281,70 +347,83 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       return;
     }
 
-    let result: DocumentPicker.DocumentPickerResult;
-    try {
-      result = await DocumentPicker.getDocumentAsync({
-        multiple: true,
-        copyToCacheDirectory: true,
-        type: [...PROJECT_SOURCE_MIME_TYPES],
-      });
-    } catch {
-      Alert.alert('Error', 'Could not pick files. Please try again.');
-      return;
-    }
-    if (result.canceled) return;
-
-    setBusy(true);
+    const context = captureContext();
+    if (!context.isCurrent()) return;
+    if (uploadRef.current) return;
     const controller = new AbortController();
     uploadRef.current = controller;
-    const failures: string[] = [];
-    const total = result.assets.length;
-    for (const [index, asset] of result.assets.entries()) {
-      if (controller.signal.aborted) break;
-      setUploadProgress({ name: asset.name, position: index + 1, total, percent: null });
+    setBusy(true);
+    try {
+      let result: DocumentPicker.DocumentPickerResult;
       try {
-        await addSource(
-          projectId,
-          {
-            name: asset.name,
-            mimeType: asset.mimeType ?? 'application/octet-stream',
-            size: asset.size ?? 0,
-            uri: asset.uri,
-          },
-          {
-            signal: controller.signal,
-            onProgress: ({ bytesSent, totalBytes }) => {
-              if (!mounted.current || controller.signal.aborted) return;
-              const percent = percentOf(bytesSent, totalBytes);
-              setUploadProgress((current) =>
-                current && current.position === index + 1 && current.percent !== percent
-                  ? { ...current, percent }
-                  : current,
-              );
+        result = await DocumentPicker.getDocumentAsync({
+          multiple: true,
+          copyToCacheDirectory: true,
+          type: [...PROJECT_SOURCE_MIME_TYPES],
+        });
+      } catch {
+        if (context.isCurrent()) Alert.alert('Error', 'Could not pick files. Please try again.');
+        return;
+      }
+      if (!context.isCurrent() || controller.signal.aborted || result.canceled) return;
+
+      const failures: string[] = [];
+      const total = result.assets.length;
+      for (const [index, asset] of result.assets.entries()) {
+        if (!context.isCurrent() || controller.signal.aborted) break;
+        setUploadProgress({ name: asset.name, position: index + 1, total, percent: null });
+        try {
+          await addSource(
+            projectId,
+            {
+              name: asset.name,
+              mimeType: asset.mimeType ?? 'application/octet-stream',
+              size: asset.size ?? 0,
+              uri: asset.uri,
             },
-          },
-        );
-      } catch (error) {
-        if (error instanceof ProjectSourceCancelledError || controller.signal.aborted) break;
-        failures.push(
-          projectSourceErrorMessage(error, `"${asset.name}" could not be added. Try again.`),
-        );
+            {
+              accountEpoch: context.accountEpoch,
+              signal: controller.signal,
+              onProgress: ({ bytesSent, totalBytes }) => {
+                if (!context.isCurrent() || controller.signal.aborted) return;
+                const percent = percentOf(bytesSent, totalBytes);
+                setUploadProgress((current) =>
+                  current && current.position === index + 1 && current.percent !== percent
+                    ? { ...current, percent }
+                    : current,
+                );
+              },
+            },
+          );
+        } catch (error) {
+          if (
+            !context.isCurrent() ||
+            error instanceof ProjectSourceCancelledError ||
+            controller.signal.aborted
+          ) break;
+          failures.push(
+            projectSourceErrorMessage(error, `"${asset.name}" could not be added. Try again.`),
+          );
+        }
+      }
+      if (!context.isCurrent()) return;
+      setUploadProgress(null);
+      if (target === 'cloud') await refreshCloudSources();
+      if (!context.isCurrent()) return;
+      if (failures.length > 0) {
+        Alert.alert('Some sources were not added', failures.join('\n\n'));
+      }
+    } finally {
+      if (uploadRef.current === controller) {
+        uploadRef.current = null;
+        if (context.isCurrent()) {
+          setUploadProgress(null);
+          setBusy(false);
+        }
       }
     }
-    if (uploadRef.current === controller) uploadRef.current = null;
-    if (!mounted.current) return;
-    setUploadProgress(null);
-    if (target === 'cloud') await refreshCloudSources();
-    if (!mounted.current) return;
-    setBusy(false);
-    if (failures.length > 0) {
-      Alert.alert('Some sources were not added', failures.join('\n\n'));
-    }
-  }, [projectId, target, addSource, refreshCloudSources]);
+  }, [projectId, target, addSource, refreshCloudSources, captureContext]);
 
-  const [textEditorOpen, setTextEditorOpen] = useState(false);
-  const [textTitle, setTextTitle] = useState('');
-  const [textBody, setTextBody] = useState('');
 
   const closeTextEditor = useCallback(() => {
     setTextEditorOpen(false);
@@ -353,6 +432,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   }, []);
 
   const handleSaveText = useCallback(async () => {
+    const context = captureContext();
+    if (!context.isCurrent()) return;
+    if (uploadRef.current) return;
     const body = textBody.trim();
     if (!body || !cacheDirectory) return;
     const baseName =
@@ -363,46 +445,83 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     const name = baseName.toLowerCase().endsWith('.txt') ? baseName : `${baseName}.txt`;
     const uri = `${cacheDirectory}project-text-${uuidv7()}.txt`;
     setBusy(true);
+    const controller = new AbortController();
+    uploadRef.current = controller;
     try {
       await writeAsStringAsync(uri, body);
-      await addSource(projectId, {
-        name,
-        mimeType: 'text/plain',
-        size: new TextEncoder().encode(body).length,
-        uri,
-      });
+      if (!context.isCurrent() || controller.signal.aborted) return;
+      await addSource(
+        projectId,
+        {
+          name,
+          mimeType: 'text/plain',
+          size: new TextEncoder().encode(body).length,
+          uri,
+        },
+        { signal: controller.signal, accountEpoch: context.accountEpoch },
+      );
+      if (!context.isCurrent()) return;
       if (target === 'cloud') await refreshCloudSources();
-      if (mounted.current) closeTextEditor();
+      if (context.isCurrent()) closeTextEditor();
     } catch (error) {
+      if (!context.isCurrent() || controller.signal.aborted) return;
       Alert.alert(
         'Text was not added',
         projectSourceErrorMessage(error, 'Check your connection and try again.'),
       );
     } finally {
-      if (mounted.current) setBusy(false);
+      if (uploadRef.current === controller) {
+        uploadRef.current = null;
+        if (context.isCurrent()) setBusy(false);
+      }
     }
-  }, [addSource, closeTextEditor, projectId, refreshCloudSources, target, textBody, textTitle]);
+  }, [
+    addSource,
+    closeTextEditor,
+    projectId,
+    refreshCloudSources,
+    target,
+    textBody,
+    textTitle,
+    captureContext,
+  ]);
 
   const handleRemove = useCallback(
     async (sourceId: string) => {
+      const context = captureContext();
+      if (!context.isCurrent()) return;
       try {
-        await removeSource(projectId, sourceId);
+        await removeSource(projectId, sourceId, context.accountEpoch);
+        if (!context.isCurrent()) return;
         if (target === 'cloud') await refreshCloudSources();
       } catch (error) {
+        if (!context.isCurrent()) return;
         Alert.alert(
           'Could not remove source',
           projectSourceErrorMessage(error, 'Please try again.'),
         );
       }
     },
-    [projectId, target, removeSource, refreshCloudSources],
+    [projectId, target, removeSource, refreshCloudSources, captureContext],
   );
 
   const handleRemovePress = useCallback(
     (sourceId: string) => {
-      void handleRemove(sourceId);
+      const context = captureContext();
+      const source = sources.find((candidate) => candidate.id === sourceId);
+      if (!context.isCurrent() || !source) return;
+      Alert.alert('Remove source', `Remove "${source.name}" from this project?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            if (context.isCurrent()) void handleRemove(sourceId);
+          },
+        },
+      ]);
     },
-    [handleRemove],
+    [captureContext, handleRemove, sources],
   );
 
   return (

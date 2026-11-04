@@ -871,3 +871,54 @@ describe('stream refresh account ownership', () => {
     expect(captureCloudAccountEpoch()?.ownerId).toBe('refresh-account-b');
   });
 });
+
+describe('caller-bound Cloud account request epochs', () => {
+  it('rejects replacement credentials before dispatch even without an API generation reset', async () => {
+    activateCloudAccount('bound-request-a');
+    const accountEpoch = captureCloudAccountEpoch();
+    const credentials = deferredBody<Record<string, string>>();
+    mockGetAuthHeaders.mockImplementationOnce(credentials.read);
+    const fetch = jest.spyOn(globalThis, 'fetch');
+    const pending = api.post('/api/project-knowledge', {}, { accountEpoch });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'StaleCloudAccountOperationError' });
+    await credentials.started;
+    activateCloudAccount('bound-request-b');
+    credentials.resolve({ Authorization: 'Bearer replacement-test-token' });
+    await rejected;
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale JSON receipt after the body await', async () => {
+    activateCloudAccount('bound-body-a');
+    const accountEpoch = captureCloudAccountEpoch();
+    const body = deferredBody<unknown>();
+    const response = makeResponse(200, {});
+    response.json = body.read;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    const pending = api.post('/api/project-knowledge', {}, { accountEpoch });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'StaleCloudAccountOperationError' });
+    await body.started;
+    activateCloudAccount('bound-body-b');
+    body.resolve({ file: 'original receipt' });
+    await rejected;
+  });
+
+  it.each([true, false])('does not retry or sign out a replacement account after refresh returns %s', async (refreshed) => {
+    activateCloudAccount('bound-refresh-a');
+    const accountEpoch = captureCloudAccountEpoch();
+    const refresh = deferredBody<boolean>();
+    mockRefreshAuthSession.mockImplementationOnce(refresh.read);
+    const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+    const pending = api.post('/api/project-knowledge', {}, { accountEpoch });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'StaleCloudAccountOperationError' });
+    await refresh.started;
+    activateCloudAccount('bound-refresh-b');
+    refresh.resolve(refreshed);
+    await rejected;
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mockGetAuthHeaders).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+});
