@@ -166,17 +166,51 @@ impl ConfigSync {
     // ----- Hashing -----
 
     /// Compute SHA256 hex digest for a byte slice.
-    fn keep_imported_copy(local: &Path, imported: &[u8]) -> Result<()> {
-        let mut name = local.as_os_str().to_owned();
-        name.push(".imported");
-        let copy = PathBuf::from(name);
-        fs::write(&copy, imported).with_context(|| format!("failed to write {}", copy.display()))
-    }
-
     fn sha256_hex(data: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(data);
         crate::hex::encode(&hasher.finalize())
+    }
+
+    fn import_path(home: &Path, relative: &str) -> Result<PathBuf> {
+        if !is_contained_relative_path(relative) {
+            anyhow::bail!("invalid sync import path: '{}'", relative);
+        }
+        let destination = home.join(relative);
+        let mut current = home.to_path_buf();
+        let mut components = Path::new(relative).components().peekable();
+        while let Some(component) = components.next() {
+            current.push(component.as_os_str());
+            match fs::symlink_metadata(&current) {
+                Ok(metadata) => {
+                    if metadata.file_type().is_symlink() {
+                        anyhow::bail!(
+                            "refusing sync import through symlink: {}",
+                            current.display()
+                        );
+                    }
+                    if components.peek().is_some() {
+                        if !metadata.is_dir() {
+                            anyhow::bail!(
+                                "sync import parent is not a directory: {}",
+                                current.display()
+                            );
+                        }
+                    } else if !metadata.is_file() {
+                        anyhow::bail!(
+                            "sync import destination is not a regular file: {}",
+                            current.display()
+                        );
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to inspect {}", current.display()));
+                }
+            }
+        }
+        Ok(destination)
     }
 
     // ----- Public API -----
@@ -280,63 +314,53 @@ impl ConfigSync {
     /// - Local changed since last sync -> conflict (keep local, report)
     /// - `config.toml`: section-level TOML merge (add new keys, don't clobber existing)
     /// - `mcp.json`: merge server entries (add new, don't remove existing)
+    ///
+    /// Preflight rejects unsupported paths, invalid checksums, and existing
+    /// symlinks before writes. It does not prevent concurrent filesystem changes
+    /// or roll back completed writes after a later I/O failure.
     pub fn import(home: &Path, bundle: &SyncBundle) -> Result<SyncReport> {
-        let old_manifest = Self::load_manifest(home)?;
+        for (rel_path, synced) in &bundle.files {
+            if !Self::SYNCED_FILES.contains(&rel_path.as_str()) {
+                anyhow::bail!("Sync bundle contains unsupported path: '{}'", rel_path);
+            }
+            if Self::sha256_hex(synced.content.as_bytes()) != synced.sha256 {
+                anyhow::bail!("Sync bundle checksum mismatch for '{}'", rel_path);
+            }
+        }
+
+        let canonical_home = home
+            .canonicalize()
+            .context("failed to resolve sync home directory")?;
+        if !canonical_home.is_dir() {
+            anyhow::bail!("sync home is not a directory: {}", canonical_home.display());
+        }
+        Self::import_path(&canonical_home, Self::MANIFEST_FILE)?;
+        for rel_path in Self::SYNCED_FILES {
+            Self::import_path(&canonical_home, rel_path)?;
+        }
+
+        let old_manifest = Self::load_manifest(&canonical_home)?;
         let mut report = SyncReport {
             files_updated: Vec::new(),
             files_skipped: Vec::new(),
             conflicts: Vec::new(),
         };
-
-        // Canonicalize home once, on macOS /var is a symlink to /private/var,
-        // so we need a stable prefix for starts_with checks.
-        let canonical_home = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+        let mut writes = Vec::new();
 
         for (rel_path, synced) in &bundle.files {
-            // Validate that rel_path doesn't escape the home directory (path traversal).
-            // Build abs_path from the canonical home so both paths share the same
-            // symlink-resolved prefix, avoids false positives when the target file
-            // doesn't exist yet (canonicalize would fail on a non-existent path).
-            // `starts_with` is a lexical component compare and `canonicalize`
-            // fails on a target that does not exist yet, so the old guard let
-            // `.agiworkforce/../Library/LaunchAgents/x.plist` through: its
-            // components literally begin with home's. Reject anything that is
-            // not a plain relative name before the join, so no `..`, no root
-            // and no Windows prefix can reach the filesystem at all.
-            if !is_contained_relative_path(rel_path) {
-                anyhow::bail!(
-                    "Sync bundle contains path traversal: '{}' is not a relative path inside the home directory",
-                    rel_path
-                );
-            }
             let abs_path = canonical_home.join(rel_path);
-            let canonical_abs = abs_path.canonicalize().unwrap_or_else(|_| abs_path.clone());
-            if !canonical_abs.starts_with(&canonical_home) {
-                anyhow::bail!(
-                    "Sync bundle contains path traversal: '{}' resolves outside home directory",
-                    rel_path
-                );
-            }
-
-            // Ensure parent directory exists
-            if let Some(parent) = abs_path.parent() {
-                if !parent.exists() {
-                    fs::create_dir_all(parent)
-                        .with_context(|| format!("failed to create directory for {}", rel_path))?;
+            let local_data = match fs::read(&abs_path) {
+                Ok(data) => data,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    writes.push((rel_path.clone(), synced.content.as_bytes().to_vec()));
+                    report.files_updated.push(rel_path.clone());
+                    continue;
                 }
-            }
-
-            if !abs_path.exists() {
-                // File doesn't exist locally -> import it
-                fs::write(&abs_path, &synced.content)
-                    .with_context(|| format!("failed to write {}", rel_path))?;
-                report.files_updated.push(rel_path.clone());
-                continue;
-            }
-
-            // File exists locally, check if it changed since last sync
-            let local_data = fs::read(&abs_path)
-                .with_context(|| format!("failed to read local {}", rel_path))?;
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to read local {}", rel_path));
+                }
+            };
             let local_hash = Self::sha256_hex(&local_data);
 
             // If remote content matches local, skip
@@ -355,47 +379,39 @@ impl ConfigSync {
             };
 
             if local_changed_since_sync {
-                // Both sides changed -> conflict
-                // Special handling for config.toml and mcp.json: attempt merge
-                if rel_path == "config.toml" {
-                    match Self::merge_toml(&local_data, &synced.content) {
-                        Ok(merged) => {
-                            fs::write(&abs_path, merged)
-                                .with_context(|| format!("failed to write merged {}", rel_path))?;
-                            report.files_updated.push(rel_path.clone());
-                        }
-                        Err(_) => {
-                            Self::keep_imported_copy(&abs_path, synced.content.as_bytes())?;
-                            report.conflicts.push(rel_path.clone());
-                        }
-                    }
-                } else if rel_path == "mcp.json" {
-                    match Self::merge_mcp_json(&local_data, &synced.content) {
-                        Ok(merged) => {
-                            fs::write(&abs_path, merged)
-                                .with_context(|| format!("failed to write merged {}", rel_path))?;
-                            report.files_updated.push(rel_path.clone());
-                        }
-                        Err(_) => {
-                            Self::keep_imported_copy(&abs_path, synced.content.as_bytes())?;
-                            report.conflicts.push(rel_path.clone());
-                        }
-                    }
+                let merged = match rel_path.as_str() {
+                    "config.toml" => Self::merge_toml(&local_data, &synced.content).ok(),
+                    "mcp.json" => Self::merge_mcp_json(&local_data, &synced.content).ok(),
+                    _ => None,
+                };
+                if let Some(merged) = merged {
+                    writes.push((rel_path.clone(), merged.into_bytes()));
+                    report.files_updated.push(rel_path.clone());
                 } else {
-                    Self::keep_imported_copy(&abs_path, synced.content.as_bytes())?;
+                    let copy = format!("{}.imported", rel_path);
+                    Self::import_path(&canonical_home, &copy)?;
+                    writes.push((copy, synced.content.as_bytes().to_vec()));
                     report.conflicts.push(rel_path.clone());
                 }
             } else {
-                // Local unchanged since last sync -> safe to overwrite
-                fs::write(&abs_path, &synced.content)
-                    .with_context(|| format!("failed to write {}", rel_path))?;
+                writes.push((rel_path.clone(), synced.content.as_bytes().to_vec()));
                 report.files_updated.push(rel_path.clone());
             }
         }
 
-        // Save updated manifest
-        let new_manifest = Self::compute_manifest(home)?;
-        Self::save_manifest(home, &new_manifest)?;
+        for (rel_path, contents) in writes {
+            let abs_path = Self::import_path(&canonical_home, &rel_path)?;
+            if let Some(parent) = abs_path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create directory for {}", rel_path))?;
+            }
+            fs::write(&abs_path, contents)
+                .with_context(|| format!("failed to write {}", rel_path))?;
+        }
+
+        Self::import_path(&canonical_home, Self::MANIFEST_FILE)?;
+        let new_manifest = Self::compute_manifest(&canonical_home)?;
+        Self::save_manifest(&canonical_home, &new_manifest)?;
 
         Ok(report)
     }
@@ -577,15 +593,366 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().join("home");
         fs::create_dir_all(&home).unwrap();
-        setup_home(&home);
 
-        let report = ConfigSync::import(&home, &bundle_with("memories/notes.md", "kept")).unwrap();
+        let report =
+            ConfigSync::import(&home, &bundle_with("memories/raw_memories.md", "kept")).unwrap();
 
-        assert_eq!(report.files_updated, vec!["memories/notes.md".to_string()]);
         assert_eq!(
-            fs::read_to_string(home.join("memories/notes.md")).unwrap(),
+            report.files_updated,
+            vec!["memories/raw_memories.md".to_string()]
+        );
+        assert_eq!(
+            fs::read_to_string(home.join("memories/raw_memories.md")).unwrap(),
             "kept"
         );
+    }
+
+    #[test]
+    fn unsupported_bundle_paths_are_rejected_without_creating_files() {
+        for path in [
+            "sessions.db",
+            "sync_manifest.json",
+            "memories/notes.md",
+            "memories/./raw_memories.md",
+            "memories//raw_memories.md",
+            "memories\\raw_memories.md",
+            "./config.toml",
+        ] {
+            let home = tempfile::tempdir().unwrap();
+            let bundle = bundle_with(path, "payload");
+
+            let error = ConfigSync::import(home.path(), &bundle).err().unwrap();
+
+            assert!(error.to_string().contains("unsupported path"), "{path}");
+            assert_eq!(fs::read_dir(home.path()).unwrap().count(), 0, "{path}");
+        }
+    }
+
+    #[test]
+    fn a_forged_matching_hash_is_rejected_before_other_files_are_written() {
+        let home = tempfile::tempdir().unwrap();
+        let local = home.path().join("INSTRUCTIONS.md");
+        fs::write(&local, "local instructions").unwrap();
+        let mut bundle = bundle_with("INSTRUCTIONS.md", "different remote instructions");
+        bundle.files.get_mut("INSTRUCTIONS.md").unwrap().sha256 =
+            ConfigSync::sha256_hex(b"local instructions");
+        bundle.files.extend(bundle_with("projects.json", "{}").files);
+
+        let error = ConfigSync::import(home.path(), &bundle).err().unwrap();
+
+        assert!(error.to_string().contains("checksum mismatch"));
+        assert_eq!(fs::read_to_string(local).unwrap(), "local instructions");
+        assert!(!home.path().join("projects.json").exists());
+        assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+        assert!(!home.path().join("INSTRUCTIONS.md.imported").exists());
+    }
+
+    #[test]
+    fn a_later_invalid_destination_prevents_earlier_bundle_writes() {
+        let home = tempfile::tempdir().unwrap();
+        let mut bundle = bundle_with("INSTRUCTIONS.md", "incoming instructions");
+        bundle.files.extend(bundle_with("projects.json", "{}").files);
+        let first = bundle.files.keys().next().unwrap().clone();
+        let last = bundle.files.keys().last().unwrap().clone();
+        fs::create_dir(home.path().join(&last)).unwrap();
+
+        let error = ConfigSync::import(home.path(), &bundle).err().unwrap();
+
+        assert!(error.to_string().contains("not a regular file"));
+        assert!(!home.path().join(first).exists());
+        assert!(home.path().join(last).is_dir());
+        assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+    }
+
+    #[test]
+    fn a_later_invalid_conflict_copy_prevents_earlier_planned_writes() {
+        let home = tempfile::tempdir().unwrap();
+        let mut bundle = bundle_with("INSTRUCTIONS.md", "incoming instructions");
+        bundle.files.extend(bundle_with("projects.json", "{}").files);
+        let first = bundle.files.keys().next().unwrap().clone();
+        let last = bundle.files.keys().last().unwrap().clone();
+        fs::write(home.path().join(&last), "local content").unwrap();
+        let copy = home.path().join(format!("{last}.imported"));
+        fs::create_dir(&copy).unwrap();
+
+        let error = ConfigSync::import(home.path(), &bundle).err().unwrap();
+
+        assert!(error.to_string().contains("not a regular file"));
+        assert!(!home.path().join(first).exists());
+        assert_eq!(
+            fs::read_to_string(home.path().join(last)).unwrap(),
+            "local content"
+        );
+        assert!(copy.is_dir());
+        assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+    }
+
+    #[test]
+    fn an_unresolved_home_is_not_created_by_import() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("missing-home");
+
+        let error = ConfigSync::import(&home, &bundle_with("INSTRUCTIONS.md", "incoming"))
+            .err()
+            .unwrap();
+
+        assert!(error.to_string().contains("failed to resolve sync home"));
+        assert!(!home.exists());
+    }
+
+    #[test]
+    fn a_non_directory_parent_is_rejected_before_import() {
+        let home = tempfile::tempdir().unwrap();
+        fs::write(home.path().join("memories"), "preserved").unwrap();
+
+        let error = ConfigSync::import(home.path(), &bundle_with("INSTRUCTIONS.md", "incoming"))
+            .err()
+            .unwrap();
+
+        assert!(error.to_string().contains("parent is not a directory"));
+        assert_eq!(
+            fs::read_to_string(home.path().join("memories")).unwrap(),
+            "preserved"
+        );
+        assert!(!home.path().join("INSTRUCTIONS.md").exists());
+        assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_parent_symlink_is_rejected_when_the_import_leaf_is_missing() {
+        use std::os::unix::fs::symlink;
+
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        symlink(outside.path(), home.path().join("memories")).unwrap();
+
+        let result = ConfigSync::import(
+            home.path(),
+            &bundle_with("memories/raw_memories.md", "incoming"),
+        );
+
+        assert!(result.is_err());
+        assert!(!outside.path().join("raw_memories.md").exists());
+        assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+        assert!(fs::symlink_metadata(home.path().join("memories"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_and_dangling_destination_symlinks_are_rejected() {
+        use std::os::unix::fs::symlink;
+
+        for target_exists in [false, true] {
+            let home = tempfile::tempdir().unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            let target = outside.path().join("instructions");
+            if target_exists {
+                fs::write(&target, "outside content").unwrap();
+            }
+            symlink(&target, home.path().join("INSTRUCTIONS.md")).unwrap();
+
+            let result = ConfigSync::import(
+                home.path(),
+                &bundle_with("INSTRUCTIONS.md", "incoming"),
+            );
+
+            assert!(result.is_err());
+            assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+            if target_exists {
+                assert_eq!(fs::read_to_string(target).unwrap(), "outside content");
+            } else {
+                assert!(!target.exists());
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn conflict_copy_symlinks_are_rejected_for_each_conflict_path() {
+        use std::os::unix::fs::symlink;
+
+        for path in ["INSTRUCTIONS.md", "config.toml", "mcp.json"] {
+            for target_exists in [false, true] {
+                let home = tempfile::tempdir().unwrap();
+                let outside = tempfile::tempdir().unwrap();
+                let target = outside.path().join("preserve");
+                if target_exists {
+                    fs::write(&target, "outside content").unwrap();
+                }
+                fs::write(home.path().join(path), "invalid local config {").unwrap();
+                let copy = home.path().join(format!("{path}.imported"));
+                symlink(&target, &copy).unwrap();
+                let mut bundle = bundle_with(path, "remote content");
+                bundle.files.extend(bundle_with("projects.json", "{}").files);
+
+                let result = ConfigSync::import(home.path(), &bundle);
+
+                assert!(result.is_err(), "{path}");
+                assert_eq!(
+                    fs::read_to_string(home.path().join(path)).unwrap(),
+                    "invalid local config {"
+                );
+                assert!(!home.path().join("projects.json").exists());
+                assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+                assert!(fs::symlink_metadata(copy).unwrap().file_type().is_symlink());
+                if target_exists {
+                    assert_eq!(fs::read_to_string(target).unwrap(), "outside content");
+                } else {
+                    assert!(!target.exists());
+                }
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_manifest_symlink_is_rejected_before_bundle_writes() {
+        use std::os::unix::fs::symlink;
+
+        for target_exists in [false, true] {
+            let home = tempfile::tempdir().unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            let target = outside.path().join("manifest.json");
+            let original = r#"{"device_id":"outside","last_sync":"previous","files":{}}"#;
+            if target_exists {
+                fs::write(&target, original).unwrap();
+            }
+            symlink(&target, home.path().join(ConfigSync::MANIFEST_FILE)).unwrap();
+
+            let result = ConfigSync::import(
+                home.path(),
+                &bundle_with("INSTRUCTIONS.md", "incoming"),
+            );
+
+            assert!(result.is_err());
+            assert!(!home.path().join("INSTRUCTIONS.md").exists());
+            if target_exists {
+                assert_eq!(fs::read_to_string(target).unwrap(), original);
+            } else {
+                assert!(!target.exists());
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_in_other_manifest_inputs_prevents_bundle_writes() {
+        use std::os::unix::fs::symlink;
+
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("mcp.json");
+        fs::write(&target, "outside content").unwrap();
+        symlink(&target, home.path().join("mcp.json")).unwrap();
+
+        let result = ConfigSync::import(
+            home.path(),
+            &bundle_with("INSTRUCTIONS.md", "incoming"),
+        );
+
+        assert!(result.is_err());
+        assert!(!home.path().join("INSTRUCTIONS.md").exists());
+        assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
+        assert_eq!(fs::read_to_string(target).unwrap(), "outside content");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_home_alias_uses_the_resolved_directory_for_files_and_manifest() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let alias = dir.path().join("alias");
+        fs::create_dir(&home).unwrap();
+        symlink(&home, &alias).unwrap();
+
+        let report =
+            ConfigSync::import(&alias, &bundle_with("INSTRUCTIONS.md", "incoming")).unwrap();
+
+        assert_eq!(report.files_updated, vec!["INSTRUCTIONS.md".to_string()]);
+        assert_eq!(
+            fs::read_to_string(home.join("INSTRUCTIONS.md")).unwrap(),
+            "incoming"
+        );
+        assert!(ConfigSync::load_manifest(&home).unwrap().is_some());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn identical_content_skips_an_unused_conflict_copy_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("preserve");
+        fs::write(&target, "outside content").unwrap();
+        fs::write(home.path().join("INSTRUCTIONS.md"), "same content").unwrap();
+        let copy = home.path().join("INSTRUCTIONS.md.imported");
+        symlink(&target, &copy).unwrap();
+
+        let report =
+            ConfigSync::import(home.path(), &bundle_with("INSTRUCTIONS.md", "same content"))
+                .unwrap();
+
+        assert_eq!(report.files_skipped, vec!["INSTRUCTIONS.md".to_string()]);
+        assert!(report.files_updated.is_empty());
+        assert!(report.conflicts.is_empty());
+        assert_eq!(fs::read_to_string(target).unwrap(), "outside content");
+        assert!(fs::symlink_metadata(copy).unwrap().file_type().is_symlink());
+    }
+
+    #[test]
+    fn a_regular_conflict_copy_keeps_the_existing_overwrite_behavior() {
+        let home = tempfile::tempdir().unwrap();
+        fs::write(home.path().join("INSTRUCTIONS.md"), "local instructions").unwrap();
+        fs::write(home.path().join("INSTRUCTIONS.md.imported"), "older import").unwrap();
+
+        let report = ConfigSync::import(
+            home.path(),
+            &bundle_with("INSTRUCTIONS.md", "newer import"),
+        )
+        .unwrap();
+
+        assert_eq!(report.conflicts, vec!["INSTRUCTIONS.md".to_string()]);
+        assert_eq!(
+            fs::read_to_string(home.path().join("INSTRUCTIONS.md")).unwrap(),
+            "local instructions"
+        );
+        assert_eq!(
+            fs::read_to_string(home.path().join("INSTRUCTIONS.md.imported")).unwrap(),
+            "newer import"
+        );
+    }
+
+    #[test]
+    fn successful_config_merges_do_not_validate_unused_conflict_copies() {
+        for (path, local, remote) in [
+            ("config.toml", "[local]\nkept = true\n", "[remote]\nadded = true\n"),
+            (
+                "mcp.json",
+                r#"{"mcpServers":{"local":{"command":"kept"}}}"#,
+                r#"{"mcpServers":{"remote":{"command":"added"}}}"#,
+            ),
+        ] {
+            let home = tempfile::tempdir().unwrap();
+            fs::write(home.path().join(path), local).unwrap();
+            let copy = home.path().join(format!("{path}.imported"));
+            fs::create_dir(&copy).unwrap();
+
+            let report = ConfigSync::import(home.path(), &bundle_with(path, remote)).unwrap();
+
+            assert_eq!(report.files_updated, vec![path.to_string()]);
+            assert!(report.conflicts.is_empty());
+            let merged = fs::read_to_string(home.path().join(path)).unwrap();
+            assert!(merged.contains("local"));
+            assert!(merged.contains("remote"));
+            assert!(copy.is_dir());
+        }
     }
 
     #[test]
