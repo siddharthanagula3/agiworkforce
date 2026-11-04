@@ -22,7 +22,11 @@ import { readCloudAgentRunAssistantText } from '@/lib/services/cloud-agent-run-s
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, type InteractiveCard } from '@agiworkforce/types';
-import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
+import type {
+  AgentEventEnvelope,
+  AgentEventStopReason,
+  AgentTaskState,
+} from '@agiworkforce/types/protocol';
 import type { ProcessedRequest } from './request-processor';
 import {
   canPersistAssistantTurn,
@@ -145,6 +149,7 @@ export function buildManagedAgentStream(
   let settled = false;
   let reportedFailure = false;
   let reportedFailureCode: string | undefined;
+  let lastStopReason: AgentEventStopReason | undefined;
   let lastTaskState: AgentTaskState | undefined;
   let terminalReported = false;
   const persistable = Boolean(input.userId) && canPersistAssistantTurn(input.processed);
@@ -406,10 +411,15 @@ export function buildManagedAgentStream(
         while (true) {
           const next = await input.generator.next();
           if (next.done) {
+            const outcome = reportedFailure
+              ? 'failed'
+              : lastStopReason === 'cancelled'
+                ? 'cancelled'
+                : 'completed';
             if (input.runJournal) {
               await flushJournal();
-              if (reportedFailure) {
-                await transitionJournal('failed');
+              if (outcome !== 'completed') {
+                await transitionJournal(outcome);
               } else if (
                 lastTaskState === undefined ||
                 lastTaskState === 'queued' ||
@@ -423,13 +433,15 @@ export function buildManagedAgentStream(
             await settle(
               reportedFailure
                 ? `${input.completionReason}_reported_failure`
-                : input.completionReason,
-              reportedFailure ? 'failed' : 'completed',
+                : outcome === 'cancelled'
+                  ? input.cancellationReason
+                  : input.completionReason,
+              outcome,
               reportedFailure
                 ? { outcome: 'failed', errorClass: reportedFailureCode }
-                : { outcome: 'completed' },
+                : { outcome },
             );
-            if (input.processed.managedUsage && !reportedFailure) {
+            if (input.processed.managedUsage && outcome === 'completed') {
               await markManagedUsageClientDelivered(input.processed.managedUsage).catch((error) => {
                 logger.warn(
                   { error, requestId: input.processed.requestId },
@@ -437,8 +449,8 @@ export function buildManagedAgentStream(
                 );
               });
             }
-            await persistTurn(reportedFailure);
-            await reportTerminal(reportedFailure ? 'failed' : 'completed');
+            await persistTurn(outcome !== 'completed');
+            await reportTerminal(outcome);
             controller.enqueue(encoder.encode(TERMINAL_EVENT));
             controller.close();
             await patchTurnSourceUrls();
@@ -467,8 +479,9 @@ export function buildManagedAgentStream(
               }
             }
           }
-          if (journal) {
-            for (const envelope of extractManagedAgentEventEnvelopes(next.value)) {
+          for (const envelope of extractManagedAgentEventEnvelopes(next.value)) {
+            if (envelope.event.type === 'stop') lastStopReason = envelope.event.reason;
+            if (journal) {
               const state = await journal.append(envelope);
               if (state !== undefined) lastTaskState = state;
             }

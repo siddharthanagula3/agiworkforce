@@ -130,6 +130,7 @@ import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-sear
 import { buildManagedAgentStream, managedAgentReportedFailureCode } from './managed-agent-stream';
 import type { ProcessedRequest } from './request-processor';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import type { AgentEvent } from '@agiworkforce/types/protocol';
 
 const processed = {
   provider: 'anthropic',
@@ -189,6 +190,37 @@ async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
       ],
     })}\n\n`,
   );
+  yield encoder.encode('data: [DONE]\n\n');
+}
+
+async function* canonicalTerminalGenerator(
+  terminalEvents: AgentEvent[],
+  onText?: () => void,
+): AsyncGenerator<Uint8Array> {
+  const encoder = new TextEncoder();
+  yield encoder.encode('data: {"choices":[{"delta":{"content":"Partial answer"}}]}\n\n');
+  onText?.();
+  for (const [sequence, event] of terminalEvents.entries()) {
+    yield encoder.encode(
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            delta: {
+              x_agent_event: {
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence,
+                emittedAtMs: 1_752_780_000_000,
+                event,
+              },
+            },
+            index: 0,
+          },
+        ],
+      })}\n\n`,
+    );
+  }
   yield encoder.encode('data: [DONE]\n\n');
 }
 
@@ -298,6 +330,174 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 describe('managed agent stream', () => {
+  it.each([false, true])('classifies canonical cancellation at EOF with journal=%s', async (journaled) => {
+    finalize.mockClear();
+    delivered.mockClear();
+    transitionCloudAgentRun.mockClear();
+    persistenceMocks.execute.mockClear();
+    const onTerminal = vi.fn(async () => undefined);
+    const usage = createObservedProviderUsage();
+    const stream = buildManagedAgentStream({
+      generator: canonicalTerminalGenerator(
+        [
+          { type: 'task-state-changed', taskId: 'turn-1', state: 'cancelled' },
+          { type: 'stop', reason: 'cancelled' },
+        ],
+        () => accumulateObservedProviderUsage(usage, { inputTokens: 120, outputTokens: 40 }),
+      ),
+      processed: {
+        ...processed,
+        estimatedPromptTokens: 3_000,
+        conversationId: '0190a000-0000-7000-8000-00000000000b',
+        assistantMessageId: '0190a000-0000-7000-8000-00000000000c',
+        conversationIsTemporary: false,
+      } as ProcessedRequest,
+      usage,
+      userId: 'user-1',
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+      onTerminal,
+      ...(journaled
+        ? {
+            runJournal: {
+              db: processed.managedUsage!.db,
+              userId: 'user-1',
+              runId: '0190a000-0000-7000-8000-000000000001',
+            },
+          }
+        : {}),
+    });
+
+    const output = await readAll(stream);
+
+    expect(output.match(/data: \[DONE\]/g)).toHaveLength(1);
+    expect(finalize).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        reason: 'client_cancelled_tool_loop',
+        cancelled: true,
+        attempt: { outcome: 'cancelled' },
+        usage: expect.objectContaining({ providerCalls: 1, inputTokens: 120, outputTokens: 40 }),
+      }),
+    );
+    expect(delivered).not.toHaveBeenCalled();
+    expect(onTerminal).toHaveBeenCalledExactlyOnceWith('cancelled');
+    expect(transitionCloudAgentRun).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ state: 'ready_for_review' }),
+    );
+    if (journaled) {
+      expect(transitionCloudAgentRun).toHaveBeenCalledWith(
+        processed.managedUsage!.db,
+        expect.objectContaining({ state: 'cancelled' }),
+      );
+    }
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    expect(JSON.parse(String((call?.[1] as unknown[] | undefined)?.[7]))).toMatchObject({
+      truncated: true,
+    });
+  });
+
+  it('estimates stopped text when canonical cancellation arrives before provider usage', async () => {
+    finalize.mockClear();
+    const usage = createObservedProviderUsage();
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator([{ type: 'stop', reason: 'cancelled' }]),
+        processed: { ...processed, estimatedPromptTokens: 3_000 } as ProcessedRequest,
+        usage,
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+      }),
+    );
+    expect(usage.providerCalls).toBe(1);
+    expect(usage.inputTokens).toBe(3_000);
+    expect(usage.outputTokens).toBeGreaterThan(0);
+    expect(finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ usage, attempt: { outcome: 'cancelled' } }),
+    );
+  });
+
+  it('preserves reported failure precedence over a canonical cancellation', async () => {
+    finalize.mockClear();
+    const onTerminal = vi.fn(async () => undefined);
+    async function* failedThenCancelled(): AsyncGenerator<Uint8Array> {
+      yield* failedGenerator();
+      yield* canonicalTerminalGenerator([{ type: 'stop', reason: 'cancelled' }]);
+    }
+    await readAll(
+      buildManagedAgentStream({
+        generator: failedThenCancelled(),
+        processed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        onTerminal,
+      }),
+    );
+    expect(finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ attempt: { outcome: 'failed', errorClass: undefined } }),
+    );
+    expect(onTerminal).toHaveBeenCalledExactlyOnceWith('failed');
+  });
+
+  it('preserves completion when the final canonical stop is end-turn', async () => {
+    delivered.mockClear();
+    const onTerminal = vi.fn(async () => undefined);
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator([{ type: 'stop', reason: 'end-turn' }]),
+        processed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        onTerminal,
+      }),
+    );
+    expect(delivered).toHaveBeenCalledOnce();
+    expect(onTerminal).toHaveBeenCalledExactlyOnceWith('completed');
+  });
+
+  it('keeps observed free-tier cost when canonical cancellation ends the stream', async () => {
+    settleFreeTrialRequest.mockClear();
+    const usage = createObservedProviderUsage();
+    addToolSpend(usage, 7_000);
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator([{ type: 'stop', reason: 'cancelled' }], () =>
+          accumulateObservedProviderUsage(usage, { inputTokens: 90, outputTokens: 30 }),
+        ),
+        processed: {
+          ...processed,
+          managedUsage: undefined,
+          freeTrial: {
+            kind: 'free_trial',
+            userId: 'free-user',
+            requestId: 'free-cancelled-request',
+          },
+        } as ProcessedRequest,
+        usage,
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+      }),
+    );
+    expect(settleFreeTrialRequest).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        outcome: 'cancelled',
+        attempt: { outcome: 'cancelled' },
+        cost: expect.objectContaining({
+          tokenMicrousd: observedProviderUsageLedgerMicrousd(usage, {
+            provider: 'anthropic',
+            model: 'claude-test',
+          }),
+          toolMicrousd: 7_000,
+        }),
+        usage: expect.objectContaining({ promptTokens: 90, completionTokens: 30, totalTokens: 120 }),
+      }),
+    );
+  });
+
   it('withholds the generator terminal event until durable settlement succeeds', async () => {
     events.length = 0;
     finalize.mockClear();
@@ -582,6 +782,7 @@ describe('managed agent stream', () => {
 
   it('persists canonical activity before making it visible and preserves an awaiting-input terminal', async () => {
     events.length = 0;
+    finalize.mockClear();
     appendCloudAgentEvents.mockClear();
     transitionCloudAgentRun.mockClear();
 
@@ -603,6 +804,9 @@ describe('managed agent stream', () => {
     expect(output).toContain('x_agent_event');
     expect(events[0]).toBe('event-persisted');
     expect(appendCloudAgentEvents).toHaveBeenCalledOnce();
+    expect(finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ cancelled: false, attempt: { outcome: 'completed' } }),
+    );
     expect(transitionCloudAgentRun).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ state: 'ready_for_review' }),
