@@ -9074,3 +9074,46 @@ on hold, and compatibility callers, derived indefinite memory-capability caching
 and billing refresh internals remain outside that migration. Existing local/offline
 settings and logout purge are preserved. All fixture sources are unexecuted; no
 universal settings or memory lifecycle closure is established.
+
+
+## WEB-ARTIFACT-SYNC-BASELINE-OWNERSHIP-01
+
+- **Severity/status:** Medium, OPEN. Source-derived availability and write-provenance
+  design dependency, independently read 2026-11-04; no observed loss or cross-account
+  database disclosure. No production correction, tests, database or network actions.
+- **Baseline mismatch:** `features/chat/stores/artifacts-store.ts` keeps
+  `_cloudArtifacts` in memory; `PersistedShape`/`buildPersistedShape` persist local
+  artifacts/versions/selection only. `use-artifact-cloud-sync.ts` clears that overlay
+  at effect setup and cleanup but reads/writes a durable per-origin/user cursor.
+  `/api/chat/sync` GET filters artifact `server_version > since`. After remount,
+  unchanged cloud-only artifacts, cloud edits and tombstones are not rehydrated from
+  the retained cursor. This is missing local baseline state, not server deletion.
+- **Reset is not a read-only repair:** `collectArtifactPushBatch` scans persisted
+  local artifacts, with Local/temporary/deleted/rejected-content filters but without
+  canonical owner or admitted dirty-intent tags. `cloudBaseVersion` uses zero when
+  the overlay is absent; restored cloud rows provide a current version. For eligible
+  differing local content considered newer by `supersedesCloudCopy`, reset can change
+  the first POST from base-zero conflict into an accepted optimistic update, skipping
+  its conflict notice. Existing `applyArtifactPushResult` also records conflict
+  versions and can enable a later automatic retry: reset does not create the underlying
+  provenance defect or uniquely cause eventual overwrite. Full-scan collection cannot
+  certify no-new-upload semantics for a baseline-only change.
+- **Progress and authority:** the shared endpoint also returns conversations/messages.
+  The service applies pages incrementally but returns the new cursor only on complete
+  success, with a 100-page cap. Repeated full replay can restart after late failure or
+  exhaust the cap and starve the following push. The hook captures user ID but uses
+  a supplied mutable token getter rather than admitted immutable session/workspace
+  authority. This is a qualified publication/ownership boundary, not proof of a
+  cross-workspace leak merely because the cursor key lacks a workspace suffix.
+- **Existing counterguards:** service `signal.throwIfAborted()` precedes applying
+  pull deltas; hook stopped/abort checks fence cleanup and push-result publication.
+  Server user/org RLS (tenancy migrations `0073`/`0110`) and conversation/message
+  parent checks remain. Optimistic version equality still gates updates. Logout
+  purges app storage; ordinary workspace transition purges cursor/artifact state and
+  reloads. These must not be weakened or described as newly missing controls.
+- **Design held:** establish coherent owner/admitted dirty intent and baseline/cursor
+  commit semantics, bounded partial-progress recovery, and explicit legacy migration
+  before changing replay. Do not adopt/delete legacy artifacts, silently disable
+  push or invent a retention/product policy. No simple cursor reset or implementation-
+  ready protocol is approved; runtime, large-account and cross-tab behavior remain
+  unverified.

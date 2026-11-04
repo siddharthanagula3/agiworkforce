@@ -3114,6 +3114,34 @@ successors and current publication; the images fixture mock is migrated. They do
 not establish real browser, database, storage cleanup or delivery behavior. No
 tests/checks or network/database actions were performed for this documentation.
 
+## Artifact sync baseline and write provenance remain a coordinated design dependency
+
+Source tracing adds OPEN `WEB-ARTIFACT-SYNC-BASELINE-OWNERSHIP-01` in the canonical
+registers, not a reconstructed production slice. `artifacts-store.ts` persists
+local artifacts/versions/selection but keeps the cloud overlay in memory.
+`use-artifact-cloud-sync.ts` clears that overlay on setup/cleanup while retaining a
+per-user durable cursor; `/api/chat/sync` only returns rows newer than that cursor.
+Unchanged cloud-only rows, edits and tombstones can therefore be absent after
+remount without any server deletion.
+
+Resetting the cursor alone is not safely read-only: the subsequent collector scans
+persisted local artifacts without admitted owner/dirty-intent provenance. A restored
+cloud version can turn an eligible base-zero conflict into a first accepted update
+and skip the conflict notice. Existing conflict handling can itself enable a later
+retry, so reset is not the origin or unique cause of this provenance risk. General
+sync also pages conversations/messages; the 100-page pull limit and cursor return
+only after complete success make repeated full replay/late failure a possible push
+starvation boundary. A coherent correction needs baseline/cursor commit and partial-
+progress semantics together with owner-bound dirty intent and explicit migration.
+
+Abort-before-delta publication, hook cleanup checks, server user/org RLS and
+parent/message/version guards remain real counterguards. Logout purge and normal
+workspace purge/hard reload remain unchanged; a cursor without workspace suffix
+alone does not demonstrate leakage. Mutable-token/admitted-workspace publication
+still needs qualified ownership design. No legacy adoption/deletion, silent push
+disabling, implementation-ready solution, observed loss or cross-account database
+disclosure is asserted. See the canonical finding for exact source boundaries.
+
 ## Reconstruction boundary
 
 Only the one hundred and eight accepted production slices traced above are represented as
