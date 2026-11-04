@@ -263,9 +263,52 @@ are unexecuted; aborted native rejection, callback/onDone throws and configurati
 disposal do not have dedicated regression coverage in this slice. No runtime
 acceptance or universal local-runtime safety guarantee is claimed.
 
+## Tier-1 Local system-instruction bridge
+
+Reconstructed commit: `459673e92992cb40a2e77c44b7cf7bee83b3ffd8`.
+The two-file slice changes `packages/platform/local-llm/src/tier1.ts` and its
+unexecuted regression source. `tier1Generate` previously removed system-role
+history from native message history without adding it to the instruction field.
+It now joins the explicit system prompt first, followed by ordered nonblank
+system-role history entries, separated by blank lines. Non-system history remains
+unchanged and separate from the current prompt.
+
+Both existing Apple Foundation Models and Android AICore calls receive the
+combined instruction string through their existing argument. Native bridges are
+unchanged: Apple already trims outer whitespace before constructing instructions;
+Android uses the existing prompt-prefix field. Preservation of nonblank string
+formatting at the JavaScript bridge is therefore not an end-to-end native
+formatting guarantee. This changes instruction delivery, not routing, privacy or
+native cancellation policy; regression sources and native execution remain
+unverified at runtime.
+
+## Live Voice tool admission and explicit rejection
+
+Reconstructed commit: `3e6e071b36cfa5d9a19dd58b0effa6211d8588ce`.
+The three-file slice changes `live-voice-tool-runner.ts` and two unexecuted
+regression sources. The tools route supplies the existing session's stored
+organization, conversation, model and offered tools, not caller-selected scope.
+
+Before tool dispatch, the runner verifies active membership for a non-null
+original organization through `resolveOrganizationMembershipId`, then queries
+the exact live conversation by ID, account owner and null-safe organization.
+Personal remains explicit null. Missing, deleted, moved or foreign conversation,
+or refused membership, yields a blocked response rather than treating absence as
+a temporary chat. Existing current-workspace database RLS remains in force:
+switching away can block access, not silently rescope this session to another
+workspace. This slice does not replace that database scope with stored scope.
+
+Existing deny precedence remains. A supplied rejected decision now declines even
+when the current tool policy says allow, rather than only when it says ask.
+Neither decision reaches tool execution. This is a before-tool-effects boundary,
+not before all writes: the route already touches the voice-session heartbeat and
+refusals retain audit writes. No SQL/RLS runtime behavior, continuous revocation
+across later awaits, persisted one-use approval payload, provider cancellation or
+voice settlement correction is established. Regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the seven accepted production slices traced above are represented as
+Only the nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
