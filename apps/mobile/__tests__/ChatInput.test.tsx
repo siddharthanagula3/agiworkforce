@@ -97,7 +97,12 @@ const mockSetDraft = mockDraftStore.setDraft;
 
 let capturedAttachmentPreviewProps:
   | {
-      attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
+      attachments: Array<{
+        id: string;
+        fileName: string;
+        pastedText?: string;
+        sendFailed?: boolean;
+      }>;
       onExpandPastedText?: (id: string) => void;
     }
   | undefined;
@@ -107,7 +112,12 @@ jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const { View } = require('react-native');
   return {
     AttachmentPreview: (props: {
-      attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
+      attachments: Array<{
+        id: string;
+        fileName: string;
+        pastedText?: string;
+        sendFailed?: boolean;
+      }>;
       onExpandPastedText?: (id: string) => void;
     }) => {
       capturedAttachmentPreviewProps = props;
@@ -473,10 +483,18 @@ describe('ChatInput', () => {
   });
 
   describe('attachment send failure', () => {
-    it('marks a staged attachment "Not sent" when the surface rejects the send', async () => {
-      const onSend = jest.fn().mockResolvedValue(false);
+    it.each([true, false])('preserves a rejected Cloud message and files when isOnline=%s', async (isOnline) => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      const onSend = jest.fn().mockImplementation(() => (isOnline ? Promise.resolve(false) : false));
       const attachRef = React.createRef<ChatInputHandle>();
-      const { getByLabelText, getByTestId } = renderInput({ onSend, attachRef });
+      const { getByLabelText, getByTestId } = renderInput({
+        onSend,
+        attachRef,
+        isOnline,
+        draftKey: 'cloud-conversation-1',
+        draftProvenance: { scope: 'cloud', ownerId: 'account-a' },
+      });
 
       await act(async () => {
         attachRef.current?.addAttachments([
@@ -501,6 +519,14 @@ describe('ChatInput', () => {
         ).toBe(true);
       });
       expect(onSend).toHaveBeenCalledTimes(1);
+      expect(onSend).toHaveBeenCalledWith('read this', [
+        expect.objectContaining({ id: 'a-1', uri: 'file:///doc.pdf' }),
+      ]);
+      expect(getByLabelText('Message input').props.value).toBe('read this');
+      expect(capturedAttachmentPreviewProps?.attachments).toEqual([
+        expect.objectContaining({ id: 'a-1', fileName: 'doc.pdf', sendFailed: true }),
+      ]);
+      expect(mockDraftStore.clearDraft).not.toHaveBeenCalled();
       const sentAttachments = onSend.mock.calls[0][1] as Array<Record<string, unknown>>;
       expect(sentAttachments[0]).not.toHaveProperty('sendFailed');
     });

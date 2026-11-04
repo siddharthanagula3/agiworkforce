@@ -636,6 +636,13 @@ export default function ChatScreen() {
           : undefined;
 
       if (!isOnline && conversationExecutionMode === 'cloud') {
+        if (attachments?.length) {
+          Alert.alert(
+            'Connect to send attachments',
+            'Attachments cannot be queued offline. Your message and files are still in the composer. Reconnect and send again.',
+          );
+          return false;
+        }
         if (!clerkUserId) {
           Alert.alert(
             'Sign in to queue this message',
