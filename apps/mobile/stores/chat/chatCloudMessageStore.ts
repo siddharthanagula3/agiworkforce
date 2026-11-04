@@ -5,6 +5,14 @@ import { providerForExecutionMode } from '@/src/features/chat/utils/conversation
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import type { ManagedCloudConversationHistoryStats } from '@agiworkforce/cloud-contracts';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import {
+  invalidateAllCloudHistoryLoads,
+  invalidateCloudHistoryLoad,
+  isCloudHistoryLoadCurrent,
+  publishCloudHistoryLoading,
+  recordCloudHistoryLeafWrite,
+  type CloudHistoryLoad,
+} from './cloudHistoryLoad';
 
 interface CloudMessageState {
   conversations: ConversationSummary[];
@@ -18,6 +26,7 @@ interface CloudMessageState {
   setCloudMessages: (conversationId: string, messages: ChatMessage[]) => void;
   deleteCloudMessage: (conversationId: string, messageId: string) => void;
   addCloudConversation: (conversation: ConversationSummary) => void;
+  admitCloudHistoryConversation: (conversation: ConversationSummary, load: CloudHistoryLoad) => void;
   patchCloudConversation: (id: string, patch: Partial<ConversationSummary>) => void;
   removeCloudConversation: (id: string) => void;
   /**
@@ -112,11 +121,23 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
               (dirtyIds.includes(conversation.id) || conversation.temporary === true) &&
               !snapshotIds.has(conversation.id),
           );
+          const conversations = [...dirtyOutsideSnapshot, ...normalized];
+          const retainedIds = new Set(conversations.map((conversation) => conversation.id));
+          for (const conversation of state.conversations) {
+            if (!retainedIds.has(conversation.id)) invalidateCloudHistoryLoad(conversation.id);
+          }
+          for (const conversation of cloudConversations) {
+            if (!localById.has(conversation.id)) invalidateCloudHistoryLoad(conversation.id);
+            else if (conversation.activeLeafMessageId !== undefined) {
+              recordCloudHistoryLeafWrite(conversation.id);
+            }
+          }
           return {
-            conversations: [...dirtyOutsideSnapshot, ...normalized],
+            conversations,
             ...(historyStats ? { historyStats } : {}),
           };
         });
+        publishCloudHistoryLoading();
       },
 
       setCloudMessages: (conversationId, messages) => {
@@ -139,6 +160,7 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       },
 
       addCloudConversation: (conversation) => {
+        invalidateCloudHistoryLoad(conversation.id);
         const normalized: ConversationSummary = {
           ...conversation,
           provider: conversation.provider ?? providerForExecutionMode('cloud'),
@@ -148,15 +170,42 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
           conversations: [normalized, ...state.conversations],
           messages: { ...state.messages, [normalized.id]: [] },
         }));
+        publishCloudHistoryLoading();
+      },
+
+      admitCloudHistoryConversation: (conversation, load) => {
+        set((state) => {
+          if (
+            conversation.id !== load.conversationId ||
+            !isCloudHistoryLoadCurrent(load) ||
+            state.conversations.some((candidate) => candidate.id === conversation.id)
+          ) {
+            return state;
+          }
+          return {
+            conversations: [
+              {
+                ...conversation,
+                provider: providerForExecutionMode('cloud'),
+                executionMode: 'cloud',
+              },
+              ...state.conversations,
+            ],
+          };
+        });
       },
 
       patchCloudConversation: (id, patch) => {
+        if (Object.prototype.hasOwnProperty.call(patch, 'activeLeafMessageId')) {
+          recordCloudHistoryLeafWrite(id);
+        }
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, ...patch } : c)),
         }));
       },
 
       removeCloudConversation: (id) => {
+        invalidateCloudHistoryLoad(id);
         set((state) => {
           const { [id]: _, ...remainingMessages } = state.messages;
           return {
@@ -164,11 +213,13 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
             messages: remainingMessages,
           };
         });
+        publishCloudHistoryLoading();
       },
 
       restoreCloudConversation: (conversation, index, messages) => {
         set((state) => {
           if (state.conversations.some((c) => c.id === conversation.id)) return state;
+          invalidateCloudHistoryLoad(conversation.id);
           const conversations = [...state.conversations];
           const at = Math.max(0, Math.min(index, conversations.length));
           conversations.splice(at, 0, conversation);
@@ -177,17 +228,25 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
             ...(messages ? { messages: { ...state.messages, [conversation.id]: messages } } : {}),
           };
         });
+        publishCloudHistoryLoading();
       },
 
       clearCloudData: () => {
+        invalidateAllCloudHistoryLoads();
         set({ conversations: [], messages: {}, historyStats: null });
+        publishCloudHistoryLoading();
       },
     }),
     {
       name: 'chat-message-store-cloud',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      merge: (persistedState, currentState) => {
+        invalidateAllCloudHistoryLoads();
+        return { ...currentState, ...(persistedState as Partial<CloudMessageState>) };
+      },
       onRehydrateStorage: () => (_state, error) => {
+        publishCloudHistoryLoading();
         if (error) console.warn('[chatCloudMessageStore] Hydration failed:', error);
       },
       partialize: (state) => {

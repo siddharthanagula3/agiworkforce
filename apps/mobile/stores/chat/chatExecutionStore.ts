@@ -1172,7 +1172,14 @@ function ensureLocalThreadParents(conversationId: string): ChatMessage[] {
 }
 
 function setLocalActiveLeaf(conversationId: string, messageId: string): void {
-  getConversationMessageStore(conversationId).setState((state) => ({
+  const store = getConversationMessageStore(conversationId);
+  if (store === useChatCloudMessageStore) {
+    useChatCloudMessageStore.getState().patchCloudConversation(conversationId, {
+      activeLeafMessageId: messageId,
+    });
+    return;
+  }
+  store.setState((state) => ({
     conversations: state.conversations.map((candidate) =>
       candidate.id === conversationId
         ? { ...candidate, activeLeafMessageId: messageId }
