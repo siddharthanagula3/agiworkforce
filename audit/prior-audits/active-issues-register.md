@@ -9041,10 +9041,25 @@ Legacy-only/offline cloud management now reports unavailable rather than using o
 auto-uploading old local facts. The migration does not read, adopt, rewrite or
 delete v1 backlog; existing logout purge is preserved without any promise to retain
 private data across logout. The unchanged standalone legacy store/editor and
-separate Local personal-context/project-only cache/read lane are outside the named
-consumer correction. Settings preference caches/queues remain a separate open
+separate Local personal-context/project-only cache/read lane were outside that
+management correction; the latter is narrowly corrected by `efdb7f495a` below.
+Settings preference caches/queues remain a separate open
 assessment, not claimed fixed here. Forget confirmation's recomputed target set
 also remains independently tracked. Fixture sources cover controller/hook and
 consumer boundaries with mocks, but all are unexecuted. No integrated browser,
 SDK, DB/RLS, deployment or memory action validation occurred; broader closure is
 not justified.
+
+
+Separate Local-context correction `efdb7f495aa5fa6e94cfae101078348e071c85c1`
+replaces the unowned project-only query cache with ephemeral canonical admitted
+owner/epoch/scope and per-project entries. Prefetch uses captured bearer plus
+explicit Personal/organization scope; late bodies cannot publish after retirement,
+and a current 401/403 clears its exact entry before parsing. Local sends read
+synchronously through their captured session, without token/network work; missing
+admission omits optional context rather than blocking Local execution. Same-owner
+offline context is deliberately retained without a hard read TTL, so this is not
+continuous server-policy freshness. Old query data is not adopted. This supersedes
+the Local cache/read exclusion only, not standalone legacy storage, logout purge,
+settings preference caches or forget-target semantics. Dedicated and compatibility
+fixture sources remain unexecuted; runtime/deployment acceptance stays OPEN.

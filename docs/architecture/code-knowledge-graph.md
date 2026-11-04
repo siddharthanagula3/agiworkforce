@@ -2700,7 +2700,8 @@ or offline cloud management is unavailable instead of silently using device fact
 Existing logout reset, persist clearing and storage purge remain unchanged; inert
 legacy use does not authorize preserving private bytes across logout. Standalone
 legacy editor behavior, settings preference caches and the separate Local
-personal-context/project-only cache/read lane are outside this correction.
+personal-context/project-only cache/read lane are outside this management slice;
+the following section traces the separate Local-context correction.
 `WEB-MEMORY-OWNER-BACKLOG-01` remains OPEN for residual scope and runtime acceptance;
 this is not whole-memory ownership closure or a fix for forget-target confirmation.
 
@@ -2711,9 +2712,45 @@ writes, acknowledged refresh failure and draft lifetimes with mocked boundaries.
 All remain unexecuted; no browser, database, SDK event-order or integrated runtime
 acceptance is established.
 
+## Optional Local personal context uses an ephemeral admitted-owner cache
+
+Accepted commit `efdb7f495aa5fa6e94cfae101078348e071c85c1` changes two production
+files and twenty-two fixture/support files. `local-personal-context.ts` replaces
+the project-only TanStack query entry with a dedicated in-memory owner cache and
+per-project entries. The existing WebChatPage prefetch hook now bootstraps canonical
+workspace admission through `useAccountWorkspaces`; only matching admitted
+session incarnation/epoch/scope creates a context owner. Observed retirement clears
+entries and retires requests. The old unowned query key is not adopted.
+
+Prefetch uses original RequestAuthority bearer transport, omitted cookies,
+`cache: no-store` and an explicit Personal or organization selector. Pending reads
+are coalesced per project; response/body publication checks the exact owner/entry.
+A current 401/403 clears only its captured project entry before any body parsing.
+Other unsuccessful/offline refreshes retain still-owned data. The existing
+60-second refresh staleness interval is not a hard read TTL: cached context remains
+available offline for the same admitted owner until retirement or explicit denial.
+This does not provide continuous server-policy revocation or cross-tab freshness.
+
+`useChatStream.ts` supplies only `authority?.session` to the synchronous cache
+reader. It checks that session's currentness and the admitted cache owner without
+fetching, obtaining a token or replacing canonical ownership. Missing, unavailable
+or uncertain admission omits optional instructions/memory while the Local turn
+still runs; existing temporary-chat personalization and memory-enabled selection
+remain. This is cache/read isolation, not a change to Local inference transport,
+server authorization, persisted legacy memory or logout purge. Settings preference
+caches remain a separate open lane; whole-memory closure is not claimed.
+
+Dedicated hook fixtures cover admission/bootstrap, explicit selectors, same-ID
+authority replacement, project deduplication, offline retention, denial-before-body,
+late JSON and unavailable/uncertain/anonymous states. Local-send fixture changes
+exercise omitted context. Seventeen page fixture wrappers and their helper supply
+canonical admission/query context for compatibility; they are not independent
+end-to-end SDK/navigation acceptance. All regression sources remain unexecuted;
+no browser/native, network, tests/checks or runtime validation was performed.
+
 ## Reconstruction boundary
 
-Only the ninety-nine accepted production slices traced above are represented as
+Only the one hundred accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
