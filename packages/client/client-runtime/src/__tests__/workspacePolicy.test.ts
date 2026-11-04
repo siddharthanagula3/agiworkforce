@@ -4,6 +4,8 @@ import {
   DEFAULT_WORKSPACE_CODE_CONTROLS,
   EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
   isWorkspaceCountryAllowed,
+  evaluateWorkspaceCodeAct,
+  resolveWorkspaceCodeControls,
   type EffectiveWorkspacePolicyResponse,
 } from '@agiworkforce/types';
 import {
@@ -29,7 +31,7 @@ function governed(revision: number, overrides: Record<string, boolean> = {}) {
       revision,
       blockingRules: [],
     },
-    code: null,
+    code: resolveWorkspaceCodeControls(DEFAULT_WORKSPACE_CODE_CONTROLS, []),
   } satisfies EffectiveWorkspacePolicyResponse;
 }
 
@@ -141,6 +143,70 @@ describe('workspace policy poller', () => {
     })!;
     expect(isWorkspaceFeatureEnabled(parsed, 'work')).toBe(false);
     expect(isWorkspaceCountryAllowed(parsed.controls!, 'US')).toBe(false);
+  });
+
+  it('keeps v2 country authority and feature advice while refusing ambiguous host and MCP lists', async () => {
+    const wire = governed(9, { hooks: false });
+    const legacy = {
+      ...wire,
+      schemaVersion: 2,
+      code: { ...wire.code, allowedMcpServers: ['reopened.example'], allowedEgressHosts: ['reopened.example'], allowGithubConnection: false },
+    };
+    const parsed = parseEffectiveWorkspacePolicy(legacy)!;
+    expect(isWorkspaceCountryAllowed(parsed.controls!, null)).toBe(true);
+    expect(isWorkspaceFeatureEnabled(parsed, 'hooks')).toBe(false);
+    expect(parsed.code?.allowGithubConnection).toBe(false);
+    expect(evaluateWorkspaceCodeAct(parsed.code, { act: 'use_mcp_server', server: 'reopened.example' }).allowed).toBe(false);
+    expect(evaluateWorkspaceCodeAct(parsed.code, { act: 'reach_host', host: 'reopened.example' }).allowed).toBe(false);
+    const cache = memoryCache(JSON.stringify({ etag: '"v2"', policy: legacy }));
+    const request = vi.fn().mockResolvedValue(json(wire, '"v3"'));
+    const poller = createWorkspacePolicyPoller({ cache, request });
+    await poller.refresh();
+    expect(request.mock.calls[0]?.[0]).toEqual({});
+    expect(poller.getSnapshot().policy?.code?.mcpRestrictionActive).toBe(false);
+  });
+
+  it('retains current active-empty host and MCP denial through serialization and 304', async () => {
+    const wire = governed(10);
+    wire.code.mcpRestrictionActive = true;
+    wire.code.egressRestrictionActive = true;
+    const cache = memoryCache(JSON.stringify({ etag: '"v3"', policy: wire }));
+    const request = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
+    const poller = createWorkspacePolicyPoller({ cache, request });
+    await poller.refresh();
+    const code = poller.getSnapshot().policy!.code;
+    expect(evaluateWorkspaceCodeAct(code, { act: 'use_mcp_server' }).allowed).toBe(false);
+    expect(evaluateWorkspaceCodeAct(code, { act: 'reach_host', host: 'any.example' }).allowed).toBe(false);
+    expect(code?.allowGithubConnection).toBe(true);
+  });
+
+  it('trusts null Code controls only for an explicitly unscoped current response', () => {
+    const personal = { ...governed(1), organizationId: null, governed: false, controls: null, code: null };
+    expect(parseEffectiveWorkspacePolicy(personal)?.code).toBeNull();
+    for (const wire of [
+      { ...personal, organizationId: ORG },
+      { ...personal, code: undefined },
+      { ...personal, schemaVersion: 2 },
+    ]) {
+      expect(parseEffectiveWorkspacePolicy(wire)?.code?.mcpRestrictionActive).toBe(true);
+      expect(parseEffectiveWorkspacePolicy(wire)?.code?.egressRestrictionActive).toBe(true);
+    }
+  });
+
+  it('fails closed missing, malformed and future Code projections without dropping other advice', () => {
+    const wire = governed(11, { hooks: false });
+    for (const code of [null, {}, { ...wire.code, allowedMcpServers: null, allowedEgressHosts: 42 }, { ...wire.code, mcpRestrictionActive: undefined, egressRestrictionActive: undefined }]) {
+      const parsed = parseEffectiveWorkspacePolicy({ ...wire, code })!;
+      expect(parsed.code).not.toBeNull();
+      expect(isWorkspaceFeatureEnabled(parsed, 'hooks')).toBe(false);
+      expect(evaluateWorkspaceCodeAct(parsed.code, { act: 'use_mcp_server' }).allowed).toBe(false);
+      expect(evaluateWorkspaceCodeAct(parsed.code, { act: 'reach_host', host: 'any.example' }).allowed).toBe(false);
+    }
+    const future = parseEffectiveWorkspacePolicy({ ...wire, schemaVersion: 999 })!;
+    expect(evaluateWorkspaceCodeAct(future.code, { act: 'use_mcp_server' }).allowed).toBe(false);
+    const inconsistent = parseEffectiveWorkspacePolicy({ ...wire, code: { ...wire.code, allowedMcpServers: ['only.example'], allowedEgressHosts: ['only.example'] } })!;
+    expect(evaluateWorkspaceCodeAct(inconsistent.code, { act: 'use_mcp_server', server: 'only.example' }).allowed).toBe(true);
+    expect(evaluateWorkspaceCodeAct(inconsistent.code, { act: 'reach_host', host: 'other.example' }).allowed).toBe(false);
   });
 
   beforeEach(() => {

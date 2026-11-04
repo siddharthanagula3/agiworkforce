@@ -400,19 +400,33 @@ export function resolveWorkspaceControls(
   };
 }
 
-export interface EffectiveWorkspaceCodeControls extends WorkspaceCodeControls {
+export interface WorkspaceCodeHostRestrictions {
+  mcpRestrictionActive: boolean;
+  egressRestrictionActive: boolean;
+}
+
+type WorkspaceCodeControlsWithRestrictions = WorkspaceCodeControls &
+  Partial<WorkspaceCodeHostRestrictions>;
+
+export interface EffectiveWorkspaceCodeControls
+  extends WorkspaceCodeControls, WorkspaceCodeHostRestrictions {
   appliedOverrideIds: readonly string[];
   revision: number;
   blockingRules: readonly WorkspacePolicyBlockingRule[];
 }
 
 function narrowCodeWithLayer(
-  base: WorkspaceCodeControls,
-  layer: WorkspaceCodeControlsLayer,
+  base: WorkspaceCodeControlsWithRestrictions,
+  layer: WorkspaceCodeControlsLayer & Partial<WorkspaceCodeHostRestrictions>,
   origin: LayerOrigin,
   rules: WorkspacePolicyBlockingRule[],
-): WorkspaceCodeControls {
-  const next: WorkspaceCodeControls = { ...base };
+): WorkspaceCodeControls & WorkspaceCodeHostRestrictions {
+  const next = {
+    ...base,
+    mcpRestrictionActive: base.mcpRestrictionActive === true || base.allowedMcpServers.length > 0,
+    egressRestrictionActive:
+      base.egressRestrictionActive === true || base.allowedEgressHosts.length > 0,
+  };
 
   for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
     if (layer[key] !== false || next[key] === false) continue;
@@ -420,14 +434,18 @@ function narrowCodeWithLayer(
     rules.push({ control: 'code', ...origin, codeControl: key, reason: 'code_control_disabled' });
   }
 
-  for (const key of ['allowedMcpServers', 'allowedEgressHosts'] as const) {
-    const allowed = layer[key];
-    if (!allowed || allowed.length === 0) continue;
+  for (const [key, activeKey] of [
+    ['allowedMcpServers', 'mcpRestrictionActive'],
+    ['allowedEgressHosts', 'egressRestrictionActive'],
+  ] as const) {
+    const allowed = layer[key] ?? [];
+    if (layer[activeKey] !== true && allowed.length === 0) continue;
     const current = next[key];
-    const merged =
-      current.length === 0 ? [...allowed] : current.filter((entry) => allowed.includes(entry));
-    if (merged.length === current.length) continue;
+    const active = next[activeKey];
+    const merged = active ? current.filter((entry) => allowed.includes(entry)) : [...allowed];
+    next[activeKey] = true;
     next[key] = merged;
+    if (active && merged.length === current.length) continue;
     rules.push({ control: 'code', ...origin, codeControl: key, reason: 'code_control_narrowed' });
   }
 
@@ -451,7 +469,7 @@ function narrowCodeWithLayer(
 // Same narrow-only contract as resolveWorkspaceControls: a role, group, project,
 // device or person layer may take a Code connection away and never give one back.
 export function resolveWorkspaceCodeControls(
-  base: WorkspaceCodeControls,
+  base: WorkspaceCodeControlsWithRestrictions,
   overrides: readonly WorkspacePolicyOverride[],
   revision = 0,
 ): EffectiveWorkspaceCodeControls {
@@ -514,7 +532,7 @@ export interface WorkspaceCodePolicyResponse {
 }
 
 export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/policy/effective';
-export const EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION = 2;
+export const EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION = 3;
 
 // A client cannot honour a control it is never told about, so the effective
 // answer carries the Code controls beside the rest of the policy.
@@ -570,12 +588,10 @@ const CODE_ACT_TOGGLES: Readonly<
 });
 
 /**
- * An empty allow list is "the workspace added no rule", never deny everything,
- * which is the state every organization that has not touched these controls is
- * in. Only a control an administrator explicitly turned off refuses.
+ * Configured empty lists add no rule; an active empty effective intersection denies all.
  */
 export function evaluateWorkspaceCodeAct(
-  controls: WorkspaceCodeControls | null,
+  controls: WorkspaceCodeControlsWithRestrictions | null,
   act: WorkspaceCodeAct,
 ): WorkspaceCodeDecision {
   if (!controls) return CODE_ACT_ALLOWED;
@@ -596,8 +612,9 @@ export function evaluateWorkspaceCodeAct(
 
     case 'use_mcp_server': {
       if (!controls.allowMcpServers) return codeControlOff('allowMcpServers');
-      if (controls.allowedMcpServers.length === 0) return CODE_ACT_ALLOWED;
-      if (isCodeHostAllowed(controls.allowedMcpServers, act.server)) return CODE_ACT_ALLOWED;
+      if (controls.allowedMcpServers.length === 0) {
+        if (controls.mcpRestrictionActive !== true) return CODE_ACT_ALLOWED;
+      } else if (isCodeHostAllowed(controls.allowedMcpServers, act.server)) return CODE_ACT_ALLOWED;
       return {
         allowed: false,
         code: 'code_mcp_server_not_allowed',
@@ -608,8 +625,9 @@ export function evaluateWorkspaceCodeAct(
     }
 
     case 'reach_host': {
-      if (controls.allowedEgressHosts.length === 0) return CODE_ACT_ALLOWED;
-      if (isCodeHostAllowed(controls.allowedEgressHosts, act.host)) return CODE_ACT_ALLOWED;
+      if (controls.allowedEgressHosts.length === 0) {
+        if (controls.egressRestrictionActive !== true) return CODE_ACT_ALLOWED;
+      } else if (isCodeHostAllowed(controls.allowedEgressHosts, act.host)) return CODE_ACT_ALLOWED;
       return {
         allowed: false,
         code: 'code_host_not_allowed',

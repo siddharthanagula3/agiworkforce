@@ -16,6 +16,7 @@ import {
   builtInRoleKeyForMembershipRole,
   clampReasoningEffort,
   evaluateAuthorization,
+  evaluateWorkspaceCodeAct,
   isCodeHostAllowed,
   isWorkspaceCountryAllowed,
   isGrantableOrganizationPermission,
@@ -454,6 +455,54 @@ describe('organization Code controls', () => {
     expect(
       resolved.blockingRules.filter((rule) => rule.codeControl === 'sessionRetentionDays'),
     ).toHaveLength(2);
+  });
+
+  it('keeps disjoint host and MCP restrictions closed through later layers and re-resolution', () => {
+    const base = {
+      ...DEFAULT_WORKSPACE_CODE_CONTROLS,
+      allowedMcpServers: ['first.example'],
+      allowedEgressHosts: ['first.example'],
+    };
+    const resolved = resolveWorkspaceCodeControls(base, [
+      override('group', 'g-1', {
+        code: { allowedMcpServers: ['second.example'], allowedEgressHosts: ['second.example'] },
+      }),
+      override('user', 'u-1', {
+        code: { allowedMcpServers: ['third.example'], allowedEgressHosts: ['third.example'] },
+      }),
+    ]);
+    for (const policy of [resolved, resolveWorkspaceCodeControls(resolved, [])]) {
+      expect(policy.allowedMcpServers).toEqual([]);
+      expect(policy.allowedEgressHosts).toEqual([]);
+      expect(policy.mcpRestrictionActive).toBe(true);
+      expect(policy.egressRestrictionActive).toBe(true);
+      expect(policy.allowMcpServers).toBe(true);
+      for (const host of [undefined, 'first.example', 'second.example', 'third.example']) {
+        expect(evaluateWorkspaceCodeAct(policy, { act: 'use_mcp_server', server: host }).allowed).toBe(false);
+        expect(evaluateWorkspaceCodeAct(policy, { act: 'reach_host', host }).allowed).toBe(false);
+      }
+      expect(evaluateWorkspaceCodeAct(policy, { act: 'connect_github' }).allowed).toBe(true);
+    }
+    expect(base.allowedMcpServers).toEqual(['first.example']);
+    expect(resolved.blockingRules).toContainEqual(expect.objectContaining({
+      subjectId: 'g-1', codeControl: 'allowedMcpServers', reason: 'code_control_narrowed',
+    }));
+  });
+
+  it('distinguishes unrestricted defaults from an active empty effective restriction', () => {
+    const defaults = resolveWorkspaceCodeControls(DEFAULT_WORKSPACE_CODE_CONTROLS, []);
+    expect(defaults.mcpRestrictionActive).toBe(false);
+    expect(defaults.egressRestrictionActive).toBe(false);
+    expect(evaluateWorkspaceCodeAct(defaults, { act: 'use_mcp_server' }).allowed).toBe(true);
+    expect(evaluateWorkspaceCodeAct(defaults, { act: 'reach_host' }).allowed).toBe(true);
+    const single = resolveWorkspaceCodeControls({
+      ...DEFAULT_WORKSPACE_CODE_CONTROLS, allowedMcpServers: ['*.example.com'],
+    }, [override('user', 'u-1', { code: { allowedMcpServers: [] } })]);
+    expect(single.mcpRestrictionActive).toBe(true);
+    expect(evaluateWorkspaceCodeAct(single, { act: 'use_mcp_server', server: 'example.com' }).allowed).toBe(true);
+    expect(evaluateWorkspaceCodeAct(single, { act: 'use_mcp_server', server: 'elsewhere.test' }).allowed).toBe(false);
+    expect(WORKSPACE_CODE_CONTROL_KEYS).not.toContain('mcpRestrictionActive');
+    expect(WORKSPACE_CODE_CONTROL_KEYS).not.toContain('egressRestrictionActive');
   });
 
   it('reads an empty allow list as no rule and a populated one as exhaustive', () => {

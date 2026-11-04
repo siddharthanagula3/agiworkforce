@@ -3092,7 +3092,7 @@ mod tests {
     #[test]
     fn workspace_mcp_slash_lists_refusals_when_no_server_connected() {
         crate::cloud::workspace_policy::with_test_policy(
-            serde_json::json!({"code": {"allowMcpServers": false}}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
             || {
                 crate::mcp::with_test_configs(
                     std::collections::HashMap::from([(

@@ -20,19 +20,22 @@ const CACHE_KEY_ACCOUNT: &str = "cache-seal";
 const SEALED_POLICY_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
 const CLOCK_SKEW_SECS: u64 = 5 * 60;
 const CACHE_VERSION: u32 = 2;
+const EFFECTIVE_POLICY_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EffectiveWorkspacePolicy {
+    #[serde(default, deserialize_with = "deserialize_optional_authority")]
+    schema_version: Option<u32>,
     #[serde(default)]
     organization_id: Option<String>,
     #[serde(default)]
     revision: u64,
-    #[serde(default)]
-    governed: bool,
+    #[serde(default, deserialize_with = "deserialize_optional_authority")]
+    governed: Option<bool>,
     #[serde(default)]
     controls: Option<WorkspaceControls>,
-    #[serde(default)]
+    #[serde(default = "unknown_code_controls", deserialize_with = "deserialize_code_controls")]
     code: Option<WorkspaceCodeControls>,
 }
 
@@ -42,7 +45,33 @@ struct WorkspaceCodeControls {
     #[serde(default)]
     allow_mcp_servers: Option<bool>,
     #[serde(default)]
-    allowed_mcp_servers: Vec<String>,
+    allowed_mcp_servers: Option<Vec<String>>,
+    #[serde(default)]
+    mcp_restriction_active: Option<bool>,
+}
+
+fn deserialize_optional_authority<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).ok())
+}
+
+fn unknown_code_controls() -> Option<WorkspaceCodeControls> {
+    Some(WorkspaceCodeControls::default())
+}
+
+fn deserialize_code_controls<'de, D>(deserializer: D) -> Result<Option<WorkspaceCodeControls>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(deserializer)?;
+    if value.is_null() {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::from_value(value).unwrap_or_default()))
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -70,6 +99,21 @@ struct CachedPolicy {
 }
 
 impl EffectiveWorkspacePolicy {
+    fn signed_out() -> Self {
+        Self { schema_version: Some(EFFECTIVE_POLICY_SCHEMA_VERSION), governed: Some(false), ..Self::default() }
+    }
+
+    fn mcp_policy_known(&self) -> bool {
+        self.schema_version == Some(EFFECTIVE_POLICY_SCHEMA_VERSION)
+            && self.governed.is_some()
+            && match self.code.as_ref() {
+                Some(code) => code.allow_mcp_servers.is_some()
+                    && code.allowed_mcp_servers.is_some()
+                    && code.mcp_restriction_active.is_some(),
+                None => self.governed == Some(false) && self.organization_id.is_none(),
+            }
+    }
+
     fn feature_enabled(&self, feature: &str) -> bool {
         self.controls
             .as_ref()
@@ -271,7 +315,7 @@ fn with_current<R>(read: impl FnOnce(Option<&EffectiveWorkspacePolicy>) -> R) ->
     let context = CloudClient::policy_context()?;
     context.with_current(|| {
         let policy = if context.jwt.is_none() {
-            Some(EffectiveWorkspacePolicy::default())
+            Some(EffectiveWorkspacePolicy::signed_out())
         } else {
             context.owner.as_deref().and_then(current_policy)
         };
@@ -279,8 +323,8 @@ fn with_current<R>(read: impl FnOnce(Option<&EffectiveWorkspacePolicy>) -> R) ->
     }).ok_or_else(account_changed)
 }
 
-fn policy_known() -> bool {
-    with_current(|policy| policy.is_some()).unwrap_or(false)
+fn mcp_policy_known() -> bool {
+    with_current(|policy| policy.is_some_and(EffectiveWorkspacePolicy::mcp_policy_known)).unwrap_or(false)
 }
 
 /// A switch a signed-in account's administrator might have turned off counts
@@ -295,11 +339,11 @@ fn feature_allowed(policy: Option<&EffectiveWorkspacePolicy>, feature: &str) -> 
 }
 
 pub fn governed() -> bool {
-    with_current(|policy| policy.is_none_or(|policy| policy.governed)).unwrap_or(true)
+    with_current(|policy| policy.is_none_or(|policy| policy.governed == Some(true))).unwrap_or(true)
 }
 
 pub async fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
-    if !policy_known() {
+    if !mcp_policy_known() {
         let _ = tokio::time::timeout(FIRST_FETCH_WAIT, refresh(PrivacyMode::Managed)).await;
     }
     cached_mcp_server_refusal(name, url)
@@ -310,6 +354,9 @@ pub fn cached_mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String
         let Some(policy) = policy else {
             return Some(unread_mcp_policy_refusal(name));
         };
+        if !policy.mcp_policy_known() {
+            return Some(unread_mcp_policy_refusal(name));
+        }
         policy
             .code
             .as_ref()
@@ -342,14 +389,15 @@ fn code_controls_refusal(
             "MCP server '{name}' was not started: your workspace administrator has turned MCP servers off"
         ));
     }
-    if code.allowed_mcp_servers.is_empty() {
+    let allowed = code.allowed_mcp_servers.as_deref().unwrap_or(&[]);
+    if allowed.is_empty() && code.mcp_restriction_active != Some(true) {
         return None;
     }
     let host = url
         .and_then(|url| reqwest::Url::parse(url).ok())
         .and_then(|url| url.host_str().map(str::to_ascii_lowercase));
     match host {
-        Some(host) if host_allowed(&code.allowed_mcp_servers, &host) => None,
+        Some(host) if host_allowed(allowed, &host) => None,
         Some(host) => Some(format!(
             "MCP server '{name}' was not started: your workspace allows only listed MCP hosts, and {host} is not one of them"
         )),
@@ -404,6 +452,64 @@ mod sealed_cache_tests {
     }
 
     #[test]
+    fn policy_semantics_survive_serialization_and_sealing_without_trusting_legacy_mcp() {
+        for version in [None, Some(2), Some(EFFECTIVE_POLICY_SCHEMA_VERSION), Some(999)] {
+            let wire = serde_json::json!({
+                "schemaVersion": version,
+                "governed": true,
+                "controls": {"featureAccess": {"hooks": false}},
+                "code": {"allowMcpServers": true, "allowedMcpServers": [], "mcpRestrictionActive": true}
+            });
+            let fresh: EffectiveWorkspacePolicy = serde_json::from_value(wire).unwrap();
+            let serialized = serde_json::to_string(&fresh).unwrap();
+            let cached = sealed("user_1", &serialized);
+            let restored = open_sealed(&KEY, "user_1", &cached, NOW, &newest_of(&cached)).unwrap();
+            assert!(!restored.feature_enabled("hooks"));
+            assert_eq!(restored.schema_version, version);
+            assert_eq!(restored.mcp_policy_known(), version == Some(EFFECTIVE_POLICY_SCHEMA_VERSION));
+            assert_eq!(restored.code.as_ref().unwrap().mcp_restriction_active, Some(true));
+            assert!(code_controls_refusal(restored.code.as_ref().unwrap(), "local", None).is_some());
+        }
+    }
+
+    #[test]
+    fn malformed_mcp_and_schema_authority_preserves_feature_denials_through_sealing() {
+        let valid_code = serde_json::json!({
+            "allowMcpServers": true, "allowedMcpServers": [], "mcpRestrictionActive": false
+        });
+        for malformed in [
+            serde_json::json!(42),
+            serde_json::json!({"allowMcpServers": "yes", "allowedMcpServers": [], "mcpRestrictionActive": false}),
+            serde_json::json!({"allowMcpServers": true, "allowedMcpServers": [42], "mcpRestrictionActive": false}),
+            serde_json::json!({"allowMcpServers": true, "allowedMcpServers": [], "mcpRestrictionActive": "true"}),
+        ] {
+            let wire = serde_json::json!({
+                "schemaVersion": 3, "governed": false,
+                "controls": {"featureAccess": {"hooks": false}}, "code": malformed
+            });
+            let fresh: EffectiveWorkspacePolicy = serde_json::from_value(wire).unwrap();
+            assert!(!fresh.mcp_policy_known());
+            assert!(!fresh.feature_enabled("hooks"));
+            let cached = sealed("user_1", &serde_json::to_string(&fresh).unwrap());
+            let restored = open_sealed(&KEY, "user_1", &cached, NOW, &newest_of(&cached)).unwrap();
+            assert!(!restored.mcp_policy_known());
+            assert!(!restored.feature_enabled("hooks"));
+        }
+        for wire in [
+            serde_json::json!({"schemaVersion": "3", "governed": true, "code": valid_code}),
+            serde_json::json!({"schemaVersion": 3, "governed": "false", "code": null}),
+            serde_json::json!({"schemaVersion": 3, "governed": "false", "code": valid_code}),
+            serde_json::json!({"schemaVersion": 3, "governed": false}),
+        ] {
+            let mut wire = wire;
+            wire["controls"] = serde_json::json!({"featureAccess": {"hooks": false}});
+            let policy: EffectiveWorkspacePolicy = serde_json::from_value(wire).unwrap();
+            assert!(!policy.mcp_policy_known());
+            assert!(!policy.feature_enabled("hooks"));
+        }
+    }
+
+    #[test]
     fn hmac_matches_the_rfc_4231_vector() {
         let key = [0x0bu8; 20];
         assert_eq!(
@@ -419,7 +525,7 @@ mod sealed_cache_tests {
             r#"{"governed":true,"code":{"allowMcpServers":false}}"#,
         );
         let policy = open_sealed(&KEY, "user_1", &cached, NOW, &newest_of(&cached)).expect("opens");
-        assert!(policy.governed);
+        assert_eq!(policy.governed, Some(true));
         assert_eq!(
             policy.code.and_then(|code| code.allow_mcp_servers),
             Some(false)
@@ -520,8 +626,49 @@ mod mcp_control_tests {
     fn allow_list(hosts: &[&str]) -> WorkspaceCodeControls {
         WorkspaceCodeControls {
             allow_mcp_servers: Some(true),
-            allowed_mcp_servers: hosts.iter().map(|host| host.to_string()).collect(),
+            allowed_mcp_servers: Some(hosts.iter().map(|host| host.to_string()).collect()),
+            mcp_restriction_active: Some(!hosts.is_empty()),
         }
+    }
+
+    #[test]
+    fn active_empty_refuses_local_remote_and_missing_hosts() {
+        let code = WorkspaceCodeControls {
+            allow_mcp_servers: Some(true),
+            allowed_mcp_servers: Some(Vec::new()),
+            mcp_restriction_active: Some(true),
+        };
+        for url in [None, Some("invalid"), Some("https://any.example/mcp")] {
+            assert!(code_controls_refusal(&code, "restricted", url).is_some());
+        }
+        let mut nonempty = allow_list(&["only.example"]);
+        nonempty.mcp_restriction_active = Some(false);
+        assert!(code_controls_refusal(&nonempty, "other", Some("https://other.example")).is_some());
+    }
+
+    #[test]
+    fn mcp_authority_is_distinct_from_feature_policy_presence() {
+        for wire in [
+            serde_json::json!({"schemaVersion": 2, "code": {"allowMcpServers": true, "allowedMcpServers": ["reopened.example"]}}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": null}),
+            serde_json::json!({"schemaVersion": 3}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": true, "mcpRestrictionActive": false}}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": true, "allowedMcpServers": []}}),
+            serde_json::json!({"schemaVersion": 999, "code": {"allowMcpServers": true, "allowedMcpServers": [], "mcpRestrictionActive": false}}),
+        ] {
+            with_test_policy(wire, || {
+                assert!(!mcp_policy_known());
+                assert!(cached_mcp_server_refusal("local", None).is_some());
+                assert!(feature_enabled("hooks"));
+            });
+        }
+        let signed_out = EffectiveWorkspacePolicy::signed_out();
+        assert!(signed_out.mcp_policy_known());
+        assert!(signed_out.feature_enabled("hooks"));
+        with_test_policy(serde_json::to_value(signed_out).unwrap(), || {
+            assert!(mcp_policy_known());
+            assert!(cached_mcp_server_refusal("local", None).is_none());
+        });
     }
 
     #[test]
@@ -546,7 +693,8 @@ mod mcp_control_tests {
     fn servers_off_refuses_everything_and_no_list_allows_everything() {
         let off = WorkspaceCodeControls {
             allow_mcp_servers: Some(false),
-            allowed_mcp_servers: Vec::new(),
+            allowed_mcp_servers: Some(Vec::new()),
+            mcp_restriction_active: Some(false),
         };
         assert!(code_controls_refusal(&off, "local", None).is_some());
         let open = WorkspaceCodeControls::default();
@@ -756,11 +904,11 @@ mod scoped_mcp_policy_tests {
     #[test]
     fn workspace_mcp_test_policy_is_scoped_and_restored_after_panics() {
         with_test_policy(
-            serde_json::json!({"code": {"allowMcpServers": true}}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": true, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
             || {
                 let result = std::panic::catch_unwind(|| {
                     with_test_policy(
-                        serde_json::json!({"code": {"allowMcpServers": false}}),
+                        serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
                         || {
                             assert!(cached_mcp_server_refusal("fixture", None).is_some());
                             panic!("fixture unwind");
@@ -782,7 +930,7 @@ mod scoped_mcp_policy_tests {
                 let barrier = barrier.clone();
                 std::thread::spawn(move || {
                     with_test_policy(
-                        serde_json::json!({"code": {"allowMcpServers": allowed}}),
+                        serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": allowed, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
                         || {
                             barrier.wait();
                             assert_eq!(

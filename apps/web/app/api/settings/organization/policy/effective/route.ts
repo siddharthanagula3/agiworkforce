@@ -38,7 +38,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         governed: true,
         revision: effective.revision,
         controls: effective.controls,
-        code: effective.code,
+        code: {
+          ...effective.code,
+          // Older clients ignore the restriction discriminator but understand the MCP switch.
+          allowMcpServers:
+            effective.code.allowMcpServers &&
+            !(effective.code.mcpRestrictionActive && effective.code.allowedMcpServers.length === 0),
+        },
       }
     : {
         schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,

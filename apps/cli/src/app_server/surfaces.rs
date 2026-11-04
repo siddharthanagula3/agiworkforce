@@ -1790,7 +1790,7 @@ mod workspace_mcp_refusal_tests {
     }
 
     fn policy() -> serde_json::Value {
-        serde_json::json!({"code": {"allowedMcpServers": ["*.example.test"]}})
+        serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": true, "allowedMcpServers": ["*.example.test"], "mcpRestrictionActive": true}})
     }
 
     #[test]
