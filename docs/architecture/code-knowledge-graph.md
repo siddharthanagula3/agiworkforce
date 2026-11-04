@@ -1642,8 +1642,9 @@ legacy exemptions; unreadable scoped authority is not treated as revocation.
 
 Normal admission and managed journal recovery retain tasks/journals on unknown
 authority. Journal checks compare current enabled task/account and resolved prompt
-before run lookup, resume and entry into the CHAT handler. These are not final
-network gates after that handler's later awaits. A counted recovery attempt is
+before run lookup, resume and entry into the CHAT handler. This admission slice
+alone did not gate final transport after the handler's later awaits; the companion
+below adds that bounded gate. A counted recovery attempt is
 restored only for source unavailability before any recovery I/O begins: exact
 task/request, expected count, non-cancelled state and current admission predicate
 are checked inside the journal mutation queue. Once even run lookup begins,
@@ -1676,9 +1677,39 @@ automatic drop, broader refusal policy or implementation-ready design is approve
 here. This constraint is recorded once beside its architecture owner rather than
 adding a duplicate broad schedule finding; no observed exploit or loss is claimed.
 
+## Scheduled managed transport rechecks source and owner before dispatch
+
+Accepted commit `a3f0c99fdb07c7df2e98ccd87e732478bc0971f9` changes five
+production files and one fixture source. The private optional transport threads
+through initial chat POST, automatic durable follow, scheduled run lookup and
+resume clients. It reads fresh scheduled source authority, then verifies the
+exact original account/session owner, rechecks the synchronous execution lease
+and request signal, and only then invokes fetch. Scheduled lookup/resume clients
+retain the default mutation-header decoration. Interactive callers without the
+optional transport keep their defaults; cancellation remains outside this source
+guard so revocation does not itself prevent cleanup requests.
+
+`ScheduledTaskTransportControl` subclasses the shared non-transient
+`ManagedCloudAgentRunAbortError`. Initial POST, stream/follow, model-access,
+run-control and CHAT catches preserve that wrapper; shared durable retries do
+not retry it. Only the outer scheduled execution boundary unwraps the original
+denied/unavailable control. Actual guarded fetch invocation marks recovery I/O;
+model-access conservatively marks helper entry. Thus later uncertainty cannot
+speculatively restore an attempt after either boundary, while pre-I/O unknown
+authority retains the preceding exact restoration rules.
+
+This narrowly supersedes the admission-to-transport gap above. Source-policy and
+account reads are sequential observations, not an atomic snapshot or continuous
+revocation mechanism; already dispatched requests are not recalled. V1 journal
+provenance, local recorded replay/per-action target policy and shared cache
+freshness remain separate limitations. Fixture sources exercise injected transport,
+delayed routing, control propagation and shared retry refusal; actual background
+and automatic-follow integration is partly textual wiring evidence. All fixtures
+remain unexecuted, with no Chrome/network/runtime acceptance.
+
 ## Reconstruction boundary
 
-Only the sixty-eight accepted production slices traced above are represented as
+Only the sixty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
