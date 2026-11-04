@@ -1851,9 +1851,40 @@ Clerk, egress, native WebRTC and hook dependencies for stale identity/destinatio
 late microphone, close-window and original credential cases. None were executed;
 no native/audio/end-to-end acceptance or pending dictation correction is claimed.
 
+## Web dictation owns recording, retry and destination delivery
+
+Accepted commit `c638c4d64a4457b9846d6e8c773177dbdb6cc68f` changes seven
+production files and three fixture sources. `use-dictation.ts` captures session
+RequestAuthority plus an observed destination generation and rechecks current
+caller availability, dictation setting and billing kill-switch. The global
+`voice-input-store` remains shared, but recording/recorder callbacks, chunks,
+stop resolver, failed audio and retry language belong to an exact owner and
+generation. New capture preempts the previous owner; old cancellation/clear
+cannot erase a replacement. Retry uses original audio/language and original
+session bearer with omitted cookies, not a newly selected login or language.
+No-argument global cancellation remains available to existing live-voice control.
+
+Chat admission rejects explicit Local/BYOK selection and canonical conversation/
+message history evidence, including restrictive metadata, while retaining unknown
+chat-mode compatibility where no such evidence exists. Code receives its effective
+session/draft model and destination and fails closed unless eligible Managed Cloud
+context is established. Remote dictation binds the current connection/attempt;
+the desktop overlay binds its existing host return target. These are explicit
+caller boundaries, not a universal workspace or privacy guarantee.
+
+Delivery uses current draft callbacks within the original destination. Chat's
+deferred send retains and rechecks the original authority before submitting;
+Remote completion only clears unchanged submitted text under its original
+connection/attempt. Observed scope change, setting disable, retirement or unmount
+suppresses stale results and releases owned capture; late microphone grants are
+stopped when observed, not guaranteed cancelled at the OS. Already dispatched
+transcription is not recalled. Deferred recording/session/destination and retry
+fixture sources were read but not executed; no browser/native/offline/end-to-end
+acceptance is claimed. Pending mobile dictation work is outside this slice.
+
 ## Reconstruction boundary
 
-Only the seventy-three accepted production slices traced above are represented as
+Only the seventy-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
