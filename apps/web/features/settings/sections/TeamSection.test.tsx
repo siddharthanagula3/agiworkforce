@@ -13,6 +13,8 @@ const SeatPaymentError = vi.hoisted(
 );
 
 const state = vi.hoisted(() => ({
+  ownerKey: 'owner-1',
+  canonicalAvailable: true,
   seatDataAvailable: true,
   organization: null as null | {
     id: string;
@@ -140,11 +142,22 @@ vi.mock('../hooks/use-settings-queries', () => ({
     refetch: vi.fn(),
   }),
   useCreateOrganization: () => ({
+    ownerKey: state.ownerKey,
     mutate: state.create,
     isPending: false,
     error: null,
   }),
   useSwitchWorkspace: () => ({
+    ownerKey: state.ownerKey,
+    accountWorkspaces: state.canonicalAvailable ? {
+      workspaces: state.workspaces.map((workspace) => ({
+        ...workspace, id: `workspace:${workspace.id}`, organizationId: workspace.id,
+        kind: 'organization', isPrimary: true,
+      })),
+      scope: state.activeOrganizationId ? 'organization' : 'personal',
+      activeOrganizationId: state.activeOrganizationId,
+      activeWorkspaceId: state.activeOrganizationId ? `workspace:${state.activeOrganizationId}` : null,
+    } : undefined,
     mutate: state.switchWorkspace,
     isPending: false,
     error: null,
@@ -204,6 +217,8 @@ describe('TeamSection', () => {
     state.seatDataAvailable = true;
     state.organization = null;
     state.activeOrganizationId = null;
+    state.ownerKey = 'owner-1';
+    state.canonicalAvailable = true;
     state.workspaces = [];
     state.access = {
       plan: 'team',
@@ -237,6 +252,22 @@ describe('TeamSection', () => {
       slug: 'demo-team',
     });
     expect(screen.queryByText(/SSO|SCIM/)).toBeNull();
+  });
+
+  it('does not reuse creation fields after the admission owner changes', () => {
+    const { rerender } = render(<TeamSection />);
+    fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Private draft' } });
+    fireEvent.change(screen.getByLabelText('Workspace slug'), { target: { value: 'private-draft' } });
+    state.ownerKey = 'owner-2';
+    rerender(<TeamSection />);
+    expect(screen.getByLabelText('Workspace name')).toHaveValue('');
+    expect(screen.getByLabelText('Workspace slug')).toHaveValue('');
+  });
+
+  it('does not infer Personal from an unavailable canonical workspace result', () => {
+    state.canonicalAvailable = false;
+    render(<TeamSection />);
+    expect(screen.queryByRole('combobox', { name: 'Active workspace' })).toBeNull();
   });
 
   it('switches among Personal and every membership without conflating membership with ownership', () => {

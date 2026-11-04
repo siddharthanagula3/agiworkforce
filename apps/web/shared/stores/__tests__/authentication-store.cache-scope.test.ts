@@ -85,6 +85,24 @@ beforeEach(() => {
 });
 
 describe('applyCacheScope', () => {
+  it('does not purge or record scope after the captured owner retires during cancellation', async () => {
+    await applyCacheScope({ accountId: 'user_1', workspaceId: null });
+    let current = true;
+    stopStreaming.mockImplementationOnce(() => { current = false; });
+    localStorage.setItem('agi-composer-draft:v2:tab-a:conversation-a', 'kept');
+    expect(await applyCacheScope({ accountId: 'user_1', workspaceId: 'org_a' }, () => current)).toBe(false);
+    expect(chatWorkspaceReset).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SCOPE_KEY)).toBe('user_1/personal');
+    expect(localStorage.getItem('agi-composer-draft:v2:tab-a:conversation-a')).toBe('kept');
+  });
+
+  it('does not enter account-wide logout cleanup from a captured workspace switch', async () => {
+    await applyCacheScope({ accountId: 'user_2', workspaceId: null });
+    await expect(applyCacheScope({ accountId: 'user_1', workspaceId: 'org_a' }, () => true))
+      .rejects.toThrow('Account cache scope is still resolving');
+    expect(chatReset).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SCOPE_KEY)).toBe('user_2/personal');
+  });
   it('adopts the first scope it sees without dropping the signed-in account state', async () => {
     localStorage.setItem('agi.chat-drafts', 'draft');
 

@@ -1,7 +1,8 @@
 'use client';
 
 import type { QueryClient } from '@tanstack/react-query';
-import { applyCacheScope, useAuthStore } from '@shared/stores/authentication-store';
+import { applyCacheScope } from '@shared/stores/authentication-store';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 
 const STABLE_CHAT_ROUTES = new Set([
   'artifacts',
@@ -41,14 +42,18 @@ function navigateAfterWorkspaceSwitch(destination: string | null): void {
 export async function finalizeWorkspaceSwitch(
   queryClient: QueryClient,
   activeOrganizationId: string | null,
+  authority: RequestAuthority,
   navigate: (destination: string | null) => void = navigateAfterWorkspaceSwitch,
 ): Promise<void> {
   // Cancel first so a response issued under the previous workspace cannot repopulate the cache.
+  authority.assertCurrent();
   await queryClient.cancelQueries();
+  authority.assertCurrent();
   await applyCacheScope({
-    accountId: useAuthStore.getState().user?.id ?? null,
+    accountId: authority.session.userId,
     workspaceId: activeOrganizationId,
-  });
+  }, authority.isCurrent);
+  authority.assertCurrent();
   queryClient.clear();
   navigate(workspaceSwitchDestination(window.location.pathname));
 }

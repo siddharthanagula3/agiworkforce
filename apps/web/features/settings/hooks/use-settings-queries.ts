@@ -45,7 +45,7 @@ import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './useStepUp';
-import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
+import { useSelectWorkspace, useWorkspaceSelectionMutation } from '@/features/workspaces/hooks/use-workspaces';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
@@ -678,30 +678,8 @@ export function useOrganizationOverview(): UseQueryResult<OrganizationOverview, 
   });
 }
 
-export function useSwitchWorkspace(): UseMutationResult<void, Error, string | null> {
-  const queryClient = useQueryClient();
-  return useMutation<void, Error, string | null>({
-    mutationFn: async (organizationId) => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-      const csrfToken = await getCsrfToken();
-      const response = await fetch('/api/settings/organization/active', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ organizationId }),
-      });
-      if (!response.ok) throw new Error(await readApiError(response));
-    },
-    onSuccess: async (_data, organizationId) => {
-      toast.success('Workspace switched');
-      await finalizeWorkspaceSwitch(queryClient, organizationId);
-    },
-    onError: (error) => toast.error(toUserMessage(error, 'Failed to switch workspace')),
-  });
+export function useSwitchWorkspace() {
+  return useSelectWorkspace('organization');
 }
 
 export interface CreateOrganizationInput {
@@ -709,48 +687,11 @@ export interface CreateOrganizationInput {
   slug: string;
 }
 
-export function useCreateOrganization(): UseMutationResult<
-  OrganizationSettings,
-  Error,
-  CreateOrganizationInput
-> {
-  const queryClient = useQueryClient();
-
-  return useMutation<OrganizationSettings, Error, CreateOrganizationInput>({
-    mutationFn: async (input) => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-      const csrfToken = await getCsrfToken();
-
-      const response = await fetch('/api/settings/organization', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify(input),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response));
-      }
-
-      const body = (await response.json()) as { organization?: OrganizationSettings };
-      if (!body.organization) throw new Error('Invalid response from server');
-      return body.organization;
-    },
-    onSuccess: async () => {
-      await queryClient.cancelQueries();
-      queryClient.clear();
-      toast.success('Workspace created');
-      window.location.reload();
-    },
-    onError: (error) => {
-      logger.error('Failed to create workspace:', error);
-      toast.error(toUserMessage(error, 'Failed to create workspace'));
-    },
-  });
+export function useCreateOrganization() {
+  return useWorkspaceSelectionMutation<CreateOrganizationInput>((input) => ({
+    url: '/api/settings/organization', method: 'POST', body: input,
+    errorMessage: 'We could not create your workspace. Try again.',
+  }));
 }
 
 /**

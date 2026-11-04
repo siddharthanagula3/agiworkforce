@@ -207,6 +207,12 @@ export function TeamSection() {
 
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
+  const [creationDraft, setCreationDraft] = useState({
+    ownerKey: createOrganization.ownerKey, name: '', slug: '',
+  });
+  const currentCreationDraft = creationDraft.ownerKey === createOrganization.ownerKey
+    ? creationDraft
+    : { ownerKey: createOrganization.ownerKey, name: '', slug: '' };
   const [memberEmail, setMemberEmail] = useState('');
   const [memberRole, setMemberRole] = useState<TeamInvitation['role']>('member');
   const [pendingAction, setPendingAction] = useState<PendingMemberAction>(null);
@@ -281,7 +287,10 @@ export function TeamSection() {
   const licensedPremiumSeats = seatTypesQuery.data?.licensedPremiumSeats ?? 0;
   const premiumSeatsAssigned = seatTypesQuery.data?.premiumSeatsAssigned ?? 0;
   const unassignedPremiumSeats = Math.max(0, licensedPremiumSeats - premiumSeatsAssigned);
-  const workspaces = overview.workspaces ?? [];
+  const accountWorkspaces = switchWorkspace.accountWorkspaces;
+  const workspaces = accountWorkspaces?.workspaces.filter(
+    (workspace) => workspace.kind === 'organization' && workspace.organizationId !== null,
+  ) ?? [];
 
   function requestSeatChange(member: TeamMember, seatType: TeamSeatType) {
     if (!organization || !seatBilling || seatType === member.seatType) return;
@@ -318,7 +327,7 @@ export function TeamSection() {
     updateSeatType.error instanceof SeatTypePaymentRequiredError ? updateSeatType.error : null;
 
   const workspacePicker =
-    workspaces.length > 0 ? (
+    (accountWorkspaces && workspaces.length > 0) || switchWorkspace.requiresReload ? (
       <div
         style={{
           display: 'flex',
@@ -334,11 +343,11 @@ export function TeamSection() {
           Workspace
         </label>
         <div>
-          <select
+          {accountWorkspaces ? <select
             id="team-active-workspace"
             aria-label="Active workspace"
-            value={overview.activeOrganizationId ?? 'personal'}
-            disabled={switchWorkspace.isPending}
+            value={accountWorkspaces.scope === 'personal' ? 'personal' : accountWorkspaces.activeOrganizationId!}
+            disabled={switchWorkspace.isPending || switchWorkspace.canMutate === false}
             onChange={(event) => {
               const target = event.target.value === 'personal' ? null : event.target.value;
               if (switchInterruptions.length === 0) {
@@ -359,12 +368,17 @@ export function TeamSection() {
           >
             <option value="personal">Personal</option>
             {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name} · {titleCase(workspace.role)}
+              <option key={workspace.id} value={workspace.organizationId!}>
+                {workspace.name}{workspace.role ? ` · ${titleCase(workspace.role)}` : ''}
               </option>
             ))}
-          </select>
+          </select> : null}
           <InlineError error={switchWorkspace.error} />
+          {switchWorkspace.requiresReload ? (
+            <button type="button" onClick={() => window.location.reload()}>
+              Reload to resolve workspace status
+            </button>
+          ) : null}
         </div>
       </div>
     ) : null;
@@ -372,8 +386,8 @@ export function TeamSection() {
   function handleCreate(event: FormEvent) {
     event.preventDefault();
     createOrganization.mutate({
-      name: workspaceName.trim(),
-      slug: workspaceSlug.trim(),
+      name: currentCreationDraft.name.trim(),
+      slug: currentCreationDraft.slug.trim(),
     });
   }
 
@@ -542,8 +556,8 @@ export function TeamSection() {
                 Workspace name
                 <input
                   aria-label="Workspace name"
-                  value={workspaceName}
-                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  value={currentCreationDraft.name}
+                  onChange={(event) => setCreationDraft({ ...currentCreationDraft, name: event.target.value })}
                   required
                   maxLength={120}
                   style={controlStyle}
@@ -560,8 +574,8 @@ export function TeamSection() {
                 Workspace slug
                 <input
                   aria-label="Workspace slug"
-                  value={workspaceSlug}
-                  onChange={(event) => setWorkspaceSlug(event.target.value.toLowerCase())}
+                  value={currentCreationDraft.slug}
+                  onChange={(event) => setCreationDraft({ ...currentCreationDraft, slug: event.target.value.toLowerCase() })}
                   required
                   maxLength={60}
                   pattern="[a-z0-9-]+"
@@ -570,9 +584,14 @@ export function TeamSection() {
                 />
               </label>
               <InlineError error={createOrganization.error} />
+              {createOrganization.requiresReload ? (
+                <button type="button" onClick={() => window.location.reload()}>
+                  Reload to resolve workspace status
+                </button>
+              ) : null}
               <button
                 type="submit"
-                disabled={createOrganization.isPending}
+                disabled={createOrganization.isPending || createOrganization.canMutate === false}
                 style={{ ...primaryButtonStyle, justifySelf: 'start' }}
               >
                 <Building2 size={14} style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }} />
