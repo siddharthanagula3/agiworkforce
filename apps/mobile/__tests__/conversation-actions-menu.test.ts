@@ -26,8 +26,14 @@ jest.mock('../services/managedCloudChat', () => ({
   },
 }));
 
+const mockShowToast = jest.fn();
+jest.mock('../src/shared/components/Toast', () => ({
+  showToast: (...args: unknown[]) => mockShowToast(...args),
+}));
+
 import { Alert } from 'react-native';
-import { act, renderHook } from '@testing-library/react-native';
+import { api } from '../services/api';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useConversationActions } from '../src/features/conversation-actions/useConversationActions';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
@@ -45,6 +51,7 @@ const LOCAL_MODEL_ID = requireLocalModel().id;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.mocked(api.put).mockReset();
   mockMmkvValues.clear();
   __resetCloudAccountSessionForTests();
   activateCloudAccount('conversation-actions-test-account');
@@ -188,5 +195,103 @@ describe('conversation row actions reach every action on both platforms', () => 
     expect(result.current.rename.menu.actions.find((action) => action.key === 'pin')?.label).toBe(
       'Unpin',
     );
+  });
+});
+
+
+function archivedWire(archived: boolean) {
+  return { conversation: {
+    id: 'c-1', title: 'Chat c-1', model: null, project_id: null,
+    pinned: false, starred: false, archived, is_temporary: false,
+    created_at: T, updated_at: T,
+  } };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+async function archiveAndReadUndo() {
+  seedCloudRow('c-1');
+  jest.mocked(api.put).mockResolvedValueOnce(archivedWire(true));
+  const view = renderHook(() => useConversationActions());
+  act(() => view.result.current.openActions('c-1', 'Chat c-1', false));
+  act(() => view.result.current.rename.menu.actions.find((action) => action.key === 'archive')?.run());
+  await waitFor(() => expect(mockShowToast).toHaveBeenCalledTimes(1));
+  const undo = mockShowToast.mock.calls[0]?.[1]?.onPress as (() => void) | undefined;
+  if (!undo) throw new Error('Archive did not provide Undo');
+  return undo;
+}
+
+describe('archive Undo retains the original account intent', () => {
+  it('does not dispatch a saved Undo after an account round trip', async () => {
+    const undo = await archiveAndReadUndo();
+    act(() => {
+      activateCloudAccount('replacement-account');
+      activateCloudAccount('conversation-actions-test-account');
+      undo();
+    });
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('admits one Undo with the original account and restores its row', async () => {
+    const undo = await archiveAndReadUndo();
+    const restore = deferred<ReturnType<typeof archivedWire>>();
+    jest.mocked(api.put).mockReturnValueOnce(restore.promise);
+    act(() => { undo(); undo(); });
+    expect(api.put).toHaveBeenCalledTimes(2);
+    const originalAccount = jest.mocked(api.put).mock.calls[0]?.[2]?.accountEpoch;
+    expect(api.put).toHaveBeenLastCalledWith('/api/chat/conversations/c-1',
+      { archived: false }, { accountEpoch: originalAccount });
+    await act(async () => { restore.resolve(archivedWire(false)); });
+    expect(useChatCloudMessageStore.getState().conversations.find((row) => row.id === 'c-1'))
+      .toMatchObject({ id: 'c-1', pinned: false });
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('reports an uncertain Undo without claiming the chat remains archived', async () => {
+    const undo = await archiveAndReadUndo();
+    jest.mocked(api.put).mockRejectedValueOnce(new Error('response lost'));
+    await act(async () => { undo(); });
+    expect(Alert.alert).toHaveBeenCalledWith('Could not unarchive',
+      'Could not confirm the restore. Refresh your chats and Archived chats to check.');
+    act(() => undo());
+    expect(api.put).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignores a late Undo %s after account replacement', async (outcome) => {
+    const undo = await archiveAndReadUndo();
+    const restore = deferred<ReturnType<typeof archivedWire>>();
+    jest.mocked(api.put).mockReturnValueOnce(restore.promise);
+    act(() => undo());
+    act(() => {
+      activateCloudAccount('replacement-account');
+      useChatCloudMessageStore.getState().clearCloudData();
+      seedCloudRow('replacement-row');
+    });
+    await act(async () => {
+      if (outcome === 'resolve') restore.resolve(archivedWire(false));
+      else restore.reject(new Error('late old failure'));
+    });
+    expect(useChatCloudMessageStore.getState().conversations.map((row) => row.id))
+      .toEqual(['replacement-row']);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('suppresses a late original archive failure after account replacement', async () => {
+    seedCloudRow('c-1');
+    const archive = deferred<ReturnType<typeof archivedWire>>();
+    jest.mocked(api.put).mockReturnValueOnce(archive.promise);
+    const view = renderHook(() => useConversationActions());
+    act(() => view.result.current.openActions('c-1', 'Chat c-1', false));
+    act(() => view.result.current.rename.menu.actions.find((action) => action.key === 'archive')?.run());
+    activateCloudAccount('replacement-account');
+    await act(async () => { archive.reject(new Error('late old failure')); });
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockShowToast).not.toHaveBeenCalled();
   });
 });

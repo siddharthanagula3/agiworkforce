@@ -116,10 +116,24 @@ describe('Archived chats failure recovery', () => {
     await waitFor(() => expect(screen.getByLabelText('Restore Launch plan')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Restore Launch plan'));
 
-    await waitFor(() => expect(mockRestore).toHaveBeenCalledWith('chat-1'));
+    await waitFor(() => expect(mockRestore).toHaveBeenCalledWith('chat-1', expect.objectContaining({ ownerId: 'account-a' })));
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Chat restored', expect.any(String)));
     expect(alertSpy.mock.calls[0]?.[1]).toBe('Refresh your chats to see it in the list.');
     expect(screen.queryByText('Launch plan')).toBeNull();
+  });
+
+  it('does not claim the chat remains archived after an uncertain restore response', async () => {
+    mockFetch.mockResolvedValue({
+      conversations: [{ id: 'chat-1', title: 'Launch plan', updatedAt: '2026-09-27T00:00:00.000Z' }],
+      hasMore: false,
+      nextOffset: 1,
+    });
+    mockRestore.mockRejectedValueOnce(new Error('response lost'));
+    const screen = render(<ArchivedChatsScreen />);
+    fireEvent.press(await screen.findByLabelText('Restore Launch plan'));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Could not restore',
+      'Could not confirm the restore. Refresh archived chats before trying again.'));
+    expect(mockLoadConversations).not.toHaveBeenCalled();
   });
 
   it('hides the old account list and ignores its in-flight response after switching accounts', async () => {
@@ -169,6 +183,21 @@ describe('Archived chats failure recovery', () => {
     screen.rerender(<ArchivedChatsScreen />);
 
     expect(screen.queryByText('Old account chat')).toBeNull();
+  });
+
+  it('does not rebind a saved Restore row callback to a replacement account', async () => {
+    mockFetch.mockResolvedValue({
+      conversations: [{ id: 'chat-1', title: 'Launch plan', updatedAt: '2026-09-27T00:00:00.000Z' }],
+      hasMore: false,
+      nextOffset: 1,
+    });
+    const screen = render(<ArchivedChatsScreen />);
+    const restore = (await screen.findByLabelText('Restore Launch plan')).props.onPress;
+    activateCloudAccount('account-b');
+    mockClerkUserId = 'account-b';
+    act(() => restore());
+    expect(mockRestore).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 
   it('does not delete after a confirmation outlives its account', async () => {

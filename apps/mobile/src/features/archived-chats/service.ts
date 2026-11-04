@@ -9,6 +9,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { api } from '@/services/api';
+import {
+  assertCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
@@ -66,16 +70,30 @@ export async function fetchArchivedConversations(
   };
 }
 
-export async function restoreArchivedConversation(id: string): Promise<void> {
-  ManagedCloudUpdateConversationResponseSchema.parse(
-    await api.put<unknown>(managedCloudConversationPath(id), { archived: false }),
+async function setConversationArchived(
+  id: string,
+  archived: boolean,
+  account: CloudAccountEpoch,
+): Promise<void> {
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.put<unknown>(
+    managedCloudConversationPath(id),
+    { archived },
+    { accountEpoch: account },
   );
+  assertCloudAccountEpochCurrent(account);
+  ManagedCloudUpdateConversationResponseSchema.parse(response);
 }
 
-export async function archiveConversation(id: string): Promise<void> {
-  ManagedCloudUpdateConversationResponseSchema.parse(
-    await api.put<unknown>(managedCloudConversationPath(id), { archived: true }),
-  );
+export async function restoreArchivedConversation(
+  id: string,
+  account: CloudAccountEpoch,
+): Promise<void> {
+  return setConversationArchived(id, false, account);
+}
+
+export async function archiveConversation(id: string, account: CloudAccountEpoch): Promise<void> {
+  return setConversationArchived(id, true, account);
 }
 
 export async function deleteArchivedConversation(id: string): Promise<void> {

@@ -160,18 +160,17 @@ export default function ArchivedChatsScreen() {
   }, []);
 
   const handleRestore = useCallback(
-    (conversation: ArchivedConversation) => {
-      const account = captureCloudAccountEpoch();
+    (conversation: ArchivedConversation, account: CloudAccountEpoch) => {
       if (!isCurrentCloudScope(account)) return;
       void (async () => {
         setBusyId(conversation.id);
         try {
-          await restoreArchivedConversation(conversation.id);
+          await restoreArchivedConversation(conversation.id, account);
           if (!isCurrentCloudScope(account)) return;
           removeFromList(conversation.id, account);
         } catch {
           if (isCurrentCloudScope(account)) {
-            Alert.alert('Could not restore', 'The chat is still archived. Try again.');
+            Alert.alert('Could not restore', 'Could not confirm the restore. Refresh archived chats before trying again.');
           }
           return;
         } finally {
@@ -445,7 +444,7 @@ export default function ArchivedChatsScreen() {
 
                 <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
                   <Pressable
-                    onPress={() => handleRestore(conversation)}
+                    onPress={() => handleRestore(conversation, visibleState.account)}
                     disabled={busyId === conversation.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Restore ${conversation.title}`}

@@ -128,9 +128,11 @@ export function useConversationActions(): ConversationActions {
       };
 
       const archive = guard(() => {
+        if (ownership.scope !== 'cloud') return;
+        const account = ownership.account;
         void (async () => {
           try {
-            await archiveConversation(conversationId);
+            await archiveConversation(conversationId, account);
             // Only hide the row once the server has acknowledged the write; a
             // swallowed failure would leave the chat visibly gone here and
             // still present on web and desktop.
@@ -138,12 +140,15 @@ export function useConversationActions(): ConversationActions {
             const cloudStore = useChatCloudMessageStore.getState();
             const index = cloudStore.conversations.findIndex((c) => c.id === conversationId);
             cloudStore.removeCloudConversation(conversationId);
+            let undoConsumed = false;
             showToast('Chat archived. Find it in Settings, Archived chats.', {
               label: 'Undo',
               onPress: () => {
+                if (undoConsumed || !isAccountScopedUiStateOwned(ownership)) return;
+                undoConsumed = true;
                 void (async () => {
                   try {
-                    await restoreArchivedConversation(conversationId);
+                    await restoreArchivedConversation(conversationId, account);
                     if (!isAccountScopedUiStateOwned(ownership)) return;
                     useChatCloudMessageStore
                       .getState()
@@ -152,15 +157,17 @@ export function useConversationActions(): ConversationActions {
                         Math.max(0, index),
                       );
                   } catch {
+                    if (!isAccountScopedUiStateOwned(ownership)) return;
                     Alert.alert(
                       'Could not unarchive',
-                      'Find the chat in Settings, Archived chats.',
+                      'Could not confirm the restore. Refresh your chats and Archived chats to check.',
                     );
                   }
                 })();
               },
             });
           } catch {
+            if (!isAccountScopedUiStateOwned(ownership)) return;
             Alert.alert('Could not archive', 'Check your connection and try again.');
           }
         })();
