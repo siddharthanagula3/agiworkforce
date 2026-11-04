@@ -15,13 +15,13 @@ import {
   interactiveCardResponseDeadlineMs,
 } from '@/app/api/interactive-cards/response-contract';
 import {
-  respondToInteractiveCard,
   useInteractiveCardResume,
   type InteractiveCardResponseBinding,
   type WebInteractiveCardKind,
 } from '@/lib/hooks/useChatStream';
 import { selectIsActiveConversationStreaming, useChatStore } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
+import { useOptionalChatStreamRuntime } from '../ChatStreamRuntimeProvider';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { ImageToolCard } from './cards/ImageToolCard';
 import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/LazyMapCards';
@@ -131,18 +131,17 @@ const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardP
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
   const channel = useCardResponseChannel(card.cardId);
   const submissionError = useCardSubmissionError(card.cardId);
-  const [submitting, setSubmitting] = useState(false);
+  const runtime = useOptionalChatStreamRuntime();
+  const binding = channel ? { ...channel, cardId: card.cardId } : null;
+  const submitting = binding ? runtime?.isInteractiveCardResponsePending(binding) ?? false : false;
   useCardResponseDeadline(card);
-  useCardTurnResume(card, channel);
-  const canRespond = channel !== null && interactiveCardAcceptsResponse(card);
+  useCardTurnResume(card, runtime ? channel : null);
+  const canRespond = runtime !== null && channel !== null && interactiveCardAcceptsResponse(card);
 
   if (renderer && card.recognized) {
     const onRespond = (cardId: string, payload: InteractiveCardResponsePayload) => {
-      if (!channel || submitting) return;
-      setSubmitting(true);
-      void respondToInteractiveCard({ ...channel, cardId }, payload).finally(() =>
-        setSubmitting(false),
-      );
+      if (!runtime || !channel || !canRespond || submitting || cardId !== card.cardId) return;
+      void runtime.respondToInteractiveCard({ ...channel, cardId }, payload);
     };
 
     return (

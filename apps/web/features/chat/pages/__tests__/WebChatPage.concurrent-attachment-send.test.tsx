@@ -160,7 +160,8 @@ vi.mock('../../components/messages/ChatMessageList', () => ({
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useChatStreamRuntime: () => ({
     sendMessage: mocks.sendMessage,
     stopGeneration: vi.fn(),

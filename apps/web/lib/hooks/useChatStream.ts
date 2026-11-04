@@ -16,6 +16,7 @@ import {
   useContext,
   useRef,
   useEffect,
+  useState,
   type MutableRefObject,
 } from 'react';
 import {
@@ -125,6 +126,7 @@ import {
 import {
   INTERACTIVE_CARD_RESPONSE_PATH,
   RESPONDABLE_INTERACTIVE_CARD_KIND,
+  interactiveCardAcceptsResponse,
   interactiveCardNeedsResume,
   type InteractiveCardResponseRequest,
 } from '@/app/api/interactive-cards/response-contract';
@@ -352,6 +354,11 @@ export interface UseChatStreamReturn {
     assistantMessageId: string,
     options?: { force?: boolean },
   ) => Promise<void>;
+  respondToInteractiveCard: (
+    binding: InteractiveCardResponseBinding,
+    payload: InteractiveCardResponsePayload,
+  ) => Promise<void>;
+  isInteractiveCardResponsePending: (binding: InteractiveCardResponseBinding) => boolean;
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -1250,7 +1257,9 @@ function hasResumableInteractiveCard(message: Message | undefined): boolean {
   return (message.metadata?.interactiveCards ?? []).some(interactiveCardNeedsResume);
 }
 
-const inFlightCardResponses = new Set<string>();
+function interactiveCardResponseKey(binding: InteractiveCardResponseBinding): string {
+  return JSON.stringify([binding.conversationId, binding.messageId, binding.cardId]);
+}
 
 function patchInteractiveCardSubmissionError(
   binding: InteractiveCardResponseBinding,
@@ -1275,55 +1284,6 @@ function patchInteractiveCardSubmissionError(
     },
     binding.conversationId,
   );
-}
-
-export async function respondToInteractiveCard(
-  binding: InteractiveCardResponseBinding,
-  payload: InteractiveCardResponsePayload,
-): Promise<void> {
-  const inFlightKey = `${binding.conversationId}:${binding.messageId}:${binding.cardId}`;
-  if (inFlightCardResponses.has(inFlightKey)) return;
-  inFlightCardResponses.add(inFlightKey);
-  patchInteractiveCardSubmissionError(binding, undefined);
-  try {
-    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-    const response = await fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        conversation_id: binding.conversationId,
-        message_id: binding.messageId,
-        card_id: binding.cardId,
-        response: payload,
-      } satisfies InteractiveCardResponseRequest),
-    });
-    if (!response.ok) {
-      throw new Error(`Interactive card response rejected with ${response.status}`);
-    }
-    const settled = parseInteractiveCardDelta(await response.json());
-    if (!settled?.recognized) {
-      throw new Error('Interactive card response returned a card that failed validation');
-    }
-    const message = findConversationMessage(binding.conversationId, binding.messageId);
-    useChatStore.getState().updateMessage(
-      binding.messageId,
-      {
-        metadata: {
-          ...message?.metadata,
-          interactiveCards: (message?.metadata?.interactiveCards ?? []).map((card) =>
-            card.cardId === settled.cardId ? settled : card,
-          ),
-        },
-      },
-      binding.conversationId,
-    );
-  } catch (error) {
-    logger.error('[useChatStream] Interactive card response failed', error);
-    toast.error(INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
-    patchInteractiveCardSubmissionError(binding, INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
-  } finally {
-    inFlightCardResponses.delete(inFlightKey);
-  }
 }
 
 function autoResolvePendingApprovals(
@@ -3709,13 +3669,21 @@ export function useChatStream(
   const requestAuthoritiesRef = useRef(new Map<string, RequestAuthority>());
   const turnAuthoritiesRef = useRef(new Map<string, RequestAuthority>());
   const ownedAuthoritiesRef = useRef(new Set<RequestAuthority>());
-  useEffect(() => () => {
-    for (const authority of ownedAuthoritiesRef.current) {
-      authority.retire();
-    }
-    ownedAuthoritiesRef.current.clear();
-    requestAuthoritiesRef.current.clear();
-    turnAuthoritiesRef.current.clear();
+  const cardResponsesRef = useRef(new Map<string, RequestAuthority>());
+  const cardResponseRuntimeActiveRef = useRef(false);
+  const [, refreshCardResponses] = useState(0);
+  useEffect(() => {
+    cardResponseRuntimeActiveRef.current = true;
+    return () => {
+      cardResponseRuntimeActiveRef.current = false;
+      for (const authority of ownedAuthoritiesRef.current) {
+        authority.retire();
+      }
+      ownedAuthoritiesRef.current.clear();
+      requestAuthoritiesRef.current.clear();
+      turnAuthoritiesRef.current.clear();
+      cardResponsesRef.current.clear();
+    };
   }, []);
   useEffect(() => {
     for (const authority of ownedAuthoritiesRef.current) {
@@ -4947,6 +4915,99 @@ export function useChatStream(
     ],
   );
 
+  const isInteractiveCardResponsePending = useCallback(
+    (binding: InteractiveCardResponseBinding): boolean =>
+      cardResponsesRef.current.get(interactiveCardResponseKey(binding))?.isCurrent() ?? false,
+    [],
+  );
+
+  const respondToInteractiveCard = useCallback(
+    async (
+      input: InteractiveCardResponseBinding,
+      payload: InteractiveCardResponsePayload,
+    ): Promise<void> => {
+      if (!cardResponseRuntimeActiveRef.current) return;
+      const binding = { ...input };
+      const key = interactiveCardResponseKey(binding);
+      if (cardResponsesRef.current.get(key)?.isCurrent()) return;
+      const existingAuthority =
+        turnAuthoritiesRef.current.get(binding.messageId) ??
+        requestAuthoritiesRef.current.get(binding.conversationId);
+      const snapshot = existingAuthority ? null : captureSessionSnapshot();
+      const owner = existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
+      if (!owner?.isCurrent()) return;
+      const message = findConversationMessage(binding.conversationId, binding.messageId);
+      const card = message?.metadata?.interactiveCards?.find(
+        (candidate) => candidate.cardId === binding.cardId,
+      );
+      if (!message || !card || !interactiveCardAcceptsResponse(card)) return;
+      turnAuthoritiesRef.current.set(binding.messageId, owner);
+      ownedAuthoritiesRef.current.add(owner);
+      const authority = createRequestAuthority(
+        owner.session,
+        () => cardResponseRuntimeActiveRef.current && owner.isCurrent(),
+      );
+      ownedAuthoritiesRef.current.add(authority);
+      cardResponsesRef.current.set(key, authority);
+      refreshCardResponses((revision) => revision + 1);
+      patchInteractiveCardSubmissionError(binding, undefined);
+
+      try {
+        const body = JSON.stringify({
+          conversation_id: binding.conversationId,
+          message_id: binding.messageId,
+          card_id: binding.cardId,
+          response: payload,
+        } satisfies InteractiveCardResponseRequest);
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        authority.assertCurrent();
+        const response = await authority.fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
+          method: 'POST',
+          headers,
+          body,
+        });
+        authority.assertCurrent();
+        if (!response.ok) {
+          throw new Error(`Interactive card response rejected with ${response.status}`);
+        }
+        const decoded: unknown = await response.json();
+        authority.assertCurrent();
+        const settled = parseInteractiveCardDelta(decoded);
+        if (!settled?.recognized || settled.cardId !== binding.cardId || settled.kind !== card.kind) {
+          throw new Error('Interactive card response returned a card that failed validation');
+        }
+        const currentMessage = findConversationMessage(binding.conversationId, binding.messageId);
+        if (!currentMessage) return;
+        useChatStore.getState().updateMessage(
+          binding.messageId,
+          {
+            metadata: {
+              ...currentMessage.metadata,
+              interactiveCards: (currentMessage.metadata?.interactiveCards ?? []).map((candidate) =>
+                candidate.cardId === settled.cardId ? settled : candidate,
+              ),
+            },
+          },
+          binding.conversationId,
+        );
+      } catch (error) {
+        if (!authority.isCurrent()) return;
+        logger.error('[useChatStream] Interactive card response failed', error);
+        toast.error(INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
+        patchInteractiveCardSubmissionError(binding, INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
+      } finally {
+        const current = authority.isCurrent();
+        if (cardResponsesRef.current.get(key) === authority) {
+          cardResponsesRef.current.delete(key);
+          if (current) refreshCardResponses((revision) => revision + 1);
+        }
+        ownedAuthoritiesRef.current.delete(authority);
+        authority.retire();
+      }
+    },
+    [captureSessionSnapshot],
+  );
+
   const resumeInteractiveCardTurn = useCallback(
     async (assistantMessageId: string, options: { force?: boolean } = {}): Promise<void> => {
       const store = useChatStore.getState();
@@ -5088,6 +5149,8 @@ export function useChatStream(
     stopGeneration,
     continueGeneration,
     resumeInteractiveCardTurn,
+    respondToInteractiveCard,
+    isInteractiveCardResponsePending,
     resolveToolApproval,
     resolveToolInput,
     steerActiveTurn,

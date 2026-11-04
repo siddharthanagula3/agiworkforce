@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { InteractiveCard } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 const envelope = {
   schemaVersion: 1,
@@ -42,6 +43,8 @@ function decodeDelta(raw: unknown): InteractiveCard {
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 describe('InteractiveCardBlock', () => {
+  beforeEach(() => useChatStore.getState().reset());
+  afterEach(() => useChatStore.getState().reset());
   it('renders nothing when a message carries no cards', () => {
     const { container } = render(<InteractiveCardBlock cards={[]} />);
     expect(container).toBeEmptyDOMElement();
@@ -165,6 +168,30 @@ describe('InteractiveCardBlock', () => {
 
   it('renders a clarify card read-only when the surface cannot respond', () => {
     render(<InteractiveCardBlock cards={[decodeDelta(envelope)]} />);
+    expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Send answers' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a persisted actionable card read-only outside the chat runtime', () => {
+    const card = decodeDelta(envelope);
+    useChatStore.setState({
+      activeConversationId: 'conversation-1',
+      conversations: [{
+        id: 'conversation-1',
+        title: 'Saved conversation',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:00:00.000Z',
+        isTemporary: false,
+      }],
+      messages: [{
+        id: 'message-1',
+        role: 'assistant',
+        content: '',
+        createdAt: '2026-08-05T10:00:00.000Z',
+        metadata: { interactiveCards: [card] },
+      }],
+    });
+    render(<InteractiveCardBlock cards={[card]} />);
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send answers' })).not.toBeInTheDocument();
   });
