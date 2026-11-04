@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Clipboard, Image, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import {
@@ -112,10 +112,14 @@ export default function CloudAccountScreen() {
     value: AccountDeletionStatus;
   } | null>(null);
   const [deletionStatusError, setDeletionStatusError] = useState(false);
+  const deletionStatusRequest = useRef(0);
+  const cancellationInFlight = useRef(false);
   const [organization, setOrganization] = useState<{ ownerId: string; id: string } | null>(null);
   const [organizationCopied, setOrganizationCopied] = useState(false);
 
   useLayoutEffect(() => {
+    deletionStatusRequest.current += 1;
+    cancellationInFlight.current = false;
     setCopied(false);
     setLoggingOut(false);
     setExporting(false);
@@ -138,19 +142,24 @@ export default function CloudAccountScreen() {
     if (await saveProfileName(userId, nameDraft)) setEditingName(false);
   }, [nameDraft, saveProfileName, userId]);
 
-  const refreshDeletionStatus = useCallback(async () => {
-    const account = captureCloudAccountEpoch();
-    if (!account || !userId || account.ownerId !== userId) return;
+  const refreshDeletionStatus = useCallback(async (
+    account = captureCloudAccountEpoch(),
+  ) => {
+    if (!isCloudAccountEpochCurrent(account) || !userId || account.ownerId !== userId) return;
+    const request = ++deletionStatusRequest.current;
+    setDeletionStatus(null);
     setDeletionStatusError(false);
     try {
       const status = parseAccountDeletionStatus(
-        await api.get<unknown>(MANAGED_CLOUD_ACCOUNT_DELETION_PATH),
+        await api.get<unknown>(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, { accountEpoch: account }),
       );
-      if (isCloudAccountEpochCurrent(account)) {
+      if (isCloudAccountEpochCurrent(account) && request === deletionStatusRequest.current) {
         setDeletionStatus({ ownerId: account.ownerId, value: status });
       }
     } catch {
-      if (isCloudAccountEpochCurrent(account)) setDeletionStatusError(true);
+      if (isCloudAccountEpochCurrent(account) && request === deletionStatusRequest.current) {
+        setDeletionStatusError(true);
+      }
     }
   }, [userId]);
 
@@ -297,6 +306,7 @@ export default function CloudAccountScreen() {
   }, [appMode, captureVisibleAccount, setAppMode]);
 
   const handleDeleteAccount = useCallback(() => {
+    if (cancellationInFlight.current) return;
     const account = captureVisibleAccount();
     if (!account) return;
     Alert.alert(DELETE_ACCOUNT_CONFIRMATION.title, DELETE_ACCOUNT_CONFIRMATION.message, [
@@ -312,18 +322,19 @@ export default function CloudAccountScreen() {
             );
             return;
           }
+          if (cancellationInFlight.current) return;
           setDeleting(true);
           withStepUp('account.delete', null, (headers) =>
             api.delete<{ message?: string; scheduledFor?: string }>(
               MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
-              { headers },
+              { headers, accountEpoch: account },
             ),
           )
             .then(async (res) => {
               if (!isCloudAccountEpochCurrent(account)) {
                 Alert.alert(
                   'Account changed',
-                  'The active account changed before deletion completed. No action was applied to the new account.',
+                  'The active account changed. Check deletion status in the original account to confirm the outcome.',
                 );
                 return;
               }
@@ -338,7 +349,7 @@ export default function CloudAccountScreen() {
               if (!isCloudAccountEpochCurrent(account)) {
                 Alert.alert(
                   'Account changed',
-                  'The deletion request did not apply to the current account.',
+                  'The active account changed. Check deletion status in the original account to confirm the outcome.',
                 );
                 return;
               }
@@ -370,7 +381,9 @@ export default function CloudAccountScreen() {
                   : ACCOUNT_DELETE_FAILED,
               );
             })
-            .finally(() => setDeleting(false));
+            .finally(() => {
+              if (isCloudAccountEpochCurrent(account)) setDeleting(false);
+            });
         },
       },
     ]);
@@ -391,35 +404,52 @@ export default function CloudAccountScreen() {
               Alert.alert('Account changed', 'Open this action again for the current account.');
               return;
             }
+            if (cancellationInFlight.current) return;
+            cancellationInFlight.current = true;
             setCancellingDeletion(true);
+            deletionStatusRequest.current += 1;
+            setDeletionStatus(null);
+            setDeletionStatusError(false);
             api
-              .post<{ cancelled: boolean; message?: string }>(
+              .post<unknown>(
                 MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
+                undefined,
+                { accountEpoch: account },
               )
               .then((response) => {
                 if (!isCloudAccountEpochCurrent(account)) return;
-                if (response.cancelled !== true) {
-                  throw new Error('The server did not confirm cancellation.');
+                deletionStatusRequest.current += 1;
+                if (
+                  typeof response !== 'object' || response === null ||
+                  !('cancelled' in response) || typeof response.cancelled !== 'boolean'
+                ) {
+                  throw new Error('The server did not confirm deletion status.');
                 }
                 setDeletionStatus({
                   ownerId: account.ownerId,
                   value: NO_PENDING_ACCOUNT_DELETION,
                 });
+                setDeletionStatusError(false);
                 Alert.alert(
-                  'Account deletion cancelled',
-                  response.message ?? 'Your account is active.',
+                  response.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
+                  response.cancelled
+                    ? 'Your account deletion was cancelled.'
+                    : 'The server confirmed that no account deletion is pending.',
                 );
               })
               .catch(() => {
                 if (!isCloudAccountEpochCurrent(account)) return;
                 Alert.alert(
-                  'Could not cancel account deletion',
-                  'Deletion is still scheduled; check your connection and try again.',
+                  'Could not confirm cancellation',
+                  'The cancellation outcome is unknown. Check the refreshed deletion status before taking another action.',
                 );
-                void refreshDeletionStatus();
+                void refreshDeletionStatus(account);
               })
               .finally(() => {
-                if (isCloudAccountEpochCurrent(account)) setCancellingDeletion(false);
+                if (isCloudAccountEpochCurrent(account)) {
+                  cancellationInFlight.current = false;
+                  setCancellingDeletion(false);
+                }
               });
           },
         },
@@ -673,16 +703,6 @@ export default function CloudAccountScreen() {
           icon={Trash2}
         />
       )}
-      {deletionStatusError && (
-        <SettingsGroup>
-          <SettingsRow
-            label="Could not check deletion status. Retry"
-            icon={Trash2}
-            onPress={() => void refreshDeletionStatus()}
-            isLast
-          />
-        </SettingsGroup>
-      )}
       <View
         style={{
           borderRadius: 14,
@@ -707,7 +727,14 @@ export default function CloudAccountScreen() {
             Danger Zone
           </Text>
         </View>
-        {deletionStatus?.ownerId === userId && deletionStatus.value.pending ? (
+        {deletionStatus?.ownerId !== userId ? (
+          <SettingsRow
+            label={deletionStatusError ? 'Could not check deletion status. Retry' : 'Check deletion status'}
+            icon={RefreshCw}
+            onPress={() => void refreshDeletionStatus()}
+            isLast
+          />
+        ) : deletionStatus.value.pending ? (
           <SettingsRow
             label={
               deletionStatus.value.canCancel
@@ -730,7 +757,7 @@ export default function CloudAccountScreen() {
             icon={Trash2}
             destructive
             onPress={
-              deleting || deletionStatusError || deletionStatus?.ownerId !== userId
+              deleting || cancellingDeletion || deletionStatusError || deletionStatus?.ownerId !== userId
                 ? undefined
                 : handleDeleteAccount
             }

@@ -33,6 +33,11 @@ jest.mock('../src/features/auth/store', () => ({
     selector({ signOut: mockSignOut }),
 }));
 
+const mockWithStepUp = jest.fn();
+jest.mock('../src/features/auth/hooks/useStepUp', () => ({
+  useStepUp: () => ({ withStepUp: mockWithStepUp, modal: null }),
+}));
+
 const mockDeleteAccount = jest.fn();
 const mockGetDeletionStatus = jest.fn();
 const mockGetMe = jest.fn();
@@ -41,10 +46,10 @@ const mockPatchMe = jest.fn();
 const mockCancelDeletion = jest.fn();
 jest.mock('../services/api', () => ({
   api: {
-    get: (path: string) => {
+    get: (path: string, options?: unknown) => {
       if (path === '/api/me?surface=mobile') return mockGetMe(path);
       if (path === '/api/settings/organization') return mockGetOrganization(path);
-      return mockGetDeletionStatus(path);
+      return mockGetDeletionStatus(path, options);
     },
     patch: (...args: unknown[]) => mockPatchMe(...args),
     post: (...args: unknown[]) => mockCancelDeletion(...args),
@@ -162,6 +167,7 @@ import { httpErrorFrom } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
+  captureCloudAccountEpoch,
 } from '../src/features/auth/services/cloudAccountSession';
 
 function destructiveActionFor(title: string): () => void {
@@ -189,6 +195,9 @@ describe('Cloud Account destructive action ownership', () => {
       imageUrl: null,
     };
     mockSignOut.mockResolvedValue(undefined);
+    mockWithStepUp.mockImplementation(
+      (_action: string, _resourceId: string | null, send: (headers: Record<string, string>) => Promise<unknown>) => send({}),
+    );
     mockExportCloudUserData.mockResolvedValue(undefined);
     mockGetDeletionStatus.mockResolvedValue({
       pending: false,
@@ -381,7 +390,7 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockSignOut).not.toHaveBeenCalled();
     expect(Alert.alert).toHaveBeenLastCalledWith(
       'Account changed',
-      expect.stringContaining('No action was applied to the new account'),
+      expect.stringContaining('Check deletion status in the original account'),
     );
   });
 
@@ -513,7 +522,10 @@ describe('Cloud Account destructive action ownership', () => {
       buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
     });
 
-    expect(mockCancelDeletion).toHaveBeenCalledWith('/api/user/delete-account/cancel');
+    expect(mockCancelDeletion).toHaveBeenCalledWith(
+      '/api/user/delete-account/cancel', undefined,
+      { accountEpoch: captureCloudAccountEpoch() },
+    );
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
     expect(mockSignOut).not.toHaveBeenCalled();
   });
@@ -549,7 +561,7 @@ describe('Cloud Account destructive action ownership', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy(),
     );
-    fireEvent.press(screen.getByLabelText('Delete Account'));
+    expect(screen.queryByLabelText('Delete Account')).toBeNull();
 
     expect(Alert.alert).not.toHaveBeenCalledWith(
       'Delete Account',
@@ -558,4 +570,130 @@ describe('Cloud Account destructive action ownership', () => {
     );
     expect(mockDeleteAccount).not.toHaveBeenCalled();
   });
+
+  it('binds deletion requests to the account whose confirmation was accepted', async () => {
+    mockDeleteAccount.mockResolvedValueOnce({ scheduledFor: '2026-09-28T18:00:00.000Z' });
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    const account = captureCloudAccountEpoch();
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => { destructiveActionFor('Delete Account')(); });
+    expect(mockDeleteAccount).toHaveBeenCalledWith('/api/user/delete-account', {
+      headers: {}, accountEpoch: account,
+    });
+  });
+
+  it.each([true, false])('uses the strict cancellation receipt %s and retires older status reads', async (cancelled) => {
+    const pending = {
+      pending: true, canCancel: true,
+      requestedAt: '2026-09-27T18:00:00.000Z', scheduledFor: '2026-09-28T18:00:00.000Z',
+    };
+    let settleCancellation!: (value: unknown) => void;
+    let settleStatus!: (value: unknown) => void;
+    mockGetDeletionStatus.mockResolvedValueOnce(pending);
+    mockCancelDeletion.mockReturnValueOnce(new Promise((resolve) => { settleCancellation = resolve; }));
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    await act(async () => {
+      const buttons = (Alert.alert as jest.Mock).mock.calls.findLast(
+        ([title]) => title === 'Cancel account deletion?',
+      )?.[2] as Array<{ text?: string; onPress?: () => void }>;
+      buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
+    });
+    mockGetDeletionStatus.mockReturnValueOnce(new Promise((resolve) => { settleStatus = resolve; }));
+    fireEvent.press(screen.getByLabelText('Check deletion status'));
+    await act(async () => { settleCancellation({ cancelled }); });
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
+      expect.any(String),
+    );
+    await act(async () => { settleStatus(pending); });
+    expect(screen.queryByLabelText('Cancel Account Deletion')).toBeNull();
+    expect(screen.getByLabelText('Delete Account')).toBeTruthy();
+    expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([null, {}, { cancelled: 'false' }, new Error('Response lost')])(
+    'reconciles unknown cancellation %p without claiming deletion is still scheduled', async (outcome) => {
+      mockGetDeletionStatus.mockResolvedValueOnce({
+        pending: true, canCancel: true,
+        requestedAt: '2026-09-27T18:00:00.000Z', scheduledFor: '2026-09-28T18:00:00.000Z',
+      });
+      if (outcome instanceof Error) mockCancelDeletion.mockRejectedValueOnce(outcome);
+      else mockCancelDeletion.mockResolvedValueOnce(outcome);
+      render(<CloudAccountScreen />);
+      await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+      const account = captureCloudAccountEpoch();
+      mockGetDeletionStatus.mockRejectedValueOnce(new Error('Status unavailable'));
+      fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+      await act(async () => {
+        const buttons = (Alert.alert as jest.Mock).mock.calls.findLast(
+          ([title]) => title === 'Cancel account deletion?',
+        )?.[2] as Array<{ text?: string; onPress?: () => void }>;
+        buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
+      });
+      expect(Alert.alert).toHaveBeenLastCalledWith('Could not confirm cancellation', expect.any(String));
+      expect(mockGetDeletionStatus).toHaveBeenLastCalledWith('/api/user/delete-account', { accountEpoch: account });
+      expect(screen.queryByLabelText('Cancel Account Deletion')).toBeNull();
+      expect(screen.queryByLabelText('Delete Account')).toBeNull();
+      expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy();
+      expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+    },
+  );
+
+
+  it('keeps deletion disabled when a refresh finds no pending schedule during cancellation', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce({
+      pending: true, canCancel: true,
+      requestedAt: '2026-09-27T18:00:00.000Z', scheduledFor: '2026-09-28T18:00:00.000Z',
+    });
+    let settleCancellation!: (value: unknown) => void;
+    mockCancelDeletion.mockReturnValueOnce(new Promise((resolve) => { settleCancellation = resolve; }));
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    await act(async () => {
+      const buttons = (Alert.alert as jest.Mock).mock.calls.findLast(
+        ([title]) => title === 'Cancel account deletion?',
+      )?.[2] as Array<{ text?: string; onPress?: () => void }>;
+      buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
+    });
+    fireEvent.press(screen.getByLabelText('Check deletion status'));
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    expect(Alert.alert).not.toHaveBeenCalledWith('Delete Account', expect.anything(), expect.anything());
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
+    await act(async () => { settleCancellation({ cancelled: false }); });
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    expect(Alert.alert).toHaveBeenCalledWith('Delete Account', expect.anything(), expect.anything());
+  });
+
+  it('retains the original epoch in a delayed step-up send after an account switch', async () => {
+    let resume!: () => void;
+    mockWithStepUp.mockImplementationOnce(async (
+      _action: string, _resourceId: string | null,
+      send: (headers: Record<string, string>) => Promise<unknown>,
+    ) => {
+      await new Promise<void>((resolve) => { resume = resolve; });
+      return send({ 'x-step-up-token': 'fixture-proof' });
+    });
+    mockDeleteAccount.mockResolvedValueOnce({ scheduledFor: '2026-09-28T18:00:00.000Z' });
+    const view = render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    const originalAccount = captureCloudAccountEpoch();
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => { destructiveActionFor('Delete Account')(); });
+    act(() => {
+      activateCloudAccount('account-b');
+      mockClerkUser = { ...mockClerkUser, id: 'account-b' };
+      view.rerender(<CloudAccountScreen />);
+    });
+    await act(async () => { resume(); });
+    expect(mockDeleteAccount).toHaveBeenCalledWith('/api/user/delete-account', {
+      headers: { 'x-step-up-token': 'fixture-proof' }, accountEpoch: originalAccount,
+    });
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
 });
