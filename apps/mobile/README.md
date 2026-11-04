@@ -27,6 +27,12 @@ of it are in `AGENTS.md`.
 goes through a config plugin under `native`, never through a hand edit to
 generated output, because the next prebuild discards it.
 
+The Android share-intent plugin leaves any `MainActivity.kt` containing
+`rewriteShareIntent` unchanged. Plugin fixes therefore require a clean release
+prebuild from a fresh generated Android project, followed by a new native build;
+rerunning the plugin on an already patched project or shipping a JavaScript-only
+update does not apply them. Preserve any local native changes before regeneration.
+
 ## Commands
 
 | Task                | Command                                              |
