@@ -52,7 +52,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { managedCloudProjectKnowledgePath } from '@agiworkforce/cloud-contracts';
-import { Alert } from 'react-native';
+import { Alert, Modal } from 'react-native';
 import { getDocumentAsync } from 'expo-document-picker';
 import { createUploadTask, getInfoAsync, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
 import { api } from '@/services/api';
@@ -745,5 +745,105 @@ describe('retained source action callbacks', () => {
     await act(async () => oldPick());
     expect(getDocumentAsync).not.toHaveBeenCalled();
     screen.unmount();
+  });
+});
+
+describe('text source editor revisions', () => {
+  async function openDraft() {
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    (writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Add text'));
+    fireEvent.changeText(screen.getByLabelText('Text source title'), 'Original title');
+    fireEvent.changeText(screen.getByLabelText('Text source content'), 'Original body');
+    return screen;
+  }
+
+  it.each(['title', 'body'])('preserves newer %s input after an accepted upload succeeds', async (field) => {
+    const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
+    const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
+    const screen = await openDraft();
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
+      fireEvent.changeText(screen.getByLabelText(`Text source ${field === 'title' ? 'title' : 'content'}`), 'Newer input');
+      await act(async () => { upload.resolve(registeredFile().file); });
+      expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+      expect(screen.getByLabelText(`Text source ${field === 'title' ? 'title' : 'content'}`).props.value).toBe('Newer input');
+      expect(uploadSource).toHaveBeenCalledTimes(1);
+      expect(guardedFetch).not.toHaveBeenCalled();
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+    }
+  });
+
+  it('closes an unchanged editor after a successful same-session save', async () => {
+    const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockResolvedValue(registeredFile().file);
+    const screen = await openDraft();
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(false));
+      expect(uploadSource).toHaveBeenCalledTimes(1);
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+    }
+  });
+
+  it('preserves a reopened editor when an earlier accepted save settles', async () => {
+    const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
+    const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
+    const screen = await openDraft();
+    const reopen = screen.getByLabelText('Add text').props.onPress as () => void;
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
+      fireEvent.press(screen.getByLabelText('Cancel'));
+      act(() => reopen());
+      fireEvent.changeText(screen.getByLabelText('Text source content'), 'Reopened draft');
+      await act(async () => { upload.resolve(registeredFile().file); });
+      expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+      expect(screen.getByLabelText('Text source content').props.value).toBe('Reopened draft');
+      expect(uploadSource).toHaveBeenCalledTimes(1);
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+    }
+  });
+
+  it('rejects a retained pre-edit save callback before writing its old text', async () => {
+    const screen = await openDraft();
+    try {
+      const oldSave = screen.getByLabelText('Add').props.onPress as () => void;
+      const edit = screen.getByLabelText('Text source content').props.onChangeText as (text: string) => void;
+      await act(async () => { edit('Newer input before rerender'); oldSave(); });
+      expect(writeAsStringAsync).not.toHaveBeenCalled();
+      expect(api.post).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Text source content').props.value).toBe('Newer input before rerender');
+    } finally {
+      screen.unmount();
+    }
+  });
+
+  it('does not show an old save failure over newer text', async () => {
+    const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
+    const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const screen = await openDraft();
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
+      fireEvent.changeText(screen.getByLabelText('Text source content'), 'Newer draft');
+      await act(async () => { upload.reject(new Error('Original upload failed')); });
+      expect(alert).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Text source content').props.value).toBe('Newer draft');
+      expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+      alert.mockRestore();
+    }
   });
 });

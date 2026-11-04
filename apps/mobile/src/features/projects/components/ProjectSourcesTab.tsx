@@ -213,7 +213,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const [busy, setBusy] = useState(false);
   const [, setAccountRevision] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [textEditorOpen, setTextEditorOpen] = useState(false);
+  const [textEditorState, setTextEditorState] = useState({ session: 0, revision: 0, open: false });
+  const textEditorRef = useRef(textEditorState);
+  const textEditorOpen = textEditorState.open;
   const [textTitle, setTextTitle] = useState('');
   const [textBody, setTextBody] = useState('');
   const mounted = useRef(true);
@@ -247,6 +249,43 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     };
   }, [projectId, target, renderedGeneration, renderedAccount]);
 
+  const resetTextEditor = useCallback(() => {
+    const next = { session: textEditorRef.current.session + 1, revision: 0, open: false };
+    textEditorRef.current = next;
+    setTextEditorState(next);
+    setTextTitle('');
+    setTextBody('');
+  }, []);
+
+  const openTextEditor = useCallback(() => {
+    if (!captureContext().isCurrent() || textEditorRef.current.open) return;
+    const next = { session: textEditorRef.current.session + 1, revision: 0, open: true };
+    textEditorRef.current = next;
+    setTextEditorState(next);
+  }, [captureContext]);
+
+  const closeTextEditor = useCallback(() => {
+    if (
+      !captureContext().isCurrent() ||
+      !textEditorState.open ||
+      textEditorRef.current.session !== textEditorState.session
+    ) return;
+    resetTextEditor();
+  }, [captureContext, resetTextEditor, textEditorState.open, textEditorState.session]);
+
+  const editTextSource = useCallback((field: 'title' | 'body', value: string) => {
+    if (
+      !captureContext().isCurrent() ||
+      !textEditorRef.current.open ||
+      textEditorRef.current.session !== textEditorState.session
+    ) return;
+    const next = { ...textEditorRef.current, revision: textEditorRef.current.revision + 1 };
+    textEditorRef.current = next;
+    setTextEditorState(next);
+    if (field === 'title') setTextTitle(value);
+    else setTextBody(value);
+  }, [captureContext, textEditorState.session]);
+
   useEffect(() => {
     return subscribeCloudAccountEpochChange(() => {
       if (viewRef.current.target !== 'cloud') return;
@@ -258,24 +297,20 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       setCloudSources(EMPTY_SOURCES);
       setLoadError(null);
       setUploadProgress(null);
-      setTextEditorOpen(false);
-      setTextTitle('');
-      setTextBody('');
+      resetTextEditor();
       setBusy(false);
     });
-  }, []);
+  }, [resetTextEditor]);
 
   useEffect(() => {
     uploadRef.current?.abort();
     uploadRef.current = null;
     setUploadProgress(null);
-    setTextEditorOpen(false);
-    setTextTitle('');
-    setTextBody('');
+    resetTextEditor();
     return () => {
       uploadRef.current?.abort();
     };
-  }, [projectId, target]);
+  }, [projectId, target, resetTextEditor]);
 
   useEffect(() => {
     mounted.current = true;
@@ -425,13 +460,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   }, [projectId, target, addSource, refreshCloudSources, captureContext]);
 
 
-  const closeTextEditor = useCallback(() => {
-    setTextEditorOpen(false);
-    setTextTitle('');
-    setTextBody('');
-  }, []);
-
   const handleSaveText = useCallback(async () => {
+    const editorIsCurrent = () => textEditorState.open && textEditorRef.current === textEditorState;
+    if (!editorIsCurrent()) return;
     const context = captureContext();
     if (!context.isCurrent()) return;
     if (uploadRef.current) return;
@@ -462,9 +493,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       );
       if (!context.isCurrent()) return;
       if (target === 'cloud') await refreshCloudSources();
-      if (context.isCurrent()) closeTextEditor();
+      if (context.isCurrent() && editorIsCurrent()) closeTextEditor();
     } catch (error) {
-      if (!context.isCurrent() || controller.signal.aborted) return;
+      if (!context.isCurrent() || controller.signal.aborted || !editorIsCurrent()) return;
       Alert.alert(
         'Text was not added',
         projectSourceErrorMessage(error, 'Check your connection and try again.'),
@@ -483,6 +514,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     target,
     textBody,
     textTitle,
+    textEditorState,
     captureContext,
   ]);
 
@@ -548,7 +580,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           </Text>
         </PressableBox>
         <PressableBox
-          onPress={() => setTextEditorOpen(true)}
+          onPress={openTextEditor}
           disabled={busy || target === 'unknown'}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl mt-2"
           style={{
@@ -601,7 +633,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
             </Text>
             <TextInput
               value={textTitle}
-              onChangeText={setTextTitle}
+              onChangeText={(value) => editTextSource('title', value)}
               placeholder="Title"
               placeholderTextColor={colors.textMuted}
               accessibilityLabel="Text source title"
@@ -617,7 +649,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
             />
             <TextInput
               value={textBody}
-              onChangeText={setTextBody}
+              onChangeText={(value) => editTextSource('body', value)}
               placeholder="Paste or type the text this project should use"
               placeholderTextColor={colors.textMuted}
               accessibilityLabel="Text source content"
