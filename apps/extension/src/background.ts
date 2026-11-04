@@ -151,6 +151,7 @@ import {
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
 import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy, loadScheduledSitePolicyInput } from './features/site-policy/store';
+import { createSitePolicyPublicationOwner } from './background/site-policy-publication';
 import { scheduledSourceAuthority } from './features/background/scheduled-task-source-authority';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
@@ -3255,6 +3256,10 @@ const SITE_NOT_APPROVED_MESSAGE =
 let siteAllowlistCache = new Set<string>();
 let adminSitePolicyCache: SitePolicyAdminState = null;
 let siteAllowlistLoaded = false;
+const siteAllowlistPublication = createSitePolicyPublicationOwner();
+const adminSitePolicyPublication = createSitePolicyPublicationOwner();
+const startupSiteAllowlistOwner = siteAllowlistPublication.claim();
+const startupAdminSitePolicyOwner = adminSitePolicyPublication.claim();
 // Held rather than dropped: the message that wakes a dormant MV3 worker arrives
 // before this read resolves, and a floating promise left that first message
 // deciding against an empty set.
@@ -3264,16 +3269,22 @@ const siteAllowlistReady: Promise<void> = Promise.all([
     .then((res) => {
       const list = res[SITE_ALLOWLIST_STORAGE_KEY];
       if (Array.isArray(list)) {
-        siteAllowlistCache = new Set(list as string[]);
+        siteAllowlistPublication.publish(startupSiteAllowlistOwner, () => {
+          siteAllowlistCache = new Set(list as string[]);
+        });
       }
     })
     .catch(() => {}),
   readAdminSitePolicy()
     .then((policy) => {
-      adminSitePolicyCache = policy;
+      adminSitePolicyPublication.publish(startupAdminSitePolicyOwner, () => {
+        adminSitePolicyCache = policy;
+      });
     })
     .catch(() => {
-      adminSitePolicyCache = SITE_POLICY_ADMIN_UNAVAILABLE;
+      adminSitePolicyPublication.publish(startupAdminSitePolicyOwner, () => {
+        adminSitePolicyCache = SITE_POLICY_ADMIN_UNAVAILABLE;
+      });
     }),
 ])
   .then(() => undefined)
@@ -3313,6 +3324,7 @@ function cancelActiveRunUnlessOriginStillApproved(
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
+  siteAllowlistPublication.claim();
   const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
   cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
@@ -3320,11 +3332,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if ((area !== 'local' && area !== 'managed') || !changes[ADMIN_SITE_POLICY_STORAGE_KEY]) return;
+  const owner = adminSitePolicyPublication.claim();
   void readAdminSitePolicy()
     .catch(() => SITE_POLICY_ADMIN_UNAVAILABLE as SitePolicyAdminState)
     .then((policy) => {
-      adminSitePolicyCache = policy;
-      cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+      adminSitePolicyPublication.publish(owner, () => {
+        adminSitePolicyCache = policy;
+        cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+      });
     });
 });
 
