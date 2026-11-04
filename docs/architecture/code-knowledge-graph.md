@@ -3476,9 +3476,46 @@ an approved metadata-only patch or lock across remote calls. See the
 [canonical finding](../../audit/prior-audits/active-issues-register.md#web-project-object-lifecycle-01).
 No production slice is added; no tests, database, storage or network actions were run.
 
+## Mounted project notes retain drafts and own save acknowledgments
+
+Accepted commit `5dd9ce6124e53000cc87b4cb2a2e407b1cf3c77a` changes
+`ProjectNotes.tsx` and its Notebook fixture source. The project-keyed Notes session
+owns initialization and a parent draft that survives editor collapse/re-expansion;
+collapse no longer starts another read. Explicit failed-load retry and save have
+synchronous admission refs. Save captures submitted text and acknowledges that
+saved baseline without replacing newer typing. Lifetime checks suppress retired
+load/save publication, toast, `onSaved` and finally after unmount/project replacement.
+
+This is mounted draft preservation, not navigation persistence, account/session
+transport ownership or server compare-and-swap. Existing upload/storage semantics
+remain. Unexecuted mocked cases cover collapse, newer typing during save, project
+replacement, explicit retry and overlapping retry admission; they are not browser
+or backend acceptance.
+
+## Project settings save belongs to its opening dialog session
+
+Accepted commit `ef2c65505871def4166ab3bc160b19d3fb019019` changes
+`ProjectSettingsDialog.tsx` and one fixture source. The wrapper mounts a project-keyed
+session only while open, taking its opening project snapshot rather than resetting
+editable fields on same-project parent refresh. A synchronous save lock admits one
+request, blocks dialog dismissal while pending and disables editable native fields
+through a fieldset. Exact lifetime checks fence save callbacks, toast and finally
+when the parent closes/reopens or replaces the target project. A failed current save
+retains the draft and releases the lock.
+
+Independent file and memory panels remain outside that disabled fieldset and are
+not redesigned. Sibling duplicate/delete callbacks, account/session transport and
+server revision conflict handling are unchanged. A retired successful save omits
+`onUpdate`, so the parent store may need a reload despite accepted server changes;
+there is no rollback or remote cancellation. Drafts are not persisted across
+navigation. The separate OPEN project-object lifecycle finding above remains
+unchanged. Mocked fixtures cover overlapping saves, dismissal, refresh/failure,
+direct open-project replacement and same/different-project reopen, all unexecuted.
+Neither slice was tested, checked or exercised against browser, network or storage.
+
 ## Reconstruction boundary
 
-Only the one hundred and seventeen accepted production slices traced above are represented as
+Only the one hundred and nineteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
