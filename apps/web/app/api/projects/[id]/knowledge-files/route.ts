@@ -6,7 +6,10 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readFileStorageMeter } from '@/lib/server/file-storage';
-import { resolveSharedProjectScope } from '@/lib/services/org-sharing-service';
+import {
+  READABLE_PROJECT_SCOPE_SQL,
+  selectReadableProject,
+} from '@/lib/server/project-read-access';
 import { ManagedCloudProjectKnowledgeRegisterRequestSchema } from '@agiworkforce/cloud-contracts';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
@@ -17,49 +20,6 @@ import {
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/**
- * Migration 0090 grants an organization member SELECT on the knowledge files of
- * a project shared with them, and restricts every write to the owner. The
- * database is the authority here, and this read has to match it: filtering the
- * lookup by `user_id` refused the read the policy allows, so a shared project
- * opened to a sources panel that could never load.
- */
-async function selectReadableProject(
-  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
-  projectId: string,
-  userId: string,
-  organizationId: string | null,
-): Promise<{ id: string } | undefined> {
-  const [owned] = await db.query<{ id: string }>(
-    `select id
-       from user_projects
-      where id = $1
-        and user_id = $2
-        and organization_id is not distinct from $3::uuid
-        and deleted_at is null
-      limit 1`,
-    [projectId, userId, organizationId],
-  );
-  if (owned || !organizationId) return owned;
-
-  const sharedScope = await resolveSharedProjectScope(db, userId);
-  if (sharedScope?.organizationId !== organizationId || sharedScope.projectIds.length === 0) {
-    return undefined;
-  }
-
-  const [shared] = await db.query<{ id: string }>(
-    `select id
-       from user_projects
-      where id = $1
-        and id = any($2::uuid[])
-        and organization_id is not distinct from $3::uuid
-        and deleted_at is null
-      limit 1`,
-    [projectId, sharedScope.projectIds, organizationId],
-  );
-  return shared;
-}
-
 async function handleListKnowledgeFiles(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
@@ -67,7 +27,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id: projectId } = await context.params;
 
-  const project = await selectReadableProject(db, projectId, userId, organizationId);
+  const project = await selectReadableProject(db, { userId, organizationId }, projectId);
 
   if (!project) {
     throw createError.notFound('Project not found');
@@ -76,10 +36,13 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   let data: Record<string, unknown>[];
   try {
     data = await db.query<Record<string, unknown>>(
-      `select * from project_knowledge_files
-       where project_id = $1 and deleted_at is null and superseded_at is null
-       order by added_at desc`,
-      [projectId],
+      `select f.*
+         from project_knowledge_files f
+         join user_projects p on p.id = f.project_id
+        where ${READABLE_PROJECT_SCOPE_SQL}
+          and f.deleted_at is null and f.superseded_at is null
+        order by f.added_at desc`,
+      [projectId, userId, organizationId],
     );
   } catch (error) {
     logger.error({ error, projectId }, 'Failed to fetch knowledge files');

@@ -57,7 +57,7 @@ vi.mock('@/lib/server/chat-attachment-completion', () => ({
   resolveUploadSourceSurface: () => 'web',
 }));
 vi.mock('@/lib/server/project-knowledge-files', () => ({
-  findOwnedProjectKnowledgeFile: vi.fn(),
+  findReadableProjectKnowledgeFile: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
   checkProjectKnowledgeCapacity: vi.fn(),

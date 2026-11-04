@@ -10,7 +10,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { getProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
-import { findOwnedProjectKnowledgeFile } from '@/lib/server/project-knowledge-files';
+import { findReadableProjectKnowledgeFile } from '@/lib/server/project-knowledge-files';
 import { fileTextPreviewKind, renderFileTextPreview } from '@/lib/server/file-text-preview';
 
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
@@ -24,7 +24,7 @@ async function handleGetKnowledgeFileText(
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id: projectId, fileId } = await context.params;
-  const file = await findOwnedProjectKnowledgeFile(
+  const file = await findReadableProjectKnowledgeFile(
     db,
     { userId, organizationId },
     projectId,

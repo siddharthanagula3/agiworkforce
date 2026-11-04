@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   objectKeyFromStorageUri: vi.fn(),
   getProjectKnowledgeObject: vi.fn(),
   deleteProjectKnowledgeObject: vi.fn(),
-  findOwnedProjectKnowledgeFile: vi.fn(),
+  findReadableProjectKnowledgeFile: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -96,7 +96,7 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: vi.fn(),
-  findOwnedProjectKnowledgeFile: mocks.findOwnedProjectKnowledgeFile,
+  findReadableProjectKnowledgeFile: mocks.findReadableProjectKnowledgeFile,
 }));
 
 import { DELETE, GET } from '../route';
@@ -131,7 +131,7 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: 'org-1' });
-    mocks.findOwnedProjectKnowledgeFile.mockResolvedValue(file);
+    mocks.findReadableProjectKnowledgeFile.mockResolvedValue(file);
     mocks.objectKeyFromStorageUri.mockReturnValue('k/report.pdf');
     mocks.getProjectKnowledgeObject.mockResolvedValue({
       contentType: 'application/pdf',
@@ -149,12 +149,12 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
     });
 
     it('returns 404 for a file outside the caller scope', async () => {
-      mocks.findOwnedProjectKnowledgeFile.mockResolvedValue(null);
+      mocks.findReadableProjectKnowledgeFile.mockResolvedValue(null);
 
       const response = await get();
 
       expect(response.status).toBe(404);
-      expect(mocks.findOwnedProjectKnowledgeFile).toHaveBeenCalledWith(
+      expect(mocks.findReadableProjectKnowledgeFile).toHaveBeenCalledWith(
         db,
         { userId: 'user-1', organizationId: 'org-1' },
         'p-1',

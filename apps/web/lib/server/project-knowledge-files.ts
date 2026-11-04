@@ -5,6 +5,7 @@ import { assertFileStorageAvailable, resolveFileStorageAllowance } from '@/lib/s
 import { logger } from '@/lib/logger';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import type { getUserScopedDb } from '@/lib/server/rls-db';
+import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';
 import { resolveProjectWriteAccess } from '@/lib/services/org-sharing-service';
 import {
   extractProjectKnowledgeFile,
@@ -38,18 +39,18 @@ import {
 } from '@/lib/services/retrieval-index-service';
 import { dispatchRetrievalIndexWorkflows } from '@/lib/workflows/start-retrieval-index-workflow';
 
-export interface OwnedProjectKnowledgeFile {
+export interface ReadableProjectKnowledgeFile {
   mimeType: string;
   fileName: string;
   storageUri: string;
 }
 
-export async function findOwnedProjectKnowledgeFile(
+export async function findReadableProjectKnowledgeFile(
   db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
-  owner: { userId: string; organizationId: string | null },
+  scope: { userId: string; organizationId: string | null },
   projectId: string,
   fileId: string,
-): Promise<OwnedProjectKnowledgeFile | null> {
+): Promise<ReadableProjectKnowledgeFile | null> {
   const [file] = await db.query<{
     mime_type: string | null;
     file_name: string;
@@ -58,14 +59,11 @@ export async function findOwnedProjectKnowledgeFile(
     `select f.mime_type, f.file_name, f.storage_uri
        from project_knowledge_files f
        join user_projects p on p.id = f.project_id
-      where f.id = $1
-        and f.project_id = $2
+      where ${READABLE_PROJECT_SCOPE_SQL}
+        and f.id = $4
         and f.deleted_at is null
-        and p.user_id = $3
-        and p.organization_id is not distinct from $4::uuid
-        and p.deleted_at is null
       limit 1`,
-    [fileId, projectId, owner.userId, owner.organizationId],
+    [projectId, scope.userId, scope.organizationId, fileId],
   );
   if (!file?.storage_uri) return null;
   return {
