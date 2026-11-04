@@ -3662,9 +3662,39 @@ were source-traced, not exercised. Independent source review accepted the bounde
 change. No tests, checks, builds, browser, authentication or network actions were
 run for this slice; all regression sources remain unexecuted.
 
+## Mobile shared links retain focused account and operation ownership
+
+Accepted commit `529308ae05211d4c35d7224184eb617445efe97a` changes the
+Shared Links screen/service and three fixture sources. A focused screen lifetime
+captures the canonical Cloud account epoch. Account/auth or Local-mode transitions,
+blur and unmount retire the owner synchronously, abort owned requests and invalidate
+saved callbacks. Ready rows are owner-tagged; each read has its own identity, so
+an older success, error or finally cannot replace a newer list or refresh spinner.
+The original epoch is passed to the existing API boundary for list/revoke calls.
+
+A revoke confirmation retains its original account and immutable token. Consuming
+the intent and claiming a mutation are synchronous, excluding duplicate callbacks.
+Ordinary same-owner refresh does not cancel that intent or retarget its token;
+missing-token 404 remains idempotent only for the original current account. A
+current success removes the confirmed row without another read. An ambiguous
+failure hides actionable rows and asks for refresh rather than claiming the link
+is still active. Retired receipts cannot publish rows, alerts or spinner state.
+Native sharing requires a current non-expired row before opening the system sheet;
+a sheet already opened cannot be recalled by this screen.
+
+This is account/focus/mode ownership, not exact SDK-session or workspace pinning,
+server rollback, or proof of cross-account deletion. The existing API already
+rejects ordinary account-generation changes; the new screen lifetime also covers
+saved confirmations, ready data and Local/focus boundaries. Shared-link creation is
+unchanged. Independent source review accepted deliberate confirmation survival
+across same-owner refresh. Authored fixtures cover deferred reads, stale callbacks,
+account/mode round trips, focus/unmount, duplicate revoke and uncertain responses.
+No tests, checks, builds, native sharing, deletion or network actions were run;
+all regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-five accepted production slices traced above are represented as
+Only the one hundred and twenty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
