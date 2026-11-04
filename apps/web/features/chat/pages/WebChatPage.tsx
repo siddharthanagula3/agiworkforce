@@ -353,7 +353,6 @@ import { toast } from 'sonner';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { useUpgradePlanFlow } from '@features/billing/hooks/useUpgradePlanFlow';
 import {
-  buildAcceptedHandoffSystemMessage,
   buildWebLocalToByokPreview,
   getByokTargetProviderLabel,
   resolveRegenerateBoundaryRefusal,
@@ -825,44 +824,6 @@ export function toChatSession(conversation: Conversation, messageCount: number):
     isStarred: conversation.isStarred ?? false,
     tags: [],
     participants: [],
-  };
-}
-
-async function saveSystemMessage(params: {
-  conversationId: string;
-  content: string;
-  metadata: MessageMetadata;
-  authToken: string;
-}): Promise<Message> {
-  const headers = await addCsrfHeaders({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${params.authToken}`,
-  });
-  const response = await fetch(`/api/chat/conversations/${params.conversationId}/messages`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      role: 'system',
-      content: params.content,
-      metadata: params.metadata,
-      skipLlm: true,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || 'Failed to save BYOK handoff context');
-  }
-
-  const data = await response.json();
-  const raw = data.message as { id?: string; created_at?: string; metadata?: MessageMetadata };
-
-  return {
-    id: raw.id ?? crypto.randomUUID(),
-    role: 'system',
-    content: params.content,
-    createdAt: raw.created_at ?? new Date().toISOString(),
-    metadata: raw.metadata ?? params.metadata,
   };
 }
 
@@ -1449,7 +1410,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [handoffPreview, setHandoffPreview] = useState<WebLocalToByokPreview | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
-  const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   // Whether CreateProjectDialog was opened from the composer picker (select the
   // new project as chat scope) vs the sidebar (navigate to the project page).
@@ -4359,12 +4319,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   }, [pendingByokHandoff, selectedHandoffContextIds]);
 
   const closeHandoffDialog = useCallback(() => {
-    if (isConfirmingHandoff) return;
     setPendingByokHandoff(null);
     setSelectedHandoffContextIds([]);
     setHandoffPreview(null);
     setHandoffError(null);
-  }, [isConfirmingHandoff]);
+  }, []);
 
   const handleToggleHandoffContext = useCallback(
     (contextId: string) => {
@@ -4380,116 +4339,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [pendingByokHandoff],
   );
 
-  const handleConfirmHandoff = useCallback(async () => {
-    if (!pendingByokHandoff || !handoffPreview || handoffPreview.redactionReport.blocked) return;
-
-    setIsConfirmingHandoff(true);
-    setHandoffError(null);
-    // Same first-message send guard: the BYOK fork lazily creates a conversation
-    // and only commits bareChatSessionId after an async saveSystemMessage, so the
-    // stale-active reconciler must not clear the fork during that window.
-    //
-    // Balanced, idempotent release: the dispatched sendContent claims its own
-    // window, so this one must only release what it claimed.
-    const releaseSendWindow = claimSendWindow();
-
-    try {
-      const fork = await createConversation(
-        `${pendingByokHandoff.conversationTitle} (BYOK fork)`,
-        activeModelId,
-      );
-      if (!fork) throw new Error('Could not create BYOK fork conversation.');
-
-      // A temporary source chat means the user explicitly asked for this
-      // transcript not to be kept. `createConversation` always creates a
-      // persisted row, and `saveSystemMessage` writes the redacted payload to
-      // the server unconditionally, so the fork must inherit the flag BEFORE
-      // anything is written. If that write fails we refuse the fork with a
-      // visible reason rather than silently persisting an on-device transcript
-      // the user asked us not to keep.
-      const sourceIsTemporary = isTemporaryConversationById(
-        conversations,
-        pendingByokHandoff.sourceConversationId,
-      );
-      if (sourceIsTemporary) {
-        const marked = await updateConversation(fork.id, { isTemporary: true });
-        if (!marked) {
-          await deleteConversation(fork.id);
-          throw new Error(
-            'This is a temporary chat, and the BYOK fork could not be marked temporary. Nothing was sent.',
-          );
-        }
-      }
-
-      const metadata: MessageMetadata = {
-        privacyMode: 'byok',
-        providerMode: 'DirectByok',
-        handoffDraftId: handoffPreview.draft.id,
-        handoffPreviewHashSha256: handoffPreview.draft.previewHashSha256,
-        handoffSourceConversationId: pendingByokHandoff.sourceConversationId,
-      };
-      const handoffSystemContent = buildAcceptedHandoffSystemMessage(handoffPreview);
-      // Temporary forks keep the consent record client-side only: the provider
-      // history sent to the model is built from the store (useChatStream's
-      // `readConversationMessages`), so the ceremony's redacted payload still
-      // reaches the BYOK provider without a server row the user opted out of.
-      const systemMessage: Message = sourceIsTemporary
-        ? {
-            id: crypto.randomUUID(),
-            role: 'system',
-            content: handoffSystemContent,
-            createdAt: new Date().toISOString(),
-            metadata,
-          }
-        : await saveSystemMessage({
-            conversationId: fork.id,
-            content: handoffSystemContent,
-            metadata,
-            authToken: await getToken().then((token) => {
-              if (!token) throw new Error('Not authenticated');
-              return token;
-            }),
-          });
-
-      // The handoff system message belongs to the fork.
-      // `saveSystemMessage` above is awaited, so "whatever is active now" is not
-      // a safe target.
-      addMessage(systemMessage, fork.id);
-      setBareChatSessionId(fork.id);
-      router.push(surfaceRootHref);
-      setComposerClearSignal((value) => value + 1);
-      setPendingByokHandoff(null);
-      setSelectedHandoffContextIds([]);
-      setHandoffPreview(null);
-      void sendContent(pendingByokHandoff.content, {
-        conversationId: fork.id,
-        attachments: pendingByokHandoff.attachments,
-        meta: pendingByokHandoff.meta,
-      });
-    } catch (error) {
-      setHandoffError(toUserMessage(error, 'Could not create BYOK fork conversation.'));
-    } finally {
-      setIsConfirmingHandoff(false);
-      // The dispatched sendContent (conversationId already set) claimed its own
-      // window synchronously above; the fork's create→navigate window is now
-      // closed, so releasing ONLY this owner's claim is safe.
-      releaseSendWindow();
-    }
-  }, [
-    addMessage,
-    conversations,
-    createConversation,
-    deleteConversation,
-    getToken,
-    handoffPreview,
-    pendingByokHandoff,
-    router,
-    activeModelId,
-    sendContent,
-    surfaceRootHref,
-    claimSendWindow,
-    updateConversation,
-  ]);
+  const handleConfirmHandoff = useCallback(() => {
+    setHandoffError(
+      'Direct BYOK is not available on web. Nothing was sent. Your draft and attachments are unchanged.',
+    );
+  }, []);
 
   const handleNewChat = useCallback(() => {
     setAttachmentUploadAttempts((current) =>
@@ -7570,7 +7424,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           selectedContextIds={selectedHandoffContextIds}
           preview={handoffPreview}
           isBuilding={isBuildingHandoff}
-          isConfirming={isConfirmingHandoff}
           error={handoffError}
           onOpenChange={(open) => {
             if (!open) closeHandoffDialog();
