@@ -25,6 +25,7 @@ interface MediaState {
   jobs: MediaJob[];
   addJob: (job: MediaJob) => void;
   updateJob: (id: string, updates: Partial<MediaJob>) => void;
+  reset: () => void;
 }
 
 /**
@@ -35,6 +36,8 @@ interface MediaState {
  */
 export const useMediaStore = create<MediaState>()((set) => ({
   jobs: [],
+
+  reset: () => set({ jobs: [] }),
 
   addJob: (job) =>
     set((state) => ({

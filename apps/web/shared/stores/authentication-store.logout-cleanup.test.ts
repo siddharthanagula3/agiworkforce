@@ -7,7 +7,6 @@ vi.mock('@shared/lib/logger', () => ({
 vi.mock('./layout-store', () => ({}));
 vi.mock('./web-chat-store', () => ({}));
 vi.mock('./web-settings-store', () => ({}));
-vi.mock('./media-store', () => ({}));
 vi.mock('./model-store', () => ({}));
 vi.mock('./thinking-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
@@ -21,6 +20,7 @@ vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({}));
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
 import { cleanupAllStores } from './authentication-store';
+import { useMediaStore } from './media-store';
 import { authService } from '@shared/services/authentication-manager';
 import { FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY } from '@/features/chat/components/FreePlanTrainingNotice';
 
@@ -28,6 +28,30 @@ describe('sign-out storage sweep', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    useMediaStore.getState().reset();
+  });
+
+  it('clears actual media jobs and refuses resurrection by a late update', async () => {
+    const original = {
+      id: 'old-media-job', type: 'image' as const, prompt: 'private old prompt',
+      status: 'generating' as const, createdAt: '2026-11-04T00:00:00.000Z',
+    };
+    for (const status of ['pending', 'generating', 'completed', 'failed'] as const) {
+      useMediaStore.getState().addJob({
+        ...original, id: `${original.id}-${status}`, status,
+        resultUrl: '/old-result', errorMessage: 'old failure',
+      });
+    }
+    useMediaStore.getState().addJob(original);
+    await cleanupAllStores();
+    expect(useMediaStore.getState().jobs).toEqual([]);
+
+    useMediaStore.getState().addJob({ ...original, id: 'new-media-job', prompt: 'new prompt' });
+    useMediaStore.getState().updateJob(original.id, { status: 'completed', resultUrl: '/old-image' });
+    expect(useMediaStore.getState().jobs).toEqual([
+      { ...original, id: 'new-media-job', prompt: 'new prompt' },
+    ]);
+    expect(useMediaStore.getState().reset).toEqual(expect.any(Function));
   });
 
   it('removes the legacy APIClient bearer and refresh tokens', async () => {

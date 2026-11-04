@@ -44,7 +44,6 @@ vi.mock('../web-chat-store', () =>
   }),
 );
 vi.mock('../web-settings-store', () => ({}));
-vi.mock('../media-store', () => ({}));
 vi.mock('../model-store', () => ({
   useModelStore: {
     getState: () => ({ reset: modelReset }),
@@ -74,6 +73,7 @@ vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
 import { applyCacheScope } from '../authentication-store';
+import { useMediaStore } from '../media-store';
 
 const SCOPE_KEY = 'agi.cache-scope';
 const MODEL_PREFERENCES = JSON.stringify([resolveModelFamilySlot('openai/gpt-fast')]);
@@ -82,9 +82,34 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   sessionStorage.clear();
+  useMediaStore.getState().reset();
 });
 
 describe('applyCacheScope', () => {
+  it.each(['account', 'workspace'] as const)('resets actual media jobs on a %s scope change', async (kind) => {
+    await applyCacheScope({ accountId: 'user_1', workspaceId: null });
+    useMediaStore.getState().addJob({
+      id: 'previous-scope-job', type: 'video', prompt: 'previous scope prompt',
+      status: 'generating', createdAt: '2026-11-04T00:00:00.000Z',
+    });
+    await applyCacheScope(kind === 'account'
+      ? { accountId: 'user_2', workspaceId: null }
+      : { accountId: 'user_1', workspaceId: 'org_a' });
+    expect(useMediaStore.getState().jobs).toEqual([]);
+  });
+
+  it('preserves current media work on first and unchanged scope observation', async () => {
+    const job = {
+      id: 'current-job', type: 'image' as const, prompt: 'current prompt',
+      status: 'generating' as const, createdAt: '2026-11-04T00:00:00.000Z',
+    };
+    useMediaStore.getState().addJob(job);
+    expect(await applyCacheScope({ accountId: 'user_1', workspaceId: null })).toBe(false);
+    expect(useMediaStore.getState().jobs).toEqual([job]);
+    expect(await applyCacheScope({ accountId: 'user_1', workspaceId: null })).toBe(false);
+    expect(useMediaStore.getState().jobs).toEqual([job]);
+  });
+
   it('does not purge or record scope after the captured owner retires during cancellation', async () => {
     await applyCacheScope({ accountId: 'user_1', workspaceId: null });
     let current = true;
