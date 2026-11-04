@@ -52,6 +52,7 @@ import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
+import { useNotebookWorkspace } from '@/features/notebook/hooks/useNotebookWorkspace';
 import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import {
@@ -196,6 +197,7 @@ export function CloudCodePage(props: CloudCodePageProps) {
 function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePageProps) {
   const { api, capture } = useCloudCodeAuthority(injectedApi);
   const sessionSnapshot = useSessionSnapshot();
+  const notebookWorkspace = useNotebookWorkspace();
   const paneRef = useRef(pane);
   paneRef.current = pane;
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
@@ -1804,6 +1806,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
 
                         {isNotebookSession && (
                           <NotebookPanel
+                            workspace={notebookWorkspace}
+                            selectionRevision={renderedSelectionRevision}
                             sessionId={selectedSession.id}
                             sessionReady={selectedSession.state === 'ready'}
                             onSession={(next) => {
