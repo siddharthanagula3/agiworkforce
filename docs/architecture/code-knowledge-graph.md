@@ -884,9 +884,50 @@ test. Fixtures cover selected/ordinary error handling, planning and stored-resul
 deadlines plus concurrency behavior, but remain unexecuted; no provider, storage,
 Workflow or runtime cancellation guarantee is established.
 
+## Native schedule and memory pre-dispatch cancellation
+
+Reconstructed commit: `9b0214be1713313dfb513cc5dc0449a93fd0cecd` changes seven
+production files and four unexecuted fixture sources. The tool loop passes its
+optional execution signal into native schedule/memory contexts and their claimed
+DB adapter. Wrapper, entitlement/policy admission, ownership, advisory-lock and
+quota boundaries check cancellation before mutation SQL. Memory save/forget
+commands carry the signal as execution context, not persisted memory metadata.
+
+`createClaimedUserScopedDb` additionally checks before transaction entry, after
+Neon checkout enters the callback, and after awaited role/claim binding before
+caller SQL or a transaction callback. This covers asynchronous adapter work hidden
+beneath a service's apparent pre-query check; `withOrg` retains the same signal.
+The underlying Neon transaction still commits after the callback normally returns.
+No post-write, post-callback or pre-commit cancellation gate is added, preserving
+a successful operation's receipt rather than reporting cancellation after its
+mutation. Known business-error-shaped abort reasons escape schedule/memory error
+translation by exact identity with the signal's reason.
+
+Other callers omitting the optional signal retain their behavior. This is not
+full native-tool coverage, cancellation of already-dispatched SQL, rollback of
+remote effects or a deadline on connection checkout. Fixtures describe delayed
+admission/binding, cancellation identity and successful receipt preservation but
+were not run; no database action or runtime acceptance is claimed.
+
+## Text preview actual stored-byte limit
+
+Reconstructed commit: `ffa6a17be7987d0e71ce21c1a8dece29f31385b7` changes file
+text GET and one unexecuted route fixture source. Its existing 30 MiB metadata
+limit now also passes to `readStoredMedia`, enforcing bounded actual storage reads
+before `renderFileTextPreview`. Typed oversize becomes validation 400; missing
+advertised size or streamed overflow without a known length uses the truthful
+"could not be read within" message. Missing bytes remain 404, and unrelated
+storage errors retain their existing error path rather than becoming size refusals.
+
+This uses the bounded-reader ownership described above, not a new parser or
+universal memory ceiling. The separate local project-knowledge reader still
+checks stat then uses unrestricted `readFile`, leaving its growth-between-check-
+and-read boundary unchanged. Route fixtures wrap the real renderer and mock
+storage, but were not executed; no parser, storage or runtime acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the thirty-six accepted production slices traced above are represented as
+Only the thirty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
