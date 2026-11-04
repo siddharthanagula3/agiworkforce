@@ -3551,9 +3551,38 @@ wipe/logout behavior. Mocked fixtures cover unsupported ownership, stale install
 snapshots, supported removal and retained state on failure; all are unexecuted. No
 native, database, disk deletion, tests, checks or network actions were performed.
 
+## Performance benchmarks admit a captured Local model and report its actual runtime
+
+Accepted commit `2e989c55388b89d7a40e4059a8e5e4c82e27d575` changes the
+Performance screen, `performanceMonitor.ts` and one fixture source. The sole
+production `runBenchmark` caller resolves its captured selection through
+`resolveLocalModelRef` before starting the sampler. It passes the resulting model
+ID/path to `localGenerate`, including supported system models without an installation
+row. Failed admission gives actionable model-selection/download guidance instead of
+starting generation. The service persists `GenerateResult.runtime`, not a guessed
+device-tier backend, and refuses an aborted result before recording history; sampler
+cleanup remains in finally. UI copy describes a standard prompt, not a guaranteed
+60-token result, and distinguishes a saved result whose display refresh failed.
+
+A synchronous screen-local operation ref excludes overlapping benchmark/load/unload
+entry. Readiness uses exact resident ExecuTorch preset or GGUF path against a
+selection-tagged resolved reference, refreshed at focus and operation boundaries.
+The existing `loadedLocalModel` helper prioritizes the ExecuTorch snapshot over
+GGUF; it is not a complete live inventory. System availability is checked on use,
+and the unload label is plural because `unloadLocalModels` releases both runtimes,
+not necessarily only the displayed selection.
+
+This is not a navigation lifetime or global operation lease. A late old operation
+can publish its tagged selection and conservatively remove a newer ready display;
+tagging prevents treating that old reference as the new selected model. Native
+runtime timing, installation/cache state and network behavior are not proved.
+Fixtures mock the resolver and generation, covering failed admission, system model,
+captured path/model, duplicate starts, aborted persistence and a different resident
+preset; all are unexecuted. No tests, checks or native/cache/network actions were run.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-one accepted production slices traced above are represented as
+Only the one hundred and twenty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
