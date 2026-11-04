@@ -8401,3 +8401,30 @@ and user-visible resolution before deciding whether to invalidate or migrate
 records. Blind version adoption, deleting snapshots, or claiming a normal pull
 already reconciles content is not justified. Accepted new conflict handling and
 its unexecuted fixtures do not resolve this legacy-state boundary.
+
+## EXT-SITE-TOOL-AUTO-APPROVAL-CONTRACT-01
+
+Severity: Medium. Status: OPEN source-backed product-policy contract discrepancy,
+2026-11-04. No exploit, deployed behavior or universal consent bypass established.
+
+`apps/extension/src/features/computer-use/browserToolDefinitions.ts` describes
+`call_site_tool` as requiring approval on every call. `approvalPolicy.ts` returns
+`alwaysAsk: true, reason: 'site_tool'`, but `crucialActions.ts` maps that reason to
+null. `askBeforeActing.ts::actionNeedsApproval` ignores noncrucial `alwaysAsk` in
+Auto, the default mode, and returns false; the production `background.ts`
+`onBeforeAction` callback consequently returns true without an extension prompt.
+This is a concrete mismatch between the declared per-call contract and mode
+resolution, not evidence that every site call runs without consent.
+
+`webmcp.ts::callTool` independently plans against the actual page and retains
+`window.confirm` when its policy requires approval; form submission also confirms.
+Ask/Full and other crucial-action requirements remain separate. Accepted alias
+retirement `73709c77c6839814c86ae8fe16ff6632a0522334` routes production site tools
+through the existing canonical bound service but does not change this policy.
+
+Required decision: establish whether every canonical site invocation must prompt
+in Auto, or whether the declared contract should describe mode-dependent consent.
+Then align driver policy, tool description and user-facing permission semantics
+without weakening actual-page sensitive/authentication/form controls. No policy
+change is approved or implemented by this note; fixtures are unexecuted and
+runtime/deployment acceptance remains open.

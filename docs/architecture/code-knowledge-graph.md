@@ -627,7 +627,9 @@ The action requires a known composer instance/revision, no staged renderer files
 no pending host attachments and no active turn. Missing binding refuses. Observed
 typing and model intent retire delayed work; the first-message branch/reset path
 also checks before reset. The final renderer draft gate checks expected instance,
-revision, conversation epoch and attachment state before inserting/submitting text.
+revision and conversation epoch before inserting text. User attachment additions
+invalidate the revision; explicit attachment counters separately guard automatic
+submission after insertion, not insertion itself.
 This extends the earlier approval/Undo slice to the separately scoped explicit
 navigation paths, without restoring automatic latest-reply Undo.
 
@@ -638,9 +640,36 @@ exact hunks, not generated or executed; all fixtures are unexecuted, with dedica
 branchAnswer, runtime/cwd and FileReader interleaving gaps. No runtime navigation,
 atomic filesystem or loss-free composer guarantee is claimed.
 
+## Chrome canonical site-tool dispatch
+
+Reconstructed commit: `73709c77c6839814c86ae8fe16ff6632a0522334` removes
+legacy `site_*` aliases and their original-tab callbacks from the sole production
+`runAgentLoop` caller in `apps/extension/src/background.ts`, and removes the
+corresponding optional driver dispatch surface. Canonical `discover_site_tools`
+and `call_site_tool` remain. `BrowserAgentSiteTools.prepare` performs fresh
+discovery itself; an explicit prior model discovery call is not required. Original
+page names and imperative/declarative descriptors remain supported.
+
+The existing canonical service binds plans to the current lease tab, URL, document
+instance, navigation generation, descriptor and copied arguments; execution
+rediscovers and compares the plan, sends scoped cancellation on abort, and fences
+returned results. Results remain untrusted page reports, not independent success
+verification. These existing protections are now the production site-tool path,
+not newly introduced guarantees of remote cancellation or rollback. The old alias
+path also had content-side actual-page policy checks; its removal does not prove
+that all earlier consent was bypassed. Native page-policy `window.confirm` and
+form-submission confirmation remain.
+
+Separate OPEN constraint `EXT-SITE-TOOL-AUTO-APPROVAL-CONTRACT-01`: the tool
+contract says every call needs approval, but default Auto ignores the noncrucial
+`alwaysAsk/site_tool` requirement. Alias retirement does not resolve that product
+policy mismatch. The canonical registers retain the decision boundary without
+changing permission behavior. Three changed fixture sources are unexecuted; no
+browser race, deployed behavior or universal prompting guarantee is established.
+
 ## Reconstruction boundary
 
-Only the twenty-six accepted production slices traced above are represented as
+Only the twenty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
