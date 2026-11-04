@@ -44,6 +44,7 @@ import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import * as accountAccess from '../features/surfaces/accountAccess';
 import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
+import * as tierResolver from '../integrations/tierResolver';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -4647,6 +4648,303 @@ describe('ChatStateManager error classification', () => {
     expect(harness.posted).toContainEqual({
       type: 'error',
       payload: presentTurnFailure(failure),
+    });
+  });
+});
+
+describe('ChatStateManager composer-bound conversation navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(vscode.window.showWarningMessage).mockReset();
+    vi.mocked(vscode.window.showQuickPick).mockReset();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+  });
+
+  const composer = { instance: 'navigation-fixture', revision: 0, attachments: 0 };
+  const rewindOutcome = {
+    restoredFiles: [],
+    removedFiles: [],
+    skippedFiles: [],
+    conversationRestored: true,
+    prompt: 'Continue here',
+  };
+
+  async function navigationHarness(binding = true) {
+    const persisted = {
+      thread: threadSummary({ id: 'navigation-source' }),
+      messages: [
+        { role: 'user', text: 'First prompt', index: 0 },
+        { role: 'assistant', text: 'First answer', index: 1 },
+        { role: 'user', text: 'Continue here', index: 2 },
+      ],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: persisted });
+    vi.mocked(harness.conversationTreeProvider!.resolveThread).mockImplementation(
+      async (threadId) => ({
+        response: { ...persisted, thread: threadSummary({ id: threadId }) },
+        runtime: harness.runtime as unknown as LocalRuntimeClient,
+        cwd: '/workspace',
+      }),
+    );
+    const forkThread = vi.fn().mockResolvedValue(threadSummary({ id: 'navigation-fork' }));
+    const rewindThread = vi.fn().mockResolvedValue(rewindOutcome);
+    const listCheckpoints = vi.fn().mockResolvedValue({
+      checkpoints: [{
+        checkpointIndex: 0,
+        messageIndex: 2,
+        prompt: 'Continue here',
+        createdAt: '2026-10-18T00:00:00Z',
+        trackedFiles: 0,
+      }],
+    });
+    Object.assign(harness.runtime, { forkThread, rewindThread, listCheckpoints });
+    harness.runtime.offers.mockImplementation(async (...args: unknown[]) =>
+      args[0] === 'forkAtMessage' || args[0] === 'checkpoints',
+    );
+    await expect(harness.manager.resumeConversation('navigation-source')).resolves.toBe(true);
+    if (binding) await harness.manager.handleMessage({ type: 'composerState', payload: { ...composer } });
+    harness.runtime.resumeThread.mockClear();
+    harness.posted.length = 0;
+    return { ...harness, forkThread, rewindThread, listCheckpoints };
+  }
+
+  function navigate(harness: Awaited<ReturnType<typeof navigationHarness>>, action: 'branch' | 'resend' | 'checkpoint') {
+    if (action === 'checkpoint') {
+      vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) =>
+        (await items)[0] as never,
+      );
+      vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Rewind' as never);
+      return harness.manager.showCheckpoints();
+    }
+    if (action === 'resend') {
+      vi.mocked(vscode.window.showWarningMessage).mockImplementationOnce(async (_message, _options, item) => item as never);
+    }
+    return harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action, text: 'Continue here', occurrence: 0, composer: { ...composer } },
+    });
+  }
+
+  it.each(['branch', 'resend', 'checkpoint'] as const)(
+    'keeps a newer resume authoritative after delayed %s finishes',
+    async (action) => {
+      const harness = await navigationHarness();
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      const operation = action === 'branch' ? harness.forkThread : harness.rewindThread;
+      operation.mockImplementationOnce(async () => {
+        await pending;
+        return action === 'branch' ? threadSummary({ id: 'navigation-fork' }) : rewindOutcome;
+      });
+      const navigation = navigate(harness, action);
+      await vi.waitFor(() => expect(operation).toHaveBeenCalledOnce());
+      await expect(harness.manager.resumeConversation('newer-history')).resolves.toBe(true);
+      harness.posted.length = 0;
+      release();
+      await navigation;
+      expect(harness.manager.activeThreadId()).toBe('newer-history');
+      expect(harness.runtime.resumeThread.mock.calls).toEqual([['newer-history']]);
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+    },
+  );
+
+  it.each(['branch', 'resend', 'checkpoint'] as const)(
+    'cancels %s after the composer revision changes during the runtime operation',
+    async (action) => {
+      const harness = await navigationHarness();
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      const operation = action === 'branch' ? harness.forkThread : harness.rewindThread;
+      operation.mockImplementationOnce(async () => {
+        await pending;
+        return action === 'branch' ? threadSummary({ id: 'navigation-fork' }) : rewindOutcome;
+      });
+      const navigation = navigate(harness, action);
+      await vi.waitFor(() => expect(operation).toHaveBeenCalledOnce());
+      await harness.manager.handleMessage({ type: 'composerState', payload: { ...composer, revision: 1 } });
+      release();
+      await navigation;
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+    },
+  );
+
+  it('invalidates a pending fork when the model is reselected without changing its value', async () => {
+    const harness = await navigationHarness();
+    let release!: () => void;
+    harness.forkThread.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => { release = resolve; });
+      return threadSummary({ id: 'navigation-fork' });
+    });
+    const navigation = navigate(harness, 'branch');
+    await vi.waitFor(() => expect(harness.forkThread).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({ type: 'selectModel', payload: { modelId: 'auto' } });
+    release();
+    await navigation;
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+  });
+
+  it.each(['branch', 'resend', 'checkpoint'] as const)(
+    'restores the draft for unchanged same-owner %s',
+    async (action) => {
+      const harness = await navigationHarness();
+      await navigate(harness, action);
+      expect(harness.runtime.resumeThread).toHaveBeenCalledWith(
+        action === 'branch' ? 'navigation-fork' : 'navigation-source',
+      );
+      expect(harness.posted).toContainEqual({
+        type: 'composerDraft',
+        payload: {
+          text: 'Continue here',
+          references: [],
+          submit: action === 'resend',
+          expectedComposer: { ...composer, epoch: expect.any(Number) },
+        },
+      });
+      expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['missing', 'staged', 'pending'] as const)(
+    'refuses message actions and command checkpoints with %s composer binding or files',
+    async (state) => {
+      const harness = await navigationHarness(state !== 'missing');
+      if (state === 'staged') {
+        await harness.manager.handleMessage({ type: 'composerState', payload: { ...composer, attachments: 1 } });
+      }
+      if (state === 'pending') {
+        await harness.manager.handleMessage({
+          type: 'attachFiles',
+          payload: { files: [{ name: 'note.txt', mimeType: 'text/plain', sizeBytes: 3, dataUrl: 'data:text/plain;base64,YWJj' }] },
+        });
+        expect(harness.posted).toContainEqual(expect.objectContaining({
+          type: 'attachFilesAck',
+          payload: expect.objectContaining({ added: [expect.objectContaining({ name: 'note.txt' })] }),
+        }));
+      }
+      await navigate(harness, 'branch');
+      await navigate(harness, 'resend');
+      await harness.manager.handleMessage({
+        type: 'messageAction',
+        payload: { action: 'branch', text: 'First prompt', occurrence: 0, composer: { ...composer } },
+      });
+      await harness.manager.showCheckpoints();
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.forkThread).not.toHaveBeenCalled();
+      expect(harness.rewindThread).not.toHaveBeenCalled();
+      expect(harness.listCheckpoints).not.toHaveBeenCalled();
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining('remove staged files'));
+    },
+  );
+
+  it('refuses an action with no binding even when the host has a current composer', async () => {
+    const harness = await navigationHarness();
+    await harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action: 'branch', text: 'Continue here', occurrence: 0 },
+    });
+    expect(harness.forkThread).not.toHaveBeenCalled();
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+  });
+
+  it.each(['trustMode', 'provider', 'model'] as const)(
+    'refuses a fork whose resumed %s differs from its captured authority',
+    async (field) => {
+      const harness = await navigationHarness();
+      const changed = threadSummary({
+        id: 'navigation-fork',
+        ...(field === 'trustMode' ? { trustMode: 'local' as const } : {}),
+        ...(field === 'provider' ? { provider: 'ollama' } : {}),
+        ...(field === 'model' ? { model: requireCatalogModel('anthropic').id } : {}),
+      });
+      harness.runtime.resumeThread.mockResolvedValueOnce(changed);
+      await navigate(harness, 'branch');
+      expect(harness.forkThread).toHaveBeenCalledOnce();
+      expect(harness.runtime.resumeThread).toHaveBeenCalledWith('navigation-fork');
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+    },
+  );
+
+  it('invalidates a pending fork before model selection finishes resolving the tier', async () => {
+    const harness = await navigationHarness();
+    let releaseFork!: () => void;
+    harness.forkThread.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => { releaseFork = resolve; });
+      return threadSummary({ id: 'navigation-fork' });
+    });
+    let releaseTier!: (tier: Awaited<ReturnType<typeof tierResolver.resolveTier>>) => void;
+    const pendingTier = new Promise<Awaited<ReturnType<typeof tierResolver.resolveTier>>>(
+      (resolve) => { releaseTier = resolve; },
+    );
+    const tier = vi.spyOn(tierResolver, 'resolveTier').mockReturnValueOnce(pendingTier);
+    let selection: Promise<void> | undefined;
+    try {
+      const navigation = navigate(harness, 'branch');
+      await vi.waitFor(() => expect(harness.forkThread).toHaveBeenCalledOnce());
+      selection = harness.manager.handleMessage({ type: 'selectModel', payload: { modelId: 'auto' } });
+      expect(tier).toHaveBeenCalledWith(harness.context);
+      expect(tier.mock.results[0]?.value).toBe(pendingTier);
+      releaseFork();
+      await navigation;
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+    } finally {
+      releaseTier('byok');
+      await selection;
+      tier.mockRestore();
+    }
+  });
+
+  it('does not restore a fork draft after model selection while committed usage is pending', async () => {
+    const harness = await navigationHarness();
+    let release!: () => void;
+    const usage = vi.spyOn(harness.manager, 'pushUsageMeter').mockImplementationOnce(
+      () => new Promise<void>((resolve) => { release = resolve; }),
+    );
+    try {
+      const navigation = navigate(harness, 'branch');
+      await vi.waitFor(() => expect(usage).toHaveBeenCalledOnce());
+      expect(harness.manager.activeThreadId()).toBe('navigation-fork');
+      await harness.manager.handleMessage({ type: 'selectModel', payload: { modelId: 'auto' } });
+      harness.posted.length = 0;
+      release();
+      await navigation;
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+    } finally {
+      usage.mockRestore();
+    }
+  });
+
+  it('preserves the captured binding across the intentional first-message reset', async () => {
+    const harness = await navigationHarness();
+    await harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action: 'branch', text: 'First prompt', occurrence: 0, composer: { ...composer } },
+    });
+    expect(harness.manager.activeThreadId()).toBeUndefined();
+    expect(harness.forkThread).not.toHaveBeenCalled();
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'composerDraft',
+      payload: {
+        text: 'First prompt', references: [], submit: false,
+        expectedComposer: { ...composer, epoch: expect.any(Number) },
+      },
     });
   });
 });

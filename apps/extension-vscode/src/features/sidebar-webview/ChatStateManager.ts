@@ -157,7 +157,11 @@ import {
   type EditorContextSnapshot,
 } from '../../data/composerContext';
 import { searchMentionTargets } from '../../data/mentionSearch';
-import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
+import type {
+  ApprovalDecision,
+  ComposerBinding,
+  ContextAttachmentKind,
+} from '../../protocol/webviewMessages';
 import {
   approvalFilePath,
   approvalToolIdentity,
@@ -292,6 +296,7 @@ export type WebviewToExtMessage =
       };
     }
   | { type: 'ready' }
+  | { type: 'composerState'; payload: ComposerBinding }
   | { type: 'viewFocused' }
   | { type: 'viewBlurred' }
   | { type: 'openPlanDocument' }
@@ -371,7 +376,12 @@ export type WebviewToExtMessage =
   | { type: 'openArchivedSessions' }
   | {
       type: 'messageAction';
-      payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
+      payload: {
+        action: 'resend' | 'branch' | 'branchAnswer';
+        text: string;
+        occurrence: number;
+        composer?: ComposerBinding;
+      };
     }
   | {
       type: 'planDecision';
@@ -517,7 +527,12 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'composerDraft';
-      payload: { text: string; references: WorkspaceFileReference[]; submit?: boolean };
+      payload: {
+        text: string;
+        references: WorkspaceFileReference[];
+        submit?: boolean;
+        expectedComposer?: ComposerBinding & { epoch: number };
+      };
     }
   | { type: 'addUserMessage'; payload: { text: string } }
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
@@ -840,6 +855,15 @@ function manualModelUnlockText(): string {
     : `Your plan uses Auto; upgrade to ${getBillingPlanPricing(tier).label} to choose these models`;
 }
 
+interface ConversationNavigation {
+  attempt: number;
+  epoch: number;
+  thread: DeveloperThreadState;
+  source: DeveloperThreadState;
+  activeModel: string;
+  composer: ComposerBinding | undefined;
+}
+
 export class ChatStateManager {
   private _thread?: DeveloperThreadState;
   private _transcriptSyncActive = false;
@@ -863,6 +887,7 @@ export class ChatStateManager {
     this._post({ type: 'sessionBinding', payload: { epoch: this._conversationEpoch } });
   }
   private _resumeAttemptSeq = 0;
+  private _composerBinding: ComposerBinding | undefined;
   private _turnLifecycleActive = false;
   private _turnLifecycleEpoch: number | undefined;
   /**
@@ -967,6 +992,7 @@ export class ChatStateManager {
   }
 
   async selectModel(modelId: string): Promise<'conversation' | 'default'> {
+    this._resumeAttemptSeq++;
     const model = this._normalizeModelSelection(modelId);
     const scope = this._thread === undefined ? 'default' : 'conversation';
     if (scope === 'default') {
@@ -1047,6 +1073,10 @@ export class ChatStateManager {
 
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
+      case 'composerState': {
+        this._composerBinding = msg.payload;
+        break;
+      }
       case 'ready': {
         if (this._context.globalState.get<boolean>(ONBOARDING_SEEN_KEY) === true) {
           this._post({ type: 'hideOnboarding' });
@@ -1681,6 +1711,7 @@ export class ChatStateManager {
       }
 
       case 'selectModel': {
+        this._resumeAttemptSeq++;
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId.startsWith('__local_setup__')) break;
         const normalized = this._normalizeModelSelection(modelId);
@@ -2223,11 +2254,20 @@ export class ChatStateManager {
   }
 
   public async resumeConversation(threadId: string): Promise<boolean> {
-    const attempt = ++this._resumeAttemptSeq;
+    return this._resumeConversation(threadId, ++this._resumeAttemptSeq);
+  }
+
+  private async _resumeConversation(
+    threadId: string,
+    attempt: number,
+    navigation?: ConversationNavigation,
+  ): Promise<boolean> {
+    if (attempt !== this._resumeAttemptSeq) return false;
     const startingEpoch = this._conversationEpoch;
     const isCurrentAttempt = (): boolean =>
       attempt === this._resumeAttemptSeq &&
       startingEpoch === this._conversationEpoch &&
+      (navigation === undefined || this._isCurrentNavigation(navigation)) &&
       !this._turnLifecycleActive &&
       this._activeTurn === undefined;
 
@@ -2249,6 +2289,15 @@ export class ChatStateManager {
       }
 
       const listed = resolved.response.thread;
+      if (
+        navigation !== undefined &&
+        (resolved.runtime !== navigation.source.runtime ||
+          !isSameWorkspacePath(resolved.cwd, navigation.source.cwd) ||
+          listed.trustMode !== navigation.source.trustMode ||
+          listed.provider !== navigation.source.provider)
+      ) {
+        return false;
+      }
       if (isCloudThread(listed)) {
         void showCloudSession(resolved.response);
         return false;
@@ -2273,6 +2322,13 @@ export class ChatStateManager {
       }
       if (resumed.trustMode === 'unknown') {
         return this._rejectResume(unknownBoundaryMessage(), PERMISSION_REFUSAL);
+      }
+      if (
+        navigation !== undefined &&
+        (resumed.trustMode !== navigation.source.trustMode ||
+          resumed.provider !== navigation.source.provider)
+      ) {
+        return false;
       }
 
       let localModels: LocalModelSummary[];
@@ -2303,6 +2359,13 @@ export class ChatStateManager {
         resumed.trustMode === 'local' && persistedModel !== undefined
           ? persistedModel
           : this._normalizeModelSelection(persistedModel ?? Config.model());
+      if (
+        navigation !== undefined &&
+        (model !== navigation.source.model ||
+          this._providerBoundaryForSession(resumed, model) !== navigation.source.providerBoundary)
+      ) {
+        return false;
+      }
       if (
         resumed.trustMode !== 'local' &&
         persistedModel !== undefined &&
@@ -2822,15 +2885,19 @@ export class ChatStateManager {
       );
       return;
     }
+    const navigation = this._beginConversationNavigation(thread, this._composerBinding);
+    if (!this._canStartNavigation(navigation)) return;
     let listed: ThreadCheckpointList;
     try {
       listed = await thread.runtime.listCheckpoints(thread.id);
     } catch (error) {
+      if (!this._isCurrentNavigation(navigation)) return;
       void vscode.window.showErrorMessage(
         `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return;
     }
+    if (!this._isCurrentNavigation(navigation)) return;
     if (listed.checkpoints.length === 0) {
       void vscode.window.showInformationMessage(
         `${PRODUCT_NAMES.code}: this session has no checkpoints yet. One is saved with each prompt.`,
@@ -2846,7 +2913,7 @@ export class ChatStateManager {
       })),
       { title: `${PRODUCT_NAMES.code}, Checkpoints`, placeHolder: 'Pick the prompt to go back to' },
     );
-    if (picked === undefined) return;
+    if (picked === undefined || !this._isCurrentNavigation(navigation)) return;
     const hasConversation = picked.checkpoint.messageIndex !== undefined;
     const hasCode = picked.checkpoint.trackedFiles > 0;
     const choices = REWIND_CHOICES.filter(
@@ -2864,19 +2931,13 @@ export class ChatStateManager {
       title: `${PRODUCT_NAMES.code}, Rewind to “${picked.label}”`,
       placeHolder: 'What goes back to this point',
     });
-    if (choice === undefined) return;
+    if (choice === undefined || !this._isCurrentNavigation(navigation)) return;
     const confirmed = await vscode.window.showWarningMessage(
       `Rewind to “${picked.label}”?`,
       { modal: true, detail: choice.consequence },
       REWIND,
     );
-    if (confirmed !== REWIND || this._thread !== thread) return;
-    if (this._activeTurn?.threadId === thread.id) {
-      void vscode.window.showWarningMessage(
-        `${PRODUCT_NAMES.code}: stop the current response before rewinding this session.`,
-      );
-      return;
-    }
+    if (confirmed !== REWIND || !this._isCurrentNavigation(navigation)) return;
     let outcome: ThreadRewindOutcome;
     try {
       outcome = await thread.runtime.rewindThread({
@@ -2890,8 +2951,12 @@ export class ChatStateManager {
       );
       return;
     }
-    if (outcome.conversationRestored && (await this.resumeConversation(thread.id))) {
-      this._post({ type: 'composerDraft', payload: { text: outcome.prompt, references: [] } });
+    if (
+      outcome.conversationRestored &&
+      this._isCurrentNavigation(navigation) &&
+      (await this._resumeConversation(thread.id, navigation.attempt, navigation))
+    ) {
+      this._postNavigationDraft(navigation, outcome.prompt);
     }
     if (outcome.skippedFiles.length > 0) {
       void vscode.window.showWarningMessage(
@@ -4349,6 +4414,7 @@ export class ChatStateManager {
     action: 'resend' | 'branch' | 'branchAnswer';
     text: string;
     occurrence: number;
+    composer?: ComposerBinding;
   }): Promise<void> {
     const thread = this._thread;
     const loaded = this._loadedConversation;
@@ -4372,12 +4438,18 @@ export class ChatStateManager {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
+    const navigation = this._beginConversationNavigation(thread, action.composer);
+    if (!this._canStartNavigation(navigation)) return;
     try {
-      if (action.action === 'resend') await this._resendMessage(thread, target.index, target.text);
-      else if (action.action === 'branchAnswer') {
-        await this._branchFromAnswer(thread, loaded.title, target.index);
-      } else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
+      if (action.action === 'resend') {
+        await this._resendMessage(thread, target.index, target.text, navigation);
+      } else if (action.action === 'branchAnswer') {
+        await this._branchFromAnswer(thread, loaded.title, target.index, navigation);
+      } else {
+        await this._branchFromMessage(thread, loaded.title, target.index, target.text, navigation);
+      }
     } catch (error) {
+      if (navigation.attempt !== this._resumeAttemptSeq) return;
       void vscode.window.showErrorMessage(
         t('messageActions.failed', {
           reason: error instanceof Error ? error.message : String(error),
@@ -4390,8 +4462,11 @@ export class ChatStateManager {
     thread: DeveloperThreadState,
     messageIndex: number,
     text: string,
+    navigation: ConversationNavigation,
   ): Promise<void> {
-    if (!(await thread.runtime.offers('checkpoints'))) {
+    const supported = await thread.runtime.offers('checkpoints');
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (!supported) {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
@@ -4401,18 +4476,19 @@ export class ChatStateManager {
       { modal: true, detail: t('messageActions.resendDetail') },
       resend,
     );
-    if (confirmed !== resend || this._thread !== thread || this.turnInFlight()) return;
+    if (confirmed !== resend || !this._isCurrentNavigation(navigation)) return;
     const outcome = await thread.runtime.rewindThread({
       threadId: thread.id,
       messageIndex,
       restore: 'conversation',
     });
+    if (!this._isCurrentNavigation(navigation)) return;
     if (!outcome.conversationRestored) {
       void vscode.window.showWarningMessage(t('messageActions.notFound'));
       return;
     }
-    if (await this.resumeConversation(thread.id)) {
-      this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
+    if (await this._resumeConversation(thread.id, navigation.attempt, navigation)) {
+      this._postNavigationDraft(navigation, text, true);
     }
   }
 
@@ -4420,8 +4496,11 @@ export class ChatStateManager {
     thread: DeveloperThreadState,
     title: string,
     messageIndex: number,
+    navigation: ConversationNavigation,
   ): Promise<void> {
-    if (!(await thread.runtime.offers('forkAtMessage'))) {
+    const supported = await thread.runtime.offers('forkAtMessage');
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (!supported) {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
@@ -4431,7 +4510,8 @@ export class ChatStateManager {
       messageIndex,
     );
     this._conversationTreeProvider?.refresh();
-    await this.resumeConversation(forked.id);
+    if (!this._isCurrentNavigation(navigation)) return;
+    await this._resumeConversation(forked.id, navigation.attempt, navigation);
   }
 
   private async _branchFromMessage(
@@ -4439,13 +4519,18 @@ export class ChatStateManager {
     title: string,
     messageIndex: number,
     text: string,
+    navigation: ConversationNavigation,
   ): Promise<void> {
     if (messageIndex === 0) {
+      if (!this._isCurrentNavigation(navigation)) return;
       this.resetConversation();
-      this._post({ type: 'composerDraft', payload: { text, references: [] } });
+      navigation.attempt = this._resumeAttemptSeq;
+      this._postNavigationDraft(navigation, text);
       return;
     }
-    if (!(await thread.runtime.offers('forkAtMessage'))) {
+    const supported = await thread.runtime.offers('forkAtMessage');
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (!supported) {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
@@ -4455,9 +4540,77 @@ export class ChatStateManager {
       messageIndex - 1,
     );
     this._conversationTreeProvider?.refresh();
-    if (await this.resumeConversation(forked.id)) {
-      this._post({ type: 'composerDraft', payload: { text, references: [] } });
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (await this._resumeConversation(forked.id, navigation.attempt, navigation)) {
+      this._postNavigationDraft(navigation, text);
     }
+  }
+
+  private _beginConversationNavigation(
+    thread: DeveloperThreadState,
+    composer: ComposerBinding | undefined,
+  ): ConversationNavigation {
+    return {
+      attempt: ++this._resumeAttemptSeq,
+      epoch: this._conversationEpoch,
+      thread,
+      source: { ...thread },
+      activeModel: this._activeModel,
+      composer,
+    };
+  }
+
+  private _isCurrentNavigation(navigation: ConversationNavigation): boolean {
+    return (
+      navigation.attempt === this._resumeAttemptSeq &&
+      navigation.epoch === this._conversationEpoch &&
+      navigation.thread === this._thread &&
+      navigation.activeModel === this._activeModel &&
+      navigation.composer !== undefined &&
+      navigation.composer.instance === this._composerBinding?.instance &&
+      navigation.composer.revision === this._composerBinding.revision &&
+      navigation.composer.attachments === 0 &&
+      this._composerBinding.attachments === 0 &&
+      this._pendingAttachments.length === 0 &&
+      navigation.source.runtime === this._thread.runtime &&
+      navigation.source.cwd === this._thread.cwd &&
+      navigation.source.model === this._thread.model &&
+      navigation.source.trustMode === this._thread.trustMode &&
+      navigation.source.provider === this._thread.provider &&
+      navigation.source.providerBoundary === this._thread.providerBoundary &&
+      !this.turnInFlight()
+    );
+  }
+
+  private _canStartNavigation(navigation: ConversationNavigation): boolean {
+    if (this._isCurrentNavigation(navigation)) return true;
+    void vscode.window.showWarningMessage(
+      `${PRODUCT_NAMES.code}: finish the current response and remove staged files before retrying this action. If the composer was replaced, reopen the chat first.`,
+    );
+    return false;
+  }
+
+  private _postNavigationDraft(
+    navigation: ConversationNavigation,
+    text: string,
+    submit = false,
+  ): void {
+    if (
+      navigation.composer === undefined ||
+      navigation.attempt !== this._resumeAttemptSeq ||
+      this.turnInFlight()
+    ) {
+      return;
+    }
+    this._post({
+      type: 'composerDraft',
+      payload: {
+        text,
+        references: [],
+        submit: submit && this._pendingAttachments.length === 0,
+        expectedComposer: { ...navigation.composer, epoch: this._conversationEpoch },
+      },
+    });
   }
 
   private _conversationPayload(
