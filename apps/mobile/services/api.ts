@@ -5,7 +5,11 @@ import { combineAbortSignals } from '@/lib/abortSignal';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
-import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  invalidateCloudAccount,
+  assertCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
 import {
   createUploadTask,
@@ -208,9 +212,11 @@ export function streamAuthRefusal(status: number, text: string): Error | null {
   return null;
 }
 
-export async function recoverStreamSession(): Promise<boolean> {
+export async function recoverStreamSession(account: CloudAccountEpoch): Promise<boolean> {
+  assertCloudAccountEpochCurrent(account);
   const accountGeneration = _accountGeneration;
   const refreshed = await tryRefreshToken();
+  assertCloudAccountEpochCurrent(account);
   assertApiAccountGeneration(accountGeneration);
   if (!refreshed) handleUnrecoverableAuth();
   return refreshed;

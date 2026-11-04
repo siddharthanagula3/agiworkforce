@@ -50,6 +50,10 @@ async function loadStreamingService() {
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { activateCloudAccount } = require('@/src/features/auth/services/cloudAccountSession') as typeof import('@/src/features/auth/services/cloudAccountSession');
+  activateCloudAccount('stream-account-a');
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('@/services/streaming') as typeof import('@/services/streaming');
 }
 

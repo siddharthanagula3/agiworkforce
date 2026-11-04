@@ -34,6 +34,7 @@ jest.mock('../lib/egressGuard', () => ({
 
 const mockInvalidateCloudAccount = jest.fn();
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  ...jest.requireActual('../src/features/auth/services/cloudAccountSession'),
   invalidateCloudAccount: () => mockInvalidateCloudAccount(),
 }));
 
@@ -67,8 +68,13 @@ import {
   ApiFreeCapacityError,
   ApiPaywallError,
   resetApiAccountState,
+  recoverStreamSession,
 } from '../services/api';
 import { Alert } from 'react-native';
+import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+} from '../src/features/auth/services/cloudAccountSession';
 import {
   paywallActivityErrorFromApiError,
   paywallErrorStateFromApiError,
@@ -841,5 +847,27 @@ describe('ApiPaywallError class', () => {
     expect(err.feature).toBe('image_quota');
     expect(err.requiredTier).toBe('max_15x');
     expect(err.reason).toBe('custom reason');
+  });
+});
+
+
+describe('stream refresh account ownership', () => {
+  it.each([true, false])('rejects a delayed refresh result %s without touching the next account', async (refreshed) => {
+    activateCloudAccount('refresh-account-a');
+    const account = captureCloudAccountEpoch();
+    if (!account) throw new Error('Expected an active test account');
+    const refresh = deferredBody<boolean>();
+    mockRefreshAuthSession.mockImplementation(refresh.read);
+    const pending = recoverStreamSession(account);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'StaleCloudAccountOperationError' });
+    await refresh.started;
+    activateCloudAccount('refresh-account-b');
+    refresh.resolve(refreshed);
+    await rejected;
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(captureCloudAccountEpoch()?.ownerId).toBe('refresh-account-b');
   });
 });
