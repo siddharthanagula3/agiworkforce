@@ -1570,9 +1570,37 @@ obsolete/current creation failure, late acquisition, token/renewal retirement,
 identity changes and current null/error outcomes; none were executed. No browser,
 credential, network or deployment acceptance is claimed.
 
+## Chrome deletion queue serializes local mutation and settles exact entries
+
+Accepted commit `b498d74d9d6dbb971bd2650f3a46b625bd5b9ded` changes
+`apps/extension/src/features/cloud-bridge/conversationSync.ts` and its fixture
+source. A recovering Promise tail serializes queue snapshots and fresh
+read/modify/write operations for the actual background message/sweep callers;
+network deletion remains outside the tail. Enqueue creates a UUID generation.
+Successful/404 settlement rereads the queue and removes only matching account,
+conversation, org and generation; generation-absent legacy entries additionally
+match their original timestamp. A same-ID replacement therefore survives an
+older request's settlement, including a new entry with the same timestamp.
+
+An absent storage key remains an empty queue. Present malformed queues/records,
+invalid generations and storage read errors no longer masquerade as empty or
+silently discard rows. Valid legacy entries remain readable, and unknown fields
+on retained records survive parsing and unrelated rewrites. Enqueue failure
+returns false; initial drain read failure prevents network dispatch, while a
+settlement read/write failure leaves durable intent for a later attempt. The
+Promise tail recovers after rejection so subsequent operations can proceed.
+
+This is background-local coordination, not cross-context locking, crash-atomic
+storage or exactly-once remote deletion. Malformed stored data blocks progress
+until repair; no automatic repair is added. The existing sweep catch returns
+pending work on errors and can retain its periodic alarm, but enqueue/alarm/auth
+wake liveness is not corrected by this slice. Concurrent enqueue, replacement,
+legacy, read-failure and malformed-data fixtures use mocked storage/network and
+remain unexecuted; no browser scheduling or durable runtime guarantee is claimed.
+
 ## Reconstruction boundary
 
-Only the sixty-five accepted production slices traced above are represented as
+Only the sixty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
