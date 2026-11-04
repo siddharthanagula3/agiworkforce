@@ -3633,9 +3633,38 @@ isolates the newly imported resolver. Independent source review accepted the
 bounded change; no tests, checks, builds, native, network or storage actions were
 performed for this slice. Regression sources remain unexecuted.
 
+## Web image Stop owns the pending authentication interval
+
+Accepted commit `cfdaab6bd41ebd7414376b092055e66ebe74fea8` changes
+`useMediaGeneration.ts` and its fixture source. Both mounted new-image and
+regeneration callers expose a streaming image card before invoking the hook.
+The hook now registers its exact cancellable operation before awaiting the
+browser authentication token. A matching Stop marks it cancelled immediately;
+authentication success cannot then dispatch generation, and either authentication
+success or failure settles with the existing cancellation error. Ordinary auth
+failure remains an ordinary failure, with the local job and registration cleaned.
+
+An explicit dispatch flag separates this local-only interval from an image POST
+that has started. Only the latter sends the existing durable cancellation request
+with its idempotency key. The post-authentication network deadline is unchanged,
+and its timer is absent during pending authentication. Cancellation does not abort
+token acquisition itself; local settlement still awaits that acquisition. Scope
+matching and repeated-Stop behavior are retained.
+
+Already-dispatched provider work, successful late response handling, server paid
+attempt delivery and quota settlement are unchanged. This slice does not add an
+account/workspace epoch, redesign cancellation retries, or cover the earlier prompt
+persistence interval before the generation hook starts. Mocked fixtures cover
+deferred auth success/failure after Stop, ordinary auth rejection cleanup, wrong
+scope/repeated Stop and dispatched cancellation identity. Existing success and
+deadline fixture sources remain; mounted-flow and concurrent-active-scope behavior
+were source-traced, not exercised. Independent source review accepted the bounded
+change. No tests, checks, builds, browser, authentication or network actions were
+run for this slice; all regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-four accepted production slices traced above are represented as
+Only the one hundred and twenty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
