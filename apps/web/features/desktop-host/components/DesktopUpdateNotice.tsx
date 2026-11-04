@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { HostBridge, HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
 import { getItem, setItem } from '@shared/utils/localStorage';
 import { installUpdate, type UpdateInstallFeedback } from '../lib/update-install';
@@ -28,35 +28,53 @@ function InstallFeedback({
 
 export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
   const [update, setUpdate] = useState<HostUpdateAvailability | null>(null);
-  const [readyVersion, setReadyVersion] = useState<string | null>(null);
+  const [ready, setReady] = useState<{ version: string | null } | null>(null);
   const [feedback, setFeedback] = useState<UpdateInstallFeedback | null>(null);
+  const readyGeneration = useRef(0);
 
-  useEffect(
-    () =>
-      host.onRuntimeEvent((event) => {
-        if (event.kind === 'update-ready') setReadyVersion(event.version);
-      }),
-    [host],
-  );
+  useEffect(() => {
+    let retired = false;
+    readyGeneration.current += 1;
+    setReady(null);
+    setUpdate(null);
+    setFeedback(null);
+    const unsubscribe = host.onRuntimeEvent((event) => {
+      if (retired || event.kind !== 'update-ready') return;
+      readyGeneration.current += 1;
+      setReady({ version: event.version || null });
+      setUpdate(null);
+      setFeedback(null);
+    });
+    return () => {
+      retired = true;
+      readyGeneration.current += 1;
+      unsubscribe();
+    };
+  }, [host]);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const check = async () => {
+      const generation = readyGeneration.current;
       setItem(LAST_CHECK_KEY, Date.now());
       try {
         const result = await host.checkForUpdate();
-        if (cancelled) return;
+        if (cancelled || generation !== readyGeneration.current) return;
         if (result.readyToInstall) {
-          setReadyVersion(result.version);
+          setReady({
+            version: result.stagedVersion === undefined ? result.version || null : result.stagedVersion,
+          });
+          setUpdate(null);
         } else if (
           result.available &&
-          !result.installsAutomatically &&
           !result.downloading &&
           getItem<string | null>(DISMISSED_VERSION_KEY, null) !== result.version
         ) {
           setUpdate(result);
+        } else {
+          setUpdate(null);
         }
       } catch {
         // The manual Settings row owns update-check errors and retry.
@@ -83,7 +101,7 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
 
   const canRestart = host.restartToUpdate !== undefined;
 
-  if (readyVersion) {
+  if (ready) {
     return (
       <aside
         role="status"
@@ -91,7 +109,9 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
         className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
       >
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">AGI Desktop {readyVersion} is ready to install</p>
+          <p className="text-sm font-medium">
+            {`AGI Desktop${ready.version ? ` ${ready.version}` : ' update'} is ready to install`}
+          </p>
           <InstallFeedback
             feedback={feedback}
             fallback={
@@ -113,7 +133,7 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
           className="shrink-0 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={() => {
             setFeedback(null);
-            setReadyVersion(null);
+            setReady(null);
           }}
         >
           Later

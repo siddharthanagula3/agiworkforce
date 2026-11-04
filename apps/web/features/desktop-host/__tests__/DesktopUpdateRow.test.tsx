@@ -37,6 +37,47 @@ afterEach(() => {
 });
 
 describe('DesktopUpdateRow', () => {
+  it('offers a manual installer when automatic capability has no active download', async () => {
+    installHost({ checkForUpdate: async () => ({
+      available: true, currentVersion: '1.2.0', version: '1.3.0', downloadUrl: '',
+      installsAutomatically: true,
+    }) });
+    render(<DesktopUpdateRow />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByRole('button', { name: 'Download installer' })).toBeEnabled();
+    expect(screen.getByRole('status')).not.toHaveTextContent('downloading');
+  });
+
+  it('uses staged identity and keeps restart available when latest metadata failed', async () => {
+    installHost({
+      restartToUpdate: vi.fn(),
+      checkForUpdate: async () => ({
+        available: true, currentVersion: '1.2.0', version: '', stagedVersion: null,
+        downloadUrl: '', readyToInstall: true, metadataError: 'Latest version could not be checked.',
+      }),
+    });
+    render(<DesktopUpdateRow />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByRole('button', { name: 'Restart to update' })).toBeEnabled();
+    expect(screen.getByRole('status')).toHaveTextContent('An update is ready.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Latest version could not be checked.');
+  });
+
+  it('labels the installer fallback honestly on a host without restart', async () => {
+    const openUpdateInstaller = vi.fn();
+    installHost({
+      restartToUpdate: undefined, openUpdateInstaller,
+      checkForUpdate: async () => ({
+        available: true, currentVersion: '1.2.0', version: '1.3.0', downloadUrl: '', readyToInstall: true,
+      }),
+    });
+    render(<DesktopUpdateRow />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Download installer' }));
+    expect(openUpdateInstaller).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Restart to update' })).toBeNull();
+  });
+
   it('renders nothing in a browser', () => {
     const { container } = render(<DesktopUpdateRow />);
     expect(container).toBeEmptyDOMElement();
@@ -171,7 +212,7 @@ describe('DesktopUpdateRow', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('Version 1.3.0 is downloading.');
+      expect(screen.getByRole('status')).toHaveTextContent('An update is downloading.');
     });
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Restart to update' })).toBeNull();

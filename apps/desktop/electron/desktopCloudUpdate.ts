@@ -194,6 +194,7 @@ export async function checkDesktopCloudUpdate(
     available,
     currentVersion,
     version: release.version,
+    latestVersion: release.version,
     ...(release.publishedAt ? { publishedAt: release.publishedAt } : {}),
     downloadUrl: desktopCloudInstallerDownloadUrl(architecture),
   };
@@ -233,7 +234,7 @@ export function desktopUpdatePrompt(
       restartButton: null,
     };
   }
-  if (!outcome.available) {
+  if (!outcome.available && !outcome.readyToInstall && !outcome.downloading) {
     return {
       type: 'info',
       title: `${PRODUCT_NAMES.desktop} is up to date`,
@@ -248,11 +249,12 @@ export function desktopUpdatePrompt(
     };
   }
   if (outcome.readyToInstall) {
+    const version = outcome.stagedVersion === undefined ? outcome.version : outcome.stagedVersion;
     return {
       type: 'info',
       title: `${PRODUCT_NAMES.desktop} update ready`,
-      message: `${PRODUCT_NAMES.desktop} ${outcome.version} is ready to install.`,
-      detail: `You have ${outcome.currentVersion}. Restart ${PRODUCT_NAMES.desktop} to finish updating; your chats are saved in your account.`,
+      message: `${PRODUCT_NAMES.desktop}${version ? ` ${version}` : ' update'} is ready to install.`,
+      detail: `You have ${outcome.currentVersion}. Restart ${PRODUCT_NAMES.desktop} to finish updating; your chats are saved in your account.${outcome.metadataError ? ` ${outcome.metadataError}` : ''}`,
       buttons: ['Restart to Update', 'Later'],
       downloadButton: null,
       restartButton: 0,
@@ -271,11 +273,11 @@ export function desktopUpdatePrompt(
       restartButton: null,
     };
   }
-  if (outcome.installsAutomatically || outcome.downloading) {
+  if (outcome.downloading) {
     return {
       type: 'info',
       title: `${PRODUCT_NAMES.desktop} update available`,
-      message: `${PRODUCT_NAMES.desktop} ${outcome.version} is downloading.`,
+      message: `An update for ${PRODUCT_NAMES.desktop} is downloading.`,
       detail: `You have ${outcome.currentVersion}. ${PRODUCT_NAMES.desktop} tells you when the update is ready, then installs it when you restart.`,
       buttons: ['OK'],
       downloadButton: null,

@@ -143,6 +143,7 @@ const installDownloadedUpdate = vi.fn(() => downloadedVersion !== null);
 vi.mock('../desktopAutoUpdate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   downloadedUpdate: () => downloadedVersion,
+  autoUpdateState: () => downloadedVersion !== null ? 'ready' : 'idle',
   installDownloadedUpdate,
   startAutoUpdate: vi.fn(),
 }));
@@ -896,6 +897,59 @@ describe('the update buttons', () => {
     const frame = { url: 'https://agiworkforce.com/chat' };
     return { senderFrame: frame, sender: { mainFrame: frame } };
   };
+
+  it('reports the staged version independently of newer release metadata', async () => {
+    const check = ipcHandlers.get(ELECTRON_IPC_CHANNELS.checkUpdate);
+    if (!check) throw new Error('the update channel was never registered');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      version: '1.4.0', platforms: { mac: true }, architectures: { arm64: true, x64: true },
+    })));
+    downloadedVersion = '1.3.0';
+    try {
+      await expect(check(trustedCaller())).resolves.toMatchObject({
+        available: true, version: '1.3.0', stagedVersion: '1.3.0', latestVersion: '1.4.0',
+        readyToInstall: true, downloading: false, nativeUpdateState: 'ready',
+      });
+    } finally {
+      downloadedVersion = null;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(['1.3.0', ''])('keeps staged %s restartable when metadata fails', async (version) => {
+    const check = ipcHandlers.get(ELECTRON_IPC_CHANNELS.checkUpdate);
+    if (!check) throw new Error('the update channel was never registered');
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    downloadedVersion = version;
+    try {
+      await expect(check(trustedCaller())).resolves.toMatchObject({
+        available: true, version, stagedVersion: version || null,
+        readyToInstall: true, metadataError: expect.any(String),
+        downloadUrl: expect.stringContaining('/api/download?platform=mac&app=cloud&arch='),
+      });
+    } finally {
+      downloadedVersion = null;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('observes a staged update arriving while metadata is pending', async () => {
+    const check = ipcHandlers.get(ELECTRON_IPC_CHANNELS.checkUpdate);
+    if (!check) throw new Error('the update channel was never registered');
+    let finish!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+    try {
+      const pending = check(trustedCaller());
+      downloadedVersion = '1.3.0';
+      finish(new Response(null, { status: 404 }));
+      await expect(pending).resolves.toMatchObject({
+        available: true, version: '1.3.0', readyToInstall: true,
+      });
+    } finally {
+      downloadedVersion = null;
+      vi.unstubAllGlobals();
+    }
+  });
 
   it('opens the installer download while no update is downloaded, and restart says not ready', async () => {
     const download = ipcHandlers.get(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
