@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecutorchPreset } from '@agiworkforce/types';
 import { getDefaultModel, getLiteModeModel } from '../catalog.js';
-import { tier2Generate, tier2LoadModel, tier2Release, _setLLMModuleForTesting } from '../tier2.js';
+import { tier2Generate, tier2LoadModel, tier2Release, tier2LoadedPresetName, _setLLMModuleForTesting } from '../tier2.js';
 
 const makeInstance = () => ({
   generate: vi.fn().mockResolvedValue('hello from model'),
@@ -134,10 +134,12 @@ describe('tier2: generate, basic', () => {
     expect(messages[3]).toEqual({ role: 'user', content: 'What is 2+2?' });
   });
 
-  it('calls setTokenCallback when onToken provided', async () => {
+  it('installs a lease-scoped callback that ignores tokens after settlement', async () => {
     const onToken = vi.fn();
     await tier2Generate(DEFAULT_PRESET, { prompt: 'Hi', onToken });
-    expect(mockInstance.setTokenCallback).toHaveBeenCalledWith({ tokenCallback: onToken });
+    const { tokenCallback } = mockInstance.setTokenCallback.mock.calls[0][0];
+    tokenCallback('late');
+    expect(onToken).not.toHaveBeenCalled();
   });
 
   it('resets token callback to a no-op when no onToken is provided', async () => {
@@ -217,11 +219,208 @@ describe('tier2: cancellation', () => {
 
     const controller = new AbortController();
     const pending = tier2Generate(DEFAULT_PRESET, { prompt: 'Hi', signal: controller.signal });
+    await vi.waitFor(() => expect(mockInstance.generate).toHaveBeenCalledOnce());
     controller.abort();
     resolveGenerate('late text');
 
     const result = await pending;
     expect(mockInstance.interrupt).toHaveBeenCalledOnce();
     expect(result).toEqual({ text: '', runtime: 'executorch', aborted: true });
+  });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe('tier2: exclusive generation lease', () => {
+  it('reserves initial loading before a second generation or public mutation', async () => {
+    const loading = deferred<ReturnType<typeof makeInstance>>();
+    mockFromModelName.mockReturnValueOnce(loading.promise);
+    const first = tier2Generate(DEFAULT_PRESET, { prompt: 'first' });
+
+    await expect(tier2Generate(ALTERNATE_PRESET, { prompt: 'second' })).rejects.toThrow('busy');
+    await expect(tier2LoadModel(DEFAULT_PRESET)).rejects.toThrow('busy');
+    expect(() => tier2Release()).toThrow('busy');
+    expect(mockInstance.setTokenCallback).not.toHaveBeenCalled();
+
+    loading.resolve(mockInstance);
+    await first;
+    expect(mockFromModelName).toHaveBeenCalledOnce();
+    tier2Release();
+    expect(mockInstance.delete).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a rejected overlapping turn steal the active callback', async () => {
+    const generating = deferred<string>();
+    mockInstance.generate.mockReturnValueOnce(generating.promise);
+    const onToken = vi.fn();
+    const otherToken = vi.fn();
+    const first = tier2Generate(DEFAULT_PRESET, { prompt: 'first', onToken });
+    await vi.waitFor(() => expect(mockInstance.generate).toHaveBeenCalledOnce());
+    const { tokenCallback } = mockInstance.setTokenCallback.mock.calls[0][0];
+
+    await expect(
+      tier2Generate(DEFAULT_PRESET, { prompt: 'second', onToken: otherToken }),
+    ).rejects.toThrow('busy');
+    await expect(tier2LoadModel(ALTERNATE_PRESET)).rejects.toThrow('busy');
+    expect(() => tier2Release()).toThrow('busy');
+    tokenCallback('first token');
+    expect(onToken).toHaveBeenCalledWith('first token');
+    expect(otherToken).not.toHaveBeenCalled();
+    expect(mockInstance.setTokenCallback).toHaveBeenCalledOnce();
+    expect(mockInstance.delete).not.toHaveBeenCalled();
+
+    generating.resolve('first result');
+    await first;
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'next', onToken: otherToken });
+    tokenCallback('stale token');
+    expect(onToken).toHaveBeenCalledTimes(1);
+    expect(otherToken).not.toHaveBeenCalled();
+  });
+
+  it('suppresses aborted tokens but holds the lease until native settlement', async () => {
+    const generating = deferred<string>();
+    mockInstance.generate.mockReturnValueOnce(generating.promise);
+    const controller = new AbortController();
+    const onToken = vi.fn();
+    const first = tier2Generate(DEFAULT_PRESET, {
+      prompt: 'first', signal: controller.signal, onToken,
+    });
+    await vi.waitFor(() => expect(mockInstance.generate).toHaveBeenCalledOnce());
+    const { tokenCallback } = mockInstance.setTokenCallback.mock.calls[0][0];
+    controller.abort();
+    tokenCallback('after abort');
+    expect(onToken).not.toHaveBeenCalled();
+    expect(mockInstance.interrupt).toHaveBeenCalledOnce();
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'second' })).rejects.toThrow('busy');
+    expect(() => tier2Release()).toThrow('busy');
+    generating.resolve('late result');
+    await expect(first).resolves.toMatchObject({ text: '', aborted: true });
+    tier2Release();
+    expect(mockInstance.delete).toHaveBeenCalledOnce();
+  });
+
+  it('holds the lease when cancellation happens during initial loading', async () => {
+    const loading = deferred<ReturnType<typeof makeInstance>>();
+    mockFromModelName.mockReturnValueOnce(loading.promise);
+    const controller = new AbortController();
+    const first = tier2Generate(DEFAULT_PRESET, { prompt: 'first', signal: controller.signal });
+    controller.abort();
+    expect(() => tier2Release()).toThrow('busy');
+    loading.resolve(mockInstance);
+    await expect(first).resolves.toMatchObject({ aborted: true });
+    expect(mockInstance.generate).not.toHaveBeenCalled();
+    tier2Release();
+  });
+
+  it('does not load or mutate callbacks for an already aborted turn', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(tier2Generate(DEFAULT_PRESET, {
+      prompt: 'cancelled', signal: controller.signal,
+    })).resolves.toMatchObject({ aborted: true });
+    expect(mockFromModelName).not.toHaveBeenCalled();
+    expect(mockInstance.setTokenCallback).not.toHaveBeenCalled();
+    await tier2Generate(DEFAULT_PRESET, { prompt: 'next' });
+  });
+
+  it('releases ownership after native generation and loading failures', async () => {
+    mockFromModelName.mockRejectedValueOnce(new Error('load failed'));
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'first' })).rejects.toThrow('load failed');
+    mockInstance.generate.mockRejectedValueOnce(new Error('generate failed'));
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'second' })).rejects.toThrow('generate failed');
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'third' })).resolves.toMatchObject({
+      text: 'hello from model',
+    });
+  });
+});
+
+describe('tier2: load reservations', () => {
+  it('rejects generation while a public load is reserved even for a cached preset', async () => {
+    await tier2LoadModel(DEFAULT_PRESET);
+    const loading = deferred<ReturnType<typeof makeInstance>>();
+    mockFromModelName.mockReturnValueOnce(loading.promise);
+    const pending = tier2LoadModel(ALTERNATE_PRESET);
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'first' })).rejects.toThrow('busy');
+    expect(mockInstance.setTokenCallback).not.toHaveBeenCalled();
+    loading.resolve(makeInstance());
+    await pending;
+  });
+
+  it('drains A/B/A reservations before accepting cached readiness', async () => {
+    await tier2LoadModel(DEFAULT_PRESET);
+    const loadingB = deferred<ReturnType<typeof makeInstance>>();
+    mockFromModelName.mockReturnValueOnce(loadingB.promise);
+    const pendingB = tier2LoadModel(ALTERNATE_PRESET);
+    const pendingA = tier2LoadModel(DEFAULT_PRESET);
+    await vi.waitFor(() => expect(mockFromModelName).toHaveBeenCalledTimes(2));
+    loadingB.resolve(makeInstance());
+    await Promise.all([pendingB, pendingA]);
+    expect(mockFromModelName).toHaveBeenCalledTimes(3);
+    expect(tier2LoadedPresetName()).toBe(DEFAULT_PRESET.modelName);
+  });
+
+  it('keeps later reservations busy when an earlier load settles', async () => {
+    const loadingA = deferred<ReturnType<typeof makeInstance>>();
+    const loadingB = deferred<ReturnType<typeof makeInstance>>();
+    mockFromModelName.mockReturnValueOnce(loadingA.promise).mockReturnValueOnce(loadingB.promise);
+    const first = tier2LoadModel(DEFAULT_PRESET);
+    const second = tier2LoadModel(ALTERNATE_PRESET);
+    const third = tier2LoadModel(DEFAULT_PRESET);
+    loadingA.resolve(mockInstance);
+    await first;
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'first' })).rejects.toThrow('busy');
+    loadingB.resolve(makeInstance());
+    await Promise.all([second, third]);
+    expect(tier2LoadedPresetName()).toBe(DEFAULT_PRESET.modelName);
+    expect(mockFromModelName).toHaveBeenCalledTimes(3);
+  });
+
+  it('invalidates loads waiting for download consent before native work begins', async () => {
+    const consent = deferred<void>();
+    const ensureDownloadAllowed = vi.fn(() => consent.promise);
+    const pending = tier2LoadModel(DEFAULT_PRESET, undefined, { ensureDownloadAllowed });
+    await vi.waitFor(() => expect(ensureDownloadAllowed).toHaveBeenCalledOnce());
+    tier2Release();
+    consent.resolve(undefined);
+    await pending;
+    expect(mockFromModelName).not.toHaveBeenCalled();
+    expect(tier2LoadedPresetName()).toBeNull();
+    await tier2LoadModel(DEFAULT_PRESET);
+    expect(mockFromModelName).toHaveBeenCalledOnce();
+  });
+
+  it('disposes an invalidated late instance without clearing a newer reservation', async () => {
+    const oldLoading = deferred<ReturnType<typeof makeInstance>>();
+    const newLoading = deferred<ReturnType<typeof makeInstance>>();
+    const lateInstance = makeInstance();
+    mockFromModelName.mockReturnValueOnce(oldLoading.promise).mockReturnValueOnce(newLoading.promise);
+    const oldLoad = tier2LoadModel(DEFAULT_PRESET);
+    await vi.waitFor(() => expect(mockFromModelName).toHaveBeenCalledOnce());
+    tier2Release();
+    const newLoad = tier2LoadModel(ALTERNATE_PRESET);
+    oldLoading.resolve(lateInstance);
+    await oldLoad;
+    expect(lateInstance.delete).toHaveBeenCalledOnce();
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'first' })).rejects.toThrow('busy');
+    newLoading.resolve(mockInstance);
+    await newLoad;
+    expect(tier2LoadedPresetName()).toBe(ALTERNATE_PRESET.modelName);
+  });
+
+  it('allows a later public reservation to proceed after a failed load', async () => {
+    mockFromModelName.mockRejectedValueOnce(new Error('load failed'));
+    const first = tier2LoadModel(DEFAULT_PRESET);
+    const second = tier2LoadModel(ALTERNATE_PRESET);
+    await expect(first).rejects.toThrow('load failed');
+    await second;
+    expect(tier2LoadedPresetName()).toBe(ALTERNATE_PRESET.modelName);
   });
 });

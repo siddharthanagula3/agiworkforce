@@ -72,6 +72,8 @@ jest.mock('@agiworkforce/local-llm', () => {
     }),
     refreshCapabilities: jest.fn().mockResolvedValue({}),
     getModelById: jest.fn(actual.getModelById),
+    loadedLocalModel: jest.fn().mockReturnValue(null),
+    unloadLocalModels: jest.fn().mockResolvedValue(undefined),
     localGenerate: jest
       .fn()
       .mockImplementation(async (_path: unknown, opts: { onToken?: (t: string) => void }) => {
@@ -319,7 +321,7 @@ describe('perf settings MMKV keys', () => {
   });
 });
 
-import { act, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import PerformanceScreen from '../app/(app)/settings/performance';
 
 async function renderSettledPerformanceScreen() {
@@ -455,6 +457,44 @@ describe('PerformanceScreen rendering', () => {
     await act(async () => {
       useModelStore.setState({ selectedModel: null });
     });
+  });
+
+  it('restores the unload action after a busy rejection and allows retry', async () => {
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    const { loadedLocalModel, unloadLocalModels } = require('@agiworkforce/local-llm');
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
+    loadedLocalModel.mockReturnValue({
+      runtime: 'executorch', preset: mockLocalLlm.getDefaultModel().executorchPreset!.modelName,
+    });
+    unloadLocalModels.mockRejectedValueOnce(new Error('ExecuTorch is busy'));
+    const screen = await renderSettledPerformanceScreen();
+
+    try {
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'Unload model from memory' }));
+      });
+      expect(screen.getByText(
+        'Failed to unload: Wait for any active response to finish, then try again.',
+      )).toBeTruthy();
+      expect(screen.getByRole('button', {
+        name: 'Unload model from memory',
+      }).props.accessibilityState).toMatchObject({ disabled: false });
+      expect(screen.queryByText('Working…')).toBeNull();
+
+      loadedLocalModel.mockReturnValue(null);
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: 'Unload model from memory' }));
+      });
+      expect(unloadLocalModels).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('button', { name: 'Load model now' })).toBeTruthy();
+      expect(screen.queryByText(/Failed to unload/)).toBeNull();
+    } finally {
+      screen.unmount();
+      loadedLocalModel.mockReturnValue(null);
+      useModelStore.setState({ selectedModel: null });
+      warn.mockRestore();
+    }
   });
 
   it('switches have accessibilityRole switch (1 total)', async () => {

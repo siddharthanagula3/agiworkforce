@@ -433,7 +433,7 @@ export default function PerformanceScreen() {
   }, [selectedModelId]);
 
   const [runtimeState, setRuntimeState] = useState<
-    { kind: 'idle' | 'busy' } | { kind: 'failed'; message: string }
+    { kind: 'idle' | 'busy' } | { kind: 'failed'; action: 'load' | 'unload'; message: string }
   >({ kind: 'idle' });
   const [loadedModel, setLoadedModel] = useState(() => loadedLocalModel());
   const systemManaged = activeLocalModel?.fileSizeBytes === 0;
@@ -451,6 +451,7 @@ export default function PerformanceScreen() {
       setLoadedModel(loadedLocalModel());
       setRuntimeState({
         kind: 'failed',
+        action: 'load',
         message: 'Try again, or choose a smaller model.',
       });
     }
@@ -458,9 +459,19 @@ export default function PerformanceScreen() {
 
   const handleUnloadModel = useCallback(async () => {
     setRuntimeState({ kind: 'busy' });
-    await unloadLocalModels();
-    setLoadedModel(loadedLocalModel());
-    setRuntimeState({ kind: 'idle' });
+    try {
+      await unloadLocalModels();
+      setRuntimeState({ kind: 'idle' });
+    } catch (error) {
+      console.warn('[local-model] unload failed', error);
+      setRuntimeState({
+        kind: 'failed',
+        action: 'unload',
+        message: 'Wait for any active response to finish, then try again.',
+      });
+    } finally {
+      setLoadedModel(loadedLocalModel());
+    }
   }, []);
 
   const tIndicator = useMemo(
@@ -688,7 +699,7 @@ export default function PerformanceScreen() {
                     : runtimeState.kind === 'busy'
                       ? 'Working…'
                       : runtimeState.kind === 'failed'
-                        ? `Failed to load: ${runtimeState.message}`
+                        ? `Failed to ${runtimeState.action}: ${runtimeState.message}`
                         : loadedModel
                           ? 'Loaded in memory'
                           : 'Not loaded, loads on first use'}

@@ -75,6 +75,13 @@ let _loadedPresetName: string | null = null;
 let _loadedPresetVision = false;
 let _loadPromise: Promise<void> | null = null;
 let _loadGeneration = 0;
+let _generationLease: symbol | null = null;
+
+function generationBusyError(): Error {
+  return new Error(
+    'ExecuTorch is busy. Wait for the current generation to finish before trying again.',
+  );
+}
 
 export function tier2LoadedPresetName(): string | null {
   return _instance ? _loadedPresetName : null;
@@ -93,61 +100,72 @@ export interface Tier2LoadOptions {
   ensureDownloadAllowed?: () => Promise<void>;
 }
 
+async function loadModel(
+  preset: ExecutorchPreset,
+  loadGeneration: number,
+  onDownloadProgress?: (progress: number) => void,
+  options?: Tier2LoadOptions,
+): Promise<void> {
+  if (loadGeneration !== _loadGeneration) return;
+  if (_loadedPresetName === preset.modelName && _instance) return;
+  const LLMModule = getLLMModuleClass();
+  if (!LLMModule) throw new Error('react-native-executorch not available');
+
+  await options?.ensureDownloadAllowed?.();
+  if (loadGeneration !== _loadGeneration) return;
+  if (_instance) {
+    _instance.delete();
+    _instance = null;
+    _loadedPresetName = null;
+    _loadedPresetVision = false;
+  }
+
+  const vlmInfo = executorchVlmPresetInfo(preset.modelName);
+  const nextInstance = await LLMModule.fromModelName(
+    {
+      modelName: preset.modelName,
+      modelSource: preset.modelSource,
+      tokenizerSource: preset.tokenizerSource,
+      tokenizerConfigSource: preset.tokenizerConfigSource,
+      ...(vlmInfo ? { capabilities: vlmInfo.capabilities } : {}),
+    },
+    onDownloadProgress,
+  );
+  if (loadGeneration !== _loadGeneration) {
+    nextInstance.delete();
+    return;
+  }
+  try {
+    if (vlmInfo?.generationConfig) {
+      nextInstance.configure({ generationConfig: vlmInfo.generationConfig });
+    }
+  } catch (error) {
+    nextInstance.delete();
+    throw error;
+  }
+  _instance = nextInstance;
+  _loadedPresetName = preset.modelName;
+  _loadedPresetVision = vlmInfo?.capabilities.includes('vision') ?? false;
+}
+
 export async function tier2LoadModel(
   preset: ExecutorchPreset,
   onDownloadProgress?: (progress: number) => void,
   options?: Tier2LoadOptions,
 ): Promise<void> {
-  if (_loadedPresetName === preset.modelName && _instance) return;
-  if (_loadPromise) {
-    await _loadPromise;
-    if (_loadedPresetName === preset.modelName && _instance) return;
-  }
-
-  const LLMModule = getLLMModuleClass();
-  if (!LLMModule) throw new Error('react-native-executorch not available');
-
-  const loadGeneration = ++_loadGeneration;
-  _loadPromise = (async () => {
-    // Registering the promise before the first await is what makes the
-    // `_loadPromise` guard above a real one. Awaiting the download consent
-    // out here let a second concurrent caller past that guard and start its
-    // own native load.
-    await options?.ensureDownloadAllowed?.();
-    if (_instance) {
-      _instance.delete();
-      _instance = null;
-      _loadedPresetName = null;
-      _loadedPresetVision = false;
-    }
-
-    const vlmInfo = executorchVlmPresetInfo(preset.modelName);
-    const nextInstance = await LLMModule.fromModelName(
-      {
-        modelName: preset.modelName,
-        modelSource: preset.modelSource,
-        tokenizerSource: preset.tokenizerSource,
-        tokenizerConfigSource: preset.tokenizerConfigSource,
-        ...(vlmInfo ? { capabilities: vlmInfo.capabilities } : {}),
-      },
-      onDownloadProgress,
-    );
-    if (loadGeneration !== _loadGeneration) {
-      nextInstance.delete();
-      return;
-    }
-    if (vlmInfo?.generationConfig) {
-      nextInstance.configure({ generationConfig: vlmInfo.generationConfig });
-    }
-    _instance = nextInstance;
-    _loadedPresetName = preset.modelName;
-    _loadedPresetVision = vlmInfo?.capabilities.includes('vision') ?? false;
+  if (_generationLease) throw generationBusyError();
+  const loadGeneration = _loadGeneration;
+  const previousLoad = _loadPromise;
+  const pendingLoad = (async () => {
+    // Every reservation drains the preceding queue before testing cached readiness (A/B/A).
+    await previousLoad?.catch(() => undefined);
+    await loadModel(preset, loadGeneration, onDownloadProgress, options);
   })();
-
+  _loadPromise = pendingLoad;
   try {
-    await _loadPromise;
+    await pendingLoad;
   } finally {
-    _loadPromise = null;
+    if (_loadPromise === pendingLoad) _loadPromise = null;
   }
 }
 
@@ -155,31 +173,38 @@ export async function tier2Generate(
   preset: ExecutorchPreset,
   opts: GenerateOptions,
 ): Promise<GenerateResult> {
-  const LLMModule = getLLMModuleClass();
-  if (!LLMModule) throw new Error('react-native-executorch not available');
-
-  if (_loadedPresetName !== preset.modelName || !_instance) {
-    await tier2LoadModel(preset);
-  }
-  const instance = _instance!;
-
-  instance.setTokenCallback({ tokenCallback: opts.onToken ?? (() => undefined) });
-
+  if (_generationLease || _loadPromise) throw generationBusyError();
+  const lease = Symbol('executorch-generation');
+  _generationLease = lease;
+  let instance: LLMModuleInstance | null = null;
   const abortHandler = () => {
     try {
-      instance.interrupt();
+      instance?.interrupt();
     } catch (error) {
       console.warn('[local-llm] Failed to interrupt ExecuTorch generation:', error);
     }
   };
-  if (opts.signal?.aborted) {
-    abortHandler();
-    opts.onDone?.({ aborted: true, reason: 'cancel' });
-    return { text: '', runtime: 'executorch', aborted: true };
-  }
-  opts.signal?.addEventListener('abort', abortHandler, { once: true });
 
   try {
+    if (opts.signal?.aborted) {
+      opts.onDone?.({ aborted: true, reason: 'cancel' });
+      return { text: '', runtime: 'executorch', aborted: true };
+    }
+    await loadModel(preset, _loadGeneration);
+    instance = _instance;
+    if (!instance) throw new Error('ExecuTorch model is not loaded');
+
+    if (opts.signal?.aborted) {
+      opts.onDone?.({ aborted: true, reason: 'cancel' });
+      return { text: '', runtime: 'executorch', aborted: true };
+    }
+    instance.setTokenCallback({
+      tokenCallback: (token) => {
+        if (_generationLease === lease && !opts.signal?.aborted) opts.onToken?.(token);
+      },
+    });
+    opts.signal?.addEventListener('abort', abortHandler, { once: true });
+
     const messages: Array<{ role: string; content: string; mediaPath?: string }> = [];
     if (opts.systemPrompt) {
       messages.push({ role: 'system', content: opts.systemPrompt });
@@ -203,12 +228,13 @@ export async function tier2Generate(
     return { text: aborted ? '' : text, runtime: 'executorch', aborted };
   } finally {
     opts.signal?.removeEventListener('abort', abortHandler);
+    if (_generationLease === lease) _generationLease = null;
   }
 }
 
 export function tier2Release(): void {
+  if (_generationLease) throw generationBusyError();
   _loadGeneration += 1;
-  _loadPromise = null;
   if (_instance) {
     _instance.delete();
     _instance = null;
