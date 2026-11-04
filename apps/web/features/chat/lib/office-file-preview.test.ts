@@ -289,21 +289,62 @@ describe('xlsxSheets', () => {
 describe('loadWorkbookSheets', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('fetches a workbook once for the preview and the panel', async () => {
-    const bytes = await multiSheetWorkbook();
-    const fetchMock = vi.fn(async () => new Response(bytes));
+  it('fetches fresh workbook bytes for each sequential load of the same URI', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(await multiSheetWorkbook()))
+      .mockResolvedValueOnce(new Response(await workbook('<row><c><v>updated</v></c></row>')));
     vi.stubGlobal('fetch', fetchMock);
 
     const first = await loadWorkbookSheets('/api/files/once');
     const second = await loadWorkbookSheets('/api/files/once');
 
     expect(first.map((sheet) => sheet.name)).toEqual(['Instructions', 'Budget', 'Review']);
-    expect(second).toBe(first);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('/api/files/once', { credentials: 'same-origin' });
+    expect(second).toEqual([{ name: 'Sheet1', csv: 'updated' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/files/once', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/files/once', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
   });
 
-  it('forgets a failed load so the next attempt asks again', async () => {
+  it('does not share an in-flight request with a concurrent load of the same URI', async () => {
+    let resolveFirst!: (response: Response) => void;
+    const firstResponse = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const firstBytes = await workbook('<row><c><v>first</v></c></row>');
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(firstResponse)
+      .mockResolvedValueOnce(new Response(await workbook('<row><c><v>second</v></c></row>')));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = loadWorkbookSheets('/api/files/concurrent');
+    const second = loadWorkbookSheets('/api/files/concurrent');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(second).resolves.toEqual([{ name: 'Sheet1', csv: 'second' }]);
+    resolveFirst(new Response(firstBytes));
+    await expect(first).resolves.toEqual([{ name: 'Sheet1', csv: 'first' }]);
+  });
+
+  it('honors a new authorization refusal after a successful load of the same URI', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(await multiSheetWorkbook()))
+      .mockResolvedValueOnce(new Response('Forbidden', { status: 403 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(loadWorkbookSheets('/api/files/reauthorize')).resolves.toHaveLength(3);
+    await expect(loadWorkbookSheets('/api/files/reauthorize')).rejects.toThrow('HTTP 403');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('requests bytes again after a failed load', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response('nope', { status: 500 }))

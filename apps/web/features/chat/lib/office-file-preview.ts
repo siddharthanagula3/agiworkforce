@@ -20,7 +20,6 @@ const DEFAULT_SHEET_PATH = 'xl/worksheets/sheet1.xml';
 const WORKBOOK_PATH = 'xl/workbook.xml';
 const WORKBOOK_RELS_PATH = 'xl/_rels/workbook.xml.rels';
 const MAX_SHEETS = 50;
-const MAX_CACHED_WORKBOOKS = 16;
 
 function parseXml(source: string): Document {
   return new DOMParser().parseFromString(source, 'application/xml');
@@ -381,25 +380,10 @@ export async function xlsxSheets(data: ArrayBuffer): Promise<WorkbookSheet[]> {
   return sheets;
 }
 
-const workbookSheetsByUri = new Map<string, Promise<WorkbookSheet[]>>();
-
-export function clearWorkbookSheetCache(): void {
-  workbookSheetsByUri.clear();
-}
-
 export function loadWorkbookSheets(uri: string): Promise<WorkbookSheet[]> {
-  const cached = workbookSheetsByUri.get(uri);
-  if (cached) return cached;
-  const pending = fetch(uri, { credentials: 'same-origin' })
+  return fetch(uri, { credentials: 'same-origin', cache: 'no-store' })
     .then((response) =>
       response.ok ? response.arrayBuffer() : Promise.reject(new Error(`HTTP ${response.status}`)),
     )
     .then(xlsxSheets);
-  workbookSheetsByUri.set(uri, pending);
-  pending.catch(() => workbookSheetsByUri.delete(uri));
-  if (workbookSheetsByUri.size > MAX_CACHED_WORKBOOKS) {
-    const oldest = workbookSheetsByUri.keys().next().value;
-    if (oldest !== undefined) workbookSheetsByUri.delete(oldest);
-  }
-  return pending;
 }

@@ -24,7 +24,6 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { getImageModelLabel } from '../../lib/imageGenerationOptions';
 import {
-  clearWorkbookSheetCache,
   WORKBOOK_PREVIEW_TOO_LARGE,
   PRESENTATION_PREVIEW_TOO_LARGE,
 } from '../../lib/office-file-preview';
@@ -2039,7 +2038,6 @@ describe('MessageBubble', () => {
 
     const WORKBOOK_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     const DECK_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    beforeEach(() => clearWorkbookSheetCache());
 
     const workbookFile = genFile({
       id: 'gf-xlsx',
