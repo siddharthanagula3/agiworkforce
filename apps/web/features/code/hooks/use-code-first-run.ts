@@ -11,6 +11,7 @@ const NO_INSTALLATIONS = 0;
 export function useCodeFirstRun(
   enabled: boolean,
   api: CloudCodeApi,
+  capture: () => (() => boolean),
 ): { state: CodeFirstRunState; finish: () => void } {
   const completed = useSettingsStore((store) => store.codeFirstRunCompleted);
   const setCompleted = useSettingsStore((store) => store.setCodeFirstRunCompleted);
@@ -23,6 +24,7 @@ export function useCodeFirstRun(
       return;
     }
     const controller = new AbortController();
+    const accountCurrent = capture();
     setState('checking');
 
     void Promise.all([
@@ -30,7 +32,7 @@ export function useCodeFirstRun(
       api.listRepositories(undefined, controller.signal),
     ])
       .then(([sessions, repositories]) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !accountCurrent()) return;
         const connection = repositories.connection?.status;
         const alreadySetUp =
           sessions.sessions.length > 0 || repositories.installationCount > NO_INSTALLATIONS;
@@ -54,15 +56,15 @@ export function useCodeFirstRun(
         setState(availability.deploymentEnabled && availability.planEntitled ? 'show' : 'hide');
       })
       .catch(() => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !accountCurrent()) return;
         setState('hide');
       });
 
     return () => controller.abort();
-  }, [active, api, setCompleted]);
+  }, [active, api, capture, setCompleted]);
 
   return {
     state: active ? state : 'idle',
-    finish: () => setCompleted(true),
+    finish: () => { if (capture()()) setCompleted(true); },
   };
 }
