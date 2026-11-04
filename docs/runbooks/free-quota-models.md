@@ -868,17 +868,27 @@ notice and agrees, or uses Auto instead.
 
 ## Free image and video
 
-The Free plan has no free image or video generation. The limited free media
-offer of 2026-10-04 ended on 2026-10-22 (owner decision): its configuration
-block, daily cap, public offer endpoint, Limited labels and home page pill are
-gone. A Free account that asks for an image or video gets the plan answer,
-Upgrade, with no request sent to any provider.
+Source reconstruction (2026-11-04): backend `ae3c02000c`, mobile `a777f6d7f1`
+and web `79e502eac7` restore limited media separately from paid plan inclusion.
+`limitedMediaOffer` configures 10 image and 5 video requests per user per UTC day.
+`freeQuotaPlanAdmission` admits included plans unchanged, or eligible managed-chat
+plans under those limited terms. Chat remains Free-plan-only; Local-only/BYOK
+plan standing does not become media eligibility.
 
-Free quota image and video offerings still serve plans that include the paid
-capability, and only those: `freeQuotaPlanAdmits` in
-`apps/web/lib/server/free-quota-catalogue.ts` is the one place that decides it,
-for the picker and for the request. Chat is admitted on the Free plan only.
-Local-only and BYOK accounts are admitted to none of them.
+The catalogue/offer contract distinguishes `offered`, `not_offered` and `unknown`.
+Public offer availability is not per-user/workspace permission or a reservation.
+Unknown reads must not be turned into Upgrade: clients retain the draft and offer
+retry. Request admission still checks the owned conversation, verified surface,
+platform compute and organization policy for media, alongside privacy/model/egress
+gates. These media gates do not change Free chat routing or OpenRouter.
+
+Daily request caps and provider allowance units are separate. The existing store
+increment/expiry/compensation operations are not a transactional or exactly-once
+protocol. Uncertain post-submit outcomes, including busy/503 ambiguity, retain
+the daily/provider reservation; do not automatically retry or promise a refund.
+Only recognized pre-submission refusal can release the corresponding allowance.
+No tests, live provider probes or deployment validation were performed for these
+reconstructed changes.
 
 - The terms review, the console check, each offering's allowance and expiry, the
   billing signal and the provider holds apply to every request exactly as to
@@ -908,8 +918,12 @@ Local-only and BYOK accounts are admitted to none of them.
 - Choosing a model, or typing a request for an image, uses the ready offering
   whose allowance ends soonest, the one with most allowance left on a tie
   (`freeQuotaMediaUseOrder`), so capacity that is about to expire goes first.
-- The free image and video models are listed in the model picker's Free section
-  for plans that include the capability, and nowhere for any other plan.
+- Web lists limited media with its current offer terms as well as included-plan
+  offerings. Mobile restores the eligible no-attachment image fallback; its video
+  UI remains paid-only despite media-capable transport. Web's captured-session
+  typed-image lookup guards forwarding after that lookup, not all later main-send
+  awaits. Mobile focus generation rejects blur/refocus continuations, but equal
+  model/project/media values after an ABA change are not a cancellation fence.
 
 ### What ends an offering
 

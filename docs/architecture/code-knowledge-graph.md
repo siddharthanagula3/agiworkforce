@@ -335,9 +335,50 @@ rollout are not established (CLI feature policy is not country enforcement).
 The existing `SHARED-WORKSPACE-CODE-DISJOINT-ALLOWLIST-01` remains open for host/MCP
 empty-intersection ambiguity; country source correction does not close it.
 
+## Limited provider-funded media admission
+
+Reconstructed commits: backend `ae3c02000c31fd59979f06f55d58a28f5eeab6ca`,
+mobile `a777f6d7f19ab8aa09f53b6118c3ed3ae8f5fb7c`, and web
+`79e502eac7be9b5106f1dcee0bbe778d8bee631a`. These are accepted source slices,
+not deployed-capacity or runtime acceptance; regression sources are unexecuted.
+
+`free-pools.json` supplies limited caps of 10 image and 5 video requests per user
+per UTC day. `freeQuotaPlanAdmission` retains paid inclusion and separately admits
+eligible managed-chat plans under limited terms. Shared contracts own ordered
+media selection and offered/not_offered/unknown availability. The public media
+offer reader and endpoint expose inventory availability, not per-user/workspace
+permission; unknown responses are not an upgrade decision. Authenticated catalogue
+terms and request-side daily checks remain separate from provider pool units.
+
+`UserScopedDb` carries verified surface provenance. Non-chat free-media dispatch
+checks that surface, platform compute and organization gates before provider
+work, in addition to existing owned conversation, privacy/model and egress gates.
+Chat/OpenRouter routing is unchanged. Daily reservation still uses the existing
+increment, expiry and compensation sequence: no atomic transaction or exactly-once
+claim. Ambiguous post-submit/busy outcomes retain daily and provider allowance;
+recognized pre-submission refusal can compensate. No automatic retry/refund or
+live provider availability is promised.
+
+Mobile catalogue and stream protocol admit eligible media offerings; both chat
+screens restore the no-attachment image fallback with captured account and
+conversation/project/model context. Unknown lookup returns false, preserving the
+draft rather than showing Upgrade. Focus generations reject blur/refocus ABA;
+model/project/media equality ABA remains outside that fence. Creation publication
+has an additional account-epoch guard. Existing Local settlement and account-stream
+ownership remain. Mobile video UI is still paid-only, not newly restored free
+video UI merely because the transport supports media.
+
+Web promotional hooks and composer controls expose Limited terms and preserve
+unknown availability. Typed-image lookup captures live SDK session identity plus
+rendered destination scope before awaiting the typed catalogue result and rechecks
+before forwarding. That accepted boundary does not cover subsequent awaits inside
+the main send pipeline. Composer request/draft guards are not universal account,
+workspace or remote cancellation guarantees. No pending main-send implementation,
+marketing restoration or pricing change is represented by this graph.
+
 ## Reconstruction boundary
 
-Only the ten accepted production slices traced above are represented as
+Only the thirteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
