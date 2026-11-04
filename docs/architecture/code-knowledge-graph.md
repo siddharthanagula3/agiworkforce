@@ -3318,9 +3318,48 @@ cases use mocked API options and deferred outcomes, not real bearer/step-up tran
 or deletion execution. All are unexecuted. No tests/checks, authentication, native,
 database or network actions were performed for this trace.
 
+## Mobile security mutations carry original account and consequence intent
+
+Accepted commit `112c9f479e754f9e5a17cb91c3d65469c905e0f9` changes five
+production files and three fixture sources. Seven mutations now pass the original
+canonical Cloud epoch through confirmation and any step-up resend: revoke all
+sessions, password change, authenticator setup/verify, backup-code regeneration,
+two-factor disable and workspace ownership transfer. Their service calls use the
+existing API epoch checks rather than recapturing the destination after approval.
+
+AccountSecurity keeps owner-tagged status and masks it against current epoch/user.
+Password opening captures its account; operation versions fence retained submit,
+close, error and finally callbacks. Two-factor enrollment secrets and backup-code
+stages carry account identity; exact stage/operation checks fence verification,
+close, secret copy/authenticator launch and related callbacks. This is bounded
+client ownership, not new server permission or credential-policy enforcement.
+
+Workspace loading captures one account across overview and member reads, with
+request sequencing and epoch publication checks. Ownership-transfer confirmation
+captures organization ID, member and displayed workspace name; later callbacks use
+that original consequence rather than a replacement row. Current ready-state and
+intent checks reject retired targets. Existing server authentication, CSRF,
+subject/action-bound step-up grants, membership and Primary Owner checks remain
+counterguards, not newly absent protections or evidence of observed wrong-account
+security changes.
+
+Single-session revoke, timeout/lockdown settings, ordinary membership mutations
+and workspace switching remain outside this slice. Generic StepUpModal challenge/
+latest-session completion races are not redesigned. Existing API rejects late
+successful responses after an epoch transition, so an already-dispatched mutation
+can have an unknown outcome; this is not full receipt preservation, rollback or
+automatic retry. No already-issued native secret-sharing action can be recalled.
+
+Unexecuted fixtures exercise original epoch options, retained confirmations,
+account transitions, staged state and workspace read/transfer paths. Same-workspace
+replacement, backup sharing and old-finally combinations lack dedicated coverage;
+mocked source cases are not real transport/authentication or native acceptance.
+No tests/checks, credentials, network, database or security actions were performed
+for this documentation trace.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirteen accepted production slices traced above are represented as
+Only the one hundred and fourteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
