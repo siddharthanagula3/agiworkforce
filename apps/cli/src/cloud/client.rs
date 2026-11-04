@@ -213,6 +213,35 @@ impl CloudClient {
         })
     }
 
+    pub(crate) fn policy_context() -> Result<tier_cache::ManagedRequestContext, CloudError> {
+        let context = tier_cache::ManagedRequestContext::capture()
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        if context.owner.is_none() {
+            return Err(CloudError::Transport("Managed account identity is unreadable".to_string()));
+        }
+        Ok(context)
+    }
+
+    pub(crate) fn from_managed_context(
+        context: &tier_cache::ManagedRequestContext,
+    ) -> Result<Self, CloudError> {
+        let jwt = context.jwt.as_ref().ok_or(CloudError::SignedOut)?;
+        let owner = crate::auth::jwt_subject(jwt)
+            .filter(|_| context.owner.is_some())
+            .ok_or_else(|| CloudError::Transport("Managed account identity is unreadable".to_string()))?;
+        let http = reqwest::Client::builder()
+            .timeout(CLOUD_TIMEOUT)
+            .build()
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        Ok(Self {
+            base: context.base.clone(),
+            jwt: jwt.clone(),
+            auth_base: crate::app_server::account::device_auth_base(),
+            owner,
+            http,
+        })
+    }
+
     /// Identity the stored sync cursors belong to. A different account signing
     /// in must not resume another account's cursors.
     pub fn owner(&self) -> &str {

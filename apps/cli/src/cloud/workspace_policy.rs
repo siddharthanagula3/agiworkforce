@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -10,6 +9,7 @@ use sha2::{Digest, Sha256};
 use super::{cloud_dir, read_cache, write_cache, CloudClient, CloudError};
 use crate::config::CliConfig;
 use crate::platform::runtime::session::PrivacyMode;
+use crate::tier_cache::ManagedRequestContext;
 
 const EFFECTIVE_POLICY_PATH: &str = "/api/settings/organization/policy/effective";
 const REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
@@ -19,6 +19,7 @@ const CACHE_KEY_ACCOUNT: &str = "cache-seal";
 /// A sealed policy older than this needs a fresh read before it counts.
 const SEALED_POLICY_MAX_AGE_SECS: u64 = 7 * 24 * 60 * 60;
 const CLOCK_SKEW_SECS: u64 = 5 * 60;
+const CACHE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,17 +52,14 @@ struct WorkspaceControls {
     feature_access: HashMap<String, bool>,
 }
 
-/// The policy as the server sent it, sealed to the account and workspace with a
-/// key held in the OS credential store. A cache edited by hand, or read by
-/// another account or for another workspace, no longer matches its seal and is
-/// ignored. This keeps honest clients honest; it is not a security boundary,
-/// since whoever controls the machine controls the binary that enforces it.
-/// The seal also covers when the policy was read, so a copy older than a week
-/// is refused, and the newest revision seen is kept beside the key, so an
-/// older sealed copy put back in place is refused too. Where the key cannot be
-/// stored nothing is cached and an offline start fails closed.
+// The seal binds deployment/session ownership and the server-reported workspace,
+// not the workspace's live selection. Legacy subject-only seals require an
+// authenticated refresh; an offline upgrade therefore fails closed. The OS
+// credential store guards tampering and rollback, not control of this binary.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct CachedPolicy {
+    #[serde(default)]
+    version: u32,
     owner: String,
     #[serde(default)]
     organization: String,
@@ -81,18 +79,38 @@ impl EffectiveWorkspacePolicy {
     }
 }
 
-static CURRENT: RwLock<Option<EffectiveWorkspacePolicy>> = RwLock::new(None);
-static LAST_REFRESH: Mutex<Option<Instant>> = Mutex::new(None);
-static HOOKS_REFUSAL_REPORTED: AtomicBool = AtomicBool::new(false);
+struct PolicyRead {
+    owner: String,
+    fetched_at: u64,
+    policy: EffectiveWorkspacePolicy,
+}
+
+impl PolicyRead {
+    fn reusable_for(&self, owner: &str, now: u64) -> bool {
+        self.owner == owner && policy_fresh(self.fetched_at, now)
+    }
+}
+
+struct RefreshRead {
+    owner: String,
+    at: Instant,
+}
+
+static CURRENT: RwLock<Option<PolicyRead>> = RwLock::new(None);
+static LAST_REFRESH: Mutex<Option<RefreshRead>> = Mutex::new(None);
+static HOOKS_REFUSAL_REPORTED: Mutex<Option<String>> = Mutex::new(None);
 
 fn cache_path(config_dir: &Path) -> PathBuf {
     cloud_dir(config_dir).join("workspace-policy.json")
 }
 
-fn signed_in_owner() -> Option<String> {
-    crate::tier_cache::load_jwt()
-        .filter(|jwt| !jwt.trim().is_empty())
-        .map(|jwt| crate::auth::jwt_subject(&jwt).unwrap_or_else(|| "unknown".to_string()))
+fn account_changed() -> CloudError {
+    CloudError::Transport("Managed account changed; retry the policy read".to_string())
+}
+
+fn policy_fresh(fetched_at: u64, now: u64) -> bool {
+    fetched_at <= now.saturating_add(CLOCK_SKEW_SECS)
+        && now.saturating_sub(fetched_at) <= SEALED_POLICY_MAX_AGE_SECS
 }
 
 fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
@@ -115,6 +133,7 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
 
 fn seal_for(key: &[u8], owner: &str, organization: &str, fetched_at: u64, policy: &str) -> String {
     let message = [
+        b"workspace-policy-v2\n",
         owner.as_bytes(),
         b"\n",
         organization.as_bytes(),
@@ -160,11 +179,10 @@ fn open_sealed(
         cached.fetched_at,
         &cached.policy,
     );
-    if cached.owner != owner || !seal_matches(&expected, &cached.seal) {
+    if cached.version != CACHE_VERSION || cached.owner != owner || !seal_matches(&expected, &cached.seal) {
         return None;
     }
-    let fresh = cached.fetched_at <= now + CLOCK_SKEW_SECS
-        && now.saturating_sub(cached.fetched_at) <= SEALED_POLICY_MAX_AGE_SECS;
+    let fresh = policy_fresh(cached.fetched_at, now);
     let policy: EffectiveWorkspacePolicy = serde_json::from_str(&cached.policy).ok()?;
     let read = NewestPolicyRead {
         revision: policy.revision,
@@ -182,7 +200,7 @@ fn now_secs() -> u64 {
 }
 
 fn newest_read_account(owner: &str) -> String {
-    format!("newest-read:{owner}")
+    format!("newest-read:v2:{owner}")
 }
 
 fn newest_read(owner: &str) -> Option<NewestPolicyRead> {
@@ -220,98 +238,83 @@ fn cache_key_or_create() -> Option<Vec<u8>> {
     Some(key.to_vec())
 }
 
-fn load_cached() -> Option<EffectiveWorkspacePolicy> {
-    let owner = signed_in_owner()?;
+fn load_cached(owner: &str) -> Option<PolicyRead> {
     let config_dir = CliConfig::config_dir().ok()?;
     let cached: CachedPolicy = read_cache(&cache_path(&config_dir));
     if cached.seal.is_empty() {
         return None;
     }
-    let newest = newest_read(&owner)?;
-    open_sealed(&cache_key()?, &owner, &cached, now_secs(), &newest)
+    let newest = newest_read(owner)?;
+    let policy = open_sealed(&cache_key()?, owner, &cached, now_secs(), &newest)?;
+    Some(PolicyRead { owner: owner.to_string(), fetched_at: cached.fetched_at, policy })
 }
 
-fn with_current<R>(read: impl FnOnce(&EffectiveWorkspacePolicy) -> R) -> R {
+fn current_policy(owner: &str) -> Option<EffectiveWorkspacePolicy> {
+    if let Ok(current) = CURRENT.read() {
+        if let Some(read) = current.as_ref().filter(|read| read.reusable_for(owner, now_secs())) {
+            return Some(read.policy.clone());
+        }
+    }
+    let read = load_cached(owner)?;
+    let policy = read.policy.clone();
+    if let Ok(mut current) = CURRENT.write() {
+        *current = Some(read);
+    }
+    Some(policy)
+}
+
+fn with_current<R>(read: impl FnOnce(Option<&EffectiveWorkspacePolicy>) -> R) -> Result<R, CloudError> {
     #[cfg(test)]
     if let Some(policy) = TEST_POLICY.with(|cell| cell.borrow().clone()) {
-        return read(&policy);
+        return Ok(read(Some(&policy)));
     }
-    if let Ok(current) = CURRENT.read() {
-        if let Some(policy) = current.as_ref() {
-            return read(policy);
-        }
-    }
-    match load_cached() {
-        Some(policy) => {
-            let value = read(&policy);
-            if let Ok(mut current) = CURRENT.write() {
-                current.get_or_insert(policy);
-            }
-            value
-        }
-        None => read(&EffectiveWorkspacePolicy::default()),
-    }
+    let context = CloudClient::policy_context()?;
+    context.with_current(|| {
+        let policy = if context.jwt.is_none() {
+            Some(EffectiveWorkspacePolicy::default())
+        } else {
+            context.owner.as_deref().and_then(current_policy)
+        };
+        read(policy.as_ref())
+    }).ok_or_else(account_changed)
 }
 
 fn policy_known() -> bool {
-    #[cfg(test)]
-    if TEST_POLICY.with(|cell| cell.borrow().is_some()) {
-        return true;
-    }
-    CURRENT
-        .read()
-        .map(|current| current.is_some())
-        .unwrap_or(false)
-        || load_cached().is_some()
+    with_current(|policy| policy.is_some()).unwrap_or(false)
 }
 
 /// A switch a signed-in account's administrator might have turned off counts
 /// as off until a policy is known, including for hooks that run before the
 /// first read of the session.
 pub fn feature_enabled(feature: &str) -> bool {
-    if closes_on_failed_read(signed_in_owner().is_some(), policy_known()) {
-        return false;
-    }
-    with_current(|policy| policy.feature_enabled(feature))
+    with_current(|policy| feature_allowed(policy, feature)).unwrap_or(false)
 }
 
-/// Whether a failed read leaves this account's controls unknown. Only the
-/// policy reply itself says whether an administrator governs the account, so a
-/// signed-in account with neither a fresh reply nor a sealed one counts as
-/// governed with its switches off.
-fn closes_on_failed_read(signed_in: bool, known: bool) -> bool {
-    signed_in && !known
+fn feature_allowed(policy: Option<&EffectiveWorkspacePolicy>, feature: &str) -> bool {
+    policy.is_some_and(|policy| policy.feature_enabled(feature))
 }
 
 pub fn governed() -> bool {
-    with_current(|policy| policy.governed)
+    with_current(|policy| policy.is_none_or(|policy| policy.governed)).unwrap_or(true)
 }
 
 pub async fn mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
-    if !policy_known() && signed_in_owner().is_some() {
-        let fetched = tokio::time::timeout(FIRST_FETCH_WAIT, fetch(PrivacyMode::Managed)).await;
-        let signed_in = !matches!(fetched, Ok(Err(CloudError::SignedOut)));
-        if !matches!(fetched, Ok(Ok(()))) && closes_on_failed_read(signed_in, policy_known()) {
-            return Some(unread_mcp_policy_refusal(name));
-        }
+    if !policy_known() {
+        let _ = tokio::time::timeout(FIRST_FETCH_WAIT, refresh(PrivacyMode::Managed)).await;
     }
-    current_mcp_server_refusal(name, url)
+    cached_mcp_server_refusal(name, url)
 }
 
 pub fn cached_mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
-    if !policy_known() && signed_in_owner().is_some() {
-        return Some(unread_mcp_policy_refusal(name));
-    }
-    current_mcp_server_refusal(name, url)
-}
-
-fn current_mcp_server_refusal(name: &str, url: Option<&str>) -> Option<String> {
     with_current(|policy| {
+        let Some(policy) = policy else {
+            return Some(unread_mcp_policy_refusal(name));
+        };
         policy
             .code
             .as_ref()
             .and_then(|code| code_controls_refusal(code, name, url))
-    })
+    }).unwrap_or_else(|_| Some(unread_mcp_policy_refusal(name)))
 }
 
 fn unread_mcp_policy_refusal(name: &str) -> String {
@@ -358,13 +361,12 @@ fn code_controls_refusal(
 
 #[cfg(test)]
 mod failed_read_tests {
-    use super::closes_on_failed_read;
+    use super::*;
 
     #[test]
     fn a_signed_in_account_with_no_known_policy_closes() {
-        assert!(closes_on_failed_read(true, false));
-        assert!(!closes_on_failed_read(true, true));
-        assert!(!closes_on_failed_read(false, false));
+        assert!(!feature_allowed(None, "hooks"));
+        assert!(feature_allowed(Some(&EffectiveWorkspacePolicy::default()), "hooks"));
     }
 }
 
@@ -382,6 +384,7 @@ mod sealed_cache_tests {
             .and_then(|parsed| parsed.organization_id)
             .unwrap_or_default();
         CachedPolicy {
+            version: CACHE_VERSION,
             owner: owner.to_string(),
             seal: seal_for(&KEY, owner, &organization, NOW, policy),
             organization,
@@ -421,6 +424,28 @@ mod sealed_cache_tests {
             policy.code.and_then(|code| code.allow_mcp_servers),
             Some(false)
         );
+    }
+
+    #[test]
+    fn legacy_seals_require_an_authenticated_refetch() {
+        let mut cached = sealed("deployment_session_a", r#"{"governed":false}"#);
+        let newest = newest_of(&cached);
+        cached.version = 0;
+        assert!(open_sealed(&KEY, "deployment_session_a", &cached, NOW, &newest).is_none());
+        assert_ne!(newest_read_account("deployment_session_a"), "newest-read:deployment_session_a");
+    }
+
+    #[test]
+    fn memory_policy_requires_matching_authority_and_freshness() {
+        let read = PolicyRead {
+            owner: "deployment_session_a".to_string(),
+            fetched_at: NOW,
+            policy: EffectiveWorkspacePolicy::default(),
+        };
+        assert!(read.reusable_for("deployment_session_a", NOW));
+        assert!(!read.reusable_for("deployment_session_b", NOW));
+        assert!(!read.reusable_for("deployment_session_a", NOW + 8 * DAY));
+        assert!(!read.reusable_for("deployment_session_a", NOW - DAY));
     }
 
     #[test]
@@ -534,32 +559,56 @@ pub fn hooks_allowed() -> bool {
     if feature_enabled("hooks") {
         return true;
     }
-    if !HOOKS_REFUSAL_REPORTED.swap(true, Ordering::Relaxed) {
+    #[cfg(test)]
+    if TEST_POLICY.with(|cell| cell.borrow().is_some()) {
+        return false;
+    }
+    let report = CloudClient::policy_context().ok().and_then(|context| {
+        context.with_current(|| {
+            let mut reported = HOOKS_REFUSAL_REPORTED.lock().ok()?;
+            if reported.as_ref() == context.owner.as_ref() {
+                return Some(false);
+            }
+            *reported = context.owner.clone();
+            Some(true)
+        }).flatten()
+    }).unwrap_or(true);
+    if report {
         crate::output::print_warn(
-            "hooks did not run: your workspace administrator has turned hooks off",
+            "hooks did not run: your workspace policy disallows them or could not be checked",
         );
     }
     false
 }
 
 pub async fn refresh(privacy: PrivacyMode) -> Result<(), CloudError> {
-    if let Ok(mut last) = LAST_REFRESH.lock() {
-        *last = Some(Instant::now());
+    if privacy != PrivacyMode::Managed {
+        return Err(CloudError::NotManaged(privacy));
     }
-    fetch(privacy).await
+    let context = CloudClient::policy_context()?;
+    context.with_current(|| {
+        if let (Some(owner), Ok(mut last)) = (context.owner.as_ref(), LAST_REFRESH.lock()) {
+            *last = Some(RefreshRead { owner: owner.clone(), at: Instant::now() });
+        }
+    }).ok_or_else(account_changed)?;
+    fetch(&context).await
 }
 
-async fn fetch(privacy: PrivacyMode) -> Result<(), CloudError> {
-    let client = CloudClient::connect(privacy)?;
+async fn fetch(context: &ManagedRequestContext) -> Result<(), CloudError> {
+    let client = CloudClient::from_managed_context(context)?;
     let policy: EffectiveWorkspacePolicy = client.get(EFFECTIVE_POLICY_PATH, &[]).await?;
-    remember(client.owner(), &policy);
-    if let Ok(mut current) = CURRENT.write() {
-        *current = Some(policy);
-    }
-    Ok(())
+    context.with_current(|| {
+        let owner = context.owner.as_ref().ok_or_else(account_changed)?;
+        let fetched_at = now_secs();
+        remember(owner, &policy, fetched_at);
+        if let Ok(mut current) = CURRENT.write() {
+            *current = Some(PolicyRead { owner: owner.clone(), fetched_at, policy });
+        }
+        Ok(())
+    }).ok_or_else(account_changed)?
 }
 
-fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
+fn remember(owner: &str, policy: &EffectiveWorkspacePolicy, fetched_at: u64) {
     let (Ok(config_dir), Ok(serialized)) = (CliConfig::config_dir(), serde_json::to_string(policy))
     else {
         return;
@@ -569,7 +618,6 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
         return;
     };
     let organization = policy.organization_id.clone().unwrap_or_default();
-    let fetched_at = now_secs();
     let newest = NewestPolicyRead {
         revision: policy.revision,
         organization: organization.clone(),
@@ -585,6 +633,7 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
         return;
     }
     let cached = CachedPolicy {
+        version: CACHE_VERSION,
         owner: owner.to_string(),
         seal: seal_for(&key, owner, &organization, fetched_at, &serialized),
         organization,
@@ -598,30 +647,63 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy) {
     }
 }
 
-fn claim_refresh() -> Option<bool> {
+fn refresh_due(last: Option<&RefreshRead>, owner: &str) -> Option<bool> {
+    match last {
+        None => Some(true),
+        Some(read) if read.owner != owner => Some(true),
+        Some(read) if read.at.elapsed() >= REFRESH_INTERVAL => Some(false),
+        Some(_) => None,
+    }
+}
+
+fn claim_refresh(owner: &str) -> Option<bool> {
     let mut last = LAST_REFRESH.lock().ok()?;
-    let first = match *last {
-        None => true,
-        Some(at) if at.elapsed() >= REFRESH_INTERVAL => false,
-        Some(_) => return None,
-    };
-    *last = Some(Instant::now());
+    let first = refresh_due(last.as_ref(), owner)?;
+    *last = Some(RefreshRead { owner: owner.to_string(), at: Instant::now() });
     Some(first)
+}
+
+#[cfg(test)]
+mod refresh_owner_tests {
+    use super::*;
+
+    #[test]
+    fn another_session_does_not_inherit_the_refresh_delay() {
+        let recent = RefreshRead { owner: "session_a".to_string(), at: Instant::now() };
+        assert_eq!(refresh_due(Some(&recent), "session_a"), None);
+        assert_eq!(refresh_due(Some(&recent), "session_b"), Some(true));
+        assert_eq!(refresh_due(None, "session_a"), Some(true));
+        let expired = RefreshRead {
+            owner: "session_a".to_string(),
+            at: Instant::now() - REFRESH_INTERVAL,
+        };
+        assert_eq!(refresh_due(Some(&expired), "session_a"), Some(false));
+    }
 }
 
 /// Read at most hourly for any signed-in account, in every privacy mode: the
 /// read sends only the bearer token, nothing of the session, and the
 /// administrator's switches bind Local and BYOK sessions as they bind Managed.
 pub async fn refresh_when_due() {
-    let Some(first) = claim_refresh() else {
+    let Ok(context) = CloudClient::policy_context() else {
         return;
     };
-    let fetching = tokio::spawn(async {
-        if let Err(error) = fetch(PrivacyMode::Managed).await {
+    if context.jwt.is_none() {
+        return;
+    }
+    let Some(wait) = context.with_current(|| {
+        let owner = context.owner.as_deref()?;
+        let first = claim_refresh(owner)?;
+        Some(first && current_policy(owner).is_none())
+    }).flatten() else {
+        return;
+    };
+    let fetching = tokio::spawn(async move {
+        if let Err(error) = fetch(&context).await {
             tracing::debug!("[workspace_policy] refresh failed: {error}");
         }
     });
-    if first && load_cached().is_none() {
+    if wait {
         let _ = tokio::time::timeout(FIRST_FETCH_WAIT, fetching).await;
     }
 }
