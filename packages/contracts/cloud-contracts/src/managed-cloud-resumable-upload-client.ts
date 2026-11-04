@@ -26,6 +26,7 @@ export interface ResumableUploadSessionStore {
 
 export interface ManagedCloudResumableUploadClientConfig {
   baseUrl?: string;
+  assertCurrent?: () => void;
   getHeaders?: () => HeadersInit | Promise<HeadersInit>;
   decorateMutationHeaders?: (headers: Headers) => HeadersInit | Promise<HeadersInit>;
   fetchImpl?: typeof globalThis.fetch;
@@ -181,6 +182,12 @@ export function createManagedCloudResumableUploadClient(
   const sessions = config.sessions === undefined ? webStorageSessions() : config.sessions;
   const sleep = config.sleep ?? defaultSleep;
 
+  async function readJson(response: Response): Promise<unknown> {
+    const data: unknown = await response.json();
+    config.assertCurrent?.();
+    return data;
+  }
+
   async function headers(json: boolean, mutation: boolean): Promise<HeadersInit> {
     const result = new Headers(await config.getHeaders?.());
     if (json) result.set('Content-Type', 'application/json');
@@ -213,7 +220,7 @@ export function createManagedCloudResumableUploadClient(
     }
     return parseContract(
       ManagedCloudResumableUploadSessionSchema,
-      await response.json(),
+      await readJson(response),
       'session response',
     );
   }
@@ -230,7 +237,7 @@ export function createManagedCloudResumableUploadClient(
     if (!response.ok) throw await responseError(response, 'Could not read the upload progress.');
     const progress = parseContract(
       ManagedCloudResumableUploadProgressSchema,
-      await response.json(),
+      await readJson(response),
       'progress response',
     );
     return new Map(progress.parts.map((part) => [part.partNumber, part.size]));
@@ -250,7 +257,7 @@ export function createManagedCloudResumableUploadClient(
     if (!response.ok) throw await responseError(response, 'Could not prepare the upload.');
     const signed = parseContract(
       ManagedCloudResumableUploadPartsResponseSchema,
-      await response.json(),
+      await readJson(response),
       'parts response',
     );
     return new Map(signed.parts.map((part) => [part.partNumber, part]));
@@ -323,7 +330,7 @@ export function createManagedCloudResumableUploadClient(
     if (!response.ok) throw await responseError(response, 'Could not finish the upload.');
     return parseContract(
       ManagedCloudResumableUploadCompleteResponseSchema,
-      await response.json(),
+      await readJson(response),
       'completion response',
     );
   }

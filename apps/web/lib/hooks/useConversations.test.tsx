@@ -1,3 +1,4 @@
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
@@ -123,6 +124,98 @@ describe('useConversations.createConversation', () => {
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
     vi.stubGlobal('fetch', mockFetchRoutes());
+  });
+
+  it('does not publish a create response decoded after its original session retires', async () => {
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    let decode!: (value: unknown) => void;
+    const response = new Response(null, { status: 200 });
+    vi.spyOn(response, 'json').mockImplementation(() => new Promise((resolve) => { decode = resolve; }));
+    vi.mocked(fetch).mockResolvedValueOnce(response);
+    const authority = createRequestAuthority({
+      userId: 'user-1', sessionId: 'session-1', isCurrent: () => true,
+      getToken: async () => 'original-session-token',
+    });
+    await act(async () => {
+      const creating = result.current.createConversation('New Chat', 'auto', null, { authority });
+      const rejected = expect(creating).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(response.json).toHaveBeenCalled());
+      authority.retire();
+      decode({ conversation: WIRE_CONVERSATION });
+      await rejected;
+    });
+    expect(useChatStore.getState().conversations).toHaveLength(0);
+    expect(useChatStore.getState().activeConversationId).toBeNull();
+    expect(useChatStore.getState().error).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('settles only its own create busy lease when an earlier request retires', async () => {
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const earlierResponse = deferredResponse();
+    const laterResponse = deferredResponse();
+    vi.mocked(fetch).mockReturnValueOnce(earlierResponse.promise).mockReturnValueOnce(laterResponse.promise);
+    const earlierAuthority = createRequestAuthority({
+      userId: 'user-1', sessionId: 'session-1', isCurrent: () => true,
+      getToken: async () => 'original-session-token',
+    });
+    const laterAuthority = createRequestAuthority(earlierAuthority.session);
+    let earlier!: Promise<Conversation | null>;
+    let later!: Promise<Conversation | null>;
+    let rejected!: Promise<void>;
+    await act(async () => {
+      earlier = result.current.createConversation('Earlier', 'auto', null, { authority: earlierAuthority });
+      rejected = expect(earlier).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        '/api/chat/conversations', expect.objectContaining({ body: expect.stringContaining('Earlier') }),
+      ));
+      later = result.current.createConversation('Later', 'auto', null, { authority: laterAuthority });
+      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        '/api/chat/conversations', expect.objectContaining({ body: expect.stringContaining('Later') }),
+      ));
+    });
+    expect(result.current.isLoading).toBe(true);
+    await act(async () => {
+      earlierAuthority.retire();
+      earlierResponse.resolve(new Response(JSON.stringify({ conversation: WIRE_CONVERSATION })));
+      await rejected;
+    });
+    expect(result.current.isLoading).toBe(true);
+    expect(useChatStore.getState().conversations).toHaveLength(0);
+    await act(async () => {
+      laterResponse.resolve(new Response(JSON.stringify({ conversation: WIRE_CONVERSATION })));
+      await later;
+    });
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('retains an accepted background creation without activating it after navigation', async () => {
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    const response = deferredResponse();
+    vi.mocked(fetch).mockReturnValueOnce(response.promise);
+    const authority = createRequestAuthority({
+      userId: 'user-1', sessionId: 'session-1', isCurrent: () => true,
+      getToken: async () => 'original-session-token',
+    });
+    let foreground = true;
+    await act(async () => {
+      const creating = result.current.createConversation('New Chat', 'auto', null, {
+        authority, shouldActivate: () => foreground,
+      });
+      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        '/api/chat/conversations', expect.objectContaining({ method: 'POST' }),
+      ));
+      foreground = false;
+      useChatStore.getState().setActiveConversation('different-chat');
+      response.resolve(new Response(JSON.stringify({ conversation: WIRE_CONVERSATION })));
+      await expect(creating).resolves.toMatchObject({ id: WIRE_CONVERSATION.id });
+    });
+    expect(useChatStore.getState().conversations.some((item) => item.id === WIRE_CONVERSATION.id)).toBe(true);
+    expect(useChatStore.getState().activeConversationId).toBe('different-chat');
+    expect(authority.isCurrent()).toBe(true);
   });
 
   it('threads the selected projectId into the POST body and returns it on the conversation', async () => {

@@ -18,15 +18,18 @@ import {
   ManagedCloudResumableUploadError,
   createManagedCloudResumableUploadClient,
   isResumableUploadUnavailable,
+  type ResumableUploadSessionStore,
 } from './managed-cloud-resumable-upload-client';
 import { shouldUploadInParts } from './resumable-uploads';
 
 export interface ManagedCloudChatAttachmentsClientConfig {
   baseUrl?: string;
+  assertCurrent?: () => void;
   getHeaders?: () => HeadersInit | Promise<HeadersInit>;
   decorateMutationHeaders?: (headers: Headers) => HeadersInit | Promise<HeadersInit>;
   fetchImpl?: typeof globalThis.fetch;
   uploadFetchImpl?: typeof globalThis.fetch;
+  sessions?: ResumableUploadSessionStore | null;
 }
 
 export interface ManagedCloudChatAttachmentUploadOptions {
@@ -148,6 +151,12 @@ export function createManagedCloudChatAttachmentsClient(
     uploadFetchImpl,
   });
 
+  async function readJson(response: Response): Promise<unknown> {
+    const data: unknown = await response.json();
+    config.assertCurrent?.();
+    return data;
+  }
+
   async function mutationHeaders(): Promise<HeadersInit> {
     const headers = new Headers(await config.getHeaders?.());
     headers.set('Content-Type', 'application/json');
@@ -256,7 +265,7 @@ export function createManagedCloudChatAttachmentsClient(
             throw await responseError(presignResponse, `Could not upload ${file.name}.`);
           }
           const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
-            await presignResponse.json(),
+            await readJson(presignResponse),
           );
           const uploadUrl = new URL(presign.uploadUrl);
           const sameOrigin =
@@ -301,7 +310,7 @@ export function createManagedCloudChatAttachmentsClient(
             throw await responseError(completionResponse, `Could not verify ${file.name}.`);
           }
           const completed = ManagedCloudChatAttachmentCompleteResponseSchema.parse(
-            await completionResponse.json(),
+            await readJson(completionResponse),
           );
           uploaded.push(completed.attachment);
           reportStatus(onStatus, { index, fileName: file.name, phase: 'complete' });

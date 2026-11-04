@@ -1,3 +1,4 @@
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@agiworkforce/cloud-contracts');
 
@@ -46,6 +47,23 @@ function requestedUrls(): string[] {
 }
 
 describe('settings preference paths come from the cloud contract', () => {
+  it('does not dispatch an owned preference write after session retirement during CSRF', async () => {
+    const { savePreferenceNamespace } = await import('./preferences-client');
+    const { addCsrfHeaders } = await import('@/lib/client/csrf');
+    let finish!: (headers: HeadersInit) => void;
+    vi.mocked(addCsrfHeaders).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const authority = createRequestAuthority({
+      userId: 'owner-a', sessionId: 'session-a', isCurrent: () => true,
+      getToken: async () => 'owner-a-token',
+    });
+    const saving = savePreferenceNamespace('provider-consent', { accepted: true }, { authority });
+    const rejected = expect(saving).rejects.toMatchObject({ name: 'AbortError' });
+    authority.retire();
+    finish({});
+    await rejected;
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('reads and writes namespaces through the relocated contract path', async () => {
     const {
       fetchStoredPreferenceNamespace,

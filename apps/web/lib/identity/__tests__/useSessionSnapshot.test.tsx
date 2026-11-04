@@ -7,7 +7,7 @@ const fixtures = vi.hoisted(() => ({
     loaded: true,
     user: { id: 'account-a' } as { id: string } | null,
     session: { id: 'session-a', user: { id: 'account-a' } } as
-      { id: string; user: { id: string } } | null,
+      { id: string; user: { id: string }; getToken?: () => Promise<string | null> } | null,
   },
 }));
 
@@ -26,6 +26,32 @@ beforeEach(() => {
 });
 
 describe('live SDK session snapshot', () => {
+  it('uses only the captured session token method and rejects its late result', async () => {
+    let resolve!: (value: string) => void;
+    const original = vi.fn(() => new Promise<string>((done) => { resolve = done; }));
+    const replacement = vi.fn(async () => 'token-b');
+    fixtures.sdk.session!.getToken = original;
+    const { result } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    const token = snapshot.getToken();
+    fixtures.sdk.session = { id: 'session-b', user: { id: 'account-b' }, getToken: replacement };
+    fixtures.sdk.user = { id: 'account-b' };
+    resolve('token-a');
+    await expect(token).resolves.toBeNull();
+    expect(original).toHaveBeenCalledOnce();
+    expect(replacement).not.toHaveBeenCalled();
+  });
+
+  it('does not revive after an observed SDK mismatch returns to the original object', () => {
+    const { result } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    const original = fixtures.sdk.session;
+    fixtures.sdk.session = null;
+    expect(snapshot.isCurrent()).toBe(false);
+    fixtures.sdk.session = original;
+    expect(snapshot.isCurrent()).toBe(false);
+  });
+
   it('captures only agreeing rendered and live session authority', () => {
     const { result } = renderHook(() => useSessionSnapshot());
     expect(result.current()?.isCurrent()).toBe(true);

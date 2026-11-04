@@ -1,3 +1,4 @@
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   composeFreeModelProviderNotice,
@@ -55,6 +56,15 @@ describe('the agreement as the web client writes it', () => {
       expect(isNamedProviderConsentCurrent(stored, notice)).toBe(accepted);
     },
   );
+
+  it('passes the original authority through the preference mutation', async () => {
+    const authority = createRequestAuthority({
+      userId: 'owner-a', sessionId: 'session-a', isCurrent: () => true,
+      getToken: async () => 'owner-a-token',
+    });
+    await saveNamedProviderConsent(notice, true, authority);
+    expect(mocks.save.mock.calls[0]![2]).toEqual({ merge: true, authority });
+  });
 
   it('has a notice for every free model the free quota route can serve', () => {
     expect(served.length).toBeGreaterThan(0);

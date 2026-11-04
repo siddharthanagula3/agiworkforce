@@ -1,3 +1,4 @@
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +31,10 @@ describe('explicit memory commands', () => {
   it('renders a receipt for a refused command that carries no message', async () => {
     respond(200, { command: { kind: 'remember', subject: 'x' }, status: 'refused' });
     const { result } = renderHook(() => useExplicitMemoryCommands());
-    const report = await result.current.runExplicitMemoryCommand('Remember x', scope);
+    const report = await result.current.runExplicitMemoryCommand('Remember x', scope, createRequestAuthority({
+      userId: 'fixture-user', sessionId: 'fixture-session', isCurrent: () => true,
+      getToken: async () => 'fixture-token',
+    }));
 
     expect(report).toEqual({ kind: 'remember', status: 'refused' });
     expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining('Not saved'));
@@ -39,7 +43,10 @@ describe('explicit memory commands', () => {
   it('never claims nothing changed when the transport outcome is unknown', async () => {
     respond(500, {});
     const { result } = renderHook(() => useExplicitMemoryCommands());
-    const report = await result.current.runExplicitMemoryCommand('Remember x', scope);
+    const report = await result.current.runExplicitMemoryCommand('Remember x', scope, createRequestAuthority({
+      userId: 'fixture-user', sessionId: 'fixture-session', isCurrent: () => true,
+      getToken: async () => 'fixture-token',
+    }));
 
     expect(report).toEqual({ kind: 'remember', status: 'failed' });
     const message = String(mocks.toast.error.mock.calls[0]![0]);

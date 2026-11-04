@@ -2,6 +2,7 @@
 
 import { MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH } from '@agiworkforce/cloud-contracts';
 
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { apiErrorMessage } from '@/shared/utils/api-error';
 
@@ -145,6 +146,7 @@ export async function refreshProfileConsumers(): Promise<void> {
 }
 
 export interface PreferenceSaveOptions {
+  authority?: RequestAuthority;
   /** Merge into the stored namespace instead of replacing it. */
   merge?: boolean;
   /** Refuse the write, with a conflict, if the stored revision moved on. */
@@ -161,8 +163,11 @@ export async function savePreferenceNamespace<T extends object>(
   value: T,
   options?: PreferenceSaveOptions,
 ): Promise<PreferenceSaveResult> {
+  const authority = options?.authority;
+  authority?.assertCurrent();
   const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-  const response = await fetch(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
+  authority?.assertCurrent();
+  const response = await (authority?.fetch ?? fetch)(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, {
     method: 'PUT',
     headers,
     credentials: 'include',
@@ -180,6 +185,7 @@ export async function savePreferenceNamespace<T extends object>(
       settings?: unknown;
       version?: unknown;
     };
+    authority?.assertCurrent();
     const message = apiErrorMessage(data, 'Failed to save settings');
     if (response.status === 412) {
       invalidatePreferencesSnapshot();
@@ -194,6 +200,7 @@ export async function savePreferenceNamespace<T extends object>(
   }
 
   const data = (await response.json().catch(() => ({}))) as { version?: unknown };
+  authority?.assertCurrent();
   invalidatePreferencesSnapshot();
   const version = readVersion(data.version);
 

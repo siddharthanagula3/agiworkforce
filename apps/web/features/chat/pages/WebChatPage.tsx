@@ -51,7 +51,8 @@ import { pickFreePoolModel } from '../lib/eligible-model';
 import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
-import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot, type IdentitySessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import {
   ToolApprovalProvider,
@@ -617,6 +618,7 @@ type PendingProviderNotice = {
   // from the follow-up queue is no longer in the composer, so declining the
   // notice has to hand its text back or it exists nowhere.
   send: {
+    session: IdentitySessionSnapshot;
     content: string;
     attachments?: File[];
     meta?: SendMeta;
@@ -1099,10 +1101,23 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const { t } = useTranslation(['chat', 'common']);
   const { getToken, isLoaded: authLoaded, userId } = useSession();
   const captureSessionSnapshot = useSessionSnapshot();
+  const prestreamAuthoritiesRef = useRef(new Set<RequestAuthority>());
+  const sendPageGenerationRef = useRef<object>({});
+  useEffect(() => {
+    const generation = {};
+    sendPageGenerationRef.current = generation;
+    return () => {
+      sendPageGenerationRef.current = {};
+      for (const authority of prestreamAuthoritiesRef.current) authority.retire();
+      prestreamAuthoritiesRef.current.clear();
+    };
+  }, []);
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const sendPagePathRef = useRef(pathname);
+  sendPagePathRef.current = pathname;
   const surfaceRootHref = compact ? QUICK_ASK_PATH : NEW_CHAT_PATH;
   const surfaceConversationHref = useCallback(
     (conversationId: string) => `${surfaceRootHref}/${conversationId}`,
@@ -1412,6 +1427,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [pendingProviderNotice, setPendingProviderNotice] = useState<PendingProviderNotice | null>(
     null,
   );
+  const pendingProviderNoticeRef = useRef(pendingProviderNotice);
+  pendingProviderNoticeRef.current = pendingProviderNotice;
   const freeModelProviderNotices = useMemo(() => freeModelNotices(), []);
   const { statusOf: providerConsentStatusOf } = useNamedProviderConsents(freeModelProviderNotices);
   useEffect(() => {
@@ -2251,6 +2268,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       content: string,
       options: {
         conversationId?: string;
+        session?: IdentitySessionSnapshot;
         attachments?: File[];
         meta?: SendMeta;
         userMessageId?: string;
@@ -2271,6 +2289,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // a DIFFERENT chat is never silently swallowed. A brand-new chat has no id
       // yet, so pre-create sends share one key -- which is exactly right: two
       // rapid submits on the empty surface must not create two conversations.
+      const session = options.session ?? captureSessionSnapshot();
+      if (localModelSelection === null && (!session || !session.isCurrent())) return false;
+      const generation = sendPageGenerationRef.current;
+      const pagePath = sendPagePathRef.current;
+      const shouldActivate = () =>
+        sendPageGenerationRef.current === generation && sendPagePathRef.current === pagePath;
+      let handedOff = false;
+      const authority = localModelSelection !== null ? undefined : createRequestAuthority(
+        session!,
+        () => handedOff || shouldActivate(),
+      );
+      authority?.assertCurrent();
       lastSendGuardBlockedRef.current = false;
       const sendGuardKey =
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
@@ -2324,6 +2354,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         lastSendGuardBlockedRef.current = true;
         return false;
       }
+      if (authority) prestreamAuthoritiesRef.current.add(authority);
       sendingConversationsRef.current.add(sendGuardKey);
       inFlightSendFingerprintsRef.current.set(sendGuardKey, sendFingerprint);
       let sendGuardReleased = false;
@@ -2364,6 +2395,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // Skipped when the optimistic bubble itself survived (it already carries
       // the content, with its own inline Retry).
       const abandonSend = (): false => {
+        if (authority && !authority.isCurrent()) return false;
         const survived =
           resolvedUserMessageId !== null &&
           targetConversationId !== null &&
@@ -2373,9 +2405,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (!survived) {
           parkUnsentDraft(targetConversationId, content);
           if (options.attachments?.length && attachmentsUploaded) {
-            setRestoredAttachments(options.attachments);
+            if (shouldActivate()) setRestoredAttachments(options.attachments);
           } else if (options.attachments?.length && !options.attachmentUploadAttemptId) {
-            setRestoredAttachments(options.attachments);
+            if (shouldActivate()) setRestoredAttachments(options.attachments);
           }
         }
         return false;
@@ -2386,11 +2418,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // back to the empty-chat state instead of stranding it on a dead id,
       // and park the draft where that state reads it from.
       const releaseUnresolvedPlaceholder = () => {
+        if (authority && !authority.isCurrent()) return;
         if (!clientConvId || resolvedFreshConvId) return;
         const stillHasMessages =
           (useChatStore.getState().messagesByConversation[clientConvId]?.length ?? 0) > 0;
         if (stillHasMessages) return;
-        if (!urlConversationId) {
+        if (!urlConversationId && shouldActivate()) {
           setBareChatSessionId((current) => (current === clientConvId ? null : current));
         }
         targetConversationId = null;
@@ -2405,6 +2438,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
       };
       try {
+        authority?.assertCurrent();
         const mediaOverride = freeQuotaSelection(options.meta?.modelOverrideId);
         const modelForTurn =
           mediaOverride?.category === 'image' || mediaOverride?.category === 'video'
@@ -2428,7 +2462,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ? runExplicitMemoryCommand(content, {
                 conversationId: existingConvId || null,
                 projectId: sendProjectId ?? null,
-              })
+              }, authority!)
             : null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
@@ -2458,14 +2492,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? async (): Promise<string | null> => {
               const c = await createConversation(NEW_CHAT_TITLE, cloudModelId, sendProjectId, {
                 isTemporary: temporaryIntent,
+                authority,
+                shouldActivate,
               });
+              authority?.assertCurrent();
               if (!c) return null;
               resolvedFreshConvId = c.id;
-              adoptPendingComposerToggles(c.id);
-              if (!urlConversationId) setBareChatSessionId(c.id);
+              if (shouldActivate()) {
+                adoptPendingComposerToggles(c.id);
+                if (!urlConversationId) setBareChatSessionId(c.id);
+              }
               // Keep the conversation bookmarkable after the first message and
               // preserve whichever chat surface created it.
-              router.replace(surfaceConversationHref(c.id));
+              if (shouldActivate()) router.replace(surfaceConversationHref(c.id));
               return c.id;
             }
           : undefined;
@@ -2481,8 +2520,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
                   }
                 : {}),
-            })
+            }, authority!)
           : undefined;
+        authority?.assertCurrent();
         releaseUploadController();
         if (uploadController.signal.aborted) {
           releaseUnresolvedPlaceholder();
@@ -2490,6 +2530,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
         attachmentsUploaded = Boolean(options.attachments?.length);
         const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
+        authority?.assertCurrent();
         if (options.attachmentUploadAttemptId) {
           setAttachmentUploadAttempts((current) =>
             current.filter((attempt) => attempt.id !== options.attachmentUploadAttemptId),
@@ -2500,14 +2541,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // durable (its row saved), not at stream end, so the edit/regenerate
         // flow drops the replaced turn's server rows then; otherwise a reload
         // mid-stream shows a duplicated user message plus the stale answer.
-        const doSend = (replacementTurnCommitted?: () => void) =>
-          sendMessage(content, {
+        const doSend = (replacementTurnCommitted?: () => void) => {
+          authority?.assertCurrent();
+          handedOff = true;
+          if (authority) prestreamAuthoritiesRef.current.delete(authority);
+          return sendMessage(content, {
+            authority,
             model: modelForTurn,
             userMessageId: resolvedUserMessageId ?? undefined,
             assistantMessageId: options.assistantMessageId,
             conversationId: convId,
             ensureConversationId,
             onTurnCommitted: () => {
+              if (authority && !authority.isCurrent()) return;
               replacementTurnCommitted?.();
               options.onTurnCommitted?.();
               releaseSendGuard();
@@ -2535,8 +2581,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             routingProfile: useModelStore.getState().routingProfile,
             ...(memoryCommand ? { memoryCommand } : {}),
           });
+        };
 
         const announceDesktopCompletion = () => {
+          if (authority && !authority.isCurrent()) return;
           // A new chat's turn ran under the client placeholder, which
           // `ensureConversationId` renamed to the server's id.
           const finishedIn = resolvedFreshConvId ?? convId;
@@ -2578,6 +2626,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         announceDesktopCompletion();
         return true;
       } catch (error) {
+        if (authority && !authority.isCurrent()) return false;
         if (uploadController.signal.aborted) {
           releaseUnresolvedPlaceholder();
           return abandonSend();
@@ -2597,9 +2646,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         releaseSendGuard();
         releaseSendWindow();
         releaseUploadController();
+        if (authority) prestreamAuthoritiesRef.current.delete(authority);
+        if (!handedOff) authority?.retire();
       }
     },
     [
+      captureSessionSnapshot,
       urlConversationId,
       surfaceConversationHref,
       bareChatSessionId,
@@ -4013,6 +4065,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       skillId?: string,
       meta?: SendMeta,
     ): false | typeof SEND_GUARD_BLOCKED | void => {
+      const session = captureSessionSnapshot();
+      if (localModelSelection === null && (!session || !session.isCurrent())) return false;
       let resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
       const outgoingContent = content;
       const mediaOverride = freeQuotaSelection(resolvedMeta?.modelOverrideId);
@@ -4039,6 +4093,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setPendingProviderNotice({
           notice: providerNotice,
           send: {
+            session: session!,
             content: outgoingContent,
             attachments,
             meta: resolvedMeta,
@@ -4123,6 +4178,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ]);
           }
           void sendContent(outgoingContent, {
+            session: session ?? undefined,
             attachments,
             meta: resolvedMeta,
             attachmentUploadAttemptId,
@@ -4146,6 +4202,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (lastSendGuardBlockedRef.current) return SEND_GUARD_BLOCKED;
     },
     [
+      captureSessionSnapshot,
+      localModelSelection,
       displayedConversation,
       displayedConversationId,
       displayedMessages,
@@ -4216,21 +4274,45 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleAcceptProviderNotice = useCallback(async () => {
     const pending = pendingProviderNotice;
-    if (!pending) return;
-    await saveNamedProviderConsent(pending.notice, true);
-    setPendingProviderNotice(null);
-    if (!pending.send) return;
-    if (pending.send.keptInComposer) setComposerClearSignal((value) => value + 1);
-    void sendContent(pending.send.content, {
-      attachments: pending.send.attachments,
-      meta: pending.send.meta,
-    });
-  }, [pendingProviderNotice, sendContent]);
+    if (!pending || pendingProviderNoticeRef.current !== pending) return;
+    const session = pending.send?.session ?? captureSessionSnapshot();
+    if (!session?.isCurrent()) {
+      setPendingProviderNotice((current) => current === pending ? null : current);
+      return;
+    }
+    const generation = sendPageGenerationRef.current;
+    const authority = createRequestAuthority(session, () =>
+      pendingProviderNoticeRef.current === pending && sendPageGenerationRef.current === generation,
+    );
+    prestreamAuthoritiesRef.current.add(authority);
+    try {
+      await saveNamedProviderConsent(pending.notice, true, authority);
+      authority.assertCurrent();
+      setPendingProviderNotice((current) => current === pending ? null : current);
+      if (!pending.send) return;
+      if (pending.send.keptInComposer) setComposerClearSignal((value) => value + 1);
+      void sendContent(pending.send.content, {
+        session: pending.send.session,
+        conversationId: pending.send.conversationId ?? undefined,
+        attachments: pending.send.attachments,
+        meta: pending.send.meta,
+      });
+    } catch (error) {
+      if (!authority.isCurrent()) {
+        setPendingProviderNotice((current) => current === pending ? null : current);
+        return;
+      }
+      throw error;
+    } finally {
+      prestreamAuthoritiesRef.current.delete(authority);
+      authority.retire();
+    }
+  }, [pendingProviderNotice, sendContent, captureSessionSnapshot]);
 
   const handleDeclineProviderNotice = useCallback(() => {
     const held = pendingProviderNotice?.send;
-    setPendingProviderNotice(null);
-    if (!held || held.keptInComposer) return;
+    setPendingProviderNotice((current) => current === pendingProviderNotice ? null : current);
+    if (!held || !held.session.isCurrent() || held.keptInComposer) return;
     parkUnsentDraft(held.conversationId, held.content);
     toast.error(
       held.attachments?.length
@@ -7468,7 +7550,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         />
       )}
       <NamedProviderNoticeDialog
-        notice={pendingProviderNotice?.notice ?? null}
+        notice={pendingProviderNotice?.send && !pendingProviderNotice.send.session.isCurrent()
+          ? null : pendingProviderNotice?.notice ?? null}
         alternativeName={
           availableModels.find((model) => model.id === getBestAutoModeForTier(subscriptionTier))
             ?.name

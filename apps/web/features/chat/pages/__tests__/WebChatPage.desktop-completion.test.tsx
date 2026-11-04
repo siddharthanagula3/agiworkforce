@@ -53,15 +53,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();

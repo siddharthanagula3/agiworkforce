@@ -37,6 +37,8 @@ import { accountSecurityVerifyPageHref } from '@agiworkforce/cloud-contracts/acc
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { toast } from 'sonner';
 import {
   useChatStore,
@@ -261,6 +263,7 @@ interface SendMessageOptions {
   maxTokens?: number;
   attachments?: Attachment[];
   conversationId?: string;
+  authority?: RequestAuthority;
   webSearch?: boolean;
   searchRequested?: boolean;
   webFetch?: boolean;
@@ -657,7 +660,23 @@ const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
 const STOPPED_FINISH_REASON = 'stopped';
 const RATE_LIMITED_SAVE_STATUS = 429;
 
-type AuthTokenProvider = () => Promise<string>;
+type AuthTokenProvider = (() => Promise<string>) & { authority?: RequestAuthority };
+
+function authorityToken(authority: RequestAuthority): AuthTokenProvider {
+  return Object.assign(authority.getToken, { authority });
+}
+
+function assertTokenOwner(getAuthToken: AuthTokenProvider): void {
+  getAuthToken.authority?.assertCurrent();
+}
+
+function tokenOwnerCurrent(getAuthToken: AuthTokenProvider): boolean {
+  return getAuthToken.authority?.isCurrent() ?? true;
+}
+
+function ownerFetch(getAuthToken: AuthTokenProvider): typeof fetch {
+  return getAuthToken.authority?.fetch ?? fetch;
+}
 
 type SaveRetryOptions = ManagedCloudSaveMessageOptions;
 
@@ -685,7 +704,7 @@ async function saveMessageToDb(
   const client = createManagedCloudChatClient({
     getAuthToken,
     decorateMutationHeaders: addCsrfHeaders,
-    fetchImpl: (input, init) => fetch(input, init),
+    fetchImpl: ownerFetch(getAuthToken),
   });
   const id =
     message.id && CLIENT_MESSAGE_ID_PATTERN.test(message.id) ? message.id : crypto.randomUUID();
@@ -708,6 +727,7 @@ async function saveMessageToDb(
   messageSavesInFlight.set(id, save);
   try {
     const saved = await save;
+    assertTokenOwner(getAuthToken);
     return { id: saved.id };
   } catch (error) {
     if (error instanceof ManagedCloudChatHttpError) {
@@ -866,6 +886,7 @@ interface PendingApprovalCall {
 }
 
 interface PendingTurn {
+  authority?: RequestAuthority;
   runId: string;
   model: string;
   conversationId: string;
@@ -886,6 +907,7 @@ interface PendingInputCall {
 }
 
 interface PendingInputTurn {
+  authority?: RequestAuthority;
   runId: string;
   model: string;
   conversationId: string;
@@ -1327,7 +1349,7 @@ const REMOTE_APPROVAL_MAX_BACKOFF_MS = 60_000;
 const REMOTE_APPROVAL_FATAL_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 let remoteApprovalFollowers = 0;
 const WAITING_RUN_STATES: ReadonlySet<string> = new Set(['awaiting_input', 'paused']);
-const remoteApprovalWatches = new Set<string>();
+const remoteApprovalWatches = new Map<string, AuthTokenProvider>();
 
 function journalFollowResponse(runId: string): Response {
   const frame = { choices: [{ index: 0, delta: { x_run_detached: { run_id: runId } } }] };
@@ -1346,6 +1368,7 @@ async function continueRemotelyAnsweredTurn(
   turn: PendingTurn,
   getAuthToken: AuthTokenProvider,
 ): Promise<void> {
+  if (!tokenOwnerCurrent(getAuthToken)) return;
   const store = useChatStore.getState();
   pendingTurns.delete(assistantMessageId);
   for (const call of turn.calls) {
@@ -1375,8 +1398,10 @@ async function continueRemotelyAnsweredTurn(
         ? { seedTools: message.metadata.tools.map((tool) => ({ ...tool })) }
         : {}),
     });
+    assertTokenOwner(getAuthToken);
     if (outcome.suspended && outcome.pendingCalls.length > 0) {
       pendingTurns.set(assistantMessageId, {
+        authority: getAuthToken.authority,
         runId: turn.runId,
         model: turn.model,
         conversationId: turn.conversationId,
@@ -1389,6 +1414,7 @@ async function continueRemotelyAnsweredTurn(
     }
     if (outcome.suspended && outcome.pendingInputs.length > 0) {
       pendingInputTurns.set(assistantMessageId, {
+        authority: getAuthToken.authority,
         runId: turn.runId,
         model: turn.model,
         conversationId: turn.conversationId,
@@ -1417,7 +1443,7 @@ async function watchRemoteApproval(
   assistantMessageId: string,
   getAuthToken: AuthTokenProvider,
 ): Promise<void> {
-  const client = createManagedCloudAgentRunClient({ getAuthToken });
+  const client = createManagedCloudAgentRunClient({ getAuthToken, fetchImpl: ownerFetch(getAuthToken) });
   let failures = 0;
   for (;;) {
     const delay = Math.min(
@@ -1425,6 +1451,7 @@ async function watchRemoteApproval(
       REMOTE_APPROVAL_MAX_BACKOFF_MS,
     );
     await new Promise((resolve) => setTimeout(resolve, delay));
+    if (!tokenOwnerCurrent(getAuthToken)) return;
     const turn = pendingTurns.get(assistantMessageId);
     if (!turn || turn.resolving || remoteApprovalFollowers === 0) return;
     if (useChatStore.getState().activeConversationId !== turn.conversationId) return;
@@ -1437,11 +1464,13 @@ async function watchRemoteApproval(
         afterSequence: lastSequence,
         limit: 1,
       });
+      assertTokenOwner(getAuthToken);
       failures = 0;
       progressed =
         !WAITING_RUN_STATES.has(snapshot.run.state) ||
         (lastSequence >= 0 && snapshot.events.length > 0);
     } catch (error) {
+      if (!tokenOwnerCurrent(getAuthToken)) return;
       logger.warn('[useChatStream] Could not check a waiting run for a remote answer', error);
       if (
         error instanceof ManagedCloudAgentRunHttpError &&
@@ -1460,10 +1489,12 @@ async function watchRemoteApproval(
 }
 
 function followRemoteApproval(assistantMessageId: string, getAuthToken: AuthTokenProvider): void {
-  if (remoteApprovalWatches.has(assistantMessageId)) return;
-  remoteApprovalWatches.add(assistantMessageId);
+  const previous = remoteApprovalWatches.get(assistantMessageId);
+  if (previous && tokenOwnerCurrent(previous)) return;
+  if (!tokenOwnerCurrent(getAuthToken)) return;
+  remoteApprovalWatches.set(assistantMessageId, getAuthToken);
   void watchRemoteApproval(assistantMessageId, getAuthToken).finally(() => {
-    remoteApprovalWatches.delete(assistantMessageId);
+    if (remoteApprovalWatches.get(assistantMessageId) === getAuthToken) remoteApprovalWatches.delete(assistantMessageId);
   });
 }
 
@@ -1487,6 +1518,7 @@ interface StreamOutcome {
 
 interface ConsumeStreamContext {
   response: Response;
+  signal?: AbortSignal;
   assistantMessageId: string;
   model: string;
   conversationId: string;
@@ -1739,6 +1771,7 @@ async function driveDeviceSteps(
 ): Promise<StreamOutcome> {
   const { updateToolEntry } = useChatStore.getState();
   const device = await readDeviceHostDeclaration().catch(() => null);
+  assertTokenOwner(ctx.getAuthToken);
   const results = [];
   for (const step of steps) {
     updateToolEntry(
@@ -1754,6 +1787,7 @@ async function driveDeviceSteps(
             content: `This step is waiting on ${step.deviceName}. Open AGI Desktop on that machine.`,
             isError: true,
           };
+    assertTokenOwner(ctx.getAuthToken);
     updateToolEntry(
       ctx.assistantMessageId,
       step.toolCallId,
@@ -1789,7 +1823,7 @@ async function driveDeviceSteps(
     }),
     ...hostContext.headers,
   });
-  const response = await fetch(DEVICE_STEP_RESUME_PATH, {
+  const response = await ownerFetch(ctx.getAuthToken)(DEVICE_STEP_RESUME_PATH, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -1807,6 +1841,7 @@ async function driveDeviceSteps(
   const seedTools = assistantMessage?.metadata?.tools;
   const next = await consumeAssistantStream({
     response,
+    signal: ctx.signal,
     assistantMessageId: ctx.assistantMessageId,
     model: response.headers.get('X-AGI-Resolved-Model')?.trim() || ctx.model,
     conversationId: ctx.conversationId,
@@ -1817,6 +1852,7 @@ async function driveDeviceSteps(
     ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
   });
 
+  assertTokenOwner(ctx.getAuthToken);
   if (next.suspended && next.pendingDeviceSteps.length > 0 && next.runHandle) {
     return driveDeviceSteps({ ...ctx, runId: next.runHandle.runId }, next.pendingDeviceSteps);
   }
@@ -1833,6 +1869,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     getAuthToken,
     latencyTrace,
   } = ctx;
+  assertTokenOwner(getAuthToken);
 
   const store = useChatStore.getState();
   const runHandle = readManagedCloudAgentRunHandle(response);
@@ -1900,6 +1937,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let fallbackDisclosed = false;
   const coalescedAppends = createFrameCoalescedAppender({
     onFlush: (kind, messageId, text) => {
+      if (!tokenOwnerCurrent(getAuthToken)) return;
       if (kind === 'thinking') {
         appendToThinking(messageId, text, conversationId);
         return;
@@ -1969,6 +2007,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   );
 
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
+    if (!tokenOwnerCurrent(getAuthToken)) return;
     const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } }, conversationId);
   };
@@ -2616,6 +2655,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let heldEmptyTurnSave: (() => void) | undefined;
 
   const persistAssistant = (streamedContent: string) => {
+    if (!tokenOwnerCurrent(getAuthToken)) return;
     const deliveredContent = withProviderCitationMarkers(streamedContent);
     const generatedVideoUrl =
       freeQuotaSelection(model)?.category === 'video'
@@ -2666,11 +2706,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         getAuthToken,
       )
         .then((saved) => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
           if (saved?.id && saved.id !== assistantMessageId) {
             updateMessage(assistantMessageId, { id: saved.id }, conversationId);
           }
         })
         .catch((err) => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
           notifyPersistenceFailure('assistant', err);
           if (
             err instanceof ManagedCloudChatHttpError &&
@@ -2793,13 +2835,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
    */
   const replayFromCursor = async (): Promise<boolean> => {
     for (let attempt = 0; attempt < STREAM_RESUME_ATTEMPTS; attempt += 1) {
+      ctx.signal?.throwIfAborted();
       if (attempt > 0) {
         await new Promise((resolve) => setTimeout(resolve, STREAM_RESUME_RETRY_MS));
       }
       let response: Response;
       try {
-        response = await fetch(turnResumeEndpoint(assistantMessageId), {
+        response = await ownerFetch(getAuthToken)(turnResumeEndpoint(assistantMessageId), {
           method: 'POST',
+          signal: ctx.signal,
           credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
@@ -2814,6 +2858,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }),
         });
       } catch {
+        assertTokenOwner(getAuthToken);
+        ctx.signal?.throwIfAborted();
         continue;
       }
       // The turn is written once the server's own leg settles, which can be
@@ -2822,6 +2868,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (!response.ok || !response.body) return false;
 
       const remainder = await readTurnResumeRemainder(response.body);
+      assertTokenOwner(getAuthToken);
+      ctx.signal?.throwIfAborted();
       if (remainder) {
         emitPublicText(remainder, true);
         coalescedAppends.flush();
@@ -2842,11 +2890,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     try {
       return await replayFromCursor();
     } finally {
-      endStreamPhase(assistantMessageId, 'reconnecting');
+      if (tokenOwnerCurrent(getAuthToken)) endStreamPhase(assistantMessageId, 'reconnecting');
     }
   };
 
   const settleStream = (): StreamOutcome => {
+    assertTokenOwner(getAuthToken);
     flushContentBuffer(true);
     if (contentSplitter.closeThinking()) {
       closeThinkingSegment();
@@ -2898,6 +2947,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
     const client = createManagedCloudAgentRunClient({
       getAuthToken,
+      fetchImpl: ownerFetch(getAuthToken),
     });
     const afterSequence = Math.max(
       currentCloudAgentRun?.lastSequence ?? -1,
@@ -2914,8 +2964,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       const followed = await client.followRun(runHandle.runId, {
         afterSequence,
         pollIntervalMs: DURABLE_RUN_POLL_INTERVAL_MS,
-        signal: terminalFollowAbort.signal,
+        signal: AbortSignal.any([
+          terminalFollowAbort.signal,
+          ...(getAuthToken.authority ? [getAuthToken.authority.signal] : []),
+          ...(ctx.signal ? [ctx.signal] : []),
+        ]),
         onEvent: (envelope) => {
+          assertTokenOwner(getAuthToken);
+          ctx.signal?.throwIfAborted();
           endStreamPhase(assistantMessageId, 'reconnecting');
           const kind = recordAgentEventOutcome(envelope.event);
           if (kind === 'text' && envelope.event.type === 'text-delta' && envelope.event.delta) {
@@ -2958,6 +3014,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
         },
         onSnapshot: (snapshot) => {
+          assertTokenOwner(getAuthToken);
+          ctx.signal?.throwIfAborted();
           endStreamPhase(assistantMessageId, 'reconnecting');
           publishCloudRunReference({
             lastSequence: snapshot.nextAfterSequence,
@@ -2966,10 +3024,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           });
         },
       });
+      assertTokenOwner(getAuthToken);
+      ctx.signal?.throwIfAborted();
       lastKnownSequence = followed.lastSequence;
       runState = followed.run.state;
       cancellationRequestedAt = followed.run.cancellationRequestedAt;
     } catch (error) {
+      assertTokenOwner(getAuthToken);
+      ctx.signal?.throwIfAborted();
       const isAbortError =
         typeof error === 'object' &&
         error !== null &&
@@ -3012,6 +3074,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   try {
     while (true) {
       const { done, value } = await reader.read();
+      assertTokenOwner(getAuthToken);
+      ctx.signal?.throwIfAborted();
       if (!done && value && value.byteLength > 0) latencyTrace?.markFirstChunk();
 
       const text = done ? decoder.decode() : decoder.decode(value, { stream: true });
@@ -3532,7 +3596,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     return settleStream();
   } catch (error) {
-    const isAbort =
+    assertTokenOwner(getAuthToken);
+    let isAbort =
       typeof error === 'object' &&
       error !== null &&
       (error as { name?: unknown }).name === 'AbortError';
@@ -3545,6 +3610,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         terminalError = replayError;
       }
     }
+    isAbort = isAbort || ctx.signal?.aborted === true;
 
     // A plain streaming turn has no run to follow, so the persisted turn is the
     // only record of what the connection was carrying when it dropped.
@@ -3552,6 +3618,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       return settleStream();
     }
 
+    assertTokenOwner(getAuthToken);
     if (currentAgentActivity) {
       const completedAtMs = Date.now();
       currentAgentActivity = finishAgentActivityLocally(currentAgentActivity, {
@@ -3611,7 +3678,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     throw terminalError;
   } finally {
-    endStreamPhase(assistantMessageId, 'reconnecting');
+    if (tokenOwnerCurrent(getAuthToken)) endStreamPhase(assistantMessageId, 'reconnecting');
     closeFirstTokenWait();
     coalescedAppends.flush();
     await reader.cancel().catch(() => undefined);
@@ -3638,9 +3705,38 @@ export function useChatStream(
 ): UseChatStreamReturn {
   const followActiveConversation = options.followActiveConversation !== false;
   const { getToken, userId, isSignedIn } = useSession();
+  const captureSessionSnapshot = useSessionSnapshot();
+  const requestAuthoritiesRef = useRef(new Map<string, RequestAuthority>());
+  const turnAuthoritiesRef = useRef(new Map<string, RequestAuthority>());
+  const ownedAuthoritiesRef = useRef(new Set<RequestAuthority>());
+  useEffect(() => () => {
+    for (const authority of ownedAuthoritiesRef.current) {
+      authority.retire();
+    }
+    ownedAuthoritiesRef.current.clear();
+    requestAuthoritiesRef.current.clear();
+    turnAuthoritiesRef.current.clear();
+  }, []);
+  useEffect(() => {
+    for (const authority of ownedAuthoritiesRef.current) {
+      if (authority.isCurrent()) continue;
+      ownedAuthoritiesRef.current.delete(authority);
+    }
+    const state = useChatStore.getState();
+    const retainedMessages = new Set([
+      ...state.messages.map((message) => message.id),
+      ...Object.values(state.messagesByConversation).flatMap((messages) => messages.map((message) => message.id)),
+    ]);
+    for (const [id] of turnAuthoritiesRef.current) {
+      if (!retainedMessages.has(id)) turnAuthoritiesRef.current.delete(id);
+    }
+  });
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
-    Map<string, Pick<ManagedCloudAgentRunHandle, 'runId'> & { assistantMessageId?: string }>
+    Map<string, Pick<ManagedCloudAgentRunHandle, 'runId'> & {
+      assistantMessageId?: string;
+      authority?: RequestAuthority;
+    }>
   >(new Map());
   const recoveryVersionsRef = useRef<Map<string, number>>(new Map());
   const cancellationsRef = useRef<Map<string, 'pending' | 'unconfirmed'>>(new Map());
@@ -3725,18 +3821,22 @@ export function useChatStream(
 
   useEffect(() => {
     if (!followActiveConversation) return undefined;
-    const getAuthToken: AuthTokenProvider = async () => {
-      const token = await getToken();
-      if (!token) throw new Error('Not authenticated');
-      return token;
-    };
     remoteApprovalFollowers += 1;
     const checked = new Set<string>();
     const followRestored = (messages: readonly Message[]): void => {
       for (const message of messages) {
         if (checked.has(message.id) || !message.metadata?.cloudApproval) continue;
         checked.add(message.id);
-        if (isApprovalTurnLive(message.id)) followRemoteApproval(message.id, getAuthToken);
+        if (!isApprovalTurnLive(message.id)) continue;
+        const turn = pendingTurns.get(message.id);
+        if (!turn) continue;
+        if (!turn.authority) {
+          const snapshot = captureSessionSnapshot();
+          if (!snapshot) continue;
+          turn.authority = createRequestAuthority(snapshot);
+          ownedAuthoritiesRef.current.add(turn.authority);
+        }
+        if (turn.authority.isCurrent()) followRemoteApproval(message.id, authorityToken(turn.authority));
       }
     };
     followRestored(useChatStore.getState().messages);
@@ -3753,17 +3853,21 @@ export function useChatStream(
       unsubscribe();
       remoteApprovalFollowers -= 1;
     };
-  }, [followActiveConversation, getToken]);
+  }, [followActiveConversation, captureSessionSnapshot]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   useEffect(() => {
     if (!followActiveConversation) return undefined;
+    const snapshot = captureSessionSnapshot();
+    if (!snapshot) return undefined;
+    const authority = createRequestAuthority(snapshot);
+    let adopted = false;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
 
     const ask = async (): Promise<void> => {
-      if (stopped) return;
+      if (stopped || !authority.isCurrent()) return;
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       const activeRun = conversationId ? activeRunsRef.current.get(conversationId) : undefined;
@@ -3786,12 +3890,12 @@ export function useChatStream(
       const version = recoveryVersionsRef.current.get(conversationId as string) ?? 0;
       let recovery: InFlightTurnRecovery;
       try {
-        recovery = await askWhetherTurnIsRunning(conversationId as string, controller.signal);
+        recovery = await askWhetherTurnIsRunning(conversationId as string, controller.signal, authority.fetch);
       } catch {
         recovery = { verdict: 'idle', verified: false };
       }
       if (
-        stopped ||
+        stopped || !authority.isCurrent() ||
         useChatStore.getState().activeConversationId !== conversationId ||
         (recoveryVersionsRef.current.get(conversationId as string) ?? 0) !== version ||
         abortControllersRef.current.has(conversationId as string)
@@ -3807,7 +3911,12 @@ export function useChatStream(
         timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
         return;
       }
-      if (runId) activeRunsRef.current.set(conversationId as string, { runId });
+      if (runId) {
+        if (!recovery.verified) return;
+        activeRunsRef.current.set(conversationId as string, { runId, authority });
+        ownedAuthoritiesRef.current.add(authority);
+        adopted = true;
+      }
       else if (!activeRunsRef.current.get(conversationId as string)?.assistantMessageId) {
         activeRunsRef.current.delete(conversationId as string);
       }
@@ -3832,9 +3941,10 @@ export function useChatStream(
     return () => {
       stopped = true;
       controller.abort();
+      if (!adopted) authority.retire();
       if (timer) clearTimeout(timer);
     };
-  }, [activeConversationId, followActiveConversation, userId, isSignedIn]);
+  }, [activeConversationId, followActiveConversation, userId, isSignedIn, captureSessionSnapshot]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef);
   const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval);
@@ -3871,6 +3981,19 @@ export function useChatStream(
       });
       const model = turnRoute.model;
       const localModel = resolveLocalModel(model, selectedLocalModel);
+      const session = options.authority ? null : captureSessionSnapshot();
+      const authority = options.authority ?? (session ? createRequestAuthority(session) : undefined);
+      if (!localModel && (!authority || !authority.isCurrent())) return false;
+      if (authority) {
+        if (!authority.isCurrent()) return false;
+        const previous = requestAuthoritiesRef.current.get(conversationId);
+        if (previous && previous !== authority) {
+          previous.retire();
+          ownedAuthoritiesRef.current.delete(previous);
+        }
+        requestAuthoritiesRef.current.set(conversationId, authority);
+        ownedAuthoritiesRef.current.add(authority);
+      }
 
       if (localModel && options.attachments?.length) {
         setError(LOCAL_ATTACHMENTS_UNSUPPORTED, conversationId);
@@ -3914,7 +4037,7 @@ export function useChatStream(
               ...(turnRoute.handoffReason ? { freeModelHandoff: turnRoute.handoffReason } : {}),
             }
           : undefined;
-      const getAuthToken: AuthTokenProvider = async () => {
+      const getAuthToken: AuthTokenProvider = authority ? authorityToken(authority) : async () => {
         const token = await getToken();
         if (!token) throw new Error('Not authenticated');
         return token;
@@ -3950,6 +4073,7 @@ export function useChatStream(
 
       let turnCommittedReported = false;
       const reportTurnCommitted = () => {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         if (turnCommittedReported) return;
         turnCommittedReported = true;
         try {
@@ -3989,8 +4113,11 @@ export function useChatStream(
       }
 
       const abortController = beginConversationRequest(conversationId);
+      const retireTransport = () => abortController.abort();
+      authority?.signal.addEventListener('abort', retireTransport, { once: true });
 
       const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
+      if (authority) turnAuthoritiesRef.current.set(assistantMessageId, authority);
       const assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
       const assistantStartedAtMs = regenerateParentId
         ? Date.now()
@@ -4035,6 +4162,11 @@ export function useChatStream(
       const turnConversationId = conversationId;
       const abandonTurn = () => {
         latencyTrace?.cancel();
+        authority?.signal.removeEventListener('abort', retireTransport);
+        if (!tokenOwnerCurrent(getAuthToken)) {
+          endConversationRequest(conversationId, abortController);
+          return;
+        }
         stopStreaming(turnConversationId);
         setLoading(false, turnConversationId);
         deleteMessage(assistantMessageId, turnConversationId);
@@ -4051,6 +4183,11 @@ export function useChatStream(
         } catch {
           realConversationId = null;
         }
+        if (!tokenOwnerCurrent(getAuthToken)) {
+          authority?.signal.removeEventListener('abort', retireTransport);
+          endConversationRequest(conversationId, abortController);
+          return false;
+        }
         if (!realConversationId) {
           abandonTurn();
           setError(
@@ -4060,6 +4197,11 @@ export function useChatStream(
           return false;
         }
         if (realConversationId !== conversationId) {
+          if (authority && requestAuthoritiesRef.current.get(conversationId) === authority) {
+            requestAuthoritiesRef.current.delete(conversationId);
+            requestAuthoritiesRef.current.get(realConversationId)?.retire();
+            requestAuthoritiesRef.current.set(realConversationId, authority);
+          }
           if (abortControllersRef.current.get(conversationId) === abortController) {
             abortControllersRef.current.delete(conversationId);
             abortControllersRef.current.set(realConversationId, abortController);
@@ -4083,6 +4225,7 @@ export function useChatStream(
           await getAuthToken();
         } catch {
           abandonTurn();
+          if (!tokenOwnerCurrent(getAuthToken)) return false;
           setError('Your session has expired. Please sign in again.', conversationId);
           return false;
         }
@@ -4100,6 +4243,7 @@ export function useChatStream(
         modelName: getModelMetadataById(model)?.name,
         startedAtMs: assistantStartedAtMs,
         onSummary: (summary) => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
           const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
           const next = withTurnStartSummary(current?.agentActivity, summary);
           if (!next || next === current?.agentActivity) return;
@@ -4220,7 +4364,7 @@ export function useChatStream(
               ? normalizePromotionalChatHistory(apiMessages)
               : apiMessages;
           latencyTrace?.markFetchIssued();
-          const response = await fetch(chatCompletionEndpoint(model), {
+          const response = await ownerFetch(getAuthToken)(chatCompletionEndpoint(model), {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -4333,6 +4477,7 @@ export function useChatStream(
             signal: abortController.signal,
           });
           connectingTicker.stop();
+          assertTokenOwner(getAuthToken);
 
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
           if (resolvedModel !== model) {
@@ -4358,6 +4503,7 @@ export function useChatStream(
           const retriesEmptyTurn = !retriedEmptyTurn && !freeQuotaSelection(model);
           const outcome = await consumeAssistantStream({
             response,
+            signal: abortController.signal,
             assistantMessageId,
             model: resolvedModel,
             conversationId,
@@ -4368,8 +4514,9 @@ export function useChatStream(
             ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
             onRunHandle: (handle) => {
+              if (!tokenOwnerCurrent(getAuthToken)) return;
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority });
                 // AGI Work is the only mode sold as work that outlives the tab,
                 // so it is the only one that owes the reader a correction when
                 // the server could not give it the durable transport.
@@ -4386,6 +4533,7 @@ export function useChatStream(
             },
           });
 
+          assertTokenOwner(getAuthToken);
           let settled = outcome;
           if (settled.suspended && settled.pendingDeviceSteps.length > 0) {
             if (!settled.runHandle) {
@@ -4405,11 +4553,13 @@ export function useChatStream(
             );
           }
 
+          assertTokenOwner(getAuthToken);
           if (settled.suspended && settled.pendingCalls.length > 0) {
             if (!settled.runHandle) {
               throw new Error('The managed agent did not return a durable run handle.');
             }
             pendingTurns.set(assistantMessageId, {
+              authority,
               runId: settled.runHandle.runId,
               model,
               conversationId,
@@ -4432,6 +4582,7 @@ export function useChatStream(
               throw new Error('The managed agent did not return a durable run handle.');
             }
             pendingInputTurns.set(assistantMessageId, {
+              authority,
               runId: settled.runHandle.runId,
               model,
               conversationId,
@@ -4468,6 +4619,7 @@ export function useChatStream(
         }
       } catch (error) {
         latencyTrace?.cancel();
+        if (!tokenOwnerCurrent(getAuthToken)) return false;
         // CAP-040: a turn interrupted by an expired session was unrecoverable.
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign
@@ -4520,9 +4672,10 @@ export function useChatStream(
         });
       } finally {
         connectingTicker.stop();
+        authority?.signal.removeEventListener('abort', retireTransport);
         const activeRun = activeRunsRef.current.get(conversationId);
         if (
-          activeRun?.assistantMessageId === assistantMessageId &&
+          tokenOwnerCurrent(getAuthToken) && activeRun?.assistantMessageId === assistantMessageId &&
           !cancellationsRef.current.has(activeRun.runId)
         ) {
           activeRunsRef.current.delete(conversationId);
@@ -4544,6 +4697,7 @@ export function useChatStream(
       resolveToolApproval,
       beginConversationRequest,
       endConversationRequest,
+      captureSessionSnapshot,
     ],
   );
 
@@ -4551,6 +4705,11 @@ export function useChatStream(
     async (assistantMessageId: string) => {
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
+      const existingAuthority = turnAuthoritiesRef.current.get(assistantMessageId) ??
+        (conversationId ? requestAuthoritiesRef.current.get(conversationId) : undefined);
+      const snapshot = existingAuthority ? null : captureSessionSnapshot();
+      const authority = existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
+      if (!authority?.isCurrent()) return;
       if (conversationId && store.streamingConversationIds.includes(conversationId)) return;
       if (conversationId && continuationClaimsRef.current.has(conversationId)) return;
       const conversationMessages = conversationId
@@ -4592,15 +4751,15 @@ export function useChatStream(
               : inherited.effort),
         });
 
-        const getAuthToken: AuthTokenProvider = async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        requestAuthoritiesRef.current.set(conversationId, authority);
+        turnAuthoritiesRef.current.set(assistantMessageId, authority);
+        ownedAuthoritiesRef.current.add(authority);
+        const getAuthToken = authorityToken(authority);
         let authToken: string;
         try {
           authToken = await getAuthToken();
         } catch {
+          if (!authority.isCurrent()) return;
           setError('Not authenticated', conversationId);
           return;
         }
@@ -4642,7 +4801,7 @@ export function useChatStream(
               operationId: continuationOperationId,
             }),
           });
-          const response = await fetch(chatCompletionEndpoint(model), {
+          const response = await authority.fetch(chatCompletionEndpoint(model), {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -4677,6 +4836,7 @@ export function useChatStream(
 
           await consumeAssistantStream({
             response,
+            signal: abortController.signal,
             assistantMessageId,
             model: response.headers.get('X-AGI-Resolved-Model')?.trim() || model,
             conversationId,
@@ -4687,13 +4847,15 @@ export function useChatStream(
             seedMetadata: priorMetadata ?? {},
             onRunHandle: (handle) => {
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority });
               } else {
                 activeRunsRef.current.delete(conversationId);
               }
             },
           });
+          authority.assertCurrent();
         } catch (error) {
+          if (!authority.isCurrent()) return;
           const isAbort =
             typeof error === 'object' &&
             error !== null &&
@@ -4760,7 +4922,7 @@ export function useChatStream(
         } finally {
           const activeRun = activeRunsRef.current.get(conversationId);
           if (
-            activeRun?.assistantMessageId === assistantMessageId &&
+            authority.isCurrent() && activeRun?.assistantMessageId === assistantMessageId &&
             !cancellationsRef.current.has(activeRun.runId)
           ) {
             activeRunsRef.current.delete(conversationId);
@@ -4781,6 +4943,7 @@ export function useChatStream(
       getToken,
       beginConversationRequest,
       endConversationRequest,
+      captureSessionSnapshot,
     ],
   );
 
@@ -4789,6 +4952,13 @@ export function useChatStream(
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       if (!conversationId) return;
+      const existingAuthority = turnAuthoritiesRef.current.get(assistantMessageId) ?? requestAuthoritiesRef.current.get(conversationId);
+      const snapshot = existingAuthority ? null : captureSessionSnapshot();
+      const authority = existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
+      if (!authority?.isCurrent()) return;
+      requestAuthoritiesRef.current.set(conversationId, authority);
+      turnAuthoritiesRef.current.set(assistantMessageId, authority);
+      ownedAuthoritiesRef.current.add(authority);
       const message = findConversationMessage(conversationId, assistantMessageId);
       if (!message || !hasResumableInteractiveCard(message)) return;
       if (message.metadata?.interactiveCardsResumed && !options.force) return;
@@ -4801,7 +4971,7 @@ export function useChatStream(
       );
       if (!isTemporaryConversation) {
         try {
-          const token = await getToken();
+          const token = await authority.getToken();
           if (token) {
             await saveMessageToDb(
               conversationId,
@@ -4812,7 +4982,7 @@ export function useChatStream(
                 model: message.model,
                 metadata: nextMetadata,
               },
-              async () => token,
+              authorityToken(authority),
             );
           }
         } catch (error) {
@@ -4820,9 +4990,9 @@ export function useChatStream(
         }
       }
 
-      await continueGeneration(assistantMessageId);
+      if (authority.isCurrent()) await continueGeneration(assistantMessageId);
     },
-    [continueGeneration, updateMessage, getToken],
+    [continueGeneration, updateMessage, captureSessionSnapshot],
   );
 
   const stopGeneration = useCallback(
@@ -4831,6 +5001,9 @@ export function useChatStream(
       if (!targetConversationId) return;
 
       const activeRun = activeRunsRef.current.get(targetConversationId);
+      const authority = activeRun?.authority ?? requestAuthoritiesRef.current.get(targetConversationId);
+      if (authority && !authority.isCurrent()) return;
+      if (activeRun && !authority) return;
       if (activeRun && cancellationsRef.current.get(activeRun.runId) === 'pending') return;
       const version = invalidateRecovery(targetConversationId);
       const ownerVersion = ownerVersionRef.current;
@@ -4841,18 +5014,20 @@ export function useChatStream(
       if (activeRun) {
         cancellationsRef.current.set(activeRun.runId, 'pending');
         const client = createManagedCloudAgentRunClient({
-          getAuthToken: getToken,
+          getAuthToken: authority!.getToken,
+          fetchImpl: authority!.fetch,
           decorateMutationHeaders: addCsrfHeaders,
         });
         setLoading(true, targetConversationId);
         if (activeRun.assistantMessageId)
           beginStreamPhase(activeRun.assistantMessageId, 'stopping');
         const ownsCancellation = (): boolean =>
+          authority!.isCurrent() &&
           ownerVersionRef.current === ownerVersion &&
           recoveryVersionsRef.current.get(targetConversationId) === version;
         const isCurrentRun = (): boolean =>
           ownsCancellation() &&
-          activeRunsRef.current.get(targetConversationId)?.runId === activeRun.runId;
+          activeRunsRef.current.get(targetConversationId) === activeRun;
         void cancelCloudRunAndConfirm(client, activeRun.runId)
           .then((stopped) => {
             if (!isCurrentRun()) return;
@@ -4893,12 +5068,16 @@ export function useChatStream(
   const steerActiveTurn = useCallback(
     async (conversationId: string, message: string): Promise<string | null> => {
       const activeRun = activeRunsRef.current.get(conversationId);
+      const authority = activeRun?.authority ?? requestAuthoritiesRef.current.get(conversationId);
+      if (!authority?.isCurrent()) return null;
       if (!activeRun) return null;
       const client = createManagedCloudAgentRunClient({
-        getAuthToken: getToken,
+        getAuthToken: authority.getToken,
+        fetchImpl: authority.fetch,
         decorateMutationHeaders: addCsrfHeaders,
       });
       const { steer } = await client.steerRun(activeRun.runId, message);
+      authority.assertCurrent();
       return steer.id;
     },
     [getToken],
@@ -4941,6 +5120,7 @@ export function useResolveToolApproval(
 
       const turn = pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId);
       if (!turn || turn.resolving) return;
+      if (turn.authority && !turn.authority.isCurrent()) return;
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
 
       turn.decisions.set(toolCallId, decision);
@@ -4963,7 +5143,7 @@ export function useResolveToolApproval(
       };
       updateMessage(assistantMessageId, { metadata: selectedMetadata }, turn.conversationId);
 
-      const getAuthToken: AuthTokenProvider = async () => {
+      const getAuthToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority) : async () => {
         const token = await getToken();
         if (!token) throw new Error('Not authenticated');
         return token;
@@ -4986,6 +5166,7 @@ export function useResolveToolApproval(
         ).catch((error) => notifyPersistenceFailure('assistant', error));
       }
 
+      if (!tokenOwnerCurrent(getAuthToken)) return;
       if (turn.decisions.size < turn.calls.length) return;
       if (turn.resolving) return;
       turn.resolving = true;
@@ -5011,6 +5192,7 @@ export function useResolveToolApproval(
       }
 
       const restoreApprovalControls = async () => {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         turn.resolving = false;
         turn.decisions.clear();
         for (const call of turn.calls) {
@@ -5049,6 +5231,7 @@ export function useResolveToolApproval(
       };
 
       const closeAnsweredApprovalTurn = async (reason: string) => {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         pendingTurns.delete(assistantMessageId);
         for (const call of turn.calls) {
           updateToolEntry(
@@ -5079,7 +5262,9 @@ export function useResolveToolApproval(
       try {
         authToken = await getAuthToken();
       } catch {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         await restoreApprovalControls();
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         setError('Your session has expired. Please sign in again.', turn.conversationId);
         return;
       }
@@ -5119,7 +5304,7 @@ export function useResolveToolApproval(
           }),
           ...hostContext.headers,
         });
-        const response = await fetch(TOOL_APPROVAL_RESUME_PATH, {
+        const response = await ownerFetch(getAuthToken)(TOOL_APPROVAL_RESUME_PATH, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -5136,6 +5321,7 @@ export function useResolveToolApproval(
 
         const outcome = await consumeAssistantStream({
           response,
+          signal: abortController.signal,
           assistantMessageId,
           model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
           conversationId: turn.conversationId,
@@ -5146,6 +5332,7 @@ export function useResolveToolApproval(
           seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
         });
 
+        assertTokenOwner(getAuthToken);
         let settled = outcome;
         if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
           settled = await driveDeviceSteps(
@@ -5162,11 +5349,13 @@ export function useResolveToolApproval(
           );
         }
 
+        assertTokenOwner(getAuthToken);
         if (settled.suspended && settled.pendingCalls.length > 0) {
           if (!settled.runHandle) {
             throw new Error('The managed agent continuation lost its durable run handle.');
           }
           pendingTurns.set(assistantMessageId, {
+            authority: getAuthToken.authority,
             runId: settled.runHandle.runId,
             model: turn.model,
             conversationId: turn.conversationId,
@@ -5189,6 +5378,7 @@ export function useResolveToolApproval(
             throw new Error('The managed agent continuation lost its durable run handle.');
           }
           pendingInputTurns.set(assistantMessageId, {
+            authority: getAuthToken.authority,
             runId: settled.runHandle.runId,
             model: turn.model,
             conversationId: turn.conversationId,
@@ -5199,12 +5389,14 @@ export function useResolveToolApproval(
           });
         }
       } catch (error) {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         if (error instanceof ChatApiError) {
           if (error.status !== undefined && ANSWERED_APPROVAL_STATUSES.has(error.status)) {
             await closeAnsweredApprovalTurn(getVisibleErrorMessage(error));
           } else {
             await restoreApprovalControls();
           }
+          if (!tokenOwnerCurrent(getAuthToken)) return;
           setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);
@@ -5261,6 +5453,7 @@ function useResolveToolInput(
       const turn =
         pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId);
       if (!turn || turn.resolving) return false;
+      if (turn.authority && !turn.authority.isCurrent()) return false;
       if (!turn.calls.some((call) => call.toolCallId === toolCallId)) return false;
 
       turn.responses.set(toolCallId, inputResponses);
@@ -5276,13 +5469,14 @@ function useResolveToolInput(
         );
       }
 
-      const getAuthToken: AuthTokenProvider = async () => {
+      const getAuthToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority) : async () => {
         const token = await getToken();
         if (!token) throw new Error('Not authenticated');
         return token;
       };
 
       const restoreInputControls = () => {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         turn.resolving = false;
         turn.responses.clear();
         for (const call of turn.calls) {
@@ -5297,6 +5491,7 @@ function useResolveToolInput(
       };
 
       const closeInactiveTurn = async (reason: string) => {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         pendingInputTurns.delete(assistantMessageId);
         for (const call of turn.calls) {
           updateToolEntry(
@@ -5326,6 +5521,7 @@ function useResolveToolInput(
       try {
         authToken = await getAuthToken();
       } catch {
+        if (!tokenOwnerCurrent(getAuthToken)) return false;
         restoreInputControls();
         setError('Your session has expired. Please sign in again.', turn.conversationId);
         return false;
@@ -5366,7 +5562,7 @@ function useResolveToolInput(
           }),
           ...hostContext.headers,
         });
-        const response = await fetch(TOOL_INPUT_RESUME_PATH, {
+        const response = await ownerFetch(getAuthToken)(TOOL_INPUT_RESUME_PATH, {
           method: 'POST',
           headers,
           body: JSON.stringify(resumeRequest),
@@ -5379,6 +5575,7 @@ function useResolveToolInput(
 
         let settled = await consumeAssistantStream({
           response,
+          signal: abortController.signal,
           assistantMessageId,
           model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
           conversationId: turn.conversationId,
@@ -5404,6 +5601,7 @@ function useResolveToolInput(
           );
         }
 
+        assertTokenOwner(getAuthToken);
         const pendingCalls = settled.suspended ? settled.pendingCalls : [];
         const pendingInputs = settled.suspended ? settled.pendingInputs : [];
         const runId = settled.runHandle?.runId;
@@ -5412,6 +5610,7 @@ function useResolveToolInput(
         }
         if (runId && pendingCalls.length > 0) {
           pendingTurns.set(assistantMessageId, {
+            authority: getAuthToken.authority,
             runId,
             model: turn.model,
             conversationId: turn.conversationId,
@@ -5425,6 +5624,7 @@ function useResolveToolInput(
         }
         if (runId && pendingInputs.length > 0) {
           pendingInputTurns.set(assistantMessageId, {
+            authority: getAuthToken.authority,
             runId,
             model: turn.model,
             conversationId: turn.conversationId,
@@ -5438,12 +5638,14 @@ function useResolveToolInput(
         }
         return true;
       } catch (error) {
+        if (!tokenOwnerCurrent(getAuthToken)) return false;
         if (error instanceof ChatApiError) {
           if (error.status !== undefined && INACTIVE_INPUT_STATUSES.has(error.status)) {
             await closeInactiveTurn(getVisibleErrorMessage(error));
           } else {
             restoreInputControls();
           }
+          if (!tokenOwnerCurrent(getAuthToken)) return false;
           setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);
@@ -5499,6 +5701,7 @@ interface StreamErrorContext {
 }
 
 async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promise<void> {
+  if (!tokenOwnerCurrent(ctx.getAuthToken)) return;
   const {
     assistantMessageId,
     model,
@@ -5550,6 +5753,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         getAuthToken,
       ).catch((err) => notifyPersistenceFailure('assistant', err));
     }
+    if (!tokenOwnerCurrent(getAuthToken)) return;
     stopStreaming(conversationId);
     setLoading(false, conversationId);
     return;
@@ -5580,6 +5784,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   // Nothing streamed, so consumeAssistantStream persisted nothing and the row
   // only exists on screen. Dropping it here keeps both sides agreeing that the
   // variant was never created.
+  if (!tokenOwnerCurrent(getAuthToken)) return;
   const restoredLeaf = readConversationRows(conversationId).find(
     (row) => row.id === ctx.variantRestore?.previousLeafId,
   );
@@ -5669,6 +5874,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
           getAuthToken,
         )
           .then((saved) => {
+            if (!tokenOwnerCurrent(getAuthToken)) return saved;
             if (saved?.id && saved.id !== assistantMessageId) {
               updateMessage(assistantMessageId, { id: saved.id }, conversationId);
             }
@@ -5735,6 +5941,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
       getAuthToken,
     )
       .then((saved) => {
+        if (!tokenOwnerCurrent(getAuthToken)) return;
         if (saved?.id && saved.id !== assistantMessageId) {
           updateMessage(assistantMessageId, { id: saved.id }, conversationId);
         }

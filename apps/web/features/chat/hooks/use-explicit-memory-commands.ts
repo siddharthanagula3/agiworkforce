@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import { toast } from 'sonner';
 import { translateUiPlural, useConfirmAction } from '@agiworkforce/ui';
 import {
@@ -9,7 +9,7 @@ import {
   type ManagedMemoryCommandResponse,
   type ManagedMemoryCommandStatus,
 } from '@agiworkforce/types';
-import { useMemoryStore } from '@agiworkforce/unified-chat';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -43,13 +43,18 @@ export interface MemoryCommandReport {
 
 async function postMemoryCommand(
   body: ManagedMemoryCommandRequest,
+  authority: RequestAuthority,
 ): Promise<ManagedMemoryCommandResponse> {
-  const response = await fetch(MEMORY_COMMANDS_PATH, {
+  authority.assertCurrent();
+  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  authority.assertCurrent();
+  const response = await authority.fetch(MEMORY_COMMANDS_PATH, {
     method: 'POST',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    headers,
     body: JSON.stringify(body),
   });
   const data: unknown = await response.json().catch(() => null);
+  authority.assertCurrent();
   const parsed = response.ok ? parseManagedMemoryCommandResponse(data) : null;
   if (!parsed) {
     const message =
@@ -65,11 +70,18 @@ export function useExplicitMemoryCommands(): {
   runExplicitMemoryCommand: (
     message: string,
     scope: { conversationId: string | null; projectId: string | null },
+    authority: RequestAuthority,
   ) => Promise<MemoryCommandReport | null>;
   memoryCommandDialog: ReactElement | null;
 } {
   const { confirm, dialog } = useConfirmAction();
-  const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
+  const confirmationOwnerRef = useRef<RequestAuthority | null>(null);
+  const generationRef = useRef<object>({});
+  useEffect(() => () => {
+    generationRef.current = {};
+    confirmationOwnerRef.current?.retire();
+    confirmationOwnerRef.current = null;
+  }, []);
 
   const announce = useCallback(
     (result: ManagedMemoryCommandResponse) => {
@@ -78,29 +90,35 @@ export function useExplicitMemoryCommands(): {
       if (!receipt) return;
       if (result.status && SETTLED_STATUSES.has(result.status)) {
         toast.success(receipt);
-        void hydrateMemories();
         return;
       }
       toast(receipt);
     },
-    [hydrateMemories],
+    [],
   );
 
   const runExplicitMemoryCommand = useCallback(
     async (
       message: string,
       scope: { conversationId: string | null; projectId: string | null },
+      authority: RequestAuthority,
     ): Promise<MemoryCommandReport | null> => {
-      if (!MEMORY_COMMAND_HINT.test(message)) return null;
+      if (!MEMORY_COMMAND_HINT.test(message) || !authority.isCurrent()) return null;
+      const generation = {};
+      generationRef.current = generation;
+      confirmationOwnerRef.current?.retire();
+      confirmationOwnerRef.current = null;
       const request: ManagedMemoryCommandRequest = { message, ...scope };
       let result: ManagedMemoryCommandResponse;
       try {
-        result = await postMemoryCommand(request);
+        result = await postMemoryCommand(request, authority);
       } catch (error) {
+        if (!authority.isCurrent() || generationRef.current !== generation) return null;
         toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
         const kind = MEMORY_COMMAND_KIND_HINT.find(([, pattern]) => pattern.test(message))?.[0];
         return kind ? { kind, status: 'failed' } : null;
       }
+      if (!authority.isCurrent() || generationRef.current !== generation) return null;
       if (!result.command) return null;
       const report: MemoryCommandReport = {
         kind: result.command.kind,
@@ -111,6 +129,12 @@ export function useExplicitMemoryCommands(): {
         announce(result);
         return report;
       }
+      const confirmationAuthority: RequestAuthority = createRequestAuthority(
+        authority.session,
+        () => generationRef.current === generation &&
+          confirmationOwnerRef.current === confirmationAuthority,
+      );
+      confirmationOwnerRef.current = confirmationAuthority;
       confirm({
         title: translateUiPlural('chat', 'counts.forgetMemoriesTitle', matches.length, {
           one: 'Forget this memory?',
@@ -127,11 +151,21 @@ export function useExplicitMemoryCommands(): {
           { memories: matches.map((memory) => `“${memory.content}”`).join(' ') },
         ),
         confirmLabel: 'Forget',
+        onCancel: () => {
+          confirmationAuthority.retire();
+          if (confirmationOwnerRef.current === confirmationAuthority) confirmationOwnerRef.current = null;
+        },
         onConfirm: async () => {
           try {
-            announce(await postMemoryCommand({ ...request, confirmed: true }));
+            if (!confirmationAuthority.isCurrent()) return;
+            const confirmed = await postMemoryCommand({ ...request, confirmed: true }, confirmationAuthority);
+            confirmationAuthority.assertCurrent();
+            announce(confirmed);
           } catch (error) {
-            toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
+            if (confirmationAuthority.isCurrent()) toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
+          } finally {
+            confirmationAuthority.retire();
+            if (confirmationOwnerRef.current === confirmationAuthority) confirmationOwnerRef.current = null;
           }
         },
       });
@@ -140,5 +174,5 @@ export function useExplicitMemoryCommands(): {
     [announce, confirm],
   );
 
-  return { runExplicitMemoryCommand, memoryCommandDialog: dialog };
+  return { runExplicitMemoryCommand, memoryCommandDialog: confirmationOwnerRef.current?.isCurrent() ? dialog : null };
 }

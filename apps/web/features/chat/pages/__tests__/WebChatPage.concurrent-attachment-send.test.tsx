@@ -382,6 +382,33 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
     expect(mocks.toastError).not.toHaveBeenCalled();
+    const sendOptions = mocks.sendMessage.mock.calls[0]![1] as { authority: unknown };
+    expect(sendOptions.authority).toBe(mocks.uploadChatAttachments.mock.calls[0]![2]);
+  });
+
+  it('does not send or recover an old payload when the SDK switches during upload', async () => {
+    const originalSession = mocks.sdk.session;
+    const originalUser = mocks.sdk.user;
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [new File(['notes'], 'notes.txt', { type: 'text/plain' })]);
+    });
+    await waitFor(() => expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1));
+    const authority = mocks.uploadChatAttachments.mock.calls[0]![2] as { isCurrent: () => boolean };
+    try {
+      mocks.sdk.user = { id: 'other-user' };
+      mocks.sdk.session = { id: 'other-session', user: { id: 'other-user' } };
+      await act(async () => { mocks.uploadResolvers[0]!([]); });
+      expect(authority.isCurrent()).toBe(false);
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+      expect(mocks.createConversation).not.toHaveBeenCalled();
+      expect(mocks.toastError).not.toHaveBeenCalled();
+      expect(firstParkedSend(selectParkedSends(useChatStore.getState()))).toBeNull();
+    } finally {
+      mocks.sdk.session = originalSession;
+      mocks.sdk.user = originalUser;
+    }
   });
 
   it('keeps a failed file visible with its phase and retries the original turn', async () => {

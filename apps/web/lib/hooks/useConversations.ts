@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toUserMessage } from '@/lib/user-error-message';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { useSession } from '@/lib/identity/client';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
@@ -211,7 +212,7 @@ interface UseConversationsReturn {
     title?: string,
     model?: string,
     projectId?: string | null,
-    options?: { isTemporary?: boolean; selectedRouteId?: string | null },
+    options?: { isTemporary?: boolean; selectedRouteId?: string | null; authority?: RequestAuthority; shouldActivate?: () => boolean },
   ) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
   /**
@@ -261,6 +262,7 @@ export function useConversations(): UseConversationsReturn {
 
   const [isFetchingConversations, setIsFetchingConversations] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const creatingConversationOwnersRef = useRef(new Set<object>());
   const [isOpeningConversation, setIsOpeningConversation] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const conversationLoadErrorRef = useRef<string | null>(null);
@@ -444,19 +446,29 @@ export function useConversations(): UseConversationsReturn {
       title?: string,
       model?: string,
       projectId?: string | null,
-      options?: { isTemporary?: boolean; selectedRouteId?: string | null },
+      options?: { isTemporary?: boolean; selectedRouteId?: string | null; authority?: RequestAuthority; shouldActivate?: () => boolean },
     ): Promise<Conversation | null> => {
+      const authority = options?.authority;
+      authority?.assertCurrent();
+      const creationOwner = {};
+      creatingConversationOwnersRef.current.add(creationOwner);
       setIsCreatingConversation(true);
       setError(null);
 
       try {
-        const headers = await addCsrfHeaders(await getAuthHeaders());
+        const headers = await addCsrfHeaders(
+          authority
+            ? { 'Content-Type': 'application/json', Authorization: `Bearer ${await authority.getToken()}` }
+            : await getAuthHeaders(),
+        );
+        authority?.assertCurrent();
         const selectedModelState = useModelStore.getState();
         const selectedRouteId =
           options?.selectedRouteId === undefined && model === selectedModelState.selectedModelId
             ? selectedModelState.selectedRouteId
             : options?.selectedRouteId;
-        const response = await fetch('/api/chat/conversations', {
+        const response = await (authority?.fetch ?? fetch)('/api/chat/conversations', {
+          ...(authority ? { credentials: 'omit' as const } : {}),
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -483,6 +495,7 @@ export function useConversations(): UseConversationsReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
+          authority?.assertCurrent();
           if (response.status === 429) {
             const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
             const seconds =
@@ -497,18 +510,25 @@ export function useConversations(): UseConversationsReturn {
         }
 
         const data = ManagedCloudCreateConversationResponseSchema.parse(await response.json());
+        authority?.assertCurrent();
         const conversation = toWebConversation(data.conversation);
 
         addConversation(conversation);
-        setActiveConversation(conversation.id);
-        setMessages([]);
+        if (options?.shouldActivate?.() !== false) {
+          setActiveConversation(conversation.id);
+          setMessages([]);
+        }
 
         return conversation;
       } catch (err) {
-        setError(toUserMessage(err, 'Failed to create conversation'));
+        if (authority && !authority.isCurrent()) throw err;
+        if (options?.shouldActivate?.() !== false) {
+          setError(toUserMessage(err, 'Failed to create conversation'));
+        }
         return null;
       } finally {
-        setIsCreatingConversation(false);
+        creatingConversationOwnersRef.current.delete(creationOwner);
+        setIsCreatingConversation(creatingConversationOwnersRef.current.size > 0);
       }
     },
     [getAuthHeaders, addConversation, setActiveConversation, setMessages, setError],
