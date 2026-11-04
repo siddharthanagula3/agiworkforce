@@ -9,6 +9,7 @@ export {
   FREE_QUOTA_ATTESTATION_PATH,
   FREE_QUOTA_CATALOGUE_PATH,
   FREE_QUOTA_COMPLETIONS_PATH,
+  FREE_QUOTA_MEDIA_OFFER_PATH,
 } from './free-quota-paths';
 
 export const FREE_QUOTA_EXHAUSTED_CODE = 'free_quota_exhausted';
@@ -143,11 +144,22 @@ export const FreeQuotaModelSchema = z.object({
   consumedApproximate: z.number().nullable(),
   expiresOn: z.string().nullable(),
   status: z.enum(['ready', 'exhausted', 'expired', 'unavailable']),
+  unavailableReason: z.string().optional(),
   outputSize: z.string().optional(),
   durationSeconds: z.number().optional(),
 });
 
 export const FREE_QUOTA_MEDIA_CATEGORIES = ['image', 'video'] as const;
+
+export const FreeQuotaLimitedOfferSchema = z.object({
+  category: z.enum(FREE_QUOTA_MEDIA_CATEGORIES),
+  dailyCap: z.number().int().positive(),
+  remainingToday: z.number().int().nonnegative(),
+  resetsAt: z.string().datetime({ offset: true }),
+});
+
+export const FreeMediaAvailabilitySchema = z.enum(['offered', 'not_offered', 'unknown']);
+export type FreeMediaAvailability = z.infer<typeof FreeMediaAvailabilitySchema>;
 
 export const FreeQuotaCatalogueSchema = z.object({
   issuer: z.string().min(1),
@@ -157,6 +169,16 @@ export const FreeQuotaCatalogueSchema = z.object({
   reportedUnavailable: z.number().int().nonnegative(),
   models: z.array(FreeQuotaModelSchema),
   mediaUseOrder: z.array(z.string().min(1)).optional(),
+  limitedOffer: z.array(FreeQuotaLimitedOfferSchema).optional(),
+  mediaAvailability: z
+    .object({ image: FreeMediaAvailabilitySchema, video: FreeMediaAvailabilitySchema })
+    .optional(),
+});
+
+export const FreeQuotaMediaOfferSchema = z.object({
+  availability: z.object({ image: FreeMediaAvailabilitySchema, video: FreeMediaAvailabilitySchema }),
+  image: z.object({ lastDay: z.string().date().nullable() }).nullable(),
+  video: z.object({ lastDay: z.string().date().nullable() }).nullable(),
 });
 
 export type FreeQuotaStatus = z.infer<typeof FreeQuotaModelSchema>['status'];
@@ -164,7 +186,9 @@ export type FreeQuotaModel = z.infer<typeof FreeQuotaModelSchema>;
 export type FreeQuotaCatalogue = z.infer<typeof FreeQuotaCatalogueSchema>;
 export type FreeQuotaMediaCategory = (typeof FREE_QUOTA_MEDIA_CATEGORIES)[number];
 export const FREE_QUOTA_CHAT_DAILY_USE_KIND = 'chat' as const;
-export type FreeQuotaDailyUseKind = typeof FREE_QUOTA_CHAT_DAILY_USE_KIND;
+export type FreeQuotaDailyUseKind = FreeQuotaMediaCategory | typeof FREE_QUOTA_CHAT_DAILY_USE_KIND;
+export type FreeQuotaLimitedOffer = z.infer<typeof FreeQuotaLimitedOfferSchema>;
+export type FreeQuotaMediaOffer = z.infer<typeof FreeQuotaMediaOfferSchema>;
 
 export const FREE_QUOTA_UNAVAILABLE_REASONS = [
   'not_integrated',
@@ -324,8 +348,60 @@ export type FreeQuotaAttestationStandingStatus = z.infer<
 >;
 export type FreeQuotaAttestationStatus = z.infer<typeof FreeQuotaAttestationStatusSchema>;
 
+export interface FreeMediaCategoryOffer {
+  lastDay: string | null;
+}
+
+export interface LimitedFreeMedia {
+  lastDay: string | null;
+  dailyCap: number;
+  remainingToday: number;
+  resetsAt: string;
+}
+
+const ISO_DAY_LENGTH = 10;
+
 export function isFreeMediaCategory(category: string): category is FreeQuotaMediaCategory {
   return (FREE_QUOTA_MEDIA_CATEGORIES as readonly string[]).includes(category);
+}
+
+function lastServedDay(expiresOn: string): string | null {
+  const firstRefusedDay = new Date(`${expiresOn}T00:00:00Z`);
+  if (Number.isNaN(firstRefusedDay.getTime())) return null;
+  firstRefusedDay.setUTCDate(firstRefusedDay.getUTCDate() - 1);
+  return firstRefusedDay.toISOString().slice(0, ISO_DAY_LENGTH);
+}
+
+export function readyFreeMediaOffer(
+  models: readonly Pick<FreeQuotaModel, 'category' | 'status' | 'expiresOn'>[],
+  category: FreeQuotaMediaCategory,
+): FreeMediaCategoryOffer | null {
+  const ready = models.filter((model) => model.category === category && model.status === 'ready');
+  if (ready.length === 0) return null;
+  const ends = ready.flatMap((model) => (model.expiresOn === null ? [] : [model.expiresOn]));
+  return {
+    lastDay:
+      ends.length === ready.length
+        ? lastServedDay(
+            ends.reduce((latest, candidate) => (candidate > latest ? candidate : latest)),
+          )
+        : null,
+  };
+}
+
+export function limitedOfferTerms(
+  catalogue: Pick<FreeQuotaCatalogue, 'limitedOffer'> | null,
+  category: FreeQuotaMediaCategory,
+): FreeQuotaLimitedOffer | null {
+  return catalogue?.limitedOffer?.find((offer) => offer.category === category) ?? null;
+}
+
+export function catalogueFreeMediaOffer(
+  catalogue: Pick<FreeQuotaCatalogue, 'models' | 'limitedOffer'> | null,
+  category: FreeQuotaMediaCategory,
+): FreeMediaCategoryOffer | null {
+  if (!catalogue || !limitedOfferTerms(catalogue, category)) return null;
+  return readyFreeMediaOffer(catalogue.models, category);
 }
 
 export function orderedReadyFreeMedia(
@@ -347,4 +423,39 @@ export function orderedReadyFreeMedia(
           (rank.get(right.model.key) ?? Number.POSITIVE_INFINITY) || left.listed - right.listed,
     )
     .map(({ model }) => model);
+}
+
+export function limitedFreeMedia(
+  catalogue: Pick<FreeQuotaCatalogue, 'models' | 'limitedOffer'> | null,
+  category: FreeQuotaMediaCategory,
+): LimitedFreeMedia | null {
+  const terms = limitedOfferTerms(catalogue, category);
+  const offer = catalogueFreeMediaOffer(catalogue, category);
+  if (!terms || !offer) return null;
+  return {
+    lastDay: offer.lastDay,
+    dailyCap: terms.dailyCap,
+    remainingToday: terms.remainingToday,
+    resetsAt: terms.resetsAt,
+  };
+}
+
+export function chooseLimitedFreeMedia(
+  catalogue: FreeQuotaCatalogue | null,
+  category: FreeQuotaMediaCategory,
+): string | null {
+  if (!catalogue || !limitedFreeMedia(catalogue, category)) return null;
+  return orderedReadyFreeMedia(catalogue, category)[0]?.key ?? null;
+}
+
+export function freeMediaAvailability(
+  catalogue: Pick<FreeQuotaCatalogue, 'models' | 'mediaAvailability'> | null,
+  category: FreeQuotaMediaCategory,
+): FreeMediaAvailability {
+  if (!catalogue) return 'unknown';
+  if (catalogue.mediaAvailability?.[category]) return catalogue.mediaAvailability[category];
+  const models = catalogue.models.filter((model) => model.category === category);
+  if (models.some((model) => model.status === 'ready')) return 'offered';
+  if (models.some((model) => model.status === 'unavailable')) return 'unknown';
+  return 'not_offered';
 }

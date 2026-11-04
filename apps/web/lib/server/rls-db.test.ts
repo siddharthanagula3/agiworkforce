@@ -454,3 +454,19 @@ describe('getCurrentCookieUserRlsDb', () => {
     expect(rlsWithUser).not.toHaveBeenCalled();
   });
 });
+
+describe('authenticated surface carried by a scoped database', () => {
+  it.each([
+    { boundSurface: 'mobile' as const, expected: 'mobile' },
+    { boundSurface: undefined, expected: 'unknown' },
+  ])('does not trust a web header over verified claims: $expected', async ({ boundSurface, expected }) => {
+    const token = 'fixture-verified-token';
+    const request = new NextRequest('https://example.test/api/models/free-quota/completions', {
+      headers: { authorization: `Bearer ${token}`, 'x-agi-surface': 'web' },
+    });
+    const scoped = await getVerifiedBearerUserScopedDb(request, {
+      userId: 'user_verified', token, ...(boundSurface ? { boundSurface } : {}),
+    });
+    expect(scoped.surface).toBe(expected);
+  });
+});

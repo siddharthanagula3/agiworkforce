@@ -1,22 +1,56 @@
 import {
+  freeMediaAvailability,
+  catalogueFreeMediaOffer,
   isFreeMediaCategory,
+  limitedFreeMedia,
+  limitedOfferTerms,
   orderedReadyFreeMedia,
+  readyFreeMediaOffer,
+  type FreeMediaAvailability,
+  type FreeMediaCategoryOffer,
+  type FreeQuotaLimitedOffer,
   type FreeQuotaMediaCategory,
+  type LimitedFreeMedia,
 } from '@agiworkforce/cloud-contracts';
-import { canUseBillingPlanCapability, type BillingPlanCapability } from '@agiworkforce/types';
 
-export { isFreeMediaCategory, orderedReadyFreeMedia };
+export {
+  freeMediaAvailability,
+  catalogueFreeMediaOffer,
+  isFreeMediaCategory,
+  limitedFreeMedia,
+  limitedOfferTerms,
+  orderedReadyFreeMedia,
+  readyFreeMediaOffer,
+  type FreeMediaAvailability,
+  type FreeMediaCategoryOffer,
+  type LimitedFreeMedia,
+};
+import {
+  canUseBillingPlanCapability,
+  formatUsageResetIn,
+  type BillingPlanCapability,
+} from '@agiworkforce/types';
+
+export type FreeMediaAccess =
+  { label: 'included' } | { label: 'limited'; lastDay: string | null } | { label: 'upgrade' } | { label: 'unknown' };
+
+export const FREE_MEDIA_LIMITED_LABEL = 'Limited';
 
 export const FREE_MEDIA_PLAN_CAPABILITY = {
   image: 'image_generation',
   video: 'video_generation',
 } as const satisfies Record<FreeQuotaMediaCategory, BillingPlanCapability>;
 
-export function freeMediaPlanIncludes(
+export type FreeMediaPlanStanding = 'included' | 'offer_eligible' | 'ineligible';
+
+export function freeMediaPlanStanding(
   planTier: string | null | undefined,
   category: FreeQuotaMediaCategory,
-): boolean {
-  return canUseBillingPlanCapability(planTier, FREE_MEDIA_PLAN_CAPABILITY[category]);
+): FreeMediaPlanStanding {
+  if (canUseBillingPlanCapability(planTier, FREE_MEDIA_PLAN_CAPABILITY[category])) {
+    return 'included';
+  }
+  return canUseBillingPlanCapability(planTier, 'managed_chat') ? 'offer_eligible' : 'ineligible';
 }
 
 const FREE_QUOTA_DAY_ZONE = 'UTC';
@@ -31,4 +65,39 @@ const CALENDAR_DAY: Intl.DateTimeFormatOptions = {
 export function freeQuotaCalendarDay(isoDate: string, locale?: string): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
   return Number.isNaN(date.getTime()) ? isoDate : date.toLocaleDateString(locale, CALENDAR_DAY);
+}
+
+export function freeMediaAccess(input: {
+  planIncludes: boolean;
+  offer: FreeMediaCategoryOffer | null;
+  availability?: FreeMediaAvailability;
+}): FreeMediaAccess {
+  if (input.planIncludes) return { label: 'included' };
+  if (input.availability === 'unknown' || (input.availability === 'offered' && !input.offer)) {
+    return { label: 'unknown' };
+  }
+  return input.offer ? { label: 'limited', lastDay: input.offer.lastDay } : { label: 'upgrade' };
+}
+
+export function freeMediaTodayLine(
+  terms: Pick<FreeQuotaLimitedOffer, 'remainingToday' | 'resetsAt'>,
+  nowMs: number = Date.now(),
+): string | null {
+  if (terms.remainingToday > 0) return null;
+  const reset = formatUsageResetIn(terms.resetsAt, nowMs);
+  return reset ? `Today's free limit is used. ${reset}.` : "Today's free limit is used.";
+}
+
+export function freeMediaOfferNote(
+  limited: LimitedFreeMedia,
+  nowMs: number = Date.now(),
+): string | null {
+  return freeMediaTodayLine(limited, nowMs);
+}
+
+export function freeMediaPlanIncludes(
+  planTier: string | null | undefined,
+  category: FreeQuotaMediaCategory,
+): boolean {
+  return freeMediaPlanStanding(planTier, category) === 'included';
 }

@@ -277,16 +277,16 @@ describe('the shipped configuration', () => {
 });
 
 describe('the free media offer configuration', () => {
-  it('ships no limited free image or video offer', () => {
-    expect(loadFreePools()).not.toHaveProperty('limitedMediaOffer');
+  it('ships ten images and five videos per account per day', () => {
+    expect(loadFreePools().limitedMediaOffer?.dailyCapPerUser).toEqual({ image: 10, video: 5 });
   });
 
-  it('ignores a retired limited media offer block instead of reading an offer from it', () => {
+  it('reads configured daily media request caps', () => {
     const parsed = parseFreePoolsDocument({
       ...document([entry()]),
       limitedMediaOffer: { dailyCapPerUser: { image: 5, video: 1 } },
     });
-    expect(parsed).not.toHaveProperty('limitedMediaOffer');
+    expect(parsed.limitedMediaOffer?.dailyCapPerUser).toEqual({ image: 5, video: 1 });
   });
 });
 

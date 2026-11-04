@@ -8,6 +8,7 @@ import {
 import {
   FREE_MEDIA_PLAN_CAPABILITY,
   freeMediaPlanIncludes,
+  freeMediaAccess,
   freeQuotaCalendarDay,
   orderedReadyFreeMedia,
 } from './free-media';
@@ -94,5 +95,15 @@ describe('the calendar day a free offer ends', () => {
   it('is printed in UTC and passes an unreadable date through', () => {
     expect(freeQuotaCalendarDay('2026-10-21', 'en-US')).toBe('Oct 21, 2026');
     expect(freeQuotaCalendarDay('soon')).toBe('soon');
+  });
+});
+
+describe('media access without complete offer terms', () => {
+  it('keeps offered inventory with missing personal terms unknown rather than asking to upgrade', () => {
+    expect(freeMediaAccess({ planIncludes: false, offer: null, availability: 'offered' })).toEqual({ label: 'unknown' });
+    expect(freeMediaAccess({ planIncludes: false, offer: null, availability: 'unknown' })).toEqual({ label: 'unknown' });
+  });
+  it('keeps paid capability inclusion independent of the limited offer', () => {
+    expect(freeMediaAccess({ planIncludes: true, offer: null, availability: 'unknown' })).toEqual({ label: 'included' });
   });
 });

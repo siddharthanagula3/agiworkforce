@@ -589,18 +589,18 @@ describe('which plan may use a free quota offering', () => {
   const planHas = (plan: string, capability: BillingPlanCapability) =>
     (BILLING_PLAN_CAPABILITY_TIERS[capability] as readonly string[]).includes(plan);
 
-  it('admits chat on the Free plan and image or video only on plans that include the capability', () => {
+  it('admits chat on the Free plan and limited media on managed-chat plans and included media on paid plans', () => {
     for (const plan of PLANS) {
       expect(freeQuotaPlanAdmits(plan, 'chat'), plan).toBe(isFreeBillingPlanTier(plan));
-      expect(freeQuotaPlanAdmits(plan, 'image'), plan).toBe(planHas(plan, 'image_generation'));
-      expect(freeQuotaPlanAdmits(plan, 'video'), plan).toBe(planHas(plan, 'video_generation'));
+      expect(freeQuotaPlanAdmits(plan, 'image'), plan).toBe(planHas(plan, 'image_generation') || planHas(plan, 'managed_chat'));
+      expect(freeQuotaPlanAdmits(plan, 'video'), plan).toBe(planHas(plan, 'video_generation') || planHas(plan, 'managed_chat'));
       expect(freeQuotaPlanAdmits(plan, 'audio'), plan).toBe(false);
     }
   });
 
-  it('gives the Free plan no free image or video and admits no unknown plan', () => {
-    expect(freeQuotaPlanAdmits('free', 'image')).toBe(false);
-    expect(freeQuotaPlanAdmits('free', 'video')).toBe(false);
+  it('admits limited Free media but no unknown plan', () => {
+    expect(freeQuotaPlanAdmits('free', 'image')).toBe(true);
+    expect(freeQuotaPlanAdmits('free', 'video')).toBe(true);
     expect(freeQuotaPlanAdmits(null, 'image')).toBe(false);
     expect(freeQuotaPlanAdmits('not-a-plan', 'video')).toBe(false);
   });
