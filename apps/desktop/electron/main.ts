@@ -577,10 +577,6 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (downloadedUpdate() !== null) {
-      await restartToUpdate();
-      return;
-    }
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
   });
 

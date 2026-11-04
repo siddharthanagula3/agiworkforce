@@ -911,12 +911,29 @@ describe('the update buttons', () => {
     expect(installDownloadedUpdate).not.toHaveBeenCalled();
   });
 
-  // The shipped page restarts into a downloaded update through the installer
-  // button, so both buttons restart through the quit guard.
-  it('restarts into a downloaded update only once work a quit would stop is agreed to', async () => {
+  it('opens only the installer even when an update is already staged', async () => {
     const download = ipcHandlers.get(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
+    if (!download) throw new Error('the installer channel was never registered');
+    const openExternal = vi.mocked(electron.shell.openExternal);
+    openExternal.mockClear();
+    showMessageBox.mockReset();
+    installDownloadedUpdate.mockClear();
+    downloadedVersion = '1.3.0';
+    shellRuns = 1;
+    try {
+      await download(trustedCaller());
+      expect(openExternal).toHaveBeenCalledTimes(1);
+      expect(showMessageBox).not.toHaveBeenCalled();
+      expect(installDownloadedUpdate).not.toHaveBeenCalled();
+    } finally {
+      downloadedVersion = null;
+      shellRuns = 0;
+    }
+  });
+
+  it('restarts into a downloaded update only once work a quit would stop is agreed to', async () => {
     const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
-    if (!download || !restart) throw new Error('the update channels were never registered');
+    if (!restart) throw new Error('the update channels were never registered');
     const openExternal = vi.mocked(electron.shell.openExternal);
     openExternal.mockClear();
     showMessageBox.mockReset();
@@ -929,7 +946,7 @@ describe('the update buttons', () => {
       expect(installDownloadedUpdate).not.toHaveBeenCalled();
 
       showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
-      await download(trustedCaller());
+      await expect(restart(trustedCaller())).resolves.toBe('restarting');
       expect(installDownloadedUpdate).toHaveBeenCalledTimes(1);
       expect(openExternal).not.toHaveBeenCalled();
       expect(beforeQuit().preventDefault).not.toHaveBeenCalled();
