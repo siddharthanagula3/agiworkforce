@@ -1,5 +1,9 @@
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
+import {
+  assertCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const SHARED_LINK_TITLE_MAX_LENGTH = 200;
 
@@ -43,17 +47,30 @@ function toSharedLink(value: unknown): SharedLink | null {
   };
 }
 
-export async function fetchSharedLinks(): Promise<SharedLink[]> {
-  const response = await api.get<SharedLinkResponse>('/api/share');
+export interface SharedLinksRequestOptions {
+  accountEpoch: CloudAccountEpoch;
+  signal?: AbortSignal;
+}
+
+export async function fetchSharedLinks(options: SharedLinksRequestOptions): Promise<SharedLink[]> {
+  assertCloudAccountEpochCurrent(options.accountEpoch);
+  const response = await api.get<SharedLinkResponse>('/api/share', options);
+  assertCloudAccountEpochCurrent(options.accountEpoch);
   const shares = response?.shares;
   if (!Array.isArray(shares)) return [];
   return shares.map(toSharedLink).filter((link): link is SharedLink => link !== null);
 }
 
-export async function revokeSharedLink(token: string): Promise<void> {
+export async function revokeSharedLink(
+  token: string,
+  options: SharedLinksRequestOptions,
+): Promise<void> {
+  assertCloudAccountEpochCurrent(options.accountEpoch);
   try {
-    await api.delete(`/api/share/${encodeURIComponent(token)}`);
+    await api.delete(`/api/share/${encodeURIComponent(token)}`, options);
+    assertCloudAccountEpochCurrent(options.accountEpoch);
   } catch (error) {
+    assertCloudAccountEpochCurrent(options.accountEpoch);
     if (error instanceof ApiHttpError && error.status === 404) return;
     throw error;
   }
