@@ -2821,7 +2821,8 @@ failure ends playback rather than replaying all text. Settings preview remains
 explicit device speech and relies on hook cleanup instead of a redundant stop
 effect.
 
-This does not redesign Local/BYOK speech routing, consent or trust-mode semantics.
+That lifecycle slice alone does not redesign Local/BYOK speech routing, consent
+or trust-mode semantics; the following section records the separate refusal policy.
 Browser/device synthesis is not an offline/privacy guarantee. Entirely unobserved
 SDK transitions and arbitrary external synthesizer writers remain limitations;
 there is no universal global-synthesis coordination or native cancellation proof.
@@ -2830,9 +2831,40 @@ are textual wiring assertions. They include stale callbacks, cross-hook cleanup,
 resume/token/body/decode waits and same-owner fallback/chunks, but all remain
 unexecuted. No browser/audio/network tests, checks or runtime acceptance occurred.
 
+## Restrictive read-aloud content refuses both cloud and unverified device speech
+
+Accepted commit `2d2fcbc26a` changes six production files and four fixture sources.
+`read-aloud-policy.ts` recognizes explicit Chat privacyMode local/byok,
+providerMode Local/DirectByok, or a canonical Local model ID. Restrictive evidence
+wins over a conflicting managed label. It does not infer provenance from the
+current picker, display names or unrelated transcript rows. ChatMessageList
+re-reads the actual clicked row from current rendered groups, uses its current text
+rather than a retained callback payload, and refuses missing/restricted rows.
+MessageBubble displays a disabled reason; the live row predicate also guards the
+speech operation across asynchronous boundaries.
+
+LocalSessionPanel passes durable session trustMode through CodeTranscript:
+local/byok refuse, unknown refuses as unverified, and explicit managed retains
+compatibility. `useTTS` adds a render policy generation and fail-closed canSpeak
+predicate. Policy narrowing retires owned playback; old callbacks cannot revive
+or cancel a replacement after an observed policy round trip. Refusal precedes
+token acquisition, managed speech, device speech and unlock primer. No verified
+on-device browser transport is provided, so restrictive content has neither
+managed synthesis nor a browser fallback. This is an availability restriction,
+not a localService privacy/offline guarantee.
+
+Existing cloud/shared Code and unlabeled legacy Chat remain unclassified
+compatibility paths, not universally proven Managed content. Settings device
+preview is unchanged. Already dispatched server work cannot be recalled, and the
+prior identity-observation/external-synthesizer limitations remain. Pure policy
+fixtures, mocked hook/component cases and textual caller wiring cover restrictive
+labels, missing/current rows, policy narrowing and retained handlers; all are
+unexecuted. They do not establish native/browser audio, continuous revocation or
+runtime privacy acceptance. No tests/checks or network actions were performed.
+
 ## Reconstruction boundary
 
-Only the one hundred and two accepted production slices traced above are represented as
+Only the one hundred and three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
