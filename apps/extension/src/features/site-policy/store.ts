@@ -106,3 +106,31 @@ export async function assertSiteAccess(
   if (!evaluation.allowed) throw new Error(sitePolicyDenialMessage(evaluation, fallback));
   return evaluation;
 }
+
+/** Scheduled work must distinguish unavailable authority from a real revocation. */
+export async function loadScheduledSitePolicyInput(): Promise<SitePolicyInput | null> {
+  const local = localArea();
+  if (!local) return null;
+  try {
+    const stored = await local.get([SITE_ALLOWLIST_STORAGE_KEY, ADMIN_SITE_POLICY_STORAGE_KEY]);
+    const rawAllowlist = stored[SITE_ALLOWLIST_STORAGE_KEY];
+    if (rawAllowlist !== undefined &&
+      (!Array.isArray(rawAllowlist) || rawAllowlist.some((origin) => typeof origin !== 'string'))) {
+      return null;
+    }
+    const managed = await readAdminPolicyFrom(managedArea(), SITE_POLICY_ADMIN_UNAVAILABLE);
+    if (managed === SITE_POLICY_ADMIN_UNAVAILABLE) return null;
+    let admin = managed;
+    if (admin === null) {
+      const document = stored[ADMIN_SITE_POLICY_STORAGE_KEY];
+      if (document !== undefined && document !== null) {
+        const parsed = parseAdminSitePolicy(document);
+        if (!parsed.ok) return null;
+        admin = parsed.policy;
+      }
+    }
+    return { admin, userAllowlist: (rawAllowlist as string[] | undefined) ?? [] };
+  } catch {
+    return null;
+  }
+}

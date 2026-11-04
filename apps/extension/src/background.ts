@@ -68,6 +68,7 @@ import {
   loadScheduledTaskRunJournals,
   removeScheduledTaskRunJournal,
   updateScheduledTaskRunJournal,
+  restoreDeferredScheduledRecoveryAttempt,
   type ScheduledTaskRunJournal,
 } from './features/background/scheduled-task-runs';
 import {
@@ -145,7 +146,8 @@ import {
   validateBridgeUrl,
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
-import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy } from './features/site-policy/store';
+import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy, loadScheduledSitePolicyInput } from './features/site-policy/store';
+import { scheduledSourceAuthority } from './features/background/scheduled-task-source-authority';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_DESTINATION,
@@ -1950,6 +1952,64 @@ async function scheduledTaskUsesManagedCloud(
   return (await scheduledTaskManagedPrompt(task)) !== undefined;
 }
 
+class ScheduledTaskSourceUnavailableError extends Error {}
+class ScheduledTaskSourceDeniedError extends Error {
+  constructor(message: string, readonly taskOriginDenied = false) { super(message); }
+}
+
+async function assertScheduledTaskSourceAuthority(task: ScheduledTask): Promise<string | undefined> {
+  if (task.prompt !== undefined && typeof task.prompt !== 'string') {
+    throw new ScheduledTaskSourceUnavailableError('The scheduled prompt is unreadable.');
+  }
+  const directPrompt = task.prompt?.slice(0, TASK_PROMPT_MAX_CHARS).trim();
+  let shortcut: Awaited<ReturnType<typeof loadShortcuts>>[number] | undefined;
+  try {
+    // A direct prompt takes precedence over a shortcut, as in scheduledTaskManagedPrompt.
+    if (!directPrompt && task.shortcutId) {
+      shortcut = (await loadShortcuts()).find((candidate) => candidate.id === task.shortcutId);
+    }
+  } catch {
+    throw new ScheduledTaskSourceUnavailableError('The scheduled shortcut could not be read.');
+  }
+  const storedPolicy = await loadScheduledSitePolicyInput();
+  const policy = storedPolicy ? {
+    ...storedPolicy,
+    userAllowlist: [...storedPolicy.userAllowlist, ...oneTimeGrantedOrigins()],
+  } : null;
+  const taskAuthority = scheduledSourceAuthority([task.createdByOrigin], policy);
+  const authority = scheduledSourceAuthority([task.createdByOrigin, shortcut?.createdByOrigin], policy);
+  if (authority === 'unavailable') {
+    throw new ScheduledTaskSourceUnavailableError('Scheduled source policy is temporarily unavailable.');
+  }
+  if (authority === 'denied') {
+    throw new ScheduledTaskSourceDeniedError('A scheduled source is no longer approved.', taskAuthority === 'denied');
+  }
+  if (directPrompt) return directPrompt;
+  if (!shortcut) return undefined;
+  try {
+    const plan = planShortcutReplay(shortcut);
+    return plan.kind === 'prompt' ? plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS).trim() || undefined : undefined;
+  } catch {
+    throw new ScheduledTaskSourceUnavailableError('The scheduled shortcut is unreadable.');
+  }
+}
+
+async function assertScheduledJournalSourceAuthority(journal: ScheduledTaskRunJournal): Promise<void> {
+  let task: ScheduledTask | undefined;
+  try {
+    task = (await loadScheduledTasks()).find((candidate) => candidate.id === journal.taskId);
+  } catch {
+    throw new ScheduledTaskSourceUnavailableError('Scheduled task storage is temporarily unavailable.');
+  }
+  if (!task?.enabled || task.managedCloudAccountId !== journal.owner.accountId) {
+    throw new ScheduledTaskSourceDeniedError('The scheduled task lost its authority.');
+  }
+  const prompt = await assertScheduledTaskSourceAuthority(task);
+  if (prompt !== journal.prompt) {
+    throw new ScheduledTaskSourceDeniedError('The scheduled prompt changed.');
+  }
+}
+
 class ScheduledTaskRecoveryPendingError extends Error {
   constructor(message: string) {
     super(message);
@@ -2243,6 +2303,34 @@ async function executeScheduledTaskJournalWithAuthority(
   recover: boolean,
   admissionSignal?: AbortSignal,
 ): Promise<ScheduledTaskExecutionOutcome> {
+  let recoveryAttemptRecorded = false;
+  let executionStarted = false;
+  try {
+    return await executeScheduledTaskJournalWithSourceAuthority(
+      initialJournal, credential, recover, admissionSignal,
+      () => { recoveryAttemptRecorded = true; },
+      () => { executionStarted = true; },
+    );
+  } catch (error) {
+    if (error instanceof ScheduledTaskSourceUnavailableError && recoveryAttemptRecorded && !executionStarted) {
+      // Never restore a newer attempt, cancellation, or an execution already started.
+      await restoreDeferredScheduledRecoveryAttempt(initialJournal, () => !admissionSignal?.aborted).catch((restoreError) => {
+        logger.warn('Could not restore deferred scheduled recovery budget', restoreError);
+      });
+    }
+    throw error;
+  }
+}
+
+async function executeScheduledTaskJournalWithSourceAuthority(
+  initialJournal: ScheduledTaskRunJournal,
+  credential: { token: string; owner: ManagedCloudOwner },
+  recover: boolean,
+  admissionSignal: AbortSignal | undefined,
+  onRecoveryAttempt: () => void,
+  onExecutionStarted: () => void,
+): Promise<ScheduledTaskExecutionOutcome> {
+  await assertScheduledJournalSourceAuthority(initialJournal);
   const state = { journal: initialJournal, answer: '' };
   const delivery = createJournalDelivery(initialJournal, state);
   if (!delivery) {
@@ -2273,7 +2361,10 @@ async function executeScheduledTaskJournalWithAuthority(
       state.journal.requestId,
       { recoveryAttempts: state.journal.recoveryAttempts + 1 },
     );
-    if (updated) state.journal = updated;
+    if (updated) {
+      state.journal = updated;
+      onRecoveryAttempt();
+    }
     if (admissionSignal?.aborted) {
       return {
         result: scheduledTaskError('cancelled', 'The scheduled task lost account authority.'),
@@ -2282,6 +2373,9 @@ async function executeScheduledTaskJournalWithAuthority(
       };
     }
     if (!state.journal.cloudRun) {
+      await assertScheduledJournalSourceAuthority(state.journal);
+      if (admissionSignal?.aborted) throw new ScheduledTaskCancelledError();
+      onExecutionStarted();
       const recoveredRun = await findChromeManagedRunByRequestId(
         state.journal.requestId,
         {
@@ -2326,6 +2420,9 @@ async function executeScheduledTaskJournalWithAuthority(
     if (admissionSignal?.aborted) controller.abort();
     if (!registeredRecovery) activeScheduledRecoveries.set(state.journal.requestId, recovery);
     try {
+      await assertScheduledJournalSourceAuthority(state.journal);
+      if (controller.signal.aborted) throw new ScheduledTaskCancelledError();
+      onExecutionStarted();
       return await resumeScheduledTaskJournal(state, delivery, credential, controller.signal);
     } finally {
       if (linkAdmission) admissionSignal.removeEventListener('abort', abortForAdmission);
@@ -2381,6 +2478,9 @@ async function executeScheduledTaskJournalWithAuthority(
         journal: state.journal,
       };
     }
+    await assertScheduledJournalSourceAuthority(state.journal);
+    if (admissionSignal?.aborted) throw new ScheduledTaskCancelledError();
+    onExecutionStarted();
     result = await handleChatMessage(
       {
         type: 'CHAT_MESSAGE',
@@ -2638,6 +2738,11 @@ async function recoverScheduledTaskRun(
     await abandonScheduledTaskRun(outcome.journal, credential);
     assertScheduledExecutionSucceeded(outcome.result);
   } catch (error) {
+    if (error instanceof ScheduledTaskSourceUnavailableError) return;
+    if (error instanceof ScheduledTaskSourceDeniedError) {
+      await abandonScheduledTaskRun(journal, credential);
+      return;
+    }
     if (
       recoveryGate.controller.signal.aborted ||
       abandonedScheduledTaskRequestIds.has(journal.requestId)
@@ -2777,7 +2882,17 @@ async function recoverScheduledTaskRuns(): Promise<void> {
       continue;
     }
     const task = tasks.find((candidate) => candidate.id === journal.taskId);
-    const managedPrompt = task ? await scheduledTaskManagedPrompt(task) : undefined;
+    let managedPrompt: string | undefined;
+    try {
+      if (task) managedPrompt = await assertScheduledTaskSourceAuthority(task);
+    } catch (error) {
+      if (error instanceof ScheduledTaskSourceDeniedError) {
+        await abandonScheduledTaskRun(journal, credential);
+      } else if (!(error instanceof ScheduledTaskSourceUnavailableError)) {
+        throw error;
+      }
+      continue;
+    }
     const expectedPrompt = managedPrompt?.slice(0, TASK_PROMPT_MAX_CHARS).trim();
     if (
       !task?.enabled ||
@@ -2911,29 +3026,38 @@ async function executeScheduledTask(
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
   try {
-    if (
-      task.createdByOrigin &&
-      task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
-      !isOriginApprovedForAutomation(task.createdByOrigin)
-    ) {
+    try {
+      await assertScheduledTaskSourceAuthority(task);
+    } catch (error) {
+      if (!(error instanceof ScheduledTaskSourceDeniedError) || !error.taskOriginDenied) throw error;
+      if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) return;
       logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
         taskId: task.id,
         createdByOrigin: task.createdByOrigin,
       });
-      await handleDeleteScheduledTask(
+      let deletionGeneration: number | undefined;
+      const deletion = await handleDeleteScheduledTask(
         {
           type: 'DELETE_SCHEDULED_TASK',
           taskId: task.id,
         } as import('./types').DeleteScheduledTaskMessage,
         task.managedCloudAccountId,
         () => {
-          scheduledTaskExecutions.invalidate(task.id);
+          deletionGeneration = scheduledTaskExecutions.invalidate(task.id);
         },
+        (current) => current.createdByOrigin === task.createdByOrigin &&
+          current.prompt === task.prompt && current.shortcutId === task.shortcutId &&
+          (deletionGeneration === undefined
+            ? scheduledTaskExecutions.isCurrent(lease)
+            : scheduledTaskExecutions.generation(task.id) === deletionGeneration),
       );
+      if (!deletion.success || deletionGeneration === undefined) return;
       const journal = (await loadScheduledTaskRunJournals()).find(
         (candidate) => candidate.taskId === task.id,
       );
-      if (journal) await abandonScheduledTaskRun(journal, await getManagedCloudAuthContext());
+      const credential = await getManagedCloudAuthContext();
+      if (scheduledTaskExecutions.generation(task.id) !== deletionGeneration) return;
+      if (journal) await abandonScheduledTaskRun(journal, credential);
       return;
     }
 
@@ -3006,6 +3130,18 @@ async function executeScheduledTask(
       signal: lease.controller.signal,
     });
   } catch (error) {
+    if (error instanceof ScheduledTaskSourceUnavailableError) {
+      logger.warn('Scheduled source authority could not be read; preserving work', { taskId: task.id });
+      return;
+    }
+    if (error instanceof ScheduledTaskSourceDeniedError) {
+      if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) return;
+      const journal = (await loadScheduledTaskRunJournals()).find((run) => run.taskId === task.id);
+      const credential = await getManagedCloudAuthContext();
+      if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) return;
+      if (journal) await abandonScheduledTaskRun(journal, credential);
+      return;
+    }
     if (error instanceof ScheduledTaskCancelledError || lease.controller.signal.aborted) {
       logger.info('Scheduled task execution lost authority', { taskId: task.id });
       return;

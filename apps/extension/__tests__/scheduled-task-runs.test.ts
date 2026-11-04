@@ -22,6 +22,7 @@ const {
   loadScheduledTaskRunJournals,
   removeScheduledTaskRunJournal,
   updateScheduledTaskRunJournal,
+  restoreDeferredScheduledRecoveryAttempt,
 } = await import('../src/features/background/scheduled-task-runs');
 
 const OWNER = { accountId: 'account-a', authIncarnation: 'session-a' } as const;
@@ -188,5 +189,26 @@ describe('scheduled Managed Cloud run journal', () => {
         'Original prompt',
       ),
     ).toBe(false);
+  });
+});
+
+
+describe('pre-I/O scheduled authority deferral budget', () => {
+  it('refunds only the matching current attempt and preserves cancellation or newer work', async () => {
+    const { journal } = await beginScheduledTaskRunJournal({
+      taskId: 'task-deferred', taskName: 'Deferred', prompt: 'Read my inbox',
+      requestId: 'agi.chrome.task.deferred', owner: OWNER,
+    });
+    await updateScheduledTaskRunJournal(journal.taskId, journal.requestId, { recoveryAttempts: 1 });
+    await restoreDeferredScheduledRecoveryAttempt(journal, () => false);
+    expect((await loadScheduledTaskRunJournals())[0]?.recoveryAttempts).toBe(1);
+    await restoreDeferredScheduledRecoveryAttempt(journal, () => true);
+    expect((await loadScheduledTaskRunJournals())[0]?.recoveryAttempts).toBe(0);
+    await updateScheduledTaskRunJournal(journal.taskId, journal.requestId, { recoveryAttempts: 2 });
+    await restoreDeferredScheduledRecoveryAttempt(journal, () => true);
+    expect((await loadScheduledTaskRunJournals())[0]?.recoveryAttempts).toBe(2);
+    await updateScheduledTaskRunJournal(journal.taskId, journal.requestId, { recoveryAttempts: 1, cancellationPending: true });
+    await restoreDeferredScheduledRecoveryAttempt(journal, () => true);
+    expect((await loadScheduledTaskRunJournals())[0]).toMatchObject({ recoveryAttempts: 1, cancellationPending: true });
   });
 });
