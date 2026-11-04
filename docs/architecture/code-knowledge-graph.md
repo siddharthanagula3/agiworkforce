@@ -820,9 +820,49 @@ spend policy, seat resolution, later provider-step authorization, compensation o
 refunds. Fixture source covers failure and legitimate-absence behavior but has
 not been executed; no database, provider or deployment acceptance is claimed.
 
+## Image redrive input eligibility
+
+Reconstructed commit: `f1785ae12f2f309eb9e33c9d5c79848839f0a747` changes three
+production files and three unexecuted fixture sources. The shared
+`isImageGenerationJobDrivable` predicate permits generation, but unattended edits
+require a stored source, no inline references and a stored mask whenever the
+original job records a mask hash. Scheduling and status-driven execution use this
+eligibility; the executor applies it before resolving stored edit bytes, preventing
+an unattended replay that silently omits an original inline mask.
+
+Status handling still reconciles pending cancellation before deciding whether to
+redrive. Explicit retries with resupplied inline inputs remain available, and the
+existing executor validates recorded source/reference and mask hashes on that
+branch. The new retry fixture mocks the executor and proves only route byte
+handoff, not real hash validation or provider execution. No native/provider,
+queue-delivery or runtime acceptance is claimed.
+
+## Video cancellation settlement guard and recovery boundary
+
+Reconstructed commit: `d92bf7c99446708a03d2021d6d943f11f89ccce1` adds migration
+`0392_video_cancellation_wins_settlement.sql`, its reversal and an unexecuted
+source-equivalence fixture. The migration removes the previous Runway-only
+qualifier: a cancellation recorded before the finalizer's row lock refuses
+completion for every provider, after existing terminal/claim checks and before
+managed settlement. The prior function behavior and grants otherwise remain;
+the down migration restores them and removes this migration's ledger entry in
+the same transaction. These migrations are NOT APPLIED; no SQL/runtime proof is
+claimed by committing their source.
+
+This guards settlement, not full cancellation or non-delivery. Reconciliation
+persists a moderated/provenance-marked asset before finalization; scoped owner/org
+listing and serving do not require the job to be completed. Cleanup is attempted
+on failure, but failed compensation followed by non-Runway cancellation can exit
+before retrying removal. Captured completed-provider cost is invocation-local and
+may be replaced by the estimate on a later cancellation attempt. These source-backed
+recovery constraints are tracked as Medium OPEN
+`WEB-VIDEO-DELIVERY-RECOVERY-01`, not observed production loss or cross-tenant
+exposure. Durable cost, publication and cleanup recovery semantics remain a
+separate design decision; no refund or financial repair is implemented here.
+
 ## Reconstruction boundary
 
-Only the thirty-three accepted production slices traced above are represented as
+Only the thirty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

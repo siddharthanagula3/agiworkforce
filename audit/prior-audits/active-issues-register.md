@@ -8428,3 +8428,43 @@ Then align driver policy, tool description and user-facing permission semantics
 without weakening actual-page sensitive/authentication/form controls. No policy
 change is approved or implemented by this note; fixtures are unexecuted and
 runtime/deployment acceptance remains open.
+
+## WEB-VIDEO-DELIVERY-RECOVERY-01
+
+Severity: Medium. Status: OPEN source-backed visibility, compensation and provider
+cost recovery constraint, 2026-11-04. No observed production loss, deployed race or
+cross-tenant exposure is established.
+
+`apps/web/lib/services/video-job-reconciliation-service.ts::persistCompletedVideo`
+moderates and marks output, stores bytes and upserts its media asset before the
+completion finalizer runs (approximately lines 573–581). Owner/org-scoped
+`media-assets.ts` list queries and active-workspace lookup, consumed by
+`app/api/files/[id]/route.ts`, do not require a terminal completed video job.
+Thus an owner's persisted output may be readable before settlement. This is not
+a cross-account authorization bypass.
+
+On finalization failure, reconciliation rereads the job and preserves completed
+success rather than deleting delivered output. Otherwise it attempts blob then
+catalog compensation. If that cleanup fails, lines 588–605 defer the still-active
+job. On a later non-Runway cancellation, lines 497–504 return through failure
+settlement before attempting cleanup again. Readable output can therefore remain
+in that conditional sequence despite the cancellation message claiming it was not
+delivered. Pre-persistence cancellation reread (562–571), moderation/provenance,
+tenant/workspace/deletion/temporary filters and attempted compensation are existing
+counterguards, not complete publication/recovery coordination.
+
+Completed provider cost is held locally around line 552. A finalizer SQL failure
+in `lib/server/video-generation-jobs.ts` occurs before its provider-cost ledger
+writes; generic reconciliation error handling does not persist that captured
+cost. A later cancellation supplies `estimatedCostCents` to the undelivered cost
+record instead. This supports possible cost misattribution, not proof of missing
+production ledger records or a justified refund amount.
+
+Accepted `d92bf7c99446708a03d2021d6d943f11f89ccce1` adds the NOT-APPLIED `0392`
+migration removing the Runway qualifier from the row-locked cancellation-wins
+completion guard. It does not fix publication, cleanup replay or durable observed
+cost. Its full-source/reversal fixture is unexecuted, not live database evidence.
+A coherent design must distinguish publication/delivery from settlement, retain
+observed cost and cleanup obligations durably across attempts, and define
+idempotent recovery and truthful receipts. No full cancellation, automatic refund,
+financial repair or new product semantics are approved by this documentation.
