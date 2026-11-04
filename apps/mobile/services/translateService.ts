@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import { getDefaultModel, localGenerate } from '@agiworkforce/local-llm';
+import { resolveLocalModelRef } from '@/src/features/model-picker/localModelRuntime';
 
 export interface TranslateResult {
   translatedText: string;
@@ -120,9 +121,14 @@ export async function translate(
     `Text: ${text}`;
 
   const defaultModel = getDefaultModel();
+  const modelRef = await resolveLocalModelRef(defaultModel.id).catch((error: unknown) => {
+    throwIfAborted(opts?.signal);
+    throw error;
+  });
+  throwIfAborted(opts?.signal);
   let tokens = '';
-  const result = await localGenerate(defaultModel.id, {
-    modelId: defaultModel.id,
+  const result = await localGenerate(modelRef.modelPath, {
+    modelId: modelRef.modelId,
     signal: opts?.signal,
     prompt,
     onToken: (token: string) => {

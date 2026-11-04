@@ -20,6 +20,9 @@ jest.mock('expo-router', () => ({
     }, [callback]);
   },
 }));
+jest.mock('../src/features/model-picker/localModelRuntime', () => ({
+  resolveLocalModelRef: jest.fn(),
+}));
 jest.mock('../services/translateService', () => ({
   ...jest.requireActual('../services/translateService'),
   translate: (...args: unknown[]) => mockTranslate(...args),

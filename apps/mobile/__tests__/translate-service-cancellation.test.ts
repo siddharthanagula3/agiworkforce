@@ -1,6 +1,12 @@
 import { NativeModules } from 'react-native';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { translate } from '../services/translateService';
+import { resolveLocalModelRef } from '../src/features/model-picker/localModelRuntime';
+import type { LocalModelRef } from '../src/features/model-picker/localModelRuntime';
+
+jest.mock('../src/features/model-picker/localModelRuntime', () => ({
+  resolveLocalModelRef: jest.fn(),
+}));
 
 jest.mock('@agiworkforce/local-llm', () => ({
   getDefaultModel: () => ({ id: 'fixture-model', displayName: 'Fixture' }),
@@ -14,6 +20,11 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 const generate = jest.mocked(localGenerate);
+const resolveModel = jest.mocked(resolveLocalModelRef);
+beforeEach(() => {
+  resolveModel.mockReset();
+  resolveModel.mockResolvedValue({ modelId: 'fixture-model', displayName: 'Fixture', installed: true });
+});
 const originalNative = NativeModules.AGITranslate;
 afterEach(() => { NativeModules.AGITranslate = originalNative; jest.clearAllMocks(); });
 
@@ -84,4 +95,50 @@ test('ordinary native failure still permits local translation without account co
   NativeModules.AGITranslate = { isPairDownloaded: async () => false, translate: async () => { throw new Error('unavailable'); } };
   generate.mockResolvedValueOnce({ text: 'translated', runtime: 'executorch', aborted: false });
   await expect(translate('text', 'en', 'hi')).resolves.toMatchObject({ translatedText: 'translated', backend: 'local_llm' });
+});
+
+
+test('native success bypasses local model admission entirely', async () => {
+  NativeModules.AGITranslate = {
+    isPairDownloaded: async () => true,
+    translate: async () => ({ translatedText: 'native result' }),
+  };
+  await expect(translate('text', 'en', 'hi')).resolves.toMatchObject({ translatedText: 'native result' });
+  expect(resolveModel).not.toHaveBeenCalled();
+  expect(generate).not.toHaveBeenCalled();
+});
+
+test('missing default installation rejects without generation or selecting another model', async () => {
+  NativeModules.AGITranslate = undefined;
+  resolveModel.mockRejectedValueOnce(new Error('default not downloaded'));
+  await expect(translate('text', 'en', 'hi')).rejects.toThrow('default not downloaded');
+  expect(resolveModel.mock.calls).toEqual([['fixture-model']]);
+  expect(generate).not.toHaveBeenCalled();
+});
+
+test.each([undefined, '/fixture/installed-default.gguf'])('forwards exact admitted default ID and path %s', async (modelPath) => {
+  NativeModules.AGITranslate = undefined;
+  resolveModel.mockResolvedValueOnce({ modelId: 'fixture-model', modelPath, displayName: 'Fixture', installed: true });
+  generate.mockResolvedValueOnce({ text: 'translated', runtime: 'executorch', aborted: false });
+  await expect(translate('text', 'en', 'hi')).resolves.toMatchObject({ translatedText: 'translated' });
+  expect(resolveModel).toHaveBeenCalledWith('fixture-model');
+  expect(generate).toHaveBeenCalledWith(modelPath, expect.objectContaining({ modelId: 'fixture-model' }));
+});
+
+test.each(['resolve', 'reject'] as const)('model admission %s after abort reports cancellation without generation', async (outcome) => {
+  NativeModules.AGITranslate = undefined;
+  const admission = deferred<LocalModelRef>();
+  resolveModel.mockReturnValueOnce(admission.promise);
+  const controller = new AbortController();
+  const pending = translate('text', 'en', 'hi', { signal: controller.signal });
+  await Promise.resolve();
+  expect(resolveModel).toHaveBeenCalledWith('fixture-model');
+  controller.abort();
+  if (outcome === 'resolve') {
+    admission.resolve({ modelId: 'fixture-model', installed: true, displayName: 'Fixture' });
+  } else {
+    admission.reject(new Error('admission unavailable'));
+  }
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  expect(generate).not.toHaveBeenCalled();
 });
