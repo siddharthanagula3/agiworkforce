@@ -798,9 +798,31 @@ serialize later storage streaming with membership/grant changes. Mocked route an
 SQL-source-contract fixtures are unexecuted, not live PostgreSQL/RLS proof. No
 billing or broader lifecycle correction is included in this slice.
 
+## Governing billing lookup failures
+
+Reconstructed commit: `01556a38f613416db115f9e13388d996ad27f127` changes two
+production services and two unexecuted fixture sources. In
+`managed-usage-request-service.ts`, exceptions resolving the governing funding
+organization, reading its policy or reading spend now throw the existing typed
+503 `billing_unavailable` error before reservation SQL. Successful reads that
+legitimately find no governing organization, no policy or a null cap retain their
+previous semantics; absence is not conflated with lookup failure.
+
+`entitlement-resolution.ts` now propagates errors reading the account's own
+enterprise collection state instead of treating that state as unrestricted.
+This occurs during own-entitlement resolution before seat fallback. It is not a
+universal typed-503 conversion: existing outer wrappers may surface a generic
+500 for the propagated collection error.
+
+The explicit availability tradeoff is refusal during governing lookup outages,
+rather than reservation with unknown restrictions. This slice does not redesign
+spend policy, seat resolution, later provider-step authorization, compensation or
+refunds. Fixture source covers failure and legitimate-absence behavior but has
+not been executed; no database, provider or deployment acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the thirty-two accepted production slices traced above are represented as
+Only the thirty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
