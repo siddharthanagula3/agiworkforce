@@ -2154,9 +2154,73 @@ proof. Four existing mock migrations only supply static store methods, not live
 subscription simulation. All sources remain unexecuted; native picker, device
 navigation, event ordering and runtime acceptance are unverified.
 
+## Mobile share completion retains caller ownership, not snapshot authority
+
+Accepted commit `976bd4582f93d4747f5b9dfbb3f0cb996b28c8e8` adds two checks
+in `shareConversation.ts` plus one unexecuted fixture source: after link creation
+before native Share and before error publication, the existing caller `isCurrent`
+must still pass. Chat supplies its conversation action scope, the conversation
+menu supplies account ownership, and task sharing supplies selected run-ID
+equality. No stronger task ABA/unmount/account predicate is invented. Already
+created links remain, and dispatched native sharing cannot be recalled.
+
+Separate OPEN `MOBILE-SHARE-TRANSCRIPT-SNAPSHOT-01` records source snapshot limits:
+task sharing maps one default first page across branches; conversation actions
+attempt refresh but a swallowed loader failure can retain nonempty selected cache;
+chat uses captured selected-thread rows. Server owner/workspace/temporary/policy,
+redaction and public-consent controls remain. Separate metadata/count/message
+reads, offset ordering, message-only edits and tolerant/null-leaf ancestry prevent
+simple pagination or count/version heuristics from proving a coherent snapshot.
+A bounded authoritative snapshot and legacy branch-provenance decision need
+coherent design, not a partial client repair. No observed disclosure is claimed.
+The completion fixtures mock native Share and link creation; all are unexecuted.
+
+## Mobile history separates request ownership from active-leaf intent
+
+Accepted commit `11e7ddc4f2bae9cd26aa9a80df3a8e3f5345804e` changes four
+production files and one fixture source. `cloudHistoryLoad.ts` owns an active-only
+Map of exact per-conversation load objects, distinct from their `leafChanged`
+intent marker. New same-ID requests replace earlier ownership; finishing an old
+request cannot clear its successor or another conversation's global loading
+state. Account retirement, removal/restoration, list replacement, clear and
+hydration invalidate applicable loads. These tokens are ephemeral, not persistent
+per-ID revisions or a durable synchronization protocol.
+
+Cloud leaf writes pass through tracked store actions, including the execution
+store's active-leaf writer. Same-value and ABA intent mark the current request;
+ordinary mark-read and omitted-leaf list refresh do not erase normal remote-leaf
+adoption. The loader checks account/request currentness before and after each
+page, validates returned conversation identity, reconciles against freshly reread
+messages/dirty IDs, then rereads committed state for artifact derivation. Original
+request messages remain merge evidence, not an unconditional replacement array.
+
+Valid unknown remote details can be admitted explicitly into Cloud, with Cloud
+artifact ownership, only while still admitted and without a current Local
+conversation or own local messages key of the same ID. This also refuses old
+locally misclassified residual buckets; no migration of those buckets is added.
+Known Cloud loading retains its existing mode-independent behavior. Unknown
+loading checks mode at request admission only; later mode changes, including ABA,
+do not retire that request. Errors
+remain represented in store state rather than a caller-visible successful-load
+receipt, so the separate share-snapshot design constraint remains open.
+
+OPEN `MOBILE-MESSAGE-DELETE-TOPOLOGY-ROLLBACK-01` remains separate: single-row
+optimistic filtering does not apply the server child splice/leaf receipt, and
+same-account failure can restore an obsolete whole array. Hard server deletion
+plus absent-ID, base-version-zero sync creation permits a source-derived stale
+no-version recreation path; no observed loss is claimed. Whole-send/persistence
+quiescence, authoritative deletion receipts and durable deletion identity require
+coherent design, not just a history token or a streaming flag.
+
+Fixture sources include valid two-page loading, account changes, older same-ID
+success/error, leaf intent, removal/restoration, unknown admission and a subscriber
+change after leaf publication. They are unexecuted. Integrated execution-caller,
+hydration and post-message-publication subscriber cases remain uncovered by this
+slice; no native, live sync or runtime acceptance is asserted.
+
 ## Reconstruction boundary
 
-Only the eighty-two accepted production slices traced above are represented as
+Only the eighty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

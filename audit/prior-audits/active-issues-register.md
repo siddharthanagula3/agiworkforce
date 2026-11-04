@@ -8813,3 +8813,86 @@ receipts, and reconciliation for close/expiry/supersede and legacy closed rows.
 Specify partial credit/allowance/COGS outcomes without inventing refund or charge
 policy. No naive reopen/repeated-settlement patch or implementation-ready design
 is asserted. Source-only; no tests, checks, DB, billing or network actions.
+
+## MOBILE-MESSAGE-DELETE-TOPOLOGY-ROLLBACK-01
+
+Severity: Medium. Status: OPEN, source-backed design dependency reviewed
+2026-11-04; no reproduced loss or exploit and no production correction.
+
+`apps/mobile/app/(app)/chat/[id].tsx::handleDeleteMessage` captures the complete
+Cloud array, removes the target optimistically, then restores that old array on
+failure if the captured canonical account epoch remains current. That account
+fence is a real counterguard, but does not protect newer same-account activity
+from whole-array rollback. `chatCloudMessageStore.ts::deleteCloudMessage` only
+filters the target. `cloudMessageMutations.ts::deleteCloudMessagesRemote` ignores
+successful JSON and treats 404 as success. By contrast, the server message DELETE
+transaction locks the thread, splices direct children to the deleted parent,
+settles the active leaf and returns it. The mobile path does not apply that receipt.
+
+`resolveVisibleThread` stops at a missing parent when walking a known leaf; thus
+removing an interior row without splicing can hide older ancestors in the visible
+thread and next-send history (`chatExecutionStore.ts::historyMessagesForConversation`).
+The null-leaf legacy path returns all rows and is a counterexample to a universal
+blank-history claim. Server owner/workspace admission and legal-hold refusal remain.
+
+A coherent design needs an authoritative non-subtree deletion receipt with target,
+parent and leaf semantics, exact operation-owned reconciliation/rollback and a
+successful persistence boundary. Merely checking streaming UI flags is insufficient:
+execution admission has earlier awaits, completion clears flags before deferred
+`pushCloudAssistantUpdate`, and that helper starts `void syncNow()`. `syncNow`
+returns immediately if the same account is already syncing and catches failures;
+it is not a joinable successful flush barrier.
+
+There is also a source-derived stale-create counterpath, not observed resurrection:
+server `messages/lib/message-thread.ts::deleteMessages` physically deletes rows;
+`app/api/chat/sync/route.ts` inserts absent IDs with incoming `base_version = 0`
+under its existing live owned non-temporary conversation checks; shared
+`packages/client/sync/src/messages.ts::toMessagePushItem` defaults missing
+`serverVersion` to `'0'`. A previously captured no-version snapshot can therefore
+recreate a deleted identity after confirmation if admitted later. Existing-version
+conflicts and sync tombstones are separate counterguards, not protection for this
+absent-ID path. A local conversation lock alone cannot resolve another device's
+stale create: durable deletion identity/tombstone or create-precondition semantics
+and migration must be designed with server/sync owners. No unsafe partial patch,
+blanket retry, destructive action or implementation-ready design is proposed.
+Accepted history ownership commit `11e7ddc4f2` is a prerequisite only, not
+deletion repair; the hard-delete/sync and rollback constraints remain open.
+No tests, checks, DB, native or network actions were performed for this finding.
+
+## MOBILE-SHARE-TRANSCRIPT-SNAPSHOT-01
+
+Severity: Medium. Status: OPEN source-backed snapshot design constraint,
+2026-11-04. No observed disclosure, runtime reproduction or production repair.
+
+`taskActions.ts::shareCloudRun` reads one default `getConversation` page and maps
+all returned rows, without selected-thread resolution or pagination. The current
+conversation GET defaults to 100 rows. `useConversationActions.ts` DOES await
+`loadMessages`, then reads the selected thread from current cache, but the loader
+catches failure and resolves without a success receipt; nonempty retained cache
+can then be published. The chat route instead maps its captured selected-thread
+rows. These are distinct completeness/freshness/provenance limitations, not a
+claim that every caller skips refresh. POST `/api/share` stores the supplied
+sanitized snapshot, rather than independently reconstructing its source thread.
+Existing owner/workspace/temporary-chat checks, external-sharing policy, secret
+redaction and explicit public-link consent remain counterguards.
+
+Naive pagination does not establish a snapshot: conversation metadata, messages
+and count are read separately; this GET uses offset plus created_at-only ordering.
+Its ETag comes from conversation version, while assistant content-edit SQL updates
+only the message and the client drops the response ETag. Counts, deduplication or
+that version alone cannot establish coherent message content and topology. The
+separate messages keyset route is not a snapshot contract for this caller.
+Canonical visible-thread resolution tolerates missing ancestry; a strict share
+path needs explicit completeness validation. A null active leaf can follow a
+deleted branched root (`messages/lib/message-thread.ts::conversationIsUnbranched`);
+all-null parent rows also do not distinguish legacy linear history from root-only
+siblings without durable provenance.
+
+Required design is a bounded server-authoritative consistent snapshot with strict
+active-leaf ancestry and an explicit legacy/null-leaf product/migration decision,
+while preserving existing sharing admission, redaction and consent. This is not
+implementation-ready, and no blanket refusal, inferred branch selection or
+changed public-sharing semantics is approved. Commit `976bd4582f` separately
+fences post-create completion by the existing caller predicate; it does not repair
+snapshot selection, revoke a created link or strengthen task selection ABA.
+Source-only review; no tests, checks, network or sharing actions.
