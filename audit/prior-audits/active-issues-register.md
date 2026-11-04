@@ -9152,3 +9152,43 @@ universal settings or memory lifecycle closure is established.
   push or invent a retention/product policy. No simple cursor reset or implementation-
   ready protocol is approved; runtime, large-account and cross-tab behavior remain
   unverified.
+
+
+## WEB-PROJECT-OBJECT-LIFECYCLE-01
+
+- **Severity/status:** Medium, OPEN; source-derived object availability and recovery
+  design dependency, reviewed 2026-11-04. No observed loss, cross-owner disclosure,
+  storage operation or runtime reproduction is claimed. No production fix is approved.
+- **Concurrent reference creation:** `apps/web/app/api/projects/[id]/duplicate/route.ts`
+  reads the owner/org-scoped live source project before its transaction, then copies
+  knowledge rows with `INSERT ... SELECT`, retaining `storage_uri`, without source
+  lifecycle locks. Single-file DELETE in `knowledge-files/[fileId]/route.ts` marks
+  metadata deleted, reads remaining live references, then removes the object.
+  `lib/server/project-deletion.ts` similarly releases references inside the project
+  deletion transaction and removes objects afterward. An overlapping copy whose new
+  reference is still uncommitted can be invisible to these reference reads while its
+  source rows were visible to the earlier copy statement. A later committed copy can
+  therefore reference removed bytes. This is a possible interleaving, not measured
+  deployment behavior or proof that every concurrent duplicate loses its object.
+- **Partial removal is not rollback:** `deleteProjectKnowledgeObject` in
+  `lib/server/project-knowledge-object-storage.ts` deletes private storage before an
+  optional legacy-public object; local development removes bytes and metadata with
+  parallel unlinks. One removal can succeed before another rejects. Single-file DELETE
+  restores `deleted_at = null` on any object-removal error without a per-object receipt
+  proving surviving bytes; even that restoration can fail. Whole-project object cleanup
+  instead logs errors after metadata deletion. Neither behavior establishes atomic
+  storage/metadata recovery.
+- **Consumers and counterguards:** `KnowledgeFilesPanel` and `SourcesPanel` restore
+  their prior list on failed removal; this does not prove the source bytes still exist.
+  Mobile project store Cloud `removeSource` consumes the same remote deletion contract.
+  Existing authenticated owner/org, live-project and file checks, CSRF/rate limits,
+  transaction boundaries, sealed upload handling and checks for committed references
+  remain real controls. This finding does not allege cross-account access or weaken
+  those controls; it concerns lifecycle coordination of otherwise authorized objects.
+- **Design dependency, not implementation-ready:** coordinate reference acquisition
+  and deletion eligibility with durable operation state, truthful partial/unknown
+  outcomes and idempotent reconciliation before destructive storage work. The design
+  must cover duplicate, file removal and whole-project release together and define
+  how callers recover uncertain results. A metadata-only restoration or an ad-hoc
+  database lock held across remote storage calls is not an established solution.
+  No new retry/deletion policy, tests, checks, database or network actions were performed.

@@ -3454,6 +3454,28 @@ They are mocked and unexecuted; stale timer execution and caller status replacem
 lack dedicated cases. No native, network, authentication, tests or checks establish
 runtime acceptance here.
 
+## Project knowledge references and object deletion need coordinated recovery
+
+Design-only constraint `WEB-PROJECT-OBJECT-LIFECYCLE-01` remains OPEN. Project
+`duplicate/route.ts` copies live knowledge metadata and its existing `storage_uri`
+inside a transaction after an earlier scoped source-project read, without a common
+source lifecycle lock. File DELETE and `releaseDeletedProjectContents` check live
+references before later object removal. An uncommitted duplicate reference can be
+invisible to that check; committed-reference protection is real but does not settle
+this overlap. Owner/org admission remains intact, with no cross-owner or observed
+loss claim.
+
+`deleteProjectKnowledgeObject` can partially remove private/legacy-public objects
+or local byte/metadata files before rejecting. Single-file DELETE then attempts to
+restore live metadata without a surviving-byte receipt, while both web panels restore
+their previous lists on failure. Whole-project cleanup logs storage failure after
+metadata deletion; mobile Cloud sources also use the file-removal contract. None
+of these UI/metadata outcomes proves physical rollback. Coherent reference admission,
+durable deletion status and partial/unknown recovery are a design dependency, not
+an approved metadata-only patch or lock across remote calls. See the
+[canonical finding](../../audit/prior-audits/active-issues-register.md#web-project-object-lifecycle-01).
+No production slice is added; no tests, database, storage or network actions were run.
+
 ## Reconstruction boundary
 
 Only the one hundred and seventeen accepted production slices traced above are represented as
