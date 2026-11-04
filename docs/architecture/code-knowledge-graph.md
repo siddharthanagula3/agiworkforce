@@ -679,7 +679,8 @@ conversation predicate adds the fourth only when supplied.
 
 File GET and text GET pass `getUserScopedDb`'s admitted organization rather than
 re-resolving saved selection. Existing owner filtering and workspace RLS remain
-counterguards (tenancy policies and `0110_active_workspace_content_scope.sql`);
+counterguards (tenancy policies, with the current visibility predicate in
+`0272_active_membership_authorization.sql` superseding the earlier `0110` definition);
 the former serving drift supports an availability mismatch, not a demonstrated
 cross-account exposure. In contrast, attachment hydration uses the service DB:
 `chat-attachment-hydration.ts` now compares both owner and admitted organization
@@ -690,13 +691,39 @@ scope through the now-required hydration argument.
 Same-owner, same-workspace reuse across conversations is intentionally allowed
 where no conversation constraint is supplied. This slice does not redesign shared
 grants, deletion, durable provenance or continuous revocation across subsequent
-awaits. Generation callers still using the helper's legacy selection fallback are
-outside this accepted slice, as is Gmail. Null/non-null scope fixture source was
+awaits. Generation callers were outside this serving/hydration slice and are addressed
+separately below; Gmail remains outside it. Null/non-null scope fixture source was
 reviewed, but no SQL/RLS, storage, request or deployment behavior was executed.
+
+## Generation image-reference workspace authority
+
+Reconstructed commit: `c50c1a295fc78533264617e25327e96c68cc4ad5` changes seven
+production files and three unexecuted fixture sources. All ten production calls
+to `resolveImageRefBytes` now pass scope: managed generation source/mask/references,
+durable image executor source/mask/references, retry source/mask/references and
+video input images. Stored references refuse missing DB or undefined organization
+before reading bytes; explicit null is Personal. Inline base64 handling is
+unchanged. The underlying general media lookup retains its undefined-only legacy
+fallback, but this generation entry point no longer falls through to it.
+
+Managed generation captures one admitted scope for stored references. Durable
+execution uses the job organization; retry first retrieves the original job
+through the admitted scoped DB and explicit user filter, then uses that job's
+organization rather than retargeting to a newly resolved saved selection. Video
+passes its admitted organization. Explicit chat image selection retains its
+conversation constraint and now includes admitted organization. An implicit latest
+conversation candidate is revalidated by the scoped byte resolver before bytes
+are used; candidate discovery alone is not authority.
+
+Existing same-workspace/cross-conversation reuse where no conversation predicate
+is supplied remains unchanged. This does not implement retention, Gmail scope,
+shared grants, deletion/provenance redesign or continuous revocation after the
+checks. Fixtures cover source-level scope behavior only; no provider, storage,
+SQL/RLS, deployment or runtime acceptance is claimed.
 
 ## Reconstruction boundary
 
-Only the twenty-eight accepted production slices traced above are represented as
+Only the twenty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
