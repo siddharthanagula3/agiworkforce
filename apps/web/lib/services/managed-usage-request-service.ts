@@ -325,9 +325,13 @@ async function resolveSpendCapOrganizationId(
   } catch (error) {
     logger.error(
       { error, userId },
-      '[managed-usage] funding organization lookup failed; spend cap treated as ungoverned',
+      '[managed-usage] funding organization lookup failed; billing unavailable',
     );
-    return null;
+    throw new ManagedUsageRequestError(
+      'Managed usage billing is temporarily unavailable.',
+      503,
+      'billing_unavailable',
+    );
   }
 }
 
@@ -342,9 +346,13 @@ async function assertOrganizationSpendCap(
   } catch (error) {
     logger.error(
       { error, organizationId, userId },
-      '[managed-usage] organization policy read failed; spend cap treated as ungoverned',
+      '[managed-usage] organization policy read failed; billing unavailable',
     );
-    return;
+    throw new ManagedUsageRequestError(
+      'Managed usage billing is temporarily unavailable.',
+      503,
+      'billing_unavailable',
+    );
   }
 
   if (!policy || policy.monthlySpendCapCents === null) return;
@@ -355,9 +363,13 @@ async function assertOrganizationSpendCap(
   } catch (error) {
     logger.error(
       { error, organizationId, userId },
-      '[managed-usage] organization spend lookup failed; spend cap treated as ungoverned',
+      '[managed-usage] organization spend lookup failed; billing unavailable',
     );
-    return;
+    throw new ManagedUsageRequestError(
+      'Managed usage billing is temporarily unavailable.',
+      503,
+      'billing_unavailable',
+    );
   }
 
   const decision = evaluateOrganizationPolicy(policy, {
