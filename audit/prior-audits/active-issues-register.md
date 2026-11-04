@@ -7624,17 +7624,52 @@ Acceptance target: Require exact requirement/acceptance equivalence or retain al
 
 ## NATIVE-EXCEL-EDIT-UNATTACHED-SHEETS-01
 
-Severity: High. Status: open source-qualified finding reviewed October 9, 2026; source unchanged.
+Severity: High historical source risk. Status: source-contained by
+`7a1467c3b67758da9ffca69afdb318778e232f50`; runtime/deployment acceptance remains
+OPEN and full-fidelity existing-workbook editing is unavailable, not restored.
 
-The retained editor writes source cells and supported edits into a separate Worksheet map, passes an unused workbook parameter to apply_edit, and saves a fresh Workbook without attaching any sheet. The registered native command forwards that path. Current installed writer source starts with an empty vector and creates a blank sheet on save; it creates the output path, so equal readable-source/writable-output paths can replace original content. This is source derivation; no workbook was edited or overwritten.
+Historical evidence: the retained editor wrote loaded cells and edits into a
+separate Worksheet map, passed an unused workbook to `apply_edit`, then saved a
+fresh Workbook without attaching those sheets. The original October 9 dependency
+source review reported an initially empty writer, blank-sheet creation on save
+and output creation. That external dependency behavior is historical, not freshly
+verified; exact serialized bytes, successful save and compiled linkage were not
+executed. Fresh first-party reading confirms the old path reached the truncating
+write utility, a source-derived overwrite risk rather than observed data loss.
 
-Counterguards: Unsupported edit variants, path traversal/protected-path/empty input and propagated edit/save errors refuse. The create path explicitly attaches sheets through workbook.add_worksheet. Native startup, caller permissions/approval, dependency archive authenticity, actual compiled linkage and public Electron applicability remain unknown.
+Reachability correction: the standalone `document_edit_excel` Rust function was
+not a registered Tauri IPC command. The retained registered `chat_send_message`
+path selected registered tool schemas, dispatched through the tool executor and
+its document adapter, then invoked the wrapper/editor; output defaulted to source.
+Public Electron rejects the unsupported route, and no public Electron/CLI/web edit
+path is established here. The former direct registered-command premise is withdrawn.
 
-Evidence: root source review (`audit/checklist/reviews/coverage-audit-import-excel-owner-source-2026-10-09-039.json`, untracked), original retained candidate (`audit/checklist/reviews/coverage-retained-native-source-2026-10-09-039.json`, untracked). The original qualified Native039 pair remains frozen and its pending relation is resolved into this canonical ID.
+Containment: `ExcelEditor::edit_spreadsheet` now unconditionally returns unsupported
+before source/output I/O. `add_row` delegates to that refusal; the public edit enum
+is preserved. The wrapper no longer resolves source/output paths. Removing the
+registry entry withholds model advertisement and makes ordinary explicit retained
+chat selection fail lookup before dispatch; direct Rust/custom-registry routes
+still reach the refusing owner. Existing dispatch/guard structure remains, and
+read/create paths are unchanged. No lossy reconstruction remains in this owner.
+Producer-owned `docs/decisions/wire-or-cut.md` and misleading command/executor
+comments were corrected in the accepted commit.
 
-Limits: No complete importer/CSV writer, application/fixture module, native/Rust tests/build, workbook I/O, provider/network, SQL/database, install, Git mutation or production action ran. Source transform controls use exact pure function text and inert values. Installed writer spans are outside-repository dependency evidence with missing archive checksum, excluded from first-party/full-file credit. No observed data loss, current status corruption, approved caller bypass or public Electron runtime acceptance is claimed.
+Historical counterguards included unsupported variants, path/protected-path/input
+validation and propagated edit/save errors; the create path attached its sheets.
+They did not establish full-fidelity editing. New source fixtures cover all enum
+variants, empty/invalid/equal/distinct paths, add_row and absent registry/schema
+advertisement with read/create retained. All are unexecuted: no Rust/build, native
+startup, workbook I/O or installed/deployed acceptance is claimed.
 
-Acceptance target: Attach every preserved/edited worksheet to the saved workbook and prove supported edits preserve existing cells/sheets/formulas/metadata before exposing overwrite behavior; preserve unsupported-edit refusal and source/output access controls.
+Original evidence remains the October 9 source review
+(`audit/checklist/reviews/coverage-audit-import-excel-owner-source-2026-10-09-039.json`,
+untracked) and retained candidate
+(`audit/checklist/reviews/coverage-retained-native-source-2026-10-09-039.json`,
+untracked). The qualified Native039 pair stays historical; external dependency
+spans lacked archive checksum and do not count as current first-party verification.
+Re-enabling requires an explicitly accepted full-fidelity backend and preservation
+proof for existing cells, sheets, formulas and metadata. No such restoration or
+observed overwrite is asserted by this containment.
 
 ## AUDIT-UI-GAP-MARKDOWN-HASH-ONLY-01
 

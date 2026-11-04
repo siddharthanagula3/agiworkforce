@@ -3142,9 +3142,34 @@ still needs qualified ownership design. No legacy adoption/deletion, silent push
 disabling, implementation-ready solution, observed loss or cross-account database
 disclosure is asserted. See the canonical finding for exact source boundaries.
 
+## Retained native Excel edits are refused, not reconstructed lossily
+
+Accepted commit `7a1467c3b67758da9ffca69afdb318778e232f50` changes six source,
+embedded-fixture and decision-document files. `ExcelEditor::edit_spreadsheet`
+unconditionally returns unsupported before source/output I/O; `add_row` delegates
+to it and the edit enum remains compatible. The wrapper no longer resolves paths.
+The registry no longer advertises the edit tool, so ordinary retained chat lookup
+refuses before dispatch; direct Rust/custom-registry routes remain protected by
+the owner refusal. Existing guard/dispatch structure and read/create remain.
+
+The actual historical route was registered `chat_send_message` → tool registry →
+executor/document adapter → wrapper → editor, with output defaulting to source.
+The standalone edit function was not registered Tauri IPC; public Electron's
+unsupported gate is separate. Prior first-party code populated an unattached
+Worksheet map before saving a fresh Workbook and reaching a truncating writer.
+The earlier installed dependency writer inspection is historical, not reverified
+serialization/save evidence. No workbook overwrite or data loss was observed.
+
+Existing High `NATIVE-EXCEL-EDIT-UNATTACHED-SHEETS-01` is qualified as source-contained,
+with runtime/deployment acceptance OPEN and full-fidelity editing unavailable.
+Embedded fixtures for variants/path inputs/add_row and registry/read/create
+advertisement were read but not run. No Rust, workbook I/O, native build or deployed
+proof exists in this tranche. Re-enabling requires a separately accepted preserving
+backend, not simply reattaching sheets or restoring the registry entry.
+
 ## Reconstruction boundary
 
-Only the one hundred and eight accepted production slices traced above are represented as
+Only the one hundred and nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
