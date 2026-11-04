@@ -726,6 +726,7 @@ interface MessageBubbleProps {
   isReadingAloud?: boolean;
   /** Keeps an unavailable browser capability out of the action row. */
   isReadAloudSupported?: boolean;
+  readAloudUnavailableReason?: string | null;
   isLatestTurn?: boolean;
   /**
    * Why this turn failed, and what to do about it. Both ride on the run's own
@@ -787,6 +788,7 @@ const MessageBubbleComponent = function MessageBubble({
   onReadAloud,
   isReadingAloud = false,
   isReadAloudSupported = false,
+  readAloudUnavailableReason,
   isLatestTurn = false,
   turnFailureReason,
   turnFailureActions,
@@ -3928,6 +3930,7 @@ const MessageBubbleComponent = function MessageBubble({
                         {!isUser && hasReadableTurn && isReadAloudSupported && onReadAloud && (
                           <DropdownMenuCheckboxItem
                             checked={isReadingAloud}
+                            disabled={Boolean(readAloudUnavailableReason)}
                             onCheckedChange={() => onReadAloud(message.id, message.content)}
                           >
                             {isReadingAloud ? (
@@ -3935,7 +3938,7 @@ const MessageBubbleComponent = function MessageBubble({
                             ) : (
                               <Volume2 className="me-2 h-4 w-4" aria-hidden="true" />
                             )}
-                            {isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
+                            {readAloudUnavailableReason ?? (isReadingAloud ? 'Stop reading message' : 'Read message aloud')}
                           </DropdownMenuCheckboxItem>
                         )}
                         {onPin && (
@@ -4279,6 +4282,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onReact !== next.onReact) return false;
   if (prev.onBranch !== next.onBranch) return false;
   if (prev.onReadAloud !== next.onReadAloud) return false;
+  if (prev.readAloudUnavailableReason !== next.readAloudUnavailableReason) return false;
   if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;

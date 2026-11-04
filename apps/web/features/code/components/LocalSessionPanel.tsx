@@ -146,6 +146,7 @@ import { LocalReviewPane } from './LocalReviewPane';
 import { LocalTurnChangesView } from './LocalTurnChangesView';
 import { LocalTurnControls } from './LocalTurnControls';
 import { CodeTranscriptBody } from './CodeTranscript';
+import { codeReadAloudUnavailable } from '@/lib/read-aloud-policy';
 import styles from '../CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -1117,6 +1118,7 @@ export function LocalSessionPanel({
               {!state.loading && (
                 <CodeTranscriptBody
                   readAloudScope={JSON.stringify([session.rootId, session.id])}
+                  readAloudUnavailableReason={codeReadAloudUnavailable(session.trustMode)}
                   items={items}
                   approvals={[]}
                   busy={busy}

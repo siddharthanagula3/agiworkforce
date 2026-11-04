@@ -220,9 +220,11 @@ function StepGroup({ steps, verbose }: { steps: CloudCodeAgentStep[]; verbose: b
   );
 }
 
-function ReplyActions({ text, at, readAloudScope }: { text: string; at: string; readAloudScope?: string }) {
+function ReplyActions({ text, at, readAloudScope, readAloudUnavailableReason }: {
+  text: string; at: string; readAloudScope?: string; readAloudUnavailableReason?: string | null;
+}) {
   const [copied, setCopied] = useState(false);
-  const { isSpeaking, isSupported, speak, stop } = useTTS(readAloudScope);
+  const { isSpeaking, isSupported, speak, stop } = useTTS(readAloudScope, !readAloudUnavailableReason);
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
@@ -248,7 +250,8 @@ function ReplyActions({ text, at, readAloudScope }: { text: string; at: string; 
         <button
           type="button"
           className={styles['actionButton']}
-          aria-label={isSpeaking ? CODE_COPY.stopReading : CODE_COPY.readAloud}
+          disabled={Boolean(readAloudUnavailableReason)}
+          aria-label={readAloudUnavailableReason ?? (isSpeaking ? CODE_COPY.stopReading : CODE_COPY.readAloud)}
           onClick={() => (isSpeaking ? stop() : speak(text))}
         >
           {isSpeaking ? (
@@ -256,7 +259,7 @@ function ReplyActions({ text, at, readAloudScope }: { text: string; at: string; 
           ) : (
             <Volume2 size={ACTION_GLYPH_SIZE} aria-hidden="true" />
           )}
-          <span>{isSpeaking ? CODE_COPY.stopReading : CODE_COPY.readAloud}</span>
+          <span>{readAloudUnavailableReason ?? (isSpeaking ? CODE_COPY.stopReading : CODE_COPY.readAloud)}</span>
         </button>
       )}
       <span className={styles['actionTime']}>{formatRelativeTime(at)}</span>
@@ -313,6 +316,8 @@ export interface CodeTranscriptBodyProps extends Omit<
   header?: React.ReactNode;
   /** Playback lifetime only; this does not classify the content trust boundary. */
   readAloudScope?: string;
+  /** Absent for existing cloud/shared transcripts, whose origin is unclassified. */
+  readAloudUnavailableReason?: string | null;
   /** A one-line status between the transcript and the working row. */
   pending?: string | null;
   /** Offered on a task that began a turn the session can rewind to. */
@@ -334,6 +339,7 @@ export function CodeTranscriptBody({
   onRetryTask,
   header,
   readAloudScope,
+  readAloudUnavailableReason,
   pending,
   onRewindTask,
   rewindLabel,
@@ -427,7 +433,7 @@ export function CodeTranscriptBody({
                 {CODE_COPY.retryTask}
               </button>
             )}
-            {item.id === lastReplyId && item.text && <ReplyActions text={item.text} at={item.at} readAloudScope={readAloudScope} />}
+            {item.id === lastReplyId && item.text && <ReplyActions text={item.text} at={item.at} readAloudScope={readAloudScope} readAloudUnavailableReason={readAloudUnavailableReason} />}
           </div>
         );
       })}

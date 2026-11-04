@@ -12,9 +12,14 @@ describe('read-aloud caller lifetime scopes', () => {
     const transcript = source('features/code/components/CodeTranscript.tsx');
     expect(transcript).toContain('readAloudScope={session.id}');
     expect(transcript).toContain('readAloudScope={readAloudScope}');
-    expect(transcript).toContain('useTTS(readAloudScope)');
+    expect(transcript).toContain('useTTS(readAloudScope, !readAloudUnavailableReason)');
     expect(source('features/code/components/LocalSessionPanel.tsx')).toContain('readAloudScope={JSON.stringify([session.rootId, session.id])}');
+    expect(source('features/code/components/LocalSessionPanel.tsx')).toContain('readAloudUnavailableReason={codeReadAloudUnavailable(session.trustMode)}');
     expect(source('features/code/SharedCodeSessionPage.tsx')).toContain('readAloudScope={token}');
+  });
+  it('keeps cloud and shared origin unclassified rather than manufacturing managed labels', () => {
+    expect(source('features/code/SharedCodeSessionPage.tsx')).not.toContain('codeReadAloudUnavailable');
+    expect(source('features/code/components/CodeTranscript.tsx')).not.toContain("codeReadAloudUnavailable('managed')");
   });
   it('keeps the settings preview explicitly on device speech', () => {
     expect(source('features/settings/sections/GeneralSection.tsx')).toContain('deviceVoice: true');

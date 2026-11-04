@@ -504,3 +504,80 @@ it('does not let an old identity stop cancel the new identity voice', () => {
   act(() => oldStop());
   expect(cancel).not.toHaveBeenCalled();
 });
+
+
+describe('useTTS, central content policy fixtures', () => {
+  it('refuses before acquiring tokens, creating audio, or speaking device text', () => {
+    const token = signedIn();
+    const context = vi.fn();
+    vi.stubGlobal('AudioContext', context);
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const hook = renderHook(() => useTTS('code', false));
+    act(() => hook.result.current.speak('Restricted'));
+    act(() => hook.result.current.speak('Restricted', { deviceVoice: true }));
+    act(() => hook.result.current.unlock());
+    expect(token).not.toHaveBeenCalled();
+    expect(context).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(spoken).toHaveLength(0);
+  });
+
+  it('retires playing speech and rejects retained handlers after Code policy narrows', () => {
+    const hook = renderHook(({ allowed }) => useTTS('same-code', allowed), { initialProps: { allowed: true } });
+    const staleSpeak = hook.result.current.speak;
+    act(() => hook.result.current.speak('Earlier', { deviceVoice: true }));
+    const cancel = vi.mocked(window.speechSynthesis.cancel);
+    cancel.mockClear();
+    hook.rerender({ allowed: false });
+    expect(cancel).toHaveBeenCalledOnce();
+    act(() => staleSpeak('Stale permission', { deviceVoice: true }));
+    expect(spoken).toHaveLength(1);
+    hook.rerender({ allowed: true });
+    act(() => staleSpeak('Old generation', { deviceVoice: true }));
+    expect(spoken).toHaveLength(1);
+  });
+
+  it('retires an active Chat operation when its current-row predicate changes', () => {
+    let currentRowAllowed = true;
+    const canSpeak = () => currentRowAllowed;
+    const hook = renderHook(() => useTTS('chat'));
+    act(() => hook.result.current.speak('Current row', { deviceVoice: true, canSpeak }));
+    const cancel = vi.mocked(window.speechSynthesis.cancel);
+    cancel.mockClear();
+    currentRowAllowed = false;
+    hook.rerender();
+    expect(cancel).toHaveBeenCalledOnce();
+    act(() => hook.result.current.speak('Stale row', { canSpeak }));
+    expect(spoken).toHaveLength(1);
+  });
+
+  it('does not fetch or fall back when row policy narrows during resume', async () => {
+    signedIn();
+    const audio = installAudio('suspended');
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    let currentRowAllowed = true;
+    const hook = renderHook(() => useTTS('chat'));
+    act(() => hook.result.current.speak('Current row', { canSpeak: () => currentRowAllowed }));
+    currentRowAllowed = false;
+    audio.resume.resolve();
+    await flush();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(spoken).toHaveLength(0);
+    audio.close();
+  });
+});
+
+
+it('does not let an old-policy stop cancel a replacement after a policy round trip', () => {
+  const hook = renderHook(({ allowed }) => useTTS('code', allowed), { initialProps: { allowed: true } });
+  const oldStop = hook.result.current.stop;
+  hook.rerender({ allowed: false });
+  hook.rerender({ allowed: true });
+  act(() => hook.result.current.speak('Replacement', { deviceVoice: true }));
+  const cancel = vi.mocked(window.speechSynthesis.cancel);
+  cancel.mockClear();
+  act(() => oldStop());
+  expect(cancel).not.toHaveBeenCalled();
+});

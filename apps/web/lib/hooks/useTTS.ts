@@ -131,10 +131,20 @@ function stripMarkdown(text: string): string {
   );
 }
 
+export interface SpeechOptions {
+  deviceVoice?: boolean;
+  /** Re-read current content policy, including after asynchronous boundaries. */
+  canSpeak?: () => boolean;
+}
+
+function policyAllows(canSpeak?: () => boolean): boolean {
+  try { return canSpeak?.() ?? true; } catch { return false; }
+}
+
 export interface UseTTSReturn {
   isSpeaking: boolean;
   isSupported: boolean;
-  speak: (text: string, options?: { deviceVoice?: boolean }) => void;
+  speak: (text: string, options?: SpeechOptions) => void;
   stop: () => void;
   unlock: () => void;
   voices: SpeechSynthesisVoice[];
@@ -144,7 +154,7 @@ export interface UseTTSReturn {
 
 const UNLOCK_TEXT = ' ';
 
-export function useTTS(ownerScope?: string | null): UseTTSReturn {
+export function useTTS(ownerScope?: string | null, allowed = true): UseTTSReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -153,6 +163,13 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
   const captureIdentity = useReadonlyIdentityLifetime();
   const lifetimeRef = useRef<object | null>(null);
   const scopeRef = useRef(ownerScope);
+  const policyRef = useRef(allowed);
+  const policyGeneration = useRef(0);
+  if (policyRef.current !== allowed) {
+    policyRef.current = allowed;
+    policyGeneration.current += 1;
+  }
+  const renderedPolicyGeneration = policyGeneration.current;
   const scopeGeneration = useRef(0);
   if (scopeRef.current !== ownerScope) {
     scopeRef.current = ownerScope;
@@ -164,8 +181,9 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
 
   const stop = useCallback(() => {
     if (scopeGeneration.current !== renderedScopeGeneration || !renderedIdentity.isCurrent()) return;
+    if (policyGeneration.current !== renderedPolicyGeneration) return;
     operationRef.current?.retire();
-  }, [renderedScopeGeneration, renderedIdentity]);
+  }, [renderedScopeGeneration, renderedIdentity, renderedPolicyGeneration]);
 
   useLayoutEffect(() => {
     const lifetime = {};
@@ -227,12 +245,13 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
     [voices, voiceUri],
   );
 
-  const begin = useCallback((clean: string): SpeechOperation | null => {
+  const begin = useCallback((clean: string, canSpeak?: () => boolean): SpeechOperation | null => {
     operationRef.current?.retire();
     const lifetime = lifetimeRef.current;
     if (!lifetime) return null;
     const identity = captureIdentity();
     const scope = scopeGeneration.current;
+    const policy = policyGeneration.current;
     let retired = false;
     const operation: SpeechOperation = {
       clean,
@@ -242,7 +261,8 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
       settleEnded: null,
       isCurrent: () => {
         const current = !retired && lifetimeRef.current === lifetime &&
-          scopeGeneration.current === scope && operationRef.current === operation && identity.isCurrent();
+          scopeGeneration.current === scope && policyGeneration.current === policy &&
+          policyRef.current && policyAllows(canSpeak) && operationRef.current === operation && identity.isCurrent();
         if (!current) operation.retire();
         return current;
       },
@@ -326,13 +346,19 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
   const unlock = useCallback(() => {
     if (!isSupported || !('speechSynthesis' in window)) return;
     if (scopeGeneration.current !== renderedScopeGeneration || !renderedIdentity.isCurrent()) return;
+    if (!policyRef.current || policyGeneration.current !== renderedPolicyGeneration) return;
     if (operationRef.current || deviceOwner || window.speechSynthesis.speaking || window.speechSynthesis.pending) return;
     const operation = begin(UNLOCK_TEXT);
     if (operation) speakWithDevice(operation, true);
-  }, [isSupported, begin, speakWithDevice, renderedScopeGeneration, renderedIdentity]);
+  }, [isSupported, begin, speakWithDevice, renderedScopeGeneration, renderedIdentity, renderedPolicyGeneration]);
 
-  const speak = useCallback((text: string, options?: { deviceVoice?: boolean }) => {
+  const speak = useCallback((text: string, options?: SpeechOptions) => {
     if (!isSupported || scopeGeneration.current !== renderedScopeGeneration || !renderedIdentity.isCurrent()) return;
+    if (policyGeneration.current !== renderedPolicyGeneration) return;
+    if (!policyRef.current || !policyAllows(options?.canSpeak)) {
+      operationRef.current?.retire();
+      return;
+    }
     const clean = stripMarkdown(text);
     if (!clean) return;
     const previous = operationRef.current;
@@ -340,7 +366,7 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
       previous.retire();
       return;
     }
-    const operation = begin(clean);
+    const operation = begin(clean, options?.canSpeak);
     if (!operation) return;
     const session = options?.deviceVoice ? null : captureSession();
     const context = session ? speechAudioContext() : null;
@@ -397,7 +423,7 @@ export function useTTS(ownerScope?: string | null): UseTTSReturn {
         operation.retire();
       }
     })();
-  }, [isSupported, begin, captureSession, speakWithDevice, renderedScopeGeneration, renderedIdentity]);
+  }, [isSupported, begin, captureSession, speakWithDevice, renderedScopeGeneration, renderedIdentity, renderedPolicyGeneration]);
 
   return { isSpeaking, isSupported, speak, stop, unlock, voices, voiceUri, setVoiceUri };
 }
