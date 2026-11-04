@@ -1,3 +1,5 @@
+const mockRandomUUID = jest.fn();
+jest.mock('expo-crypto', () => ({ randomUUID: () => mockRandomUUID() }));
 
 const mockWriteAsStringAsync = jest.fn();
 const mockGetInfoAsync = jest.fn();
@@ -27,7 +29,7 @@ jest.mock('@/services/authSession', () => ({
 }));
 
 import * as Sharing from 'expo-sharing';
-import { downloadGeneratedFile, shareGeneratedImage } from '@/services/fileCreation';
+import { downloadGeneratedFile, prepareLocalVideoPlayer, shareGeneratedImage } from '@/services/fileCreation';
 
 class FakeFileReader {
   onload: (() => void) | null = null;
@@ -42,8 +44,12 @@ class FakeFileReader {
 describe('downloadGeneratedFile', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    let nextExportId = 0;
+    mockRandomUUID.mockImplementation(() => `export-${++nextExportId}`);
     (globalThis as Record<string, unknown>).FileReader = FakeFileReader;
-    mockGetInfoAsync.mockResolvedValue({ exists: true });
+    mockGetInfoAsync.mockImplementation(async (uri: string) => ({
+      exists: uri === 'file:///docs/exports/',
+    }));
     mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer test-jwt' });
     mockGuardedFetch.mockResolvedValue({
       ok: true,
@@ -65,11 +71,11 @@ describe('downloadGeneratedFile', () => {
       headers: { Authorization: 'Bearer test-jwt' },
     });
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/report.pdf',
+      'file:///docs/exports/export-1/report.pdf',
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
-    expect(uri).toBe('file:///docs/exports/report.pdf');
+    expect(uri).toBe('file:///docs/exports/export-1/report.pdf');
   });
 
   it('does NOT attach the Bearer token for non-our-cloud hosts (no JWT leak)', async () => {
@@ -110,11 +116,11 @@ describe('downloadGeneratedFile', () => {
       { headers: { Authorization: 'Bearer test-jwt' } },
     );
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/generated-image.png',
+      'file:///docs/exports/export-1/generated-image.png',
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
-    expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///docs/exports/generated-image.png', {
+    expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///docs/exports/export-1/generated-image.png', {
       mimeType: 'image/png',
       dialogTitle: 'Share generated image',
     });
@@ -142,13 +148,30 @@ describe('downloadGeneratedFile', () => {
     await shareGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222');
 
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/generated-image.${extension}`,
+      `file:///docs/exports/export-1/generated-image.${extension}`,
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/generated-image.${extension}`,
+      `file:///docs/exports/export-1/generated-image.${extension}`,
       expect.objectContaining({ mimeType }),
     );
   });
+
+  it('downloads each video preparation and places its player beside the new video', async () => {
+    const first = await prepareLocalVideoPlayer('https://agiworkforce.com/api/files/video-1', '#000');
+    const second = await prepareLocalVideoPlayer('https://agiworkforce.com/api/files/video-1', '#fff');
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    expect(first.videoUri).not.toBe(second.videoUri);
+    expect(first.videoUri).toBe(`${first.directoryUri}video-video-1.mp4`);
+    expect(second.videoUri).toBe(`${second.directoryUri}video-video-1.mp4`);
+    expect(first.playerUri).toBe(`${first.directoryUri}player.html`);
+    expect(second.playerUri).toBe(`${second.directoryUri}player.html`);
+    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+      second.playerUri,
+      expect.stringContaining('<video src="video-video-1.mp4"'),
+      { encoding: 'utf8' },
+    );
+  });
+
 });
