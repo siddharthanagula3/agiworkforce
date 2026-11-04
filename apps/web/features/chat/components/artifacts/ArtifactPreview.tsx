@@ -746,21 +746,26 @@ export function ArtifactPreview({
   }, [isPdf, artifact.content, generatedFileSummary.primaryUri, generatedFileSummary.mimeType]);
 
   const isBlobPdf = Boolean(pdfSrc?.startsWith('blob:'));
-  const [pdfBlobOk, setPdfBlobOk] = useState<boolean | null>(null);
+  const [pdfBlobVerification, setPdfBlobVerification] = useState<{
+    src: string;
+    allowed: boolean;
+  } | null>(null);
+  const pdfBlobOk = pdfBlobVerification?.src === pdfSrc ? pdfBlobVerification.allowed : null;
   useEffect(() => {
     if (!pdfSrc || !pdfSrc.startsWith('blob:')) {
-      setPdfBlobOk(null);
+      setPdfBlobVerification(null);
       return;
     }
     let cancelled = false;
-    setPdfBlobOk(null);
+    setPdfBlobVerification(null);
     fetch(pdfSrc)
       .then((r) => r.blob())
       .then((b) => {
-        if (!cancelled) setPdfBlobOk(b.type === 'application/pdf');
+        if (!cancelled)
+          setPdfBlobVerification({ src: pdfSrc, allowed: b.type === 'application/pdf' });
       })
       .catch(() => {
-        if (!cancelled) setPdfBlobOk(false);
+        if (!cancelled) setPdfBlobVerification({ src: pdfSrc, allowed: false });
       });
     return () => {
       cancelled = true;

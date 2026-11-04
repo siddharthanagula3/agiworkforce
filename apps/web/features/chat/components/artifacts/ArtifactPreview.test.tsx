@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { SharedArtifact } from '@agiworkforce/types';
 import { ArtifactPreview, type ArtifactData } from './ArtifactPreview';
 
@@ -60,6 +60,75 @@ describe('ArtifactPreview · PDF viewer', () => {
     mockBlobFetch('text/html');
     render(<ArtifactPreview artifact={pdfArtifact({ content: 'blob:https://app.local/evil' })} />);
     await waitFor(() => expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy());
+    expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+  });
+
+  it('never assigns a replacement blob to the iframe before verifying that source', async () => {
+    const firstSrc = 'blob:https://app.local/first';
+    const nextSrc = 'blob:https://app.local/next';
+    let resolveNext!: (blob: Blob) => void;
+    const nextBlob = new Promise<Blob>((resolve) => {
+      resolveNext = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (src: string) => ({
+        blob: () =>
+          src === firstSrc
+            ? Promise.resolve(new Blob(['%PDF-1.4'], { type: 'application/pdf' }))
+            : nextBlob,
+      })),
+    );
+    const { rerender } = render(<ArtifactPreview artifact={pdfArtifact({ content: firstSrc })} />);
+    await screen.findByTitle('Trip.pdf');
+    const assignedSources: string[] = [];
+    const setAttribute = HTMLIFrameElement.prototype.setAttribute;
+    const assignments = vi
+      .spyOn(HTMLIFrameElement.prototype, 'setAttribute')
+      .mockImplementation(function (this: HTMLIFrameElement, name: string, value: string) {
+        if (name === 'src') assignedSources.push(value);
+        setAttribute.call(this, name, value);
+      });
+    try {
+      rerender(<ArtifactPreview artifact={pdfArtifact({ content: nextSrc })} />);
+      expect(assignedSources).not.toContain(nextSrc);
+      expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+      expect(screen.getByText('Loading PDF…')).toBeTruthy();
+      await act(async () => {
+        resolveNext(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+      });
+      expect((await screen.findByTitle('Trip.pdf')).getAttribute('src')).toBe(nextSrc);
+    } finally {
+      assignments.mockRestore();
+    }
+  });
+
+  it('does not approve the current blob when a previous source finishes verification late', async () => {
+    const firstSrc = 'blob:https://app.local/delayed';
+    const nextSrc = 'blob:https://app.local/rejected';
+    let resolveFirst!: (blob: Blob) => void;
+    let resolveNext!: (blob: Blob) => void;
+    const firstBlob = new Promise<Blob>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const nextBlob = new Promise<Blob>((resolve) => {
+      resolveNext = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (src: string) => ({ blob: () => (src === firstSrc ? firstBlob : nextBlob) })),
+    );
+    const { rerender } = render(<ArtifactPreview artifact={pdfArtifact({ content: firstSrc })} />);
+    rerender(<ArtifactPreview artifact={pdfArtifact({ content: nextSrc })} />);
+    await act(async () => {
+      resolveFirst(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    });
+    expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+    expect(screen.getByText('Loading PDF…')).toBeTruthy();
+    await act(async () => {
+      resolveNext(new Blob(['<html>not a PDF</html>'], { type: 'text/html' }));
+    });
+    expect(await screen.findByTestId('artifact-pdf-fallback')).toBeTruthy();
     expect(screen.queryByTitle('Trip.pdf')).toBeNull();
   });
 
