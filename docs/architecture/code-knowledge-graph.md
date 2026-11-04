@@ -2862,9 +2862,53 @@ labels, missing/current rows, policy narrowing and retained handlers; all are
 unexecuted. They do not establish native/browser audio, continuous revocation or
 runtime privacy acceptance. No tests/checks or network actions were performed.
 
+## Mobile speech owns complete server/device operations and terminal Stop
+
+Accepted commit `e749069536` changes eleven production files and eight fixture
+sources. `voiceOutput.ts` owns an exact handle spanning server synthesis, remaining
+text fallback and device chunks, plus a captured account-scoped source. Stop
+settles that handle as stopped before awaiting native cleanup; later completion,
+failure or fallback cannot restart it. Replacement and callback reentrancy use
+exact global/owner handle comparisons, so old cleanup cannot retire a replacement.
+Cloud epoch ownership applies even to Cloud-origin device-only speech or fallback;
+a missing Cloud source refuses rather than degrading to unowned native speech.
+Local source remains independent of unrelated account changes and cannot opt into
+server speech.
+
+`tts.ts` serializes native stop/start preparation and gives each utterance an exact
+terminal handle. Stale queued starts and old callbacks cannot finish a newer one;
+a stopped chunk ends the whole operation instead of advancing. A rejected native
+stop does not change the logical terminal outcome, but physical stop success is
+not guaranteed. `serverSpeech.ts` captures the original Cloud epoch for every
+`apiFetchBinary` request, adding operation checks around audio setup, response and
+prefetched chunks. Existing API generation/epoch guards and server authorization,
+policy and usage gates are counterguards, not newly introduced server controls.
+Each playback owns its cache file, player and listener; cleanup settles once and
+attempts each release independently. Failure can fall back only to unfinished text
+while the same operation remains current. Dispatched provider work is not undone.
+
+`useVoiceOutputOwner.ts` binds layout lifetime, source key and route context; route
+replacement/unmount disposes its exact owner. Chat's canonical conversation
+execution mode supplies the source. MessageList passes it into MessageBubble,
+whose message-ID/content/owner scope retires row playback and guards done-state
+publication. Voice settings preview uses a Local owner. `useVoiceConversation`
+captures original send callback, speech options, owner and session before awaiting
+an answer; stale responses cannot speak through a replacement owner. Foreground
+retirement advances the session, and only completed speech can auto-listen.
+Existing capture handles are cancelled exactly, including pending-start abort and
+late returned capture cleanup, rather than a global cancellation after an await.
+
+Native Local routing and OS voice selection are unchanged; device speech is not a
+verified offline/locality guarantee. This does not pin workspace or SDK session
+incarnation beyond the existing canonical Cloud epoch, redesign live voice, or
+promise native audio/event timing. Fixtures mock API, Expo audio/files/speech,
+account epochs and lifecycle transitions; row/owner/voice-response and compatibility
+sources are all unexecuted. StrictMode-shaped fixtures are not native runtime
+proof. No tests/checks, actual audio/network or provider validation occurred.
+
 ## Reconstruction boundary
 
-Only the one hundred and three accepted production slices traced above are represented as
+Only the one hundred and four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
