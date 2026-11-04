@@ -3,12 +3,43 @@ import { AppState, Text } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { useLiveVoiceSession } from '@/src/features/voice/hooks/useLiveVoiceSession';
 
+const mockIdentity = { current: true };
+const mockSessionIdentity = { id: 'login-1' };
+const mockAppendVoiceTurn = jest.fn();
+jest.mock('@clerk/expo', () => ({ useSession: () => ({ session: mockSessionIdentity }) }));
+jest.mock('@/services/remoteChatGate', () => ({ getRemoteChatDisabledReason: () => null }));
+jest.mock('@/stores/chat/conversationRepository', () => ({
+  getConversationMessageStore: () => ({ getState: () => ({ conversations: [
+    { id: 'conv-1', executionMode: 'cloud' }, { id: 'conv-2', executionMode: 'cloud' },
+  ] }) }),
+}));
+jest.mock('@/src/features/chat/utils/conversationMode', () => ({
+  executionModeForConversation: (conversation: { executionMode: string }) => conversation.executionMode,
+}));
+jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
+  subscribeCloudAccountEpochChange: () => () => undefined,
+}));
+jest.mock('@/src/features/voice/services/liveVoiceAuthority', () => ({
+  LIVE_VOICE_SESSION_PATH: '/api/voice/live/sessions',
+  captureLiveVoiceAuthority: (isOwner: () => boolean) => {
+    const controller = new AbortController();
+    const isCurrent = () => !controller.signal.aborted && mockIdentity.current && isOwner();
+    return {
+      signal: controller.signal, isCurrent, isIdentityCurrent: () => mockIdentity.current,
+      assertCurrent: () => { if (!isCurrent()) throw new Error('retired'); },
+      retire: () => controller.abort(), fetch: jest.fn(), closeCreated: jest.fn(),
+    };
+  },
+}));
+
 const mockStart = jest.fn();
 const mockClose = jest.fn();
 const mockSettle = jest.fn();
 
 jest.mock('@/src/features/voice/services/liveVoiceModule', () => ({
   loadLiveVoiceModule: async () => ({
+    LIVE_VOICE_SESSION_PATH: '/api/voice/live/sessions',
+    extendLiveVoiceSession: jest.fn(),
     LiveVoiceSession: { start: (...args: unknown[]) => mockStart(...args) },
     LiveVoiceSessionError: class LiveVoiceSessionError extends Error {},
     settleLiveVoiceSession: (...args: unknown[]) => mockSettle(...args),
@@ -30,13 +61,14 @@ jest.mock('@/src/features/voice/services/voiceInput', () => ({
 
 jest.mock('@/stores/chatStore', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appendVoiceTurn: jest.fn() }),
+    selector({ appendVoiceTurn: mockAppendVoiceTurn }),
 }));
 
-function Harness({ onEnded }: { onEnded: (message: string | null) => void }) {
+function Harness({ onEnded, conversationId = 'conv-1' }: { onEnded: (message: string | null) => void; conversationId?: string }) {
   const controller = useLiveVoiceSession({
     active: true,
-    conversationId: 'conv-1',
+    executionMode: 'cloud',
+    conversationId,
     model: 'test-model',
     ensureConversation: async () => 'conv-1',
     onEnded,
@@ -60,12 +92,17 @@ function fakeSession(sessionId: string) {
     sessionId,
     settlement: { ceilingSeconds: 600 },
     close: mockClose,
+    settle: mockSettle,
+    extend: jest.fn(),
+    dispose: jest.fn(),
     setMuted: jest.fn(),
   };
 }
 
 describe('live voice session backgrounded mid-connect', () => {
   beforeEach(() => {
+    mockIdentity.current = true;
+    mockAppendVoiceTurn.mockReset();
     mockStart.mockReset();
     mockSettle.mockReset();
     mockClose.mockReset();
@@ -75,6 +112,42 @@ describe('live voice session backgrounded mid-connect', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('ends the original call instead of starting implicitly in a replacement destination', async () => {
+    const captured: Array<Record<string, (value?: unknown) => void>> = [];
+    mockStart.mockImplementation(async (options: { callbacks: Record<string, (value?: unknown) => void> }) => {
+      captured.push(options.callbacks);
+      return fakeSession(`session-${captured.length}`);
+    });
+    const onEnded = jest.fn();
+    const view = render(<Harness onEnded={onEnded} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalledTimes(1));
+    view.rerender(<Harness onEnded={onEnded} conversationId="conv-2" />);
+    await waitFor(() => expect(onEnded).toHaveBeenCalledWith('ended'));
+    await act(async () => {
+      captured[0]?.['onClosed']?.({ reason: 'expired', seconds: 1 });
+      captured[0]?.['onError']?.('old failure');
+      captured[0]?.['onTranscript']?.({ turnId: 'late', role: 'user', text: 'stale', final: true });
+    });
+    expect(view.getByTestId('status').props.children).toBe('idle');
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockAppendVoiceTurn).not.toHaveBeenCalled();
+  });
+
+  it('suppresses buffered old-account transcript publication', async () => {
+    let original!: Record<string, (value?: unknown) => void>;
+    mockStart.mockImplementation(async (options: { callbacks: typeof original }) => {
+      original = options.callbacks;
+      return fakeSession('session-a');
+    });
+    render(<Harness onEnded={jest.fn()} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+    mockIdentity.current = false;
+    await act(async () => {
+      original['onTranscript']?.({ turnId: 'private', role: 'user', text: 'private', final: true });
+    });
+    expect(mockAppendVoiceTurn).not.toHaveBeenCalled();
   });
 
   it('closes a session that resolves after backgrounding and never attaches it', async () => {

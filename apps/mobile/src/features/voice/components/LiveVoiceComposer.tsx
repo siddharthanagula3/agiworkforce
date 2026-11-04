@@ -3,6 +3,7 @@ import { useLiveVoiceSession } from '@/src/features/voice/hooks/useLiveVoiceSess
 import { LiveVoiceBar } from './LiveVoiceBar';
 
 export interface LiveVoiceComposerProps {
+  executionMode: 'cloud' | 'local';
   visible: boolean;
   conversationId: string | null;
   model: string;
@@ -13,6 +14,7 @@ export interface LiveVoiceComposerProps {
 }
 
 export function LiveVoiceComposer({
+  executionMode,
   visible,
   conversationId,
   model,
@@ -26,6 +28,7 @@ export function LiveVoiceComposer({
     if (!visible) setPaused(false);
   }, [visible]);
   const controller = useLiveVoiceSession({
+    executionMode,
     active: visible && !paused,
     conversationId,
     model,

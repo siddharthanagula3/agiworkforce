@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import { useSession } from '@clerk/expo';
+import { captureLiveVoiceAuthority, type LiveVoiceAuthority } from '@/src/features/voice/services/liveVoiceAuthority';
+import { subscribeCloudAccountEpochChange } from '@/src/features/auth/services/cloudAccountSession';
 import type {
   LiveVoicePendingApproval,
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
 import { isLiveVoice } from '@agiworkforce/types/live-voices';
 import { useChatStore } from '@/stores/chatStore';
+import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
+import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import { getRemoteChatDisabledReason } from '@/services/remoteChatGate';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
 import { applyAudioRoute } from '@/src/features/voice/services/audioRoute';
@@ -45,6 +51,7 @@ export type LiveVoiceStatus = 'idle' | 'connecting' | 'live' | 'error';
 
 const RECONNECT_MAX_ATTEMPTS = 3;
 const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_STABLE_MS = 30_000;
 const TOOL_OUTCOME_LIMIT = 3;
 const EXTEND_LEAD_MS = 15_000;
 const EXTEND_RETRY_MS = 10_000;
@@ -69,6 +76,7 @@ export interface LiveVoiceController {
 }
 
 export interface UseLiveVoiceSessionOptions {
+  executionMode: 'cloud' | 'local';
   active: boolean;
   conversationId: string | null;
   model: string;
@@ -78,6 +86,7 @@ export interface UseLiveVoiceSessionOptions {
 }
 
 export function useLiveVoiceSession({
+  executionMode,
   active,
   conversationId,
   model,
@@ -102,43 +111,77 @@ export function useLiveVoiceSession({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionRef = useRef<LiveVoiceSession | null>(null);
-  const conversationRef = useRef<string | null>(conversationId);
-  const ensureRef = useRef(ensureConversation);
+  const attemptRef = useRef<object | null>(null);
+  const authorityRef = useRef<LiveVoiceAuthority | null>(null);
+  const destinationRef = useRef({ conversationId, executionMode });
+  destinationRef.current = { conversationId, executionMode };
+  const { session: identitySession } = useSession();
   const endedRef = useRef(onEnded);
-  const appendRef = useRef(appendVoiceTurn);
-  const modelRef = useRef(model);
-
-  conversationRef.current = conversationId ?? conversationRef.current;
-  ensureRef.current = ensureConversation;
   endedRef.current = onEnded;
-  const startWorkTaskRef = useRef(onStartWorkTask);
-  startWorkTaskRef.current = onStartWorkTask;
+  const bindingRef = useRef({ model, ensureConversation, onStartWorkTask });
+  bindingRef.current = { model, ensureConversation, onStartWorkTask };
   const offersWorkTask = onStartWorkTask !== undefined;
-  appendRef.current = appendVoiceTurn;
-  modelRef.current = model;
-
-  const recordTurn = useCallback((turn: LiveTranscriptTurn) => {
-    setTurns((previous) => {
-      const index = previous.findIndex((entry) => entry.turnId === turn.turnId);
-      if (index === -1) return [...previous, turn];
-      const next = [...previous];
-      next[index] = turn;
-      return next;
-    });
-    if (!turn.final) return;
-    const target = conversationRef.current;
-    if (!target) return;
-    appendRef.current(target, {
-      id: turn.turnId,
-      role: turn.role,
-      content: turn.text,
-      model: modelRef.current,
-    });
-  }, []);
+  const callBindingRef = useRef<{
+    identity: typeof identitySession;
+    conversationId: string | null;
+    binding: typeof bindingRef.current;
+  } | null>(null);
 
   useEffect(() => {
-    if (!active) return undefined;
+    if (!active) {
+      callBindingRef.current = null;
+      reconnectsRef.current = 0;
+      return undefined;
+    }
+    const existing = callBindingRef.current;
+    if (executionMode !== 'cloud' || !identitySession || !conversationId ||
+        (existing && (existing.identity !== identitySession || existing.conversationId !== conversationId))) {
+      setStatus('idle');
+      endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
+      return undefined;
+    }
+    callBindingRef.current ??= { identity: identitySession, conversationId, binding: bindingRef.current };
     let cancelled = false;
+    let terminal = false;
+    let finalizing = false;
+    const attemptOwner = {};
+    attemptRef.current = attemptOwner;
+    const binding = callBindingRef.current.binding;
+    let target = conversationId;
+    let ownedSession: LiveVoiceSession | null = null;
+    const originalManaged = () => {
+      if (!target) return false;
+      const original = getConversationMessageStore(target).getState().conversations.find((entry) => entry.id === target);
+      return Boolean(original && executionModeForConversation(original) === 'cloud');
+    };
+    const destinationCurrent = () => destinationRef.current.executionMode === 'cloud' &&
+      destinationRef.current.conversationId === target;
+    const authority = captureLiveVoiceAuthority(() => !cancelled && !terminal &&
+      attemptRef.current === attemptOwner && destinationCurrent() && originalManaged() && !getRemoteChatDisabledReason());
+    if (!authority) {
+      setStatus('error');
+      setError(LIVE_VOICE_MESSAGE.connectionFailed);
+      return undefined;
+    }
+    authorityRef.current = authority;
+    const current = () => authority.isCurrent();
+    const recordTurn = (turn: LiveTranscriptTurn) => {
+      const foreground = !cancelled && !terminal && attemptRef.current === attemptOwner && current();
+      if (!foreground && !(finalizing && turn.final)) return;
+      if (!target || !authority.isIdentityCurrent() || !originalManaged()) return;
+      if (foreground) {
+        setTurns((previous) => {
+          const index = previous.findIndex((entry) => entry.turnId === turn.turnId);
+          if (index === -1) return [...previous, turn];
+          const next = [...previous];
+          next[index] = turn;
+          return next;
+        });
+      }
+      if (turn.final) appendVoiceTurn(target, {
+        id: turn.turnId, role: turn.role, content: turn.text, model: binding.model,
+      });
+    };
     setStatus('connecting');
     setError(null);
     if (reconnectsRef.current === 0) {
@@ -151,10 +194,18 @@ export function useLiveVoiceSession({
     setToolActivity([]);
 
     const finish = (session: LiveVoiceSession, closed: LiveSessionClosed) => {
-      void liveVoice?.settleLiveVoiceSession(session.sessionId, closed, session.backendUsage);
+      void session.settle(closed);
+    };
+    const closeOwned = (session: LiveVoiceSession) => {
+      finalizing = true;
+      void session.close().then((closed) => {
+        finalizing = false;
+        finish(session, closed);
+      }, () => { finalizing = false; });
     };
 
     let budgetTimer: ReturnType<typeof setTimeout> | null = null;
+    let stableTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleBudget = (delayMs: number, run: () => void) => {
       if (budgetTimer) clearTimeout(budgetTimer);
       budgetTimer = setTimeout(run, Math.max(0, delayMs));
@@ -165,9 +216,9 @@ export function useLiveVoiceSession({
       let block = FIRST_EXTENSION_BLOCK;
       const msLeft = () => startedAt + ceilingSeconds * 1_000 - Date.now();
       const endAtLimit = (message: string) => {
-        if (cancelled || sessionRef.current !== session) return;
+        if (!current() || sessionRef.current !== session) return;
         sessionRef.current = null;
-        void session.close().then((closed) => finish(session, closed));
+        closeOwned(session);
         setStatus('idle');
         setAssistantSpeaking(false);
         setBackendBusy(false);
@@ -176,9 +227,9 @@ export function useLiveVoiceSession({
         endedRef.current(message);
       };
       const extend = async () => {
-        if (cancelled || sessionRef.current !== session || !liveVoice) return;
-        const result = await liveVoice.extendLiveVoiceSession(session.sessionId, block);
-        if (cancelled || sessionRef.current !== session) return;
+        if (!current() || sessionRef.current !== session) return;
+        const result = await session.extend(block);
+        if (!current() || sessionRef.current !== session) return;
         if (result.ok) {
           ceilingSeconds = Math.max(ceilingSeconds, result.ceilingSeconds);
           block += 1;
@@ -195,45 +246,57 @@ export function useLiveVoiceSession({
     };
 
     const run = async () => {
+      authority.assertCurrent();
       const unavailable = liveVoiceUnavailableReason();
       if (unavailable) throw new Error(unavailable);
       const module = await loadLiveVoice();
-      if (!(await requestMicPermission())) {
+      authority.assertCurrent();
+      const permission = await requestMicPermission();
+      authority.assertCurrent();
+      if (!permission) {
         throw new module.LiveVoiceSessionError(
           LIVE_VOICE_MESSAGE.microphoneDenied,
           'microphone_denied',
         );
       }
       applyAudioRoute(activeAudioRoute());
-      conversationRef.current = (await ensureRef.current()) ?? conversationRef.current;
+      const ensured = target ?? await binding.ensureConversation();
+      authority.assertCurrent();
+      if (!ensured) throw new Error('Voice conversation is unavailable');
+      target = ensured;
+      authority.assertCurrent();
       const chosenVoice = useSettingsStore.getState().liveVoice;
       return module.LiveVoiceSession.start({
+        authority,
         voice: isLiveVoice(chosenVoice) ? chosenVoice : null,
-        conversationId: conversationRef.current,
+        conversationId: target,
         language: activeSpeechLanguage()?.split('-')[0]?.trim().toLowerCase() || null,
         callbacks: {
           onStarted: () => {
-            if (cancelled) return;
-            reconnectsRef.current = 0;
+            if (!current()) return;
+            if (stableTimer) clearTimeout(stableTimer);
+            stableTimer = setTimeout(() => {
+              if (current()) reconnectsRef.current = 0;
+            }, RECONNECT_STABLE_MS);
             setReconnecting(false);
             setStatus('live');
           },
           onAssistantSpeaking: (speaking) => {
-            if (cancelled) return;
+            if (!current()) return;
             setAssistantSpeaking(speaking);
             if (speaking) setInterrupted(false);
           },
           onBackendBusy: (busy) => {
-            if (!cancelled) setBackendBusy(busy);
+            if (current()) setBackendBusy(busy);
           },
           onToolActivity: (activities) => {
-            if (!cancelled) setToolActivity(activities);
+            if (current()) setToolActivity(activities);
           },
           onToolApprovals: (pending) => {
-            if (!cancelled) setApprovals(pending);
+            if (current()) setApprovals(pending);
           },
           onToolResult: (outcome) => {
-            if (cancelled) return;
+            if (!current()) return;
             setToolOutcomes((previous) =>
               [...previous.filter((entry) => entry.callId !== outcome.callId), outcome].slice(
                 -TOOL_OUTCOME_LIMIT,
@@ -242,20 +305,20 @@ export function useLiveVoiceSession({
           },
           onTranscript: recordTurn,
           onInterrupted: () => {
-            if (!cancelled) setInterrupted(true);
+            if (current()) setInterrupted(true);
           },
           onUsage: () => undefined,
           ...(offersWorkTask
             ? {
                 onStartWorkTask: (goal: string) =>
-                  !cancelled && (startWorkTaskRef.current?.(goal) ?? false),
+                  current() && (binding.onStartWorkTask?.(goal) ?? false),
               }
             : {}),
           onClosed: (closed) => {
-            const session = sessionRef.current;
-            sessionRef.current = null;
-            if (session) finish(session, closed);
-            if (cancelled) return;
+            if (!current()) return;
+            terminal = true;
+            if (sessionRef.current === ownedSession) sessionRef.current = null;
+            if (ownedSession) finish(ownedSession, closed);
             setStatus('idle');
             setBackendBusy(false);
             setApprovals([]);
@@ -265,11 +328,12 @@ export function useLiveVoiceSession({
             );
           },
           onProviderError: () => {
-            if (!cancelled) setError(LIVE_VOICE_MESSAGE.providerError);
+            if (current()) setError(LIVE_VOICE_MESSAGE.providerError);
           },
           onError: (message) => {
-            sessionRef.current = null;
-            if (cancelled) return;
+            if (!current()) return;
+            terminal = true;
+            if (sessionRef.current === ownedSession) sessionRef.current = null;
             setStatus('error');
             setReconnecting(false);
             setBackendBusy(false);
@@ -278,12 +342,12 @@ export function useLiveVoiceSession({
             setError(message);
           },
           onConnectionLost: (message) => {
-            const session = sessionRef.current;
-            sessionRef.current = null;
-            if (session) {
-              finish(session, { reason: 'connection_lost', seconds: session.lastUsageSeconds });
+            if (!current()) return;
+            if (stableTimer) clearTimeout(stableTimer);
+            if (sessionRef.current === ownedSession) sessionRef.current = null;
+            if (ownedSession) {
+              finish(ownedSession, { reason: 'connection_lost', seconds: ownedSession.lastUsageSeconds });
             }
-            if (cancelled) return;
             setBackendBusy(false);
             setApprovals([]);
             setToolActivity([]);
@@ -297,7 +361,7 @@ export function useLiveVoiceSession({
             setReconnecting(true);
             setStatus('connecting');
             reconnectTimerRef.current = setTimeout(
-              () => setAttempt((value) => value + 1),
+              () => { if (current()) setAttempt((value) => value + 1); },
               RECONNECT_BASE_MS * 2 ** (reconnectsRef.current - 1),
             );
           },
@@ -307,28 +371,49 @@ export function useLiveVoiceSession({
 
     run().then(
       (session) => {
-        if (cancelled) {
-          void session.close().then((closed) => finish(session, closed));
+        ownedSession = session;
+        if (!current()) {
+          closeOwned(session);
           return;
         }
         sessionRef.current = session;
         trackBudget(session);
       },
       (startError: unknown) => {
-        if (cancelled) return;
+        if (!current()) return;
         setStatus('error');
         setError(startFailureMessage(startError));
       },
     );
 
-    const appState = AppState.addEventListener('change', (nextState) => {
-      // iOS reports 'inactive' while its own microphone prompt is on screen,
-      // which is where the first session asks for access.
-      if (nextState !== 'background' || cancelled) return;
+    const retire = () => {
+      if (cancelled) {
+        if (!authority.isIdentityCurrent()) ownedSession?.dispose();
+        return;
+      }
       cancelled = true;
-      const session = sessionRef.current;
-      sessionRef.current = null;
-      if (session) void session.close().then((closed) => finish(session, closed));
+      if (stableTimer) clearTimeout(stableTimer);
+      if (budgetTimer) clearTimeout(budgetTimer);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+      if (sessionRef.current === ownedSession) sessionRef.current = null;
+      if (ownedSession) closeOwned(ownedSession);
+      authority.retire();
+    };
+    const accountSubscription = subscribeCloudAccountEpochChange(() => {
+      if (authority.isIdentityCurrent()) return;
+      retire();
+      setStatus('idle');
+      setTurns([]);
+      setToolOutcomes([]);
+      setApprovals([]);
+      setToolActivity([]);
+      setBackendBusy(false);
+      endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
+    });
+    const appState = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'background' || cancelled) return;
+      retire();
       setStatus('idle');
       setAssistantSpeaking(false);
       setBackendBusy(false);
@@ -338,21 +423,24 @@ export function useLiveVoiceSession({
     });
 
     return () => {
-      cancelled = true;
-      if (budgetTimer) clearTimeout(budgetTimer);
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
+      retire();
+      if (authorityRef.current === authority) authorityRef.current = null;
+      accountSubscription();
       appState.remove();
-      const session = sessionRef.current;
-      sessionRef.current = null;
       setStatus('idle');
       setAssistantSpeaking(false);
       setBackendBusy(false);
       setApprovals([]);
       setToolActivity([]);
-      if (session) void session.close().then((closed) => finish(session, closed));
     };
-  }, [active, attempt, offersWorkTask, recordTurn]);
+  }, [active, attempt, executionMode, conversationId, identitySession, offersWorkTask, appendVoiceTurn]);
+
+  useEffect(() => {
+    if ((status === 'connecting' || status === 'live') && authorityRef.current && !authorityRef.current.isCurrent()) {
+      setStatus('idle');
+      endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
+    }
+  });
 
   const toggleMute = useCallback(() => {
     setMuted((previous) => {

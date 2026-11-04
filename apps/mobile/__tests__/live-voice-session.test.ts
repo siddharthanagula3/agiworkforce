@@ -82,8 +82,29 @@ jest.mock('react-native-webrtc', () => ({
   mediaDevices: { getUserMedia: (...args: unknown[]) => mockState.getUserMedia(...args) },
 }));
 
+jest.mock('@/src/features/voice/services/liveVoiceAuthority', () => ({
+  LIVE_VOICE_SESSION_PATH: '/api/voice/live/sessions',
+  captureLiveVoiceAuthority: jest.fn(),
+}));
+
 const mockApiFetch = jest.fn();
-jest.mock('@/services/api', () => ({ apiFetch: (...args: unknown[]) => mockApiFetch(...args) }));
+function voiceAuthority() {
+  const controller = new AbortController();
+  return {
+    signal: controller.signal,
+    isCurrent: () => !controller.signal.aborted,
+    isIdentityCurrent: () => true,
+    assertCurrent: () => { if (controller.signal.aborted) throw new Error('retired'); },
+    retire: () => controller.abort(),
+    fetch: (path: string, init?: RequestInit) => mockApiFetch(path, init),
+    closeCreated: async (id: string, body: Record<string, unknown>) => {
+      const response = await mockApiFetch(`/api/voice/live/sessions/${encodeURIComponent(id)}/close`, {
+        method: 'POST', body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error('close failed');
+    },
+  };
+}
 
 jest.mock('react-native', () => ({ NativeModules: { WebRTCModule: {} } }));
 
@@ -146,6 +167,7 @@ function createdResponse() {
 
 async function startSession(cb = callbacks()) {
   const session = await LiveVoiceSession.start({
+    authority: voiceAuthority(),
     voice: null,
     conversationId: 'conv_1',
     language: null,
@@ -170,6 +192,45 @@ describe('LiveVoiceSession', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('stops a microphone granted after cancellation without creating a session', async () => {
+    const authority = voiceAuthority();
+    let grant!: (stream: unknown) => void;
+    mockState.getUserMedia.mockReturnValueOnce(new Promise((resolve) => { grant = resolve; }));
+    const starting = LiveVoiceSession.start({
+      authority, voice: null, conversationId: 'conv_1', language: null, callbacks: callbacks(),
+    });
+    await Promise.resolve();
+    authority.retire();
+    grant({ getTracks: () => mockState.tracks, getAudioTracks: () => mockState.tracks });
+    await expect(starting).rejects.toThrow('retired');
+    expect(mockState.tracks[0]!.stop).toHaveBeenCalled();
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the close acknowledgement window after retiring normal control', async () => {
+    const authority = voiceAuthority();
+    const cb = callbacks();
+    const session = await LiveVoiceSession.start({
+      authority, voice: null, conversationId: 'conv_1', language: null, callbacks: cb,
+    });
+    mockState.peer.channel.receive({ type: 'session.started' });
+    mockState.peer.channel.receive({ type: 'session.input_transcript.delta', delta: 'final ' });
+    const closing = session.close();
+    authority.retire();
+    expect(mockState.peer.closed).toBe(false);
+    mockState.peer.channel.receive({ type: 'session.input_transcript.delta', delta: 'words' });
+    mockState.peer.channel.receive({ type: 'session.closed', usage: { seconds: 21 } });
+    await expect(closing).resolves.toEqual({ reason: 'close_requested', seconds: 21 });
+    expect(cb.turns[cb.turns.length - 1]).toMatchObject({ text: 'final words', final: true });
+  });
+
+  it('closes the exact known session if applying its answer fails', async () => {
+    jest.spyOn(mockState.peer, 'setRemoteDescription').mockRejectedValueOnce(new Error('answer failed'));
+    await expect(startSession()).rejects.toMatchObject({ code: 'connection_failed' });
+    expect(mockApiFetch.mock.calls[1]?.[0]).toBe('/api/voice/live/sessions/live_1/close');
+    expect(mockState.tracks[0]!.stop).toHaveBeenCalled();
   });
 
   it('opens no microphone and sends nothing when Cloud provider consent is declined', async () => {
@@ -505,7 +566,7 @@ describe('LiveVoiceSession', () => {
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
 
-    await settleLiveVoiceSession('live_1', { reason: 'close_requested', seconds: 31 });
+    await settleLiveVoiceSession(voiceAuthority(), 'live_1', { reason: 'close_requested', seconds: 31 });
 
     const [path, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
     expect(path).toBe(`${LIVE_VOICE_SESSION_PATH}/live_1/close`);
@@ -520,7 +581,7 @@ describe('LiveVoiceSession', () => {
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
     const backend = { inputTokens: 900, outputTokens: 120, cachedTokens: 300, webSearchCalls: 1 };
 
-    await settleLiveVoiceSession('live_1', { reason: 'close_requested', seconds: 31 }, backend);
+    await settleLiveVoiceSession(voiceAuthority(), 'live_1', { reason: 'close_requested', seconds: 31 }, backend);
 
     const [, init] = mockApiFetch.mock.calls[0] as [string, { body: string }];
     expect(JSON.parse(init.body)).toMatchObject({ backend });
@@ -530,7 +591,7 @@ describe('LiveVoiceSession', () => {
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({ ceilingSeconds: 120 }) });
 
-    await expect(extendLiveVoiceSession('live_1', 2)).resolves.toEqual({
+    await expect(extendLiveVoiceSession(voiceAuthority(), 'live_1', 2)).resolves.toEqual({
       ok: true,
       ceilingSeconds: 120,
     });
@@ -552,7 +613,7 @@ describe('LiveVoiceSession', () => {
       }),
     });
 
-    await expect(extendLiveVoiceSession('live_1', 3)).resolves.toEqual({
+    await expect(extendLiveVoiceSession(voiceAuthority(), 'live_1', 3)).resolves.toEqual({
       ok: false,
       retry: false,
       message: 'Your rolling 5-hour usage limit is reached.',

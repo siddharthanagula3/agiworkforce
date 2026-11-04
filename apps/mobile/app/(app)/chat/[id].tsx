@@ -2097,6 +2097,7 @@ export default function ChatScreen() {
         {/* Full-duplex voice for a cloud conversation: the same live session the
             web app runs, sharing this conversation's thread. */}
         <LiveVoiceComposer
+          executionMode={conversationExecutionMode}
           visible={liveVoiceVisible}
           conversationId={id ?? null}
           model={selectedModel}
