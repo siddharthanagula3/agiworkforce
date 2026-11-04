@@ -2596,9 +2596,33 @@ signed-out reads, current group accounting, observed navigation/boundary changes
 late data/empty/error suppression and replacement busy state. All are unexecuted;
 no native, browser, SDK event-order, tests/checks or runtime acceptance is asserted.
 
+## Memory editor optional pin capability stays with its supplied adapter
+
+Accepted commit `2c011ad433c2f774ba840c1e97c5ddf8d1de9434` changes
+`packages/ui/unified-chat/src/components/MemoryEditor.tsx` and one fixture source.
+A supplied adapter without `setPinned` now disables/refuses pinning with an
+accessible explanation, instead of falling through to the shared store method.
+Without an adapter, standalone shared-store pinning remains. Other adapter
+operations are not redesigned. Real adapter and default-store IDs usually differ;
+this is a capability-boundary correction, not an observed wrong-memory mutation.
+Fixtures intentionally use colliding IDs to detect fallback, plus supplied-capable
+and standalone cases; all remain unexecuted.
+
+Separate OPEN `WEB-MEMORY-OWNER-BACKLOG-01` records the shared web store's missing
+operation/persisted-owner boundary. Logout reset does not retire pending hydration,
+remove rollback or clear; v1 facts lack account/workspace provenance and hydration
+can replay unsaved text with ambient credentials, omitting its project. Existing
+server authorization and ordinary workspace hard reload remain counterguards.
+Coherent operation ownership and explicit legacy-data handling are required;
+unknown-owner backlog must not be guessed into a new scope or deleted as a repair.
+Existing logout reset and storage purge remain unchanged: inert migration/use
+does not authorize retaining private legacy data across logout.
+Settings preference queues/caches are separate, not covered by this finding or
+pin correction. No tests/checks or live memory actions ran.
+
 ## Reconstruction boundary
 
-Only the ninety-six accepted production slices traced above are represented as
+Only the ninety-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

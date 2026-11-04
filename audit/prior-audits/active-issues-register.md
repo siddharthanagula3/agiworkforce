@@ -8974,3 +8974,50 @@ confirmation is a product/contract decision. No automatic widening, blanket
 refusal, financial behavior, production redesign or implementation-ready solution
 is approved here. This remains separate from client stale-notice ownership.
 Source-only review; no tests, checks, DB reads/writes or memory deletion executed.
+
+## WEB-MEMORY-OWNER-BACKLOG-01
+
+Severity: Medium. Status: OPEN source-backed operation/backlog ownership design
+constraint, 2026-11-04. No observed loss, exploit or runtime reproduction.
+
+`packages/ui/unified-chat/src/stores/memoryStore.ts` persists nonpending facts
+under `agi-memory-store-v1` without account/session/workspace owner metadata.
+`resetOnLogout` empties state but does not invalidate pending operations:
+hydration can publish previously fetched rows afterward, failed remove can reinsert
+its captured target, and late clear can empty replacement state. Requests use
+ambient same-origin cookies through `memoryRequest`, including after CSRF awaits,
+without an original-owner generation. Web Settings `MemorySection` uses this
+store and the standalone MemoryEditor, whose effect hydrates on mount.
+
+Hydration additionally snapshots unsaved backlog after fetching server rows and
+loops over `createServerMemory(fact.text)` without an owner check between writes.
+It omits the fact's project argument. A change of ambient account/workspace can
+therefore retarget later requests; persisted unknown-owner records can also be
+replayed on a later hydrate. This is a source-derived continuity/provenance risk,
+not evidence that another user's server rows bypass RLS or that such replay ran.
+
+Counterguards: authentication cleanup discovers unified-chat stores and calls
+resetOnLogout; server memory routes use authenticated user-scoped DB, organization
+predicates, project validation, CSRF and ordinary memory policy. Workspace cleanup
+excludes the unified memory store/key, but normal `finalizeWorkspaceSwitch` cancels
+query work and hard-reloads/replaces the page. That limits a normal same-tab live
+continuation; it does not supply persisted fact provenance or retire every pending
+callback before cleanup completes. Native Tauri/React Native are excluded by this
+store's server-sync detection. Existing server IDs and random local IDs constrain
+some stale updates, but full hydration/rollback publication remains unowned.
+
+A coherent design needs operation-entry account/session and admitted immutable
+workspace/project ownership through awaits, publication and rollback; scoped
+cache/storage policy; and explicit recovery/migration treatment for v1 records
+whose owner cannot be proven. Keep unknown-owner backlog inert pending that
+product decision, rather than silently assigning it to the current account,
+replaying it or deleting it. This is a design requirement, not implemented
+containment. Existing logout reset/storage purge (including persist.clearStorage
+and the broad agi-prefixed key purge) must remain unchanged. There is no permission
+to retain private legacy data across logout; leaving backlog inert during
+migration/use does not promise preservation across logout. No deletion/adoption,
+broad memory migration or implementation-ready
+patch is authorized. Settings preferences queue/cache ownership is a separate
+assessment and is not bundled here. Adapter pin correction `2c011ad433` does not
+fix this shared-store lifecycle. Source-only review; no tests/checks, credentials,
+network, DB or memory mutation actions.
