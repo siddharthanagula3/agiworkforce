@@ -3875,9 +3875,41 @@ GET ownership/signals and confirmed restore versus reconciliation failure. No
 tests, checks, builds, native UI, database mutation or network actions were run;
 all regression sources remain unexecuted.
 
+## All-chat bulk confirmations retain their rendered focused intent
+
+Accepted commit `ce9ac3938326593d2cde6c43bdddf2ac95705051` changes Data
+Controls, the archived-chat service and two fixture sources. Each rendered bulk
+entry retains its focused account scope. Synchronous subscriptions retire scopes
+on account, auth, mode and access changes; blur/unmount also retires them. One
+exclusive intent spans both native confirmation stages and execution. Phase
+changes consume saved buttons once, while Cancel/dismiss can retire only their
+own still-pending stage. Old callbacks cannot recreate a second confirmation,
+rebind to a replacement scope or clear a newer operation's busy state.
+
+Archive-all and delete-all services now require their original account epoch and
+forward optional abort signals. The API boundary already fences account generation
+in flight; this closes admission from saved intent rather than establishing a
+server authorization bypass. Existing server user/organization filters and the
+separate Local-to-Cloud copy flow remain unchanged. Aborting a dispatched mutation
+does not prove rollback.
+
+Acknowledged mutation counts remain acknowledged when the active-chat list cannot
+refresh. The screen reads the actual store's `conversationLoadError` after its
+resolving helper, and separately handles rejection. The shared error field is not
+a per-request result, so exact attribution under concurrent list reloads remains
+a store-contract limitation. Unconfirmed mutation responses use uncertain-outcome
+copy and ask the user to inspect Cloud history before starting another bulk action.
+
+Independent source review accepted the bounded change. Deferred fixture sources
+cover both actions, confirmation duplication and dismissal, rendered callback
+replacement, focus/account/auth/mode/access round trips, stale receipt/finally,
+real resolved refresh errors, original epoch and abort propagation. Both affected
+screen mocks were migrated. No tests, checks, builds, native UI, database mutation
+or network actions were run; regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-two accepted production slices traced above are represented as
+Only the one hundred and thirty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
