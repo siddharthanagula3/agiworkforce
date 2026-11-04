@@ -3840,9 +3840,44 @@ reuse, original-epoch forwarding, retired receipt/error publication and replacem
 busy state. No tests, checks, builds, native UI, database mutation or network
 actions were run; all regression sources remain unexecuted.
 
+## Archived list reconciliation owns its focused session and read revision
+
+Accepted commit `e6cba3f2f60c2c0dbb0b72fcd08e0736d7c254ce` changes the
+Archived Chats screen/service and two fixture sources. Focused owners retire
+synchronously on account, authentication and mode transitions, plus blur/unmount.
+Each first-page read supersedes its predecessor; paging requires the exact ready
+list and exclusive current read. Retired bodies, failures and finally cleanup
+cannot replace current rows, offsets or loading indicators. Archived GET carries
+its captured account epoch through the canonical API boundary.
+
+Mutation admission takes a synchronous exclusive lease and retires pending reads.
+After either acknowledged success or uncertain failure, the screen starts a new
+owned first-page read instead of keeping a locally shortened list with its old
+offset. Read failure leaves no stale paging cursor to reuse. This prevents this
+screen's own deletion/restoration from skipping the next unseen row and prevents
+an older page from repopulating removed rows. A saved delete confirmation retains
+its original focused owner across ordinary refresh, but not account/mode/focus
+retirement, and still consumes once. Optional abort signals preserve archive-menu
+and Undo callers while stopping retired screen observers.
+
+A confirmed restore is not mislabeled as failure when archived reconciliation
+fails. The existing active-chat refresh helper catches transport failure and
+resolves after setting `conversationLoadError`; its mocked rejection fixture does
+not establish the screen's production fallback alert. That preexisting limitation
+remains. Aborting a dispatched mutation does not establish server rollback, and
+this offset-based protocol does not promise a stable snapshot under external
+concurrent writers. Cursor migration remains separate.
+
+Independent source review accepted the bounded patch. Deferred fixture sources
+cover read/page ordering, stale finally cleanup, account and mode round trips,
+blur/unmount, mutation exclusion, first-page offset reset, saved confirmations,
+GET ownership/signals and confirmed restore versus reconciliation failure. No
+tests, checks, builds, native UI, database mutation or network actions were run;
+all regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-one accepted production slices traced above are represented as
+Only the one hundred and thirty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
