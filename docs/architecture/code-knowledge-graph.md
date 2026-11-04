@@ -943,11 +943,36 @@ The authored normal-conversion, forged-header and cumulative-budget fixtures are
 unexecuted; no new dedicated Unicode/metadata, absolute-200-MiB or member-limit
 fixture establishes those boundaries. Pinned JSZip 3.10.2 behavior is unverified;
 the implementation worker's local dependency source inspection was 3.10.1, not
-pinned-version/runtime acceptance. Pending browser preview changes are excluded.
+pinned-version/runtime acceptance. Browser consumers are traced separately in the following section.
+
+## Browser Office consumed-byte budgets
+
+Reconstructed commit: `e50ec620214f6d65e6bdb62db304384201569e46` changes six
+production files and three unexecuted fixture sources. Pure web-local
+`lib/security/archive-budget.ts` owns the shared budget/error class; the server
+facade reexports the same constructor, with Node member-reader behavior unchanged.
+Browser `office-archive.ts` now enforces the existing server limits: 2,000
+nondirectory members and the smaller of 200 MiB or 120× compressed input size.
+
+XLSX/PPTX preview readers spend actual inflated chunks before retaining them,
+sharing one budget across consumed XML, relationships and image members.
+Unreferenced parts are not inflated in these readers. Oversized slide images still
+skip at the existing 450,000-byte limit, but observed bytes, including the chunk
+crossing that limit, consume budget; a global budget failure is not hidden as an
+image skip. `ArtifactPreview`'s actual DOCX conversion path uses a rebuilt STORE
+archive containing all admitted nondirectory member bytes before calling Mammoth.
+
+Public preview APIs, workbook cache and UI cancellation semantics remain unchanged.
+Input/download buffers, ZIP metadata and the current inflate chunk can allocate
+before these gates; DOM/Mammoth conversion, sparse spreadsheet/table output and
+cached results are separate costs. This is not a universal heap or CPU limit.
+Fixture source exercises budgets, preview refusal and STORE reconstruction, but
+has no actual Mammoth-interception or late-event-after-pause coverage and was not
+executed. No browser, dependency-version or runtime acceptance is claimed.
 
 ## Reconstruction boundary
 
-Only the thirty-nine accepted production slices traced above are represented as
+Only the forty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
