@@ -1,3 +1,4 @@
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 import {
   officeMemberText,
   openOfficeArchive,
@@ -141,9 +142,27 @@ export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
   return rendered.join('\n\n---\n\n');
 }
 
-function columnIndex(reference: string): number {
+export const WORKBOOK_PREVIEW_TOO_LARGE =
+  'Workbook preview is too large to display. Download the original XLSX file to view all sheets.';
+
+export class WorkbookPreviewLimitError extends Error {
+  constructor() {
+    super(WORKBOOK_PREVIEW_TOO_LARGE);
+    this.name = 'WorkbookPreviewLimitError';
+  }
+}
+
+function columnIndex(reference: string, remaining: number): number {
   const letters = /^[A-Z]+/.exec(reference)?.[0] ?? 'A';
-  return [...letters].reduce((total, letter) => total * 26 + (letter.charCodeAt(0) - 64), 0) - 1;
+  let column = 0;
+  for (const letter of letters) {
+    const digit = letter.charCodeAt(0) - 64;
+    if (column > Math.floor((remaining + 1 - digit) / 26)) {
+      throw new WorkbookPreviewLimitError();
+    }
+    column = column * 26 + digit;
+  }
+  return column - 1;
 }
 
 function csvCell(value: string): string {
@@ -157,33 +176,79 @@ export interface WorkbookSheet {
   csv: string;
 }
 
-function sheetCsv(sheetXml: string, shared: readonly string[]): string {
-  const rows: string[][] = [];
+function escapedCellLength(parts: readonly string[], remaining: number): number {
+  let length = 0;
+  let quoted = false;
+  for (const part of parts) {
+    if (part.length > remaining - length) throw new WorkbookPreviewLimitError();
+    length += part.length;
+    for (const character of part) {
+      if (character === '"') {
+        if (length === remaining) throw new WorkbookPreviewLimitError();
+        length += 1;
+      }
+      if (character === '"' || character === ',' || character === '\n' || character === '\r') {
+        quoted = true;
+      }
+    }
+  }
+  if (quoted) {
+    if (remaining - length < 2) throw new WorkbookPreviewLimitError();
+    length += 2;
+  }
+  return length;
+}
+
+function sheetCsv(sheetXml: string, shared: readonly string[], remaining: number): string {
+  const rows: Map<number, readonly string[]>[] = [];
+  let width = 0;
   for (const row of elementsByLocalName(parseXml(sheetXml), 'row')) {
-    const cells: string[] = [];
+    if (rows.length > remaining) throw new WorkbookPreviewLimitError();
+    const cells = new Map<number, readonly string[]>();
     for (const cell of elementsByLocalName(row, 'c')) {
-      const index = columnIndex(cell.getAttribute('r') ?? '');
+      const index = columnIndex(cell.getAttribute('r') ?? '', remaining);
+      width = Math.max(width, index + 1);
       const type = cell.getAttribute('t');
       const cachedNode = elementsByLocalName(cell, 'v')[0];
       const raw = cachedNode?.textContent ?? '';
       const hasFormula = elementsByLocalName(cell, 'f').length > 0;
-      const value =
+      const parts =
         hasFormula && (!cachedNode || raw === '')
-          ? XLSX_NOT_CALCULATED
+          ? [XLSX_NOT_CALCULATED]
           : type === 's'
-            ? (shared[Number(raw)] ?? '')
+            ? [shared[Number(raw)] ?? '']
             : type === 'inlineStr'
-              ? elementsByLocalName(cell, 't')
-                  .map((node) => node.textContent ?? '')
-                  .join('')
-              : raw;
-      cells[index] = value;
+              ? elementsByLocalName(cell, 't').map((node) => node.textContent ?? '')
+              : [raw];
+      cells.set(index, parts);
     }
-    rows.push(Array.from(cells, (value) => value ?? ''));
+    rows.push(cells);
   }
-  const width = Math.max(0, ...rows.map((row) => row.length));
+  const newlines = Math.max(0, rows.length - 1);
+  const commasPerRow = Math.max(0, width - 1);
+  if (
+    newlines > remaining ||
+    (rows.length > 0 && commasPerRow > Math.floor((remaining - newlines) / rows.length))
+  ) {
+    throw new WorkbookPreviewLimitError();
+  }
+  let length = newlines + rows.length * commasPerRow;
+  for (const row of rows) {
+    for (const parts of row.values()) {
+      length += escapedCellLength(parts, remaining - length);
+    }
+  }
   return rows
-    .map((row) => Array.from({ length: width }, (_, index) => csvCell(row[index] ?? '')).join(','))
+    .map((row) => {
+      const chunks: string[] = [];
+      let previous = 0;
+      for (const [index, parts] of [...row.entries()].sort(([a], [b]) => a - b)) {
+        chunks.push(','.repeat(index - previous), csvCell(parts.join('')));
+        previous = index;
+      }
+      chunks.push(','.repeat(Math.max(0, width - 1 - previous)));
+      return chunks.join('');
+    })
     .join('\n');
 }
 
@@ -222,9 +287,14 @@ export async function xlsxSheets(data: ArrayBuffer): Promise<WorkbookSheet[]> {
       )
     : [];
   const sheets: WorkbookSheet[] = [];
+  let remaining = MAX_FILE_TEXT_CHARS;
   for (const entry of await sheetEntries(archive)) {
     const sheetXml = await officeMemberText(archive, entry.path);
-    if (sheetXml !== undefined) sheets.push({ name: entry.name, csv: sheetCsv(sheetXml, shared) });
+    if (sheetXml !== undefined) {
+      const csv = sheetCsv(sheetXml, shared, remaining);
+      remaining -= csv.length;
+      sheets.push({ name: entry.name, csv });
+    }
   }
   return sheets;
 }

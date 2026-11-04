@@ -210,7 +210,12 @@ import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
-import { loadWorkbookSheets, pptxToSlidesMarkdown } from '../../lib/office-file-preview';
+import {
+  loadWorkbookSheets,
+  pptxToSlidesMarkdown,
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
@@ -1565,9 +1570,9 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [generatedFiles, generatedTextContent]);
 
-  const [officePreviews, setOfficePreviews] = useState<Record<string, string | { failed: true }>>(
-    {},
-  );
+  const [officePreviews, setOfficePreviews] = useState<
+    Record<string, string | { failed: true; tooLarge: boolean }>
+  >({});
   useEffect(() => {
     const pending = generatedFiles.filter(
       (f) =>
@@ -1589,8 +1594,12 @@ const MessageBubbleComponent = function MessageBubble({
         .then((preview) => {
           if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: preview }));
         })
-        .catch(() => {
-          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: { failed: true } }));
+        .catch((error: unknown) => {
+          if (!cancelled)
+            setOfficePreviews((prev) => ({
+              ...prev,
+              [file.id]: { failed: true, tooLarge: error instanceof WorkbookPreviewLimitError },
+            }));
         });
     }
     return () => {
@@ -3102,6 +3111,16 @@ const MessageBubbleComponent = function MessageBubble({
               <span>{attachmentTruncationNotice}</span>
             </p>
           )}
+
+          {!isUser &&
+            generatedFiles.map((file) => {
+              const preview = officePreviews[file.id];
+              return typeof preview === 'object' && preview.tooLarge ? (
+                <p key={file.id} role="status" className="mt-2 text-sm text-muted-foreground">
+                  {file.fileName}: {WORKBOOK_PREVIEW_TOO_LARGE}
+                </p>
+              ) : null;
+            })}
 
           {deliverables.length > 0 && (
             <div

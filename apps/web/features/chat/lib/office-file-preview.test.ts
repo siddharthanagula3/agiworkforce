@@ -1,3 +1,4 @@
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 import JSZip from 'jszip';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -7,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DecompressionLimitError } from '@/lib/security/archive-budget';
 import {
   XLSX_NOT_CALCULATED,
+  WorkbookPreviewLimitError,
   loadWorkbookSheets,
   pptxToSlidesMarkdown,
   xlsxSheets,
@@ -241,5 +243,99 @@ describe('loadWorkbookSheets', () => {
     await expect(loadWorkbookSheets('/api/files/retry')).rejects.toThrow('HTTP 500');
     await expect(loadWorkbookSheets('/api/files/retry')).resolves.toHaveLength(3);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+
+describe('workbook serialized preview bound', () => {
+  it('accepts the exact bound and rejects one extra UTF-16 code unit', async () => {
+    const text = '😀'.repeat(MAX_FILE_TEXT_CHARS / 2);
+    expect(await xlsxFirstSheetToCsv(await workbook(`<row><c r="A1"><v>${text}</v></c></row>`))).toBe(text);
+    await expect(
+      xlsxSheets(await workbook(`<row><c r="A1"><v>${text}x</v></c></row>`)),
+    ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+  });
+
+  it('rejects an astronomical column reference before sparse expansion', async () => {
+    await expect(
+      xlsxSheets(await workbook('<row><c r="ZZZZZZZZZZZZZZZZZZ1"><v>x</v></c></row>')),
+    ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+  });
+
+  it('counts rectangular padding across all rows', async () => {
+    await expect(
+      xlsxSheets(await workbook('<row><c r="ZZZ1"/></row>' + '<row/>'.repeat(11))),
+    ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+  });
+
+  it('counts CSV quoting before allocating its escaped output', async () => {
+    const quotes = '&quot;'.repeat(MAX_FILE_TEXT_CHARS / 2);
+    await expect(
+      xlsxSheets(await workbook(`<row><c r="A1"><v>${quotes}</v></c></row>`)),
+    ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+    const accepted = '&quot;'.repeat((MAX_FILE_TEXT_CHARS - 2) / 2);
+    expect((await xlsxFirstSheetToCsv(await workbook(`<row><c><v>${accepted}</v></c></row>`))).length)
+      .toBe(MAX_FILE_TEXT_CHARS);
+  });
+
+  it('preserves order, sparse padding, duplicate overwrites and reference fallbacks', async () => {
+    expect(await xlsxFirstSheetToCsv(await workbook(
+      '<row r="9"><c r="C9"><v>last</v></c><c r="A9"><v>old</v></c>' +
+      '<c r="A9"><v>new</v></c><c r="Bjunk"><v>middle</v></c></row>' +
+      '<row/><row r="1"><c r="lowercase"><v>fallback</v></c></row>',
+    ))).toBe('new,middle,last\n,,\nfallback,,');
+  });
+
+  it('accounts only for the final value at a duplicated column', async () => {
+    expect(await xlsxFirstSheetToCsv(await workbook(
+      `<row><c r="A1"><v>${'x'.repeat(MAX_FILE_TEXT_CHARS + 1)}</v></c><c r="A1"/></row>`,
+    ))).toBe('');
+  });
+
+  it('retains inline rich-text escaping across text runs', async () => {
+    expect(await xlsxFirstSheetToCsv(await workbook(
+      '<row><c r="B1" t="inlineStr"><is><r><t>a,&quot;</t></r><r><t>b&#13;&#10;</t></r></is></c></row>',
+    ))).toBe(',"a,""b\r\n"');
+  });
+
+  async function repeatedSharedWorkbook(sheets: number, cells: number): Promise<ArrayBuffer> {
+    const zip = new JSZip();
+    zip.file('xl/sharedStrings.xml', `<sst><si><t>${'x'.repeat(MAX_FILE_TEXT_CHARS / 2 + 1)}</t></si></sst>`);
+    zip.file('xl/workbook.xml', `<workbook xmlns:r="${REL_NS}"><sheets>${Array.from(
+      { length: sheets }, (_, i) => `<sheet name="Sheet${i}" r:id="r${i}"/>`,
+    ).join('')}</sheets></workbook>`);
+    zip.file('xl/_rels/workbook.xml.rels', `<Relationships>${Array.from(
+      { length: sheets }, (_, i) => `<Relationship Id="r${i}" Target="worksheets/sheet${i}.xml"/>`,
+    ).join('')}</Relationships>`);
+    for (let i = 0; i < sheets; i += 1) {
+      zip.file(`xl/worksheets/sheet${i}.xml`, worksheet(`<row>${Array.from(
+        { length: cells }, (_, j) => `<c r="${String.fromCharCode(65 + j)}1" t="s"><v>0</v></c>`,
+      ).join('')}</row>`));
+    }
+    return zip.generateAsync({ type: 'arraybuffer' });
+  }
+
+  it('charges every repeated shared-string reference within a sheet', async () => {
+    await expect(xlsxSheets(await repeatedSharedWorkbook(1, 2)))
+      .rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+  });
+
+  it('rejects the whole workbook when a later sheet exceeds the remaining allowance', async () => {
+    await expect(xlsxSheets(await repeatedSharedWorkbook(2, 1)))
+      .rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+  });
+
+  it('allows a fresh load after a workbook output refusal', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(await repeatedSharedWorkbook(2, 1)))
+      .mockResolvedValueOnce(new Response(await workbook('<row><c><v>ok</v></c></row>'))));
+    try {
+      await expect(loadWorkbookSheets('/api/files/output-bound-retry'))
+        .rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+      await expect(loadWorkbookSheets('/api/files/output-bound-retry'))
+        .resolves.toEqual([{ name: 'Sheet1', csv: 'ok' }]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

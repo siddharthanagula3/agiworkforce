@@ -93,7 +93,11 @@ import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
-import { loadWorkbookSheets } from '../../lib/office-file-preview';
+import {
+  loadWorkbookSheets,
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
 import { storedOfficeArchive } from '../../lib/office-archive';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
@@ -1639,19 +1643,25 @@ export function ArtifactPreview({
     uri: string;
     sheets: { name: string; content: string }[];
   } | null>(null);
+  const [oversizedWorkbookUri, setOversizedWorkbookUri] = useState<string | null>(null);
   useEffect(() => {
     if (!workbookUri) return;
     let cancelled = false;
     loadWorkbookSheets(workbookUri)
       .then((sheets) => {
-        if (!cancelled)
+        if (!cancelled) {
+          setOversizedWorkbookUri(null);
           setWorkbookSheets({
             uri: workbookUri,
             sheets: sheets.map((sheet) => ({ name: sheet.name, content: sheet.csv })),
           });
+        }
       })
-      .catch(() => {
-        if (!cancelled) setWorkbookSheets(null);
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setWorkbookSheets(null);
+          setOversizedWorkbookUri(error instanceof WorkbookPreviewLimitError ? workbookUri : null);
+        }
       });
     return () => {
       cancelled = true;
@@ -1725,6 +1735,11 @@ export function ArtifactPreview({
 
   const renderSharedPreview = (containerClassName: string) => (
     <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
+      {workbookUri && oversizedWorkbookUri === workbookUri && (
+        <p role="status" className="p-3 text-sm text-muted-foreground">
+          {WORKBOOK_PREVIEW_TOO_LARGE}
+        </p>
+      )}
       {isTabular ? (
         <SpreadsheetArtifact
           artifact={sharedArtifactView}
