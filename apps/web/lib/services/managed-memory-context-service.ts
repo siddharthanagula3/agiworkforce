@@ -735,9 +735,11 @@ export async function memoryWriteAdmission(
 export async function writeConsolidatedMemory(
   db: ManagedMemoryContextDb,
   write: ConsolidatedMemoryWrite,
-  options: { policies?: MemoryWritePolicies } = {},
+  options: { policies?: MemoryWritePolicies; signal?: AbortSignal } = {},
 ): Promise<ConsolidatedMemoryRow | null> {
+  options.signal?.throwIfAborted();
   const decision = await memoryWriteAdmission(db, write, options);
+  options.signal?.throwIfAborted();
   if (!decision.eligible) {
     if (CONTENT_REFUSAL_REASONS.has(decision.reason)) {
       recordDenial({
@@ -757,6 +759,7 @@ export async function writeConsolidatedMemory(
 
   const topic = memoryConflictTopic(write.content);
   const topicPatterns = topic ? topic.prefixes.map((prefix) => `${prefix} %`) : [];
+  options.signal?.throwIfAborted();
   const [row] = await db.query<ConsolidatedMemoryRow>(
     `with incoming as materialized (
        select coalesce($2::uuid, gen_random_uuid()) as id,

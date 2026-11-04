@@ -2136,11 +2136,13 @@ function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, 
 function callerScopedDb(
   executionContext: { organizationId: string | null } | undefined,
   userId: string,
+  signal?: AbortSignal,
 ): DatabaseAdapter {
-  return createClaimedUserScopedDb(getNeonDb(), {
-    userId,
-    organizationId: executionContext?.organizationId ?? null,
-  });
+  return createClaimedUserScopedDb(
+    getNeonDb(),
+    { userId, organizationId: executionContext?.organizationId ?? null },
+    { signal },
+  );
 }
 
 function googleHostedServerIdsOf(tools: readonly WebMcpToolDef[]): ReadonlySet<string> {
@@ -2250,6 +2252,7 @@ async function runMcpTool(
     latestUserMessage?: string;
   },
 ): Promise<ToolLoopToolResult> {
+  executionContext?.signal?.throwIfAborted();
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
     if (!availableTools.has(SKILL_TOOL_NAME)) {
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
@@ -2321,7 +2324,8 @@ async function runMcpTool(
       return { content: 'A signed-in account is required to create a schedule.', isError: true };
     }
     return executeScheduleTool(toolCall.args, {
-      db: callerScopedDb(executionContext, executionContext.userId),
+      db: callerScopedDb(executionContext, executionContext.userId, executionContext.signal),
+      signal: executionContext.signal,
       userId: executionContext.userId,
       clientTimeZone: executionContext.clientTimeZone,
       temporaryChat: executionContext.temporaryChat === true,
@@ -2381,7 +2385,8 @@ async function runMcpTool(
       return { content: GOOGLE_USER_DATA_MEMORY_REFUSAL, isError: true };
     }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
-      db: callerScopedDb(executionContext, executionContext.userId),
+      db: callerScopedDb(executionContext, executionContext.userId, executionContext.signal),
+      signal: executionContext.signal,
       userId: executionContext.userId,
       organizationId: executionContext.organizationId,
       source: memoryToolSource(executionContext.surface),

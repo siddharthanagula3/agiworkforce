@@ -72,6 +72,7 @@ export interface MemoryCommandScope {
   temporaryChat?: boolean;
   source?: string;
   userRequested?: boolean;
+  signal?: AbortSignal;
 }
 
 const MEMORY_OFF_REASONS: ReadonlySet<MemoryIneligibilityReason> = new Set([
@@ -102,6 +103,7 @@ export function createMemoryCommandPorts(
       projectId: scope.projectId ?? null,
     });
     const resolved = await visibleScope;
+    scope.signal?.throwIfAborted();
     return memoryScopePredicate(resolved, resolved.projectId ? values.push(resolved.projectId) : 0);
   };
   return {
@@ -110,10 +112,12 @@ export function createMemoryCommandPorts(
      * An explicit ask does not buy a way around either.
      */
     checkEligibility: async (fact) => {
+      scope.signal?.throwIfAborted();
       const exclusion = matchedMemoryExclusion(
         fact,
         await loadMemoryExclusions(db, { userId: scope.userId }),
       );
+      scope.signal?.throwIfAborted();
       if (exclusion !== null) {
         return { eligible: false, reason: 'excluded', message: excludedMemoryMessage(exclusion) };
       }
@@ -128,6 +132,7 @@ export function createMemoryCommandPorts(
         temporaryChat: scope.temporaryChat === true,
         userRequested: scope.userRequested === true,
       });
+      scope.signal?.throwIfAborted();
       if (decision.eligible) return { eligible: true };
       return {
         eligible: false,
@@ -137,30 +142,38 @@ export function createMemoryCommandPorts(
     },
 
     store: async ({ fact, category }) => {
+      scope.signal?.throwIfAborted();
       try {
-        const row = await writeConsolidatedMemory(db, {
-          userId: scope.userId,
-          content: fact,
-          category,
-          source: scope.source ?? MEMORY_COMMAND_SOURCE,
-          organizationId: scope.organizationId,
-          projectId: scope.projectId ?? null,
-          userRequested: scope.userRequested === true,
-        });
+        const row = await writeConsolidatedMemory(
+          db,
+          {
+            userId: scope.userId,
+            content: fact,
+            category,
+            source: scope.source ?? MEMORY_COMMAND_SOURCE,
+            organizationId: scope.organizationId,
+            projectId: scope.projectId ?? null,
+            userRequested: scope.userRequested === true,
+          },
+          { signal: scope.signal },
+        );
         if (!row) return 'not_stored';
         if (row.outcome === 'merged') return 'already_known';
         return row.superseded_by ? 'overruled' : 'stored';
       } catch (error) {
+        if (scope.signal?.aborted && error === scope.signal.reason) throw error;
         if (error instanceof MemoryIneligibleError) return 'not_stored';
         throw error;
       }
     },
 
     find: async (subject) => {
+      scope.signal?.throwIfAborted();
       const trimmed = subject.trim();
       if (trimmed.length < MIN_FORGET_SUBJECT_CHARS) return [];
       const values: unknown[] = [scope.userId, likePattern(trimmed), scope.organizationId];
       const visible = await visibleMemories(values);
+      scope.signal?.throwIfAborted();
       return db.query<MemoryCommandMatch>(
         `select id::text as id, content
            from user_memories
@@ -180,9 +193,11 @@ export function createMemoryCommandPorts(
      * forgotten; the stored row keeps no copy of it.
      */
     remove: async (ids) => {
+      scope.signal?.throwIfAborted();
       if (ids.length === 0) return [];
       const values: unknown[] = [scope.userId, ids, scope.organizationId];
       const visible = await visibleMemories(values);
+      scope.signal?.throwIfAborted();
       return db.query<MemoryCommandMatch>(
         `with target as (
            select id, content

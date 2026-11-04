@@ -937,13 +937,16 @@ export async function createSchedule(
   db: DatabaseAdapter,
   userId: string,
   input: ScheduleInput,
-  options: { planTier: string; now?: Date },
+  options: { planTier: string; now?: Date; signal?: AbortSignal },
 ): Promise<ScheduleTask> {
+  options.signal?.throwIfAborted();
   const definition = validateScheduleInput(input, options.now ?? new Date(), {
     planTier: options.planTier,
   });
   if (definition.projectId) await assertProjectOwnership(db, userId, definition.projectId);
+  options.signal?.throwIfAborted();
   if (definition.agentId) await assertScheduleAgent(db, userId, definition.agentId);
+  options.signal?.throwIfAborted();
   const [row] = await db.query<TaskRow>(
     `insert into scheduled_tasks (
        user_id, name, description, schedule_type, cron_expression, execute_at,
