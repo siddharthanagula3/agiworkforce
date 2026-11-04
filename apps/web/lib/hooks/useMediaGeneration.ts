@@ -146,6 +146,7 @@ interface ActiveImageGeneration {
   controller: AbortController;
   idempotencyKey: string;
   cancelled: boolean;
+  requestStarted: boolean;
 }
 
 const activeImageGenerations = new Map<string, ActiveImageGeneration>();
@@ -169,7 +170,9 @@ export function cancelImageGenerations(scope: string): boolean {
     if (generation.scope !== scope || generation.cancelled) continue;
     generation.cancelled = true;
     generation.controller.abort();
-    void requestImageJobCancellation(generation.idempotencyKey);
+    if (generation.requestStarted) {
+      void requestImageJobCancellation(generation.idempotencyKey);
+    }
     cancelled = true;
   }
   return cancelled;
@@ -281,8 +284,6 @@ export function useMediaGeneration() {
         operation: 'image',
         operationId: jobId,
       });
-      const authToken = await getAuthToken();
-
       addJob({
         id: jobId,
         type: 'image',
@@ -294,16 +295,25 @@ export function useMediaGeneration() {
       });
 
       const deadline = new AbortController();
-      const deadlineTimer = setTimeout(() => deadline.abort(), IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
       const active: ActiveImageGeneration = {
         scope: options.cancelScope ?? null,
         controller: deadline,
         idempotencyKey,
         cancelled: false,
+        requestStarted: false,
       };
       activeImageGenerations.set(jobId, active);
 
       try {
+        const authToken = await getAuthToken();
+        if (active.cancelled) {
+          throw new MediaGenerationApiError(IMAGE_GENERATION_CANCELLED_MESSAGE, {
+            code: IMAGE_GENERATION_CANCELLED_CODE,
+          });
+        }
+        deadlineTimer = setTimeout(() => deadline.abort(), IMAGE_GENERATION_FUNCTION_LIMIT_MS);
+        active.requestStarted = true;
         const response = await fetch('/api/media/image/generate', {
           method: 'POST',
           headers: {
@@ -416,7 +426,7 @@ export function useMediaGeneration() {
         updateJob(jobId, { status: 'failed', errorMessage: message });
         throw error;
       } finally {
-        clearTimeout(deadlineTimer);
+        if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
         activeImageGenerations.delete(jobId);
       }
     },
