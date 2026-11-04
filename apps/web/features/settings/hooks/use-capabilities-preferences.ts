@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+  managedCloudPreferencesNamespacePath,
+} from '@agiworkforce/cloud-contracts';
 import {
   PreferenceVersionConflictError,
-  fetchPreferenceNamespace,
-  readOrganizationMemoryAllowed,
-  readPreferencesVersion,
-  savePreferenceNamespace,
+  readOwnedPreferences,
+  saveOwnedPreferenceNamespace,
+  type PreferenceOwner,
 } from '@/app/settings/_lib/preferences-client';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import { observeWorkspaceOwner, workspaceOwnerIsCurrent } from '@/features/workspaces/lib/workspace-admission';
+import { usePreferenceOwner, usePreferenceView } from './use-preference-owner';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -34,6 +43,7 @@ export const DEFAULT_CAPABILITIES_SETTINGS: CapabilitiesSettings = {
 
 export interface UseCapabilitiesPreferencesResult {
   settings: CapabilitiesSettings;
+  loaded: boolean;
   organizationMemoryAllowed: boolean;
   saving: boolean;
   saveError: string | null;
@@ -57,47 +67,94 @@ function knownCapabilities(value: unknown): CapabilitiesPatch {
 }
 
 export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
+  const owner = usePreferenceOwner();
+  const capture = usePreferenceView(owner);
   const [settings, setSettings] = useState<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
-  const [organizationMemoryAllowed, setOrganizationMemoryAllowed] = useState(true);
+  const [loadedOwner, setLoadedOwner] = useState<PreferenceOwner | null>(null);
+  const [stateOwner, setStateOwner] = useState(owner);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [rejected, setRejected] = useState<CapabilitiesPatch | null>(null);
-  const acknowledged = useRef<CapabilitiesSettings>(DEFAULT_CAPABILITIES_SETTINGS);
-  const storedVersion = useRef<string | null>(null);
-  const latestChoice = useRef(0);
-  const pending = useRef<CapabilitiesPatch>({});
-  const writeQueue = useRef<Promise<void>>(Promise.resolve());
+  const lane = useMemo(() => ({
+    acknowledged: DEFAULT_CAPABILITIES_SETTINGS,
+    version: null as string | null,
+    latestChoice: 0,
+    pending: {} as CapabilitiesPatch,
+    queue: Promise.resolve(),
+  }), [owner]);
+  const workspace = useAccountWorkspaces();
+  const captureSession = useSessionSnapshot();
+  const workspaceOwner = observeWorkspaceOwner(captureSession());
+  const epoch = workspaceOwner?.epoch;
+  const scopeKey = workspaceOwner?.scopeKey;
+  const workspaceData = workspace.data;
+  const organization = workspaceData?.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
+  const policyCurrent = useCallback(() => !!workspaceOwner && epoch !== undefined &&
+    workspaceOwner.phase === 'admitted' && workspaceOwner.scopeKey === scopeKey &&
+    !!workspaceData && scopeKey === JSON.stringify([
+      workspaceData.scope, workspaceData.activeWorkspaceId, workspaceData.activeOrganizationId,
+    ]) && workspaceOwnerIsCurrent(workspaceOwner, epoch), [workspaceOwner, epoch, scopeKey, workspaceData]);
+  const [policy, setPolicy] = useState<{ current: () => boolean; allowed: boolean } | null>(null);
 
   useEffect(() => {
+    if (!workspaceOwner || !policyCurrent()) return;
+    const currentView = capture();
+    const authority = createRequestAuthority(workspaceOwner.session, () => currentView() && policyCurrent());
+    void authority.fetch(managedCloudPreferencesNamespacePath(CAPABILITIES_NAMESPACE), {
+      cache: 'no-store',
+      headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: organization },
+    }).then(async (response) => {
+      if (!response.ok) throw new Error('Could not load workspace memory policy');
+      const data = await response.json() as { organizationMemoryAllowed?: unknown };
+      authority.assertCurrent();
+      setPolicy({ current: policyCurrent, allowed: data.organizationMemoryAllowed === true });
+    }).catch(() => {
+      if (authority.isCurrent()) setPolicy({ current: policyCurrent, allowed: false });
+    });
+    return () => authority.retire();
+  }, [workspaceOwner, policyCurrent, organization, capture, reloadKey]);
+
+  useEffect(() => {
+    if (!owner) return;
     let cancelled = false;
-    fetchPreferenceNamespace<CapabilitiesSettings>(
-      CAPABILITIES_NAMESPACE,
-      DEFAULT_CAPABILITIES_SETTINGS,
-    )
-      .then(async (value) => {
-        if (cancelled) return;
-        acknowledged.current = value;
+    const viewCurrent = capture();
+    const current = () => !cancelled && viewCurrent();
+    if (!current()) return;
+    setStateOwner(owner);
+    setLoadedOwner(null);
+    setSaveError(null);
+    setRejected(null);
+    setSaving(false);
+    setSavedAt(null);
+    readOwnedPreferences(owner)
+      .then((snapshot) => {
+        if (!current()) return;
+        const value = { ...DEFAULT_CAPABILITIES_SETTINGS, ...knownCapabilities(snapshot.settings[CAPABILITIES_NAMESPACE]) };
+        lane.acknowledged = value;
+        lane.version = snapshot.version;
         setSettings(value);
+        setLoadedOwner(owner);
         setLoadError(null);
-        storedVersion.current = await readPreferencesVersion().catch(() => null);
-        setOrganizationMemoryAllowed(await readOrganizationMemoryAllowed().catch(() => true));
       })
       .catch((error) => {
-        if (!cancelled) {
+        if (current()) {
           setLoadError(toUserMessage(error, 'Failed to load settings'));
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [reloadKey, owner, lane, capture]);
 
   const persist = useCallback((patch: CapabilitiesPatch) => {
-    const choice = (latestChoice.current += 1);
-    pending.current = { ...pending.current, ...patch };
+    if (!owner || loadedOwner !== owner) return;
+    const current = capture();
+    if (!current()) return;
+    const choice = (lane.latestChoice += 1);
+    lane.pending = { ...lane.pending, ...patch };
     setSettings((current) => ({ ...current, ...patch }));
     setSaving(true);
     setSaveError(null);
@@ -106,45 +163,49 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     // one before it was in flight. Sending the changed keys rather than the
     // whole namespace is what stops a second tab's unrelated toggle from being
     // overwritten, and the revision precondition is what catches it when it is.
-    writeQueue.current = writeQueue.current.then(async () => {
-      const batch = pending.current;
-      pending.current = {};
+    lane.queue = lane.queue.then(async () => {
+      if (!current()) return;
+      const batch = lane.pending;
+      lane.pending = {};
       if (Object.keys(batch).length === 0) {
-        if (choice === latestChoice.current) setSaving(false);
+        if (choice === lane.latestChoice) setSaving(false);
         return;
       }
       try {
         let result;
         try {
-          result = await savePreferenceNamespace(CAPABILITIES_NAMESPACE, batch, {
+          result = await saveOwnedPreferenceNamespace(owner, CAPABILITIES_NAMESPACE, batch, {
             merge: true,
-            expectedVersion: storedVersion.current,
+            expectedVersion: lane.version,
           });
         } catch (error) {
           if (!(error instanceof PreferenceVersionConflictError)) throw error;
-          acknowledged.current = { ...acknowledged.current, ...knownCapabilities(error.settings) };
-          result = await savePreferenceNamespace(CAPABILITIES_NAMESPACE, batch, {
+          if (!current()) return;
+          lane.acknowledged = { ...lane.acknowledged, ...knownCapabilities(error.settings) };
+          result = await saveOwnedPreferenceNamespace(owner, CAPABILITIES_NAMESPACE, batch, {
             merge: true,
             expectedVersion: error.version,
           });
         }
-        storedVersion.current = result?.version ?? null;
-        acknowledged.current = { ...acknowledged.current, ...batch };
-        setSettings(acknowledged.current);
+        if (!current()) return;
+        lane.version = result?.version ?? null;
+        lane.acknowledged = { ...lane.acknowledged, ...batch };
+        setSettings({ ...lane.acknowledged, ...lane.pending });
         resetMemoryCapabilityCache();
         if ('cloudCodeExecution' in batch) void useBillingStore.getState().refreshUser();
         setSavedAt(Date.now());
       } catch (error) {
+        if (!current()) return;
         // The optimistic value has to go back to what the server acknowledged,
         // or the control keeps claiming a preference the account does not hold.
-        setSettings(acknowledged.current);
+        setSettings(lane.acknowledged);
         setRejected(batch);
         setSaveError(toUserMessage(error, 'Failed to save settings'));
       } finally {
-        if (choice === latestChoice.current) setSaving(false);
+        if (current() && choice === lane.latestChoice) setSaving(false);
       }
     });
-  }, []);
+  }, [owner, loadedOwner, lane, capture]);
 
   const setBoolean = useCallback(
     (key: keyof CapabilitiesSettings, value: boolean) => {
@@ -153,21 +214,24 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     [persist],
   );
 
-  const retry = useCallback(() => setReloadKey((value) => value + 1), []);
+  const retry = useCallback(() => {
+    if (capture()()) setReloadKey((value) => value + 1);
+  }, [capture]);
 
   const retrySave = useCallback(() => {
     if (rejected) persist(rejected);
   }, [rejected, persist]);
 
   return {
-    settings,
-    organizationMemoryAllowed,
-    saving,
-    saveError,
-    savedAt,
-    loadError,
+    settings: loadedOwner === owner && owner?.isCurrent() ? settings : DEFAULT_CAPABILITIES_SETTINGS,
+    loaded: loadedOwner === owner && owner?.isCurrent() === true,
+    organizationMemoryAllowed: policy?.current() === true && policy.allowed,
+    saving: stateOwner === owner && saving,
+    saveError: stateOwner === owner ? saveError : null,
+    savedAt: stateOwner === owner ? savedAt : null,
+    loadError: stateOwner === owner ? loadError : null,
     retry,
-    retrySave: rejected ? retrySave : null,
+    retrySave: stateOwner === owner && rejected ? retrySave : null,
     setBoolean,
   };
 }

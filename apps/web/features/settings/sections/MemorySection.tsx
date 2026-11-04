@@ -16,7 +16,7 @@ import {
   useImportMemoryDialog,
 } from '@/features/settings/components/ImportMemoryDialog';
 import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
-import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
+import { useCapabilitiesPreferences, type UseCapabilitiesPreferencesResult } from '../hooks/use-capabilities-preferences';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -121,7 +121,8 @@ function memoryRow(title: string, description: string, control: ReactNode, hint?
 
 export function MemorySection() {
   const controller = useCloudMemory();
-  return <OwnedMemorySection key={controller?.key ?? 'unavailable'} controller={controller} />;
+  const capabilities = useCapabilitiesPreferences();
+  return <OwnedMemorySection key={controller?.key ?? 'unavailable'} controller={controller} capabilities={capabilities} />;
 }
 
 function CloudMemoryEditor({ controller }: { controller: CloudMemoryController }) {
@@ -129,10 +130,12 @@ function CloudMemoryEditor({ controller }: { controller: CloudMemoryController }
   return <MemoryEditor title={null} description="" hideClearAll conversationHref={conversationHref} adapter={adapter} />;
 }
 
-function OwnedMemorySection({ controller }: { controller: CloudMemoryController | null }) {
-  const { settings, organizationMemoryAllowed, saveError, retrySave, loadError, setBoolean } =
-    useCapabilitiesPreferences();
-  const togglesDisabled = loadError !== null || !organizationMemoryAllowed;
+function OwnedMemorySection({ controller, capabilities }: {
+  controller: CloudMemoryController | null;
+  capabilities: UseCapabilitiesPreferencesResult;
+}) {
+  const { settings, loaded, organizationMemoryAllowed, saveError, retrySave, loadError, setBoolean } = capabilities;
+  const togglesDisabled = !loaded || loadError !== null || !organizationMemoryAllowed;
   const needsMemory = !togglesDisabled && !settings.memory;
   const dependentHint = (id: string): MemoryRowHint | undefined =>
     needsMemory ? { id, text: NEEDS_PERSISTENT_MEMORY_HINT } : undefined;

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER, MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE } from '@agiworkforce/cloud-contracts';
 
 import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
 
@@ -24,15 +25,14 @@ const transport = vi.fn<typeof fetch>();
 const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unknown) => fallback);
 const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown) => undefined);
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
-  fetchPreferenceNamespace: (...args: unknown[]) =>
-    fetchPreferenceNamespace(...(args as [string, unknown])),
-  savePreferenceNamespace: (...args: unknown[]) =>
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  readOwnedPreferences: async () => ({
+    settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) }, version: null,
+  }),
+  saveOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
     savePreferenceNamespace(...(args as [string, unknown])),
-  fetchStoredPreferenceNamespace: async () => ({}),
-  readPreferencesVersion: async () => null,
-  readOrganizationMemoryAllowed: async () => true,
-  PreferenceVersionConflictError: class PreferenceVersionConflictError extends Error {},
+  fetchOwnedPreferenceNamespace: async () => ({}),
 }));
 
 vi.mock('@/lib/runtime/memory-capability', () => ({
@@ -55,6 +55,9 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     transport.mockReset();
     transport.mockImplementation(async (input, init) => {
       const path = String(input);
+      if (path === '/api/settings/preferences?namespace=capabilities') {
+        return new Response(JSON.stringify({ organizationMemoryAllowed: true }));
+      }
       if (path === '/api/memory' && init?.method === 'DELETE') {
         const deleted = rows.length;
         rows = [];
@@ -74,7 +77,11 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const toggle = await screen.findByRole('switch', { name: 'Persistent memory' });
+    await waitFor(() => expect(toggle).toBeEnabled());
     expect(toggle).not.toBeChecked();
+    const policyRequest = transport.mock.calls.find(([input]) => String(input) === '/api/settings/preferences?namespace=capabilities');
+    expect(policyRequest?.[1]).toMatchObject({ credentials: 'omit', cache: 'no-store' });
+    expect(new Headers(policyRequest?.[1]?.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE);
 
     await user.click(toggle);
 
@@ -135,6 +142,7 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const toggle = await screen.findByRole('switch', { name: 'Persistent memory' });
+    await waitFor(() => expect(toggle).toBeEnabled());
     await user.click(toggle);
 
     const alert = await screen.findByRole('alert');

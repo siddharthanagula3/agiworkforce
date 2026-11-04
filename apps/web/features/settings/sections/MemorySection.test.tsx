@@ -69,6 +69,7 @@ const TOGGLES = [
 
 function capabilities(organizationMemoryAllowed: boolean) {
   return {
+    loaded: true,
     settings: {
       memory: true,
       generateFromHistory: true,
@@ -142,6 +143,12 @@ describe('Unexecuted cloud MemorySection under a workspace policy', () => {
     for (const label of TOGGLES) {
       expect(screen.getByLabelText(label)).toBeEnabled();
     }
+  });
+
+  it('does not enable account controls before the current owner preferences load', () => {
+    mockCapabilities.mockReturnValue({ ...capabilities(true), loaded: false });
+    render(<MemorySection />, { wrapper: cloud.wrapper });
+    for (const label of TOGGLES) expect(screen.getByLabelText(label)).toBeDisabled();
   });
 });
 
