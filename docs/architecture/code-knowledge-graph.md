@@ -1275,9 +1275,30 @@ service guards are source-only; same-URL/new-message caller wiring and StrictMod
 lifecycle are not established by executed runtime fixtures. No native/browser or
 deployment acceptance is claimed.
 
+## Electron installer action and synchronous restart failure
+
+Accepted commits `d6bbc9348db7ebd734f24e7994b97219e0631eb2` and
+`5a1091df5d3bca5297f8fbc0f58617ecf9aeb502` change
+`apps/desktop/electron/main.ts` and its unexecuted desktop lifecycle fixtures.
+The trusted `openUpdateInstaller` IPC handler now only opens the existing fixed
+installer URL, including when an update is staged; it no longer silently routes
+that action through restart. This matches the existing HostBridge action split.
+Sender trust and installer URL construction are unchanged.
+
+Explicit `restartToUpdate` retains staged-update readiness, live-work permission
+and `not-ready`/`deferred`/`restarting` outcomes. A synchronous
+`installDownloadedUpdate` throw now immediately clears `quitConfirmed` and
+rethrows the original error rather than leaving permission until the existing
+timer. Asynchronous beforeunload/veto/failure and permission-timeout semantics
+are unchanged; `restarting` reports dispatch, not successful installation or exit.
+Mocked lifecycle cases were source-read only, not executed. The existing updater
+status conflation of capability with downloading and latest-versus-staged version
+ambiguity is outside these narrow corrections; no status redesign, install,
+network, native runtime or deployment acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the fifty-two accepted production slices traced above are represented as
+Only the fifty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
