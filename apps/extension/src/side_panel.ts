@@ -1519,6 +1519,7 @@ function effortForNewChat(): Effort | undefined {
 function advanceConversationGeneration(): void {
   _ctx.conversationGeneration += 1;
   cancelComposerImageIntake();
+  renderMemoryNotice(null);
 }
 
 function clearStoredMessages(): void {
@@ -7858,9 +7859,15 @@ function endTemporaryChat(): void {
   resetConversationView();
 }
 
-function renderMemoryNotice(
-  notice: { text: string; confirmForget?: () => Promise<void> } | null,
-): void {
+interface ChatMemoryNotice {
+  text: string;
+  confirmForget?: () => Promise<void>;
+}
+
+let currentMemoryNotice: ChatMemoryNotice | null = null;
+
+function renderMemoryNotice(notice: ChatMemoryNotice | null): void {
+  currentMemoryNotice = notice;
   const element = document.getElementById('sp-memory-notice');
   const text = document.getElementById('sp-memory-notice-text');
   const forget = document.getElementById('sp-memory-notice-forget') as HTMLButtonElement | null;
@@ -7873,6 +7880,7 @@ function renderMemoryNotice(
   forget.disabled = false;
   forget.onclick = confirmForget
     ? () => {
+        if (currentMemoryNotice !== notice || forget.disabled) return;
         forget.disabled = true;
         void confirmForget();
       }
@@ -7886,9 +7894,12 @@ function memoryCommandKindHint(message: string): MemoryCommandKind | undefined {
 
 async function runChatMemoryCommand(
   message: string,
+  streamId: string,
+  expectedOwner: ManagedCloudOwner,
 ): Promise<ManagedMemoryCommandTurn | undefined> {
-  const auth = await getManagedCloudAuthContext().catch(() => null);
-  if (!auth) return undefined;
+  const owner = { ...expectedOwner };
+  const localConversationId = _ctx.conversationId;
+  const generation = _ctx.conversationGeneration;
   const conversationId = activePersistenceEntry?.cloudSync?.conversationId;
   const projectId = _ctx.activeProject?.id;
   const request: MemoryCommandRequest = {
@@ -7896,37 +7907,62 @@ async function runChatMemoryCommand(
     conversationId: conversationId && UUID_PATTERN.test(conversationId) ? conversationId : null,
     projectId: projectId && UUID_PATTERN.test(projectId) ? projectId : null,
   };
+  const isCurrentContext = (): boolean =>
+    sameManagedCloudOwner(owner, _ctx.managedCloudOwner) &&
+    _ctx.conversationId === localConversationId &&
+    _ctx.conversationGeneration === generation &&
+    _ctx.activeProject?.id === projectId;
+  const isCurrentTurn = (): boolean =>
+    isCurrentContext() && _ctx.currentStreamId === streamId;
+  if (!isCurrentTurn()) return undefined;
+  const auth = await getManagedCloudAuthContext().catch(() => null);
+  if (!auth || !sameManagedCloudOwner(auth.owner, owner) || !isCurrentTurn()) return undefined;
   let result: MemoryCommandResult | null;
   try {
     result = await runAccountMemoryCommand(auth.token, request);
   } catch (error) {
+    if (!isCurrentTurn()) return undefined;
     renderMemoryNotice({
       text: error instanceof Error ? error.message : t('spMemoryCommandUnavailable'),
     });
     const kind = memoryCommandKindHint(message);
     return kind ? { kind, status: 'failed' } : undefined;
   }
-  if (!result) return undefined;
+  if (!result || !isCurrentTurn()) return undefined;
   const matches = result.matches;
   if (matches.length > 0) {
-    renderMemoryNotice({
+    let confirmationStarted = false;
+    const isCurrentNotice = (): boolean =>
+      isCurrentContext() && currentMemoryNotice === notice;
+    const notice: ChatMemoryNotice = {
       text: tPlural('spMemoryForgetPrompt', matches.length, [
         matches.map((memory) => `“${memory.content}”`).join(' '),
       ]),
       confirmForget: async () => {
+        if (confirmationStarted || !isCurrentNotice()) return;
+        confirmationStarted = true;
         try {
-          const confirmed = await runAccountMemoryCommand(auth.token, {
+          const confirmationAuth = await getManagedCloudAuthContext();
+          if (!isCurrentNotice()) return;
+          if (!confirmationAuth || !sameManagedCloudOwner(confirmationAuth.owner, owner)) {
+            renderMemoryNotice(null);
+            return;
+          }
+          const confirmed = await runAccountMemoryCommand(confirmationAuth.token, {
             ...request,
             confirmed: true,
           });
+          if (!isCurrentNotice()) return;
           renderMemoryNotice({ text: confirmed?.message ?? t('spMemoryCommandUnavailable') });
         } catch (error) {
+          if (!isCurrentNotice()) return;
           renderMemoryNotice({
             text: error instanceof Error ? error.message : t('spMemoryCommandUnavailable'),
           });
         }
       },
-    });
+    };
+    renderMemoryNotice(notice);
   } else if (result.message) {
     renderMemoryNotice({ text: result.message });
   }
@@ -8005,8 +8041,9 @@ function continueTurnWithMemory(
     continueTurn(userMsg, payload, streamId, owner, quickMode);
     return;
   }
-  void runChatMemoryCommand(payload.prompt).then((memoryCommand) => {
-    if (_ctx.currentStreamId !== streamId) return;
+  void runChatMemoryCommand(payload.prompt, streamId, owner).then((memoryCommand) => {
+    if (_ctx.currentStreamId !== streamId || !sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
+      return;
     continueTurn(userMsg, payload, streamId, owner, quickMode, memoryCommand);
   });
 }
