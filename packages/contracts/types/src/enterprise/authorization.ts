@@ -15,7 +15,7 @@ import type {
   WorkspaceFeature,
   WorkspaceReasoningEffort,
 } from './workspace-controls';
-import { WORKSPACE_REASONING_EFFORTS } from './workspace-controls';
+import { WORKSPACE_REASONING_EFFORTS, isWorkspaceCountryAllowed } from './workspace-controls';
 
 export const AUTHORIZATION_STAGES = [
   'membership',
@@ -241,9 +241,8 @@ export function evaluateAuthorization(
     );
   }
 
-  const allowedCountries = subject.controls.allowedCountries;
-  if (ask.country !== undefined && allowedCountries.length > 0) {
-    if (!ask.country || !allowedCountries.includes(ask.country)) {
+  if (ask.country !== undefined) {
+    if (!isWorkspaceCountryAllowed(subject.controls, ask.country)) {
       return denial(
         'region_not_allowed',
         'A workspace administrator does not allow that from this location.',

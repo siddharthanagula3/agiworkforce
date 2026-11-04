@@ -1,5 +1,6 @@
 import {
   WORKSPACE_FEATURE_LABELS,
+  isWorkspaceCountryAllowed,
   type AdminPolicy,
   type PrivacyMode,
   type SourceSurface,
@@ -193,10 +194,7 @@ function surfaceIsPermittedByControls(policy: AdminPolicy, surface: PolicySurfac
 }
 
 function countryIsPermittedByControls(policy: AdminPolicy, country: string | null | undefined) {
-  const allowed = policy.controls.allowedCountries;
-  if (allowed.length === 0) return true;
-  const normalized = country?.trim().toUpperCase();
-  return Boolean(normalized) && allowed.includes(normalized as string);
+  return isWorkspaceCountryAllowed(policy.controls, country);
 }
 
 function accessRestriction(

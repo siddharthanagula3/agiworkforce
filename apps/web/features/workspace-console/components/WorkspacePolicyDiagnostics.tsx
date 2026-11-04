@@ -8,6 +8,7 @@ import {
   WORKSPACE_FEATURE_LABELS,
   WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS,
   isWorkspaceFeature,
+  isWorkspaceCountryRestrictionActive,
   type WorkspaceFeature,
   type WorkspacePolicyBlockingRule,
 } from '@agiworkforce/types';
@@ -238,7 +239,9 @@ export function WorkspacePolicyDiagnostics({ organizationId }: { organizationId:
                 Reasoning up to {effective.controls.maxReasoningEffort ?? 'any level'} · Countries{' '}
                 {effective.controls.allowedCountries.length > 0
                   ? effective.controls.allowedCountries.join(', ')
-                  : 'any'}{' '}
+                  : isWorkspaceCountryRestrictionActive(effective.controls)
+                    ? 'none'
+                    : 'any'}{' '}
                 · Apps{' '}
                 {effective.controls.allowedSurfaces
                   ? effective.controls.allowedSurfaces.join(', ')

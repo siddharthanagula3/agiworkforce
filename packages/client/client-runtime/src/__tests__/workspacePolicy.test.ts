@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_WORKSPACE_CONTROLS,
+  DEFAULT_WORKSPACE_CODE_CONTROLS,
+  EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+  isWorkspaceCountryAllowed,
   type EffectiveWorkspacePolicyResponse,
 } from '@agiworkforce/types';
 import {
   createWorkspacePolicyPoller,
   disabledWorkspaceFeatures,
   isWorkspaceFeatureEnabled,
+  parseEffectiveWorkspacePolicy,
   type WorkspacePolicyCache,
 } from '../workspacePolicy';
 
@@ -14,6 +18,7 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 
 function governed(revision: number, overrides: Record<string, boolean> = {}) {
   return {
+    schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
     organizationId: ORG,
     governed: true,
     revision,
@@ -46,6 +51,98 @@ function memoryCache(
 }
 
 describe('workspace policy poller', () => {
+  it('retains legacy feature and Code restrictions without granting ambiguous countries', async () => {
+    const legacy = {
+      ...governed(7, { code: false }),
+      schemaVersion: undefined,
+      code: {
+        ...DEFAULT_WORKSPACE_CODE_CONTROLS,
+        allowMcpServers: false,
+        appliedOverrideIds: [],
+        revision: 7,
+        blockingRules: [],
+      },
+    };
+    const parsed = parseEffectiveWorkspacePolicy(legacy)!;
+    expect(parsed.schemaVersion).toBeUndefined();
+    expect(isWorkspaceFeatureEnabled(parsed, 'code')).toBe(false);
+    expect(parsed.code?.allowMcpServers).toBe(false);
+    expect(isWorkspaceCountryAllowed(parsed.controls!, 'US')).toBe(false);
+    const cache = memoryCache(JSON.stringify({ etag: '"legacy"', policy: parsed }));
+    const request = vi.fn().mockResolvedValue(json(legacy, '"legacy"'));
+    const poller = createWorkspacePolicyPoller({ request, cache });
+    await poller.refresh();
+    expect(request.mock.calls[0]?.[0]).toEqual({});
+    expect(JSON.parse(cache.value!).policy.schemaVersion).toBeUndefined();
+    expect(JSON.parse(cache.value!).etag).toBeNull();
+    const reopened = createWorkspacePolicyPoller({ request, cache });
+    expect(isWorkspaceFeatureEnabled(reopened.getSnapshot().policy, 'code')).toBe(false);
+    expect(isWorkspaceCountryAllowed(reopened.getSnapshot().policy!.controls!, 'US')).toBe(false);
+  });
+
+  it('allows current unrestricted defaults and fails closed only the malformed country projection', () => {
+    const unrestricted = parseEffectiveWorkspacePolicy(governed(1))!;
+    expect(isWorkspaceCountryAllowed(unrestricted.controls!, null)).toBe(true);
+    const wire = governed(2, { work: false });
+    const malformed = parseEffectiveWorkspacePolicy({
+      ...wire,
+      controls: { ...wire.controls, allowedCountries: ['invalid'] },
+    })!;
+    expect(isWorkspaceFeatureEnabled(malformed, 'work')).toBe(false);
+    expect(isWorkspaceCountryAllowed(malformed.controls!, 'US')).toBe(false);
+    const future = parseEffectiveWorkspacePolicy({ ...wire, schemaVersion: 999 })!;
+    expect(isWorkspaceFeatureEnabled(future, 'work')).toBe(false);
+    expect(isWorkspaceCountryAllowed(future.controls!, 'US')).toBe(false);
+  });
+
+  it('does not trust legacy nonempty lists that may have reopened a closed intersection', () => {
+    const wire = governed(3, { work: false });
+    const legacy = parseEffectiveWorkspacePolicy({
+      ...wire,
+      schemaVersion: 1,
+      controls: { ...wire.controls, allowedCountries: ['FR'] },
+    })!;
+    expect(legacy.schemaVersion).toBe(1);
+    expect(isWorkspaceFeatureEnabled(legacy, 'work')).toBe(false);
+    expect(isWorkspaceCountryAllowed(legacy.controls!, 'FR')).toBe(false);
+    expect(parseEffectiveWorkspacePolicy(JSON.parse(JSON.stringify(legacy)))?.schemaVersion).toBe(1);
+  });
+
+  it('never lets a false flag override a current nonempty allowlist', () => {
+    const wire = governed(4);
+    const parsed = parseEffectiveWorkspacePolicy({
+      ...wire,
+      controls: { ...wire.controls, allowedCountries: ['DE'], countryRestrictionActive: false },
+    })!;
+    expect(isWorkspaceCountryAllowed(parsed.controls!, 'DE')).toBe(true);
+    expect(isWorkspaceCountryAllowed(parsed.controls!, 'US')).toBe(false);
+  });
+
+  it('keeps current active-empty denial through cache reload and a valid 304', async () => {
+    const wire = governed(5, { work: false });
+    const restricted = {
+      ...wire,
+      controls: { ...wire.controls, countryRestrictionActive: true },
+    };
+    const cache = memoryCache(JSON.stringify({ etag: '"current"', policy: restricted }));
+    const request = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
+    const poller = createWorkspacePolicyPoller({ request, cache });
+    await poller.refresh();
+    expect(request.mock.calls[0]?.[0]).toEqual({ 'If-None-Match': '"current"' });
+    expect(isWorkspaceFeatureEnabled(poller.getSnapshot().policy, 'work')).toBe(false);
+    expect(isWorkspaceCountryAllowed(poller.getSnapshot().policy!.controls!, 'US')).toBe(false);
+  });
+
+  it('retains feature denials when a current response omits the country discriminator', () => {
+    const wire = governed(6, { work: false });
+    const parsed = parseEffectiveWorkspacePolicy({
+      ...wire,
+      controls: { ...wire.controls, countryRestrictionActive: undefined },
+    })!;
+    expect(isWorkspaceFeatureEnabled(parsed, 'work')).toBe(false);
+    expect(isWorkspaceCountryAllowed(parsed.controls!, 'US')).toBe(false);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });

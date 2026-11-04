@@ -17,6 +17,7 @@ import {
   clampReasoningEffort,
   evaluateAuthorization,
   isCodeHostAllowed,
+  isWorkspaceCountryAllowed,
   isGrantableOrganizationPermission,
   missingOrganizationPermissions,
   resolveDefaultModelId,
@@ -49,6 +50,40 @@ const workspace: WorkspaceControls = {
   featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, code: false },
   maxReasoningEffort: 'high',
 };
+
+describe('country restriction intersections', () => {
+  it('keeps genuinely unrestricted defaults and empty configured layers unrestricted', () => {
+    const controls = resolveWorkspaceControls(DEFAULT_WORKSPACE_CONTROLS, [
+      override('role', 'empty', { allowedCountries: [] }),
+    ]);
+    expect(controls.countryRestrictionActive).toBe(false);
+    expect(isWorkspaceCountryAllowed(controls, null)).toBe(true);
+  });
+
+  it('never reopens a disjoint intersection through a later layer or resolution', () => {
+    const controls = resolveWorkspaceControls(DEFAULT_WORKSPACE_CONTROLS, [
+      override('role', 'us', { allowedCountries: ['US'] }),
+      override('group', 'de', { allowedCountries: ['DE'] }),
+      override('user', 'us', { allowedCountries: ['US'] }),
+    ]);
+    expect(controls.allowedCountries).toEqual([]);
+    expect(controls.countryRestrictionActive).toBe(true);
+    expect(isWorkspaceCountryAllowed(controls, 'US')).toBe(false);
+    expect(isWorkspaceCountryAllowed(controls, null)).toBe(false);
+    const again = resolveWorkspaceControls(controls, [
+      override('user', 'de', { allowedCountries: ['DE'] }),
+    ]);
+    expect(again.allowedCountries).toEqual([]);
+    expect(again.countryRestrictionActive).toBe(true);
+  });
+
+  it('infers active restrictions from legacy lists even when spread over default false', () => {
+    const controls = { ...DEFAULT_WORKSPACE_CONTROLS, allowedCountries: ['DE'] };
+    expect(isWorkspaceCountryAllowed(controls, ' de ')).toBe(true);
+    expect(isWorkspaceCountryAllowed(controls, 'US')).toBe(false);
+    expect(isWorkspaceCountryAllowed(controls, undefined)).toBe(false);
+  });
+});
 
 describe('organization permission grid', () => {
   it('gives the Primary Owner alone the three ownership permissions', () => {

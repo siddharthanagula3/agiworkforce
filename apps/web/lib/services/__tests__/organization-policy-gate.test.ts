@@ -1133,6 +1133,22 @@ describe('evaluateActiveWorkspacePolicy, feature controls and policy layers', ()
     expect(decision.code).toBe('region_not_allowed');
   });
 
+  it('denies a disjoint country intersection even when a later user layer names the request country', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce(NO_OPEN_INVOICE)
+      .mockResolvedValueOnce([governedPolicy({ allowedCountries: ['US'] }, 2)])
+      .mockResolvedValueOnce([
+        overrideRow('group', 'group-1', { allowedCountries: ['DE'] }),
+        overrideRow('user', 'member-1', { allowedCountries: ['US'] }),
+      ]);
+    const decision = await evaluateActiveWorkspacePolicy(h.db, 'member-1', {
+      resource: 'feature', feature: 'work', country: 'US',
+    });
+    expect(decision.code).toBe('region_not_allowed');
+  });
+
   it('denies a client surface a group override excludes', async () => {
     const h = harness();
     h.query

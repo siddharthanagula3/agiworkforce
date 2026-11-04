@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -53,6 +54,7 @@ vi.mock('@/lib/services/organization-policy-override-service', () => ({
 }));
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const CURRENT_ETAG = `"v${EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION}:${ORG}:4:o-1"`;
 
 const { GET: getEffective } = await import('../effective/route');
 const { PUT: putOverride } = await import('../overrides/route');
@@ -84,6 +86,7 @@ beforeEach(() => {
       defaultModelId: null,
       maxReasoningEffort: 'low',
       allowedCountries: [],
+      countryRestrictionActive: false,
       allowedSurfaces: null,
       appliedOverrideIds: ['o-1'],
     },
@@ -107,8 +110,10 @@ describe('GET /api/settings/organization/policy/effective', () => {
     const response = await getEffective(effectiveRequest());
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('etag')).toBe(`"${ORG}:4:o-1"`);
-    expect(await response.json()).toMatchObject({ governed: true, revision: 4 });
+    expect(response.headers.get('etag')).toBe(CURRENT_ETAG);
+    expect(await response.json()).toMatchObject({
+      governed: true, revision: 4, schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+    });
   });
 
   it('tells the client which Code connections the workspace permits', async () => {
@@ -125,8 +130,14 @@ describe('GET /api/settings/organization/policy/effective', () => {
   });
 
   it('answers 304 when the client already holds this revision', async () => {
-    const response = await getEffective(effectiveRequest(`"${ORG}:4:o-1"`));
+    const response = await getEffective(effectiveRequest(CURRENT_ETAG));
     expect(response.status).toBe(304);
+  });
+
+  it('refreshes a legacy representation even when the tenant revision is unchanged', async () => {
+    const response = await getEffective(effectiveRequest(`"${ORG}:4:o-1"`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe(CURRENT_ETAG);
   });
 
   it('answers a new body once the revision moves', async () => {
@@ -135,7 +146,7 @@ describe('GET /api/settings/organization/policy/effective', () => {
       revision: 5,
       controls: { appliedOverrideIds: [] },
     });
-    const response = await getEffective(effectiveRequest(`"${ORG}:4:o-1"`));
+    const response = await getEffective(effectiveRequest(CURRENT_ETAG));
     expect(response.status).toBe(200);
   });
 

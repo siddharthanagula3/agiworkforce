@@ -35,16 +35,24 @@ vi.mock('../../hooks/use-workspace-roles', () => ({
   usePolicyDiagnosis: () => ({ data: undefined, error: null, isFetching: false }),
 }));
 
-import { GOVERNED_FEATURES, WorkspaceFeatureControls } from '../WorkspaceFeatureControls';
+import {
+  describeLayer,
+  GOVERNED_FEATURES,
+  WorkspaceFeatureControls,
+} from '../WorkspaceFeatureControls';
 
-function withPolicy(configured = true, canManagePolicy = true) {
+function withPolicy(
+  configured = true,
+  canManagePolicy = true,
+  controls = DEFAULT_WORKSPACE_CONTROLS,
+) {
   mocks.policy.mockReturnValue({
     data: {
       organizationId: 'org-1',
       configured,
       canManagePolicy,
       currentUserRole: canManagePolicy ? 'admin' : 'viewer',
-      policy: { controls: DEFAULT_WORKSPACE_CONTROLS },
+      policy: { controls },
     },
   });
 }
@@ -68,6 +76,37 @@ beforeEach(() => {
 });
 
 describe('WorkspaceFeatureControls', () => {
+  it('refuses malformed nonempty country input instead of saving an unrestricted list', () => {
+    withPolicy(true, true, { ...DEFAULT_WORKSPACE_CONTROLS, allowedCountries: ['DE'] });
+    render(<WorkspaceFeatureControls />);
+    const input = screen.getByLabelText(/Allowed countries, as two-letter codes/);
+    fireEvent.change(input, { target: { value: 'USA' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Use two-letter country codes');
+    expect(screen.getByRole('button', { name: 'Save features and defaults' })).toBeDisabled();
+    expect(mocks.updatePolicy).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: '' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save features and defaults' }));
+    expect(mocks.updatePolicy.mock.calls[0]![0].controls.allowedCountries).toEqual([]);
+  });
+
+  it('preserves active-empty state on feature edits and clears only after an explicit reset', () => {
+    withPolicy(true, true, { ...DEFAULT_WORKSPACE_CONTROLS, countryRestrictionActive: true });
+    render(<WorkspaceFeatureControls />);
+    expect(screen.getByText(/No countries are currently permitted/)).toBeInTheDocument();
+    expect(describeLayer({ allowedCountries: [], countryRestrictionActive: true }))
+      .toBe('no countries permitted');
+    fireEvent.click(screen.getByRole('switch', { name: 'Allow Code' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save features and defaults' }));
+    const first = mocks.updatePolicy.mock.calls[0]![0].controls;
+    expect(first).not.toHaveProperty('allowedCountries');
+    expect(first).not.toHaveProperty('countryRestrictionActive');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear country restriction' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save features and defaults' }));
+    const second = mocks.updatePolicy.mock.calls[1]![0].controls;
+    expect(second.allowedCountries).toEqual([]);
+    expect(second).not.toHaveProperty('countryRestrictionActive');
+  });
   it('saves a switched-off feature as a controls patch on the workspace policy', () => {
     withPolicy();
     render(<WorkspaceFeatureControls />);

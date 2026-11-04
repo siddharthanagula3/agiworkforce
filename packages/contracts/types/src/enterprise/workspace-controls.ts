@@ -156,14 +156,19 @@ export interface WorkspaceControls {
   defaultModelId: string | null;
   maxReasoningEffort: WorkspaceReasoningEffort | null;
   allowedCountries: readonly string[];
+  // Derived state distinguishes a closed intersection from an unrestricted configured empty list.
+  countryRestrictionActive?: boolean;
   allowedSurfaces: readonly SourceSurface[] | null;
 }
 
-export const DEFAULT_WORKSPACE_CONTROLS: WorkspaceControls = Object.freeze({
+export const DEFAULT_WORKSPACE_CONTROLS: WorkspaceControls & {
+  countryRestrictionActive: boolean;
+} = Object.freeze({
   featureAccess: DEFAULT_WORKSPACE_FEATURE_ACCESS,
   defaultModelId: null,
   maxReasoningEffort: null,
   allowedCountries: Object.freeze([]) as readonly string[],
+  countryRestrictionActive: false,
   allowedSurfaces: null,
 });
 
@@ -172,6 +177,7 @@ export interface WorkspaceControlsLayer {
   defaultModelId?: string | null;
   maxReasoningEffort?: WorkspaceReasoningEffort | null;
   allowedCountries?: readonly string[];
+  countryRestrictionActive?: boolean;
   allowedSurfaces?: readonly SourceSurface[] | null;
   code?: WorkspaceCodeControlsLayer;
 }
@@ -199,7 +205,7 @@ export const WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS: Readonly<
 
 // The shape a stored policy layer is written against, separate from the
 // per-tenant revision that says which edit of the rules a value came from.
-export const WORKSPACE_POLICY_SCHEMA_VERSION = 1;
+export const WORKSPACE_POLICY_SCHEMA_VERSION = 2;
 export const WORKSPACE_POLICY_MIN_SCHEMA_VERSION = 1;
 
 export const WORKSPACE_POLICY_SCOPES = [
@@ -234,7 +240,23 @@ export interface WorkspacePolicyBlockingRule {
 }
 
 export interface ResolvedWorkspaceControls extends WorkspaceControls {
+  countryRestrictionActive: boolean;
   appliedOverrideIds: readonly string[];
+}
+
+export function isWorkspaceCountryRestrictionActive(
+  controls: Pick<WorkspaceControlsLayer, 'allowedCountries' | 'countryRestrictionActive'>,
+): boolean {
+  return controls.countryRestrictionActive === true || Boolean(controls.allowedCountries?.length);
+}
+
+export function isWorkspaceCountryAllowed(
+  controls: Pick<WorkspaceControls, 'allowedCountries' | 'countryRestrictionActive'>,
+  country: string | null | undefined,
+): boolean {
+  if (!isWorkspaceCountryRestrictionActive(controls)) return true;
+  const normalized = country?.trim().toUpperCase();
+  return Boolean(normalized) && controls.allowedCountries.includes(normalized as string);
 }
 
 // A resolved policy plus the rule version it came from and what narrowed it.
@@ -276,16 +298,18 @@ function narrowWithLayer(
   }
 
   let allowedCountries = base.allowedCountries;
-  const layerCountries = layer.allowedCountries;
-  if (layerCountries && layerCountries.length > 0) {
+  let countryRestrictionActive = isWorkspaceCountryRestrictionActive(base);
+  const layerCountries = layer.allowedCountries ?? [];
+  if (isWorkspaceCountryRestrictionActive(layer)) {
     const next =
-      allowedCountries.length === 0
+      !countryRestrictionActive
         ? [...layerCountries]
         : allowedCountries.filter((country) => layerCountries.includes(country));
-    if (next.length !== allowedCountries.length) {
+    if (!countryRestrictionActive || next.length !== allowedCountries.length) {
       allowedCountries = next;
       rules.push({ control: 'country', ...origin, reason: 'region_not_allowed' });
     }
+    countryRestrictionActive = true;
   }
 
   let allowedSurfaces = base.allowedSurfaces;
@@ -306,6 +330,7 @@ function narrowWithLayer(
     defaultModelId: base.defaultModelId,
     maxReasoningEffort,
     allowedCountries,
+    countryRestrictionActive,
     allowedSurfaces,
   };
 }
@@ -315,6 +340,7 @@ function baseAsLayer(base: WorkspaceControls): WorkspaceControlsLayer {
     featureAccess: base.featureAccess,
     maxReasoningEffort: base.maxReasoningEffort,
     allowedCountries: base.allowedCountries,
+    countryRestrictionActive: isWorkspaceCountryRestrictionActive(base),
     allowedSurfaces: base.allowedSurfaces,
   };
 }
@@ -366,6 +392,7 @@ export function resolveWorkspaceControls(
 
   return {
     ...resolved,
+    countryRestrictionActive: isWorkspaceCountryRestrictionActive(resolved),
     defaultModelId,
     appliedOverrideIds: overrides.map((override) => override.id).sort(),
     revision,
@@ -487,10 +514,12 @@ export interface WorkspaceCodePolicyResponse {
 }
 
 export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/policy/effective';
+export const EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION = 2;
 
 // A client cannot honour a control it is never told about, so the effective
 // answer carries the Code controls beside the rest of the policy.
 export interface EffectiveWorkspacePolicyResponse {
+  schemaVersion?: number;
   organizationId: string | null;
   governed: boolean;
   revision: number;

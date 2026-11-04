@@ -1938,6 +1938,9 @@ export function useShareConnectorWithOrganization(): UseMutationResult<unknown, 
 // ── Workspace policy (organization_admin_policies) ─────────────────────────
 
 export type WorkspaceAdminPolicy = AdminPolicy;
+type WorkspaceAdminPolicyPatch = Partial<
+  Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt' | 'controls'>
+> & { controls?: Partial<WorkspaceAdminPolicy['controls']> };
 
 export interface WorkspacePolicyOverview {
   organizationId: string;
@@ -1985,13 +1988,13 @@ export function useWorkspacePolicy(): UseQueryResult<WorkspacePolicyOverview | n
 export function useUpdateWorkspacePolicy(): UseMutationResult<
   WorkspacePolicyOverview,
   Error,
-  Partial<Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>>
+  WorkspaceAdminPolicyPatch
 > {
   const queryClient: QueryClient = useQueryClient();
   return useMutation<
     WorkspacePolicyOverview,
     Error,
-    Partial<Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>>
+    WorkspaceAdminPolicyPatch
   >({
     mutationFn: async (patch) => {
       const token = await getAuthToken();
@@ -2005,7 +2008,16 @@ export function useUpdateWorkspacePolicy(): UseMutationResult<
           Authorization: `Bearer ${token}`,
           'x-csrf-token': csrfToken,
         },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({
+          ...patch,
+          controls: patch.controls && {
+            featureAccess: patch.controls.featureAccess,
+            defaultModelId: patch.controls.defaultModelId,
+            maxReasoningEffort: patch.controls.maxReasoningEffort,
+            allowedCountries: patch.controls.allowedCountries,
+            allowedSurfaces: patch.controls.allowedSurfaces,
+          },
+        }),
       });
 
       if (!res.ok) throw new Error(await readApiError(res));

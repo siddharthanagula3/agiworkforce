@@ -1,4 +1,5 @@
 import {
+  EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
   WORKSPACE_CODE_TOGGLE_KEYS,
   WORKSPACE_FEATURES,
   type EffectiveWorkspaceCodeControls,
@@ -70,6 +71,28 @@ function parseCodeControls(value: unknown): EffectiveWorkspaceCodeControls | nul
   return value as unknown as EffectiveWorkspaceCodeControls;
 }
 
+function parseCountryControls(controls: Record<string, unknown>, schemaVersion: unknown) {
+  const raw = controls['allowedCountries'];
+  const validCountries =
+    Array.isArray(raw) &&
+    raw.every((country) => typeof country === 'string' && /^[A-Za-z]{2}$/.test(country));
+  const current = schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION;
+  // Legacy nonempty results may already have reopened an earlier empty intersection.
+  if (
+    !validCountries ||
+    !current ||
+    typeof controls['countryRestrictionActive'] !== 'boolean'
+  ) {
+    return { allowedCountries: [], countryRestrictionActive: true };
+  }
+  const allowedCountries = (raw as string[]).map((country) => country.toUpperCase());
+  return {
+    allowedCountries,
+    countryRestrictionActive:
+      controls['countryRestrictionActive'] === true || allowedCountries.length > 0,
+  };
+}
+
 export function parseEffectiveWorkspacePolicy(
   value: unknown,
 ): EffectiveWorkspacePolicyResponse | null {
@@ -79,14 +102,23 @@ export function parseEffectiveWorkspacePolicy(
   if (typeof governed !== 'boolean' || typeof revision !== 'number') return null;
   const code = parseCodeControls(value['code']);
   if (controls === null) {
-    return governed ? null : { organizationId, governed, revision, controls: null, code };
+    return governed
+      ? null
+      : { ...(value as unknown as EffectiveWorkspacePolicyResponse), controls: null, code };
   }
   if (!isRecord(controls) || !isRecord(controls['featureAccess'])) return null;
   const featureAccess = controls['featureAccess'];
   if (!WORKSPACE_FEATURES.every((feature) => typeof featureAccess[feature] === 'boolean')) {
     return null;
   }
-  return { ...(value as unknown as EffectiveWorkspacePolicyResponse), code };
+  return {
+    ...(value as unknown as EffectiveWorkspacePolicyResponse),
+    controls: {
+      ...(controls as unknown as NonNullable<EffectiveWorkspacePolicyResponse['controls']>),
+      ...parseCountryControls(controls, value['schemaVersion']),
+    },
+    code,
+  };
 }
 
 function readCache(cache: WorkspacePolicyCache | null | undefined): CachedPolicy | null {
@@ -98,7 +130,14 @@ function readCache(cache: WorkspacePolicyCache | null | undefined): CachedPolicy
     if (!isRecord(parsed)) return null;
     const policy = parseEffectiveWorkspacePolicy(parsed['policy']);
     if (!policy) return null;
-    return { etag: typeof parsed['etag'] === 'string' ? parsed['etag'] : null, policy };
+    return {
+      etag:
+        policy.schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION &&
+        typeof parsed['etag'] === 'string'
+          ? parsed['etag']
+          : null,
+      policy,
+    };
   } catch {
     return null;
   }
@@ -170,7 +209,10 @@ export function createWorkspacePolicyPoller(
         publish({ ...snapshot, stale: true, checkedAt: now() });
         return snapshot;
       }
-      etag = response.headers.get('etag');
+      etag =
+        policy.schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION
+          ? response.headers.get('etag')
+          : null;
       writeCache(options.cache, { etag, policy });
       publish({ policy, source: 'network', stale: false, checkedAt: now() });
       return snapshot;
