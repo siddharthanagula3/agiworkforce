@@ -43,6 +43,7 @@ import { getTokenCounter } from '../data/tokenCounter';
 import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import * as accountAccess from '../features/surfaces/accountAccess';
+import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -2947,7 +2948,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
-  it('offers to review and undo the files a reply changed', async () => {
+  it('refuses automatic Undo when checkpoints cannot prove reply ownership', async () => {
     const harness = makeHarness();
     const rewindThread = vi.fn().mockResolvedValue({
       restoredFiles: ['src/math.ts'],
@@ -3009,12 +3010,12 @@ describe('ChatStateManager local turn lifecycle', () => {
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
     await harness.manager.handleMessage({ type: 'undoTurn', payload: { turnId: 'turn-1' } });
 
-    expect(rewindThread).toHaveBeenCalledWith({
-      threadId: 'thread-1',
-      checkpointIndex: 1,
-      restore: 'code',
-    });
-    expect(harness.posted).toContainEqual({
+    expect(listCheckpoints).not.toHaveBeenCalled();
+    expect(rewindThread).not.toHaveBeenCalled();
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('cannot verify which checkpoint belongs to that reply'),
+    );
+    expect(harness.posted).not.toContainEqual({
       type: 'turnChangesUndone',
       payload: { turnId: 'turn-1' },
     });
@@ -3423,6 +3424,190 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: { category: 'runtime', headline: 'approval channel closed', retryable: true },
     });
     await send;
+  });
+
+  it('does not resurrect an approval after capability discovery outlives its turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Edit file' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    let resolveCapability!: (value: boolean) => void;
+    harness.runtime.offers.mockImplementation((capability: string) =>
+      capability === 'approvalEdits'
+        ? new Promise<boolean>((resolve) => { resolveCapability = resolve; })
+        : Promise.resolve(false),
+    );
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'late-edit',
+      kind: 'FileWrite { path: "/workspace/a.ts" }', summary: 'Edit?', detail: 'a.ts',
+      editable: true, proposedContent: 'new text',
+    });
+    await vi.waitFor(() => expect(resolveCapability).toBeDefined());
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await send;
+    resolveCapability(true);
+    await Promise.resolve();
+    await harness.manager.handleMessage({
+      type: 'respondToApproval', payload: { requestId: 'late-edit', decision: 'once' },
+    });
+    expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'late-edit' }),
+    });
+  });
+
+  it.each(['once', 'abort'] as const)('does not apply a stale %s after review cleanup', async (decision) => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Edit file' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.runtime.offers.mockResolvedValue(true);
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'edit-1',
+      kind: 'FileWrite { path: "/workspace/a.ts" }', summary: 'Edit?', detail: 'a.ts',
+      editable: true, proposedContent: 'new text',
+    });
+    await vi.waitFor(() => expect(harness.posted).toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'edit-1' }),
+    }));
+    let releaseReview!: () => void;
+    const cleanup = new Promise<undefined>((resolve) => { releaseReview = () => resolve(undefined); });
+    const review = vi.spyOn(proposedChangeReview, decision === 'once' ? 'finishProposedChange' : 'discardProposedChange')
+      .mockImplementation(() => cleanup);
+    try {
+      const response = harness.manager.handleMessage({
+        type: 'respondToApproval', payload: { requestId: 'edit-1', decision },
+      });
+      await vi.waitFor(() => expect(review).toHaveBeenCalledOnce());
+      await harness.manager.handleMessage({
+        type: 'respondToApproval', payload: { requestId: 'edit-1', decision },
+      });
+      expect(review).toHaveBeenCalledOnce();
+      harness.emit({
+        type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+        response: 'done', inputTokens: 1, outputTokens: 1,
+      });
+      await send;
+      harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+      const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Next turn' } });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+      releaseReview();
+      await response;
+      expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+      expect(harness.runtime.interruptTurn).not.toHaveBeenCalled();
+      harness.emit({
+        type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+        response: 'done', inputTokens: 1, outputTokens: 1,
+      });
+      await next;
+    } finally {
+      review.mockRestore();
+    }
+  });
+
+  it('does not show a successful approval or cache session consent after an RPC failure', async () => {
+    const harness = makeHarness({ approvalFailure: new Error('approval rejected') });
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Run command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'failed-session',
+      kind: 'Exec { command: "ls" }', summary: 'Run?', detail: 'ls',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval', payload: { requestId: 'failed-session', decision: 'session' },
+    });
+    await send;
+    expect(harness.posted).not.toContainEqual({
+      type: 'approvalResolved', payload: { requestId: 'failed-session', outcome: 'session' },
+    });
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Try another command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-2', requestId: 'fresh-session',
+      kind: 'Exec { command: "pwd" }', summary: 'Run?', detail: 'pwd',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'fresh-session' }),
+    });
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await next;
+  });
+
+  it.each(['session', 'deny'] as const)('does not apply a delayed %s response to a later turn', async (decision) => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Run command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    let releaseResponse!: () => void;
+    harness.runtime.respondToApproval.mockReturnValueOnce(new Promise<void>((resolve) => { releaseResponse = resolve; }));
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'delayed-session',
+      kind: 'Exec { command: "ls" }', summary: 'Run?', detail: 'ls',
+    });
+    const response = harness.manager.handleMessage({
+      type: 'respondToApproval', payload: { requestId: 'delayed-session', decision, guidance: 'Use another approach' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await send;
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Next command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    releaseResponse();
+    await response;
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-2', requestId: 'next-session',
+      kind: 'Exec { command: "pwd" }', summary: 'Run?', detail: 'pwd',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'next-session' }),
+    });
+    expect(harness.posted).not.toContainEqual({
+      type: 'approvalResolved', payload: { requestId: 'delayed-session', outcome: decision },
+    });
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+    expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2);
+    expect(harness.runtime.steerTurn).not.toHaveBeenCalled();
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await next;
+  });
+
+  it('does not publish a delayed interrupt failure into the next turn', async () => {
+    let rejectInterrupt!: (error: Error) => void;
+    const harness = makeHarness({ interruptTurn: new Promise<void>((_resolve, reject) => { rejectInterrupt = reject; }) });
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Start work' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const cancel = harness.manager.handleMessage({ type: 'cancel' });
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await send;
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Next work' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    rejectInterrupt(new Error('old interrupt failed'));
+    await cancel;
+    expect(harness.posted).not.toContainEqual({
+      type: 'error', payload: expect.objectContaining({ headline: 'old interrupt failed' }),
+    });
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await next;
   });
 
   it('asks in the transcript rather than in a native dialog', async () => {

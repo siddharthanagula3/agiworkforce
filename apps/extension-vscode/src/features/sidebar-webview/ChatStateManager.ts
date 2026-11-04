@@ -903,7 +903,10 @@ export class ChatStateManager {
   private _webSearchLogins: readonly string[] = [];
   private _recoveryHref: string | undefined;
   private readonly _dismissedEditorContext = new Set<string>();
-  private readonly _sessionApprovals = new Set<string>();
+  private readonly _sessionApprovals = new Map<
+    string,
+    { thread: DeveloperThreadState; epoch: number }
+  >();
   private readonly _disallowedTools = new Map<string, readonly string[]>();
   private _draftDisallowedTools: readonly string[] | undefined;
   private readonly _pendingApprovals = new Map<
@@ -914,6 +917,7 @@ export class ChatStateManager {
       runtime: LocalRuntimeClient;
       identity: string;
       label: string;
+      resolving?: boolean;
       proposed?: { filePath: string; content: string };
     }
   >();
@@ -1353,27 +1357,50 @@ export class ChatStateManager {
 
       case 'respondToApproval': {
         const { requestId, decision, guidance, answer } = msg.payload;
+        const pending = this._pendingApprovals.get(requestId);
+        if (pending === undefined || pending.resolving) break;
+        const thread = this._thread;
+        const epoch = this._conversationEpoch;
+        const owner = this._activeTurn;
         if (answer !== undefined) {
           await this._resolveApproval(requestId, 'once', false, answer);
           break;
         }
-        const pending = this._pendingApprovals.get(requestId);
         const noted =
           decision === 'deny' &&
           guidance !== undefined &&
-          pending !== undefined &&
           (await pending.runtime.offers('approvalNotes'));
-        await this._resolveApproval(requestId, decision, false, noted ? guidance : undefined);
-        if (decision === 'deny' && guidance !== undefined && !noted) {
+        if (this._pendingApprovals.get(requestId) !== pending || this._activeTurn !== owner) break;
+        const resolved = await this._resolveApproval(
+          requestId,
+          decision,
+          false,
+          noted ? guidance : undefined,
+        );
+        if (
+          resolved &&
+          this._thread === thread &&
+          this._conversationEpoch === epoch &&
+          owner !== undefined &&
+          this._activeTurn === owner &&
+          !owner.isUiSettled() &&
+          decision === 'deny' &&
+          guidance !== undefined &&
+          !noted
+        ) {
           await this._handleSendMessage(guidance);
         }
         break;
       }
 
       case 'reviewApprovalChange': {
-        const proposed = this._pendingApprovals.get(msg.payload.requestId)?.proposed;
-        if (proposed === undefined) break;
+        const pending = this._pendingApprovals.get(msg.payload.requestId);
+        const proposed = pending?.proposed;
+        if (pending === undefined || proposed === undefined || pending.resolving) break;
         await openProposedChange(msg.payload.requestId, proposed.filePath, proposed.content);
+        if (this._pendingApprovals.get(msg.payload.requestId) !== pending || pending.resolving) {
+          await discardProposedChange(msg.payload.requestId);
+        }
         break;
       }
 
@@ -2533,7 +2560,6 @@ export class ChatStateManager {
     this._writtenFilesByTurn.set(turnId, written);
   }
 
-  /** Puts back the files the latest reply changed, from the checkpoint taken with its prompt. */
   private async _undoTurn(turnId: string): Promise<void> {
     const thread = this._thread;
     const changed = this._lastChangedTurn;
@@ -2549,47 +2575,10 @@ export class ChatStateManager {
       );
       return;
     }
-    const undo = 'Undo changes';
-    const confirmed = await vscode.window.showWarningMessage(
-      'Undo the changes from the latest reply?',
-      {
-        modal: true,
-        detail: `${changed.files.length === 1 ? 'The file it changed goes back to how it was' : `The ${changed.files.length} files it changed go back to how they were`} before that prompt. The conversation stays as it is.`,
-      },
-      undo,
+    // Legacy checkpoints have no turn identity, so the newest entry cannot authorize Undo.
+    void vscode.window.showWarningMessage(
+      `${PRODUCT_NAMES.code}: this runtime cannot verify which checkpoint belongs to that reply. No files were changed. Use Checkpoints to choose a restore point explicitly.`,
     );
-    if (confirmed !== undo || this._thread !== thread) return;
-    try {
-      const { checkpoints } = await thread.runtime.listCheckpoints(thread.id);
-      const latest = checkpoints[checkpoints.length - 1];
-      if (latest === undefined) {
-        void vscode.window.showWarningMessage(
-          `${PRODUCT_NAMES.code}: this session kept no checkpoint for that reply, so its changes cannot be undone here.`,
-        );
-        return;
-      }
-      const outcome = await thread.runtime.rewindThread({
-        threadId: thread.id,
-        checkpointIndex: latest.checkpointIndex,
-        restore: 'code',
-      });
-      this._lastChangedTurn = undefined;
-      this._post({ type: 'turnChangesUndone', payload: { turnId } });
-      if (outcome.skippedFiles.length > 0) {
-        void vscode.window.showWarningMessage(
-          tPlural('checkpoints.skippedFiles', outcome.skippedFiles.length, {
-            files: outcome.skippedFiles.map((file) => `${file.path} (${file.reason})`).join(', '),
-          }),
-        );
-        return;
-      }
-      const restored = outcome.restoredFiles.length + outcome.removedFiles.length;
-      void vscode.window.showInformationMessage(tPlural('checkpoints.filesRestored', restored));
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
 
   private async _continueAccountConversationHere(conversationId: string): Promise<boolean> {
@@ -2661,30 +2650,39 @@ export class ChatStateManager {
     decision: ApprovalDecision,
     automatic: boolean,
     note?: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const pending = this._pendingApprovals.get(requestId);
-    if (pending === undefined) return;
-    this._pendingApprovals.delete(requestId);
-    const allowing = decision === 'once' || decision === 'session' || decision === 'always';
-    const editedContent =
-      pending.proposed === undefined
-        ? undefined
-        : allowing
-          ? await finishProposedChange(requestId)
-          : await discardProposedChange(requestId).then(() => undefined);
-
-    if (decision === 'session') this._sessionApprovals.add(pending.identity);
-    this._post({
-      type: 'approvalResolved',
-      payload: { requestId, outcome: automatic ? 'session' : decision },
-    });
-
-    if (decision === 'abort') {
-      await this._interruptActiveTurn();
-      return;
-    }
-
+    if (pending === undefined || pending.resolving) return false;
+    const owner = this._activeTurn;
+    const thread = this._thread;
+    const epoch = this._conversationEpoch;
+    const ownsTurn = (): boolean =>
+      owner !== undefined &&
+      this._activeTurn === owner &&
+      !owner.isUiSettled() &&
+      owner.threadId === pending.threadId &&
+      owner.turnId === pending.turnId &&
+      owner.runtime === pending.runtime &&
+      thread !== undefined &&
+      this._thread === thread &&
+      thread.id === pending.threadId &&
+      thread.runtime === pending.runtime &&
+      this._conversationEpoch === epoch;
+    if (!ownsTurn()) return false;
+    pending.resolving = true;
     try {
+      const allowing = decision === 'once' || decision === 'session' || decision === 'always';
+      const editedContent =
+        pending.proposed === undefined
+          ? undefined
+          : allowing
+            ? await finishProposedChange(requestId)
+            : await discardProposedChange(requestId).then(() => undefined);
+      if (!ownsTurn() || this._pendingApprovals.get(requestId) !== pending) return false;
+      if (decision === 'abort') {
+        await this._interruptActiveTurn();
+        return true;
+      }
       await pending.runtime.respondToApproval({
         threadId: pending.threadId,
         turnId: pending.turnId,
@@ -2700,8 +2698,12 @@ export class ChatStateManager {
         ...(note === undefined ? {} : { note }),
         ...(editedContent === undefined ? {} : { editedContent }),
       });
-      const thread = this._thread;
-      if (thread?.id === pending.threadId && thread.runtime === pending.runtime) {
+      if (ownsTurn() && this._pendingApprovals.get(requestId) === pending && thread !== undefined) {
+        if (decision === 'session') this._sessionApprovals.set(pending.identity, { thread, epoch });
+        this._post({
+          type: 'approvalResolved',
+          payload: { requestId, outcome: automatic ? 'session' : decision },
+        });
         approvalAnsweredInEditor({
           cwd: thread.cwd,
           threadId: pending.threadId,
@@ -2709,21 +2711,22 @@ export class ChatStateManager {
           requestId,
           approved: decision !== 'deny',
         });
+        return true;
       }
+      return false;
     } catch (error) {
-      const current = this._activeTurn;
-      if (
-        current?.threadId !== pending.threadId ||
-        current.turnId !== pending.turnId ||
-        current.runtime !== pending.runtime
-      ) {
-        return;
-      }
+      if (!ownsTurn() || this._pendingApprovals.get(requestId) !== pending) return false;
+      this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
       this._postError(
         error instanceof Error ? error.message : t('chatNotice.approvalFailed'),
         RUNTIME_FAILURE,
       );
       await this._interruptActiveTurn();
+      return false;
+    } finally {
+      if (this._pendingApprovals.get(requestId) === pending) {
+        this._pendingApprovals.delete(requestId);
+      }
     }
   }
 
@@ -4723,10 +4726,15 @@ export class ChatStateManager {
     }
     if (event.type === 'approval_requested') {
       const approvalOwner = this._activeTurn;
+      const approvalThread = this._thread;
+      const approvalEpoch = this._conversationEpoch;
       if (
         approvalOwner?.threadId !== event.threadId ||
         approvalOwner.turnId !== event.turnId ||
-        approvalOwner.runtime !== runtime
+        approvalOwner.runtime !== runtime ||
+        approvalOwner.isUiSettled() ||
+        approvalThread?.id !== event.threadId ||
+        approvalThread.runtime !== runtime
       ) {
         complete();
         return;
@@ -4738,9 +4746,8 @@ export class ChatStateManager {
         event.editable === true &&
         event.proposedContent !== undefined &&
         filePath !== undefined &&
-        this._thread !== undefined &&
         (await runtime.offers('approvalEdits'))
-          ? { filePath: path.resolve(this._thread.cwd, filePath), content: event.proposedContent }
+          ? { filePath: path.resolve(approvalThread.cwd, filePath), content: event.proposedContent }
           : undefined;
       const question =
         event.question !== undefined && event.question !== null
@@ -4750,6 +4757,15 @@ export class ChatStateManager {
         question === undefined &&
         event.alwaysAllowSaved === true &&
         (await runtime.offers('savedPermissions'));
+      if (
+        this._activeTurn !== approvalOwner ||
+        approvalOwner.isUiSettled() ||
+        this._thread !== approvalThread ||
+        this._conversationEpoch !== approvalEpoch ||
+        this._pendingApprovals.has(event.requestId)
+      ) {
+        return;
+      }
       this._pendingApprovals.set(event.requestId, {
         threadId: event.threadId,
         turnId: event.turnId,
@@ -4758,7 +4774,12 @@ export class ChatStateManager {
         label,
         ...(proposed === undefined ? {} : { proposed }),
       });
-      if (question === undefined && this._sessionApprovals.has(identity)) {
+      const sessionApproval = this._sessionApprovals.get(identity);
+      if (
+        question === undefined &&
+        sessionApproval?.thread === approvalThread &&
+        sessionApproval.epoch === approvalEpoch
+      ) {
         await this._resolveApproval(event.requestId, 'once', true);
         return;
       }
@@ -4871,16 +4892,26 @@ export class ChatStateManager {
       this._cancelRequested = true;
       return;
     }
+    const thread = this._thread;
+    const epoch = this._conversationEpoch;
+    const ownsView = (): boolean =>
+      this._thread === thread &&
+      this._conversationEpoch === epoch &&
+      this._activeTurn === undefined &&
+      !active.isUiSettled();
     this._cancelRequested = false;
     delete this._activeTurn;
+    this._expirePendingApprovals(active.turnId);
     try {
       await active.runtime.interruptTurn({ threadId: active.threadId, turnId: active.turnId });
-      if (!active.isUiSettled()) this._post({ type: 'done' });
+      if (ownsView()) this._post({ type: 'done' });
     } catch (error) {
-      this._postError(
-        error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
-        RUNTIME_REFUSAL,
-      );
+      if (ownsView()) {
+        this._postError(
+          error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
+          RUNTIME_REFUSAL,
+        );
+      }
     } finally {
       active.complete();
     }
