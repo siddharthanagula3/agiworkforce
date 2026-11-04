@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, NotebookPen } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Spinner } from '@agiworkforce/ui';
@@ -44,7 +44,15 @@ async function readNotes(projectId: string): Promise<string> {
   return response.text();
 }
 
-export function ProjectNotes({
+export function ProjectNotes(props: {
+  projectId: string;
+  readOnly: boolean;
+  onSaved?: () => void;
+}) {
+  return <ProjectNotesSession key={props.projectId} {...props} />;
+}
+
+function ProjectNotesSession({
   projectId,
   readOnly,
   onSaved,
@@ -58,38 +66,70 @@ export function ProjectNotes({
   const [draft, setDraft] = useState('');
   const [editorKey, setEditorKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const lifetime = useRef(0);
+  const mounted = useRef(false);
+  const loadPending = useRef(false);
+  const loadStarted = useRef(false);
+  const savePending = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      lifetime.current += 1;
+      loadStarted.current = false;
+      loadPending.current = false;
+      savePending.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    if (!mounted.current || loadPending.current) return;
+    loadPending.current = true;
+    const owner = lifetime.current;
+    loadStarted.current = true;
     setState({ status: 'loading' });
     try {
       const text = await readNotes(projectId);
+      if (owner !== lifetime.current) return;
       setState({ status: 'ready', saved: text });
       setDraft(text);
       setEditorKey((key) => key + 1);
     } catch {
+      if (owner !== lifetime.current) return;
       setState({ status: 'failed' });
+    } finally {
+      if (owner === lifetime.current) loadPending.current = false;
     }
   }, [projectId]);
 
   useEffect(() => {
-    if (open) void load();
+    if (open && !loadStarted.current) void load();
   }, [open, load]);
 
   const save = async () => {
-    if (saving) return;
+    if (!mounted.current || savePending.current || readOnly || state.status !== 'ready') return;
+    savePending.current = true;
+    const owner = lifetime.current;
+    const submitted = draft;
     setSaving(true);
     try {
       await uploadProjectKnowledgeFile({
         projectId,
-        file: new File([draft], PROJECT_NOTES_FILE_NAME, { type: 'text/markdown' }),
+        file: new File([submitted], PROJECT_NOTES_FILE_NAME, { type: 'text/markdown' }),
       });
-      setState({ status: 'ready', saved: draft });
+      if (owner !== lifetime.current) return;
+      setState({ status: 'ready', saved: submitted });
       toast.success('Notes saved. The assistant uses them as a source in this project.');
       onSaved?.();
     } catch (error) {
+      if (owner !== lifetime.current) return;
       toast.error(toUserMessage(error, 'Your notes were not saved'));
     } finally {
-      setSaving(false);
+      if (owner === lifetime.current) {
+        savePending.current = false;
+        setSaving(false);
+      }
     }
   };
 
