@@ -819,7 +819,7 @@ fn jwt_from_auth_store(store: &crate::auth::AuthStore) -> Option<String> {
     None
 }
 
-fn jwt_from_legacy_auth_toml(content: &str) -> Option<String> {
+pub(crate) fn jwt_from_legacy_auth_toml(content: &str) -> Option<String> {
     let table: toml::Value = toml::from_str(content).ok()?;
     let entries = table.get("entries")?.as_table()?;
     for key in ["managed_cloud", "agiworkforce"] {
@@ -851,22 +851,7 @@ pub fn load_jwt() -> Option<String> {
         }
     }
 
-    // The legacy plaintext auth.toml moves into the credential store on first
-    // read and is then deleted, so the token stops living in the clear.
-    let auth_path = crate::config::CliConfig::config_dir()
-        .ok()?
-        .join("auth.toml");
-    let content = std::fs::read_to_string(&auth_path).ok()?;
-    let token = jwt_from_legacy_auth_toml(&content)?;
-    match crate::auth::AuthStore::adopt_legacy_token(&token) {
-        Ok(()) => {
-            let _ = std::fs::remove_file(&auth_path);
-        }
-        Err(error) => {
-            tracing::warn!("[tier_cache] could not move auth.toml into the store: {error}")
-        }
-    }
-    Some(token)
+    None
 }
 
 // ---------------------------------------------------------------------------

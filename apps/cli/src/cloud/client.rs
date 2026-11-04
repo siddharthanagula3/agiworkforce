@@ -174,6 +174,7 @@ impl Route {
 pub struct CloudClient {
     base: String,
     jwt: String,
+    auth_base: String,
     owner: String,
     http: reqwest::Client,
 }
@@ -206,6 +207,7 @@ impl CloudClient {
         Ok(Self {
             base,
             jwt,
+            auth_base: crate::app_server::account::device_auth_base(),
             owner,
             http,
         })
@@ -266,12 +268,8 @@ impl CloudClient {
         serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
     }
 
-    /// Send, and on a 401 renew the session once and send again. A token the
-    /// server refuses before it was due to expire (a passkey enrolled, the
-    /// device unlinked) would otherwise fail every call while the account still
-    /// looked signed in. A refresh that is refused too, or a second 401, forgets
-    /// the credential, so the next status reads signed out and the user, or the
-    /// desktop's account sync, signs in again.
+    // A retry retains this request's deployment and session. Resolving a fresh
+    // client here could replay the old account's body under a new login.
     async fn send_renewing<T: DeserializeOwned>(
         &self,
         build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
@@ -283,12 +281,21 @@ impl CloudClient {
         use crate::app_server::account::{
             forget_refused_session, recover_rejected_session, RejectedSessionRecovery,
         };
-        match recover_rejected_session(&self.jwt).await {
-            RejectedSessionRecovery::Renewed => {
-                let renewed = CloudClient::connect_managed()?;
+        match recover_rejected_session(&self.jwt, &self.base, &self.auth_base).await {
+            RejectedSessionRecovery::Renewed(jwt) => {
+                let renewed = CloudClient {
+                    base: self.base.clone(),
+                    jwt,
+                    auth_base: self.auth_base.clone(),
+                    owner: self.owner.clone(),
+                    http: self.http.clone(),
+                };
                 match Self::send(build(&renewed)).await {
                     Err(CloudError::SessionExpired) => {
-                        forget_refused_session();
+                        forget_refused_session(&renewed.jwt).map_err(|error| CloudError::Api {
+                            status: 401,
+                            message: format!("The rejected credential could not be removed: {error:#}"),
+                        })?;
                         Err(CloudError::SessionExpired)
                     }
                     other => other,
@@ -739,6 +746,7 @@ mod tests {
         let client = CloudClient {
             base: format!("http://{}", listener.local_addr().unwrap()),
             jwt: "fixture-token".to_string(),
+            auth_base: format!("http://{}/api", listener.local_addr().unwrap()),
             owner: "fixture-owner".to_string(),
             http: reqwest::Client::new(),
         };
@@ -799,6 +807,7 @@ mod tests {
         let client = CloudClient {
             base: format!("http://{}", listener.local_addr().unwrap()),
             jwt: "fixture-token".to_string(),
+            auth_base: format!("http://{}/api", listener.local_addr().unwrap()),
             owner: "fixture-owner".to_string(),
             http: reqwest::Client::new(),
         };

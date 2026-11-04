@@ -871,14 +871,10 @@ pub(crate) async fn try_subscription_auth(provider: &Provider) -> Option<(String
                 );
                 continue;
             }
-            // Persist any token refreshes that happened during resolve_auth
-            let _ = crate::auth::save_auth(&auth_store);
             return Some((token, url, sub_name.to_string()));
         }
     }
 
-    // Persist any token refreshes even if none matched
-    let _ = crate::auth::save_auth(&auth_store);
     None
 }
 
