@@ -2085,9 +2085,43 @@ fixtures simulate policy changes, origins, remote exclusions and project consent
 they do not establish credential/cache-expiry integration or process/runtime
 acceptance. No server process, network request or test was run for this trace.
 
+## Mobile Library picker owns loaded rows and selection callbacks
+
+Accepted commit `1621b8b044b5905495aa0d38d969a77aef4413c6` changes seven
+production files and four fixture sources. `useLibraryPickerScope` combines
+canonical account epoch, Cloud/Local mode and exact destination scope identity;
+layout cleanup retires retained callbacks. AddToChatSheet receives new-chat or
+conversation destination keys, and FileMentionPalette receives composer draft
+identity plus query. Loaded results/errors are tagged with their scope and hidden
+when it is no longer current; original request settlement cannot publish into a
+new scope. Existing account teardown, API epoch checks and server hydration
+owner/scope checks predate this UI correction.
+
+The open sheet reloads on scope changes. Its independent request generation is
+stored with ready rows and checked synchronously at cloud tap before haptic,
+close or attachment publication. Close immediately invalidates that generation,
+so a retained same-scope row callback cannot be reused after close/reopen or a
+new reload. Same-scope old rows may briefly render before the reload effect, but
+the retired request generation denies their taps. Mention rows independently
+recheck their captured query/destination/account scope before selection. Local
+Library projection remains unchanged; these are consumer ownership checks, not
+new server authorization or a claim of prior cross-account byte access.
+
+`libraryClient.ts` now accepts a single kind or readonly kind array. Both callers
+send `image,file` CSV through the existing hosted query schema before server SQL
+kind filtering, ordering and first-page limits (12 sheet items, 6 mentions).
+The existing defensive post-fetch video filter remains. This avoids filling the
+first page with excluded video rows; it does not implement full pagination,
+prove every file subtype attachable or scan/merge all Library content.
+
+Fixture sources cover captured callbacks, destination/query/account changes,
+same-owner epoch replacement, close/reopen, stale success/error and encoded kind
+queries. They use mocked sheet/API interactions and remain unexecuted: no actual
+native navigation, rendering timing or deployment acceptance is established.
+
 ## Reconstruction boundary
 
-Only the eighty accepted production slices traced above are represented as
+Only the eighty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
