@@ -330,6 +330,224 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 describe('managed agent stream', () => {
+  it.each([false, true])('recognizes a final canonical failed/error pair with journal=%s', async (journaled) => {
+    finalize.mockClear();
+    delivered.mockClear();
+    transitionCloudAgentRun.mockClear();
+    persistenceMocks.execute.mockClear();
+    const usage = createObservedProviderUsage();
+    const onTerminal = vi.fn(async () => undefined);
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator(
+          [
+            {
+              type: 'error',
+              message: 'No pending tool call.',
+              code: 'approval_resume_missing_tool_call',
+            },
+            { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+            { type: 'stop', reason: 'error' },
+          ],
+          () => accumulateObservedProviderUsage(usage, { inputTokens: 120, outputTokens: 40 }),
+        ),
+        processed: {
+          ...processed,
+          conversationId: '0190a000-0000-7000-8000-00000000000b',
+          assistantMessageId: '0190a000-0000-7000-8000-00000000000c',
+          conversationIsTemporary: false,
+        } as ProcessedRequest,
+        usage,
+        userId: 'user-1',
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        onTerminal,
+        ...(journaled
+          ? {
+              runJournal: {
+                db: processed.managedUsage!.db,
+                userId: 'user-1',
+                runId: '0190a000-0000-7000-8000-000000000001',
+              },
+            }
+          : {}),
+      }),
+    );
+    expect(finalize).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        reason: 'tool_loop_completed_reported_failure',
+        cancelled: true,
+        attempt: { outcome: 'failed' },
+        usage: expect.objectContaining({ providerCalls: 1, inputTokens: 120, outputTokens: 40 }),
+      }),
+    );
+    expect(delivered).not.toHaveBeenCalled();
+    expect(onTerminal).toHaveBeenCalledExactlyOnceWith('failed');
+    if (journaled) {
+      expect(transitionCloudAgentRun).toHaveBeenCalledWith(
+        processed.managedUsage!.db,
+        expect.objectContaining({ state: 'failed' }),
+      );
+    }
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    expect(JSON.parse(String((call?.[1] as unknown[] | undefined)?.[7]))).toMatchObject({
+      truncated: true,
+    });
+  });
+
+  it.each<{ name: string; terminalEvents: AgentEvent[] }>([
+    {
+      name: 'error event only',
+      terminalEvents: [{ type: 'error', message: 'Recoverable step error' }],
+    },
+    { name: 'error stop only', terminalEvents: [{ type: 'stop', reason: 'error' }] },
+    {
+      name: 'failed state only',
+      terminalEvents: [{ type: 'task-state-changed', taskId: 'turn-1', state: 'failed' }],
+    },
+    ...(['partial', 'timed_out', 'awaiting_input'] as const).map((state) => ({
+      name: `${state} with error stop`,
+      terminalEvents: [
+        { type: 'task-state-changed', taskId: 'turn-1', state },
+        { type: 'stop', reason: 'error' },
+      ] as AgentEvent[],
+    })),
+    {
+      name: 'failed with refusal',
+      terminalEvents: [
+        { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+        { type: 'stop', reason: 'refusal' },
+      ],
+    },
+    {
+      name: 'later recovered state',
+      terminalEvents: [
+        { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+        { type: 'stop', reason: 'error' },
+        { type: 'task-state-changed', taskId: 'turn-1', state: 'ready_for_review' },
+      ],
+    },
+    {
+      name: 'later successful stop',
+      terminalEvents: [
+        { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+        { type: 'stop', reason: 'error' },
+        { type: 'stop', reason: 'end-turn' },
+      ],
+    },
+  ])('does not broaden terminal failure classification for $name', async ({ terminalEvents }) => {
+    finalize.mockClear();
+    delivered.mockClear();
+    const onTerminal = vi.fn(async () => undefined);
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator(terminalEvents),
+        processed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        onTerminal,
+      }),
+    );
+    expect(finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ cancelled: false, attempt: { outcome: 'completed' } }),
+    );
+    expect(delivered).toHaveBeenCalledOnce();
+    expect(onTerminal).toHaveBeenCalledExactlyOnceWith('completed');
+  });
+
+  it('preserves a later cancellation after a canonical failed/error pair', async () => {
+    const onTerminal = vi.fn(async () => undefined);
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator([
+          { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+          { type: 'stop', reason: 'error' },
+          { type: 'stop', reason: 'cancelled' },
+        ]),
+        processed: { ...processed, estimatedPromptTokens: 120 } as ProcessedRequest,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        onTerminal,
+      }),
+    );
+    expect(onTerminal).toHaveBeenCalledExactlyOnceWith('cancelled');
+  });
+
+  it('keeps explicit failure codes ahead of canonical error codes', async () => {
+    finalize.mockClear();
+    async function* failureWithCanonicalCode(): AsyncGenerator<Uint8Array> {
+      yield new TextEncoder().encode(
+        'data: {"choices":[{"delta":{"x_stream_error":{"code":"provider_rate_limited"}}}]}\n\n',
+      );
+      yield* canonicalTerminalGenerator([
+        { type: 'error', message: 'Canonical error', code: 'other_error' },
+        { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+        { type: 'stop', reason: 'error' },
+      ]);
+    }
+    await readAll(
+      buildManagedAgentStream({
+        generator: failureWithCanonicalCode(),
+        processed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+      }),
+    );
+    expect(finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attempt: { outcome: 'failed', errorClass: 'provider_rate_limited' },
+      }),
+    );
+  });
+
+  it('preserves consumed free-tier usage for a canonical failed/error pair', async () => {
+    settleFreeTrialRequest.mockClear();
+    const usage = createObservedProviderUsage();
+    addToolSpend(usage, 7_000);
+    await readAll(
+      buildManagedAgentStream({
+        generator: canonicalTerminalGenerator(
+          [
+            { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
+            { type: 'stop', reason: 'error' },
+          ],
+          () => accumulateObservedProviderUsage(usage, { inputTokens: 90, outputTokens: 30 }),
+        ),
+        processed: {
+          ...processed,
+          managedUsage: undefined,
+          freeTrial: {
+            kind: 'free_trial',
+            userId: 'free-user',
+            requestId: 'free-canonical-failed-request',
+          },
+        } as ProcessedRequest,
+        usage,
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+      }),
+    );
+    expect(settleFreeTrialRequest).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        outcome: 'failed',
+        attempt: { outcome: 'failed' },
+        cost: expect.objectContaining({
+          tokenMicrousd: observedProviderUsageLedgerMicrousd(usage, {
+            provider: 'anthropic',
+            model: 'claude-test',
+          }),
+          toolMicrousd: 7_000,
+        }),
+        usage: expect.objectContaining({ promptTokens: 90, completionTokens: 30, totalTokens: 120 }),
+      }),
+    );
+  });
+
   it.each([false, true])('classifies canonical cancellation at EOF with journal=%s', async (journaled) => {
     finalize.mockClear();
     delivered.mockClear();

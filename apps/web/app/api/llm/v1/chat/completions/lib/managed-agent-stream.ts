@@ -150,6 +150,7 @@ export function buildManagedAgentStream(
   let reportedFailure = false;
   let reportedFailureCode: string | undefined;
   let lastStopReason: AgentEventStopReason | undefined;
+  let lastCanonicalTaskState: AgentTaskState | undefined;
   let lastTaskState: AgentTaskState | undefined;
   let terminalReported = false;
   const persistable = Boolean(input.userId) && canPersistAssistantTurn(input.processed);
@@ -415,7 +416,9 @@ export function buildManagedAgentStream(
               ? 'failed'
               : lastStopReason === 'cancelled'
                 ? 'cancelled'
-                : 'completed';
+                : lastCanonicalTaskState === 'failed' && lastStopReason === 'error'
+                  ? 'failed'
+                  : 'completed';
             if (input.runJournal) {
               await flushJournal();
               if (outcome !== 'completed') {
@@ -431,7 +434,7 @@ export function buildManagedAgentStream(
               }
             }
             await settle(
-              reportedFailure
+              outcome === 'failed'
                 ? `${input.completionReason}_reported_failure`
                 : outcome === 'cancelled'
                   ? input.cancellationReason
@@ -481,6 +484,9 @@ export function buildManagedAgentStream(
           }
           for (const envelope of extractManagedAgentEventEnvelopes(next.value)) {
             if (envelope.event.type === 'stop') lastStopReason = envelope.event.reason;
+            if (envelope.event.type === 'task-state-changed') {
+              lastCanonicalTaskState = envelope.event.state;
+            }
             if (journal) {
               const state = await journal.append(envelope);
               if (state !== undefined) lastTaskState = state;
