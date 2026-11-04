@@ -3977,7 +3977,12 @@ Resolution/acceptance: Include nonignored untracked files, hash each content var
 
 ## SCHEDULE-POLICY-REFUSAL-AS-SUCCESS-01
 
-Severity: Medium. Status: open in source snapshot `49d0c30f`; deployment unknown.
+Severity: Medium. Status: source-corrected by accepted commit
+`89dad3d54f1312e2bc1d323eaf2462943deccb2f`; runtime/deployment acceptance OPEN,
+2026-11-04. Historical false-success rows are not repaired.
+
+Historical evidence below describes snapshot `49d0c30f`, not a rerun or the
+current corrected path.
 
 A claimed task denied by managed-compute policy returns a normal result from
 `apps/web/lib/services/scheduled-agent-executor.ts:852-861`. The finalizer at
@@ -3997,9 +4002,26 @@ provider or push delivery was used.
 
 Evidence: [continuous assistant review](evidence/2026-09-29-ecosystem-review/continuous-assistant-review.json)
 and [reproduction result](evidence/2026-09-29-ecosystem-review/scheduled-refusal-reproduction.json).
-Return an explicit execution outcome and propagate policy refusal through
-finalization, notifications and event delivery. Add a composed test in which
-managed-compute refusal cannot become success or a completed announcement.
+The historical acceptance target was explicit refusal propagation through
+finalization, notifications and event delivery.
+
+Current source adds a `managed_compute_access_denied` cancellation reason, code
+and message to the pre-reservation executor refusal. The schedule finalizer
+records cancellation rather than success and uses the actual persisted run status
+for notification decisions, including the catch path. Running, cancelled and
+awaiting-approval states do not enqueue completion notifications.
+`scheduleRunPolicyRefusal` requires cancelled status and the exact typed result
+discriminator; fresh and replayed trigger deliveries then become filtered without
+ordinary failure retry. Unrelated cancellation is not reclassified as this policy
+refusal. Existing provider/reservation exclusion on denial, costs, cadence, run
+count and ordinary error retry semantics remain unchanged.
+
+The six-file tranche includes executor, schedule-service and trigger regression
+sources, all unexecuted. They use mocked DB/helpers, not live queue, billing or
+provider infrastructure. No dedicated cron aggregate or approval-resume denial
+fixture establishes those composed flows. Historical reproduction/test results
+above are retained as provenance only; deployment and end-to-end acceptance are
+not established by this source correction.
 
 ## ELECTRON-REJECTED-RUNTIME-NOT-DISPOSED-01
 

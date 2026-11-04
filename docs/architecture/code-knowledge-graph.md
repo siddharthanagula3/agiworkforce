@@ -1350,9 +1350,30 @@ and restart-as-dispatch semantics. Fixtures are unexecuted; full event ordering,
 StrictMode, row overlap and native runtime acceptance remain unproven. Feed,
 signing/security and quit policy are not redesigned.
 
+## Scheduled policy refusal retains cancelled outcome through delivery
+
+Accepted commit `89dad3d54f1312e2bc1d323eaf2462943deccb2f` changes three production
+files and three unexecuted regression sources. `scheduled-agent-executor.ts`
+returns explicit cancellation reason/code/message for managed-compute denial
+before reservation/provider work. `schedule-service.ts` finalizes that result as
+cancelled and announces using the actual persisted status rather than requested
+success/error status; running, cancelled and awaiting-approval states are skipped.
+`trigger-fire.ts` recognizes only the cancelled run with the exact policy-refusal
+discriminator, filtering both fresh and replayed deliveries without ordinary
+failure retry. Other cancellation remains distinct.
+
+Existing cost accounting, cadence/count and ordinary retries are unchanged; old
+false-success rows are not repaired. The existing canonical finding
+[SCHEDULE-POLICY-REFUSAL-AS-SUCCESS-01](../../audit/prior-audits/active-issues-register.md#schedule-policy-refusal-as-success-01)
+is source-corrected but remains open for runtime/deployment acceptance. Its old
+reproduction is historical, not rerun. New fixtures use mocked DB/helpers and do
+not establish live queue/billing/provider behavior; dedicated cron aggregate and
+approval-resume denial coverage is absent. No tests or operational actions were
+performed for this trace.
+
 ## Reconstruction boundary
 
-Only the fifty-six accepted production slices traced above are represented as
+Only the fifty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
