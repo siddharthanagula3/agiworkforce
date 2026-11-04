@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  CONTEXT_POLICY_SNAPSHOT_KEY,
+  ContextPolicySnapshotSchema,
+  type ContextPolicySnapshot,
+} from '@/lib/services/context-policy-snapshot';
 import { ROUTING_PROFILE_CHOICES } from '@agiworkforce/types';
 
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
@@ -22,6 +27,7 @@ const CHECKPOINT_TURN_ATTACHMENTS_KEY = 'x_turn_attachments';
 const CHECKPOINT_MODEL_SELECTION_KEY = 'x_model_selection';
 const CHECKPOINT_TURN_TOOL_PROHIBITION_KEY = 'x_turn_tool_prohibition';
 const CHECKPOINT_PRIVATE_KEYS: readonly string[] = [
+  CONTEXT_POLICY_SNAPSHOT_KEY,
   CHECKPOINT_TURN_ATTACHMENTS_KEY,
   CHECKPOINT_MODEL_SELECTION_KEY,
   CHECKPOINT_TURN_TOOL_PROHIBITION_KEY,
@@ -53,6 +59,7 @@ export function buildApprovalCheckpointRequest(
   modelSelection?: ModelSelection,
   turnToolProhibition?: TurnToolProhibition | null,
   toolSchemaState?: ToolSchemaState,
+  contextPolicySnapshot?: ContextPolicySnapshot,
 ): Record<string, unknown> {
   const {
     messages: _messages,
@@ -61,11 +68,13 @@ export function buildApprovalCheckpointRequest(
     code_execution: _serverOrCallerCodeExecution,
     ...request
   } = chatRequest;
-  const publicRequest = withoutToolSchemaState(request);
+  const publicRequest = replayableCheckpointRequest(withoutToolSchemaState(request));
+  const policySnapshot = ContextPolicySnapshotSchema.safeParse(contextPolicySnapshot);
   const schemaState = ToolSchemaStateSchema.safeParse(toolSchemaState);
   return {
     ...publicRequest,
     ...callerToolFields,
+    ...(policySnapshot.success ? { [CONTEXT_POLICY_SNAPSHOT_KEY]: policySnapshot.data } : {}),
     stream: true,
     ...(turnAttachments.length > 0 ? { [CHECKPOINT_TURN_ATTACHMENTS_KEY]: turnAttachments } : {}),
     ...(modelSelection ? { [CHECKPOINT_MODEL_SELECTION_KEY]: modelSelection } : {}),

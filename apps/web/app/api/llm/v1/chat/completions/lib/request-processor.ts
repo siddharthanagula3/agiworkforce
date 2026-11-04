@@ -1,4 +1,12 @@
 import 'server-only';
+import {
+  captureContextPolicySnapshot,
+  contextPolicySnapshotsMatch,
+  contextPolicySnapshotIsCurrent,
+  CONTEXT_POLICY_RESTART_CODE,
+  CONTEXT_POLICY_RESTART_MESSAGE,
+  type ContextPolicySnapshot,
+} from '@/lib/services/context-policy-snapshot';
 import { withoutToolSchemaState, type ToolSchemaState } from './tool-schema-state';
 import {
   isManagedToolInventoryVersion,
@@ -1436,6 +1444,7 @@ export type ProcessedRequest = {
    * to ask, so the gate's choice is allow or deny.
    */
   sensitiveContextPresent?: boolean;
+  contextPolicySnapshot?: ContextPolicySnapshot;
   untrustedContextPresent?: boolean;
   toolApprovalPolicy?: ToolApprovalPolicy;
   toolLockdown?: boolean;
@@ -3115,7 +3124,18 @@ async function freeTrialBudgetReachedResponse(
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_TOTAL_LENGTH = 1000000;
 
+function contextPolicyRestartResponse(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { error: { message: CONTEXT_POLICY_RESTART_MESSAGE, code: CONTEXT_POLICY_RESTART_CODE } },
+      { status: 409 },
+    ),
+  };
+}
+
 export interface ProcessRequestOptions {
+  contextPolicySnapshot?: ContextPolicySnapshot;
   workspaceControls?: ResolvedWorkspaceControls | null;
   scopedDbPromise?: Promise<UserScopedDb>;
   turnToolProhibition?: TurnToolProhibition | null;
@@ -3500,6 +3520,22 @@ async function processAdmittedRequest(
   const scopedDbPromise =
     options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
+
+  const contextPolicyScope = await scopedDbPromise;
+  const currentContextPolicySnapshot = await captureContextPolicySnapshot(
+    contextPolicyScope.db,
+    userId,
+    contextPolicyScope.organizationId,
+  );
+  if (
+    !currentContextPolicySnapshot ||
+    (options.contextPolicySnapshot !== undefined &&
+      !contextPolicySnapshotsMatch(options.contextPolicySnapshot, currentContextPolicySnapshot))
+  ) {
+    return contextPolicyRestartResponse();
+  }
+
+  const contextPolicySnapshot = options.contextPolicySnapshot ?? currentContextPolicySnapshot;
 
   const conversationIdForHealthSpace = chatRequest.conversation_id;
   const healthSpacePromise: Promise<string | null> = conversationIdForHealthSpace
@@ -4152,6 +4188,7 @@ async function processAdmittedRequest(
         surface: chatSurface,
         memoryEnabled: chatRequest.memory_enabled,
         policy: managedMemoryPolicy,
+        organizationContextPolicy: contextPolicySnapshot.policy,
         query: lastUserMessageText(chatRequest),
         projectContext: ownership.projectContext,
         pastChatLinksShown: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
@@ -5845,6 +5882,17 @@ async function processAdmittedRequest(
     chatRequest.code_execution && !cloudExecutionSwitchedOff
       ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
       : 0;
+  if (
+    !(await contextPolicySnapshotIsCurrent(
+      contextPolicyScope.db,
+      userId,
+      contextPolicyScope.organizationId,
+      contextPolicySnapshot,
+    ))
+  ) {
+    return contextPolicyRestartResponse();
+  }
+
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
@@ -6730,6 +6778,7 @@ async function processAdmittedRequest(
     conversationIsTemporary,
     healthSpaceProjectId: await healthSpacePromise,
     googleUserData: (await googleUserDataPromise) !== null,
+    contextPolicySnapshot,
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),

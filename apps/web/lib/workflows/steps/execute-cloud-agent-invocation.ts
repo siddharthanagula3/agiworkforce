@@ -1,4 +1,9 @@
 import 'server-only';
+import {
+  contextPolicySnapshotIsCurrent,
+  CONTEXT_POLICY_RESTART_CODE,
+  CONTEXT_POLICY_RESTART_MESSAGE,
+} from '@/lib/services/context-policy-snapshot';
 
 import {
   GENERATED_FILE_SURFACES,
@@ -570,6 +575,19 @@ export async function executeCloudAgentWorkflowInvocation(
   // rather than the managed per-step reservation -- durable is a transport
   // choice, not a licence to skip the tier's budget.
   const processed = rehydrateCloudAgentWorkflowRequest(input, managedUsageDb);
+  if (
+    !(await contextPolicySnapshotIsCurrent(
+      managedUsageDb,
+      input.userId,
+      processed.organizationId ?? null,
+      processed.contextPolicySnapshot,
+    ))
+  ) {
+    throw Object.assign(new FatalError(CONTEXT_POLICY_RESTART_MESSAGE), {
+      code: CONTEXT_POLICY_RESTART_CODE,
+    });
+  }
+
   const reloadConnectorPermissions = async () =>
     scopeConnectorPermissionsToTurn(
       await loadConnectorToolPermissions(
@@ -756,6 +774,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.modelSelection,
             processed.turnToolProhibition,
             checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           events: checkpoint.events,
@@ -777,6 +796,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.modelSelection,
             processed.turnToolProhibition,
             checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -799,6 +819,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.modelSelection,
             processed.turnToolProhibition,
             checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -823,6 +844,7 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.modelSelection,
             processed.turnToolProhibition,
             checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
