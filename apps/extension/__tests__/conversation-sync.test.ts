@@ -433,6 +433,83 @@ describe('conversation cloud sync', () => {
     expect(entry?.messages.every((message) => message.cloudSyncedAt === undefined)).toBe(true);
   }, 10_000);
 
+  it('keeps retained current-account deletions outstanding without dirty conversations', async () => {
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+      accountId: OWNER.accountId,
+      cloudConversationId: CONVERSATION_WIRE.id,
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    respond = () => jsonResponse({ error: 'Forbidden' }, 403);
+    await expect(sweepConversationSync()).resolves.toBe(true);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toHaveLength(1);
+  });
+
+  it('leaves other-account deletions dormant', async () => {
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+      accountId: OTHER_OWNER.accountId,
+      cloudConversationId: CONVERSATION_WIRE.id,
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    await expect(sweepConversationSync()).resolves.toBe(false);
+    expect(requests).toHaveLength(0);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toHaveLength(1);
+  });
+
+  it('leaves deletions dormant when auth is unavailable', async () => {
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+      accountId: OWNER.accountId,
+      cloudConversationId: CONVERSATION_WIRE.id,
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    authContext.current = null;
+    await expect(sweepConversationSync()).resolves.toBe(false);
+    expect(requests).toHaveLength(0);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toHaveLength(1);
+  });
+
+  it('reports initially unavailable auth once without making a request', async () => {
+    authContext.current = null;
+    const onAuthUnavailable = vi.fn();
+    await expect(sweepConversationSync(onAuthUnavailable)).resolves.toBe(false);
+    expect(onAuthUnavailable).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(0);
+  });
+
+  it('reports auth becoming unavailable during deletion so the same owner can wake later', async () => {
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+      accountId: OWNER.accountId,
+      cloudConversationId: CONVERSATION_WIRE.id,
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    const onAuthUnavailable = vi.fn();
+    respond = () => {
+      authContext.current = null;
+      return jsonResponse({ error: 'Forbidden' }, 403);
+    };
+    await expect(sweepConversationSync(onAuthUnavailable)).resolves.toBe(false);
+    expect(onAuthUnavailable).toHaveBeenCalledTimes(1);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toHaveLength(1);
+  });
+
+  it('does not keep the old account awake when auth changes during a failed deletion', async () => {
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+      accountId: OWNER.accountId,
+      cloudConversationId: CONVERSATION_WIRE.id,
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    respond = () => {
+      authContext.current = { token: 'other-bearer', owner: { ...OTHER_OWNER } };
+      return jsonResponse({ error: 'Forbidden' }, 403);
+    };
+    await expect(sweepConversationSync()).resolves.toBe(false);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toHaveLength(1);
+  });
+
   it('sweeps stranded work without any debounce timer firing', async () => {
     await upsertConversation(OWNER, 'conv-sweep', cloudMessages(9_000));
 

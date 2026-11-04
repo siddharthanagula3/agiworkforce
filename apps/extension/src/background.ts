@@ -54,6 +54,7 @@ import {
   type BackgroundChatDelivery,
 } from './features/background/background-results';
 import { settleDetachedAssistantTurn } from './features/background/conversation-history';
+import { createMaintenanceAlarmController } from './features/background/maintenance-alarm';
 import {
   deliverPageCapture,
   pageCaptureFailureMessage,
@@ -2684,22 +2685,34 @@ const MAINTENANCE_PERIOD_MINUTES = 1;
  */
 const RETIRED_ALARM_NAMES = ['keep-alive', SYNC_SWEEP_ALARM];
 
-let maintenanceAlarmArmed = false;
+const maintenanceAlarm = createMaintenanceAlarmController({
+  periodInMinutes: MAINTENANCE_PERIOD_MINUTES,
+  read: () => chrome.alarms.get(MAINTENANCE_ALARM),
+  create: () =>
+    new Promise<void>((resolve, reject) => {
+      chrome.alarms.create(MAINTENANCE_ALARM, { periodInMinutes: MAINTENANCE_PERIOD_MINUTES }, () => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(new Error(error.message ?? 'Failed to create maintenance alarm'));
+        else resolve();
+      });
+    }),
+  clear: async () => {
+    await chrome.alarms.clear(MAINTENANCE_ALARM);
+  },
+  runPass: runMaintenancePass,
+  onError: (error) => logger.warn('Maintenance alarm reconciliation failed', error),
+});
 
 function armMaintenanceAlarm(): void {
-  if (maintenanceAlarmArmed) return;
-  maintenanceAlarmArmed = true;
-  chrome.alarms.create(MAINTENANCE_ALARM, { periodInMinutes: MAINTENANCE_PERIOD_MINUTES }, () => {
-    if (chrome.runtime.lastError) {
-      maintenanceAlarmArmed = false;
-      logger.warn('Failed to create maintenance alarm', chrome.runtime.lastError.message);
-    }
-  });
+  maintenanceAlarm.requestWork();
 }
 
-function disarmMaintenanceAlarm(): void {
-  maintenanceAlarmArmed = false;
-  void chrome.alarms.clear(MAINTENANCE_ALARM);
+let maintenanceObservedOwner: ManagedCloudOwner | null = null;
+
+function observeMaintenanceOwner(owner: ManagedCloudOwner | null): void {
+  const changed = owner !== null && !sameManagedCloudOwner(maintenanceObservedOwner, owner);
+  maintenanceObservedOwner = owner ? { ...owner } : null;
+  if (changed) armMaintenanceAlarm();
 }
 
 /**
@@ -2723,7 +2736,11 @@ async function runMaintenancePass(): Promise<boolean> {
   }
 
   try {
-    if (await sweepConversationSync()) outstanding = true;
+    if (await sweepConversationSync(() => {
+      // Auth can be temporarily unavailable without a sign-out event. Let a
+      // later successful token read wake the same owner again, without polling.
+      maintenanceObservedOwner = null;
+    })) outstanding = true;
   } catch (error) {
     logger.debug('Conversation sync sweep failed', error);
     outstanding = true;
@@ -2738,8 +2755,7 @@ async function runMaintenancePass(): Promise<boolean> {
 }
 
 async function settleMaintenanceAlarm(): Promise<void> {
-  if (await runMaintenancePass()) armMaintenanceAlarm();
-  else disarmMaintenanceAlarm();
+  await maintenanceAlarm.settle();
 }
 
 async function recoverScheduledTaskRuns(): Promise<void> {
@@ -3818,6 +3834,7 @@ async function handleMessageAsync(
       const candidate = await getManagedCloudAuthContext(message.refresh);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
+      observeMaintenanceOwner(context?.owner ?? null);
       return {
         success: true,
         ...(context ? { token: context.token, owner: context.owner } : {}),
@@ -3832,6 +3849,9 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
       }
       retireManagedCloudOwner(previousOwner);
+      if (sameManagedCloudOwner(maintenanceObservedOwner, previousOwner)) {
+        observeMaintenanceOwner(null);
+      }
       await revokeAllOneTimeSiteGrants();
       if (computerUseStarts.getPending()) {
         computerUseStartGeneration += 1;
@@ -4846,6 +4866,7 @@ async function handleMessageAsync(
         delCloudMsg.cloudConversationId,
         delCloudMsg.organizationId,
       );
+      if (queued) armMaintenanceAlarm();
       return queued
         ? ({ success: true } as ExtensionResponse)
         : ({ success: false, error: 'Could not queue account chat deletion' } as ExtensionResponse);

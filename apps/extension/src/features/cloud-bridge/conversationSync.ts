@@ -105,20 +105,34 @@ export function scheduleConversationSync(
 }
 
 /**
- * @returns whether any conversation still needs mirroring after the pass. The
+ * @returns whether the available account still owes mirroring or deletion. The
  *   caller uses it to decide whether the service worker has to be woken again;
  *   a sweep that finds nothing must not keep a periodic alarm alive.
  */
-export async function sweepConversationSync(): Promise<boolean> {
+export async function sweepConversationSync(onAuthUnavailable?: () => void): Promise<boolean> {
   try {
     const context = await getManagedCloudAuthContext();
-    if (!context) return false;
+    if (!context) {
+      onAuthUnavailable?.();
+      return false;
+    }
     await drainCloudDeletionTombstones(context.owner);
     const entries = await listConversationsNeedingCloudSync(context.owner);
     for (const entry of entries) {
       await flushConversation(context.owner, entry.id, false);
     }
-    return (await listConversationsNeedingCloudSync(context.owner)).length > 0;
+    // A switch during network work must not keep the old account awake.
+    // Unavailable auth (including a failed non-forced lookup) remains dormant.
+    const current = await getManagedCloudAuthContext();
+    if (!current) {
+      onAuthUnavailable?.();
+      return false;
+    }
+    const retained = await withTombstoneStore(readTombstones);
+    return (
+      retained.some((row) => row.accountId === current.owner.accountId) ||
+      (await listConversationsNeedingCloudSync(current.owner)).length > 0
+    );
   } catch (error) {
     logger.debug('Conversation sync sweep failed', error);
     return true;
