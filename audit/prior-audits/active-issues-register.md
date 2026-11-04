@@ -8547,3 +8547,38 @@ consent. Cancellation, background completion and availability semantics must be
 coherent across callers. This is **not implementation-ready**. No production
 change, blanket legacy-history refusal, new transfer policy or migration is
 approved by this note. Source reading only; no tests, network or real-data actions.
+
+
+## WEB-DIRECT-STREAM-TERMINAL-BILLING-COUPLING-01
+
+Severity: Medium. Status: OPEN source-backed outcome-separation design constraint,
+2026-11-04. No observed production loss, incorrect charge amount or refund
+entitlement is established. This concerns the direct stream transformer, not the
+separate managed agent generator's canonical-cancellation correction.
+
+In `apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts`, EOF around
+725 settles billing with completed/failed derived from `assembler.lastError`.
+Only afterward, around 750, `turnTruncated` classifies reported failure, missing
+finish reason or empty output. A truncated EOF with no explicit error can thus
+already have a completed attempt (`settleStreamBilling`, around 207), a managed
+client-delivered marker (around 353), and completed billing telemetry (around
+806), despite its incomplete answer. Counterguards are important: persistence
+already marks this answer truncated, and `recordDirectRouteSuccess` plus
+`onSuccessfulTurn` execute only when `!truncated`. This is not a claim that those
+success hooks or route-health paths accept every truncated response.
+
+A naive replacement of completed with failed is not an approved correction.
+`resolveBilledOutcome` preserves completed financial settlement for cancellation
+with consumed tokens, with existing stopped-text usage estimation where applicable.
+`settleStreamBilling` and `lib/services/managed-usage-request-service.ts::finalizeManagedUsageRequest`
+(around 1128–1130) associate failed outcome with zero billed/provider cost. Changing
+terminal classification alone could erase observed consumption rather than merely
+correct attempt or delivery truth.
+
+Required design separates attempt/terminal outcome, answer delivery and financial
+settlement, retains observed provider usage/cost, and defines truthful idempotent
+receipts/recovery without inventing refund semantics. Account for explicit error,
+empty/missing-stop EOF and cancellation independently. No production change or
+financial-policy decision is approved by this note. Source reading only: no tests,
+DB, provider, billing actions or deployment verification. Managed commit
+`119de96dcd3a5ed7cb27e871b53a4f11d33f0b5b` does not resolve this direct-path issue.

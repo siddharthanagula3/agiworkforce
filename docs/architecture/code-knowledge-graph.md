@@ -1371,9 +1371,36 @@ not establish live queue/billing/provider behavior; dedicated cron aggregate and
 approval-resume denial coverage is absent. No tests or operational actions were
 performed for this trace.
 
+## Managed canonical cancellation remains cancellation at EOF
+
+Accepted commit `119de96dcd3a5ed7cb27e871b53a4f11d33f0b5b` changes
+`apps/web/app/api/llm/v1/chat/completions/lib/managed-agent-stream.ts` and its
+unexecuted regression source. The last validated canonical stop is tracked
+independently of journal presence. At generator EOF, reported failure still wins;
+otherwise a final cancelled stop selects the existing cancelled settlement path,
+including consumed usage/stopped-text estimation. Journal transition, truncated
+persistence and terminal owner callback reflect cancellation, and the completed
+client-delivery marker is skipped. Existing awaiting-input handling is unchanged.
+Mocked journal repair fixtures are not live journal/settlement proof; broader
+managed partial/timed-out terminal semantics are not corrected by this slice.
+
+## Direct stream financial outcome remains a separate design constraint
+
+[WEB-DIRECT-STREAM-TERMINAL-BILLING-COUPLING-01](../../audit/prior-audits/active-issues-register.md#web-direct-stream-terminal-billing-coupling-01)
+is Medium OPEN, source-only. `stream-transform.ts` settles EOF from `lastError`
+before computing truncation; attempt status, managed delivered marking and billing
+telemetry can therefore report completion for no-error truncated output. Existing
+persistence already records truncation and route-success/`onSuccessfulTurn` are
+already guarded by `!truncated`. Do not treat those counterguards as missing.
+Failed financial finalization zeros billed/provider costs; cancellation with
+consumed tokens has an existing special case. A coherent design must separate
+attempt/delivery truth from charges and preserve observed usage without inventing
+refund policy. No direct-path production change, observed loss, DB action or
+runtime acceptance follows from the managed cancellation correction above.
+
 ## Reconstruction boundary
 
-Only the fifty-seven accepted production slices traced above are represented as
+Only the fifty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
