@@ -15,7 +15,9 @@ export const IMAGE_JOB_DRIVE_KIND = 'media-generation.image-attempt';
 export function isImageGenerationJobDrivable(job: ImageGenerationJob): boolean {
   return (
     job.operation === 'generate' ||
-    (job.plan.sourceAssetId !== undefined && job.plan.referencesInline !== true)
+    (Boolean(job.plan.sourceAssetId) &&
+      !job.plan.referencesInline &&
+      (!job.maskImageSha256 || Boolean(job.plan.maskAssetId)))
   );
 }
 

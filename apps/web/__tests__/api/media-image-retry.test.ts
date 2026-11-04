@@ -189,6 +189,42 @@ describe('POST /api/media/image/retry', () => {
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 
+  it('passes resupplied inline source and mask bytes to an explicit retry', async () => {
+    const existing = job({
+      operation: 'edit',
+      maskImageSha256: 'a'.repeat(64),
+      plan: { ...job().plan, sourceAssetId: ASSET_ID },
+    });
+    const requeued = { ...existing, status: 'queued' as const };
+    mocks.getJob.mockResolvedValue(existing);
+    mocks.requeue.mockResolvedValue(requeued);
+    mocks.runAttempt.mockResolvedValue({
+      job: { ...existing, status: 'completed', terminalAt: new Date().toISOString() },
+      images: [],
+      providerModel: 'image-model',
+      provenance: [],
+    });
+
+    const response = await POST(
+      retryRequest({
+        job_id: JOB_ID,
+        source_image: { b64_json: 'AQID' },
+        mask_image: { b64_json: 'BAUG' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.runAttempt).toHaveBeenCalledWith({
+      db: {},
+      job: requeued,
+      inlineEdit: {
+        sourceBytes: new Uint8Array([1, 2, 3]),
+        maskBytes: new Uint8Array([4, 5, 6]),
+      },
+    });
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
   it('refuses a terminal failure, which was settled and cannot be retried for free', async () => {
     mocks.getJob.mockResolvedValue(job({ retryable: false, terminalAt: new Date().toISOString() }));
 

@@ -51,7 +51,10 @@ import {
   type GeneratedImage,
   type ImageEditContext,
 } from './image-generation-provider';
-import { scheduleImageGenerationJobDrive } from './image-job-drive-queue';
+import {
+  isImageGenerationJobDrivable,
+  scheduleImageGenerationJobDrive,
+} from './image-job-drive-queue';
 
 export interface ImageJobInlineEdit {
   sourceBytes: Uint8Array;
@@ -263,9 +266,9 @@ async function resolveEditContext(input: {
     };
   }
 
-  if (!job.plan.sourceAssetId || job.plan.referencesInline) {
+  if (!job.plan.sourceAssetId || !isImageGenerationJobDrivable(job)) {
     throw new Error(
-      'This edit was started from an uploaded image, so a retry has to be sent with that image again.',
+      'This edit uses uploaded images, so a retry has to include those original images again.',
     );
   }
   const sourceBytes = await resolveImageRefBytes(
