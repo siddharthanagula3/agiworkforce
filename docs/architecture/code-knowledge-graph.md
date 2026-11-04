@@ -2963,9 +2963,59 @@ loss or disclosure was observed. Product semantics for pre-existing content and
 the retention clock must be decided before a coherent change; no destructive
 cleanup, retention alteration or implementation-ready solution is supplied here.
 
+## Web chat request settlement separates current UI from message persistence
+
+Accepted commit `0ce0b65be6fa40a71075afcad030d545d02c767d` changes
+`useChatStream.ts`, adds `chat-request-settlement.ts` and three fixture sources.
+Ordinary Send already retired its prior authority, account/session checks already
+existed, and controller cleanup already compared exact objects. This slice adds
+an explicit settlement owner rather than treating those prior safeguards as new.
+The public length-limited answer → Continue path can reuse the assistant message
+ID; the stopped-message footer is not the asserted public Continue entry here.
+
+The new helper owns separate conversation-current requests and conversation/message
+writer identities. Beginning a successor invalidates observers and aborts the old
+controller; exact finish/release cannot delete a replacement. Tracked persistence
+and reconciliation chains retain ownership until they settle. Stop alone leaves
+partial writes eligible, while a same-row successor permanently retires the old
+writer's later dispatch/retries, even after that successor releases. Writes for a
+different, unsuperseded row can still finish. Moving a temporary conversation ID
+moves the exact request and writer keys, not unrelated conversation ownership.
+
+`saveMessageToDb` retains serialized saves and creates receipt authority from the
+original canonical session, with the per-row guard at dispatch. Already-issued
+receipts remain readable through response decoding after request replacement;
+they do not acquire replacement UI authority, and a canonical-session change
+still refuses them. Current-request checks separately gate stream/UI, error,
+phase, leaf restoration, metadata and saved-ID publication. Active run cleanup
+also requires its exact settlement. Continue and approval/input resume establish
+controllers before token awaits, so Stop or a successor fences pending admission.
+Remote approval watching acquires an invalidatable observation lease; observing
+does not itself claim transport, and a progressed current watch begins its own
+request before following the run.
+
+Restored approval/input turns without stored authority still use the inherited
+raw `getToken` fallback. This is not full persisted provenance or workspace
+pinning. The reader still awaits `reader.cancel()`, and continuation's Set claim
+is released in finalization; stalled cleanup can therefore retain liveness
+constraints. No already-dispatched server operation is undone. Server content and
+leaf ordering are separate: automatic assistant persistence already checks
+`messageExists` before promoting replayed rows, whereas the client single-message
+locked path and bulk writer promote their returned leaf without that replay guard.
+The single-message null-leaf unlocked path differs. Request ownership does not
+establish server ordering, idempotent replay leaf semantics or cross-client CAS.
+
+The three fixture sources contain 25 unexecuted cases, including public
+length→Continue, stale receipts/errors/teardown, same-row retry refusal,
+different-row persistence, stopped partial saves, pre-auth cancellation,
+observation invalidation and session changes during decoding. Teardown releases
+controlled gates/streams and awaits recorded operations before resetting mocks.
+These authored fixtures and source review are not browser, database, delivery or
+runtime acceptance; no tests/checks were run for this documentation update.
+
 ## Reconstruction boundary
 
-Only the one hundred and five accepted production slices traced above are represented as
+Only the one hundred and six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
