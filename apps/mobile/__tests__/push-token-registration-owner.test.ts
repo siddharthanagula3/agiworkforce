@@ -45,6 +45,8 @@ import {
   setupNotificationListeners,
   type PushNotificationAccountContext,
 } from '../services/notifications';
+import { postPushRegistration } from '../services/pushPreferenceSync';
+import { ApiHttpError } from '../services/apiErrors';
 
 function makeContext(
   overrides: Partial<PushNotificationAccountContext> = {},
@@ -88,6 +90,7 @@ describe('push-token registration ownership', () => {
       }),
       {
         headers: { Authorization: 'Bearer jwt-a' },
+        auth401Recovery: 'caller-owned',
         signal: controller.signal,
       },
     );
@@ -108,6 +111,12 @@ describe('push-token registration ownership', () => {
 
     await expect(registration).resolves.toBeNull();
     expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('reports a caller-owned authentication refusal as failed registration', async () => {
+    mockApiPost.mockRejectedValueOnce(new ApiHttpError('Sign in again', 401, 'auth_required'));
+    await expect(postPushRegistration('expo-token-a', makeContext())).resolves.toBe(false);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a captured account-A native token-refresh callback after switching to B', async () => {

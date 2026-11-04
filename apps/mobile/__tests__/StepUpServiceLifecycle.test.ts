@@ -46,7 +46,19 @@ test('grant forwards immutable action, resource, original bearer, epoch and sign
   await expect(requestStepUpGrant('organization.transfer_ownership', 'workspace-a', 'fixture-original-bearer', options)).resolves.toEqual({ kind: 'granted', token: 'fixture-grant' });
   expect(mockFetch).toHaveBeenCalledWith('/api/auth/step-up', {
     method: 'POST', body: JSON.stringify({ action: 'organization.transfer_ownership', resourceId: 'workspace-a' }),
-  }, { ...options, headers: { Authorization: 'Bearer fixture-original-bearer' } });
+  }, { ...options, headers: { Authorization: 'Bearer fixture-original-bearer' }, auth401Recovery: 'caller-owned' });
+});
+
+test('a 401 cannot become a grant or verification challenge from its body', async () => {
+  mockFetch.mockResolvedValue({
+    ok: false, status: 401,
+    text: async () => JSON.stringify({ token: 'unusable-grant', error: {
+      code: 'STEP_UP_VERIFICATION_REQUIRED', details: { level: 'second_factor' },
+    } }),
+  });
+  const options = { accountEpoch: { ownerId: 'account-a', epoch: 1 }, signal: new AbortController().signal };
+  await expect(requestStepUpGrant('password.change', null, 'fixture-original-bearer', options))
+    .resolves.toEqual({ kind: 'failed', message: 'Your session could not be confirmed. Sign in again to continue.' });
 });
 
 test('consequence lookup retains original epoch and cancellation signal', async () => {

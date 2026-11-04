@@ -115,6 +115,7 @@ export async function postPushRegistration(
       },
       {
         headers: { Authorization: `Bearer ${authToken}` },
+        auth401Recovery: 'caller-owned',
         signal: accountContext.signal,
       },
     );

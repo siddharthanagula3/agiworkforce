@@ -82,9 +82,12 @@ export async function requestStepUpGrant(
       method: 'POST',
       body: JSON.stringify({ action, ...(resourceId ? { resourceId } : {}) }),
     },
-    { ...options, headers: { Authorization: `Bearer ${sessionToken}` } },
+    { ...options, headers: { Authorization: `Bearer ${sessionToken}` }, auth401Recovery: 'caller-owned' },
   );
   const body = parseJsonBody(await response.text());
+  if (response.status === 401) {
+    return { kind: 'failed', message: 'Your session could not be confirmed. Sign in again to continue.' };
+  }
   if (response.ok && typeof body?.['token'] === 'string') {
     return { kind: 'granted', token: body['token'] };
   }

@@ -133,6 +133,141 @@ function deferredBody<T>() {
   };
 }
 
+describe('explicit caller-owned 401 recovery', () => {
+  const options = {
+    auth401Recovery: 'caller-owned' as const,
+    headers: { Authorization: 'Bearer original-session-token' },
+  };
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('preserves the raw refusal and sends the original bearer once', async () => {
+    const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('original refusal', {
+      status: 401, statusText: 'Unauthorized', headers: { 'x-request-id': 'original-request' },
+    }));
+    const response = await apiFetch('/api/auth/step-up', {}, options);
+    expect(response.status).toBe(401);
+    expect(response.statusText).toBe('Unauthorized');
+    expect(response.headers.get('x-request-id')).toBe('original-request');
+    expect(await response.text()).toBe('original refusal');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect((fetch.mock.calls[0]?.[1]?.headers as Record<string, string>).Authorization)
+      .toBe('Bearer original-session-token');
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('uses the normal typed 401 error for parsed requests', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, { error: 'rejected' }));
+    await expect(api.post('/api/mobile/push-token', {}, options)).rejects.toMatchObject({
+      name: 'ApiHttpError', status: 401, code: 'auth_required',
+    });
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('preserves binary refusal bytes without ambient recovery', async () => {
+    const bytes = new Uint8Array([1, 2, 3]).buffer;
+    const response = makeResponse(401, '', 'application/octet-stream');
+    response.arrayBuffer = jest.fn().mockResolvedValue(bytes);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    await expect(apiFetchBinary('/api/original-credential', {}, options)).resolves.toEqual({
+      ok: false, status: 401, contentType: 'application/octet-stream', bytes,
+    });
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the timeout until the caller-owned refusal body settles', async () => {
+    const body = deferredBody<string>();
+    const response = new Response(null, { status: 401 });
+    response.text = body.read;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    const setTimer = jest.spyOn(globalThis, 'setTimeout');
+    const clearTimer = jest.spyOn(globalThis, 'clearTimeout');
+    const pending = apiFetch('/api/original-credential', {}, { ...options, timeout: 12345 });
+    await body.started;
+    const timerIndex = setTimer.mock.calls.findIndex(([, delay]) => delay === 12345);
+    const timer = setTimer.mock.results[timerIndex]?.value;
+    expect(timerIndex).toBeGreaterThanOrEqual(0);
+    expect(clearTimer).not.toHaveBeenCalledWith(timer);
+    body.resolve('refused');
+    await pending;
+    expect(clearTimer).toHaveBeenCalledWith(timer);
+  });
+
+  it('retains the generation fence while a 401 body is read', async () => {
+    const body = deferredBody<string>();
+    const response = makeResponse(401, {});
+    response.text = body.read;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    const pending = apiFetch('/api/original-credential', {}, options);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'StaleApiAccountOperationError' });
+    await body.started;
+    resetApiAccountState();
+    body.resolve('refused');
+    await rejected;
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('releases the timeout when the refusal body fails', async () => {
+    const failure = new Error('body failed');
+    const response = makeResponse(401, {});
+    response.text = jest.fn().mockRejectedValue(failure);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+    const setTimer = jest.spyOn(globalThis, 'setTimeout');
+    const clearTimer = jest.spyOn(globalThis, 'clearTimeout');
+    await expect(apiFetch('/api/original-credential', {}, { ...options, timeout: 12345 }))
+      .rejects.toBe(failure);
+    const timerIndex = setTimer.mock.calls.findIndex(([, delay]) => delay === 12345);
+    expect(timerIndex).toBeGreaterThanOrEqual(0);
+    expect(clearTimer).toHaveBeenCalledWith(setTimer.mock.results[timerIndex]?.value);
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('retains the account epoch fence before exposing a 401', async () => {
+    activateCloudAccount('caller-owned-a');
+    const accountEpoch = captureCloudAccountEpoch();
+    const network = deferredBody<Response>();
+    jest.spyOn(globalThis, 'fetch').mockImplementationOnce(network.read);
+    const pending = apiFetch('/api/original-credential', {}, { ...options, accountEpoch });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'StaleCloudAccountOperationError' });
+    await network.started;
+    activateCloudAccount('caller-owned-b');
+    network.resolve(makeResponse(401, {}));
+    await rejected;
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('does not change ambient refresh and terminal logout for ordinary custom headers', async () => {
+    const fetch = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, {}))
+      .mockResolvedValueOnce(makeResponse(401, {}));
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+    await expect(api.get('/api/default-recovery', { headers: { 'Idempotency-Key': 'same-request' } }))
+      .rejects.toThrow('Session expired');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not suppress passkey refusals with the 401-only option', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, { error: { details: { reason: 'passkey_required' } } }),
+    );
+    await expect(apiFetch('/api/original-credential', {}, options)).rejects.toMatchObject({
+      name: 'ApiHttpError', status: 403, code: 'PASSKEY_REQUIRED',
+    });
+    expect(mockAnnouncePasskeyRequired).toHaveBeenCalledTimes(1);
+  });
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   resetApiAccountState();

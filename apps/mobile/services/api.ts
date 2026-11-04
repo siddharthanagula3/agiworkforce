@@ -264,6 +264,12 @@ interface RequestOptions {
    */
   baseUrl?: string;
   headers?: Record<string, string>;
+  /**
+   * Only controls 401 recovery. Caller-owned credentials return the refusal to
+   * the caller without refreshing or retiring the ambient session. Other auth
+   * refusals and all transport/account guards retain their normal behavior.
+   */
+  auth401Recovery?: 'ambient' | 'caller-owned';
   /** A content report the user chose to send; lets that one POST through in Local mode. */
   consentedReport?: boolean;
   _skipAuthRetry?: boolean;
@@ -354,6 +360,7 @@ async function sendRequest(
     if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
 
     if (response.status === 401) {
+      if (options.auth401Recovery === 'caller-owned') return { response, release };
       if (!options._skipAuthRetry) {
         const refreshed = await tryRefreshToken();
         assertApiAccountGeneration(accountGeneration);
