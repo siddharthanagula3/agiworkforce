@@ -96,25 +96,14 @@ pub async fn document_search(
     state.manager.search(&file_path, &query).await
 }
 
-/// Edit an existing spreadsheet, preserving the data already in it.
-///
-/// `ExcelEditor` reads the source workbook through calamine and rewrites it
-/// with the edits applied, so existing sheets and cells survive. That is what
-/// makes this safe to expose.
-///
-/// There is deliberately no `document_edit_word` counterpart: docx_rs is
-/// write-only, so a Word edit could only build a new document from the edits
-/// alone and discard the source. See docs/decisions/wire-or-cut.md.
 pub async fn document_edit_excel(
     file_path: String,
     output_path: String,
     edits: Vec<ExcelEdit>,
 ) -> Result<String> {
-    let resolved_source = resolve_output_path(&file_path)?;
-    let resolved_output = resolve_output_path(&output_path)?;
     let editor = ExcelEditor::new();
-    editor.edit_spreadsheet(&resolved_source, edits, &resolved_output)?;
-    Ok(resolved_output)
+    editor.edit_spreadsheet(&file_path, edits, &output_path)?;
+    Ok(output_path)
 }
 
 pub async fn document_create_word_simple(

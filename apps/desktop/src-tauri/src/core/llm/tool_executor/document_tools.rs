@@ -271,10 +271,6 @@ impl ToolExecutor {
         }
     }
 
-    /// Edit an existing spreadsheet in place, preserving its current data.
-    ///
-    /// Only Excel gets an edit tool. Word has no in-place editor that can parse
-    /// an existing .docx, see docs/decisions/wire-or-cut.md.
     pub(crate) async fn execute_document_edit_excel_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -297,8 +293,6 @@ impl ToolExecutor {
             .ok_or_else(|| anyhow!("Missing file_path parameter"))?
             .to_string();
 
-        // Default to editing in place, which is what "edit this spreadsheet"
-        // means to a user. An explicit output_path writes a copy instead.
         let output_path = args
             .get("output_path")
             .and_then(|v| v.as_str())
