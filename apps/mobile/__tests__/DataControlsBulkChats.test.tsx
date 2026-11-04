@@ -9,6 +9,7 @@ const mockLoadConversations = jest.fn().mockResolvedValue(undefined);
 
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockCloudUnlocked = true;
+const mockModeListeners = new Set<(state: { appMode: string }, previous: { appMode: string }) => void>();
 
 jest.mock('@/services/api', () => ({
   api: {
@@ -28,6 +29,11 @@ jest.mock('@/src/features/settings/data-controls/localDataSnapshot', () => ({
 
 jest.mock('@/src/features/settings/data-controls/localCloudSyncService', () => ({
   syncLocalConversationsToCloud: jest.fn(),
+  prepareLocalCloudSync: jest.fn(() => ({
+    account: require('@/src/features/auth/services/cloudAccountSession').captureCloudAccountEpoch(),
+    mode: 'cloud', conversationLimit: 50, messageLimit: 100, emptyChatsExcluded: 0, conversations: [{ id: 'fixture' }], messageCount: 2,
+    temporaryChatsExcluded: 0, conversationsOmitted: 0, messagesOmitted: 0,
+  })),
 }));
 
 jest.mock('@/stores/chat/chatMessageStore', () => ({
@@ -38,7 +44,10 @@ jest.mock('@/stores/chat/chatMessageStore', () => ({
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: mockAppMode }),
-    { getState: () => ({ appMode: mockAppMode }) },
+    { getState: () => ({ appMode: mockAppMode }), subscribe: (listener: (state: { appMode: string }, previous: { appMode: string }) => void) => {
+      mockModeListeners.add(listener);
+      return () => mockModeListeners.delete(listener);
+    } },
   ),
 }));
 
@@ -141,6 +150,7 @@ beforeEach(() => {
   __resetCloudAccountSessionForTests();
   activateCloudAccount('account-a');
   alertCalls.length = 0;
+  mockModeListeners.clear();
   mockAppMode = 'cloud';
   mockCloudUnlocked = true;
   mockPost.mockResolvedValue({ success: true, action: 'archive_all', affectedCount: 3 });
@@ -199,8 +209,46 @@ describe('Data controls, Chat history bulk actions', () => {
       resolveSync({ conversationsSynced: 1, messagesSynced: 2, errors: [] });
     });
 
-    expect(alertCalls.some((call) => call.title === 'Sync complete')).toBe(false);
-    expect(alertCalls.some((call) => call.title === 'Sync completed with errors')).toBe(false);
+    expect(alertCalls.some((call) => call.title === 'Selected text copied')).toBe(false);
+    expect(alertCalls.some((call) => call.title === 'Copy not fully confirmed')).toBe(false);
+  });
+
+  it('does not execute a confirmation opened for the previous account', () => {
+    const screen = render(<DataControlsScreen />);
+    fireEvent.press(screen.getByTestId('sync-to-cloud-button'));
+    act(() => { activateCloudAccount('account-b'); activateCloudAccount('account-a'); });
+    pressAlertButton('Sync to Cloud');
+    expect(syncLocalConversationsToCloud).not.toHaveBeenCalled();
+  });
+
+  it('does not revive a pending confirmation after Local-to-Cloud ABA', () => {
+    const screen = render(<DataControlsScreen />);
+    fireEvent.press(screen.getByTestId('sync-to-cloud-button'));
+    act(() => {
+      mockAppMode = 'local';
+      mockModeListeners.forEach((listener) => listener({ appMode: 'local' }, { appMode: 'cloud' }));
+      mockAppMode = 'cloud';
+      mockModeListeners.forEach((listener) => listener({ appMode: 'cloud' }, { appMode: 'local' }));
+    });
+    pressAlertButton('Sync to Cloud');
+    expect(syncLocalConversationsToCloud).not.toHaveBeenCalled();
+  });
+
+  it('does not execute a confirmation after the screen unmounts', () => {
+    const screen = render(<DataControlsScreen />);
+    fireEvent.press(screen.getByTestId('sync-to-cloud-button'));
+    screen.unmount();
+    pressAlertButton('Sync to Cloud');
+    expect(syncLocalConversationsToCloud).not.toHaveBeenCalled();
+  });
+
+  it('requires a manual Cloud-mode selection before opening a copy dialog', () => {
+    mockAppMode = 'local';
+    const screen = render(<DataControlsScreen />);
+    fireEvent.press(screen.getByTestId('sync-to-cloud-button'));
+    expect(alertCalls.at(-1)?.title).toBe('Chat is set to Local Mode');
+    expect(syncLocalConversationsToCloud).not.toHaveBeenCalled();
+    expect(mockAppMode).toBe('local');
   });
 
   it('posts action "archive_all" only after both confirmation steps', async () => {

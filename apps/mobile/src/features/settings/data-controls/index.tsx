@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
@@ -17,20 +17,21 @@ import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useLocalDataExport } from './useLocalDataExport';
-import { syncLocalConversationsToCloud } from './localCloudSyncService';
+import { prepareLocalCloudSync, syncLocalConversationsToCloud } from './localCloudSyncService';
 import {
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { archiveAllConversations, deleteAllConversations } from '@/src/features/archived-chats';
 import {
   captureCloudAccountEpoch,
+  subscribeCloudAccountEpochChange,
   isCloudAccountEpochCurrent,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
@@ -47,50 +48,91 @@ export default function DataControlsScreen() {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const loadConversations = useChatMessageStore((s) => s.loadConversations);
 
+  const syncOperation = useRef<AbortController | null>(null);
+  const focused = useRef(false);
+
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    setSyncing(false);
+    const invalidate = () => {
+      syncOperation.current?.abort();
+      syncOperation.current = null;
+      if (focused.current) setSyncing(false);
+    };
+    const unsubscribeAccount = subscribeCloudAccountEpochChange(invalidate);
+    const unsubscribeMode = useChatAppModeStore.subscribe((state, previous) => {
+      if (state.appMode !== previous.appMode) invalidate();
+    });
+    return () => {
+      focused.current = false;
+      invalidate();
+      unsubscribeAccount();
+      unsubscribeMode();
+    };
+  }, []));
+
   const handleSyncToCloud = () => {
-    if (!cloudUnlocked) {
-      Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud to sync local chats to the cloud.');
+    if (!focused.current || syncOperation.current) return;
+    if (!cloudUnlocked || !captureCloudAccountEpoch()) {
+      Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud to copy local chats to the cloud.');
       return;
     }
-
+    if (useChatAppModeStore.getState().appMode !== 'cloud') {
+      Alert.alert('Chat is set to Local Mode', 'Switch chat to AGI Cloud, then return here to review the text-copy summary.');
+      return;
+    }
+    const plan = prepareLocalCloudSync();
+    if (plan.messageCount === 0) {
+      Alert.alert('No eligible text to copy', 'There is no eligible text in the selected local chats. Temporary chats and blank, unfinished or queued messages are excluded.');
+      return;
+    }
+    const operation = new AbortController();
+    syncOperation.current = operation;
+    const isCurrent = () => focused.current && syncOperation.current === operation &&
+      !operation.signal.aborted && isCloudAccountEpochCurrent(plan.account) &&
+      useChatAppModeStore.getState().appMode === plan.mode;
+    const finish = () => {
+      if (!isCurrent()) return;
+      syncOperation.current = null;
+      setSyncing(false);
+    };
+    let started = false;
     Alert.alert(
       'Sync Local Chats to AGI Cloud?',
-      'Copies your local chat text to AGI Cloud once; files and memory stay on this device.',
+      `Copy ${plan.conversations.length} chats and ${plan.messageCount} text messages to your current AGI Cloud account. Local originals, files and memory stay on this device.\n\n` +
+        `Limited to ${plan.conversationLimit} chats and the last ${plan.messageLimit} completed messages per chat, excluding blanks. Excluded: ${plan.temporaryChatsExcluded} temporary chats, ${plan.emptyChatsExcluded} chats with no eligible text, ${plan.conversationsOmitted} additional chats, and ${plan.messagesOmitted} messages from selected chats (including blank, unfinished or queued messages).\n\n` +
+        'If a copy is interrupted, some text may already be in Cloud. Check Cloud before starting another copy; another copy can create duplicates.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: finish },
         {
           text: 'Sync to Cloud',
           style: 'default',
           onPress: () => {
-            const account = captureCloudAccountEpoch();
-            if (!account) {
-              Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud before syncing local chats.');
-              return;
-            }
+            if (!isCurrent() || started) return;
+            started = true;
             setSyncing(true);
-            syncLocalConversationsToCloud()
+            syncLocalConversationsToCloud(plan, operation.signal, () => {
+              if (!isCurrent()) throw new Error('This copy is no longer active.');
+            })
               .then((result) => {
-                if (!isCloudAccountEpochCurrent(account)) return;
-                if (result.errors.length > 0) {
-                  Alert.alert(
-                    'Sync completed with errors',
-                    `${result.conversationsSynced} chats synced, ${result.errors.length} failed.\n\n${result.errors.slice(0, 3).join('\n')}`,
-                  );
-                } else {
-                  Alert.alert(
-                    'Sync complete',
-                    `${result.conversationsSynced} chats and ${result.messagesSynced} messages copied to AGI Cloud.`,
-                  );
-                }
+                if (!isCurrent()) return;
+                const incomplete = result.outcomeUnknown || result.errors.length > 0;
+                Alert.alert(
+                  incomplete ? 'Copy not fully confirmed' : 'Selected text copied',
+                  `Selected text copied for ${result.conversationsSynced} chats; ${result.messagesSynced} messages acknowledged by Cloud.` +
+                    (incomplete ? `\n\n${result.errors.slice(0, 3).join('\n')}\n\nSome text may already be in Cloud. Check Cloud before starting another copy; another copy can create duplicates.` : '') +
+                    '\n\nLocal originals are unchanged.',
+                );
               })
               .catch(() => {
-                if (!isCloudAccountEpochCurrent(account)) return;
-                Alert.alert('Sync failed', 'Could not reach AGI Cloud. Check your connection.');
+                if (!isCurrent()) return;
+                Alert.alert('Copy outcome unknown', 'Some text may already be in Cloud. Local originals are unchanged. Check Cloud before starting another copy; another copy can create duplicates.');
               })
-              .finally(() => setSyncing(false));
+              .finally(finish);
           },
         },
       ],
+      { cancelable: true, onDismiss: () => { if (!started) finish(); } },
     );
   };
 
@@ -343,7 +385,7 @@ export default function DataControlsScreen() {
       */}
       <SettingsInfo
         title="Sync to AGI Cloud"
-        body="Copy your local chats to AGI Cloud once; files and memory stay on this device."
+        body="Copy selected local chat text while in AGI Cloud mode. Temporary chats are excluded. Local originals, files and memory stay on this device. If interrupted, check Cloud before another copy to avoid duplicates."
         icon={Cloud}
       />
       <SettingsGroup>
