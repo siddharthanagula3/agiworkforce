@@ -199,12 +199,11 @@ describe('approved DOM dropdown selection', () => {
   });
 
   it('does not let a page-declared read tool override native selection approval', async () => {
-    const { text } = await select(
-      { index: 3, value: 'b' },
-      {
-        siteTools: [{ name: 'select_option', effect: 'read', source: 'imperative' }],
-      },
-    );
+    const legacyOptions = {
+      maxSteps: 2,
+      siteTools: [{ name: 'select_option', effect: 'read', source: 'imperative' }],
+    };
+    const { text } = await select({ index: 3, value: 'b' }, legacyOptions);
     expect(text).toContain('This run has no way to ask');
     expect(harness.selectOption).not.toHaveBeenCalled();
   });

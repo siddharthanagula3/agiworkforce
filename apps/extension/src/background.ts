@@ -144,7 +144,6 @@ import {
   validateBridgeUrl,
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
-import type { SiteToolDescriptor } from './features/tools/siteToolRegistry';
 import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy } from './features/site-policy/store';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
@@ -239,10 +238,7 @@ import {
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
-import {
-  BROWSER_TOOL_DEFINITIONS,
-  resolveManagedComputerUseModel,
-} from './features/computer-use/cloudAgentClient';
+import { resolveManagedComputerUseModel } from './features/computer-use/cloudAgentClient';
 import {
   initDownloadLedger,
   listSessionDownloads,
@@ -1809,55 +1805,6 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
     logger.debug('Tab group operation failed (non-fatal)', err);
     return false;
   }
-}
-
-const SITE_TOOL_RESULT_MAX_CHARS = 8_000;
-
-async function discoverRunSiteTools(tabId: number, tabUrl: string): Promise<SiteToolDescriptor[]> {
-  try {
-    const discovery = (await forwardToContentScript(tabId, {
-      type: 'WEBMCP_DISCOVER_TOOLS',
-    } as ExtensionMessage)) as unknown as { success?: boolean; tools?: unknown; url?: unknown };
-    if (discovery.success !== true) return [];
-    const normalized = normalizeWebMCPToolsUpdate(discovery.tools, discovery.url, tabUrl);
-    if (!normalized) return [];
-    const taken = new Set(BROWSER_TOOL_DEFINITIONS.map((tool) => tool.function.name));
-    return normalized.tools.flatMap((tool): SiteToolDescriptor[] => {
-      const name = `site_${tool.name.replace(/[^A-Za-z0-9_-]/g, '_')}`.slice(0, 64);
-      if (taken.has(name)) return [];
-      taken.add(name);
-      return [
-        {
-          name,
-          pageName: tool.name,
-          effect: tool.effect,
-          source: tool.source,
-          description: tool.description,
-          ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
-}
-
-async function callRunSiteTool(
-  tabId: number,
-  pageName: string,
-  args: Record<string, unknown>,
-): Promise<string> {
-  const response = (await forwardToContentScript(tabId, {
-    type: 'WEBMCP_CALL_TOOL',
-    toolName: pageName,
-    arguments: args,
-  } as ExtensionMessage)) as unknown as { success?: boolean; result?: unknown; error?: string };
-  if (response.success !== true) {
-    throw new Error(response.error ?? 'The page did not complete its tool.');
-  }
-  const text =
-    typeof response.result === 'string' ? response.result : JSON.stringify(response.result ?? null);
-  return sanitizePageText(text).slice(0, SITE_TOOL_RESULT_MAX_CHARS);
 }
 
 async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
@@ -5119,11 +5066,6 @@ async function handleMessageAsync(
         credential: authContext.token,
       });
 
-      const siteTools = await discoverRunSiteTools(cuTabId, cuTab.url);
-      if (!computerUseRuns.isCurrent(lease)) {
-        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
-      }
-
       const allowedForTask = new Set<string>();
       const approvedUploadFiles = new WeakMap<
         Record<string, unknown>,
@@ -5138,13 +5080,12 @@ async function handleMessageAsync(
         signal: AbortSignal | undefined,
         requirement: ActionApprovalRequirement,
       ): Promise<boolean> => {
-        const siteTool = siteTools.find((tool) => tool.name === toolName);
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
           crucial: isCrucialAction(requirement),
           mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
-          readsOnly: readsWithoutActing(toolName, siteTool?.effect),
+          readsOnly: readsWithoutActing(toolName),
           siteApproved: async () => {
             const origin = normalizeApprovedSiteOrigin((await chrome.tabs.get(lease.tabId)).url);
             return origin !== null && originApprovedForBrowserControl(origin);
@@ -5335,13 +5276,6 @@ async function handleMessageAsync(
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
-        siteTools,
-        refreshSiteTools: async () => {
-          const tab = await chrome.tabs.get(cuTabId).catch(() => null);
-          if (!tab?.url) return;
-          siteTools.splice(0, siteTools.length, ...(await discoverRunSiteTools(cuTabId, tab.url)));
-        },
-        callSiteTool: (pageName, args) => callRunSiteTool(cuTabId, pageName, args),
         ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),
         runId: lease.runId,
         signal: lease.controller.signal,
