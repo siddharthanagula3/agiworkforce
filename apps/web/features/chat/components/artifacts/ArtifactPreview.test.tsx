@@ -56,6 +56,24 @@ describe('ArtifactPreview · PDF viewer', () => {
     expect(iframe.getAttribute('src')).toBe('blob:https://app.local/ok');
   });
 
+  it.each([
+    'data:application/pdf,%25PDF-1.4',
+    'data:APPLICATION/PDF;charset=utf-8;base64,JVBERi0=',
+  ])('preserves an exact PDF data MIME with supported encoding: %s', (content) => {
+    render(<ArtifactPreview artifact={pdfArtifact({ content })} />);
+    expect(screen.getByTitle('Trip.pdf').getAttribute('src')).toBe(content);
+  });
+
+  it.each([
+    'data:application/pdfx;base64,JVBERi0=',
+    'data:application/pdf+html,<html>not a PDF</html>',
+    'data:application/pdf;base64',
+  ])('rejects a PDF data MIME prefix or missing payload separator: %s', (content) => {
+    render(<ArtifactPreview artifact={pdfArtifact({ content })} />);
+    expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+    expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
+  });
+
   it('rejects a blob: source whose bytes are NOT a PDF (no HTML-blob XSS)', async () => {
     mockBlobFetch('text/html');
     render(<ArtifactPreview artifact={pdfArtifact({ content: 'blob:https://app.local/evil' })} />);
@@ -149,6 +167,57 @@ describe('ArtifactPreview · PDF viewer', () => {
     );
     expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
     expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+  });
+
+  it.each([
+    '//evil.example.com/leak.pdf',
+    '/\\evil.example.com/leak.pdf',
+    '///evil.example.com/leak.pdf',
+  ])('rejects a root-prefixed PDF source that resolves off-origin: %s', (content) => {
+    render(<ArtifactPreview artifact={pdfArtifact({ content })} />);
+    expect(screen.queryByTitle('Trip.pdf')).toBeNull();
+    expect(screen.getByTestId('artifact-pdf-fallback')).toBeTruthy();
+  });
+
+  it.each(['relative', 'absolute', 'protocol-relative'] as const)(
+    'preserves a same-origin %s PDF source with query and fragment',
+    (form) => {
+      const path = '/documents/Trip.PDF?download=0#page=2';
+      const content =
+        form === 'relative'
+          ? path
+          : form === 'absolute'
+            ? `${window.location.origin}${path}`
+            : `//${window.location.host}${path}`;
+      render(<ArtifactPreview artifact={pdfArtifact({ content })} />);
+      expect(screen.getByTitle('Trip.pdf').getAttribute('src')).toBe(
+        form === 'absolute' ? content : path,
+      );
+    },
+  );
+
+  it('sets the canonical preview query on a normalized same-origin file path', () => {
+    render(
+      <ArtifactPreview
+        artifact={pdfArtifact({
+          content: `//${window.location.host}/api/files/report.pdf?preview=other&keep=1#page=2`,
+        })}
+      />,
+    );
+    expect(screen.getByTitle('Trip.pdf').getAttribute('src')).toBe(
+      '/api/files/report.pdf?preview=pdf&keep=1#page=2',
+    );
+  });
+
+  it('keeps a normalized double-slash pathname on the verified origin', () => {
+    render(
+      <ArtifactPreview
+        artifact={pdfArtifact({ content: '/safe/..//evil.example.com/report.pdf' })}
+      />,
+    );
+    expect(screen.getByTitle('Trip.pdf').getAttribute('src')).toBe(
+      `${window.location.origin}//evil.example.com/report.pdf`,
+    );
   });
 
   it('ACCEPTS a same-origin relative /api/files/{id} uri when the generated file is a PDF', () => {

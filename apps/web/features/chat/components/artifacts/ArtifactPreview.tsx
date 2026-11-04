@@ -715,31 +715,28 @@ export function ArtifactPreview({
     for (const raw of candidates) {
       if (!raw) continue;
       const value = raw.trim();
-      if (value.toLowerCase().startsWith('data:application/pdf')) return value;
+      if (/^data:application\/pdf(?:;[^,]*)?,/i.test(value)) return value;
       if (value.startsWith('blob:')) return value;
       // Same-origin http(s) URL pointing at a PDF (never an arbitrary origin).
-      if (typeof window !== 'undefined' && /^https?:\/\//i.test(value)) {
+      if (
+        typeof window !== 'undefined' &&
+        (/^https?:\/\//i.test(value) || value.startsWith('/'))
+      ) {
         try {
-          const url = new URL(value);
+          const url = new URL(value, window.location.origin);
           if (
+            (url.protocol === 'http:' || url.protocol === 'https:') &&
             url.origin === window.location.origin &&
             (url.pathname.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))
           ) {
             if (url.pathname.startsWith('/api/files/')) url.searchParams.set('preview', 'pdf');
-            return url.href;
+            return value.startsWith('/') && !url.pathname.startsWith('//')
+              ? `${url.pathname}${url.search}${url.hash}`
+              : url.href;
           }
         } catch {
           // noop
         }
-      }
-      // Relative same-origin path.
-      if (value.startsWith('/') && (value.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))) {
-        if (value.startsWith('/api/files/')) {
-          const url = new URL(value, window.location.origin);
-          url.searchParams.set('preview', 'pdf');
-          return `${url.pathname}${url.search}${url.hash}`;
-        }
-        return value;
       }
     }
     return null;
