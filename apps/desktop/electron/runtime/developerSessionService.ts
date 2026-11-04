@@ -1467,16 +1467,18 @@ async function rememberWorktree(
   worktree: DeveloperWorktree,
 ): Promise<WorkspaceRoot | null> {
   try {
-    return await admitWorktreeRoot(
-      parent.id,
-      worktree.id,
-      worktree.path,
-      worktreeName(parent, worktree),
-    );
+    return await admitNamedWorktree(parent, worktree);
   } catch (error) {
     if (error instanceof WorktreeRootRefused) return null;
     throw error;
   }
+}
+
+function admitNamedWorktree(
+  parent: WorkspaceRoot,
+  worktree: DeveloperWorktree,
+): Promise<WorkspaceRoot> {
+  return admitWorktreeRoot(parent.id, worktree.id, worktree.path, worktreeName(parent, worktree));
 }
 
 async function listWorktrees(parent: WorkspaceRoot): Promise<{
@@ -2107,8 +2109,7 @@ export async function readDeveloperSessionActivity(
 /**
  * Start a session in the folder, or in a new worktree of it. A worktree is
  * made by the folder's CLI, then the session starts in a CLI running inside
- * the worktree, which binds the worktree to that one session. A worktree whose
- * session could not start is removed again, so a failed start leaves nothing.
+ * the worktree, which binds the worktree to that one session.
  */
 export async function startDeveloperSession(
   rootId: string,
@@ -2143,24 +2144,32 @@ export async function startDeveloperSession(
     input.worktreeStart === 'working_tree'
       ? { kind: 'working_tree' }
       : { kind: 'ref', name: 'HEAD' };
-  const created = await request(
-    parentServer,
-    'worktree/managed/create',
-    { start },
-    SNAPSHOT_TIMEOUT_MS,
-  );
+  let created: unknown;
+  try {
+    created = await request(parentServer, 'worktree/managed/create', { start }, SNAPSHOT_TIMEOUT_MS);
+  } catch (error) {
+    const failure = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${failure} The creation outcome is unconfirmed. Refresh the worktree list and inspect it before trying again.`,
+    );
+  }
   const setupScript = isRecord(created) ? toSetupScript(created['setupScript']) : null;
   const worktree = toWorktree(
     parent.id,
     isRecord(created) ? created['worktree'] : null,
     setupScript,
   );
-  if (!worktree) throw new Error('The AGI CLI made a worktree this app could not read.');
+  if (!worktree) {
+    throw new Error(
+      'The AGI CLI returned an unreadable worktree creation receipt. The creation outcome is unknown. Refresh the worktree list and inspect it before trying again.',
+    );
+  }
   const cleanupFailures = toCleanupFailures(isRecord(created) ? created['cleanupFailures'] : null);
-  const root = await rememberWorktree(parent, worktree);
-  if (!root) {
-    await requestOrNull(parentServer, 'worktree/managed/delete', { worktreeId: worktree.id });
-    throw new Error('The AGI CLI made a worktree this app could not verify.');
+  let root: WorkspaceRoot;
+  try {
+    root = await admitNamedWorktree(parent, worktree);
+  } catch (error) {
+    throw worktreeStartFailure(worktree, error);
   }
   try {
     const server = await readyServer(root);
@@ -2172,11 +2181,28 @@ export async function startDeveloperSession(
     const session = requireSession(root.id, result);
     return cleanupFailures.length > 0 ? { ...session, cleanupFailures } : session;
   } catch (error) {
-    await stopWorktreeRuntime(root.id);
-    await requestOrNull(parentServer, 'worktree/managed/delete', { worktreeId: worktree.id });
-    forgetWorktreeRoot(root.id);
-    throw error;
+    try {
+      await stopWorktreeRuntime(root.id);
+    } catch (stopError) {
+      throw worktreeStartFailure(worktree, error, stopError);
+    }
+    throw worktreeStartFailure(worktree, error);
   }
+}
+
+function worktreeStartFailure(
+  worktree: DeveloperWorktree,
+  error: unknown,
+  stopError?: unknown,
+): Error {
+  const failure = error instanceof Error ? error.message : String(error);
+  const stopping =
+    stopError === undefined
+      ? ''
+      : ` Runtime shutdown could not be confirmed: ${stopError instanceof Error ? stopError.message : String(stopError)}.`;
+  return new Error(
+    `${failure} The CLI reported worktree ${worktree.id} at ${worktree.path}. No automatic deletion was requested. Refresh the worktree list to inspect it before retrying.${stopping}`,
+  );
 }
 
 function toCleanupFailures(raw: unknown): WorktreeCleanupFailure[] {
@@ -2207,15 +2233,30 @@ export async function deleteDeveloperWorktree(rootId: string): Promise<{ snapsho
   const { parent, worktreeId } = requireWorktree(rootId);
   await stopWorktreeRuntime(rootId);
   const server = await readyServer(parent);
-  const result = await request(
-    server,
-    'worktree/managed/delete',
-    { worktreeId },
-    SNAPSHOT_TIMEOUT_MS,
-  );
-  forgetWorktreeRoot(rootId);
+  let result: unknown;
+  try {
+    result = await request(server, 'worktree/managed/delete', { worktreeId }, SNAPSHOT_TIMEOUT_MS);
+  } catch (error) {
+    const failure = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${failure} The deletion outcome for worktree ${worktreeId} is unconfirmed. Inspect the worktree and archive before trying again.`,
+    );
+  }
   const snapshotRef = isRecord(result) ? readString(result, 'snapshotRef') : null;
-  if (!snapshotRef) throw new Error('The AGI CLI did not say where it kept the worktree.');
+  const snapshotCommit = isRecord(result) ? readString(result, 'snapshotCommit') : null;
+  if (
+    !isRecord(result) ||
+    readString(result, 'worktreeId') !== worktreeId ||
+    !snapshotRef ||
+    !snapshotRef.trim() ||
+    !snapshotCommit ||
+    !snapshotCommit.trim()
+  ) {
+    throw new Error(
+      `The AGI CLI did not return a complete matching archive receipt for worktree ${worktreeId}. The deletion outcome is unknown. Inspect the worktree and archive before trying again.`,
+    );
+  }
+  forgetWorktreeRoot(rootId);
   return { snapshotRef };
 }
 

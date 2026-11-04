@@ -2489,7 +2489,13 @@ describe('developer session runtime', () => {
     getRoot.mockImplementation((id) => (id === worktree.id ? worktree : root));
     const { service, children } = await loadService((method) => {
       if (method === 'shutdown') return { acknowledged: true };
-      if (method === 'worktree/managed/delete') return { snapshotRef: 'refs/kept/worktree' };
+      if (method === 'worktree/managed/delete') {
+        return {
+          worktreeId: 'abcdef12',
+          snapshotRef: 'refs/kept/worktree',
+          snapshotCommit: 'kept-commit',
+        };
+      }
       return defaultResponder(method);
     });
     await service.readDeveloperModels(worktree.id);
@@ -2522,6 +2528,46 @@ describe('developer session runtime', () => {
     expect(children).toHaveLength(1);
     expect(children[0]!.written.some((entry) => entry.method === 'worktree/managed/delete')).toBe(false);
     expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    {},
+    { snapshotRef: 'refs/kept/worktree' },
+    { worktreeId: 'different', snapshotRef: 'refs/kept/worktree', snapshotCommit: 'commit' },
+    { worktreeId: 'abcdef12', snapshotRef: ' ', snapshotCommit: 'commit' },
+    { worktreeId: 'abcdef12', snapshotRef: 'refs/kept/worktree', snapshotCommit: '' },
+    { worktreeId: 'abcdef12', snapshotRef: 'refs/kept/worktree', snapshotCommit: 123 },
+  ])(
+    'retains admission for an incomplete or mismatched archive receipt: %j',
+    async (receipt) => {
+      const { service, children } = await loadService((method) =>
+        method === 'worktree/managed/delete' ? receipt : defaultResponder(method),
+      );
+      await expect(service.deleteDeveloperWorktree(`${root.id}::worktree::abcdef12`)).rejects.toThrow(
+        /complete matching archive receipt.*outcome is unknown/u,
+      );
+      expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+      expect(
+        children.flatMap((child) => child.written).filter(
+          (entry) => entry.method === 'worktree/managed/delete',
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
+  it('retains admission and does not retry after the delete receipt times out', async () => {
+    const { service, children } = await loadService();
+    vi.useFakeTimers();
+    const deletion = expect(
+      service.deleteDeveloperWorktree(`${root.id}::worktree::abcdef12`),
+    ).rejects.toThrow(/did not answer.*deletion outcome.*unconfirmed/u);
+    await vi.advanceTimersByTimeAsync(300_000);
+    await deletion;
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+    expect(children[0]!.written.filter(
+      (entry) => entry.method === 'worktree/managed/delete',
+    )).toHaveLength(1);
   });
 
   it('reads the running turn with the approvals and questions it waits on', async () => {
@@ -2846,6 +2892,123 @@ describe('developer session runtime', () => {
     });
 
     expect(started).not.toHaveProperty('cleanupFailures');
+  });
+
+  it.each([
+    new WorktreeRootRefused('The worktree marker does not match.'),
+    new Error('The worktree admission could not read the filesystem.'),
+  ])('keeps a reported worktree when admission fails: %s', async (failure) => {
+    admitWorktreeRoot.mockRejectedValueOnce(failure);
+    const { service, children } = await loadService((method) =>
+      method === 'worktree/managed/create'
+        ? {
+            worktree: {
+              id: 'a1b2c3d4',
+              path: '/worktrees/a1b2c3d4/checkout',
+              start: { kind: 'ref', name: 'HEAD' },
+            },
+          }
+        : defaultResponder(method),
+    );
+    const start = service.startDeveloperSession(root.id, undefined, { environment: 'worktree' });
+    await expect(start).rejects.toThrow(failure.message);
+    await expect(start).rejects.toThrow(/a1b2c3d4 at \/worktrees\/a1b2c3d4\/checkout/u);
+    expect(children).toHaveLength(1);
+    expect(children[0]!.written.some((entry) => entry.method === 'worktree/managed/delete')).toBe(false);
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+  });
+
+  it('preserves the created worktree and original start failure after its child exits', async () => {
+    const { service, children } = await loadService((method) => {
+      if (method === 'worktree/managed/create') {
+        return {
+          worktree: {
+            id: 'a1b2c3d4',
+            path: '/worktrees/a1b2c3d4/checkout',
+            start: { kind: 'ref', name: 'HEAD' },
+          },
+        };
+      }
+      if (method === 'thread/start') {
+        return new RpcFailure({ code: -1, message: 'Original start failure.' });
+      }
+      if (method === 'shutdown') return { acknowledged: true };
+      return defaultResponder(method);
+    });
+    const start = service.startDeveloperSession(root.id, undefined, { environment: 'worktree' });
+    const failure = expect(start).rejects.toThrow(
+      /Original start failure.*a1b2c3d4 at \/worktrees\/a1b2c3d4\/checkout.*No automatic deletion/u,
+    );
+    await vi.waitFor(() => expect(children[1]?.ended).toBe(true));
+    children[1]!.emit('exit', 0, null);
+    await failure;
+    expect(children.flatMap((child) => child.written).some(
+      (entry) => entry.method === 'worktree/managed/delete',
+    )).toBe(false);
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+  });
+
+  it('does not mask the original start failure when child shutdown remains uncertain', async () => {
+    const { service, children } = await loadService((method) => {
+      if (method === 'worktree/managed/create') {
+        return {
+          worktree: {
+            id: 'a1b2c3d4',
+            path: '/worktrees/a1b2c3d4/checkout',
+            start: { kind: 'ref', name: 'HEAD' },
+          },
+        };
+      }
+      if (method === 'thread/start') {
+        return new RpcFailure({ code: -1, message: 'Original start failure.' });
+      }
+      if (method === 'shutdown') return { acknowledged: true };
+      return defaultResponder(method);
+    });
+    vi.useFakeTimers();
+    const failure = expect(
+      service.startDeveloperSession(root.id, undefined, { environment: 'worktree' }),
+    ).rejects.toThrow(/Original start failure.*Runtime shutdown could not be confirmed/u);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await failure;
+    expect(children.flatMap((child) => child.written).some(
+      (entry) => entry.method === 'worktree/managed/delete',
+    )).toBe(false);
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+  });
+
+  it.each([null, {}, { worktree: { id: 'a1b2c3d4' } }])(
+    'reports an unreadable creation outcome without guessing or deleting: %j',
+    async (receipt) => {
+      const { service, children } = await loadService((method) =>
+        method === 'worktree/managed/create' ? receipt : defaultResponder(method),
+      );
+      await expect(
+        service.startDeveloperSession(root.id, undefined, { environment: 'worktree' }),
+      ).rejects.toThrow(/creation outcome is unknown/u);
+      expect(admitWorktreeRoot).not.toHaveBeenCalled();
+      expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+      expect(children[0]!.written.filter(
+        (entry) => entry.method === 'worktree/managed/create',
+      )).toHaveLength(1);
+      expect(children[0]!.written.some((entry) => entry.method === 'worktree/managed/delete')).toBe(false);
+    },
+  );
+
+  it('does not retry a creation whose receipt times out', async () => {
+    const { service, children } = await loadService();
+    vi.useFakeTimers();
+    const creation = expect(
+      service.startDeveloperSession(root.id, undefined, { environment: 'worktree' }),
+    ).rejects.toThrow(/did not answer.*creation outcome is unconfirmed/u);
+    await vi.advanceTimersByTimeAsync(300_000);
+    await creation;
+    expect(admitWorktreeRoot).not.toHaveBeenCalled();
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+    expect(children[0]!.written.filter(
+      (entry) => entry.method === 'worktree/managed/create',
+    )).toHaveLength(1);
+    expect(children[0]!.written.some((entry) => entry.method === 'worktree/managed/delete')).toBe(false);
   });
 });
 
