@@ -337,7 +337,11 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       pendingBatchesRef.current += 1;
       setPreparing(true);
       admissionRef.current = admissionRef.current
-        .then(() => Promise.all(batch.map(({ file }) => prepareChatAttachment(file))))
+        .then(() =>
+          generation === draftGenerationRef.current
+            ? Promise.all(batch.map(({ file }) => prepareChatAttachment(file)))
+            : [],
+        )
         .then(
           (results) => {
             const accepted: HeldFile[] = [];
@@ -353,6 +357,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           () => settle([], batch),
         )
         .then(() => {
+          if (generation !== draftGenerationRef.current) return;
           pendingBatchesRef.current -= 1;
           if (pendingBatchesRef.current === 0) setPreparing(false);
         });
@@ -380,6 +385,9 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
   const clearAll = useCallback(() => {
     draftGenerationRef.current += 1;
+    admissionRef.current = Promise.resolve();
+    pendingBatchesRef.current = 0;
+    setPreparing(false);
     heldCountRef.current = 0;
     heldBytesRef.current.clear();
     previewKeysRef.current = [];

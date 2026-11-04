@@ -909,6 +909,7 @@ const ChatComposerNewComponent = ({
   const attachLimitNote = `Up to ${attachmentsPerMessage} files, ${chatAttachmentSizeLabel(
     Math.min(MAX_CHAT_ATTACHMENT_BYTES, getPlanMaxAttachmentBytes(attachmentPlanTier)),
   )} each`;
+  const deferredSendRef = useRef(false);
   const {
     attachments,
     previews,
@@ -916,13 +917,17 @@ const ChatComposerNewComponent = ({
     preparing: preparingAttachments,
     addFiles,
     removeFile,
-    clearAll: clearAttachments,
+    clearAll: clearAttachmentDraft,
   } = useAttachments({
     maxFiles: attachmentsPerMessage,
     planFileLimitBytes: getPlanMaxAttachmentBytes(attachmentPlanTier),
     planLabel: getBillingPlanPricing(attachmentPlanTier).label,
     onError: (message) => setLocalNotice(message),
   });
+  const clearAttachments = useCallback(() => {
+    deferredSendRef.current = false;
+    clearAttachmentDraft();
+  }, [clearAttachmentDraft]);
   const uploadAttemptId = attachmentUploadAttempt?.id;
   const uploadAttemptFiles = attachmentUploadAttempt?.files;
   const [uploadAttemptPreviews, setUploadAttemptPreviews] = useState<
@@ -2273,7 +2278,6 @@ const ChatComposerNewComponent = ({
   // A capture, a clipboard read and a picture's metadata removal land their file after an
   // await; an Enter pressed meanwhile would send without it. The send waits instead.
   const attachmentPreparing = readingClipboard || preparingAttachments;
-  const deferredSendRef = useRef(false);
 
   const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
 
