@@ -38,6 +38,7 @@ import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { isFreeQuotaTurnModelId } from '@/src/features/model-picker/service';
 import { fastSpeedForModel } from '@/src/features/model-picker/fastMode';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
@@ -605,9 +606,8 @@ export async function streamFreeQuotaChat(
   callbacks = accountStreamCallbacks(callbacks, account);
   try {
     assertCloudAccountEpochCurrent(account);
-    const offering = getProviderOffering(body.model);
-    if (offering?.category !== 'chat' || offering.quotaProbeProtocol !== 'chat') {
-      callbacks.onError(new Error('This model is not a provider-funded Free chat offering.'));
+    if (!isFreeQuotaTurnModelId(body.model)) {
+      callbacks.onError(new Error('This model is not a provider-funded Free offering.'));
       return;
     }
     assertRemoteChatAllowed(undefined, {

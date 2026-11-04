@@ -156,6 +156,7 @@ import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
+import { freeImageOfferFor, FREE_IMAGE_OFFER_UNKNOWN_ALERT } from '@/src/features/chat/actions/freeImageOffer';
 import { useTheme, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -186,9 +187,17 @@ export default function ChatScreen() {
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const params = useLocalSearchParams<{ id: string; prompt?: string; voice?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const composerFocusedRef = useRef(false);
+  const composerFocusGenerationRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
+      composerFocusGenerationRef.current += 1;
+      composerFocusedRef.current = true;
       if (id) useChatViewStore.getState().bindStyleConversation(id);
+      return () => {
+        composerFocusedRef.current = false;
+        composerFocusGenerationRef.current += 1;
+      };
     }, [id]),
   );
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
@@ -528,8 +537,54 @@ export default function ChatScreen() {
       });
 
       if (imageRequest.status === 'blocked') {
-        alertBlockedImageRequest(imageRequest);
-        return false;
+        if (imageRequest.code !== 'plan_required' || !imageRequest.prompt) {
+          alertBlockedImageRequest(imageRequest);
+          return false;
+        }
+        const account = captureCloudAccountEpoch();
+        if (!account || account.ownerId !== clerkUserId) {
+          Alert.alert(FREE_IMAGE_OFFER_UNKNOWN_ALERT.title, FREE_IMAGE_OFFER_UNKNOWN_ALERT.message);
+          return false;
+        }
+        const action = captureConversationAction();
+        const focusGeneration = composerFocusGenerationRef.current;
+        const imageModel = useChatViewStore.getState().selectedMediaModel.image;
+        const isRequestCurrent = () =>
+          isCloudAccountEpochCurrent(account) &&
+          composerFocusedRef.current &&
+          composerFocusGenerationRef.current === focusGeneration &&
+          isConversationActionCurrent(action) &&
+          useModelStore.getState().selectedModel === selectedModel &&
+          useChatViewStore.getState().mediaMode === mediaMode &&
+          useChatViewStore.getState().selectedMediaModel.image === imageModel;
+        return freeImageOfferFor(imageRequest, account).then(async (offer) => {
+          if (!isRequestCurrent()) return false;
+          if (offer.status !== 'offered') {
+            if (offer.status === 'unknown') {
+              Alert.alert(FREE_IMAGE_OFFER_UNKNOWN_ALERT.title, FREE_IMAGE_OFFER_UNKNOWN_ALERT.message);
+            } else {
+              alertBlockedImageRequest(imageRequest);
+            }
+            return false;
+          }
+          const onAccepted = () => {
+            if (!isRequestCurrent()) return;
+            clearError();
+            quotedMessageScopeRef.current = null;
+            setQuotedMessage(null);
+          };
+          if (dispatchOptions?.awaitCompletion) {
+            return sendMessage(id, offer.prompt, offer.model, undefined, { onAccepted });
+          }
+          return resolveOnAcceptedSend(
+            (accepted) => sendMessage(id, offer.prompt, offer.model, undefined, {
+              onAccepted: () => { onAccepted(); accepted(); },
+            }),
+            () => {
+              if (isRequestCurrent()) setSendError('Image request could not be sent. Please try again.');
+            },
+          );
+        });
       }
       if (imageRequest.status === 'ready') {
         let started = false;
@@ -670,6 +725,7 @@ export default function ChatScreen() {
       stopSpeaking,
       quotedMessage,
       isConversationActionCurrent,
+      captureConversationAction,
       isOnline,
       clerkUserId,
       skillSelection,

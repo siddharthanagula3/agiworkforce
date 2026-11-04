@@ -7,6 +7,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureCloudAccountEpoch,
+  assertCloudAccountEpochCurrent,
   isCloudAccountEpochCurrent,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
@@ -1698,6 +1699,8 @@ async function createConversationForMode(
     throw new Error('AGI Cloud chat is not enabled in this mobile build.');
   }
 
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
   try {
     const id = uuidv7();
     const isTemporary = useSettingsStore.getState().isTemporaryChat;
@@ -1707,6 +1710,7 @@ async function createConversationForMode(
       projectId,
       isTemporary,
     });
+    assertCloudAccountEpochCurrent(account);
     const conversation: ConversationSummary = {
       ...normalizeManagedCloudConversationForMobile(normalizedCloudConversation),
       projectId,
