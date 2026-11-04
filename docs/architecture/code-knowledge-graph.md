@@ -925,9 +925,29 @@ checks stat then uses unrestricted `readFile`, leaving its growth-between-check-
 and-read boundary unchanged. Route fixtures wrap the real renderer and mock
 storage, but were not executed; no parser, storage or runtime acceptance is claimed.
 
+## Server DOCX admitted-byte reconstruction
+
+Reconstructed commit: `afbb42f2fcd7ba9e583b6163fd0030d921c43d1b` changes
+`office-document-text.ts` and one unexecuted fixture source. Existing ZIP member
+and declared-size checks remain. DOCX now sequentially reads every nondirectory
+member through `readArchiveMember` and one shared actual-inflation budget (the
+existing 120× compressed-size ratio and 200 MiB ceiling), then builds a fresh STORE
+archive for Mammoth. Original compressed objects are not passed through to the
+converter. Package paths and selected entry metadata are copied; directories use
+empty bytes. Decompression refusal retains `archive_bomb` mapping, while ordinary
+corruption remains `corrupt`.
+
+This is not a universal memory ceiling: ZIP chunk/concatenation/rebuild copies,
+metadata parsing and Mammoth XML/HTML expansion remain separate allocations.
+The authored normal-conversion, forged-header and cumulative-budget fixtures are
+unexecuted; no new dedicated Unicode/metadata, absolute-200-MiB or member-limit
+fixture establishes those boundaries. Pinned JSZip 3.10.2 behavior is unverified;
+the implementation worker's local dependency source inspection was 3.10.1, not
+pinned-version/runtime acceptance. Pending browser preview changes are excluded.
+
 ## Reconstruction boundary
 
-Only the thirty-eight accepted production slices traced above are represented as
+Only the thirty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
