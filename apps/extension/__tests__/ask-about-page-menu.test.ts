@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
 
 const backgroundSource = readFileSync(resolve(process.cwd(), 'src/background.ts'), 'utf8');
 const panelSource = readFileSync(resolve(process.cwd(), 'src/side_panel.ts'), 'utf8');
@@ -68,7 +69,7 @@ describe('right-click Ask AGI about this page', () => {
     const reads: Array<(result: Record<string, unknown>) => void> = [];
     const remove = vi.fn(async () => { stored = undefined; });
     const ctx = {
-      managedCloudOwner: { userId: 'owner-a', organizationId: 'org-a' },
+      managedCloudOwner: { accountId: 'owner-a', authIncarnation: 'session-a' },
       conversationId: 'conversation-a',
       conversationGeneration: 0,
       pendingPageContext: null as string | null,
@@ -119,7 +120,7 @@ describe('right-click Ask AGI about this page', () => {
         },
         PENDING_CHAT_TTL_MS: 60_000,
         SLASH_COMMANDS: { '/summarize': { prompt: 'Summarize' } },
-        sameManagedCloudOwner: (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right),
+        sameManagedCloudOwner,
         pendingBrowserContextTabs: [],
         pendingAttachments: images,
         pendingDocuments: [],
@@ -161,12 +162,13 @@ describe('right-click Ask AGI about this page', () => {
     expect(document.activeElement).toBe(h.input);
   });
 
-  it.each(['account', 'conversation', 'draft'])(
+  it.each(['account', 'incarnation', 'conversation', 'draft'])(
     'ignores a stale %s invocation before the storage callback',
     async (change) => {
       const h = harness('summarize', true);
       h.check();
-      if (change === 'account') h.ctx.managedCloudOwner.userId = 'owner-b';
+      if (change === 'account') h.ctx.managedCloudOwner.accountId = 'owner-b';
+      if (change === 'incarnation') h.ctx.managedCloudOwner.authIncarnation = 'session-b';
       if (change === 'conversation') h.ctx.conversationGeneration += 1;
       if (change === 'draft') { h.input.value = 'New question'; h.edit(); }
       h.flushStorage();
@@ -176,12 +178,13 @@ describe('right-click Ask AGI about this page', () => {
     },
   );
 
-  it.each(['account', 'conversation', 'draft', 'edit-and-revert', 'attachment'])(
+  it.each(['account', 'incarnation', 'conversation', 'draft', 'edit-and-revert', 'attachment'])(
     'does not apply a capture after a %s change',
     async (change) => {
       const h = harness('summarize');
       h.check();
-      if (change === 'account') h.ctx.managedCloudOwner.userId = 'owner-b';
+      if (change === 'account') h.ctx.managedCloudOwner.accountId = 'owner-b';
+      if (change === 'incarnation') h.ctx.managedCloudOwner.authIncarnation = 'session-b';
       if (change === 'conversation') h.ctx.conversationId = 'conversation-b';
       if (change === 'draft') { h.input.value = 'New question'; h.edit(); }
       if (change === 'edit-and-revert') h.edit();
