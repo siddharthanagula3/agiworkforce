@@ -78,6 +78,29 @@ describe('download network consent', () => {
 });
 
 describe('free space check', () => {
+  it('refuses a download when the platform reports zero free bytes', async () => {
+    mockFreeSpace.mockResolvedValue(0);
+    await expect(assertFreeSpaceFor(GB)).rejects.toMatchObject({ kind: 'storage_full' });
+  });
+
+  it('allows exactly the model size plus required headroom', async () => {
+    mockFreeSpace.mockResolvedValue(GB + 256 * 1024 * 1024);
+    await expect(assertFreeSpaceFor(GB)).resolves.toBeUndefined();
+  });
+
+  it('refuses one byte below the model size plus required headroom', async () => {
+    mockFreeSpace.mockResolvedValue(GB + 256 * 1024 * 1024 - 1);
+    await expect(assertFreeSpaceFor(GB)).rejects.toMatchObject({ kind: 'storage_full' });
+  });
+
+  it.each([NaN, Infinity, -Infinity, -1])(
+    'preserves unavailable free-space handling for %s',
+    async (freeBytes) => {
+      mockFreeSpace.mockResolvedValue(freeBytes);
+      await expect(assertFreeSpaceFor(GB)).resolves.toBeUndefined();
+    },
+  );
+
   it('refuses a model larger than the free space and reports both numbers', async () => {
     mockFreeSpace.mockResolvedValue(2 * GB);
     const error = await assertFreeSpaceFor(4 * GB).catch((err: unknown) => err);

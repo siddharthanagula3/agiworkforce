@@ -176,7 +176,7 @@ export async function assertFreeSpaceFor(requiredBytes: number): Promise<void> {
   } catch {
     return;
   }
-  if (!Number.isFinite(freeBytes) || freeBytes <= 0) return;
+  if (!Number.isFinite(freeBytes) || freeBytes < 0) return;
   const needed = requiredBytes + FREE_SPACE_HEADROOM_BYTES;
   if (freeBytes >= needed) return;
   throw new ModelDownloadError(
