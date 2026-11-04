@@ -2119,9 +2119,44 @@ same-owner epoch replacement, close/reopen, stale success/error and encoded kind
 queries. They use mocked sheet/API interactions and remain unexecuted: no actual
 native navigation, rendering timing or deployment acceptance is established.
 
+## Native mobile attachment picks retain the original composer operation
+
+Accepted commit `6be80ed0420ac8d65b19e10e0db63a2ecacc6c53` changes five
+production files, two new fixture sources and four fixture mock migrations.
+`ChatInput` exposes `captureAttachmentOperation` through its existing handle.
+`useComposerAttachmentScope` binds the committed draft identity/layout lifetime,
+validation mode and destination execution provenance before native work begins.
+Cloud ownership captures the canonical account epoch and matches the draft's
+owner; missing or mismatched provenance refuses before opening a picker. Local
+operations remain independent of account-only changes. A synchronous mode-store
+subscription retires a mode round trip even if React batches its renders.
+
+All eight camera/photos/clipboard/document handlers across new-chat and existing
+conversation routes capture this operation before awaiting. Execution scope comes
+from the route's actual mode or conversation provenance, separately from the
+composer's existing global validation mode. Camera permission completion checks
+ownership before the second native launch, and delayed Open Settings callbacks
+also check it. The shared runner suppresses stale results and error alerts rather
+than looking up a replacement composer handle after the await.
+
+Final attachment admission and the functional state updater both recheck the
+captured operation. The updater deduplicates against current attachments while
+preserving distinct concurrent picks for the same destination. It does not make
+one pick supersede every other pick. No focus/AppState invalidation is added;
+retained current composers may still accept their original results. Already
+started native work is not recalled, and this slice adds no upload, source-file
+deletion or cache cleanup. Sanitized/cache work may finish after retirement.
+
+Hook/runner fixtures cover destination and mode ABA, canonical epoch retirement,
+Local continuity, unavailable capture, late permission and concurrent completion.
+Route/updater coverage is textual; the original-URI assertion is not filesystem
+proof. Four existing mock migrations only supply static store methods, not live
+subscription simulation. All sources remain unexecuted; native picker, device
+navigation, event ordering and runtime acceptance are unverified.
+
 ## Reconstruction boundary
 
-Only the eighty-one accepted production slices traced above are represented as
+Only the eighty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
