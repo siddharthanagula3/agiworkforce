@@ -42,6 +42,7 @@ type ScanModule4 = typeof import('@/lib/server/key-value');
 type ScanModule5 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule6 = typeof import('@/lib/managed-compute-gate');
 type ScanModule7 = typeof import('@/lib/services/organization-policy-gate');
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 type ScanModule8 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule9 = typeof import('@/lib/moderation');
 type ScanModule10 = typeof import('@/lib/server/media-storage');
@@ -584,39 +585,49 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect((await sharedState()).used.get(model!)).toBe(42);
   });
 
-  it('sends a user-owned image to a vision-capable free chat model without paid inference', async () => {
-    mocks.stream.mockResolvedValue(
-      sse(
-        JSON.stringify({
-          choices: [{ index: 0, delta: { content: 'A small image' }, finish_reason: null }],
-        }),
-        '[DONE]',
-      ),
-    );
-    const response = await post(
-      {
-        model: visionModel,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Describe this image' },
-              { type: 'file', file: { asset_id: MEDIA_ASSET_ID } },
-            ],
-          },
-        ],
-      },
-      'vision-image-turn',
-    );
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain('A small image');
-    expect(mocks.hydrate).toHaveBeenCalledOnce();
-    expect(mocks.stream.mock.calls[0]![3].messages.at(-1).content).toEqual([
-      { type: 'text', text: 'Describe this image' },
-      { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
-    ]);
-    expect(mocks.otherProvider).not.toHaveBeenCalled();
-  });
+  it.each([null, '33333333-3333-4333-8333-333333333333'])(
+    'sends an image to free chat with admitted workspace %s and without paid inference',
+    async (organizationId) => {
+      vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+        db: { query: mocks.query } as unknown as UserScopedDb['db'],
+        userId: 'fixture-user',
+        organizationId,
+        surface: 'web',
+      });
+      mocks.stream.mockResolvedValue(
+        sse(
+          JSON.stringify({
+            choices: [{ index: 0, delta: { content: 'A small image' }, finish_reason: null }],
+          }),
+          '[DONE]',
+        ),
+      );
+      const response = await post(
+        {
+          model: visionModel,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Describe this image' },
+                { type: 'file', file: { asset_id: MEDIA_ASSET_ID } },
+              ],
+            },
+          ],
+        },
+        'vision-image-turn',
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain('A small image');
+      expect(mocks.hydrate).toHaveBeenCalledOnce();
+      expect(mocks.hydrate.mock.calls[0]?.[4]).toBe(organizationId);
+      expect(mocks.stream.mock.calls[0]![3].messages.at(-1).content).toEqual([
+        { type: 'text', text: 'Describe this image' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
+      ]);
+      expect(mocks.otherProvider).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects a non-image attachment even if hydration turns it into image parts', async () => {
     mocks.hydrate.mockImplementationOnce(async (messages) => {

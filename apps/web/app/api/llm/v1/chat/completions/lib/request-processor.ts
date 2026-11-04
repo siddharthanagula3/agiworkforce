@@ -4128,6 +4128,7 @@ async function processAdmittedRequest(
           userId,
           (filename) => truncatedAttachments.push(filename),
           getPlanMaxAttachmentsPerMessage(subscription.plan_tier),
+          contextPolicyScope.organizationId,
         ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),

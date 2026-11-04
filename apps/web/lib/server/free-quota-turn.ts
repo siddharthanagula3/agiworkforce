@@ -990,6 +990,7 @@ export async function serveFreeQuotaTurn(
         scoped.userId,
         undefined,
         getPlanMaxAttachmentsPerMessage(planTier),
+        scoped.organizationId,
       );
       const expected = body.messages.reduce(
         (count, message) =>

@@ -106,6 +106,19 @@ function asset(overrides: Record<string, unknown> = {}) {
 }
 
 describe('/api/files/[id]/text', () => {
+  it('passes the admitted organization to the reader', async () => {
+    mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: 'workspace-A' });
+    mocks.getActiveWorkspaceMediaAssetById.mockResolvedValue(null);
+    await GET(request(), context());
+    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith(
+      'user-1',
+      FILE_ID,
+      db,
+      { organizationId: 'workspace-A' },
+    );
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
@@ -187,7 +200,9 @@ describe('/api/files/[id]/text', () => {
       truncated: false,
       fileName: 'notes.txt',
     });
-    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db);
+    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db, {
+      organizationId: null,
+    });
     expect(mocks.readStoredMedia).toHaveBeenCalledWith('users/user-1/notes.txt');
   });
 

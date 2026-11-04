@@ -99,14 +99,14 @@ async function handleGetFile(request: NextRequest, context: RouteContext): Promi
   const rateLimitResponse = await withRateLimit(request, 'files-serve');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
 
   if (!UUID_RE.test(id)) {
     throw createError.notFound('File not found');
   }
 
-  const asset = await getActiveWorkspaceMediaAssetById(userId, id, db);
+  const asset = await getActiveWorkspaceMediaAssetById(userId, id, db, { organizationId });
   if (!asset || asset.deletedAt) {
     throw createError.notFound('File not found');
   }
