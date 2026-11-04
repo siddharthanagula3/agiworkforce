@@ -613,9 +613,34 @@ this missing client association. Explicit checkpoint picking, resend and branch
 operations are unchanged by this slice. No already-dispatched edit/approval/undo
 recall, complete cleanup transaction or runtime correctness is claimed.
 
+## VS Code delayed navigation and composer intent
+
+Reconstructed commit: `888086d06ad70f12416253abc51203891448cabb` changes
+three production protocol/manager/renderer files plus four fixture/snapshot files.
+Checkpoint picking, resend and branch actions reserve a navigation attempt before
+awaits and retain it through private resume, rather than creating a fresh public
+resume attempt after delayed work. Immutable source runtime/cwd/trust/provider/
+model context is compared before adopting the resolved/resumed session. Normal
+public history opening remains unchanged; no preserveComposer migration is added.
+
+The action requires a known composer instance/revision, no staged renderer files,
+no pending host attachments and no active turn. Missing binding refuses. Observed
+typing and model intent retire delayed work; the first-message branch/reset path
+also checks before reset. The final renderer draft gate checks expected instance,
+revision, conversation epoch and attachment state before inserting/submitting text.
+This extends the earlier approval/Undo slice to the separately scoped explicit
+navigation paths, without restoring automatic latest-reply Undo.
+
+An attachment message already in transit can still cross an epoch boundary; that
+race is not solved by this observed composer gate. Already-dispatched remote rewind
+or fork effects are not recalled. Snapshot expectations were manually authored
+exact hunks, not generated or executed; all fixtures are unexecuted, with dedicated
+branchAnswer, runtime/cwd and FileReader interleaving gaps. No runtime navigation,
+atomic filesystem or loss-free composer guarantee is claimed.
+
 ## Reconstruction boundary
 
-Only the twenty-five accepted production slices traced above are represented as
+Only the twenty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
