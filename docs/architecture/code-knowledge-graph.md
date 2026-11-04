@@ -60,8 +60,8 @@ it does not change public audience semantics, prove deployed RLS behavior,
 provide continuous revocation after a read, or establish a cache/attachment/bearer
 bypass. The older generic `getCurrentUserRlsDb` remains for other callers and is
 not globally migrated by this slice. The canonical account gate retains its
-selected-workspace lockdown lookup, not a new lockdown check against the actual
-shared resource's organization. RLS still uses the cookie's raw JWT; the existing
+selected-workspace lockdown lookup. A later slice below adds actual-grant
+lockdown only for non-owner organization-audience viewers. RLS still uses the cookie's raw JWT; the existing
 provider-subject versus canonical-account mapping in database authorization is
 unchanged and is not claimed resolved. Regression source covers cookie refusal,
 missing token, mapped account, unavailable admission, public-first reads and
@@ -1997,9 +1997,39 @@ outcomes, exact cleanup, explicit refresh and token/body boundaries. Their
 ownership simulations are not actual hook StrictMode/account end-to-end proof;
 all remain unexecuted, with no browser or deployment acceptance claimed.
 
+## Organization shared viewers check the actual readable grant's lockdown
+
+Accepted commit `3bf6cffcd0d9d2ff5a1ab0cf17418b7c01c8ec25` changes six
+production files and six fixture sources. The chat share page/API and published
+artifact page pass canonical `scoped.userId` alongside the same cookie-admitted
+RLS adapter into their token readers. After reading the resource,
+`organization-shared-viewer-admission.ts` applies only when the caller is not its
+owner and its audience is organization. It requires a readable grant from
+`organization_shared_sessions` or `organization_shared_artifacts`, then invokes
+the existing tenant-lockdown check for that grant's organization, not the
+selected Personal/unlocked workspace. Existing migrations 0184/0186 uniquely
+index the resource-side grant. A missing RLS-visible grant refuses this path;
+absence from a scoped read is not evidence that a resource is Personal.
+
+Public-first reads, independently authorized owner access and invited artifact
+access retain their separate semantics. Existing account admission, governing-org
+MFA/IP policy and RLS remain prerequisites/counterguards, not newly implemented
+controls. This correction is not blanket resource quarantine: it preserves the
+existing lockdown helper's failure behavior and does not resolve raw-JWT mapping,
+continuous revocation or races between resource, grant and lockdown reads.
+
+The artifact token reader now uses canonical `rowToPublishedArtifact`, preserving
+invited audience instead of projecting it as public. The separate organization
+summary mapper still maps non-organization values to public, and its UI is not
+corrected by this slice; that residual representation mismatch is not evidence
+of a new read authorization bypass. Page fixtures mock the readers; helper and
+API fixtures exercise mocked grant/lockdown paths, including Personal selection,
+missing grants and exempt audiences. All are unexecuted, with no live RLS,
+PostgreSQL, deployment or observed-exposure claim.
+
 ## Reconstruction boundary
 
-Only the seventy-seven accepted production slices traced above are represented as
+Only the seventy-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
