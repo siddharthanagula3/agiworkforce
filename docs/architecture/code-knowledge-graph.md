@@ -1812,11 +1812,48 @@ nor proof of accounting completion: the OPEN voice settlement finding above
 remains unchanged. Fixture sources cover selected stale callbacks, original final
 sink, late permission, setup failure and bearer cleanup with mocked browser/session
 objects. They are unexecuted, not end-to-end navigation/WebRTC/browser acceptance.
-Pending mobile voice work is not represented by this web slice.
+The following mobile slice is separate from this web correction.
+
+## Mobile live voice retains original login and captured cleanup credentials
+
+Accepted commit `304bd21dcbeb6ba55590e005f6adc2b9a6eae069` changes five
+production files and three fixture sources. `liveVoiceAuthority.ts` captures the
+exact Clerk session object/ID and canonical account epoch, with sticky observed
+identity retirement. Normal requests check identity/attempt before and after
+original-session bearer and surface-proof minting, then after buffered response
+reading. Requests stay within the configured HTTPS voice API path, omit cookies
+and use `guardedFetch`; known-ID cleanup reuses captured original bearer/proof
+with its own timeout and cannot bypass Local egress or borrow replacement login
+credentials. Token/proof expiry can still make cleanup fail.
+
+The route passes execution mode into the composer/hook. One call binds original
+conversation, model, callbacks and login, with exact attempt ownership across
+setup, budget, reconnect and results. Missing/replaced destinations do not silently
+create a new call. Account-epoch and background subscriptions retire work; effects
+and callback checks observe destination/identity changes. Foreground transcripts
+update current UI, while only final turns in the graceful close window can reach
+the original still-Cloud conversation under original identity, using the captured
+model. This is not a workspace or billing-policy redesign.
+
+The service tracks microphone/peer/channel/remote tracks, releases setup failures
+and stops late tracks; consent, permission and SDP awaits are followed by owner
+checks. Pending permission/native work is not guaranteed cancelled. Close and
+settlement coalesce per instance; the existing bounded data-channel close window
+retains final transcripts/usage and backend metering, not new tool control. A
+decoded known session ID can be closed after setup failure; an unknown creation
+outcome cannot be inferred or cleaned up by guessing. Expiry and the OPEN server
+settlement constraint remain separate.
+
+`guardedFetch`/`secureFetch` still include an asynchronous surface-proof boundary
+before native fetch: the checks and abort signal are not an atomic native dispatch
+lease, and native abort enforcement was not exercised. Fixture sources use mocked
+Clerk, egress, native WebRTC and hook dependencies for stale identity/destination,
+late microphone, close-window and original credential cases. None were executed;
+no native/audio/end-to-end acceptance or pending dictation correction is claimed.
 
 ## Reconstruction boundary
 
-Only the seventy-two accepted production slices traced above are represented as
+Only the seventy-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
