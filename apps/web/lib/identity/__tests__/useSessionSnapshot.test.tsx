@@ -1,0 +1,78 @@
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const fixtures = vi.hoisted(() => ({
+  auth: { isLoaded: true, isSignedIn: true, userId: 'account-a', sessionId: 'session-a' },
+  sdk: {
+    loaded: true,
+    user: { id: 'account-a' } as { id: string } | null,
+    session: { id: 'session-a', user: { id: 'account-a' } } as
+      { id: string; user: { id: string } } | null,
+  },
+}));
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => fixtures.auth,
+  useClerk: () => fixtures.sdk,
+}));
+
+import { useSessionSnapshot } from '../useSessionSnapshot';
+
+beforeEach(() => {
+  fixtures.auth = { isLoaded: true, isSignedIn: true, userId: 'account-a', sessionId: 'session-a' };
+  fixtures.sdk.loaded = true;
+  fixtures.sdk.user = { id: 'account-a' };
+  fixtures.sdk.session = { id: 'session-a', user: { id: 'account-a' } };
+});
+
+describe('live SDK session snapshot', () => {
+  it('captures only agreeing rendered and live session authority', () => {
+    const { result } = renderHook(() => useSessionSnapshot());
+    expect(result.current()?.isCurrent()).toBe(true);
+    fixtures.sdk.user = { id: 'account-b' };
+    expect(result.current()).toBeNull();
+  });
+
+  it('rejects a live account switch before React renders it', () => {
+    const { result } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    fixtures.sdk.user = { id: 'account-b' };
+    fixtures.sdk.session = { id: 'session-b', user: { id: 'account-b' } };
+    expect(snapshot.isCurrent()).toBe(false);
+    expect(result.current()).toBeNull();
+  });
+
+  it('rejects same-account relogin before React renders the new session', () => {
+    const { result } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    fixtures.sdk.session = { id: 'session-new', user: { id: 'account-a' } };
+    expect(snapshot.isCurrent()).toBe(false);
+  });
+
+  it('conservatively rejects replacement of a session resource with the same IDs', () => {
+    const { result } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    fixtures.sdk.session = { id: 'session-a', user: { id: 'account-a' } };
+    expect(snapshot.isCurrent()).toBe(false);
+  });
+
+  it('rejects signout and missing SDK readiness without a render', () => {
+    const { result } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    fixtures.sdk.loaded = false;
+    expect(snapshot.isCurrent()).toBe(false);
+    expect(result.current()).toBeNull();
+    fixtures.sdk.loaded = true;
+    fixtures.sdk.session = null;
+    expect(snapshot.isCurrent()).toBe(false);
+  });
+
+  it('rejects a rendered identity change even before the SDK catches up', () => {
+    const { result, rerender } = renderHook(() => useSessionSnapshot());
+    const snapshot = result.current()!;
+    fixtures.auth = { ...fixtures.auth, sessionId: 'session-new' };
+    rerender();
+    expect(snapshot.isCurrent()).toBe(false);
+    expect(result.current()).toBeNull();
+  });
+});

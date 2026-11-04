@@ -12,7 +12,7 @@ type ComposerOnSend = (
   attachments?: File[],
   skillId?: string,
   meta?: Record<string, unknown>,
-) => false | void | typeof SEND_GUARD_BLOCKED;
+) => false | void | typeof SEND_GUARD_BLOCKED | Promise<false | void | typeof SEND_GUARD_BLOCKED>;
 
 type UploadAttempt = {
   id: string;
@@ -22,6 +22,12 @@ type UploadAttempt = {
 };
 
 const mocks = vi.hoisted(() => ({
+  sdk: {
+    loaded: true,
+    user: { id: 'fixture-user' },
+    session: { id: 'fixture-session', user: { id: 'fixture-user' } },
+    signOut: vi.fn(),
+  },
   composerOnSend: null as ComposerOnSend | null,
   composerDroppedFiles: null as File[] | null,
   composerConversationId: null as string | null,
@@ -52,8 +58,10 @@ vi.mock('@clerk/nextjs', () => ({
     getToken: async () => 'fixture-token',
     isLoaded: true,
     userId: 'fixture-user',
+    sessionId: 'fixture-session',
+    isSignedIn: true,
   }),
-  useClerk: () => ({ signOut: vi.fn() }),
+  useClerk: () => mocks.sdk,
   useUser: () => ({ user: null }),
 }));
 
@@ -322,7 +330,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     await waitFor(() => expect(mocks.composerConversationId).not.toBeNull());
 
     const secondFile = new File(['other'], 'other.txt', { type: 'text/plain' });
-    let secondSendResult: false | void | typeof SEND_GUARD_BLOCKED = undefined;
+    let secondSendResult: ReturnType<ComposerOnSend> = undefined;
     act(() => {
       secondSendResult = mocks.composerOnSend!(SECOND_MESSAGE, [secondFile], undefined, {});
     });
@@ -489,6 +497,9 @@ describe('WebChatPage typed image request by plan', () => {
     mocks.createConversation.mockClear();
     mocks.toastError.mockClear();
     originalSubscription = useBillingStore.getState().subscription;
+    mocks.sdk.loaded = true;
+    mocks.sdk.user = { id: 'fixture-user' };
+    mocks.sdk.session = { id: 'fixture-session', user: { id: 'fixture-user' } };
   });
 
   afterEach(() => {
@@ -500,7 +511,7 @@ describe('WebChatPage typed image request by plan', () => {
     expect(classifyTaskLocally(PROMPT, []).type).toBe('image_generation');
   });
 
-  it.each(['free', 'pro'] as const)(
+  it.each(['pro'] as const)(
     'takes the image path on the %s plan and never sends it to a free model as a chat turn',
     async (tier) => {
       useBillingStore.setState({ subscription: subscription(tier) });
@@ -515,4 +526,50 @@ describe('WebChatPage typed image request by plan', () => {
       expect(mocks.toastError).not.toHaveBeenCalled();
     },
   );
+  it('does not dispatch a typed free image when catalogue authority is unknown', async () => {
+    useBillingStore.setState({ subscription: subscription('free') });
+    stubFetch();
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    let outcome: Awaited<ReturnType<ComposerOnSend>>;
+    await act(async () => { outcome = await mocks.composerOnSend!(PROMPT); });
+    expect(outcome!).toBe(false);
+    expect(mocks.createConversation).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('refuses an old prompt after the live SDK switches before React renders', async () => {
+    useBillingStore.setState({ subscription: subscription('free') });
+    let finishCatalogue!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) =>
+      String(input) === '/api/models/free-quota'
+        ? new Promise<Response>((resolve) => { finishCatalogue = resolve; })
+        : Promise.resolve(Response.json({})),
+    ));
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    let pending!: ReturnType<ComposerOnSend>;
+    act(() => { pending = mocks.composerOnSend!(PROMPT); });
+    expect(finishCatalogue).toBeDefined();
+    mocks.sdk.user = { id: 'other-account' };
+    mocks.sdk.session = { id: 'other-session', user: { id: 'other-account' } };
+    let outcome: Awaited<ReturnType<ComposerOnSend>>;
+    await act(async () => {
+      finishCatalogue(Response.json({
+        issuer: 'Fixture provider', observedOn: '2026-11-04',
+        evidenceUrl: 'https://provider.example/offer', reportedEligible: 1, reportedUnavailable: 0,
+        models: [{ key: 'fixture-image-offering', providerModelId: 'fixture-image',
+          displayName: 'Fixture image', category: 'image', unit: 'images', limit: 100,
+          consumedApproximate: 0, expiresOn: null, status: 'ready' }],
+        limitedOffer: [{ category: 'image', dailyCap: 10, remainingToday: 10,
+          resetsAt: '2026-11-05T00:00:00.000Z' }],
+        mediaAvailability: { image: 'offered', video: 'not_offered' },
+      }));
+      outcome = await pending;
+    });
+    expect(outcome!).toBe(false);
+    expect(mocks.createConversation).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
 });

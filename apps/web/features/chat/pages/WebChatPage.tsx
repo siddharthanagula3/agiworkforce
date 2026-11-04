@@ -51,6 +51,7 @@ import { pickFreePoolModel } from '../lib/eligible-model';
 import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import {
   ToolApprovalProvider,
@@ -163,6 +164,7 @@ import {
   type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
+  canUseBillingPlanCapability,
   hasSelfServeUpgradePath,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -249,6 +251,7 @@ import {
   ChatComposerNew,
   SEND_GUARD_BLOCKED,
   type ComposerAttachmentUploadAttempt,
+  type ComposerSendResult,
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
@@ -293,7 +296,8 @@ import {
 import { toSidebarSessions } from '@shared/components/layout/sidebar-session-rows';
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
-import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
+import { useDisabledWorkspaceFeatures, useWorkspacePolicy } from '@shared/hooks/use-workspace-policy';
+import { resolveLimitedFreeMedia } from '../lib/free-media-choice';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import {
   ConversationTitleMenu,
@@ -1094,6 +1098,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // instead of implying the whole chat UI switches language.
   const { t } = useTranslation(['chat', 'common']);
   const { getToken, isLoaded: authLoaded, userId } = useSession();
+  const captureSessionSnapshot = useSessionSnapshot();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -1467,6 +1472,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const { user: identityUser } = useCurrentUser();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
+  const mediaWorkspacePolicy = useWorkspacePolicy();
   const fastModeDisabledByWorkspace = disabledFeatures.includes('fast_mode');
   const { isUnread, toggleUnread } = useUnreadConversations();
   const { user: compatibilityUser, logout } = useAuthStore();
@@ -3978,6 +3984,28 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [steerActiveTurn, displayedConversationId],
   );
 
+  const typedImageScopeKey = JSON.stringify([
+    userId,
+    activeModelId,
+    displayedConversationId,
+    activeProjectId,
+    conversationProjectId,
+    conversationHoldsLocalTurns(displayedMessages),
+    subscriptionTier,
+    billingPolicyReady,
+    mediaWorkspacePolicy.policy?.organizationId,
+    mediaWorkspacePolicy.policy?.revision,
+  ]);
+  const typedImageScopeRef = useRef({ key: typedImageScopeKey, revision: 0 });
+  if (typedImageScopeRef.current.key !== typedImageScopeKey) {
+    typedImageScopeRef.current = {
+      key: typedImageScopeKey,
+      revision: typedImageScopeRef.current.revision + 1,
+    };
+  }
+  useEffect(() => () => {
+    typedImageScopeRef.current = { key: '', revision: typedImageScopeRef.current.revision + 1 };
+  }, []);
   const handleSend = useCallback(
     (
       content: string,
@@ -4127,6 +4155,63 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       sendContent,
       providerConsentStatusOf,
     ],
+  );
+
+  const currentHandleSendRef = useRef(handleSend);
+  currentHandleSendRef.current = handleSend;
+
+  const handleComposerSend = useCallback(
+    (
+      content: string,
+      attachments?: File[],
+      skillId?: string,
+      meta?: SendMeta,
+      isCurrent?: () => boolean,
+    ): ComposerSendResult | Promise<ComposerSendResult> => {
+      if (isCurrent && !isCurrent()) return false;
+      const providerMode = getProviderModeForModel(activeModelId);
+      const typedImage =
+        !attachments?.length &&
+        !freeQuotaSelection(meta?.modelOverrideId ?? activeModelId) &&
+        !requestsSeparateImageResources(content) &&
+        !conversationHoldsLocalTurns(displayedMessages) &&
+        (providerMode === 'ManagedGateway' || providerMode === 'ManagedNative') &&
+        (classifyTaskLocally(content, []).type === 'image_generation' || explicitlyRequestsArtifact(content)) &&
+        routeVisualRequest({ prompt: content, hasSourceImage: false }).destination !== 'artifact';
+      if (!typedImage) return handleSend(content, attachments, skillId, meta);
+      if (!billingPolicyReady) {
+        toast.error('Your plan could not be checked. Please retry.');
+        return false;
+      }
+      if (canUseBillingPlanCapability(subscriptionTier, 'image_generation')) {
+        return handleSend(content, attachments, skillId, meta);
+      }
+      const session = captureSessionSnapshot();
+      if (!session || session.userId !== userId) {
+        toast.error('Your sign-in could not be verified. Your draft is unchanged; please retry.');
+        return false;
+      }
+      const scope = typedImageScopeRef.current;
+      return resolveLimitedFreeMedia('image').then((lookup) => {
+        if (!session.isCurrent() || typedImageScopeRef.current !== scope || (isCurrent && !isCurrent())) return false;
+        if (lookup.status === 'unknown') {
+          toast.error('Free image availability could not be checked. Your draft is unchanged; please retry.');
+          return false;
+        }
+        if (lookup.status === 'not_offered') {
+          handleOpenUpgradeDialog();
+          return false;
+        }
+        return currentHandleSendRef.current(content, attachments, skillId, {
+          ...meta,
+          workMode: 'chat',
+          modelOverrideId: lookup.modelId,
+          webSearchEnabled: false,
+          codeExecutionEnabled: false,
+        });
+      });
+    },
+    [activeModelId, displayedMessages, billingPolicyReady, subscriptionTier, handleSend, handleOpenUpgradeDialog, captureSessionSnapshot, userId],
   );
 
   const handleAcceptProviderNotice = useCallback(async () => {
@@ -7082,7 +7167,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     ) : (
                       <ChatComposerNew
-                        onSend={handleSend}
+                        onSend={handleComposerSend}
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
@@ -7225,7 +7310,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     ) : (
                       <ChatComposerNew
-                        onSend={handleSend}
+                        onSend={handleComposerSend}
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
