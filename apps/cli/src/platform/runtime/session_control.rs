@@ -196,7 +196,7 @@ impl ManagedSessionReference {
 }
 
 impl ManagedSessionSummary {
-    fn from_session(session: &ManagedSession, path: PathBuf) -> Self {
+    pub(crate) fn from_session(session: &ManagedSession, path: PathBuf) -> Self {
         Self {
             version: session.version,
             session_id: session.session_id.clone(),

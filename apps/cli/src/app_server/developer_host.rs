@@ -781,7 +781,8 @@ impl CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
         let session = tokio::task::spawn_blocking(move || {
-            store.load(ManagedSessionReference::SessionId(thread_id))
+            let resolved = store.resolve(ManagedSessionReference::SessionId(thread_id))?;
+            load_resolved_session(&resolved)
         })
         .await
         .map_err(internal_error)?
@@ -1055,11 +1056,10 @@ impl CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
         let (path, fingerprint, managed) = tokio::task::spawn_blocking(move || {
-            let reference = ManagedSessionReference::SessionId(thread_id);
-            let path = store.resolve(reference.clone())?.path;
-            let fingerprint = crate::runtime::session::session_fingerprint(&path);
-            let managed = store.load(reference)?;
-            anyhow::Ok((path, fingerprint, managed))
+            let resolved = store.resolve(ManagedSessionReference::SessionId(thread_id))?;
+            let fingerprint = crate::runtime::session::session_fingerprint(&resolved.path);
+            let managed = load_resolved_session(&resolved)?;
+            anyhow::Ok((resolved.path, fingerprint, managed))
         })
         .await
         .map_err(internal_error)?
@@ -1089,7 +1089,13 @@ impl CliDeveloperSessionHost {
         if !taken_over && crate::runtime::session::session_fingerprint(&path) == loaded {
             return Ok(());
         }
-        let (path, fingerprint, managed) = self.read_session_file(thread_id).await?;
+        let (refreshed_path, fingerprint, managed) = self.read_session_file(thread_id).await?;
+        require_execution_thread_id(thread_id, &managed)?;
+        if refreshed_path != path {
+            return Err(DeveloperSessionHostError::conflict(
+                "The persisted thread path changed while it was being reloaded",
+            ));
+        }
         {
             let mut agent = session.lock().await;
             agent
@@ -1240,6 +1246,7 @@ impl CliDeveloperSessionHost {
         }
     }
 
+    #[cfg(test)]
     async fn load_agent(
         &self,
         thread_id: &str,
@@ -1249,6 +1256,28 @@ impl CliDeveloperSessionHost {
         }
 
         let (path, fingerprint, managed) = self.read_session_file(thread_id).await?;
+        self.cache_agent(path, fingerprint, managed).await
+    }
+
+    async fn load_execution_agent(
+        &self,
+        thread_id: &str,
+    ) -> Result<Arc<Mutex<AgentSession>>, DeveloperSessionHostError> {
+        let (path, fingerprint, managed) = self.read_session_file(thread_id).await?;
+        require_execution_thread_id(thread_id, &managed)?;
+        self.cache_agent(path, fingerprint, managed).await
+    }
+
+    async fn cache_agent(
+        &self,
+        path: PathBuf,
+        fingerprint: Option<SessionFingerprint>,
+        managed: ManagedSession,
+    ) -> Result<Arc<Mutex<AgentSession>>, DeveloperSessionHostError> {
+        let thread_id = managed.session_id.clone();
+        if let Some(session) = self.sessions.lock().await.get(&thread_id).cloned() {
+            return Ok(session);
+        }
         let agent = self.build_agent(managed, path).await?;
         agent.lock().await.loaded_fingerprint = fingerprint;
 
@@ -1292,12 +1321,21 @@ impl CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
         let session = tokio::task::spawn_blocking(move || {
-            store.load(ManagedSessionReference::SessionId(thread_id))
+            let resolved = store.resolve(ManagedSessionReference::SessionId(thread_id))?;
+            load_resolved_session(&resolved)
         })
         .await
         .map_err(internal_error)?
         .map_err(not_found_error)?;
         self.validate_session_workspace(&session)
+    }
+
+    async fn validate_execution_thread(
+        &self,
+        thread_id: &str,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let session = self.stored_session(thread_id).await?;
+        require_execution_thread_id(thread_id, &session)
     }
 
     async fn needs_input(&self, thread_id: &str) -> bool {
@@ -1580,7 +1618,7 @@ impl CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
         let resolved = tokio::task::spawn_blocking(move || {
-            store.resolve(ManagedSessionReference::SessionId(thread_id))
+            resolve_execution_session(&store, &thread_id)
         })
         .await
         .map_err(internal_error)?
@@ -1595,7 +1633,7 @@ impl CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
         tokio::task::spawn_blocking(move || {
-            store.resolve(ManagedSessionReference::SessionId(thread_id))
+            resolve_execution_session(&store, &thread_id)
         })
         .await
         .map_err(internal_error)?
@@ -2025,7 +2063,8 @@ impl CliDeveloperSessionHost {
         let store = self.store.clone();
         let source_id = thread_id.to_string();
         let source = tokio::task::spawn_blocking(move || {
-            store.load(ManagedSessionReference::SessionId(source_id))
+            let resolved = resolve_execution_session(&store, &source_id)?;
+            load_resolved_session(&resolved)
         })
         .await
         .map_err(internal_error)?
@@ -2353,16 +2392,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             return Err(super::cloud_threads::turn_refusal());
         }
         self.adopt_account_conversation(&params.thread_id).await;
-        self.load_agent(&params.thread_id).await?;
-        let store = self.store.clone();
-        let thread_id = params.thread_id;
-        let resolved = tokio::task::spawn_blocking(move || {
-            store.resolve(ManagedSessionReference::SessionId(thread_id))
-        })
-        .await
-        .map_err(internal_error)?
-        .map_err(not_found_error)?;
-        Ok(self.resolved_summary(resolved).await)
+        let (path, fingerprint, managed) = self.read_session_file(&params.thread_id).await?;
+        let summary = ManagedSessionSummary::from_session(&managed, path.clone());
+        self.cache_agent(path, fingerprint, managed).await?;
+        Ok(self.thread_summary(summary).await)
     }
 
     async fn read_thread(
@@ -2378,8 +2411,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let thread_id = params.thread_id;
         let (resolved, session) = tokio::task::spawn_blocking(move || {
             let reference = ManagedSessionReference::SessionId(thread_id);
-            let resolved = store.resolve(reference.clone())?;
-            let session = store.load(reference)?;
+            let resolved = store.resolve(reference)?;
+            let session = load_resolved_session(&resolved)?;
+            let resolved = ResolvedManagedSessionReference {
+                summary: ManagedSessionSummary::from_session(&session, resolved.path.clone()),
+                ..resolved
+            };
             anyhow::Ok((resolved, session))
         })
         .await
@@ -2483,7 +2520,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         client: AppServerClientInfo,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         if self
             .running_turns
             .lock()
@@ -2515,9 +2552,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let client_name = client.name.clone();
         let through_message_index = params.through_message_index;
         let resolved = tokio::task::spawn_blocking(move || {
-            let reference = ManagedSessionReference::SessionId(source_id);
+            let resolved = resolve_execution_session(&store, &source_id).map_err(not_found_error)?;
+            let source = load_resolved_session(&resolved).map_err(not_found_error)?;
+            let reference = ManagedSessionReference::Path(resolved.path);
             if let Some(index) = through_message_index {
-                let source = store.load(reference.clone()).map_err(not_found_error)?;
                 if threads::transcript_position(&source.messages, index).is_none() {
                     return Err(DeveloperSessionHostError::invalid_request(format!(
                         "This thread has no message at index {index} to fork through"
@@ -2525,9 +2563,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
             }
             let forked = store.fork(reference).map_err(not_found_error)?;
-            let mut session = store
-                .load(forked.reference.clone())
-                .map_err(not_found_error)?;
+            let mut session = load_resolved_session(&forked).map_err(not_found_error)?;
             if let Some(index) = through_message_index {
                 let kept = threads::transcript_position(&session.messages, index)
                     .map_or(session.messages.len(), |position| position + 1);
@@ -2544,9 +2580,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             session.created_by = Some(created_by);
             session.client = Some(client_name);
             store.save(&session).map_err(internal_error)?;
-            store
-                .resolve(ManagedSessionReference::SessionId(session.session_id))
-                .map_err(not_found_error)
+            resolve_execution_session(&store, &session.session_id).map_err(not_found_error)
         })
         .await
         .map_err(internal_error)??;
@@ -2560,6 +2594,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadCompactParams,
     ) -> Result<ThreadCompactResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         // Held for the whole summary, and taken before the thread is looked
         // at: a turn refuses to start on a thread whose files guard is held,
         // so none can begin and then wait on the agent while it holds the
@@ -2575,7 +2610,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Stop the running turn before summarizing this session.",
             ));
         }
-        let session = self.load_agent(&params.thread_id).await?;
+        let session = self.load_execution_agent(&params.thread_id).await?;
         let path = self.persisted_session_path(&params.thread_id).await?;
         self.refuse_foreign_writer(&params.thread_id, &path, "summarized")?;
         let mut agent = session.lock().await;
@@ -2681,7 +2716,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = params.thread_id.clone();
         let session = tokio::task::spawn_blocking(move || {
-            store.load(ManagedSessionReference::SessionId(thread_id))
+            let resolved = store.resolve(ManagedSessionReference::SessionId(thread_id))?;
+            load_resolved_session(&resolved)
         })
         .await
         .map_err(internal_error)?
@@ -2728,7 +2764,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "A session title is 1 to {THREAD_TITLE_MAX_CHARS} characters"
             )));
         }
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
         if self
             .running_turns
@@ -2743,8 +2779,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = params.thread_id.clone();
         let path = tokio::task::spawn_blocking(move || {
-            store
-                .resolve(ManagedSessionReference::SessionId(thread_id))
+            resolve_execution_session(&store, &thread_id)
                 .map(|resolved| resolved.path)
         })
         .await
@@ -2753,11 +2788,17 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.refuse_foreign_writer(&params.thread_id, &path, "renamed")?;
 
         let base_dir = self.store.base_dir().to_path_buf();
-        let thread_id = params.thread_id.clone();
+        let rename_path = path.canonicalize().map_err(not_found_error)?;
+        let rename_path = rename_path
+            .to_str()
+            .ok_or_else(|| {
+                DeveloperSessionHostError::invalid_request("The thread path is not valid UTF-8")
+            })?
+            .to_string();
         let new_title = title.clone();
         tokio::task::spawn_blocking(move || {
             let conn = crate::sessions::open_db_in(base_dir)?;
-            crate::sessions::rename_session(&conn, &thread_id, &new_title)
+            crate::sessions::rename_session(&conn, &rename_path, &new_title)
         })
         .await
         .map_err(internal_error)?
@@ -2773,7 +2814,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = params.thread_id.clone();
         let resolved = tokio::task::spawn_blocking(move || {
-            store.resolve(ManagedSessionReference::SessionId(thread_id))
+            resolve_execution_session(&store, &thread_id)
         })
         .await
         .map_err(internal_error)?
@@ -2791,7 +2832,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         // Waits out a summary of this thread, which would otherwise save the
         // session again afterwards and take the archive back.
         let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
@@ -2809,7 +2850,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let thread_id = params.thread_id;
         let id_for_event = thread_id.clone();
         tokio::task::spawn_blocking(move || {
-            store.archive(ManagedSessionReference::SessionId(thread_id))
+            let resolved = resolve_execution_session(&store, &thread_id)?;
+            store.archive(ManagedSessionReference::Path(resolved.path))
         })
         .await
         .map_err(internal_error)?
@@ -2846,12 +2888,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let store = self.store.clone();
         let thread_id = params.thread_id;
         let id_for_event = thread_id.clone();
         tokio::task::spawn_blocking(move || {
-            store.unarchive(ManagedSessionReference::SessionId(thread_id))
+            let resolved = resolve_execution_session(&store, &thread_id)?;
+            store.unarchive(ManagedSessionReference::Path(resolved.path))
         })
         .await
         .map_err(internal_error)?
@@ -2927,6 +2970,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadSideQuestionParams,
     ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let question = agiworkforce_protocol::user_input::clamp_user_input_text(
             params.question.trim().to_string(),
         );
@@ -2935,7 +2979,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Ask a question about this thread",
             ));
         }
-        let session = self.load_agent(&params.thread_id).await?;
+        let session = self.load_execution_agent(&params.thread_id).await?;
         let (config, side) = {
             let agent = session.lock().await;
             let config = turn_config_pinned_to_session_route(&self.config, &agent);
@@ -2977,8 +3021,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let thread_id = params.thread_id;
         let (session, log, unreadable) = tokio::task::spawn_blocking(move || {
             let reference = ManagedSessionReference::SessionId(thread_id);
-            let resolved = store.resolve(reference.clone())?;
-            let session = store.load(reference)?;
+            let resolved = store.resolve(reference)?;
+            let session = load_resolved_session(&resolved)?;
             let mut log = crate::agent::CheckpointLog::beside(&resolved.path);
             let unreadable = log.take_unsaved();
             anyhow::Ok((session, log, unreadable))
@@ -3013,6 +3057,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadRewindParams,
     ) -> Result<ThreadRewindResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let mode = match params.restore.unwrap_or(ThreadRewindRestore::Both) {
             ThreadRewindRestore::Both => crate::agent::RewindMode::CodeAndConversation,
             ThreadRewindRestore::Conversation => crate::agent::RewindMode::Conversation,
@@ -3033,7 +3078,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Interrupt the running turn before rewinding its thread",
             ));
         }
-        let session = self.load_agent(&params.thread_id).await?;
+        let session = self.load_execution_agent(&params.thread_id).await?;
         let session_path = session
             .lock()
             .await
@@ -3136,7 +3181,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 Err(error) => return Err(error),
             }
         }
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         // Waits out a turn of this thread still recording its after-checkpoint,
         // whose refs the delete removes.
         let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
@@ -3179,7 +3224,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = params.thread_id.clone();
         tokio::task::spawn_blocking(move || {
-            store.delete(ManagedSessionReference::SessionId(thread_id))
+            let resolved = resolve_execution_session(&store, &thread_id)?;
+            store.delete(ManagedSessionReference::Path(resolved.path))
         })
         .await
         .map_err(internal_error)?
@@ -3286,7 +3332,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         if self
             .running_turns
             .lock()
@@ -3306,7 +3352,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadIdParams,
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let path = self.persisted_session_path(&params.thread_id).await?;
         let writer = self.writer;
         let claim_path = path.clone();
@@ -3351,13 +3397,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
             return Err(super::cloud_threads::turn_refusal());
         }
+        self.validate_execution_thread(&params.thread_id).await?;
         self.validate_requested_cwd(params.cwd.as_deref())?;
         let context_files =
             self.validate_context_files(params.context_files.as_deref().unwrap_or_default())?;
         let prepared = self.prepare_input(params.input)?;
         let client_turn_id = validated_client_turn_id(params.client_turn_id)?;
         let max_turns = validated_max_turns(params.max_turns)?;
-        let session = self.load_agent(&params.thread_id).await?;
+        let session = self.load_execution_agent(&params.thread_id).await?;
         self.claim_worktree(&params.thread_id).await?;
         // Claim exclusive start ownership before touching the shared agent.
         // Keeping this guard through session setup prevents a losing concurrent
@@ -4974,6 +5021,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
 
     async fn decide_plan(&self, params: PlanDecideParams) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         if self
             .running_turns
             .lock()
@@ -5005,7 +5053,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 Some(feedback.to_string())
             }
         };
-        let session = self.load_agent(&params.thread_id).await?;
+        let session = self.load_execution_agent(&params.thread_id).await?;
         {
             let mut agent = session.lock().await;
             if !matches!(
@@ -5384,7 +5432,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: CheckpointSectionsParams,
     ) -> Result<CheckpointSectionsResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let _workspace_files = if params.preview {
             None
         } else {
@@ -5398,7 +5446,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: CheckpointSectionsParams,
     ) -> Result<CheckpointSectionsResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let _workspace_files = if params.preview {
             None
         } else {
@@ -5412,8 +5460,9 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadRevertParams,
     ) -> Result<ThreadRevertResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
+        self.validate_execution_thread(&params.thread_id).await?;
         let _workspace_files = self.lock_workspace_files(&params.thread_id).await?;
-        let session = self.load_agent(&params.thread_id).await?;
+        let session = self.load_execution_agent(&params.thread_id).await?;
         let restores_conversation = params.restore.restores_conversation();
         if restores_conversation && !params.preview {
             let path = self.persisted_session_path(&params.thread_id).await?;
@@ -5686,6 +5735,40 @@ fn default_thread_model(config: &CliConfig, account: &models::AccountRoute) -> S
     } else {
         config.default.model.clone()
     }
+}
+
+fn require_execution_thread_id(
+    thread_id: &str,
+    session: &ManagedSession,
+) -> Result<(), DeveloperSessionHostError> {
+    if session.session_id != thread_id {
+        return Err(DeveloperSessionHostError::invalid_request(format!(
+            "Use the full thread id {} for this operation; prefixes are only accepted when reading or resuming a thread",
+            session.session_id
+        )));
+    }
+    Ok(())
+}
+
+fn resolve_execution_session(
+    store: &ManagedSessionStore,
+    thread_id: &str,
+) -> anyhow::Result<ResolvedManagedSessionReference> {
+    let resolved = store.resolve(ManagedSessionReference::SessionId(thread_id.to_string()))?;
+    if resolved.summary.session_id != thread_id {
+        anyhow::bail!("The exact thread {thread_id} no longer exists; refusing a prefix match");
+    }
+    Ok(resolved)
+}
+
+fn load_resolved_session(
+    resolved: &ResolvedManagedSessionReference,
+) -> anyhow::Result<ManagedSession> {
+    let session = ManagedSession::load_from_path(&resolved.path)?;
+    if session.session_id != resolved.summary.session_id {
+        anyhow::bail!("The persisted thread identity changed while it was being opened");
+    }
+    Ok(session)
 }
 
 fn resolve_auto_with_trust(
@@ -6832,7 +6915,10 @@ async fn refresh_persisted_workspace_state(
         if git.branch.is_none() && git.worktree_root.is_none() {
             return;
         }
-        let Ok(mut session) = store.load(ManagedSessionReference::SessionId(thread_id)) else {
+        let Ok(resolved) = resolve_execution_session(&store, &thread_id) else {
+            return;
+        };
+        let Ok(mut session) = load_resolved_session(&resolved) else {
             return;
         };
         if session.git_branch == git.branch
@@ -10871,6 +10957,179 @@ mod tests {
             .await
             .expect("start thread");
         (host, thread)
+    }
+
+    #[test]
+    fn captured_session_paths_do_not_follow_new_prefix_matches_or_changed_identities() {
+        let directory = tempdir().expect("store");
+        let store = ManagedSessionStore::new(directory.path().to_path_buf());
+        let first = ManagedSession::new("captured-first", chrono::Utc::now());
+        store.save(&first).expect("save first session");
+        let resolved = store
+            .resolve(ManagedSessionReference::SessionId("captured".to_string()))
+            .expect("resolve unique prefix");
+        let second = ManagedSession::new("captured-second", chrono::Utc::now());
+        store.save(&second).expect("save second prefix match");
+        assert!(store
+            .resolve(ManagedSessionReference::SessionId("captured".to_string()))
+            .is_err());
+        assert_eq!(
+            load_resolved_session(&resolved)
+                .expect("captured path remains stable")
+                .session_id,
+            first.session_id
+        );
+        second
+            .save_to_path(&resolved.path)
+            .expect("replace captured file");
+        assert!(load_resolved_session(&resolved)
+            .expect_err("changed identity must not be loaded")
+            .to_string()
+            .contains("identity changed"));
+    }
+
+    #[test]
+    fn a_missing_execution_id_never_retargets_a_longer_prefix_match() {
+        let directory = tempdir().expect("store");
+        let store = ManagedSessionStore::new(directory.path().to_path_buf());
+        let first = ManagedSession::new("execution", chrono::Utc::now());
+        store.save(&first).expect("save exact session");
+        let captured = resolve_execution_session(&store, &first.session_id)
+            .expect("capture exact execution target");
+        let longer = ManagedSession::new("execution-longer", chrono::Utc::now());
+        let longer_path = store.save(&longer).expect("save longer prefix match");
+        let unchanged = std::fs::read(&longer_path).expect("longer session bytes");
+        std::fs::remove_file(&captured.path).expect("remove exact session");
+        assert_eq!(
+            store.resolve(ManagedSessionReference::SessionId(first.session_id.clone()))
+                .expect("read prefix still resolves")
+                .summary.session_id,
+            longer.session_id
+        );
+        assert!(resolve_execution_session(&store, &first.session_id).is_err());
+        let reference = ManagedSessionReference::Path(captured.path);
+        assert!(store.archive(reference.clone()).is_err());
+        assert!(store.unarchive(reference.clone()).is_err());
+        assert!(store.fork(reference.clone()).is_err());
+        assert!(store.delete(reference).is_err());
+        assert_eq!(std::fs::read(&longer_path).expect("longer session kept"), unchanged);
+    }
+
+    #[tokio::test]
+    async fn reading_and_resuming_prefixes_share_only_the_canonical_agent_cache() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let prefix = thread.id[..thread.id.len() - 1].to_string();
+        let canonical = host.load_agent(&thread.id).await.expect("canonical agent");
+        let alias = host.load_agent(&prefix).await.expect("prefix agent");
+        assert!(Arc::ptr_eq(&canonical, &alias));
+        let resumed = host
+            .resume_thread(ThreadIdParams {
+                thread_id: prefix.clone(),
+            })
+            .await
+            .expect("resume prefix");
+        assert_eq!(resumed.id, thread.id);
+        let read = host
+            .read_thread(ThreadIdParams {
+                thread_id: prefix.clone(),
+            })
+            .await
+            .expect("read prefix");
+        assert_eq!(read.thread.id, thread.id);
+        let sessions = host.sessions.lock().await;
+        assert_eq!(sessions.len(), 1);
+        assert!(sessions.contains_key(&thread.id));
+        assert!(!sessions.contains_key(&prefix));
+    }
+
+    #[tokio::test]
+    async fn prefix_execution_and_mutation_fail_before_agent_or_file_state_changes() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let mut persisted = ManagedSession::new("execution-full-id", chrono::Utc::now());
+        persisted.workspace_root = Some(host.workspace_root.clone());
+        let path = host.store.save(&persisted).expect("save scoped thread");
+        let before = std::fs::read(&path).expect("saved bytes");
+        let prefix = "execution";
+        let assert_prefix_refused = |error: DeveloperSessionHostError| {
+            assert_eq!(
+                error.code(),
+                DeveloperSessionHostError::invalid_request("").code()
+            );
+            assert!(error.message().contains("full thread id"));
+        };
+        assert_prefix_refused(
+            host.start_turn(turn_params(prefix, "must not execute"))
+                .await
+                .expect_err("prefix turn"),
+        );
+        assert_prefix_refused(
+            host.compact_thread(ThreadCompactParams {
+                thread_id: prefix.to_string(),
+                from_turn_id: None,
+            })
+            .await
+            .expect_err("prefix compact"),
+        );
+        assert_prefix_refused(
+            host.side_question(ThreadSideQuestionParams {
+                thread_id: prefix.to_string(),
+                question: "must not execute".to_string(),
+                request_id: None,
+            })
+            .await
+            .expect_err("prefix side question"),
+        );
+        assert_prefix_refused(
+            host.rewind_thread(ThreadRewindParams {
+                thread_id: prefix.to_string(),
+                checkpoint_index: Some(0),
+                message_index: None,
+                restore: Some(ThreadRewindRestore::Conversation),
+            })
+            .await
+            .expect_err("prefix rewind"),
+        );
+        assert_prefix_refused(
+            host.decide_plan(PlanDecideParams {
+                thread_id: prefix.to_string(),
+                decision: PlanDecision::Approve,
+                feedback: None,
+            })
+            .await
+            .expect_err("prefix plan decision"),
+        );
+        assert_prefix_refused(
+            host.revert_thread(ThreadRevertParams {
+                thread_id: prefix.to_string(),
+                turn_id: "turn".to_string(),
+                preview: false,
+                restore: Default::default(),
+            })
+            .await
+            .expect_err("prefix revert"),
+        );
+        assert_prefix_refused(
+            host.archive_thread(ThreadIdParams {
+                thread_id: prefix.to_string(),
+            })
+            .await
+            .expect_err("prefix archive"),
+        );
+        assert!(host.sessions.lock().await.is_empty());
+        assert!(host.running_turns.lock().await.is_empty());
+        assert!(host.thread_files.lock().unwrap().is_empty());
+        assert!(!writer_lease::lease_path(&path).exists());
+        assert_eq!(std::fs::read(&path).expect("unchanged bytes"), before);
+        host.validate_execution_thread(&persisted.session_id)
+            .await
+            .expect("full id accepted");
+        host.validate_thread_ownership(prefix)
+            .await
+            .expect("read prefix accepted");
     }
 
     fn foreign_lease(pid: u32, expires_in: chrono::Duration) -> WriterLease {
