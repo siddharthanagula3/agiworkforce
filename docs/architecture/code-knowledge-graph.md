@@ -1507,7 +1507,8 @@ captures before picker/text writes, uses exact controller cleanup and fences
 list/remove/late confirmations, including observed account/project ABA. Local
 operations are not retired by unrelated Cloud changes. Workspace/session
 incarnation, unobserved Clerk changes and native cancellation guarantees are not
-provided; same-owner newer-text clearing remains separate preexisting behavior.
+provided. The separate same-owner newer-text limitation is narrowed by the
+editor revision slice below, not by this account-epoch slice.
 Fixtures are source-only, not native/DB/runtime acceptance.
 
 ## Shared upload authority remains an operation-wide design dependency
@@ -1525,9 +1526,29 @@ relay, completion and cleanup, with server original-scope receipts and explicit
 unknown/legacy behavior. No shared production fix, server bypass, observed loss
 or implementation readiness is claimed.
 
+## Mobile project text saves retain their rendered editor revision
+
+Accepted commit `e851b560f44241740915919d8bdc3002d1eb63f5` changes
+`ProjectSourcesTab.tsx` and its project-source fixture file. The component owns
+an immutable rendered editor snapshot with session, revision and open state;
+edit, close and reopen synchronously replace its ref. `handleSaveText` requires
+that exact rendered snapshot before writing a temporary text file, so a retained
+pre-edit callback cannot start an old save. Existing project/account context and
+exact upload-controller ownership remain separate gates.
+
+An already accepted save retains its original text and can continue uploading
+while the editor changes. Its success closes the editor only when both original
+context and exact editor snapshot remain current; its error likewise cannot
+publish an alert over a newer draft. A valid unchanged success still closes.
+This narrowly supersedes the preceding same-owner text-settlement limitation;
+it does not undo an upload, alter registration/cleanup policy, or add account,
+workspace or native cancellation guarantees. Six authored fixture cases cover
+new title/body, unchanged success, reopen, retained pre-edit callback and stale
+failure; all are unexecuted, with no native or StrictMode/runtime acceptance.
+
 ## Reconstruction boundary
 
-Only the sixty-three accepted production slices traced above are represented as
+Only the sixty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
