@@ -1775,9 +1775,48 @@ retry/refund policy, observed production loss, migration/cron/runtime acceptance
 or pending client correction is claimed. The canonical audit records source paths
 and narrower recovery counterpaths; this design note adds no reconstructed slice.
 
+## Web live voice retains original session, attempt and destination
+
+Accepted commit `b5921a51e197b879364e208bd0775c9b2c1ce97d` changes four
+production files and four fixture sources. `WebChatPage` supplies explicit Managed
+admission to `VoiceModeSurface`; the hook captures a session identity and exact
+`VoiceAttempt` rather than looking up a replacement sink after awaits. Creation
+uses captured RequestAuthority with automatic activation disabled, binds the
+returned conversation ID before navigation, and uses the existing bounded
+navigation handoff. Destination/identity checks reject unrelated replacement
+surfaces. Work-task handoff carries the original conversation and authority into
+send admission rather than implicitly selecting the latest chat.
+
+Foreground captions require the active attempt. Transcript publication uses the
+captured original sink and a separate identity/conversation authority: a bounded
+graceful close can finalize original same-owner text after foreground control
+retires, without writing captions into a replacement surface. The original
+conversation must still exist and pass the hook's Local/BYOK history/model checks.
+This is not a workspace pin or instantaneous SDK-change observer.
+
+`LiveVoiceSession` uses bearer/omit-cookie RequestAuthority for normal API work,
+extension and tool/settings requests. Setup tracks microphone, peer, channel,
+audio and remote tracks for teardown; retirement checks surround awaited setup
+steps and late tracks are stopped. Pending microphone permission is not itself
+cancelled: a later grant is checked and released. Graceful closing retains only
+original-identity close/usage/transcript processing and backend metering, not new
+tool work. Its existing three-second data-channel close window bounds final
+transcript collection, not every native/browser promise or HTTP operation.
+
+Known session IDs can close using the token captured at start, including setup
+failure after a decoded creation response; settlement is coalesced per instance.
+No replacement credentials are borrowed. That token can expire, close HTTP is
+not given a new timeout/retry contract, and an unknown creation outcome cannot be
+cleaned up by guessed ID. Existing server expiry is neither provider revocation
+nor proof of accounting completion: the OPEN voice settlement finding above
+remains unchanged. Fixture sources cover selected stale callbacks, original final
+sink, late permission, setup failure and bearer cleanup with mocked browser/session
+objects. They are unexecuted, not end-to-end navigation/WebRTC/browser acceptance.
+Pending mobile voice work is not represented by this web slice.
+
 ## Reconstruction boundary
 
-Only the seventy-one accepted production slices traced above are represented as
+Only the seventy-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
