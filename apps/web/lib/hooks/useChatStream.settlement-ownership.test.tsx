@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDefaultModelFor } from '@agiworkforce/types';
@@ -7,12 +8,13 @@ import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
 import { isMessageContinuable } from '@/features/chat/lib/continue-generation';
 import { isStoppedTurn } from '@/features/chat/lib/turn-error-notice';
-import { __resetPendingTurnsForTests, useChatStream } from './useChatStream';
+import { __resetPendingTurnsForTests, useChatStream, useResolveToolApproval } from './useChatStream';
 
 const auth = vi.hoisted(() => ({
   getToken: vi.fn(),
   userId: 'settlement-user',
   sessionId: 'settlement-session',
+  isSignedIn: true,
 }));
 
 vi.mock('@clerk/nextjs', async () => {
@@ -21,7 +23,7 @@ vi.mock('@clerk/nextjs', async () => {
     getToken: auth.getToken,
     userId: auth.userId,
     sessionId: auth.sessionId,
-    isSignedIn: true,
+    isSignedIn: auth.isSignedIn,
     isLoaded: true,
   }));
 });
@@ -318,6 +320,42 @@ function resumePendingTurn(
     : hook.resolveToolInput(assistantId, callId, INPUT_ANSWERS);
 }
 
+function seedRestoredPendingTurn(kind: 'approval' | 'input', count = 1) {
+  const calls = Array.from({ length: count }, (_, index) => ({
+    toolCallId: `restored-call-${index}`,
+    name: 'mcp__custom-fixture__create_task',
+  }));
+  useChatStore.getState().setActiveConversationWithMessages(CONVERSATION.id, [{
+    id: ASSISTANT_ID,
+    role: 'assistant',
+    content: 'Waiting for your response.',
+    model: MODEL,
+    createdAt: CONVERSATION.createdAt,
+    metadata: {
+      cloudAgentRun: {
+        runId: OLD_RUN_ID,
+        runPath: `${COMPLETIONS_PATH}/runs/${OLD_RUN_ID}`,
+        lastSequence: 0,
+        detachable: true,
+        state: 'awaiting_input',
+      },
+      ...(kind === 'approval' ? {
+        cloudApproval: { schemaVersion: 1, runId: OLD_RUN_ID, calls },
+      } : {}),
+      tools: calls.map((call) => kind === 'approval' ? {
+        ...call,
+        status: 'awaiting_approval' as const,
+        requiresApproval: true,
+      } : {
+        ...call,
+        status: 'awaiting_input' as const,
+        connectorId: 'custom-fixture',
+        inputRequests: { priority: { method: 'elicitation/create' } },
+      }),
+    },
+  }]);
+}
+
 describe('useChatStream exact request settlement ownership', () => {
   beforeEach(() => {
     pendingOperations.length = 0;
@@ -333,6 +371,7 @@ describe('useChatStream exact request settlement ownership', () => {
     });
     auth.userId = 'settlement-user';
     auth.sessionId = 'settlement-session';
+    auth.isSignedIn = true;
     auth.getToken.mockReset().mockResolvedValue('fixture-account-token');
     vi.stubGlobal('fetch', vi.fn());
   });
@@ -348,6 +387,108 @@ describe('useChatStream exact request settlement ownership', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('keeps restored partial input bound to its first session across a remount', async () => {
+    seedRestoredPendingTurn('input', 2);
+    const resumed = controlledStream();
+    resumed.finish('Resumed successfully.');
+    const routed = routeRequests({ completions: [], resume: () => resumed });
+    const first = renderStream();
+    await act(async () => {
+      expect(await first.result.current.resolveToolInput(ASSISTANT_ID, 'restored-call-0', INPUT_ANSWERS)).toBe(true);
+    });
+    expect(routed.requests).toHaveLength(0);
+    first.unmount();
+    const second = renderStream();
+    await act(async () => {
+      expect(await second.result.current.resolveToolInput(ASSISTANT_ID, 'restored-call-1', INPUT_ANSWERS)).toBe(true);
+    });
+    const request = routed.requests.find((entry) => entry.path.endsWith('/resume-input'));
+    expect(request?.body).toEqual({
+      run_id: OLD_RUN_ID,
+      tool_inputs: [0, 1].map((index) => ({
+        tool_call_id: `restored-call-${index}`,
+        input_responses: INPUT_ANSWERS,
+      })),
+    });
+    expect(new Headers(request?.init?.headers).get('Authorization')).toBe('Bearer fixture-account-token');
+    expect(request?.init?.credentials).toBe('omit');
+    expect(assistant(ASSISTANT_ID)?.content).toContain('Resumed successfully.');
+  });
+
+  it('rejects a second session before adding to restored partial input', async () => {
+    seedRestoredPendingTurn('input', 2);
+    const routed = routeRequests({ completions: [] });
+    const first = renderStream();
+    await act(async () => {
+      expect(await first.result.current.resolveToolInput(ASSISTANT_ID, 'restored-call-0', INPUT_ANSWERS)).toBe(true);
+    });
+    first.unmount();
+    auth.userId = 'replacement-user';
+    auth.sessionId = 'replacement-session';
+    const second = renderStream();
+    const before = assistant(ASSISTANT_ID);
+    await act(async () => {
+      expect(await second.result.current.resolveToolInput(ASSISTANT_ID, 'restored-call-1', { replacement: true })).toBe(false);
+    });
+    expect(assistant(ASSISTANT_ID)).toBe(before);
+    expect(auth.getToken).not.toHaveBeenCalled();
+    expect(routed.requests).toHaveLength(0);
+  });
+
+  it.each(['approval', 'input'] as const)('leaves restored %s untouched without a canonical session', async (kind) => {
+    seedRestoredPendingTurn(kind);
+    auth.isSignedIn = false;
+    const routed = routeRequests({ completions: [] });
+    const { result } = renderStream();
+    const before = assistant(ASSISTANT_ID);
+    await act(async () => {
+      await resumePendingTurn(result.current, kind, ASSISTANT_ID, 'restored-call-0');
+    });
+    expect(assistant(ASSISTANT_ID)).toBe(before);
+    expect(auth.getToken).not.toHaveBeenCalled();
+    expect(routed.requests).toHaveLength(0);
+  });
+
+  it.each(['approval', 'input'] as const)('fences restored %s when identity changes during token acquisition', async (kind) => {
+    seedRestoredPendingTurn(kind);
+    const token = deferred('fixture-account-token');
+    auth.getToken.mockReturnValueOnce(token.promise);
+    const routed = routeRequests({ completions: [] });
+    const { result, rerender } = renderStream();
+    let resuming!: Promise<unknown>;
+    act(() => { resuming = track(resumePendingTurn(result.current, kind, ASSISTANT_ID, 'restored-call-0')); });
+    await vi.waitFor(() => expect(auth.getToken).toHaveBeenCalledTimes(1));
+    act(() => {
+      auth.userId = 'replacement-user';
+      auth.sessionId = 'replacement-session';
+      rerender();
+    });
+    const before = assistant(ASSISTANT_ID);
+    await act(async () => {
+      token.resolve('fixture-account-token');
+      await resuming;
+    });
+    expect(assistant(ASSISTANT_ID)).toBe(before);
+    expect(routed.requests).toHaveLength(0);
+  });
+
+  it('resumes a restored approval through the standalone hook with a captured bearer', async () => {
+    seedRestoredPendingTurn('approval');
+    const resumed = controlledStream();
+    resumed.finish('Approved continuation.');
+    const routed = routeRequests({ completions: [], resume: () => resumed });
+    const { result } = renderHook(() => useResolveToolApproval(useRef(new Map<string, AbortController>())));
+    await act(async () => { await result.current(ASSISTANT_ID, 'restored-call-0', 'approved'); });
+    const request = routed.requests.find((entry) => entry.path.endsWith('/approve'));
+    expect(request?.body).toEqual({
+      run_id: OLD_RUN_ID,
+      tool_approvals: [{ tool_call_id: 'restored-call-0', decision: 'approved' }],
+    });
+    expect(new Headers(request?.init?.headers).get('Authorization')).toBe('Bearer fixture-account-token');
+    expect(request?.init?.credentials).toBe('omit');
+    expect(assistant(ASSISTANT_ID)?.content).toContain('Approved continuation.');
   });
 
   it.each(['renamed receipt', 'edit conflict', 'save failure'] as const)(

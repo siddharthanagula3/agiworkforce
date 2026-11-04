@@ -38,7 +38,7 @@ import { accountSecurityVerifyPageHref } from '@agiworkforce/cloud-contracts/acc
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
-import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { useSessionSnapshot, type IdentitySessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import {
   createChatRequestSettlements,
@@ -959,6 +959,19 @@ interface PendingInputTurn {
 }
 
 const pendingInputTurns = new Map<string, PendingInputTurn>();
+
+function bindPendingTurnAuthority(
+  turn: PendingTurn | PendingInputTurn,
+  captureSessionSnapshot: () => IdentitySessionSnapshot | null,
+): RequestAuthority | null {
+  if (turn.authority) return turn.authority.isCurrent() ? turn.authority : null;
+  const snapshot = captureSessionSnapshot();
+  if (!snapshot) return null;
+  const authority = createRequestAuthority(snapshot);
+  if (!authority.isCurrent()) return null;
+  turn.authority = authority;
+  return authority;
+}
 
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
@@ -3849,13 +3862,8 @@ export function useChatStream(
         if (!isApprovalTurnLive(message.id)) continue;
         const turn = pendingTurns.get(message.id);
         if (!turn) continue;
-        if (!turn.authority) {
-          const snapshot = captureSessionSnapshot();
-          if (!snapshot) continue;
-          turn.authority = createRequestAuthority(snapshot);
-          ownedAuthoritiesRef.current.add(turn.authority);
-        }
-        if (turn.authority.isCurrent()) followRemoteApproval(message.id, authorityToken(turn.authority, requestSettlements));
+        const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
+        if (authority) followRemoteApproval(message.id, authorityToken(authority, requestSettlements));
       }
     };
     followRestored(useChatStore.getState().messages);
@@ -5232,7 +5240,7 @@ export function useResolveToolApproval(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
   sharedRequests?: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolApproval'] {
-  const { getToken } = useSession();
+  const captureSessionSnapshot = useSessionSnapshot();
   const abortControllers = sharedAbortControllers;
   const ownRequests = useRef<ChatRequestSettlements | null>(null);
   if (!sharedRequests && !ownRequests.current) {
@@ -5262,8 +5270,9 @@ export function useResolveToolApproval(
 
       const turn = pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId);
       if (!turn || turn.resolving) return;
-      if (turn.authority && !turn.authority.isCurrent()) return;
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
+      const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
+      if (!authority) return;
 
       const request = requests.begin(turn.conversationId, assistantMessageId);
       const abortController = request.controller;
@@ -5288,11 +5297,7 @@ export function useResolveToolApproval(
         };
         updateMessage(assistantMessageId, { metadata: selectedMetadata }, turn.conversationId);
 
-        const accountToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority, requests) : async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        const accountToken = authorityToken(authority, requests);
         const getAuthToken = settlementToken(accountToken, request, requests);
         if (
           turn.decisions.size < turn.calls.length &&
@@ -5571,7 +5576,7 @@ export function useResolveToolApproval(
         request.finish();
       }
     },
-    [abortControllers, getToken, requests],
+    [abortControllers, captureSessionSnapshot, requests],
   );
 }
 
@@ -5583,7 +5588,7 @@ function useResolveToolInput(
   resolveToolApproval: UseChatStreamReturn['resolveToolApproval'],
   requests: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolInput'] {
-  const { getToken } = useSession();
+  const captureSessionSnapshot = useSessionSnapshot();
   const abortControllers = sharedAbortControllers;
 
   return useCallback(
@@ -5605,8 +5610,9 @@ function useResolveToolInput(
       const turn =
         pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId);
       if (!turn || turn.resolving) return false;
-      if (turn.authority && !turn.authority.isCurrent()) return false;
       if (!turn.calls.some((call) => call.toolCallId === toolCallId)) return false;
+      const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
+      if (!authority) return false;
 
       turn.responses.set(toolCallId, inputResponses);
       if (turn.responses.size < turn.calls.length) return true;
@@ -5624,11 +5630,7 @@ function useResolveToolInput(
           );
         }
 
-        const accountToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority, requests) : async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        const accountToken = authorityToken(authority, requests);
         const getAuthToken = settlementToken(accountToken, request, requests);
 
         const restoreInputControls = () => {
@@ -5827,7 +5829,7 @@ function useResolveToolInput(
         request.finish();
       }
     },
-    [abortControllers, getToken, resolveToolApproval, requests],
+    [abortControllers, captureSessionSnapshot, resolveToolApproval, requests],
   );
 }
 
