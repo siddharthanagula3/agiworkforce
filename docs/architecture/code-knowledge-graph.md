@@ -3344,8 +3344,8 @@ counterguards, not newly absent protections or evidence of observed wrong-accoun
 security changes.
 
 Single-session revoke, timeout/lockdown settings, ordinary membership mutations
-and workspace switching remain outside this slice. Generic StepUpModal challenge/
-latest-session completion races are not redesigned. Existing API rejects late
+and workspace switching remain outside this slice. Generic StepUpModal challenge/latest-session handling was outside this seven-
+mutation slice; the separate lifecycle correction below narrows that exclusion. Existing API rejects late
 successful responses after an epoch transition, so an already-dispatched mutation
 can have an unknown outcome; this is not full receipt preservation, rollback or
 automatic retry. No already-issued native secret-sharing action can be recalled.
@@ -3357,9 +3357,45 @@ mocked source cases are not real transport/authentication or native acceptance.
 No tests/checks, credentials, network, database or security actions were performed
 for this documentation trace.
 
+## Mobile step-up attempts own challenge and verification lifetimes
+
+Accepted commit `4875633119d61a05ab1889ecb9e60b4bbbd5f280` changes three
+production files and three fixture sources. `useStepUp` establishes an exact
+attempt before the first send, capturing SDK session object/ID, canonical account
+epoch, action and resource. Its resolver belongs to that attempt; replacement,
+unmount or observed identity retirement settles only the matching pending challenge.
+Only explicit `STEP_UP_REQUIRED` enters acquisition and permits one resend.
+Already-dispatched mutation results return unchanged rather than being retroactively
+relabelled cancelled by this hook.
+
+`captureStepUpIdentity` checks SDK object/ID/user against the original epoch and
+makes observed retirement sticky. Grant/readiness requests carry that epoch and
+attempt signal, with currentness around token and response awaits. The modal is
+keyed by attempt and binds immutable initial props, so incidental parent rerenders
+do not restart verification or redirect its completion. Synchronous operation locks,
+exact versions and mounted/current checks fence verification, prompt publication,
+secret entry, grant completion, cancel and finally. Existing SDK methods are used;
+no new SDK listener or cancellation API is asserted.
+
+This narrowly supersedes the earlier generic modal lifetime exclusion, not all
+security authority. Unobserved same-user SDK ABA remains possible; already-running
+shared SDK verification state is not cancelled. Captured-bearer HTTP401 still enters
+the existing global auth recovery path, which can affect a replacement session.
+The final supplied mutation callback may still obtain ambient authentication after
+the hook's invocation check, including a same-user replacement SDK session. Caller
+epoch guards protect observed account/sign-out transitions, not exact same-user
+session identity at dispatch. Existing API/caller and server subject/action controls
+are unchanged, with no rollback or continuous identity guarantee.
+
+The pinned SDK packages were unavailable for implementation inspection. Authored
+hook/modal/service fixtures are unexecuted and mocked; email, retry, sign-out and
+late-grant/readiness branches lack dedicated cases. No authentication, credentials,
+SDK/native, network, database, test or checker execution establishes runtime
+acceptance here.
+
 ## Reconstruction boundary
 
-Only the one hundred and fourteen accepted production slices traced above are represented as
+Only the one hundred and fifteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
