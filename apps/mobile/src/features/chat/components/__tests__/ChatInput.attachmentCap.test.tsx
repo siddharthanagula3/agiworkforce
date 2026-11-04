@@ -47,8 +47,13 @@ jest.mock('@/src/features/chat/draftStore', () => ({
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: mockAppMode }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: mockAppMode }),
+    {
+      getState: () => ({ appMode: mockAppMode }),
+      subscribe: jest.fn(() => jest.fn()),
+    },
+  ),
 }));
 
 let capturedAttachments: Array<{ fileName: string }> = [];

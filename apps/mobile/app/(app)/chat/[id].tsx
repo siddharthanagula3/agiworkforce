@@ -1,3 +1,4 @@
+import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -1110,84 +1111,89 @@ export default function ChatScreen() {
   }, [handleOpenCloudSignIn, router]);
 
   const handleSheetCamera = useCallback(async () => {
-    try {
+    const operation = chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(operation, async (scope) => {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (!scope.isCurrent()) return [];
       if (status !== 'granted') {
         Alert.alert(
           'Camera Access',
           'Camera permission is required to take photos. Allow it in Settings to attach a photo.',
           [
             { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => void Linking.openSettings() },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                if (scope.isCurrent()) void Linking.openSettings();
+              },
+            },
           ],
         );
-        return;
+        return [];
       }
       const assets = await captureImageAssetsFromCamera();
-      if (assets.length > 0) {
-        chatInputAttachRef.current?.addAttachments(imageAssetsToChatAttachments(assets, 'cam'));
-      }
-    } catch (error) {
+      return scope.isCurrent() ? imageAssetsToChatAttachments(assets, 'cam') : [];
+    }, (error) => {
       Alert.alert(
         'Camera',
         error instanceof PictureMetadataError
           ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open the camera. Please try again.',
       );
-    }
-  }, []);
+    });
+  }, [conversationExecutionMode]);
 
   const handleSheetPasteImage = useCallback(async () => {
-    try {
+    const operation = chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(operation, async (scope) => {
       const attachment = await readClipboardImageAttachment();
-      if (attachment) chatInputAttachRef.current?.addAttachments([attachment]);
-      else Alert.alert('Paste image', 'There is no image on the clipboard to paste.');
-    } catch {
+      if (!scope.isCurrent()) return [];
+      if (attachment) return [attachment];
+      Alert.alert('Paste image', 'There is no image on the clipboard to paste.');
+      return [];
+    }, () => {
       Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
-    }
-  }, []);
+    });
+  }, [conversationExecutionMode]);
 
   const handleSheetPhotos = useCallback(async () => {
-    try {
+    const operation = chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(operation, async (scope) => {
       const assets = await pickImageAssetsFromLibrary({
         allowsMultipleSelection: true,
         selectionLimit: 5,
         orderedSelection: true,
       });
-      if (assets.length > 0) {
-        const attachments = imageAssetsToChatAttachments(assets);
-        chatInputAttachRef.current?.addAttachments(attachments);
-      }
-    } catch (error) {
+      return scope.isCurrent() ? imageAssetsToChatAttachments(assets) : [];
+    }, (error) => {
       Alert.alert(
         'Photos',
         error instanceof PictureMetadataError
           ? PICTURE_METADATA_RECOVERY_MESSAGE
           : 'Could not open Photos. Please try again.',
       );
-    }
-  }, []);
+    });
+  }, [conversationExecutionMode]);
 
   const handleSheetFile = useCallback(async () => {
-    try {
+    const operation = chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(operation, async (scope) => {
       const result = await DocumentPicker.getDocumentAsync({
         type: pickableDocumentMimeTypes(conversationExecutionMode),
         copyToCacheDirectory: true,
         multiple: true,
       });
-      if (!result.canceled && result.assets.length > 0) {
-        const attachments: Attachment[] = result.assets.map((asset) => ({
-          id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          uri: asset.uri,
-          mimeType: asset.mimeType ?? 'application/octet-stream',
-          fileName: asset.name ?? 'document',
-          fileSize: asset.size,
-        }));
-        chatInputAttachRef.current?.addAttachments(attachments);
-      }
-    } catch {
+      if (!scope.isCurrent() || result.canceled) return [];
+      return result.assets.map((asset) => ({
+        id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? 'application/octet-stream',
+        fileName: asset.name ?? 'document',
+        fileSize: asset.size,
+      }));
+    }, () => {
       Alert.alert('Error', 'Failed to pick document. Please try again.');
-    }
+    });
   }, [conversationExecutionMode]);
 
   const handleSelectVariant = useCallback(

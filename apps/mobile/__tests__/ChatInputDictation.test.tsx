@@ -112,8 +112,13 @@ jest.mock('../src/features/model-picker/store', () => ({
 }));
 
 jest.mock('../src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: 'local' }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: 'local' }),
+    {
+      getState: () => ({ appMode: 'local' }),
+      subscribe: jest.fn(() => jest.fn()),
+    },
+  ),
 }));
 
 jest.mock('../src/features/auth/store', () => ({

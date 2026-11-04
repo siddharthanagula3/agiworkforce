@@ -37,6 +37,8 @@ import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendPreview } from './SendPreview';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
+import { useComposerAttachmentScope } from '../useComposerAttachmentScope';
+import type { ComposerAttachmentOperation } from '../utils/runComposerAttachmentPick';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
@@ -116,6 +118,7 @@ interface QueuedFollowUp {
 
 export interface ChatInputHandle {
   addAttachments: (items: Attachment[]) => void;
+  captureAttachmentOperation: (executionMode: 'local' | 'cloud') => ComposerAttachmentOperation | null;
   focus?: () => void;
   prefillText?: (starter: string) => void;
 }
@@ -210,6 +213,7 @@ export function ChatInput({
   const chatFeatures = useChatStore((s) => s.features);
   const failureCode = useChatStore((s) => s.failureCode?.code ?? null);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const captureAttachmentScope = useComposerAttachmentScope(draftIdentity, draftProvenance, appMode);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
@@ -287,7 +291,8 @@ export function ChatInput({
   }, []);
 
   const addAttachments = useCallback(
-    (items: Attachment[]) => {
+    (items: Attachment[], isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return;
       const { accepted, rejected } = validateAttachments(items, appMode);
       const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
       const fresh: Attachment[] = [];
@@ -301,14 +306,21 @@ export function ChatInput({
         seen.add(identity);
         fresh.push(item);
       }
-      if (fresh.length > 0) setAttachments((prev) => [...prev, ...fresh]);
+      if (fresh.length > 0) {
+        setAttachments((prev) => {
+          if (!isCurrent()) return prev;
+          const currentIdentities = new Set(prev.map(attachmentIdentity));
+          return [...prev, ...fresh.filter((item) => !currentIdentities.has(attachmentIdentity(item)))];
+        });
+      }
+      if (!isCurrent()) return;
       if (duplicates.length > 0) {
         Alert.alert(
           duplicates.length === 1 ? 'Already attached' : 'Some files are already attached',
           `${duplicates.join('\n')}\n\nEach file is attached once.`,
         );
       }
-      if (rejected.length > 0) {
+      if (rejected.length > 0 && isCurrent()) {
         Alert.alert(
           rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
           rejected.map((r) => r.reason).join('\n'),
@@ -328,8 +340,17 @@ export function ChatInput({
         setText((current) => (current.trim() ? current : starter));
       },
       addAttachments,
+      captureAttachmentOperation: (executionMode: 'local' | 'cloud') => {
+        const scope = captureAttachmentScope(executionMode);
+        return scope
+          ? {
+              isCurrent: scope.isCurrent,
+              addAttachments: (items: Attachment[]) => addAttachments(items, scope.isCurrent),
+            }
+          : null;
+      },
     }),
-    [addAttachments],
+    [addAttachments, captureAttachmentScope],
   );
 
   useLayoutEffect(() => {
