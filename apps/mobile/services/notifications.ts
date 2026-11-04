@@ -19,7 +19,7 @@ import {
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from './notificationCategories';
 import type { NotificationEventType } from './notificationEventTypes';
 import {
-  beginPushPreferenceSync,
+  beginPushRegistration,
   postPushRegistration,
   stopPushPreferenceSync,
 } from './pushPreferenceSync';
@@ -101,6 +101,7 @@ function accountContextIsCurrent(accountContext: PushNotificationAccountContext)
 }
 
 let _accountContext: PushNotificationAccountContext | null = null;
+let tokenSelectionGeneration = 0;
 
 export type PushRegistrationIssue = 'device_token' | 'server';
 
@@ -111,8 +112,12 @@ export function getPushRegistrationIssue(): PushRegistrationIssue | null {
 }
 
 export function setPushAccountContext(accountContext: PushNotificationAccountContext | null): void {
+  if (_accountContext !== accountContext || accountContext === null) {
+    tokenSelectionGeneration += 1;
+    stopPushPreferenceSync();
+    _registrationIssue = null;
+  }
   _accountContext = accountContext;
-  if (!accountContext) _registrationIssue = null;
 }
 
 export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined';
@@ -158,27 +163,32 @@ export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
 export async function registerForPushNotifications(
   accountContext: PushNotificationAccountContext,
 ): Promise<string | null> {
+  if (!accountContextIsCurrent(accountContext)) return null;
+  const selectionGeneration = ++tokenSelectionGeneration;
+  const selectionIsCurrent = () =>
+    selectionGeneration === tokenSelectionGeneration && accountContextIsCurrent(accountContext);
   try {
-    if (!accountContextIsCurrent(accountContext)) return null;
+    if (!selectionIsCurrent()) return null;
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    if (!accountContextIsCurrent(accountContext)) return null;
+    if (!selectionIsCurrent()) return null;
 
     if (existingStatus !== 'granted') {
       return null;
     }
 
     await registerAndroidChannels();
-    if (!accountContextIsCurrent(accountContext)) return null;
+    if (!selectionIsCurrent()) return null;
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     const tokenData = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined,
     );
-    if (!accountContextIsCurrent(accountContext)) return null;
+    if (!selectionIsCurrent()) return null;
     const pushToken = tokenData.data;
 
-    const registered = await sendTokenToBackend(pushToken, accountContext);
-    if (!accountContextIsCurrent(accountContext)) return null;
+    const { registration, registered } = await sendTokenToBackend(pushToken, accountContext);
+    // Discovery ordering ends at POST. Receipt/status ownership follows the exact lifetime.
+    if (!registration.isCurrent()) return null;
     if (!registered) {
       _registrationIssue = 'server';
       return null;
@@ -187,7 +197,7 @@ export async function registerForPushNotifications(
     _registrationIssue = null;
     return pushToken;
   } catch (err) {
-    if (accountContextIsCurrent(accountContext)) _registrationIssue = 'device_token';
+    if (selectionIsCurrent()) _registrationIssue = 'device_token';
     if (__DEV__) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('aps-environment')) {
@@ -203,12 +213,10 @@ export async function registerForPushNotifications(
 async function sendTokenToBackend(
   token: string,
   accountContext: PushNotificationAccountContext,
-): Promise<boolean> {
-  const registered = await postPushRegistration(token, accountContext);
-  if (registered) {
-    beginPushPreferenceSync(token, accountContext);
-  }
-  return registered;
+) {
+  const registration = beginPushRegistration(token, accountContext);
+  const registered = await postPushRegistration(registration);
+  return { registration, registered };
 }
 
 export async function scheduleLocalNotification(opts: {
@@ -620,50 +628,52 @@ export function useNotificationCenter(): {
   };
 }
 
-let foregroundSubscription: Notifications.Subscription | null = null;
-let responseSubscription: Notifications.Subscription | null = null;
-let tokenSubscription: Notifications.Subscription | null = null;
+interface NotificationListenerLifetime {
+  active: boolean;
+  subscriptions: Notifications.Subscription[];
+}
+
+let notificationListenerLifetime: NotificationListenerLifetime | null = null;
+
+function retireNotificationListeners(lifetime: NotificationListenerLifetime): void {
+  if (!lifetime.active) return;
+  lifetime.active = false;
+  for (const subscription of lifetime.subscriptions) subscription.remove();
+  if (notificationListenerLifetime === lifetime) {
+    notificationListenerLifetime = null;
+    tokenSelectionGeneration += 1;
+    stopPushPreferenceSync();
+  }
+}
 
 export function setupNotificationListeners(
   accountContext: PushNotificationAccountContext | null = null,
 ): () => void {
+  if (notificationListenerLifetime) retireNotificationListeners(notificationListenerLifetime);
   if (accountContext) setPushAccountContext(accountContext);
-  if (foregroundSubscription || responseSubscription || tokenSubscription) {
-    return () => {
-      foregroundSubscription?.remove();
-      responseSubscription?.remove();
-      tokenSubscription?.remove();
-      foregroundSubscription = null;
-      responseSubscription = null;
-      tokenSubscription = null;
-      stopPushPreferenceSync();
-    };
-  }
+  const lifetime: NotificationListenerLifetime = { active: true, subscriptions: [] };
+  notificationListenerLifetime = lifetime;
+  const isCurrent = () => lifetime.active && notificationListenerLifetime === lifetime;
 
-  foregroundSubscription = Notifications.addNotificationReceivedListener((notification) => {
-    notificationCenterStore.add(notification);
-  });
-
-  responseSubscription = Notifications.addNotificationResponseReceivedListener(
-    handleNotificationResponse,
+  lifetime.subscriptions.push(
+    Notifications.addNotificationReceivedListener((notification) => {
+      if (isCurrent()) notificationCenterStore.add(notification);
+    }),
+    Notifications.addNotificationResponseReceivedListener((response) => {
+      if (isCurrent()) handleNotificationResponse(response);
+    }),
+    Notifications.addPushTokenListener((newToken) => {
+      if (!isCurrent()) return;
+      const current = _accountContext;
+      if (current && accountContextIsCurrent(current)) {
+        // A native refresh supersedes any older outstanding Expo token lookup.
+        tokenSelectionGeneration += 1;
+        void sendTokenToBackend(newToken.data, current);
+      }
+    }),
   );
 
-  tokenSubscription = Notifications.addPushTokenListener((newToken) => {
-    const current = _accountContext;
-    if (current && accountContextIsCurrent(current)) {
-      void sendTokenToBackend(newToken.data, current);
-    }
-  });
-
-  return () => {
-    foregroundSubscription?.remove();
-    responseSubscription?.remove();
-    tokenSubscription?.remove();
-    foregroundSubscription = null;
-    responseSubscription = null;
-    tokenSubscription = null;
-    stopPushPreferenceSync();
-  };
+  return () => retireNotificationListeners(lifetime);
 }
 
 export async function handleInitialNotification(): Promise<void> {
