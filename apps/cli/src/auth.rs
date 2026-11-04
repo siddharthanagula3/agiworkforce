@@ -419,6 +419,12 @@ impl AuthStore {
         Self::load_unlocked()
     }
 
+    // The callback holds the mutation lock and must not re-enter AuthStore.
+    pub(crate) fn with_snapshot<T>(read: impl FnOnce(Result<Self>) -> T) -> Result<T> {
+        let _lock = Self::mutation_lock()?;
+        Ok(read(Self::load_unlocked()))
+    }
+
     pub fn transaction<T>(change: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
         Self::transaction_with_commit(change, |_| {})
     }

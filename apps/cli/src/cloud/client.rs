@@ -234,7 +234,7 @@ impl CloudClient {
         )
     }
 
-    async fn exchange(builder: reqwest::RequestBuilder) -> Result<Reply, CloudError> {
+    async fn exchange(&self, builder: reqwest::RequestBuilder) -> Result<Reply, CloudError> {
         let response = builder
             .send()
             .await
@@ -251,14 +251,14 @@ impl CloudClient {
             return Err(CloudError::UpgradeRequired(Box::new(error)));
         }
         if status == 401 {
-            tier_cache::invalidate_tier_cache();
+            tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
         Ok(Reply { status, body })
     }
 
-    async fn send<T: DeserializeOwned>(builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
-        let reply = Self::exchange(builder).await?;
+    async fn send<T: DeserializeOwned>(&self, builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
+        let reply = self.exchange(builder).await?;
         if !reply.is_success() {
             return Err(CloudError::Api {
                 status: reply.status,
@@ -274,7 +274,7 @@ impl CloudClient {
         &self,
         build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
     ) -> Result<T, CloudError> {
-        match Self::send(build(self)).await {
+        match self.send(build(self)).await {
             Err(CloudError::SessionExpired) => {}
             other => return other,
         }
@@ -290,7 +290,7 @@ impl CloudClient {
                     owner: self.owner.clone(),
                     http: self.http.clone(),
                 };
-                match Self::send(build(&renewed)).await {
+                match renewed.send(build(&renewed)).await {
                     Err(CloudError::SessionExpired) => {
                         forget_refused_session(&renewed.jwt).map_err(|error| CloudError::Api {
                             status: 401,
@@ -359,7 +359,7 @@ impl CloudClient {
         body: &B,
         timeout: Duration,
     ) -> Result<T, CloudError> {
-        Self::send(
+        self.send(
             self.request(reqwest::Method::POST, path)
                 .header("Idempotency-Key", idempotency_key)
                 .timeout(timeout)
@@ -382,7 +382,7 @@ impl CloudClient {
         if let Some(key) = idempotency_key {
             builder = builder.header("Idempotency-Key", key);
         }
-        Self::exchange(builder).await
+        self.exchange(builder).await
     }
 
     /// Read a hosted file the account owns. Media the account stores is served
@@ -401,7 +401,7 @@ impl CloudClient {
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         let status = response.status().as_u16();
         if status == 401 {
-            tier_cache::invalidate_tier_cache();
+            tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
         if !(200..300).contains(&status) {
@@ -459,7 +459,7 @@ impl CloudClient {
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         let status = response.status().as_u16();
         if status == 401 {
-            tier_cache::invalidate_tier_cache();
+            tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
         if !(200..300).contains(&status) {

@@ -29,6 +29,8 @@ pub struct AccountSnapshot {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct AccountCacheEnvelope {
+    #[serde(default)]
+    owner: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     email: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -67,11 +69,13 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-fn read_account_cache() -> Option<AccountCacheEnvelope> {
+fn read_account_cache(context: &tier_cache::ManagedRequestContext) -> Option<AccountCacheEnvelope> {
+    let owner = context.owner.as_ref()?;
     let content = std::fs::read_to_string(account_cache_path()?).ok()?;
     let envelope: AccountCacheEnvelope = toml::from_str(&content).ok()?;
-    let age = now_secs().saturating_sub(envelope.cached_at);
-    (age <= ACCOUNT_CACHE_TTL.as_secs()).then_some(envelope)
+    let now = now_secs();
+    (envelope.owner.as_ref() == Some(owner) && envelope.cached_at <= now
+        && now - envelope.cached_at <= ACCOUNT_CACHE_TTL.as_secs()).then_some(envelope)
 }
 
 fn write_account_cache(envelope: &AccountCacheEnvelope) {
@@ -148,93 +152,53 @@ pub fn epoch_millis_to_rfc3339(millis: i64) -> Option<String> {
 /// With `refresh` unset this touches the network only once a cache has
 /// expired, which is the same rule `agi` itself applies at startup.
 pub async fn account_status(refresh: bool) -> AccountSnapshot {
-    let credential = managed_credential();
-    let Some((jwt, _)) = credential else {
-        return AccountSnapshot {
-            signed_in: false,
-            cached: true,
-            ..AccountSnapshot::default()
-        };
+    let Ok(context) = tier_cache::ManagedRequestContext::capture() else { return AccountSnapshot::default(); };
+    let Some(_) = context.jwt.as_deref() else {
+        return AccountSnapshot { cached: true, ..AccountSnapshot::default() };
     };
-
     if refresh {
-        tier_cache::invalidate_tier_cache();
-        clear_account_cache();
+        context.with_current(|| { tier_cache::invalidate_tier_cache(); clear_account_cache(); });
     }
-
-    let tier_was_cached = tier_cache::read_tier_cache().is_some();
-    let resolved = tier_cache::resolve_user_tier(Some(&jwt)).await;
-    let tier = resolved
-        .cached
-        .map(|cached| tier_cache::tier_slug(&cached.tier));
-
-    if let Some(envelope) = read_account_cache() {
-        return AccountSnapshot {
-            signed_in: true,
-            email: envelope.email,
-            tier,
-            balance_credits: envelope.balance_credits,
-            purchased_credits: envelope.purchased_credits,
-            cached: tier_was_cached,
-        };
-    }
-
-    let email = fetch_email(&jwt).await;
-    let (balance_credits, purchased_credits) = fetch_credits(&jwt).await;
-    write_account_cache(&AccountCacheEnvelope {
-        email: email.clone(),
-        balance_credits,
-        purchased_credits,
-        cached_at: now_secs(),
-    });
-
-    AccountSnapshot {
+    let tier_was_cached = context.with_current(|| tier_cache::read_tier_for(&context)).flatten().is_some();
+    let resolved = tier_cache::resolve_user_tier_for(&context).await;
+    let tier = resolved.cached.map(|cached| tier_cache::tier_slug(&cached.tier));
+    if let Some(snapshot) = context.with_current(|| read_account_cache(&context).map(|envelope| AccountSnapshot {
         signed_in: true,
-        email,
-        tier,
-        balance_credits,
-        purchased_credits,
-        cached: false,
-    }
-}
-
-async fn fetch_email(jwt: &str) -> Option<String> {
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
-    let base = tier_cache::resolve_agi_api_base(&raw_base)?;
-    let client = reqwest::Client::builder()
-        .timeout(ME_FETCH_TIMEOUT)
-        .build()
-        .ok()?;
-    let response = client
-        .get(format!("{base}/api/me"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .send()
-        .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
-    }
-    let body: MeResponse = response.json().await.ok()?;
-    if let Some(plan_tier) = body
-        .plan
-        .as_ref()
-        .and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref()))
-    {
-        tier_cache::adopt_server_plan(plan_tier);
-    }
-    body.email.filter(|email| !email.is_empty())
-}
-
-/// Plan allowance left this month and the separately purchased balance.
-async fn fetch_credits(jwt: &str) -> (Option<f64>, Option<f64>) {
-    match crate::usage_summary::fetch_account_usage(jwt).await {
+        email: envelope.email,
+        tier: tier.clone(),
+        balance_credits: envelope.balance_credits,
+        purchased_credits: envelope.purchased_credits,
+        cached: tier_was_cached,
+    })).flatten() { return snapshot; }
+    if !context.is_current() { return AccountSnapshot::default(); }
+    let email = fetch_email(&context).await;
+    let (balance_credits, purchased_credits) = match crate::usage_summary::fetch_account_usage_for(&context).await {
         Ok(usage) => match usage.credits {
             Some(credits) => (Some(credits.monthly.remaining), credits.purchased.remaining),
             None => (None, None),
         },
         Err(_) => (None, None),
+    };
+    context.with_current(|| {
+        if context.owner.is_some() {
+            write_account_cache(&AccountCacheEnvelope { owner: context.owner.clone(), email: email.clone(), balance_credits, purchased_credits, cached_at: now_secs() });
+        }
+        AccountSnapshot { signed_in: true, email, tier, balance_credits, purchased_credits, cached: false }
+    }).unwrap_or_default()
+}
+
+async fn fetch_email(context: &tier_cache::ManagedRequestContext) -> Option<String> {
+    let jwt = context.jwt.as_deref()?;
+    let client = reqwest::Client::builder().timeout(ME_FETCH_TIMEOUT).build().ok()?;
+    let response = client.get(format!("{}/api/me", context.base))
+        .header("Authorization", format!("Bearer {jwt}"))
+        .send().await.ok()?;
+    if !response.status().is_success() { return None; }
+    let body: MeResponse = response.json().await.ok()?;
+    if let Some(plan_tier) = body.plan.as_ref().and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref())) {
+        tier_cache::adopt_server_plan(context, plan_tier);
     }
+    context.with_current(|| body.email.filter(|email| !email.is_empty())).flatten()
 }
 
 /// Base URL of the device-grant endpoints, honouring the same override the
