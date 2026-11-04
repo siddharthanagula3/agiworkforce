@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
 import { MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
 import { translateUiPlural, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
@@ -87,7 +87,8 @@ export function MemoryEditor({
   const facts = adapter?.facts ?? localFacts;
   const add = adapter?.add ?? localAdd;
   const update = adapter?.update ?? localUpdate;
-  const setPinned = adapter?.setPinned ?? localSetPinned;
+  const setPinned = adapter ? adapter.setPinned : localSetPinned;
+  const pinUnavailableDescriptionId = useId();
   const remove = adapter?.remove ?? localRemove;
   const clear = adapter?.clear ?? localClear;
   const syncStatus = adapter?.syncStatus ?? localSyncStatus;
@@ -289,8 +290,12 @@ export function MemoryEditor({
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => runMutation(() => setPinned(fact.id, !fact.pinned))}
-                  disabled={fact.pending}
+                  onClick={() => {
+                    if (!setPinned || fact.pending) return;
+                    void runMutation(() => setPinned(fact.id, !fact.pinned));
+                  }}
+                  disabled={!setPinned || fact.pending}
+                  aria-describedby={!setPinned ? pinUnavailableDescriptionId : undefined}
                   aria-pressed={fact.pinned === true}
                   aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
                   className={cn(
@@ -382,6 +387,11 @@ export function MemoryEditor({
       {mutationError ? (
         <p role="alert" className="text-xs text-[var(--chat-destructive-text)]">
           {mutationError}
+        </p>
+      ) : null}
+      {!setPinned && facts.length > 0 ? (
+        <p id={pinUnavailableDescriptionId} className="text-caption text-[var(--chat-text-muted)]">
+          Pinning is not available for this memory source.
         </p>
       ) : null}
 
