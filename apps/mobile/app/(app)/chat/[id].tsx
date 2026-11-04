@@ -2025,6 +2025,7 @@ export default function ChatScreen() {
         )}
 
         <AddToChatSheet
+          destinationKey={id ?? 'unavailable'}
           ref={addToChatRef}
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}

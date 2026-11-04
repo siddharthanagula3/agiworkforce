@@ -894,6 +894,7 @@ ${current}`
 
       {mentionQuery !== null ? (
         <FileMentionPalette
+          destinationKey={draftIdentity}
           query={mentionQuery}
           onSelect={(attachment) => {
             setText((current) => withoutTrailingMention(current));

@@ -19,13 +19,15 @@ jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: () => mockFetchConnectorDirectory(),
 }));
 
+jest.mock('@/src/features/library/libraryClient', () => ({ fetchLibraryPage: jest.fn() }));
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const { View } = require('react-native');
 
   const BottomSheet = React.forwardRef(
-    ({ children }: { children: React.ReactNode }, _ref: React.Ref<unknown>) => (
-      <View testID="bottom-sheet">{children}</View>
+    ({ children, onChange }: { children: React.ReactNode; onChange: (index: number) => void }, _ref: React.Ref<unknown>) => (
+      <View testID="bottom-sheet" onChange={onChange}>{children}</View>
     ),
   );
   BottomSheet.displayName = 'BottomSheet';
@@ -68,6 +70,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('../lib/mmkv', () => ({
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
     if (store && store.persist && typeof store.persist.rehydrate === 'function')
@@ -123,6 +126,8 @@ import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
+import { fetchLibraryPage } from '@/src/features/library/libraryClient';
+import { activateCloudAccount, invalidateCloudAccount, __resetCloudAccountSessionForTests } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
@@ -182,6 +187,7 @@ function resetStores() {
 }
 
 const defaultProps = {
+  destinationKey: 'new-chat',
   onCamera: jest.fn(),
   onPhotos: jest.fn(),
   onFile: jest.fn(),
@@ -197,7 +203,91 @@ function renderSheet(overrides = {}) {
 }
 
 describe('AddToChatSheet', () => {
+  it('reloads an open Library on destination changes and revokes old row callbacks', async () => {
+    activateCloudAccount('picker-owner');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    (fetchLibraryPage as jest.Mock).mockResolvedValueOnce({
+      assets: [{ id: 'old', kind: 'document', fileName: 'old.pdf', uri: '/api/files/old', mimeType: 'application/pdf' }],
+      hasMore: false, nextOffset: null,
+    }).mockImplementation(() => new Promise(() => {}));
+    const onAttachFromLibrary = jest.fn();
+    const view = renderSheet({ destinationKey: 'first', onAttachFromLibrary });
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+    const row = await view.findByLabelText('Attach old.pdf from Library');
+    const stalePress = row.props.onPress;
+    view.rerender(<AddToChatSheet {...defaultProps} destinationKey="second" onAttachFromLibrary={onAttachFromLibrary} />);
+    expect(view.queryByLabelText('Attach old.pdf from Library')).toBeNull();
+    act(() => stalePress());
+    expect(onAttachFromLibrary).not.toHaveBeenCalled();
+    expect(fetchLibraryPage).toHaveBeenCalledTimes(2);
+    expect(fetchLibraryPage).toHaveBeenLastCalledWith({ limit: 12, kind: ['image', 'file'] });
+  });
+
+  it('does not restore a settled Library cache after an account transition', async () => {
+    activateCloudAccount('picker-owner');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    (fetchLibraryPage as jest.Mock).mockResolvedValueOnce({
+      assets: [{ id: 'old', kind: 'document', fileName: 'private.pdf', uri: '/api/files/old', mimeType: 'application/pdf' }],
+      hasMore: false, nextOffset: null,
+    }).mockImplementation(() => new Promise(() => {}));
+    const view = renderSheet();
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+    await view.findByLabelText('Attach private.pdf from Library');
+    act(() => { invalidateCloudAccount(); useChatAppModeStore.setState({ appMode: 'local' }); });
+    act(() => { activateCloudAccount('next-owner'); useChatAppModeStore.setState({ appMode: 'cloud' }); });
+    expect(view.queryByLabelText('Attach private.pdf from Library')).toBeNull();
+    expect(fetchLibraryPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('revokes a retained row callback when the same scope is reopened', async () => {
+    activateCloudAccount('picker-owner');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    (fetchLibraryPage as jest.Mock).mockResolvedValue({
+      assets: [{ id: 'old', kind: 'document', fileName: 'old.pdf', uri: '/api/files/old', mimeType: 'application/pdf' }],
+      hasMore: false, nextOffset: null,
+    });
+    const onAttachFromLibrary = jest.fn();
+    const view = renderSheet({ onAttachFromLibrary });
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+    const stalePress = (await view.findByLabelText('Attach old.pdf from Library')).props.onPress;
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
+    act(() => stalePress());
+    expect(onAttachFromLibrary).not.toHaveBeenCalled();
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+    await waitFor(() => expect(fetchLibraryPage).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    act(() => stalePress());
+    expect(onAttachFromLibrary).not.toHaveBeenCalled();
+    fireEvent.press(view.getByLabelText('Attach old.pdf from Library'));
+    expect(onAttachFromLibrary).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['success', 'error'])('ignores a stale request %s after a newer destination loads', async (outcome) => {
+    activateCloudAccount('picker-owner');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    let resolveOld!: (value: unknown) => void;
+    let rejectOld!: (reason: Error) => void;
+    const oldPage = new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject; });
+    const page = (name: string) => ({
+      assets: [{ id: name, kind: 'document', fileName: name, uri: `/api/files/${name}`, mimeType: 'application/pdf' }],
+      hasMore: false, nextOffset: null,
+    });
+    (fetchLibraryPage as jest.Mock).mockReturnValueOnce(oldPage).mockResolvedValue(page('current.pdf'));
+    const view = renderSheet({ destinationKey: 'first' });
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+    view.rerender(<AddToChatSheet {...defaultProps} destinationKey="second" />);
+    await view.findByLabelText('Attach current.pdf from Library');
+    await act(async () => {
+      if (outcome === 'success') resolveOld(page('stale.pdf'));
+      else rejectOld(new Error('stale request'));
+    });
+    expect(view.queryByLabelText('Attach stale.pdf from Library')).toBeNull();
+    expect(view.queryByText('Your Library could not load.')).toBeNull();
+    expect(view.getByLabelText('Attach current.pdf from Library')).toBeTruthy();
+  });
+
   beforeEach(() => {
+    __resetCloudAccountSessionForTests();
     resetStores();
     mockVideoSlot.modelId = requireLiveVideoModelId();
     mockWaitlistStoreState.joined = false;

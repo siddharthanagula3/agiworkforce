@@ -1093,6 +1093,7 @@ export default function ChatTabScreen() {
       </KeyboardAvoidingView>
 
       <AddToChatSheet
+        destinationKey="new-chat"
         ref={addToChatRef}
         onCamera={handleSheetCamera}
         onPhotos={handleSheetPhotos}
