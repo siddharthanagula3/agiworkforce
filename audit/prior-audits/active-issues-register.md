@@ -8977,8 +8977,11 @@ Source-only review; no tests, checks, DB reads/writes or memory deletion execute
 
 ## WEB-MEMORY-OWNER-BACKLOG-01
 
-Severity: Medium. Status: OPEN source-backed operation/backlog ownership design
-constraint, 2026-11-04. No observed loss, exploit or runtime reproduction.
+Severity: Medium. Status: OPEN with bounded source correction in
+`f24448f907a11e1f042aa113e4ddf337aea0eebc`, 2026-11-04. Residual lanes and
+runtime/deployment acceptance remain open. No observed loss, exploit or runtime
+reproduction. The following original evidence is historical for migrated consumers;
+the legacy shared store itself is unchanged.
 
 `packages/ui/unified-chat/src/stores/memoryStore.ts` persists nonpending facts
 under `agi-memory-store-v1` without account/session/workspace owner metadata.
@@ -8986,8 +8989,8 @@ under `agi-memory-store-v1` without account/session/workspace owner metadata.
 hydration can publish previously fetched rows afterward, failed remove can reinsert
 its captured target, and late clear can empty replacement state. Requests use
 ambient same-origin cookies through `memoryRequest`, including after CSRF awaits,
-without an original-owner generation. Web Settings `MemorySection` uses this
-store and the standalone MemoryEditor, whose effect hydrates on mount.
+without an original-owner generation. Before that correction, Web Settings `MemorySection` used this store and the
+standalone MemoryEditor, whose effect hydrated on mount.
 
 Hydration additionally snapshots unsaved backlog after fetching server rows and
 loops over `createServerMemory(fact.text)` without an owner check between writes.
@@ -9011,13 +9014,37 @@ workspace/project ownership through awaits, publication and rollback; scoped
 cache/storage policy; and explicit recovery/migration treatment for v1 records
 whose owner cannot be proven. Keep unknown-owner backlog inert pending that
 product decision, rather than silently assigning it to the current account,
-replaying it or deleting it. This is a design requirement, not implemented
-containment. Existing logout reset/storage purge (including persist.clearStorage
+replaying it or deleting it. The accepted correction below implements bounded containment for named cloud
+management consumers, not a general legacy-store migration. Existing logout reset/storage purge (including persist.clearStorage
 and the broad agi-prefixed key purge) must remain unchanged. There is no permission
 to retain private legacy data across logout; leaving backlog inert during
-migration/use does not promise preservation across logout. No deletion/adoption,
-broad memory migration or implementation-ready
-patch is authorized. Settings preferences queue/cache ownership is a separate
+migration/use does not promise preservation across logout. No legacy deletion/adoption or broad memory migration is supplied by this correction. Settings preferences queue/cache ownership is a separate
 assessment and is not bundled here. Adapter pin correction `2c011ad433` does not
 fix this shared-store lifecycle. Source-only review; no tests/checks, credentials,
 network, DB or memory mutation actions.
+
+
+Bounded accepted correction: the new `features/memory/cloud-memory-controller.ts`
+and hook bind in-memory facts and queued operations to canonical admitted
+account/session/workspace ownership, with explicit Personal/organization headers
+and captured bearer transport. Settings MemorySection/editor/export/clear,
+ProjectMemoryPanel, conflicts/restore, summary, import and explicit commands now
+use that controller. Supplied MemoryEditor adapters no longer subscribe to the
+legacy store. Complete bounded list reads and writes are serialized; acknowledged
+fact reductions/revisions precede refresh, and a failed refresh does not relabel
+an acknowledged mutation as failed. View and draft revision guards contain stale
+publication. Pending/unknown dispatched writes retain an account/organization
+barrier across controller/session replacement until reload; a reload is not proof
+of remote completion. No request deadline or cross-tab/remote rollback is added.
+
+Legacy-only/offline cloud management now reports unavailable rather than using or
+auto-uploading old local facts. The migration does not read, adopt, rewrite or
+delete v1 backlog; existing logout purge is preserved without any promise to retain
+private data across logout. The unchanged standalone legacy store/editor and
+separate Local personal-context/project-only cache/read lane are outside the named
+consumer correction. Settings preference caches/queues remain a separate open
+assessment, not claimed fixed here. Forget confirmation's recomputed target set
+also remains independently tracked. Fixture sources cover controller/hook and
+consumer boundaries with mocks, but all are unexecuted. No integrated browser,
+SDK, DB/RLS, deployment or memory action validation occurred; broader closure is
+not justified.

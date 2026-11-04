@@ -2608,7 +2608,7 @@ this is a capability-boundary correction, not an observed wrong-memory mutation.
 Fixtures intentionally use colliding IDs to detect fallback, plus supplied-capable
 and standalone cases; all remain unexecuted.
 
-Separate OPEN `WEB-MEMORY-OWNER-BACKLOG-01` records the shared web store's missing
+Historical evidence for OPEN `WEB-MEMORY-OWNER-BACKLOG-01` records the shared web store's missing
 operation/persisted-owner boundary. Logout reset does not retire pending hydration,
 remove rollback or clear; v1 facts lack account/workspace provenance and hydration
 can replay unsaved text with ambient credentials, omitting its project. Existing
@@ -2617,8 +2617,9 @@ Coherent operation ownership and explicit legacy-data handling are required;
 unknown-owner backlog must not be guessed into a new scope or deleted as a repair.
 Existing logout reset and storage purge remain unchanged: inert migration/use
 does not authorize retaining private legacy data across logout.
-Settings preference queues/caches are separate, not covered by this finding or
-pin correction. No tests/checks or live memory actions ran.
+The cloud management correction below supersedes this consumer exposure only for
+its named surfaces; legacy shared-store behavior is not rewritten. Settings
+preference queues/caches are separate, not covered by this finding or pin correction. No tests/checks or live memory actions ran.
 
 ## Workspace selection shares captured-session admission and uncertainty barriers
 
@@ -2652,18 +2653,67 @@ workspace cleanup and navigation. Nested module loads/method calls and storage
 purge/recording check currentness; a captured switch refuses to enter account-wide
 logout cleanup on account mismatch. Default cleanup callers and existing logout
 reset/purge remain unchanged. Ordinary successful switching still hard-reloads or
-replaces the page. The OPEN memory-store/backlog finding remains unfixed: this is
-an admission prerequisite, not a memory migration or permission to retain legacy
-bytes across logout.
+replaces the page. This workspace slice alone does not fix the memory-store/backlog finding: it is
+an admission prerequisite, not permission to retain legacy bytes across logout.
+The following section traces the separate cloud management migration.
 
 Fixture sources cover malformed admission, observed scope changes, same-ID session
 replacement, stale confirmations/token waits, canonical finalization, creation
 field ownership and nested cleanup retirement. All are unexecuted; no live SDK,
 query lifecycle, server selection or cross-tab runtime acceptance is established.
 
+## Cloud memory management uses admitted ownership without adopting legacy backlog
+
+Accepted commit `f24448f907a11e1f042aa113e4ddf337aea0eebc` changes twenty-four
+files. `features/memory/cloud-memory-controller.ts` and `use-cloud-memory.ts`
+provide an in-memory controller for the admitted workspace owner, session
+incarnation/epoch and canonical scope. Requests use original RequestAuthority,
+bearer authentication with omitted cookies, and an explicit organization or
+Personal header. All controller JSON requests and exports use `cache: no-store`.
+Workspace/session retirement masks facts, retires requests and
+refuses queued work; view lifetimes separately guard retained callbacks.
+
+The controller serializes reads and mutations, coalesces requested hydration and
+publishes a list only after complete bounded pagination. Partial or failed reads
+do not replace facts with a misleading partial success. This is not a database
+snapshot across pages. The optional RequestAuthority dispatch callback marks a
+mutation immediately before fetch, after token/currentness checks. Pending and
+uncertain writes block further writes for the same account/organization across
+controller or session replacement. A definite 4xx rejection is distinguished from
+unconfirmed dispatch/body outcomes; uncertainty remains until page reload, not
+cleared by a successful reread. Reload is not proof the prior write stopped.
+
+Acknowledged mutations reduce the known fact list and increment revision before
+refresh; refresh failure does not turn an acknowledged write into an invitation
+to resubmit. Supersession, deletion and clear reductions retain server response
+semantics. Named consumers are Settings MemorySection/editor/export/clear,
+ProjectMemoryPanel, conflicts/restore, summary, import and explicit memory
+commands. They capture view/confirmation ownership and preserve newer draft/edit
+revisions across settlement. Summary/conflicts react to fact revision, not only
+count. Import uses exact reader/preview generation and single-flight commit;
+explicit commands combine original chat authority with admitted memory scope.
+
+The shared MemoryEditor now separates supplied-adapter rendering from its legacy
+store subscriber; these cloud consumers do not hydrate or replay persisted v1
+facts. No migration reads, adopts, rewrites or deletes that backlog. Legacy-only
+or offline cloud management is unavailable instead of silently using device facts.
+Existing logout reset, persist clearing and storage purge remain unchanged; inert
+legacy use does not authorize preserving private bytes across logout. Standalone
+legacy editor behavior, settings preference caches and the separate Local
+personal-context/project-only cache/read lane are outside this correction.
+`WEB-MEMORY-OWNER-BACKLOG-01` remains OPEN for residual scope and runtime acceptance;
+this is not whole-memory ownership closure or a fix for forget-target confirmation.
+
+Queues depend on request settlement and add no request deadline, remote rollback,
+cross-tab serialization or continuous server revocation. Controller/hook and
+consumer fixture sources cover scope retirement, complete reads, unknown/pending
+writes, acknowledged refresh failure and draft lifetimes with mocked boundaries.
+All remain unexecuted; no browser, database, SDK event-order or integrated runtime
+acceptance is established.
+
 ## Reconstruction boundary
 
-Only the ninety-eight accepted production slices traced above are represented as
+Only the ninety-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
