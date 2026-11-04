@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,10 @@ import { ArtifactConnectorConsent } from './ArtifactConnectorConsent';
 import { usePublishedArtifactRuntime } from './usePublishedArtifactRuntime';
 import { copySharedArtifactToChat } from '@/features/chat/lib/copy-shared-artifact';
 import { webEntryHref, webSignInHref } from '@/features/marketing/components/system/nav';
-import { toUserMessage } from '@/lib/user-error-message';
+import { useSession } from '@/lib/identity/client';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { useArtifactsStore } from '@/features/chat/stores/artifacts-store';
 
 export interface PublishedArtifactViewProps {
   title: string;
@@ -69,6 +72,11 @@ export function PublishedArtifactView({
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [dataRefresh, setDataRefresh] = useState(0);
+  const { isLoaded, isSignedIn, userId } = useSession();
+  const captureSession = useSessionSnapshot();
+  const capturedSessionId = captureSession()?.sessionId;
+  const invocation = useRef<{ source: object; authority: RequestAuthority } | null>(null);
+  const lifetime = useRef<object | null>(null);
 
   const payload = useMemo(() => buildPublishedSandboxPayload(kind, content), [kind, content]);
   const fallbackSrcDoc = useMemo(
@@ -84,25 +92,61 @@ export function PublishedArtifactView({
   const heading = title || t('artifactPublish.untitled', 'Published artifact');
   const returnPath = token ? `/shared-artifact/${token}` : '/chat';
 
+  const source = useMemo(() => ({}), [token, content, kind, language, title, heading, publishedAt, audience, isLoaded, isSignedIn, userId, capturedSessionId]);
+  const visibleSource = useRef(source);
+  visibleSource.current = source;
+  useLayoutEffect(() => {
+    const mounted = {};
+    lifetime.current = mounted;
+    invocation.current = null;
+    setCopying(false);
+    setCopyError(null);
+    return () => {
+      if (lifetime.current === mounted) lifetime.current = null;
+    };
+  }, [source]);
+
   const saveCopy = async () => {
+    if (!isLoaded || !lifetime.current || visibleSource.current !== source) return;
+    if (invocation.current?.source === source && invocation.current.authority.isCurrent()) return;
+    if (!isSignedIn) {
+      router.push(webEntryHref(returnPath));
+      return;
+    }
+    const session = captureSession();
+    if (!session) return;
+    const mounted = lifetime.current;
+    let current: { source: object; authority: RequestAuthority };
+    const isVisible = () => lifetime.current === mounted && visibleSource.current === source && invocation.current === current && session.isCurrent();
+    const authority = createRequestAuthority(session, undefined, () => {
+      if (!isVisible()) throw new DOMException('Copy source changed', 'AbortError');
+    });
+    current = { source, authority };
+    invocation.current = current;
+    const ownsView = () => lifetime.current === mounted && visibleSource.current === source && invocation.current === current && authority.isCurrent();
     setCopying(true);
     setCopyError(null);
     try {
-      const result = await copySharedArtifactToChat({ title: heading, kind, language, content });
+      const result = await copySharedArtifactToChat({ title: heading, kind, language, content }, authority);
+      if (!ownsView()) return;
       if (result.kind === 'sign-in') {
         router.push(webEntryHref(returnPath));
-        return;
+      } else if (result.kind === 'copied') {
+        useArtifactsStore.getState().upsertArtifact(result.artifact);
+        if (ownsView()) router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
+      } else {
+        setCopyError(result.conversationId
+          ? t('artifactPublish.copySaveUnconfirmed', 'A chat was created, but saving this copy could not be confirmed. Check your chats before trying again.')
+          : t('artifactPublish.copyUnconfirmed', 'This copy could not be confirmed. Check your chats before trying again.'));
       }
-      router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
-    } catch (error) {
-      setCopyError(
-        toUserMessage(
-          error,
-          t('artifactPublish.saveCopyFailed', 'This artifact could not be copied.'),
-        ),
-      );
+    } catch {
+      if (ownsView()) setCopyError(t('artifactPublish.copyUnconfirmed', 'This copy could not be confirmed. Check your chats before trying again.'));
     } finally {
-      setCopying(false);
+      if (ownsView()) {
+        invocation.current = null;
+        setCopying(false);
+      }
+      authority.retire();
     }
   };
 
@@ -117,7 +161,7 @@ export function PublishedArtifactView({
           <Button
             size="sm"
             variant="outline"
-            disabled={copying}
+            disabled={!isLoaded || (copying && invocation.current?.authority.isCurrent() === true)}
             onClick={() => void saveCopy()}
             data-testid="published-artifact-save-copy"
           >
