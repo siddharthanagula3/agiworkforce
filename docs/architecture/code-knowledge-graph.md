@@ -2456,9 +2456,89 @@ or implementation-ready patch. No production correction, runtime reproduction,
 new permission behavior or live leak is claimed; the separate existing trust-
 classification audit owner is not replaced by this pipeline design constraint.
 
+## Chrome pending page capture retains invocation and draft ownership
+
+Accepted commit `aae3cde97db79b73a29ce486ee77dbea025a41a5` changes
+`src/side_panel.ts` and one extracted-source fixture. `checkPendingChat` captures
+its invocation before the initial session-storage read: current owner,
+conversation/generation, input identity/text/edit revision, page context, browser
+tabs, attachment/document/intake identities and phases, model and composer modes.
+The returned predicate gates the storage callback and capture result. An in-panel
+Set suppresses overlapping handling of the same pending identity only; it is not
+a durable receipt or cross-panel lock. Availability is checked again after capture
+before context publication, focus or summary send.
+
+`sendMessage` now returns synchronous local admission true/false across its
+existing branches, not a server acknowledgment. If summary admission returns false
+after capture, the captured context and summary prompt are retained in the still
+unchanged empty composer with an explicit draft notice. Failed capture/readiness
+retains pending intent. Handled records are removed best-effort only after a fresh
+storage comparison matches type/text/URL/timestamp; that get/compare/remove remains
+nonatomic. A newer different record observed by the comparison is retained.
+
+The existing capture helper checks the captured tab's URL/window/loading state
+before/after content read, but pending records do not bind original account/tab
+provenance and this caller captures the current active page rather than proving
+continuity with the menu's original tab. Active-tab continuity, cross-panel races,
+non-draft equality ABA and later account observation remain outside this slice.
+The fixtures extract and compile repository function text with mocked dependencies;
+all are unexecuted, not browser/runtime race proof. The following companion traces general submit/queue boolean propagation; memory
+notice ownership remains outside this capture slice.
+
+## Chrome composer and follow-up queue retain proven refusals
+
+Accepted companion `37c767e922995fe3ace3da8bf5320393c260a7de` changes
+`side_panel.ts` and one fixture source. `submitComposerText` propagates the actual
+synchronous send boolean rather than assuming admission. The click handler invokes
+send before clearing text; existing Enter submission now benefits from the same
+boolean. False leaves the draft intact. Successful follow-up enqueue still counts
+as local admission, not provider/server delivery.
+
+`sendNextFollowUp` retains its exact head during attempted admission. A synchronous
+reentrancy guard prevents recursive dispatch while that item is still present.
+Only explicit false preserves it for another automatic attempt. Accepted or
+unknown thrown outcomes remove only the original queue ID, avoiding consumption
+of a replacement; nested finally releases the guard even if a queue subscriber
+throws during settlement. Unknown removal preserves the prior no-auto-replay
+behavior and is not proof of delivery or safe failure classification. Cleared
+items are not resurrected. Existing QueueFull refusal can still advance the
+conversation generation before enqueue fails; no queue durability, transactional
+admission or broader generation redesign is added.
+
+Fixtures extract production functions/listeners with mocked send dependencies and
+the queue implementation, covering FIFO refusal, unknown throws, reentrancy,
+replacement, subscriber failure and button/Enter clearing. All are unexecuted;
+no real browser queue, server acknowledgment or end-to-end delivery acceptance
+is established. The following section traces the separate memory-notice correction.
+
+## Chrome memory commands retain original owner, source and notice
+
+Accepted commit `c79836674fc64c4b4c45c69793cdebadc6dbd621` changes
+`side_panel.ts` and one fixture source. `runChatMemoryCommand` captures expected
+owner, conversation/generation, project and persistence conversation before auth
+await. Initial dispatch/results require matching returned auth owner plus current
+context and stream. `continueTurnWithMemory` additionally checks owner before
+continuing. New conversation generation clears the exact visible memory notice.
+
+Forget confirmation has its own single-use notice identity and context lifetime,
+not the completed stream's lifetime, so a valid same-context confirmation remains
+usable after streaming ends. It obtains fresh auth and requires the original
+owner before POST; late success/error cannot replace a newer or dismissed notice.
+This does not undo already dispatched mutations, pin workspace policy or redesign
+storage. Extracted-function fixtures cover preauth/source capture, owner/session/
+context changes, post-stream confirmation and stale publication; all are unexecuted.
+
+Separate OPEN `SHARED-MEMORY-FORGET-CONFIRMATION-TARGET-01` concerns destructive
+confirmation semantics. The shared handler recomputes text matches on confirmed
+requests rather than binding deletion to the previously displayed set/version.
+Existing user, workspace and visible-project SQL predicates and row locking remain;
+no cross-tenant exposure or observed loss is claimed. An exact reviewed-target
+receipt/version and explicit changed-target behavior need coherent design, not
+just client notice ownership or a boolean confirmation.
+
 ## Reconstruction boundary
 
-Only the ninety-one accepted production slices traced above are represented as
+Only the ninety-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -8940,3 +8940,37 @@ No implementation-ready design, automatic discard, broad cleanup or migration
 policy is asserted. Share Preview commit `079b2485b5` only fixes downstream local
 send admission and does not repair this native-to-JS durability boundary.
 Source-only inspection; no tests, checks, native execution or destructive actions.
+
+## SHARED-MEMORY-FORGET-CONFIRMATION-TARGET-01
+
+Severity: Medium. Status: OPEN source-backed confirmation-target design constraint,
+2026-11-04. No observed loss, runtime reproduction or production correction.
+
+`packages/ai/agent-core/src/memory.ts::explicitForgetHandler` invokes
+`findForgetMatches` for every call. Without confirmation it returns the matched
+contents for display; with `confirmed: true` it removes the newly computed IDs.
+The wire `ManagedMemoryCommandRequest` carries message, boolean, project and
+conversation, but no reviewed target IDs, versions or confirmation receipt.
+`apps/web/app/api/memory/commands/route.ts` forwards that boolean to the service.
+Chrome now retains original notice/account ownership (`c79836674f`), but its
+confirmation still resends the captured text with `confirmed: true`. Concurrent
+memory insertion/edit or changed match ordering can therefore change what is
+actually deleted relative to the displayed list. This is a source-derived risk,
+not proof that such a deletion occurred or an arbitrary cross-account operation.
+
+Counterguards remain: authenticated user-scoped route/DB, CSRF/rate limits,
+`createMemoryCommandPorts` user predicate, workspace predicate and resolved visible
+project scope apply to lookup/removal; removal locks its selected rows and returns
+the actual removed content. Lookup has a minimum subject length, escaped LIKE
+pattern and bounded result count. Those controls constrain scope but do not bind
+the earlier human-visible set/content to the later destructive operation. The
+removal row lock also does not protect the interval between preview and confirm.
+
+Required design includes an exact reviewed target/version or server-owned receipt
+bound to authenticated scope, revalidation of changed/deleted targets, bounded
+expiry/replay semantics and truthful outcome handling. Bare client-supplied IDs
+must not bypass existing authorization; choosing whether changes require a new
+confirmation is a product/contract decision. No automatic widening, blanket
+refusal, financial behavior, production redesign or implementation-ready solution
+is approved here. This remains separate from client stale-notice ownership.
+Source-only review; no tests, checks, DB reads/writes or memory deletion executed.
