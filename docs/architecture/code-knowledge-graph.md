@@ -2281,9 +2281,50 @@ generated text/order, suffix/DTO preservation, exact cleanup, clipping and legac
 marker behavior; all are unexecuted. No pending CLI correction is included in
 this Android slice.
 
+## CLI session loading validates the target before replacing live transcript
+
+Accepted commit `1ef26df908f0d16e8bef5e6bd37801660c72ccc2` changes the agent,
+REPL startup/load and TUI startup/resume paths. Canonical
+`AgentSession::load_managed_conversation` prepares incoming messages, then calls
+existing routing-authority/model validation and adoption before publishing the
+transcript or resetting context/tool-loop state. A rejected route therefore
+retains the prior transcript and those transients. An empty accepted target is
+authoritative and clears the previous transcript rather than retaining unrelated
+messages. Existing memory-disabled fresh-system replacement remains conditional
+on an incoming first system message; it does not manufacture content for an empty
+target. Extraction cursor clamping remains, not a broader history provenance fix.
+
+Interactive REPL/TUI loads read the already resolved path rather than resolving
+an alias a second time. Startup explicit resume messages still override the
+managed snapshot before canonical loading. REPL resets its existing token/turn
+statistics; TUI retains its existing token accounting and recounts user turns.
+This does not establish atomic filesystem identity, change unbacked-message
+startup behavior or repair the separate accepted-turn/account-history authority
+design gap. Source fixtures cover rejected routes, empty targets, system handling
+and REPL/TUI statistics; they are unexecuted, not actual session-file operations.
+
+## CLI adopted plan state belongs to the selected session
+
+Accepted companion `daddf047aff0f6414e4a8552e1cc43f84b42b48a` changes
+`agent/mod.rs`. After target routing validation, adoption resets transient plan
+state, takes target approval with `unwrap_or(false)` and copies the target plan
+Option exactly. Missing target fields no longer inherit the previous plan or
+approval; previous plan path/rejection feedback are cleared. Permission-mode and
+plan-mode configuration precedence, explicit auto-approval behavior and other
+launch defaults remain unchanged.
+
+Initial persistence is distinct from switching sessions: the private initializer
+seeds the new backing snapshot with current approval/plan and restores the same
+in-memory plan path/feedback after adoption. The public enable guards and metadata
+synchronization ordering remain intact. The initializer permits a temporary-store
+fixture without requiring production config/metadata operations; that fixture
+and the target approval/plan matrix were only source-read, not executed. No Rust,
+actual session/credential/cache/environment or DB data was accessed. Snapshot
+save-baseline design is separate and is not represented as implemented here.
+
 ## Reconstruction boundary
 
-Only the eighty-six accepted production slices traced above are represented as
+Only the eighty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
