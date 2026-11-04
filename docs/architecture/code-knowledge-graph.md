@@ -1654,7 +1654,8 @@ original source fields and execution generation in the mutation and guards later
 journal cleanup after awaits.
 
 Local recorded-action replay/current-target policy and shared policy-cache
-freshness remain separate boundaries. Policy/helper and journal fixtures plus
+freshness are outside this admission slice; the later scheduled-only replay
+companion narrows the former boundary. Policy/helper and journal fixtures plus
 textual background wiring assertions are unexecuted; they do not establish
 Chrome scheduler, recovery-network or storage runtime acceptance.
 
@@ -1701,15 +1702,42 @@ authority retains the preceding exact restoration rules.
 This narrowly supersedes the admission-to-transport gap above. Source-policy and
 account reads are sequential observations, not an atomic snapshot or continuous
 revocation mechanism; already dispatched requests are not recalled. V1 journal
-provenance, local recorded replay/per-action target policy and shared cache
-freshness remain separate limitations. Fixture sources exercise injected transport,
+provenance, per-action target policy and shared cache freshness remain separate
+limitations; the following companion adds scheduled recorded-replay admission. Fixture sources exercise injected transport,
 delayed routing, control propagation and shared retry refusal; actual background
 and automatic-follow integration is partly textual wiring evidence. All fixtures
 remain unexecuted, with no Chrome/network/runtime acceptance.
 
+## Scheduled local replay owns one recording and checks its target before forwarding
+
+Accepted commit `09037ae52eff8a1a03402154457d5152d0c1d01f` changes two
+production files and one fixture source. `scheduled-shortcut-replay.ts` isolates
+scheduled replay from the interactive handler. It clones one loaded shortcut,
+requires validated nonempty recorded actions and refuses a replacement prompt
+without falling back to Cloud chat. Subsequent store replacement cannot alter
+that captured action/provenance snapshot; this is not a continuous store-revision
+lease.
+
+The helper checks the exact execution lease around awaited reads, selects a tab,
+then uses fresh `tabs.get` URL evidence for the existing recorded-origin match.
+Strict policy must be readable even when creator origins have legacy exemptions:
+both source policy and mandatory target automation policy apply, with live grants
+still subordinate to organization restrictions. A final synchronous lease check
+precedes forwarding; the actual `forwardToContentScript` calls `tabs.sendMessage`
+before its first await. Result publication also rechecks the lease.
+
+Unreadable authority and cancellation preserve scheduled work; helper denial
+returns failure without deleting it. This does not remove the earlier initial
+task-origin denial auto-delete path. Interactive replay and content-script action
+execution are unchanged. Navigation after the URL snapshot, document identity,
+per-action policy and continuous revocation remain outside this gate, as do V1
+journal provenance and shared policy-cache freshness. Injected deferred reads,
+copied-action and refusal fixtures plus textual caller/forwarding assertions are
+unexecuted; no actual Chrome/navigation/runtime acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the sixty-nine accepted production slices traced above are represented as
+Only the seventy accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
