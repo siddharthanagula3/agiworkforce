@@ -9,6 +9,7 @@ import { DecompressionLimitError } from '@/lib/security/archive-budget';
 import {
   XLSX_NOT_CALCULATED,
   WorkbookPreviewLimitError,
+  PresentationPreviewLimitError,
   loadWorkbookSheets,
   pptxToSlidesMarkdown,
   xlsxSheets,
@@ -156,6 +157,75 @@ describe('pptxToSlidesMarkdown table cell escaping', () => {
   it('keeps every backslash and pipe a cell contains inside that cell', async () => {
     const markdown = await tableDeck('C:\\a\\|b', 'x|y', 'end\\');
     expect(renderedCells(markdown)).toEqual(['C:\\a\\|b', 'x|y', 'end\\']);
+  });
+});
+
+describe('pptxToSlidesMarkdown text output limits', () => {
+  it('counts UTF-16 title characters and framing at the exact limit', async () => {
+    const title = '😀'.repeat((MAX_FILE_TEXT_CHARS - 2) / 2);
+    expect(await pptxToSlidesMarkdown(await deck(shape('title', title)))).toBe(`# ${title}`);
+    await expect(pptxToSlidesMarkdown(await deck(shape('title', `${title}x`))))
+      .rejects.toBeInstanceOf(PresentationPreviewLimitError);
+  });
+
+  it('counts slide separators against one cumulative budget', async () => {
+    const zip = new JSZip();
+    zip.file('ppt/slides/slide1.xml', `<sld xmlns:p="p" xmlns:a="a">${shape('title', 'x'.repeat(MAX_FILE_TEXT_CHARS - 11))}</sld>`);
+    zip.file('ppt/slides/slide2.xml', `<sld xmlns:p="p" xmlns:a="a">${shape('title', 'x')}</sld>`);
+    await expect(pptxToSlidesMarkdown(await zip.generateAsync({ type: 'arraybuffer' })))
+      .rejects.toBeInstanceOf(PresentationPreviewLimitError);
+  });
+
+  it('refuses ragged-table padding before building a rectangular table', async () => {
+    const table = `<a:tbl><a:tr>${'<a:tc/>'.repeat(1_000)}</a:tr>${'<a:tr/>'.repeat(1_000)}</a:tbl>`;
+    await expect(pptxToSlidesMarkdown(await deck(table)))
+      .rejects.toBeInstanceOf(PresentationPreviewLimitError);
+  });
+
+  it('handles many empty rows without spreading them into a function call', async () => {
+    expect(await pptxToSlidesMarkdown(await deck(`<a:tbl>${'<a:tr/>'.repeat(MAX_FILE_TEXT_CHARS)}</a:tbl>`)))
+      .toBe('# Slide 1');
+  });
+
+  it('counts table backslash and pipe escaping before allocating the escaped output', async () => {
+    const table = `<a:tbl><a:tr><a:tc><a:p><a:t>${'|'.repeat(MAX_FILE_TEXT_CHARS / 2)}</a:t></a:p></a:tc></a:tr></a:tbl>`;
+    await expect(pptxToSlidesMarkdown(await deck(table)))
+      .rejects.toBeInstanceOf(PresentationPreviewLimitError);
+  });
+
+  it('keeps trimming and whitespace normalization without counting discarded whitespace', async () => {
+    const whitespace = ' '.repeat(MAX_FILE_TEXT_CHARS + 1);
+    const table = `<a:tbl><a:tr><a:tc><a:p><a:t> A${whitespace}</a:t><a:t> B </a:t></a:p><a:p><a:t> </a:t></a:p><a:p><a:t>C</a:t></a:p></a:tc></a:tr></a:tbl>`;
+    expect(await pptxToSlidesMarkdown(await deck(shape('title', `${whitespace}Title${whitespace}`), table)))
+      .toBe('# Title\n\n| A B C |\n| --- |');
+  });
+
+  it('preserves whitespace and concatenation across paragraph text runs', async () => {
+    const title = '<p:sp><a:p><a:t> \tA\r\n</a:t><a:t>\u00a0 B </a:t></a:p></p:sp>';
+    expect(await pptxToSlidesMarkdown(await deck(title))).toBe('# A\n\u00a0 B');
+  });
+
+  it('bounds repeated descendant text in malformed nested shapes', async () => {
+    const nested = `<p:sp>${shape('title', 'x'.repeat(MAX_FILE_TEXT_CHARS / 2))}</p:sp>`;
+    await expect(pptxToSlidesMarkdown(await deck(nested)))
+      .rejects.toBeInstanceOf(PresentationPreviewLimitError);
+  });
+
+  it('does not count omitted date and slide-number placeholders', async () => {
+    expect(await pptxToSlidesMarkdown(await deck(shape('dt', 'x'.repeat(MAX_FILE_TEXT_CHARS + 1)))))
+      .toBe('# Slide 1');
+  });
+
+  it('retains a supported image whose base64 exceeds the text budget', async () => {
+    const zip = new JSZip();
+    zip.file('ppt/slides/slide1.xml',
+      `<p:sld xmlns:p="p" xmlns:a="a" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${shape('title', 'Title')}<p:pic><a:blip r:embed="image"/></p:pic></p:sld>`);
+    zip.file('ppt/slides/_rels/slide1.xml.rels',
+      '<Relationships><Relationship Id="image" Target="../media/image.png"/></Relationships>');
+    zip.file('ppt/media/image.png', new Uint8Array(450_000));
+    const markdown = await pptxToSlidesMarkdown(await zip.generateAsync({ type: 'arraybuffer' }));
+    expect(markdown).toContain('![Image](data:image/png;base64,');
+    expect(markdown.length).toBeGreaterThan(MAX_FILE_TEXT_CHARS);
   });
 });
 

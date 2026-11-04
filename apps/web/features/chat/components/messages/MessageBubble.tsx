@@ -213,6 +213,8 @@ import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
 import {
   loadWorkbookSheets,
   pptxToSlidesMarkdown,
+  PresentationPreviewLimitError,
+  PRESENTATION_PREVIEW_TOO_LARGE,
   WorkbookPreviewLimitError,
   WORKBOOK_PREVIEW_TOO_LARGE,
 } from '../../lib/office-file-preview';
@@ -1598,7 +1600,12 @@ const MessageBubbleComponent = function MessageBubble({
           if (!cancelled)
             setOfficePreviews((prev) => ({
               ...prev,
-              [file.id]: { failed: true, tooLarge: error instanceof WorkbookPreviewLimitError },
+              [file.id]: {
+                failed: true,
+                tooLarge:
+                  error instanceof WorkbookPreviewLimitError ||
+                  error instanceof PresentationPreviewLimitError,
+              },
             }));
         });
     }
@@ -3117,7 +3124,8 @@ const MessageBubbleComponent = function MessageBubble({
               const preview = officePreviews[file.id];
               return typeof preview === 'object' && preview.tooLarge ? (
                 <p key={file.id} role="status" className="mt-2 text-sm text-muted-foreground">
-                  {file.fileName}: {WORKBOOK_PREVIEW_TOO_LARGE}
+                  {file.fileName}:{' '}
+                  {file.kind === 'pptx' ? PRESENTATION_PREVIEW_TOO_LARGE : WORKBOOK_PREVIEW_TOO_LARGE}
                 </p>
               ) : null;
             })}
