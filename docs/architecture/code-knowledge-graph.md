@@ -1880,11 +1880,42 @@ suppresses stale results and releases owned capture; late microphone grants are
 stopped when observed, not guaranteed cancelled at the OS. Already dispatched
 transcription is not recalled. Deferred recording/session/destination and retry
 fixture sources were read but not executed; no browser/native/offline/end-to-end
-acceptance is claimed. Pending mobile dictation work is outside this slice.
+acceptance is claimed. The following mobile correction is a separate slice.
+
+## Mobile dictation consumes the original native recording handle
+
+Accepted commit `3a88342ff4ceb82d1a643532eb21b2f4c6603f78` changes six
+production files and six fixture sources. `voiceInput.ts` owns one native capture
+attempt across permission/locale checks, microphone or file recognition,
+listeners, timers and result settlement. Per-attempt stop/cancel cannot clear a
+newer capture. Natural final/end settles that attempt's result while its returned
+handle remains consumable; manual stop uses the existing 1.5-second grace rather
+than depending forever on a native end event. Global shared capture/file APIs
+remain available for their existing callers.
+
+`voice.ts` returns the original recording handle instead of a mutable global last
+transcript. `VoiceInputButton` is the sole tap/push-to-talk/composer result
+publisher, retaining the handle through natural completion and suppressing
+repeat publication with exact attempt/finishing ownership. Canonical settings,
+observed account epoch, disabled state, scope/reset token and unmount retire the
+button's work. Permission completion and queued results are checked before use;
+cleanup removes owned listeners/timers and requests native abort where applicable.
+
+ChatInput delegates Stop/Send/Cancel to that button and merges Send with the
+latest draft under its existing send admission. Its scope includes draft identity,
+app mode and selected model. CloudCode uses latest draft text and the button's
+existing component/account lifetime, not a newly introduced Code-session scope
+contract. QuickSchedule explicitly cancels on open/close and scopes its retained
+button to visibility. Shared native recognition configuration still requests
+on-device recognition; this is not proof of OS offline/privacy behavior or actual
+native event ordering. Source fixtures cover selected natural-final, stale handle,
+permission/file cancellation, bounded stop, button ownership and draft-delivery
+cases, with mock migrations; none were executed. Pending CloudCode audit work is
+not represented as corrected here.
 
 ## Reconstruction boundary
 
-Only the seventy-four accepted production slices traced above are represented as
+Only the seventy-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
