@@ -1,13 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import type { DirtyMessageRef } from '@agiworkforce/sync';
+
+export type { DirtyMessageRef } from '@agiworkforce/sync';
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'error';
-
-export interface DirtyMessageRef {
-  conversationId: string;
-  messageId: string;
-}
 
 interface CloudSyncState {
   cursor: string;

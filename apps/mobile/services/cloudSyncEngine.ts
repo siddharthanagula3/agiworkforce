@@ -463,7 +463,7 @@ export function applyConversationDeltas(deltas: ConversationWireDelta[]): void {
 }
 
 function applyMessageDeltas(deltas: MessageWireDelta[]): void {
-  applyMessageDeltasCore(messagePort, deltas);
+  applyMessageDeltasCore(messagePort, deltas, useCloudSyncStateStore.getState().dirtyMessages);
 }
 
 async function pull(account: CloudAccountEpoch): Promise<void> {
@@ -580,11 +580,16 @@ async function push(account: CloudAccountEpoch): Promise<void> {
       const sent = sentMessageById.get(conflict.id);
       if (!conflict.current || !ref) continue;
       const latest = getMessageRecord(ref.conversationId, conflict.id);
-      if (sent && latest && !messageSyncContentMatches(sent, latest)) {
-        patchMessageServerVersion(ref.conversationId, conflict.id, conflict.current.server_version);
+      if (
+        !conflict.current.deleted_at &&
+        sent &&
+        latest &&
+        !messageSyncContentMatches(sent, latest)
+      ) {
+        applyMessageDeltasCore(messagePort, [conflict.current], [ref]);
         continue;
       }
-      applyMessageDeltas([conflict.current]);
+      applyMessageDeltasCore(messagePort, [conflict.current]);
       resolvedMessageIds.add(conflict.id);
     }
   }
