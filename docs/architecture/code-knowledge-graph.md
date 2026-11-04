@@ -3071,9 +3071,52 @@ the follower's remount lifetime is source-traced, not directly established by a
 new regression case. No runtime or browser acceptance is claimed. The separate
 server replay/intent compatibility blocker above remains held and unchanged.
 
+## Shared artifact copying preserves owned receipts and uncertain chats
+
+Accepted commit `045943a533f40fa09851ace15f0d81e27ed2ebb5` changes
+`features/chat/lib/copy-shared-artifact.ts`, its sole production caller
+`PublishedArtifactView.tsx`, and three fixture sources. Conversation creation and
+bulk message insertion already enforce authenticated user/org scope; this is not
+a newly established cross-account database disclosure. Bulk insertion can precede
+response-schema validation or delivery failure. The old helper's known-chat
+cleanup invoked conversation DELETE, whose existing behavior soft-deletes the
+conversation, clears compaction, revokes sharing and attempts sandbox shutdown.
+That is not evidence of physical message deletion or observed data loss.
+
+The view now captures canonical session and exact invocation, source fingerprint
+and layout lifetime. RequestAuthority sends bearer credentials with cookies omitted;
+a final visibility/source/invocation predicate gates each dispatch after token
+awaits. Receipt authority remains tied to the captured canonical session rather
+than visible-source lifetime, preserving an already-issued response when the view
+moves on. Loading/inconsistent identity silently refuses entry; signed-out entry
+retains its sign-in return destination. Same-user session changes are part of the
+source identity, and stale finalization cannot clear a successor's busy state.
+
+The helper decodes the created conversation's explicit organization, including
+null Personal, and sends that scope in the bulk request header. Missing scope is
+uncertain rather than an implicit Personal fallback. A client UUID identifies the
+single assistant message; acceptance requires exactly one schema-valid receipt
+with that ID, assistant role and expected trimmed content. The helper returns the
+artifact without publishing it. Only the current exact view invocation/session
+upserts the persisted artifact singleton and navigates, with a second currentness
+check after publication.
+
+Unconfirmed creation/save yields truthful check-your-chats guidance where the
+original view remains current. There is no speculative DELETE or automatic retry;
+created shells or accepted copies may remain. This is not transactional copy,
+server idempotency, guaranteed cleanup, historical workspace provenance,
+continuous revocation or rollback of dispatched work. The created destination's
+explicit scope is distinct from pinning an initial workspace selection.
+
+Unexecuted helper/view cases cover Personal/org receipts, absent scope, malformed
+or mismatched receipts, response loss, source/session retirement, same-session
+successors and current publication; the images fixture mock is migrated. They do
+not establish real browser, database, storage cleanup or delivery behavior. No
+tests/checks or network/database actions were performed for this documentation.
+
 ## Reconstruction boundary
 
-Only the one hundred and seven accepted production slices traced above are represented as
+Only the one hundred and eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
