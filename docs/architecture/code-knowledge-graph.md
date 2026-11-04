@@ -2251,9 +2251,39 @@ Map with destructive take and no durable acknowledgment. Cross-process claims,
 manifest-owned cleanup and retryable durable delivery need a coherent design;
 no native fix, original-source deletion or observed runtime loss is claimed.
 
+## Android shared copies reserve distinct targets and report text clipping
+
+Accepted commit `0ac8a9ba36abdba308b9a3e13f8fd07bb1bd853a` changes the
+Android share-intent generator, its source fixture and the mobile README.
+`withAGIShareIntent.cjs` now emits `File.createTempFile` before opening the output
+stream, replacing timestamp/display-name destinations. The suffix preserves only
+the original final extension matching one to sixteen ASCII alphanumeric characters,
+otherwise `.bin`. This retains the existing URI-extension fallback used by
+`services/docParser.ts::detectDocType` when a content provider supplies generic
+MIME, without changing the attachment DTO's original name, MIME or copied bytes.
+Allocation failure omits the entry; copy failure/oversize cleanup targets only the
+newly allocated file. No native filesystem execution or shipped collision proof
+is claimed by the generator-source fixtures.
+
+The existing 100*1024-character native text clipping now sets `truncated=1` only
+when clipping occurs. Root routing already forwards that flag as `nativeTruncated`
+to Share Preview, which combines it with its existing byte-bound indication.
+Existing five-file admission, 12 MiB per-file cap, omission behavior and 24-hour
+mtime pruning remain unchanged; this is not a durable inbox or retention redesign.
+The separate iOS received-copy/acknowledgment finding remains OPEN.
+
+`PATCH_MARKER` still leaves activities containing `rewriteShareIntent` unchanged.
+The README therefore requires a fresh clean release prebuild and native rebuild;
+release workflow source uses clean prebuild, but neither that workflow nor a
+native build ran here. JavaScript-only delivery or reapplying the plugin to an
+old generated activity does not install this correction. Fixture sources assert
+generated text/order, suffix/DTO preservation, exact cleanup, clipping and legacy
+marker behavior; all are unexecuted. No pending CLI correction is included in
+this Android slice.
+
 ## Reconstruction boundary
 
-Only the eighty-five accepted production slices traced above are represented as
+Only the eighty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
