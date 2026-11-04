@@ -3285,9 +3285,42 @@ await boundary, capped/excluded selection, partial/invalid receipts, unexpected
 created IDs and dialog ownership. They establish no native, database, network,
 cross-device or runtime acceptance. No tests/checks were run for this trace.
 
+## Mobile account deletion retains confirmation identity and truthful status
+
+Accepted commit `94a75028b9371de74673f7cb7fb54834de55a24b` changes
+CloudAccountScreen and its owner-switch fixture. The deletion callback now passes
+the original confirmation's `accountEpoch` into `api.delete`, including the resend
+performed by `useStepUp`. Existing transport checks that epoch before/after auth
+acquisition and through retries. Previously a retained modal could acquire a fresh
+replacement-account grant and bearer before invoking the old callback; this is not
+proof of observed wrong-account deletion. The server's rejection of an original
+account grant paired with another bearer remains a real counterguard.
+
+Generic `useStepUp` grant acquisition and `StepUpModal` latest-session lifecycle
+are unchanged: this correction binds the deletion callback, not every modal action.
+Server subject/action controls, CSRF, subscription checks, grace periods and erasure
+policy also remain unchanged. There is no recall of an already accepted deletion.
+
+Cancellation now sends the captured epoch and accepts only a boolean receipt.
+Server HTTP200 `cancelled:true` acknowledges cancellation; HTTP200 false
+confirms no pending deletion. Grace-window expiry returns HTTP409, not that
+successful false contract. Malformed/network failures clear authoritative UI
+status and initiate only a status GET for the original epoch. A request sequence
+prevents older GET results from replacing the newer receipt; unknown status offers
+read-only refresh rather than deletion. A synchronous cancellation-in-flight ref
+also blocks deletion from retained or newly opened confirmation while cancellation
+is pending. Exact account checks fence status/finally publication.
+
+This deliberately makes an authoritative status read an availability prerequisite
+for the destructive UI. It is not a durable transaction or general grant-lifetime
+redesign; unknown outcomes remain unknown until readable server evidence. Fixture
+cases use mocked API options and deferred outcomes, not real bearer/step-up transport
+or deletion execution. All are unexecuted. No tests/checks, authentication, native,
+database or network actions were performed for this trace.
+
 ## Reconstruction boundary
 
-Only the one hundred and twelve accepted production slices traced above are represented as
+Only the one hundred and thirteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
