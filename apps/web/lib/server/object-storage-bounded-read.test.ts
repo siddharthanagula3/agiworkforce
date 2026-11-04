@@ -120,3 +120,33 @@ describe('getBoundedPrivateObject', () => {
     expect(getStreamMock).not.toHaveBeenCalled();
   });
 });
+
+describe('bounded object stream cleanup', () => {
+  it.each(['success', 'overflow', 'read failure'] as const)(
+    'cancels and releases the reader after %s even if cancellation rejects', async (outcome) => {
+      const failure = new Error('read failed');
+      const read = vi.fn();
+      if (outcome === 'read failure') read.mockRejectedValue(failure);
+      else read.mockResolvedValueOnce({ done: false, value: new Uint8Array(outcome === 'overflow' ? 3 : 2) })
+        .mockResolvedValueOnce({ done: true });
+      const cancel = vi.fn().mockRejectedValue(new Error('cancel failed'));
+      const releaseLock = vi.fn();
+      headMock.mockResolvedValue({ contentLength: 2 });
+      getStreamMock.mockResolvedValue({ body: { getReader: () => ({ read, cancel, releaseLock }) } });
+      const result = getBoundedPrivateObject(KEY, 2);
+      if (outcome === 'success') await expect(result).resolves.toMatchObject({ data: Buffer.alloc(2) });
+      else if (outcome === 'overflow') await expect(result).rejects.toBeInstanceOf(StoredObjectTooLargeError);
+      else await expect(result).rejects.toBe(failure);
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(releaseLock).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('accepts an empty object with a zero remaining budget', async () => {
+    headMock.mockResolvedValue({ contentLength: 0 });
+    const body = webStreamOf([]);
+    getStreamMock.mockResolvedValue({ body });
+    await expect(getBoundedPrivateObject(KEY, 0)).resolves.toMatchObject({ data: Buffer.alloc(0) });
+    expect(body.locked).toBe(false);
+  });
+});

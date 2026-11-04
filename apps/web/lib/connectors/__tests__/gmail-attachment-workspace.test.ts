@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
 
 vi.mock('server-only', () => ({}));
 
@@ -88,7 +89,7 @@ describe('Gmail draft attachment workspace authority', () => {
     expect(mocks.asset).toHaveBeenCalledWith(USER_ID, ASSET_ID, mocks.db, {
       organizationId: ORGANIZATION_ID,
     });
-    expect(mocks.read).toHaveBeenCalledWith('media/fixture.txt');
+    expect(mocks.read).toHaveBeenCalledWith('media/fixture.txt', 20_971_520);
     expect(mocks.fetch).toHaveBeenCalledOnce();
   });
 
@@ -167,6 +168,58 @@ describe('Gmail draft attachment workspace authority', () => {
     expect(mocks.membership).not.toHaveBeenCalled();
     expect(mocks.asset).not.toHaveBeenCalled();
     expect(mocks.read).not.toHaveBeenCalled();
+    expect(mocks.fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Gmail aggregate attachment read budget', () => {
+  const limit = 20_971_520;
+  const twoFiles = { ...args, files: [...args.files, ...args.files] };
+
+  it('passes the remaining aggregate budget to each read', async () => {
+    mocks.read.mockResolvedValueOnce({ data: Buffer.from('first') });
+    mocks.read.mockResolvedValueOnce({ data: Buffer.from('second') });
+    const result = await executeGmailAction(
+      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, twoFiles, ORGANIZATION_ID,
+    );
+    expect(result.isError).toBe(false);
+    expect(mocks.read).toHaveBeenNthCalledWith(1, 'media/fixture.txt', limit);
+    expect(mocks.read).toHaveBeenNthCalledWith(2, 'media/fixture.txt', limit - 5);
+    expect(mocks.fetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([undefined, limit + 1])('refuses unknown or oversized storage without posting: %s', async (size) => {
+    mocks.read.mockRejectedValue(new StoredObjectTooLargeError('media/fixture.txt', limit, size));
+    const result = await executeGmailAction(
+      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, twoFiles, ORGANIZATION_ID,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain(`${limit}-byte limit`);
+    expect(result.content).not.toContain('add up to');
+    expect(mocks.read).toHaveBeenCalledOnce();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('stops on cumulative overflow without loading subsequent files or posting', async () => {
+    mocks.read.mockResolvedValueOnce({ data: Buffer.from('first') });
+    mocks.read.mockRejectedValueOnce(new StoredObjectTooLargeError('media/fixture.txt', limit - 5));
+    const result = await executeGmailAction(USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, {
+      ...args, files: [...twoFiles.files, ...args.files],
+    }, ORGANIZATION_ID);
+    expect(result.isError).toBe(true);
+    expect(mocks.read).toHaveBeenCalledTimes(2);
+    expect(mocks.read).toHaveBeenNthCalledWith(2, 'media/fixture.txt', limit - 5);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('allows an exact-cap attachment followed by an empty attachment', async () => {
+    mocks.read.mockResolvedValueOnce({ data: Buffer.alloc(limit) });
+    mocks.read.mockResolvedValueOnce({ data: Buffer.alloc(0) });
+    const result = await executeGmailAction(
+      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, twoFiles, ORGANIZATION_ID,
+    );
+    expect(result.isError).toBe(false);
+    expect(mocks.read).toHaveBeenNthCalledWith(2, 'media/fixture.txt', 0);
     expect(mocks.fetch).toHaveBeenCalledOnce();
   });
 });

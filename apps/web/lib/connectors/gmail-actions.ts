@@ -17,6 +17,7 @@ import {
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { readStoredMedia } from '@/lib/server/media-storage';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   resolveActiveOrganizationId,
@@ -300,6 +301,7 @@ async function loadOwnedFile(
   userId: string,
   organizationId: string | null,
   reference: string,
+  maxBytes: number,
 ): Promise<DraftAttachment | string> {
   const assetId = FILE_REFERENCE_RE.exec(reference)?.[1];
   const asset = assetId
@@ -314,7 +316,7 @@ async function loadOwnedFile(
   ) {
     return `${reference} is not a file in this account.`;
   }
-  const stored = await readStoredMedia(asset.storagePathname);
+  const stored = await readStoredMedia(asset.storagePathname, maxBytes);
   if (!stored) return `${reference} could not be read.`;
   const name = asset.metadata['filename'];
   return {
@@ -349,17 +351,29 @@ async function createDraftWithAttachments(
     return { content: 'You are not an active member of this workspace.', isError: true };
   }
   const attachments: DraftAttachment[] = [];
+  let totalBytes = 0;
   for (const reference of parsed.data.files) {
-    const loaded = await loadOwnedFile(userId, organizationId, reference);
+    let loaded: DraftAttachment | string;
+    try {
+      loaded = await loadOwnedFile(
+        userId, organizationId, reference, MAX_DRAFT_ATTACHMENT_TOTAL_BYTES - totalBytes,
+      );
+    } catch (error) {
+      if (!(error instanceof StoredObjectTooLargeError)) throw error;
+      return {
+        content: `The files could not be read within the ${MAX_DRAFT_ATTACHMENT_TOTAL_BYTES}-byte limit for one email.`,
+        isError: true,
+      };
+    }
     if (typeof loaded === 'string') return { content: loaded, isError: true };
+    totalBytes += loaded.data.byteLength;
+    if (totalBytes > MAX_DRAFT_ATTACHMENT_TOTAL_BYTES) {
+      return {
+        content: `The files exceed the ${MAX_DRAFT_ATTACHMENT_TOTAL_BYTES}-byte limit for one email.`,
+        isError: true,
+      };
+    }
     attachments.push(loaded);
-  }
-  const totalBytes = attachments.reduce((sum, attachment) => sum + attachment.data.byteLength, 0);
-  if (totalBytes > MAX_DRAFT_ATTACHMENT_TOTAL_BYTES) {
-    return {
-      content: `The files add up to ${totalBytes} bytes, over the ${MAX_DRAFT_ATTACHMENT_TOTAL_BYTES}-byte limit for one email.`,
-      isError: true,
-    };
   }
   const raw = Buffer.from(mimeDraft(parsed.data, attachments), 'utf8').toString('base64url');
   const draft = (await gmailRequest(token.accessToken, token.tokenType, '/drafts', {
