@@ -1,3 +1,6 @@
+import { platformRequestHeaders } from './platformHeaders';
+import { createManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import { createScheduledTaskTransport, ScheduledTaskTransportControl, type ScheduledTaskTransport, type ScheduledTaskFetch } from './features/background/scheduled-task-transport';
 import type { ChatChunkMessage, WebMCPToolInfo } from './types';
 import type {
   ConnectionStatus,
@@ -227,6 +230,8 @@ import {
 import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
+  streamFreeChat,
+  FREE_TRIAL_GATEWAY,
   MANAGED_CHAT_MAX_INPUT_CHARS,
   type ManagedCloudAuthContext,
 } from './features/cloud-bridge/freeTrialClient';
@@ -2160,6 +2165,7 @@ async function resumeScheduledTaskJournal(
   delivery: BackgroundChatDelivery,
   credential: { token: string; owner: ManagedCloudOwner },
   signal: AbortSignal,
+  fetchImpl: ScheduledTaskFetch,
 ): Promise<unknown> {
   const cloudRun = state.journal.cloudRun;
   if (!cloudRun) return scheduledTaskError('server_error', 'The durable Cloud run is missing.');
@@ -2169,6 +2175,12 @@ async function resumeScheduledTaskJournal(
     { run: cloudRun, alreadyVisibleText: '', signal },
     {
       getAuthToken: async () => credential.token,
+      createClient: (token) => createManagedCloudAgentRunClient({
+        baseUrl: FREE_TRIAL_GATEWAY, getAuthToken: async () => token, fetchImpl,
+        decorateMutationHeaders: (headers) => ({
+          ...headers, 'X-Requested-With': 'XMLHttpRequest', ...platformRequestHeaders(),
+        }),
+      }),
       onText: (text) => {
         transcript.push(text);
       },
@@ -2311,7 +2323,8 @@ async function executeScheduledTaskJournalWithAuthority(
       () => { recoveryAttemptRecorded = true; },
       () => { executionStarted = true; },
     );
-  } catch (error) {
+  } catch (caught) {
+    const error = caught instanceof ScheduledTaskTransportControl ? caught.original : caught;
     if (error instanceof ScheduledTaskSourceUnavailableError && recoveryAttemptRecorded && !executionStarted) {
       // Never restore a newer attempt, cancellation, or an execution already started.
       await restoreDeferredScheduledRecoveryAttempt(initialJournal, () => !admissionSignal?.aborted).catch((restoreError) => {
@@ -2332,6 +2345,24 @@ async function executeScheduledTaskJournalWithSourceAuthority(
 ): Promise<ScheduledTaskExecutionOutcome> {
   await assertScheduledJournalSourceAuthority(initialJournal);
   const state = { journal: initialJournal, answer: '' };
+  const assertCurrent = (): void => {
+    if (admissionSignal?.aborted || isRetiredManagedCloudOwner(credential.owner) ||
+      state.journal.cancellationPending || abandonedScheduledTaskRequestIds.has(state.journal.requestId)) {
+      throw new ScheduledTaskCancelledError();
+    }
+  };
+  const transport = createScheduledTaskTransport(async () => {
+    assertCurrent();
+    await assertScheduledJournalSourceAuthority(state.journal);
+    const current = await getManagedCloudAuthContext();
+    assertCurrent();
+    if (!current) {
+      throw new ScheduledTaskSourceUnavailableError('The scheduled account could not be verified.');
+    }
+    if (!sameManagedCloudOwner(current.owner, credential.owner)) {
+      throw new ScheduledTaskSourceDeniedError('The scheduled account changed before transport.');
+    }
+  }, onExecutionStarted, assertCurrent);
   const delivery = createJournalDelivery(initialJournal, state);
   if (!delivery) {
     return {
@@ -2375,11 +2406,18 @@ async function executeScheduledTaskJournalWithSourceAuthority(
     if (!state.journal.cloudRun) {
       await assertScheduledJournalSourceAuthority(state.journal);
       if (admissionSignal?.aborted) throw new ScheduledTaskCancelledError();
-      onExecutionStarted();
       const recoveredRun = await findChromeManagedRunByRequestId(
         state.journal.requestId,
         {
           getAuthToken: async () => credential.token,
+          createClient: (token) => createManagedCloudAgentRunClient({
+            baseUrl: FREE_TRIAL_GATEWAY,
+            getAuthToken: async () => token,
+            fetchImpl: transport.fetch,
+            decorateMutationHeaders: (headers) => ({
+              ...headers, 'X-Requested-With': 'XMLHttpRequest', ...platformRequestHeaders(),
+            }),
+          }),
         },
         admissionSignal,
       );
@@ -2422,8 +2460,7 @@ async function executeScheduledTaskJournalWithSourceAuthority(
     try {
       await assertScheduledJournalSourceAuthority(state.journal);
       if (controller.signal.aborted) throw new ScheduledTaskCancelledError();
-      onExecutionStarted();
-      return await resumeScheduledTaskJournal(state, delivery, credential, controller.signal);
+      return await resumeScheduledTaskJournal(state, delivery, credential, controller.signal, transport.fetch);
     } finally {
       if (linkAdmission) admissionSignal.removeEventListener('abort', abortForAdmission);
       if (
@@ -2480,7 +2517,6 @@ async function executeScheduledTaskJournalWithSourceAuthority(
     }
     await assertScheduledJournalSourceAuthority(state.journal);
     if (admissionSignal?.aborted) throw new ScheduledTaskCancelledError();
-    onExecutionStarted();
     result = await handleChatMessage(
       {
         type: 'CHAT_MESSAGE',
@@ -2497,6 +2533,7 @@ async function executeScheduledTaskJournalWithSourceAuthority(
       { id: chrome.runtime.id },
       delivery,
       admissionSignal,
+      transport,
     );
     if (
       result &&
@@ -6269,6 +6306,7 @@ async function handleChatMessage(
   _sender: chrome.runtime.MessageSender,
   delivery?: BackgroundChatDelivery,
   admissionSignal?: AbortSignal,
+  scheduledTransport?: ScheduledTaskTransport,
 ): Promise<ChromeManagedChatResult> {
   if (admissionSignal?.aborted) {
     return scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.');
@@ -6550,6 +6588,19 @@ async function handleChatMessage(
               ? requestChatToolHandoff(activeStream, id, calls)
               : Promise.resolve({ status: 'cancelled' }),
         }),
+        ...(scheduledTransport ? {
+          streamChat: (...args: Parameters<typeof streamFreeChat>) => {
+            const [messages, token, options] = args;
+            return streamFreeChat(messages, token, {
+              ...(options && 'aborted' in options ? { signal: options } : options),
+              fetchImpl: scheduledTransport.fetch,
+            });
+          },
+          getModelAccess: async (token: string, signal?: AbortSignal) => {
+            await scheduledTransport.beforeModelAccess();
+            return getManagedModelAccess(token, signal);
+          },
+        } : {}),
         getAuthToken: async () => {
           activeStream.controller.signal.throwIfAborted();
           if (activeChatStreams.get(streamKey) !== activeStream)
@@ -6610,6 +6661,7 @@ async function handleChatMessage(
     if (deliveryFailure) return scheduledTaskError('server_error', deliveryFailure);
     return result;
   } catch (error) {
+    if (error instanceof ScheduledTaskTransportControl) throw error;
     const deliveryFailure = await deliverBackgroundResult();
     // Whatever threw here is this extension's own fault, and its words name a
     // module or a browser API rather than anything a reader can act on.
