@@ -1735,9 +1735,30 @@ journal provenance and shared policy-cache freshness. Injected deferred reads,
 copied-action and refusal fixtures plus textual caller/forwarding assertions are
 unexecuted; no actual Chrome/navigation/runtime acceptance is claimed.
 
+## Chrome policy cache publication rejects superseded reads
+
+Accepted commit `fca87fd12b9cda85b13ccfeed4ea6d2d2b829135` changes
+`background.ts`, the small `site-policy-publication.ts` owner and its fixture
+source. Independent Symbol revisions own user-allowlist and effective admin
+cache publication. Startup claims precede reads; a newer relevant user event
+retires the user startup result, while local/managed admin events share an admin
+revision. Only the current admin startup/reload success or failure may publish.
+Only a winning admin reload invokes the existing active-run cancellation check;
+a stale denial or failed read cannot cancel against a newer policy. User events
+retain their existing immediate publication/cancellation behavior.
+
+This corrects publication ordering, not all policy freshness. Existing startup
+readiness completion semantics remain, and the previous admin cache is retained
+while a newer reload awaits storage. Independent user/admin revisions are not a
+transactional policy snapshot; no universal enforcement, continuous external-change
+observation or periodic retry is added. Earlier sections' shared-cache limitations
+are narrowed only for superseded publication, not eliminated. Deferred helper
+fixtures and textual background wiring assertions are unexecuted and do not
+establish actual Chrome event order, startup enforcement or runtime acceptance.
+
 ## Reconstruction boundary
 
-Only the seventy accepted production slices traced above are represented as
+Only the seventy-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
