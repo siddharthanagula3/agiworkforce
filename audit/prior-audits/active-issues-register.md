@@ -8692,3 +8692,47 @@ migration/quiescence, lock ordering and recovery/product semantics require expli
 decisions. A snapshot receipt alone or a single-process UI lock cannot supply them.
 No native edits, tests, filesystem deletion, subprocess or network actions were
 performed for this finding.
+
+
+## SHARED-UPLOAD-ACTION-AUTHORITY-01
+
+Severity: Medium. Status: OPEN source-backed operation authority design dependency,
+2026-11-04. No observed disclosure or demonstrated cross-account server bypass.
+The issue is continuity of the destination authorized when an action begins,
+not absence of all server authorization.
+
+Ordinary chat presign `apps/web/app/api/uploads/presign/route.ts` admits the
+current user/org but `lib/server/upload-keys.ts` constructs a user-only staging
+key. `chat-attachment-completion.ts::isOwnedChatAttachmentUploadKey` checks that
+user prefix, while `app/api/uploads/chat-attachment/complete/route.ts` supplies
+its newly admitted current organization to completion/registration. Thus a
+user-only key is not an original workspace receipt. Existing owner, conversation
+scope checks where supplied, storage validation and moderation remain relevant.
+By contrast, multipart creation signs user/org/upload identity and
+`app/api/files/uploads/resumable-upload.ts::readResumableUploadSession` rejects
+later user or organization mismatch for session operations. Do not describe
+signed multipart as accepting a switched account/workspace.
+
+Client action entry is also broader than multipart admission. `LibraryView.tsx`
+uses `uploadChatAttachments(files)` without RequestAuthority and awaits
+`libraryItemToFile` before project upload. Web project-knowledge service supplies
+cookie/default fetch plus asynchronous CSRF decoration. Shared chat/project
+clients hash bytes before entering resumable upload; cached-session fingerprint
+uses kind/project/checksum/size, not account/org. A new scope GET only inside the
+resumable helper would therefore capture too late and omit ordinary fallback.
+Main web chat already supplies captured account RequestAuthority, credential-free
+storage transfer and `sessions: null`; that counterguard does not pin workspace.
+Accepted mobile project `bcbe3ee2ce` is a separate client/epoch correction, not a
+shared web protocol solution.
+
+Required design: capture trusted account/session and explicit workspace (including
+Personal distinct from unknown) at action entry before picker/preparation/hash;
+carry and revalidate it through resumable and ordinary fallback, relay, completion,
+publication and cleanup. Server ordinary-upload receipts must bind original scope
+rather than infer it from a user-only key. Define expired/unknown authority,
+legacy session migration, cleanup after uncertain completion and credential-free
+signed storage requests coherently. Existing active-workspace resolution supports
+explicit Personal/organization selectors, but current admission alone cannot
+reconstruct original intent. No endpoint-only patch, broad implementation, new
+compatibility/refusal semantics or implementation-ready design is approved here.
+Source-only: no tests, network, native, DB or upload actions.

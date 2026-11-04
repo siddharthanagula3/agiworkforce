@@ -1487,9 +1487,47 @@ remains design-only and not implementation-ready. No observed loss, atomic
 archive/delete, all-writer stop or deployed/native acceptance is claimed. This
 slice's mocked lifecycle fixtures remain unexecuted.
 
+## Mobile project source actions retain original canonical account epoch
+
+Accepted commit `bcbe3ee2cefa5955ebca816fbaa0e1f8d5a2af5c` changes four production
+files and three unexecuted fixture sources. Optional API `accountEpoch` checks
+span credentials, retries and response bodies. Canonical epoch listeners are
+notified after runtime transition even when subsequent persistence write/delete
+fails, isolating listener failures. Project upload captures before file info/hash,
+checks chunk/await/native/progress/result boundaries, and requests best-effort
+native cancellation on retirement. List/remove also carry the captured epoch.
+
+Cleanup uses original captured credentials with its own timeout and is skipped
+when that epoch is retired. Cleanup is disabled once registration is attempted:
+the marker is set **before** `api.post` and its authentication awaits, not proof
+that HTTP was dispatched. This deliberately retains possible orphan staging on
+uncertain registration instead of risking deletion after a committed result.
+`ProjectSourcesTab` binds handlers to rendered project/target/generation/epoch,
+captures before picker/text writes, uses exact controller cleanup and fences
+list/remove/late confirmations, including observed account/project ABA. Local
+operations are not retired by unrelated Cloud changes. Workspace/session
+incarnation, unobserved Clerk changes and native cancellation guarantees are not
+provided; same-owner newer-text clearing remains separate preexisting behavior.
+Fixtures are source-only, not native/DB/runtime acceptance.
+
+## Shared upload authority remains an operation-wide design dependency
+
+[SHARED-UPLOAD-ACTION-AUTHORITY-01](../../audit/prior-audits/active-issues-register.md#shared-upload-action-authority-01)
+is Medium OPEN. Ordinary chat staging keys bind user, while completion uses its
+current admitted org; signed multipart already binds and rejects changed user/org.
+Library/project cookie-based preparation and shared hash-before-resumable paths
+lack one action-entry authority contract. A scope lookup only inside resumable
+upload cannot cover those earlier awaits or ordinary fallback. Main web chat's
+captured account authority and `sessions: null` are existing counterguards, not
+workspace pinning; the mobile correction above is separate. A coherent future
+contract must cover original account/workspace through preparation, fallback,
+relay, completion and cleanup, with server original-scope receipts and explicit
+unknown/legacy behavior. No shared production fix, server bypass, observed loss
+or implementation readiness is claimed.
+
 ## Reconstruction boundary
 
-Only the sixty-two accepted production slices traced above are represented as
+Only the sixty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
