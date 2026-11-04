@@ -5544,12 +5544,31 @@ restriction intent; malformed non-array storage remains outside comprehensive
 repair. Stored schema 2/minimum 1 is descriptive, not negotiated. Nine regression
 files are authored but unexecuted; no live cache/API, SQL/native or deployment
 acceptance, old-binary upgrade, diagnostics-render or real-settings-hook integrated
-fixture is established. Host/MCP empty-intersection ambiguity remains **OPEN**.
-The October evidence below describes the historical country behavior, not the
-corrected country path; its host/MCP scope remains unresolved. No earlier probe
-was rerun for this reconstruction.
+fixture is established. The later host/MCP update below extends source correction.
+The October evidence is historical and was not rerun for this reconstruction.
 
-Severity: High, conditional on conflicting applicable policy layers. Status: open current source defect; root consolidated October 9, 2026.
+Host/MCP reconstruction update, 2026-11-04: accepted commit
+`17212a771f91c2535179903be0b25485f915ec35` adds derived active restriction flags
+and sticky empty intersections through canonical resolution/evaluation. Effective
+v3/ETag plus endpoint-only `allowMcpServers=false` projection protects older fresh
+MCP readers without changing stored controls. Shared parsing preserves v2 country
+and non-host advice while refusing ambiguous host/MCP authority; unrestricted null
+Code requires exact current Personal scope. CLI admission distinguishes MCP
+semantic authority from feature cache presence, refreshes/refuses old authority,
+and serializes presence/unknown markers through the unchanged v2 seal format.
+Malformed native Code does not drop retained feature denials. No cache purge or
+old offline binary migration is implemented; genuine signed-out defaults remain.
+
+Status: **source-corrected within the reconstructed host/MCP and country scope;
+OPEN for runtime/deployment acceptance**. Severity remains High for the historical
+conditional defect. Existing production enforcement is bounded to web requested
+extra hosts and native MCP admission, not general web egress, ongoing connections
+or respawn/continuous revocation. Invalid configured arrays and literal intersection/
+TS-versus-Rust wildcard matching semantics are not comprehensively corrected.
+All new fixtures and amended Rust cases are unexecuted; no live stored conflict,
+SQL, cache rollout, native transport or deployment proof is asserted.
+
+### Historical October evidence (not current corrected behavior)
 
 Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added opt-in workspace features, but disjoint country, host and MCP lists still intersect to the empty list that means unrestricted. Main also moved the Web resolver into `readMemberControls` and the Code session checks into `openCloudCodeSession`; line numbers for the files main changed are main's.
 

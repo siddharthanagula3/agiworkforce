@@ -333,8 +333,9 @@ represent deny-all without treating it as unrestricted. Diagnostics rendering an
 real settings-hook integration have no dedicated fixture in this slice. No live
 API/cache/deployment execution occurred; native country enforcement and old-client
 rollout are not established (CLI feature policy is not country enforcement).
-The existing `SHARED-WORKSPACE-CODE-DISJOINT-ALLOWLIST-01` remains open for host/MCP
-empty-intersection ambiguity; country source correction does not close it.
+Country correction alone left host/MCP ambiguity open. The later host/MCP slice
+below source-corrects that representation; runtime/deployment acceptance remains
+open under `SHARED-WORKSPACE-CODE-DISJOINT-ALLOWLIST-01`.
 
 ## Limited provider-funded media admission
 
@@ -2027,9 +2028,46 @@ API fixtures exercise mocked grant/lockdown paths, including Personal selection,
 missing grants and exempt audiences. All are unexecuted, with no live RLS,
 PostgreSQL, deployment or observed-exposure claim.
 
+## Host and MCP effective restrictions retain empty deny-all state
+
+Accepted commit `17212a771f91c2535179903be0b25485f915ec35` changes twelve
+files, including source-only fixtures and Rust test-module migrations. Canonical
+`workspace-controls.ts` derives `mcpRestrictionActive` and
+`egressRestrictionActive` separately from configured lists. Configured empty
+still adds no restriction; disjoint active intersections stay deny-all through
+later layers and re-resolution. Existing host/MCP evaluators consume those flags
+without changing unrelated toggles or literal-pattern intersection semantics.
+
+The effective endpoint emits representation v3 and corresponding ETag. Only its
+wire projection turns MCP off for active-empty restrictions so older fresh readers
+that understand `allowMcpServers` refuse; canonical controls are not mutated.
+The shared parser retains v2 country authority and other feature/Code advice,
+while missing, malformed or noncurrent host/MCP authority projects restrictive
+lists. Null Code controls are trusted only for explicit current, ungoverned,
+null-organization Personal responses. This does not comprehensively validate
+stored configured arrays or unrelated provenance fields.
+
+CLI `workspace_policy.rs` distinguishes MCP semantic authority from cached feature
+policy presence. Async MCP admission attempts refresh when authority is unknown;
+cached admission refuses until usable authority exists. Optional fields survive
+serialization; malformed Code becomes an unknown marker rather than erasing
+feature denials or masquerading as Personal. Existing seal format v2 and cache
+location remain, with no purge. Genuine signed-out Local/BYOK defaults remain
+trusted. Old sealed policies can retain feature restrictions but require MCP
+refresh/refusal; old offline binaries are not upgraded by this patch.
+
+Production coverage remains the existing web requested-extra-host gate and native
+MCP admission callers, not universal web egress enforcement. Ongoing connections,
+respawn behavior, continuous revocation and existing TS/Rust wildcard-apex
+matching differences are not corrected. Fixtures cover composition, projection,
+ETag, parsing, native admission and sealed semantic retention, but are unexecuted.
+The canonical allowlist finding is source-corrected within this scope and remains
+OPEN for runtime/deployment acceptance, not an observed live bypass or a blanket
+closure of the surrounding policy limits.
+
 ## Reconstruction boundary
 
-Only the seventy-eight accepted production slices traced above are represented as
+Only the seventy-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
