@@ -1067,12 +1067,58 @@ timestamps. Plan-model and live-catalog lifetime deliberately remains indefinite
 for a matching owner; this is not a freshness-policy redesign. Environment writes
 are outside the auth lock, error/stale account status can return a blank signed-out
 snapshot, and no whole-turn or already-dispatched request protection follows.
-Connector and local-policy caches are separate unresolved scopes. Fixtures remain
-unexecuted; no Rust, lock, network or runtime acceptance is claimed.
+This cache slice does not change connector or local-policy ownership; the later
+policy section traces that separate correction. Fixtures remain unexecuted; no
+Rust, lock, network or runtime acceptance is claimed.
+
+## PDF blob approval follows the exact source
+
+Accepted commit `9370f5093ef5ba41d95cb2ae7a8b2b6b22ff0039` changes
+`apps/web/features/chat/components/artifacts/ArtifactPreview.tsx` and its
+regression source. Blob MIME verification now stores `{ src, allowed }`; render
+considers the result only when that source equals the current PDF source. A
+replacement blob therefore cannot inherit the previous blob's approval during
+the render before effect cleanup. Existing effect cancellation suppresses late
+verification publication. The MIME check remains `application/pdf`, not a new
+PDF-content validator. Source selection, iframe sandbox and download policy are
+unchanged. Deferred replacement/late-result fixtures were read but not executed;
+no browser runtime acceptance is claimed.
+
+## CLI policy reads and offline seals follow captured authority
+
+Accepted commit `7f21d12a39c3f52bd4fa12d23e5f04c90c5e987e` changes
+`apps/cli/src/cloud/client.rs`, `cloud/workspace_policy.rs` and
+`claude_parity.rs`, including inline regression sources. `policy_context`
+requires an identifiable captured authority; `from_managed_context` constructs
+the client from that captured token and API base rather than reconnecting to a
+replacement sign-in. Advisory connector policy, local-tool policy and effective
+workspace policy check owner/currentness on cache reads, publication and returned
+answers. Local policy's governance fallback uses the same client. Configuration
+or identity-read failure is not treated as verified sign-out.
+
+Effective in-memory policy now carries owner and fetch time and applies the
+existing seven-day sealed-policy age with the existing five-minute clock-skew
+allowance. Refresh scheduling and hook-refusal warning state are owner scoped;
+a new owner does not inherit the old owner's hourly refresh delay. The v2 sealed
+envelope, HMAC domain and newest-read credential key bind deployment/session
+cache ownership and server-reported organization. Legacy subject-only seals no
+longer open and need an authenticated fetch, so offline upgrades can refuse
+policy-dependent operations. Disk storage is still one `workspace-policy.json`
+file, not per-owner offline partitions; switching owners can replace the
+available offline copy.
+
+Verified signed-out Local/BYOK continuity remains. The local-tool endpoint's
+existing 403/404 unrestricted compatibility is retained and is not proof of no
+workspace membership; advisory connector reads remain advisory/fail-open. This
+slice does not change policy content or resolve host/MCP empty-allowlist semantics.
+Server-selected workspace changes within the same authority are not pinned or
+continuously observed, and returned policy is not a whole-turn revocation lease.
+Fixture isolation and owner/freshness/seal/refresh regression sources were read,
+not run. No keyring, SQL, network, Rust or deployment acceptance is claimed.
 
 ## Reconstruction boundary
 
-Only the forty-four accepted production slices traced above are represented as
+Only the forty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
