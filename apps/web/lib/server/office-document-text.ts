@@ -200,12 +200,29 @@ function xmlTextRuns(xml: string, tag: string): string {
 }
 
 async function extractDocx(data: Buffer, filename: string): Promise<string> {
-  await readZip(data, filename);
+  const bounded = await readZip(data, filename);
   try {
-    const result = await mammoth.convertToHtml({ buffer: data });
+    const accepted = new JSZip();
+    accepted.comment = bounded.zip.comment;
+    for (const entry of Object.values(bounded.zip.files)) {
+      const bytes = entry.dir ? new Uint8Array() : await readArchiveMember(entry, bounded.budget);
+      accepted.file(entry.name, bytes, {
+        dir: entry.dir,
+        date: entry.date,
+        comment: entry.comment,
+        unixPermissions: entry.unixPermissions,
+        dosPermissions: entry.dosPermissions,
+        createFolders: false,
+        compression: 'STORE',
+      });
+    }
+    const buffer = await accepted.generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+    const result = await mammoth.convertToHtml({ buffer });
     return htmlToText(result.value);
   } catch (error) {
-    if (error instanceof OfficeDocumentUnreadableError) throw error;
+    if (error instanceof OfficeDocumentUnreadableError || error instanceof DecompressionLimitError) {
+      throw error;
+    }
     throw new OfficeDocumentUnreadableError(filename, 'corrupt');
   }
 }
