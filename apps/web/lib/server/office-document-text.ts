@@ -8,6 +8,7 @@ import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 import {
   DecompressionLimitError,
+  MAX_OFFICE_UNCOMPRESSED_BYTES,
   declaredMemberSize,
   decompressionBudget,
   readArchiveMember,
@@ -16,7 +17,6 @@ import {
 
 export const MAX_OFFICE_TEXT_CHARS = MAX_FILE_TEXT_CHARS;
 
-const MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
 const MAX_SHEET_ROWS = 5_000;
 const MAX_SLIDES = 200;
 
@@ -165,7 +165,7 @@ async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
     throw new OfficeDocumentUnreadableError(filename, 'macro_present');
   }
 
-  const budget = decompressionBudget(data.byteLength, MAX_UNCOMPRESSED_BYTES);
+  const budget = decompressionBudget(data.byteLength, MAX_OFFICE_UNCOMPRESSED_BYTES);
   const entries: JSZip.JSZipObject[] = [];
   zip.forEach((_, entry) => {
     if (!entry.dir) entries.push(entry);

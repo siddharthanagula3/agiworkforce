@@ -14,6 +14,7 @@ import {
   OfficeDocumentUnreadableError,
   extractOfficeDocumentText,
 } from '@/lib/server/office-document-text';
+import { DecompressionLimitError as SharedDecompressionLimitError } from '../archive-budget';
 
 const SHEET_XML = (rows: string): string =>
   `<?xml version="1.0"?><worksheet><sheetData>${rows}</sheetData></worksheet>`;
@@ -34,6 +35,10 @@ async function workbookXlsx(paddingBytes = 0): Promise<Buffer> {
 }
 
 describe('decompressionBudget', () => {
+  it('retains the shared error constructor through the server facade', () => {
+    expect(DecompressionLimitError).toBe(SharedDecompressionLimitError);
+  });
+
   it('takes the ratio ceiling when it is tighter than the absolute cap', () => {
     const budget = decompressionBudget(1_000, 10_000_000);
     expect(budget.ceiling).toBe(1_000 * MAX_DECOMPRESSION_RATIO);

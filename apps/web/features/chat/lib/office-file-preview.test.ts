@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DecompressionLimitError } from '@/lib/security/archive-budget';
 import {
   XLSX_NOT_CALCULATED,
   loadWorkbookSheets,
@@ -75,6 +76,21 @@ describe('pptxToSlidesMarkdown slide structure', () => {
 });
 
 describe('pptxToSlidesMarkdown tables and pictures', () => {
+  it('skips pictures above the existing image limit while retaining slide text', async () => {
+    const zip = new JSZip();
+    zip.file(
+      'ppt/slides/slide1.xml',
+      `<p:sld xmlns:p="p" xmlns:a="a" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${shape('title', 'Title')}<p:pic><p:blipFill><a:blip r:embed="image"/></p:blipFill></p:pic></p:sld>`,
+    );
+    zip.file(
+      'ppt/slides/_rels/slide1.xml.rels',
+      '<Relationships><Relationship Id="image" Target="../media/image.png"/></Relationships>',
+    );
+    zip.file('ppt/media/image.png', new Uint8Array(450_001));
+    const markdown = await pptxToSlidesMarkdown(await zip.generateAsync({ type: 'arraybuffer' }));
+    expect(markdown).toBe('# Title');
+  });
+
   it('keeps tables and embedded pictures with their slide', async () => {
     const zip = new JSZip();
     const table =
@@ -97,6 +113,24 @@ describe('pptxToSlidesMarkdown tables and pictures', () => {
     expect(markdown).toContain('# Numbers');
     expect(markdown).toContain('| Region | Sales |\n| --- | --- |\n| EU | 12 |');
     expect(markdown).toContain('![Logo](data:image/png;base64,');
+  });
+});
+
+describe('Office preview decompression limits', () => {
+  it('rejects a worksheet preview that exceeds the decompression ratio', async () => {
+    const zip = new JSZip();
+    zip.file('xl/worksheets/sheet1.xml', `<worksheet>${' '.repeat(1_000_000)}</worksheet>`);
+    await expect(
+      xlsxSheets(await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })),
+    ).rejects.toBeInstanceOf(DecompressionLimitError);
+  });
+
+  it('rejects a slide preview that exceeds the decompression ratio', async () => {
+    const zip = new JSZip();
+    zip.file('ppt/slides/slide1.xml', `<slide>${' '.repeat(1_000_000)}</slide>`);
+    await expect(
+      pptxToSlidesMarkdown(await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })),
+    ).rejects.toBeInstanceOf(DecompressionLimitError);
   });
 });
 

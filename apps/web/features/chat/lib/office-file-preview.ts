@@ -1,4 +1,9 @@
-import JSZip from 'jszip';
+import {
+  officeMemberText,
+  openOfficeArchive,
+  readOfficeMember,
+  type OfficeArchive,
+} from './office-archive';
 
 const SLIDE_PATH = /^ppt\/slides\/slide(\d+)\.xml$/;
 const MAX_SLIDE_IMAGE_BYTES = 450_000;
@@ -61,9 +66,13 @@ function resolveTarget(slidePath: string, target: string): string {
   return parts.join('/');
 }
 
-async function slideImages(zip: JSZip, slidePath: string, slide: Document): Promise<string[]> {
+async function slideImages(
+  archive: OfficeArchive,
+  slidePath: string,
+  slide: Document,
+): Promise<string[]> {
   const relsPath = slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
-  const relsXml = await zip.file(relsPath)?.async('string');
+  const relsXml = await officeMemberText(archive, relsPath);
   if (!relsXml) return [];
   const targets = new Map(
     elementsByLocalName(parseXml(relsXml), 'Relationship').map((relation) => [
@@ -80,18 +89,20 @@ async function slideImages(zip: JSZip, slidePath: string, slide: Document): Prom
     if (!target) continue;
     const path = resolveTarget(slidePath, target);
     const type = IMAGE_TYPES[path.split('.').pop()?.toLowerCase() ?? ''];
-    const file = zip.file(path);
+    const file = archive.zip.file(path);
     if (!type || !file) continue;
-    const bytes = await file.async('base64');
-    if ((bytes.length * 3) / 4 > MAX_SLIDE_IMAGE_BYTES) continue;
+    const bytes = await readOfficeMember(file, archive.budget, MAX_SLIDE_IMAGE_BYTES);
+    if (bytes === null) continue;
+    const base64 = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
     const name = elementsByLocalName(picture, 'cNvPr')[0]?.getAttribute('descr')?.trim() || 'Image';
-    out.push(`![${name.replace(/[[\]]/g, '')}](data:${type};base64,${bytes})`);
+    out.push(`![${name.replace(/[[\]]/g, '')}](data:${type};base64,${base64})`);
   }
   return out;
 }
 
 export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
-  const zip = await JSZip.loadAsync(data);
+  const archive = await openOfficeArchive(data);
+  const { zip } = archive;
   const slides = Object.keys(zip.files)
     .map((path) => ({ path, match: SLIDE_PATH.exec(path) }))
     .filter((entry): entry is { path: string; match: RegExpExecArray } => entry.match !== null)
@@ -99,7 +110,7 @@ export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
 
   const rendered: string[] = [];
   for (const slide of slides) {
-    const xml = await zip.file(slide.path)?.async('string');
+    const xml = await officeMemberText(archive, slide.path);
     if (!xml) continue;
     const titles: string[] = [];
     const body: string[] = [];
@@ -116,7 +127,7 @@ export async function pptxToSlidesMarkdown(data: ArrayBuffer): Promise<string> {
     const title = titles.length > 0 ? titles.join(' ') : firstBody;
     const bullets = titles.length > 0 ? body : restBody;
     const tables = elementsByLocalName(document, 'tbl').map(tableMarkdown).filter(Boolean);
-    const images = await slideImages(zip, slide.path, document);
+    const images = await slideImages(archive, slide.path, document);
     rendered.push(
       [
         `# ${title ?? `Slide ${slide.match[1]}`}`,
@@ -176,9 +187,9 @@ function sheetCsv(sheetXml: string, shared: readonly string[]): string {
     .join('\n');
 }
 
-async function sheetEntries(zip: JSZip): Promise<{ name: string; path: string }[]> {
-  const workbookXml = await zip.file(WORKBOOK_PATH)?.async('string');
-  const relsXml = await zip.file(WORKBOOK_RELS_PATH)?.async('string');
+async function sheetEntries(archive: OfficeArchive): Promise<{ name: string; path: string }[]> {
+  const workbookXml = await officeMemberText(archive, WORKBOOK_PATH);
+  const relsXml = await officeMemberText(archive, WORKBOOK_RELS_PATH);
   if (!workbookXml || !relsXml) return [{ name: 'Sheet1', path: DEFAULT_SHEET_PATH }];
   const targets = new Map(
     elementsByLocalName(parseXml(relsXml), 'Relationship').map((relation) => [
@@ -201,8 +212,8 @@ async function sheetEntries(zip: JSZip): Promise<{ name: string; path: string }[
 }
 
 export async function xlsxSheets(data: ArrayBuffer): Promise<WorkbookSheet[]> {
-  const zip = await JSZip.loadAsync(data);
-  const sharedXml = await zip.file('xl/sharedStrings.xml')?.async('string');
+  const archive = await openOfficeArchive(data);
+  const sharedXml = await officeMemberText(archive, 'xl/sharedStrings.xml');
   const shared = sharedXml
     ? elementsByLocalName(parseXml(sharedXml), 'si').map((item) =>
         elementsByLocalName(item, 't')
@@ -211,8 +222,8 @@ export async function xlsxSheets(data: ArrayBuffer): Promise<WorkbookSheet[]> {
       )
     : [];
   const sheets: WorkbookSheet[] = [];
-  for (const entry of await sheetEntries(zip)) {
-    const sheetXml = await zip.file(entry.path)?.async('string');
+  for (const entry of await sheetEntries(archive)) {
+    const sheetXml = await officeMemberText(archive, entry.path);
     if (sheetXml !== undefined) sheets.push({ name: entry.name, csv: sheetCsv(sheetXml, shared) });
   }
   return sheets;

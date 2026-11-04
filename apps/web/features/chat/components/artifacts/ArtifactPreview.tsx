@@ -94,6 +94,7 @@ import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { loadWorkbookSheets } from '../../lib/office-file-preview';
+import { storedOfficeArchive } from '../../lib/office-archive';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
 import { ArtifactChangesReview } from './review/ArtifactChangesReview';
@@ -641,7 +642,9 @@ export function ArtifactPreview({
           const binary = artifact.content;
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
         }
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const result = await mammoth.convertToHtml({
+          arrayBuffer: await storedOfficeArchive(arrayBuffer),
+        });
         if (!cancelled) setDocxHtml(result.value);
       } catch (err) {
         if (!cancelled) setDocxError(toUserMessage(err, 'DOCX conversion failed'));
