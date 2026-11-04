@@ -6,8 +6,14 @@ import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { resolveReviewEffort, reviewDepthInstruction } from '../providers/reviewEffort';
 
 const chatCompletion = vi.hoisted(() => vi.fn());
+const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
 vi.mock('../utils/api', () => ({ chatCompletion }));
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs')>()),
+  realpathSync: realpath,
+}));
 
 function editorWith(text: string): vscode.TextEditor {
   return {
@@ -55,6 +61,7 @@ describe('reviewing code at an effort', () => {
   beforeEach(() => {
     chatCompletion.mockReset();
     chatCompletion.mockResolvedValue('Looks fine.');
+    realpath.mockReset().mockImplementation((path) => path);
   });
 
   async function userPromptAt(effort: Parameters<typeof reviewDepthInstruction>[0]) {
@@ -80,4 +87,32 @@ describe('reviewing code at an effort', () => {
     expect(xhigh).toContain('second pass');
     expect(xhigh).toContain('const a = 1;');
   });
+
+  it.each(['credential-target', 'unresolved'] as const)(
+    'reads and sends nothing when the file path is %s',
+    async (refusal) => {
+      if (refusal === 'credential-target') {
+        realpath.mockReturnValue('/repo/.env');
+      } else {
+        realpath.mockImplementation(() => {
+          throw new Error('EACCES');
+        });
+      }
+      const editor = editorWith('const a = 1;');
+      const read = vi.spyOn(editor.document, 'getText');
+      const provider = new AgiDiagnosticsProvider();
+
+      const result = await provider.reviewCode(
+        editor,
+        {} as vscode.SecretStorage,
+        new vscode.CancellationTokenSource().token,
+        'medium',
+      );
+
+      expect(result.diagnosticCount).toBe(0);
+      expect(result.summary).toMatch(/contents are not sent/);
+      expect(read).not.toHaveBeenCalled();
+      expect(chatCompletion).not.toHaveBeenCalled();
+    },
+  );
 });
