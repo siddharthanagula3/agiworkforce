@@ -667,9 +667,36 @@ policy mismatch. The canonical registers retain the decision boundary without
 changing permission behavior. Three changed fixture sources are unexecuted; no
 browser race, deployed behavior or universal prompting guarantee is established.
 
+## Web admitted-scope media serving and hydration
+
+Reconstructed commit: `30af21e015510eed0268fae650e4af041eef9866` changes six
+production files and six unexecuted fixture sources. `lib/server/media-assets.ts`
+now projects organization identity in all four serving-row lookup mappings.
+`getActiveWorkspaceMediaAssetById` accepts captured organization scope: only
+undefined falls back to resolving saved active selection; explicit null means
+Personal. Organization-only lookup uses three SQL arguments; the optional
+conversation predicate adds the fourth only when supplied.
+
+File GET and text GET pass `getUserScopedDb`'s admitted organization rather than
+re-resolving saved selection. Existing owner filtering and workspace RLS remain
+counterguards (tenancy policies and `0110_active_workspace_content_scope.sql`);
+the former serving drift supports an availability mismatch, not a demonstrated
+cross-account exposure. In contrast, attachment hydration uses the service DB:
+`chat-attachment-hydration.ts` now compares both owner and admitted organization
+before interpreting filename metadata or reading stored bytes. The main request
+processor passes context-policy scope, and the free-quota path passes its admitted
+scope through the now-required hydration argument.
+
+Same-owner, same-workspace reuse across conversations is intentionally allowed
+where no conversation constraint is supplied. This slice does not redesign shared
+grants, deletion, durable provenance or continuous revocation across subsequent
+awaits. Generation callers still using the helper's legacy selection fallback are
+outside this accepted slice, as is Gmail. Null/non-null scope fixture source was
+reviewed, but no SQL/RLS, storage, request or deployment behavior was executed.
+
 ## Reconstruction boundary
 
-Only the twenty-seven accepted production slices traced above are represented as
+Only the twenty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
