@@ -148,7 +148,29 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
       etag: '"etag-1"',
     });
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
+    expect(mockDeletePrivateObject.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockInsertMediaAsset.mock.invocationCallOrder[0]!,
+    );
   });
+
+  it.each(['rejected', 'missing-id'])(
+    'retains staging after sealing when registration is %s',
+    async (outcome) => {
+      process.env['MODERATION_HASH_DENYLIST'] = 'a'.repeat(64);
+      if (outcome === 'rejected') {
+        mockInsertMediaAsset.mockRejectedValueOnce(new Error('Registration unavailable'));
+      } else {
+        mockInsertMediaAsset.mockResolvedValueOnce(null);
+      }
+
+      const response = await POST(completeRequest());
+
+      expect(response.status).toBe(500);
+      expect(mockCopyPrivateObjectIfUnchanged).toHaveBeenCalledOnce();
+      expect(mockInsertMediaAsset).toHaveBeenCalledOnce();
+      expect(mockDeletePrivateObject).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects an upload whose bytes changed between the scan and the seal', async () => {
     mockCopyPrivateObjectIfUnchanged.mockResolvedValue(false);

@@ -46,6 +46,7 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   getProjectKnowledgeObject: vi.fn(),
   deleteProjectKnowledgeObject: vi.fn(),
   sealProjectKnowledgeObject: mockSealProjectKnowledgeObject,
+  sealedProjectKnowledgeKey: (key: string) => key.replace(/\/([^/]+)$/, '/sealed/$1'),
 }));
 
 import { POST } from '@/app/api/projects/[id]/knowledge-files/route';

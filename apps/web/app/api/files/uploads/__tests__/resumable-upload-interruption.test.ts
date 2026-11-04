@@ -95,6 +95,7 @@ vi.mock('@/lib/server/object-storage-runtime', async (importOriginal) => ({
 }));
 
 import { POST as createUpload } from '../route';
+import { findCompletedChatAttachment } from '@/lib/server/chat-attachment-completion';
 import {
   DELETE as abortUpload,
   GET as readProgress,
@@ -248,11 +249,15 @@ describe('a resumable upload that is interrupted', () => {
     await sendPart(upload, 1, LEAD);
     await sendPart(upload, 2, TAIL);
 
-    expect((await finish(upload)).status).toBe(200);
+    const first = await finish(upload);
+    expect(first.status).toBe(200);
+    const completed = await first.json();
+    vi.mocked(findCompletedChatAttachment).mockResolvedValueOnce(completed.attachment);
     const retried = await finish(upload);
 
     expect(retried.status).toBe(200);
-    expect((await retried.json()).kind).toBe('chat-attachment');
+    expect(await retried.json()).toEqual(completed);
+    expect(mockCompleteChatAttachmentUpload).toHaveBeenCalledOnce();
   });
 
   it('leaves no stored object and records nothing when the user cancels', async () => {

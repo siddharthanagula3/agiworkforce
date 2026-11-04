@@ -73,7 +73,6 @@ const RETRY_BASE_DELAY_MS = 500;
 const RETRY_MAX_DELAY_MS = 8_000;
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const EXPIRED_SIGNATURE_STATUS = 403;
-const SESSION_GONE_STATUSES = new Set([401, 403, 404, 409]);
 
 function defaultSleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -233,7 +232,7 @@ export function createManagedCloudResumableUploadClient(
       managedCloudResumableUploadSessionPath(session.uploadId, session.session),
       { method: 'GET', headers: await headers(false, false), signal },
     );
-    if (SESSION_GONE_STATUSES.has(response.status)) return null;
+    if (response.status === 404) return null;
     if (!response.ok) throw await responseError(response, 'Could not read the upload progress.');
     const progress = parseContract(
       ManagedCloudResumableUploadProgressSchema,
@@ -347,7 +346,14 @@ export function createManagedCloudResumableUploadClient(
       const fingerprint = sessionFingerprint(createRequest);
       let session = readStoredSession((await sessions?.read(fingerprint)) ?? null);
       let stored = session ? await storedParts(session, signal) : null;
-      if (!session || !stored) {
+      if (session && !stored) {
+        assertNotAborted(signal);
+        onCompleting?.();
+        const completed = await complete(session, completion, signal);
+        await forget(fingerprint);
+        return completed;
+      }
+      if (!session) {
         session = await openSession(createRequest, signal);
         stored = new Map();
         await sessions?.write(fingerprint, JSON.stringify(session));
@@ -362,7 +368,7 @@ export function createManagedCloudResumableUploadClient(
             createRequest.byteCount,
             openSessionHandle.partBytes,
           );
-          if (stored.get(partNumber) !== range.end - range.start) pending.push(partNumber);
+          if (stored?.get(partNumber) !== range.end - range.start) pending.push(partNumber);
         }
         if (pending.length > 0) {
           const signed = await signParts(openSessionHandle, pending, signal);
@@ -387,13 +393,6 @@ export function createManagedCloudResumableUploadClient(
       } catch (error) {
         if (isAbortError(error)) {
           await abort(openSessionHandle);
-          await forget(fingerprint);
-        } else if (
-          error instanceof ManagedCloudResumableUploadError &&
-          error.status >= 400 &&
-          error.status < 500 &&
-          !RETRYABLE_STATUSES.has(error.status)
-        ) {
           await forget(fingerprint);
         }
         throw error;

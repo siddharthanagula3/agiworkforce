@@ -11,8 +11,7 @@ import type { UploadedPart } from '@agiworkforce/object-storage';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { createError, isAppError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
+import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveProductAnalyticsSurface } from '@/lib/server/product-analytics';
@@ -26,7 +25,6 @@ import {
   findProjectKnowledgeFileByChecksum,
   registerProjectKnowledgeFile,
 } from '@/lib/server/project-knowledge-files';
-import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import {
   assertSessionPartNumber,
   missingParts,
@@ -190,6 +188,7 @@ async function finishedUpload(
     const file = await findProjectKnowledgeFileByChecksum(
       { db, ...scope, projectId: session.projectId },
       session.checksumSha256,
+      session.key,
     );
     return file ? knowledgeFileCompletion(file) : null;
   }
@@ -218,27 +217,15 @@ async function finishKnowledgeFile(
   const projectId = session.projectId;
   if (!projectId || !session.sourceSurface) throw createError.notFound('Upload not found');
   const projectScope = { db, ...scope, projectId };
-  try {
-    const registration = await registerProjectKnowledgeFile(projectScope, {
-      fileName: session.fileName,
-      mimeType: session.mimeType,
-      byteCount: session.byteCount,
-      checksumSha256: session.checksumSha256,
-      sourceSurface: session.sourceSurface,
-      storageUri: session.key,
-    });
-    return knowledgeFileCompletion(registration.file);
-  } catch (error) {
-    if (isAppError(error) && error.statusCode < 500) {
-      await deleteProjectKnowledgeObject(session.key).catch((deleteError: unknown) => {
-        logger.error(
-          { err: deleteError, userId: scope.userId, projectId, objectKey: session.key },
-          '[uploads] an assembled project source that failed registration was not deleted',
-        );
-      });
-    }
-    throw error;
-  }
+  const registration = await registerProjectKnowledgeFile(projectScope, {
+    fileName: session.fileName,
+    mimeType: session.mimeType,
+    byteCount: session.byteCount,
+    checksumSha256: session.checksumSha256,
+    sourceSurface: session.sourceSurface,
+    storageUri: session.key,
+  });
+  return knowledgeFileCompletion(registration.file);
 }
 
 async function handleComplete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
@@ -259,6 +246,9 @@ async function handleComplete(request: NextRequest, context: RouteContext): Prom
 
   const rateLimitResponse = await withRateLimit(request, 'uploads-presign', userId);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const finished = await finishedUpload(db, { userId, organizationId }, session, parsed.data);
+  if (finished) return NextResponse.json(finished);
 
   const target = resumableUploadTarget();
   if ((await assembleParts(target, session)) === 'closed') {

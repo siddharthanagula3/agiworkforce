@@ -17,6 +17,7 @@ import { enqueueJob } from '@/lib/jobs/job-service';
 import {
   deleteProjectKnowledgeObject,
   sealProjectKnowledgeObject,
+  sealedProjectKnowledgeKey,
 } from '@/lib/server/project-knowledge-object-storage';
 import { recordModerationEvent } from '@/lib/moderation';
 import { MAX_PROJECT_KNOWLEDGE_FILES, validateAttachmentMeta } from '@agiworkforce/types';
@@ -269,18 +270,23 @@ export async function checkProjectKnowledgeCapacity(
 export async function findProjectKnowledgeFileByChecksum(
   scope: ProjectKnowledgeScope,
   checksumSha256: string,
+  uploadKey: string,
 ): Promise<ReturnType<typeof projectKnowledgeResponse> | null> {
-  const { db, userId, projectId } = scope;
+  const { db, userId, organizationId, projectId } = scope;
+  const sealedKey = sealedProjectKnowledgeKey(uploadKey);
+  if (!sealedKey) return null;
   const [row] = await db.query<Record<string, unknown>>(
-    `select *
-       from project_knowledge_files
-      where project_id = $1
-        and checksum_sha256 = $2
-        and added_by_user_id = $3
-        and deleted_at is null
-        and superseded_at is null
+    `select f.*
+       from project_knowledge_files f
+       join user_projects p on p.id = f.project_id
+      where ${READABLE_PROJECT_SCOPE_SQL}
+        and f.checksum_sha256 = $4
+        and f.added_by_user_id = $2
+        and f.storage_uri = $5
+        and f.deleted_at is null
+        and f.superseded_at is null
       limit 1`,
-    [projectId, checksumSha256, userId],
+    [projectId, userId, organizationId, checksumSha256, sealedKey],
   );
   if (!row) return null;
   const fileId = String(row['id'] ?? '');
@@ -373,8 +379,8 @@ export async function registerProjectKnowledgeFile(
     key: extraction.objectKey,
     etag: extraction.etag,
   });
-  await purgeUploadedKnowledgeObject(db, userId, projectId, extraction.objectKey);
   if (!sealedKey) {
+    await purgeUploadedKnowledgeObject(db, userId, projectId, extraction.objectKey);
     logger.warn(
       { userId, projectId, objectKey: extraction.objectKey, hadEtag: Boolean(extraction.etag) },
       '[knowledge-files] rejected a project source whose bytes changed after inspection',
@@ -462,6 +468,7 @@ export async function registerProjectKnowledgeFile(
     logger.error({ error, projectId }, 'Failed to create knowledge file');
     throw createError.internal('Failed to create knowledge file');
   }
+  await purgeUploadedKnowledgeObject(db, userId, projectId, extraction.objectKey);
 
   const fileId = String(data['id'] ?? '');
   await dispatchKnowledgeIndexing(db, fileId, userId);
