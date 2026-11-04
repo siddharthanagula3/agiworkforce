@@ -9240,3 +9240,53 @@ unmounted observation was introduced. Exact-session/request guards remain intact
 this is not evidence of cross-account remote access. Actual-store fixture sources
 were independently reviewed but not executed, and runtime/deployment acceptance
 remains open.
+
+
+## MOBILE-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
+
+Status: OPEN, source-backed on 2026-11-04. No runtime reproduction.
+
+`ProviderTrainingOptOutGroup.tsx` and `UsOnlyRoutingGroup.tsx` load only on
+mount and retain their local settings without original account/focus/mode
+ownership. A retained callback can dispatch through the current API account after
+the displayed choice originated elsewhere. React `saving` disables the next
+rendered control but is not a synchronous operation lease; overlapping callbacks
+can race optimistic rollback and finally cleanup. Their failure copy also treats
+an unconfirmed mutation as definitely unsaved. The namespace preference service
+normalizes malformed settings to an empty object, while the routing group maps
+schema failures to empty preferences, so downstream UI cannot infer authoritative
+absence from those values.
+
+Canonical API generation and optional account-epoch checks already fence in-flight
+transport. They do not recover a saved callback's original UI owner. Existing
+Local-mode egress refusal is also not a context-round-trip lifetime. Server writes
+remain authenticated-user scoped; no authorization bypass or live cross-account
+write was demonstrated.
+
+Continue with a bounded original-owner/ready-snapshot admission and exclusive
+operation design, truthful acknowledgment/uncertainty, and authoritative read
+contracts. Analytics was separately source-corrected by `0eb6b9458c`; it does not
+close these controls. US-only additionally depends on
+`WEB-ROUTING-PREFERENCES-READ-01`. Device-scoped named-provider MMKV consent is a
+separate ownership model and must not be silently account-bound. No tests, checks,
+builds, native UI, settings mutation or network actions were performed.
+
+## WEB-ROUTING-PREFERENCES-READ-01
+
+Status: OPEN, source-backed on 2026-11-04. No runtime reproduction.
+
+`apps/web/app/api/me/routing-preferences/route.ts` catches a database read failure
+and returns HTTP 200 with `{}`. A valid absent preference and an unavailable read
+are therefore indistinguishable to callers. Its PUT replaces the complete stored
+routing JSON. Mobile's `UsOnlyRoutingGroup.tsx` spreads its loaded preferences and
+writes that object with the changed `us_only` field. After a failed read represented
+as empty success, a later successful save can erase an existing `geo_overlay` or
+other supported routing field. No live erasure or provider-routing outcome was
+demonstrated.
+
+UI schema validation alone cannot establish whether `{}` was authoritative.
+Define an honest failure-versus-absence read contract and preserve the intended
+replacement/merge semantics across callers. Concurrent full-object edits are a
+separate lost-update concern, not solved merely by rejecting failed reads. Keep
+existing authenticated-user scoping and valid no-preference behavior. No tests,
+checks, builds, database calls, settings mutation or network actions were run.

@@ -3907,9 +3907,46 @@ real resolved refresh errors, original epoch and abort propagation. Both affecte
 screen mocks were migrated. No tests, checks, builds, native UI, database mutation
 or network actions were run; regression sources remain unexecuted.
 
+## Mobile analytics consent owns its ready choice and recorded receipt
+
+Accepted commit `0eb6b9458cf633aad2084f0710883508fdf4b1a2` changes the
+analytics settings group, adds its narrow response parser and two fixture sources,
+and migrates two existing screen mocks. A focused owner captures the canonical
+Cloud account epoch and checks loaded/signed-in Clerk identity and Cloud mode.
+Account/auth/mode transitions and blur/unmount retire that owner synchronously.
+A save must retain the exact current ready choice and claim one operation before
+awaiting. Original epoch and abort signal reach GET and POST; response bodies,
+errors, reconciliation and finally retain exact owner/operation checks.
+
+The GET parser distinguishes a genuinely absent analytics record from malformed
+or unavailable settings. It uses the actual purpose-object catalog and preserves
+the canonical per-purpose grant-version reader. A POST receipt validates the
+submitted top-level privacy-notice version separately from the analytics record's
+purpose-specific notice version. The acknowledged boolean comes from the recorded
+decision, including a server-adjusted denial, rather than the requested boolean.
+
+Confirmed writes remain confirmed when readback fails, with the actual recorded
+on/off value stated. Lost responses and invalid receipts remain unconfirmed and
+trigger an owned read, never an automatic repeat POST. A notice-conflict response
+requires a refreshed ready snapshot and a new choice. Failed reconciliation leaves
+no actionable stale ready value; the explicit retry control only reads. Cancellation
+does not establish rollback, and concurrent external changes remain possible.
+
+This is analytics-only source correction, not an account-authorization bypass
+claim or a generic settings framework. Provider-training and US-only control
+ownership remain separately recorded as `MOBILE-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`.
+The routing endpoint's successful empty response on a failed database read remains
+`WEB-ROUTING-PREFERENCES-READ-01`. Device-scoped named-provider consent is unchanged.
+
+Independent source review accepted the bounded patch. Deferred fixture sources
+cover context round trips, duplicate callbacks, delayed bodies/receipts, unmount,
+malformed responses, adjusted denial/readback failure, uncertainty, notice renewal
+and read retry. No tests, checks, builds, native UI, consent changes or network
+actions were run; all regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-three accepted production slices traced above are represented as
+Only the one hundred and thirty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
