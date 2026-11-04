@@ -1727,6 +1727,11 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                     </div>
                   ) : (
                     <CodeComposer
+                      dictationDestination={selectedId ? selectedSession?.id ?? null : 'new-cloud-code'}
+                      dictationModel={selectedSession
+                        ? (runtimeRunsOwnAgent(selectedSession.runtimeId)
+                          ? sessionModelsRef.current[selectedSession.id] : undefined) ?? agentModel
+                        : (runtimeRunsOwnAgent(draft.runtimeId) ? draft.harnessModelId : '') || agentModel}
                       value={task}
                       onChange={setTask}
                       onSubmit={(text, repository) => void handleSubmit(text, turnMode, repository)}

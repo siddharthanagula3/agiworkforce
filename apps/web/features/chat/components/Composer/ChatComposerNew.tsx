@@ -58,6 +58,10 @@ import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
+import { getConversationProviderMode } from '@features/chat/lib/localByokHandoff';
+import { conversationHoldsLocalTurns } from '@features/chat/lib/local-origin';
 import { dictationSwitchedOffReason, useDictation } from '@features/chat/hooks/use-dictation';
 import {
   DesktopRuntimeError,
@@ -1983,16 +1987,32 @@ const ChatComposerNewComponent = ({
     [appendDictatedText, focusComposerEnd],
   );
 
-  const dictationSendRef = useRef(false);
+  const dictationSendRef = useRef<RequestAuthority | null>(null);
   const handleDictationSend = useCallback(
-    (text: string) => {
-      dictationSendRef.current = true;
+    (text: string, owner: RequestAuthority) => {
+      dictationSendRef.current = owner;
       appendDictatedText(text);
     },
     [appendDictatedText],
   );
 
   const dictation = useDictation({
+    scope: JSON.stringify([conversationId, newChatProjectId, composerSelectedModelId, localSelection]),
+    isAvailable: () => {
+      if (useLocalModelSelection.getState().selected !== null) return false;
+      const selectedMode = getProviderModeForModel(useModelStore.getState().selectedModelId);
+      if (selectedMode === 'Local' || selectedMode === 'DirectByok') return false;
+      if (!conversationId) return true;
+      const chat = useChatStore.getState();
+      const conversation = chat.conversations.find((entry) => entry.id === conversationId);
+      if (!conversation) return false;
+      const messages = chat.messagesByConversation[conversationId] ?? [];
+      const mode = getConversationProviderMode(conversation, messages);
+      return mode !== 'Local' && mode !== 'DirectByok' &&
+        !conversationHoldsLocalTurns(messages) &&
+        !messages.some((entry) => entry.metadata?.privacyMode === 'byok' ||
+          entry.metadata?.providerMode === 'Local' || entry.metadata?.providerMode === 'DirectByok');
+    },
     onInsert: handleDictationInsert,
     onSend: handleDictationSend,
   });
@@ -3964,8 +3984,9 @@ const ChatComposerNewComponent = ({
   const handleSubmitInverted = useCallback(() => submitMessage(true), [submitMessage]);
 
   useEffect(() => {
-    if (!dictationSendRef.current) return;
-    dictationSendRef.current = false;
+    const owner = dictationSendRef.current;
+    dictationSendRef.current = null;
+    if (!owner?.isCurrent()) return;
     if (!message.trim() && attachments.length === 0) return;
     handleSubmit();
   }, [message, attachments.length, handleSubmit]);

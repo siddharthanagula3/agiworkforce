@@ -220,20 +220,32 @@ export function RemoteComputerPage() {
 
   const sendTask = async (text: string) => {
     const prompt = text.trim();
-    if (!prompt || !connection.current) return;
-    const requestId = await connection.current.sendTask(prompt, titleFor(prompt));
+    const target = connection.current;
+    const targetAttempt = attempt.current;
+    if (!prompt || !target) return;
+    const requestId = await target.sendTask(prompt, titleFor(prompt));
+    if (!mounted.current || connection.current !== target || attempt.current !== targetAttempt) return;
     if (!requestId) {
       setError(SEND_FAILED);
       return;
     }
     setError(null);
-    setDraft('');
+    setDraft((current) => current.trim() === prompt ? '' : current);
     setTasks((current) => [{ requestId, prompt, status: 'queued' }, ...current]);
   };
 
+  const dictationConnection = connection.current;
+  const dictationAttempt = attempt.current;
   const dictation = useDictation({
+    scope: JSON.stringify([dictationAttempt, phase]),
+    isAvailable: () => Boolean(mounted.current && phase === 'connected' &&
+      dictationConnection && connection.current === dictationConnection && attempt.current === dictationAttempt),
     onInsert: (text) => setDraft((current) => (current ? `${current} ${text}` : text)),
-    onSend: (text) => void sendTask(draft ? `${draft} ${text}` : text),
+    onSend: (text) => {
+      const next = draft ? `${draft} ${text}` : text;
+      setDraft(next);
+      void sendTask(next);
+    },
   });
 
   return (

@@ -37,7 +37,12 @@ export function DictationBar() {
     [host],
   );
 
-  const dictation = useDictation({ onInsert: finish, onSend: finish });
+  const dictation = useDictation({
+    scope: host,
+    isAvailable: () => Boolean(host?.finishDictation && !handedBack.current),
+    onInsert: finish,
+    onSend: finish,
+  });
   const { start, stop, cancel, isActive } = dictation;
 
   const discard = useCallback(() => {

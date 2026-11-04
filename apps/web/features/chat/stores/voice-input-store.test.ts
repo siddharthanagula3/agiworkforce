@@ -11,11 +11,14 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
 }));
 
 import { useVoiceInputStore, _resetRuntimeRefs } from './voice-input-store';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { clearCsrfToken } from '@/lib/client/csrf';
 
 const CSRF_ENDPOINT = '/api/csrf';
 const CSRF_TOKEN = 'csrf-token-fixture';
 const TRANSCRIBE_ENDPOINT = '/api/voice/transcribe';
+const newOwner = () => createRequestAuthority({ userId: 'user-a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'original-session-token' });
+let owner: RequestAuthority;
 
 function stubFetch(transcribe: () => unknown) {
   const mock = vi.fn(async (url: string) => {
@@ -103,6 +106,8 @@ function installFailingCapture(error: DOMException) {
 
 describe('voiceInputStore', () => {
   beforeEach(() => {
+    _resetRuntimeRefs();
+    owner = newOwner();
     resetStore();
     clearCsrfToken();
     vi.clearAllMocks();
@@ -139,15 +144,19 @@ describe('voiceInputStore', () => {
   });
 
   describe('clearTranscript', () => {
-    it('resets the transcript to empty string', () => {
+    it('resets the owned transcript to empty string', async () => {
+      installCapture();
+      await useVoiceInputStore.getState().startListening(owner);
       useVoiceInputStore.setState({ transcript: 'hello world' });
-      useVoiceInputStore.getState().clearTranscript();
+      useVoiceInputStore.getState().clearTranscript(owner);
       expect(useVoiceInputStore.getState().transcript).toBe('');
     });
 
-    it('does not change mode', () => {
+    it('does not change mode', async () => {
+      installCapture();
+      await useVoiceInputStore.getState().startListening(owner);
       useVoiceInputStore.setState({ mode: 'listening', transcript: 'hello' });
-      useVoiceInputStore.getState().clearTranscript();
+      useVoiceInputStore.getState().clearTranscript(owner);
       expect(useVoiceInputStore.getState().mode).toBe('listening');
     });
   });
@@ -184,13 +193,13 @@ describe('voiceInputStore', () => {
     });
 
     it('transitions mode to listening after getUserMedia resolves', async () => {
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       expect(useVoiceInputStore.getState().mode).toBe('listening');
     });
 
     it('asks for the chosen microphone, and for none when the system default is set', async () => {
       useVoiceInputStore.getState().setMicrophoneId('usb-mic');
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       const chosen = vi.mocked(navigator.mediaDevices.getUserMedia).mock.calls[0]![0] as {
         audio: MediaTrackConstraints;
       };
@@ -198,8 +207,9 @@ describe('voiceInputStore', () => {
 
       useVoiceInputStore.getState().cancelListening();
       installCapture();
+      owner = newOwner();
       useVoiceInputStore.getState().setMicrophoneId('');
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       const fallback = vi.mocked(navigator.mediaDevices.getUserMedia).mock.calls[0]![0] as {
         audio: MediaTrackConstraints;
       };
@@ -208,13 +218,13 @@ describe('voiceInputStore', () => {
 
     it('exposes the capture stream so a level meter can read it', async () => {
       const { stream } = installCapture();
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       expect(useVoiceInputStore.getState().captureStream).toBe(stream);
     });
 
     it('captures audio even where the browser offers speech recognition', async () => {
       defineWindowValue('webkitSpeechRecognition', function noop() {});
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledOnce();
       expect(useVoiceInputStore.getState().captureStream).not.toBeNull();
       defineWindowValue('webkitSpeechRecognition', undefined);
@@ -222,26 +232,26 @@ describe('voiceInputStore', () => {
 
     it('clears previous error on start', async () => {
       useVoiceInputStore.setState({ error: 'previous error' });
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       expect(useVoiceInputStore.getState().error).toBeNull();
     });
 
     it('clears previous transcript on start', async () => {
       useVoiceInputStore.setState({ transcript: 'old transcript' });
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
       expect(useVoiceInputStore.getState().transcript).toBe('');
     });
 
     it('does nothing if already in listening mode', async () => {
-      useVoiceInputStore.setState({ mode: 'listening' });
-      await useVoiceInputStore.getState().startListening();
-      expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().startListening(owner);
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledOnce();
     });
 
     it('sets mode to error on NotAllowedError', async () => {
       installFailingCapture(new DOMException('Permission denied', 'NotAllowedError'));
 
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
 
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().error).toContain('denied');
@@ -251,7 +261,7 @@ describe('voiceInputStore', () => {
     it('sets mode to error on NotFoundError', async () => {
       installFailingCapture(new DOMException('Device not found', 'NotFoundError'));
 
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
 
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().error).toContain('microphone');
@@ -265,7 +275,7 @@ describe('voiceInputStore', () => {
     ])('gives an actionable message for %s', async (name, expected) => {
       installFailingCapture(new DOMException('host detail', name));
 
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
 
       expect(useVoiceInputStore.getState().error).toMatch(expected);
       expect(useVoiceInputStore.getState().error).not.toContain('host detail');
@@ -276,7 +286,7 @@ describe('voiceInputStore', () => {
         new DOMException('SELECT token FROM credentials trace 0xdeadbeef', 'UnknownError'),
       );
 
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
 
       expect(useVoiceInputStore.getState().error).toBe(
         'Could not start the microphone. Check your device and browser permissions, then try again.',
@@ -287,11 +297,11 @@ describe('voiceInputStore', () => {
   describe('stopListening', () => {
     it('returns immediately if not in listening mode', async () => {
       useVoiceInputStore.setState({ mode: 'idle' });
-      await expect(useVoiceInputStore.getState().stopListening()).resolves.toBeUndefined();
+      await expect(useVoiceInputStore.getState().stopListening(owner)).resolves.toBeUndefined();
       expect(useVoiceInputStore.getState().mode).toBe('idle');
     });
 
-    it('POSTs to /api/voice/transcribe with the catalog voice model and a csrf token', async () => {
+    it('POSTs to /api/voice/transcribe with the catalog voice model and original session bearer', async () => {
       installCapture();
       const fetchMock = stubFetch(() => ({
         ok: true,
@@ -299,13 +309,14 @@ describe('voiceInputStore', () => {
         text: async () => '',
       }));
 
-      await useVoiceInputStore.getState().startListening();
-      await useVoiceInputStore.getState().stopListening();
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
 
       const [, init] = transcribeCall(fetchMock);
       const request = init as RequestInit;
       expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
-      expect((request.headers as Record<string, string>)['x-csrf-token']).toBe(CSRF_TOKEN);
+      expect(new Headers(request.headers).get('Authorization')).toBe('Bearer original-session-token');
+      expect(request.credentials).toBe('omit');
       expect(useVoiceInputStore.getState().transcript).toBe('hello');
       expect(useVoiceInputStore.getState().captureStream).toBeNull();
     });
@@ -319,8 +330,8 @@ describe('voiceInputStore', () => {
         text: async () => '',
       }));
 
-      await useVoiceInputStore.getState().startListening();
-      await useVoiceInputStore.getState().stopListening();
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
 
       const [, init] = transcribeCall(fetchMock);
       expect(((init as RequestInit).body as FormData).get('language')).toBe('en');
@@ -335,8 +346,8 @@ describe('voiceInputStore', () => {
         text: async () => '',
       }));
 
-      await useVoiceInputStore.getState().startListening();
-      await useVoiceInputStore.getState().stopListening();
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
 
       const [, init] = transcribeCall(fetchMock);
       expect(((init as RequestInit).body as FormData).get('language')).toBeNull();
@@ -346,8 +357,8 @@ describe('voiceInputStore', () => {
       installCapture();
       stubFetch(() => ({ ok: false, status: 500 }));
 
-      await useVoiceInputStore.getState().startListening();
-      await useVoiceInputStore.getState().stopListening();
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
 
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().transcript).toBe('');
@@ -358,8 +369,8 @@ describe('voiceInputStore', () => {
     async function recordAgainst(response: unknown) {
       installCapture();
       stubFetch(() => response);
-      await useVoiceInputStore.getState().startListening();
-      await useVoiceInputStore.getState().stopListening();
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
     }
 
     it('says the month of voice minutes is used up when the allowance code comes back', async () => {
@@ -410,9 +421,10 @@ describe('voiceInputStore', () => {
         grant = resolve;
       });
       vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValueOnce(pending);
-      const first = useVoiceInputStore.getState().startListening();
+      const first = useVoiceInputStore.getState().startListening(owner);
       useVoiceInputStore.getState().cancelListening();
-      await useVoiceInputStore.getState().startListening();
+      owner = newOwner();
+      await useVoiceInputStore.getState().startListening(owner);
       const current = useVoiceInputStore.getState().captureStream;
       const stopOld = vi.fn();
       grant({ getTracks: () => [{ stop: stopOld }] } as unknown as MediaStream);
@@ -439,8 +451,8 @@ describe('voiceInputStore', () => {
           return body;
         },
       }));
-      await useVoiceInputStore.getState().startListening();
-      const stopping = useVoiceInputStore.getState().stopListening();
+      await useVoiceInputStore.getState().startListening(owner);
+      const stopping = useVoiceInputStore.getState().stopListening(owner);
       await started;
       useVoiceInputStore.getState().cancelListening();
       resolveText({ text: 'discarded speech' });
@@ -451,7 +463,7 @@ describe('voiceInputStore', () => {
 
     it('releases the microphone and drops the recording', async () => {
       const { stop } = installCapture();
-      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().startListening(owner);
 
       useVoiceInputStore.getState().cancelListening();
 
@@ -459,6 +471,77 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().mode).toBe('idle');
       expect(useVoiceInputStore.getState().transcript).toBe('');
       expect(useVoiceInputStore.getState().captureStream).toBeNull();
+    });
+  });
+
+  describe('recording authority', () => {
+    it('retires a pending permission request when stopped before capture begins', async () => {
+      installCapture();
+      let grant!: (stream: MediaStream) => void;
+      vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValueOnce(
+        new Promise((resolve) => { grant = resolve; }),
+      );
+      const starting = useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
+      const stop = vi.fn();
+      grant({ getTracks: () => [{ stop }] } as unknown as MediaStream);
+      await starting;
+      expect(stop).toHaveBeenCalledOnce();
+      expect(owner.isCurrent()).toBe(false);
+      expect(useVoiceInputStore.getState().captureStream).toBeNull();
+      expect(useVoiceInputStore.getState().mode).toBe('idle');
+    });
+
+    it('does not let an old owner cancel or clear a newer owner', async () => {
+      installCapture();
+      await useVoiceInputStore.getState().startListening(owner);
+      const newer = newOwner();
+      await useVoiceInputStore.getState().startListening(newer);
+      useVoiceInputStore.setState({ transcript: 'newer draft' });
+      useVoiceInputStore.getState().cancelListening(owner);
+      useVoiceInputStore.getState().clearTranscript(owner);
+      expect(useVoiceInputStore.getState().mode).toBe('listening');
+      expect(useVoiceInputStore.getState().transcript).toBe('newer draft');
+      expect(newer.isCurrent()).toBe(true);
+    });
+
+    it('retries the original audio language with original session authority', async () => {
+      installCapture();
+      const fetchMock = stubFetch(() => ({ ok: false, status: 503, json: async () => ({}) }));
+      useVoiceInputStore.getState().setLanguage('fr-FR');
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
+      useVoiceInputStore.getState().setLanguage('de-DE');
+      await useVoiceInputStore.getState().retryTranscription(owner);
+      const requests = fetchMock.mock.calls as unknown as [string, RequestInit][];
+      expect(requests).toHaveLength(2);
+      for (const [, init] of requests) {
+        expect((init.body as FormData).get('language')).toBe('fr');
+        expect(new Headers(init.headers).get('Authorization')).toBe('Bearer original-session-token');
+        expect(init.credentials).toBe('omit');
+      }
+    });
+
+    it('does not upload after its captured session changes during token acquisition', async () => {
+      installCapture();
+      let current = true;
+      let release!: (token: string) => void;
+      let requested!: () => void;
+      const tokenRequested = new Promise<void>((resolve) => { requested = resolve; });
+      owner = createRequestAuthority({
+        userId: 'user-a', sessionId: 'session-a', isCurrent: () => current,
+        getToken: () => { requested(); return new Promise((resolve) => { release = resolve; }); },
+      });
+      const fetchMock = stubFetch(() => ({ ok: true, json: async () => ({ text: 'stale' }) }));
+      await useVoiceInputStore.getState().startListening(owner);
+      const stopping = useVoiceInputStore.getState().stopListening(owner);
+      await tokenRequested;
+      current = false;
+      release('old-token');
+      await stopping;
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(useVoiceInputStore.getState().canRetryTranscription).toBe(false);
+      expect(useVoiceInputStore.getState().transcript).toBe('');
     });
   });
 
