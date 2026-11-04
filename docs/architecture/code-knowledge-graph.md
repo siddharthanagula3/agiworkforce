@@ -1629,9 +1629,56 @@ alarm delivery/persistence. Injected alarm-port fixtures, mocked sweeps and text
 background wiring contracts were source-read only; none were executed in Chrome
 or a test runner.
 
+## Chrome schedules distinguish source refusal from unreadable authority
+
+Accepted commit `a44ee70839f40557bacda5612ec7afcba370efd5` changes four
+production files and two fixture sources. The schedule-only policy reader in
+`features/site-policy/store.ts` distinguishes genuine absence from storage or
+parse uncertainty, retaining managed-policy precedence. The background source
+resolver uses the same loaded shortcut object for its origin and prompt, preserves
+direct-prompt precedence and canonical slice/trim, and adds live one-time grants
+to the policy input. Missing origins and the extension-page sentinel retain their
+legacy exemptions; unreadable scoped authority is not treated as revocation.
+
+Normal admission and managed journal recovery retain tasks/journals on unknown
+authority. Journal checks compare current enabled task/account and resolved prompt
+before run lookup, resume and entry into the CHAT handler. These are not final
+network gates after that handler's later awaits. A counted recovery attempt is
+restored only for source unavailability before any recovery I/O begins: exact
+task/request, expected count, non-cancelled state and current admission predicate
+are checked inside the journal mutation queue. Once even run lookup begins,
+subsequent uncertainty retains the consumed attempt; restoration write failure
+logs rather than providing durable repair. Task-origin denial deletion now checks
+original source fields and execution generation in the mutation and guards later
+journal cleanup after awaits.
+
+Local recorded-action replay/current-target policy and shared policy-cache
+freshness remain separate boundaries. Policy/helper and journal fixtures plus
+textual background wiring assertions are unexecuted; they do not establish
+Chrome scheduler, recovery-network or storage runtime acceptance.
+
+### V1 journal provenance remains a design constraint
+
+`ScheduledTaskRunJournal` in `features/background/scheduled-task-runs.ts` stores
+prompt, task/request IDs and owner, but no immutable direct-versus-shortcut source,
+shortcut ID or captured origin. Its normalizer reconstructs known fields;
+`canResumeScheduledTaskRunJournal` compares owner, cancellation and prompt.
+Checking today's task/shortcut and equal text therefore cannot establish the
+original run's source provenance. The new admission checks do not migrate that
+historical authority or make it complete.
+
+A future contract needs a source descriptor captured with the same prompt
+snapshot, explicit legacy/unknown treatment and decisions about source edits,
+deletions and already-dispatched completion/cancellation. Backfilling from the
+current shortcut is not proof; old writers can strip additive fields, and this
+V1 reader treats an unknown store version as empty. No journal migration,
+automatic drop, broader refusal policy or implementation-ready design is approved
+here. This constraint is recorded once beside its architecture owner rather than
+adding a duplicate broad schedule finding; no observed exploit or loss is claimed.
+
 ## Reconstruction boundary
 
-Only the sixty-seven accepted production slices traced above are represented as
+Only the sixty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
