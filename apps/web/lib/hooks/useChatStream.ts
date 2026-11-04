@@ -40,6 +40,13 @@ import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import {
+  createChatRequestSettlements,
+  createChatRequestToken as settlementToken,
+  type ChatRequestAuthToken,
+  type ChatRequestSettlement,
+  type ChatRequestSettlements,
+} from './chat-request-settlement';
 import { toast } from 'sonner';
 import {
   useChatStore,
@@ -667,21 +674,38 @@ const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
 const STOPPED_FINISH_REASON = 'stopped';
 const RATE_LIMITED_SAVE_STATUS = 429;
 
-type AuthTokenProvider = (() => Promise<string>) & { authority?: RequestAuthority };
+type AuthTokenProvider = ChatRequestAuthToken;
 
-function authorityToken(authority: RequestAuthority): AuthTokenProvider {
-  return Object.assign(authority.getToken, { authority });
+function authorityToken(
+  authority: RequestAuthority,
+  requests?: ChatRequestSettlements,
+): AuthTokenProvider {
+  return Object.assign(() => authority.getToken(), { authority, requests });
+}
+
+function trackSettlement<T>(getAuthToken: AuthTokenProvider, work: Promise<T>): Promise<T> {
+  return getAuthToken.settlement?.track(work) ?? work;
 }
 
 function assertTokenOwner(getAuthToken: AuthTokenProvider): void {
   getAuthToken.authority?.assertCurrent();
+  getAuthToken.settlement?.assertCurrent();
 }
 
 function tokenOwnerCurrent(getAuthToken: AuthTokenProvider): boolean {
-  return getAuthToken.authority?.isCurrent() ?? true;
+  return (getAuthToken.authority?.isCurrent() ?? true) &&
+    (getAuthToken.settlement?.isCurrent() ?? true);
 }
 
 function ownerFetch(getAuthToken: AuthTokenProvider): typeof fetch {
+  if (getAuthToken.dispatchFetch) {
+    return async (input, init) => {
+      assertTokenOwner(getAuthToken);
+      const response = await getAuthToken.dispatchFetch!(input, init);
+      assertTokenOwner(getAuthToken);
+      return response;
+    };
+  }
   return getAuthToken.authority?.fetch ?? fetch;
 }
 
@@ -708,15 +732,22 @@ async function saveMessageToDb(
   getAuthToken: AuthTokenProvider,
   options: SaveRetryOptions = {},
 ): Promise<{ id: string }> {
-  const client = createManagedCloudChatClient({
-    getAuthToken,
-    decorateMutationHeaders: addCsrfHeaders,
-    fetchImpl: ownerFetch(getAuthToken),
-  });
   const id =
     message.id && CLIENT_MESSAGE_ID_PATTERN.test(message.id) ? message.id : crypto.randomUUID();
-  const send = () =>
-    client.saveMessage(
+  const assertWriter = getAuthToken.settlement?.claimMessageWrite(id);
+  const receiptAuthority = getAuthToken.settlement && getAuthToken.authority
+    ? createRequestAuthority(getAuthToken.authority.session, undefined, assertWriter)
+    : undefined;
+  const receiptToken = receiptAuthority?.getToken ?? getAuthToken;
+  const client = createManagedCloudChatClient({
+    getAuthToken: receiptToken,
+    decorateMutationHeaders: addCsrfHeaders,
+    fetchImpl: receiptAuthority?.fetch ?? ownerFetch(getAuthToken),
+  });
+  const send = () => {
+    if (assertWriter) assertWriter();
+    else assertTokenOwner(getAuthToken);
+    return client.saveMessage(
       conversationId,
       {
         id,
@@ -730,11 +761,13 @@ async function saveMessageToDb(
       },
       options,
     );
+  };
   const save = (messageSavesInFlight.get(id) ?? Promise.resolve()).then(send, send);
   messageSavesInFlight.set(id, save);
   try {
     const saved = await save;
-    assertTokenOwner(getAuthToken);
+    if (receiptAuthority) receiptAuthority.assertCurrent();
+    else assertTokenOwner(getAuthToken);
     return { id: saved.id };
   } catch (error) {
     if (error instanceof ManagedCloudChatHttpError) {
@@ -746,6 +779,7 @@ async function saveMessageToDb(
     }
     throw error;
   } finally {
+    receiptAuthority?.retire();
     if (messageSavesInFlight.get(id) === save) messageSavesInFlight.delete(id);
   }
 }
@@ -1309,7 +1343,7 @@ const REMOTE_APPROVAL_MAX_BACKOFF_MS = 60_000;
 const REMOTE_APPROVAL_FATAL_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 let remoteApprovalFollowers = 0;
 const WAITING_RUN_STATES: ReadonlySet<string> = new Set(['awaiting_input', 'paused']);
-const remoteApprovalWatches = new Map<string, AuthTokenProvider>();
+const remoteApprovalWatches = new Map<string, { isCurrent: () => boolean }>();
 
 function journalFollowResponse(runId: string): Response {
   const frame = { choices: [{ index: 0, delta: { x_run_detached: { run_id: runId } } }] };
@@ -1329,6 +1363,9 @@ async function continueRemotelyAnsweredTurn(
   getAuthToken: AuthTokenProvider,
 ): Promise<void> {
   if (!tokenOwnerCurrent(getAuthToken)) return;
+  const requests = getAuthToken.requests;
+  const request = requests?.begin(turn.conversationId, assistantMessageId);
+  if (request && requests) getAuthToken = settlementToken(getAuthToken, request, requests);
   const store = useChatStore.getState();
   pendingTurns.delete(assistantMessageId);
   for (const call of turn.calls) {
@@ -1347,6 +1384,7 @@ async function continueRemotelyAnsweredTurn(
   try {
     const outcome = await consumeAssistantStream({
       response: journalFollowResponse(turn.runId),
+      ...(request ? { signal: request.controller.signal } : {}),
       assistantMessageId,
       model: turn.model,
       conversationId: turn.conversationId,
@@ -1396,12 +1434,15 @@ async function continueRemotelyAnsweredTurn(
       setLoading: store.setLoading,
       updateMessage: store.updateMessage,
     });
+  } finally {
+    request?.finish();
   }
 }
 
 async function watchRemoteApproval(
   assistantMessageId: string,
   getAuthToken: AuthTokenProvider,
+  isObservationCurrent: () => boolean,
 ): Promise<void> {
   const client = createManagedCloudAgentRunClient({ getAuthToken, fetchImpl: ownerFetch(getAuthToken) });
   let failures = 0;
@@ -1411,7 +1452,7 @@ async function watchRemoteApproval(
       REMOTE_APPROVAL_MAX_BACKOFF_MS,
     );
     await new Promise((resolve) => setTimeout(resolve, delay));
-    if (!tokenOwnerCurrent(getAuthToken)) return;
+    if (!isObservationCurrent() || getAuthToken.settlement?.controller.signal.aborted) return;
     const turn = pendingTurns.get(assistantMessageId);
     if (!turn || turn.resolving || remoteApprovalFollowers === 0) return;
     if (useChatStore.getState().activeConversationId !== turn.conversationId) return;
@@ -1425,12 +1466,13 @@ async function watchRemoteApproval(
         limit: 1,
       });
       assertTokenOwner(getAuthToken);
+      if (!isObservationCurrent() || getAuthToken.settlement?.controller.signal.aborted) return;
       failures = 0;
       progressed =
         !WAITING_RUN_STATES.has(snapshot.run.state) ||
         (lastSequence >= 0 && snapshot.events.length > 0);
     } catch (error) {
-      if (!tokenOwnerCurrent(getAuthToken)) return;
+      if (!isObservationCurrent()) return;
       logger.warn('[useChatStream] Could not check a waiting run for a remote answer', error);
       if (
         error instanceof ManagedCloudAgentRunHttpError &&
@@ -1441,7 +1483,7 @@ async function watchRemoteApproval(
       failures += 1;
       continue;
     }
-    if (pendingTurns.get(assistantMessageId) !== turn || turn.resolving) return;
+    if (!isObservationCurrent() || pendingTurns.get(assistantMessageId) !== turn || turn.resolving) return;
     if (!progressed) continue;
     await continueRemotelyAnsweredTurn(assistantMessageId, turn, getAuthToken);
     return;
@@ -1450,12 +1492,19 @@ async function watchRemoteApproval(
 
 function followRemoteApproval(assistantMessageId: string, getAuthToken: AuthTokenProvider): void {
   const previous = remoteApprovalWatches.get(assistantMessageId);
-  if (previous && tokenOwnerCurrent(previous)) return;
+  if (previous?.isCurrent()) return;
   if (!tokenOwnerCurrent(getAuthToken)) return;
-  remoteApprovalWatches.set(assistantMessageId, getAuthToken);
-  void watchRemoteApproval(assistantMessageId, getAuthToken).finally(() => {
-    if (remoteApprovalWatches.get(assistantMessageId) === getAuthToken) remoteApprovalWatches.delete(assistantMessageId);
-  });
+  const turn = pendingTurns.get(assistantMessageId);
+  if (!turn) return;
+  const observation = getAuthToken.requests?.observe(turn.conversationId);
+  const watch = {
+    isCurrent: () => tokenOwnerCurrent(getAuthToken) && (observation?.isCurrent() ?? true),
+  };
+  remoteApprovalWatches.set(assistantMessageId, watch);
+  void trackSettlement(getAuthToken, watchRemoteApproval(assistantMessageId, getAuthToken, watch.isCurrent).finally(() => {
+    observation?.release();
+    if (remoteApprovalWatches.get(assistantMessageId) === watch) remoteApprovalWatches.delete(assistantMessageId);
+  }));
 }
 
 export interface PendingDeviceStep {
@@ -2653,7 +2702,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     );
     if (!fullContent && !hasMeaningfulMetadata) return;
     const save = () => {
-      saveMessageToDb(
+      void trackSettlement(getAuthToken, saveMessageToDb(
         conversationId,
         {
           id: assistantMessageId,
@@ -2700,7 +2749,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             { metadata: { ...current?.metadata, metadataNotSaved: true } },
             conversationId,
           );
-        });
+        }));
     };
     if (ctx.retriesEmptyTurn && !suspended && !hasVisibleText(fullContent)) {
       heldEmptyTurnSave = save;
@@ -3704,6 +3753,7 @@ export function useChatStream(
     Map<string, Pick<ManagedCloudAgentRunHandle, 'runId'> & {
       assistantMessageId?: string;
       authority?: RequestAuthority;
+      settlement?: ChatRequestSettlement;
     }>
   >(new Map());
   const recoveryVersionsRef = useRef<Map<string, number>>(new Map());
@@ -3715,6 +3765,21 @@ export function useChatStream(
     recoveryVersionsRef.current.set(conversationId, version);
     return version;
   }, []);
+
+  const requestSettlementsRef = useRef<ChatRequestSettlements | null>(null);
+  if (!requestSettlementsRef.current) {
+    requestSettlementsRef.current = createChatRequestSettlements(
+      abortControllersRef.current,
+      (conversationId) => {
+        invalidateRecovery(conversationId);
+        const activeRun = activeRunsRef.current.get(conversationId);
+        activeRunsRef.current.delete(conversationId);
+        if (activeRun) cancellationsRef.current.delete(activeRun.runId);
+      },
+    );
+  }
+  const requestSettlements = requestSettlementsRef.current;
+  useEffect(() => () => requestSettlements.dispose(), [requestSettlements]);
 
   // streamingConversationIds only flips after the auth-token await below, so it
   // cannot stop a second click that arrives inside that gap. Claim the
@@ -3729,27 +3794,13 @@ export function useChatStream(
   }, []);
 
   const beginConversationRequest = useCallback(
-    (conversationId: string): AbortController => {
-      invalidateRecovery(conversationId);
-      const activeRun = activeRunsRef.current.get(conversationId);
-      activeRunsRef.current.delete(conversationId);
-      if (activeRun) {
-        cancellationsRef.current.delete(activeRun.runId);
-      }
-      abortConversation(conversationId);
-      const controller = new AbortController();
-      abortControllersRef.current.set(conversationId, controller);
-      return controller;
-    },
-    [abortConversation, invalidateRecovery],
+    (conversationId: string, assistantMessageId: string): ChatRequestSettlement =>
+      requestSettlements.begin(conversationId, assistantMessageId),
+    [requestSettlements],
   );
 
   const endConversationRequest = useCallback(
-    (conversationId: string, controller: AbortController): void => {
-      if (abortControllersRef.current.get(conversationId) === controller) {
-        abortControllersRef.current.delete(conversationId);
-      }
-    },
+    (_conversationId: string, request: ChatRequestSettlement): void => request.finish(),
     [],
   );
 
@@ -3804,7 +3855,7 @@ export function useChatStream(
           turn.authority = createRequestAuthority(snapshot);
           ownedAuthoritiesRef.current.add(turn.authority);
         }
-        if (turn.authority.isCurrent()) followRemoteApproval(message.id, authorityToken(turn.authority));
+        if (turn.authority.isCurrent()) followRemoteApproval(message.id, authorityToken(turn.authority, requestSettlements));
       }
     };
     followRestored(useChatStore.getState().messages);
@@ -3821,7 +3872,7 @@ export function useChatStream(
       unsubscribe();
       remoteApprovalFollowers -= 1;
     };
-  }, [followActiveConversation, captureSessionSnapshot]);
+  }, [followActiveConversation, captureSessionSnapshot, requestSettlements]);
 
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   useEffect(() => {
@@ -3914,8 +3965,8 @@ export function useChatStream(
     };
   }, [activeConversationId, followActiveConversation, userId, isSignedIn, captureSessionSnapshot]);
 
-  const resolveToolApproval = useResolveToolApproval(abortControllersRef);
-  const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval);
+  const resolveToolApproval = useResolveToolApproval(abortControllersRef, requestSettlements);
+  const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval, requestSettlements);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -4005,7 +4056,7 @@ export function useChatStream(
               ...(turnRoute.handoffReason ? { freeModelHandoff: turnRoute.handoffReason } : {}),
             }
           : undefined;
-      const getAuthToken: AuthTokenProvider = authority ? authorityToken(authority) : async () => {
+      let getAuthToken: AuthTokenProvider = authority ? authorityToken(authority, requestSettlements) : async () => {
         const token = await getToken();
         if (!token) throw new Error('Not authenticated');
         return token;
@@ -4080,11 +4131,13 @@ export function useChatStream(
         }
       }
 
-      const abortController = beginConversationRequest(conversationId);
+      const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
+      const request = beginConversationRequest(conversationId, assistantMessageId);
+      const abortController = request.controller;
+      getAuthToken = settlementToken(getAuthToken, request, requestSettlements);
       const retireTransport = () => abortController.abort();
       authority?.signal.addEventListener('abort', retireTransport, { once: true });
 
-      const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
       if (authority) turnAuthoritiesRef.current.set(assistantMessageId, authority);
       const assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
       const assistantStartedAtMs = regenerateParentId
@@ -4132,7 +4185,7 @@ export function useChatStream(
         latencyTrace?.cancel();
         authority?.signal.removeEventListener('abort', retireTransport);
         if (!tokenOwnerCurrent(getAuthToken)) {
-          endConversationRequest(conversationId, abortController);
+          endConversationRequest(conversationId, request);
           return;
         }
         stopStreaming(turnConversationId);
@@ -4141,7 +4194,7 @@ export function useChatStream(
         useChatStore
           .getState()
           .setActiveLeaf(turnConversationId, regenerateParentId ? restoreLeafId : userMessageId);
-        endConversationRequest(turnConversationId, abortController);
+        endConversationRequest(turnConversationId, request);
       };
 
       if (options.ensureConversationId) {
@@ -4153,15 +4206,15 @@ export function useChatStream(
         }
         if (!tokenOwnerCurrent(getAuthToken)) {
           authority?.signal.removeEventListener('abort', retireTransport);
-          endConversationRequest(conversationId, abortController);
+          endConversationRequest(conversationId, request);
           return false;
         }
         if (!realConversationId) {
-          abandonTurn();
           setError(
             useChatStore.getState().error ?? 'Could not start the conversation.',
             conversationId,
           );
+          abandonTurn();
           return false;
         }
         if (realConversationId !== conversationId) {
@@ -4170,10 +4223,7 @@ export function useChatStream(
             requestAuthoritiesRef.current.get(realConversationId)?.retire();
             requestAuthoritiesRef.current.set(realConversationId, authority);
           }
-          if (abortControllersRef.current.get(conversationId) === abortController) {
-            abortControllersRef.current.delete(conversationId);
-            abortControllersRef.current.set(realConversationId, abortController);
-          }
+          request.move(realConversationId);
           useChatStore.getState().renameConversationId(conversationId, realConversationId);
           useThinkingStore
             .getState()
@@ -4192,9 +4242,10 @@ export function useChatStream(
         try {
           await getAuthToken();
         } catch {
+          if (tokenOwnerCurrent(getAuthToken)) {
+            setError('Your session has expired. Please sign in again.', conversationId);
+          }
           abandonTurn();
-          if (!tokenOwnerCurrent(getAuthToken)) return false;
-          setError('Your session has expired. Please sign in again.', conversationId);
           return false;
         }
       }
@@ -4271,6 +4322,7 @@ export function useChatStream(
             memoryCitations: localContext?.memoryCitations ?? null,
             signal: abortController.signal,
           });
+          if (!tokenOwnerCurrent(getAuthToken)) return false;
           if (outcome.error) setError(outcome.error, conversationId);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -4485,7 +4537,7 @@ export function useChatStream(
             onRunHandle: (handle) => {
               if (!tokenOwnerCurrent(getAuthToken)) return;
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority });
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority, settlement: request });
                 // AGI Work is the only mode sold as work that outlives the tab,
                 // so it is the only one that owes the reader a correction when
                 // the server could not give it the durable transport.
@@ -4644,12 +4696,12 @@ export function useChatStream(
         authority?.signal.removeEventListener('abort', retireTransport);
         const activeRun = activeRunsRef.current.get(conversationId);
         if (
-          tokenOwnerCurrent(getAuthToken) && activeRun?.assistantMessageId === assistantMessageId &&
+          tokenOwnerCurrent(getAuthToken) && activeRun?.settlement === request &&
           !cancellationsRef.current.has(activeRun.runId)
         ) {
           activeRunsRef.current.delete(conversationId);
         }
-        endConversationRequest(conversationId, abortController);
+        endConversationRequest(conversationId, request);
       }
       return true;
     },
@@ -4667,6 +4719,7 @@ export function useChatStream(
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
+      requestSettlements,
     ],
   );
 
@@ -4694,6 +4747,11 @@ export function useChatStream(
         return;
       }
       continuationClaimsRef.current.add(conversationId);
+      const request = beginConversationRequest(conversationId, assistantMessageId);
+      const abortController = request.controller;
+      const getAuthToken = settlementToken(
+        authorityToken(authority, requestSettlements), request, requestSettlements,
+      );
       try {
         const isTemporaryConversation = Boolean(
           store.conversations.find((conversation) => conversation.id === conversationId)
@@ -4723,17 +4781,15 @@ export function useChatStream(
         requestAuthoritiesRef.current.set(conversationId, authority);
         turnAuthoritiesRef.current.set(assistantMessageId, authority);
         ownedAuthoritiesRef.current.add(authority);
-        const getAuthToken = authorityToken(authority);
         let authToken: string;
         try {
           authToken = await getAuthToken();
         } catch {
-          if (!authority.isCurrent()) return;
+          if (!tokenOwnerCurrent(getAuthToken) || abortController.signal.aborted) return;
           setError('Not authenticated', conversationId);
           return;
         }
-
-        const abortController = beginConversationRequest(conversationId);
+        if (!tokenOwnerCurrent(getAuthToken) || abortController.signal.aborted) return;
 
         const apiMessages: ApiMessage[] = conversationMessages
           .slice(0, messageIndex + 1)
@@ -4770,7 +4826,7 @@ export function useChatStream(
               operationId: continuationOperationId,
             }),
           });
-          const response = await authority.fetch(chatCompletionEndpoint(model), {
+          const response = await ownerFetch(getAuthToken)(chatCompletionEndpoint(model), {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -4815,16 +4871,17 @@ export function useChatStream(
             seedTools,
             seedMetadata: priorMetadata ?? {},
             onRunHandle: (handle) => {
+              if (!tokenOwnerCurrent(getAuthToken)) return;
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority });
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority, settlement: request });
               } else {
                 activeRunsRef.current.delete(conversationId);
               }
             },
           });
-          authority.assertCurrent();
+          assertTokenOwner(getAuthToken);
         } catch (error) {
-          if (!authority.isCurrent()) return;
+          if (!tokenOwnerCurrent(getAuthToken)) return;
           const isAbort =
             typeof error === 'object' &&
             error !== null &&
@@ -4874,7 +4931,7 @@ export function useChatStream(
           );
           setError(errorMessage, conversationId);
           if (!isTemporaryConversation) {
-            saveMessageToDb(
+            void trackSettlement(getAuthToken, saveMessageToDb(
               conversationId,
               {
                 id: assistantMessageId,
@@ -4884,21 +4941,22 @@ export function useChatStream(
                 metadata: { ...interruptedMetadata, finishReason: undefined },
               },
               getAuthToken,
-            ).catch((err) => notifyPersistenceFailure('assistant', err));
+            ).catch((err) => {
+              if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', err);
+            }));
           }
           stopStreaming(conversationId);
           setLoading(false, conversationId);
-        } finally {
-          const activeRun = activeRunsRef.current.get(conversationId);
-          if (
-            authority.isCurrent() && activeRun?.assistantMessageId === assistantMessageId &&
-            !cancellationsRef.current.has(activeRun.runId)
-          ) {
-            activeRunsRef.current.delete(conversationId);
-          }
-          endConversationRequest(conversationId, abortController);
         }
       } finally {
+        const activeRun = activeRunsRef.current.get(conversationId);
+        if (
+          tokenOwnerCurrent(getAuthToken) && activeRun?.settlement === request &&
+          !cancellationsRef.current.has(activeRun.runId)
+        ) {
+          activeRunsRef.current.delete(conversationId);
+        }
+        endConversationRequest(conversationId, request);
         continuationClaimsRef.current.delete(conversationId);
       }
     },
@@ -4913,6 +4971,7 @@ export function useChatStream(
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
+      requestSettlements,
     ],
   );
 
@@ -5025,36 +5084,46 @@ export function useChatStream(
       if (!message || !hasResumableInteractiveCard(message)) return;
       if (message.metadata?.interactiveCardsResumed && !options.force) return;
 
-      const nextMetadata: MessageMetadata = { ...message.metadata, interactiveCardsResumed: true };
-      updateMessage(assistantMessageId, { metadata: nextMetadata }, conversationId);
-
-      const isTemporaryConversation = Boolean(
-        store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+      const request = beginConversationRequest(conversationId, assistantMessageId);
+      const getAuthToken = settlementToken(
+        authorityToken(authority, requestSettlements), request, requestSettlements,
       );
-      if (!isTemporaryConversation) {
-        try {
-          const token = await authority.getToken();
-          if (token) {
-            await saveMessageToDb(
-              conversationId,
-              {
-                id: assistantMessageId,
-                role: 'assistant',
-                content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-                model: message.model,
-                metadata: nextMetadata,
-              },
-              authorityToken(authority),
-            );
-          }
-        } catch (error) {
-          notifyPersistenceFailure('assistant', error);
-        }
-      }
+      try {
+        const nextMetadata: MessageMetadata = { ...message.metadata, interactiveCardsResumed: true };
+        updateMessage(assistantMessageId, { metadata: nextMetadata }, conversationId);
 
-      if (authority.isCurrent()) await continueGeneration(assistantMessageId);
+        const isTemporaryConversation = Boolean(
+          store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+        );
+        if (!isTemporaryConversation) {
+          try {
+            const token = await getAuthToken();
+            if (token) {
+              await saveMessageToDb(
+                conversationId,
+                {
+                  id: assistantMessageId,
+                  role: 'assistant',
+                  content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                  model: message.model,
+                  metadata: nextMetadata,
+                },
+                getAuthToken,
+              );
+            }
+          } catch (error) {
+            if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', error);
+          }
+        }
+
+        if (tokenOwnerCurrent(getAuthToken) && !request.controller.signal.aborted) {
+          await continueGeneration(assistantMessageId);
+        }
+      } finally {
+        request.finish();
+      }
     },
-    [continueGeneration, updateMessage, captureSessionSnapshot],
+    [continueGeneration, updateMessage, captureSessionSnapshot, beginConversationRequest, requestSettlements],
   );
 
   const stopGeneration = useCallback(
@@ -5161,9 +5230,18 @@ export function useChatStream(
 
 export function useResolveToolApproval(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
+  sharedRequests?: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolApproval'] {
   const { getToken } = useSession();
   const abortControllers = sharedAbortControllers;
+  const ownRequests = useRef<ChatRequestSettlements | null>(null);
+  if (!sharedRequests && !ownRequests.current) {
+    ownRequests.current = createChatRequestSettlements(abortControllers.current);
+  }
+  const requests = sharedRequests ?? ownRequests.current!;
+  useEffect(() => () => {
+    if (!sharedRequests) requests.dispose();
+  }, [requests, sharedRequests]);
 
   return useCallback(
     async function resolveToolApproval(
@@ -5187,99 +5265,136 @@ export function useResolveToolApproval(
       if (turn.authority && !turn.authority.isCurrent()) return;
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
 
-      turn.decisions.set(toolCallId, decision);
-      const trimmedGuidance = guidance?.trim();
-      if (trimmedGuidance) {
-        turn.guidance = turn.guidance ? `${turn.guidance}\n\n${trimmedGuidance}` : trimmedGuidance;
-      }
+      const request = requests.begin(turn.conversationId, assistantMessageId);
+      const abortController = request.controller;
+      try {
+        turn.decisions.set(toolCallId, decision);
+        const trimmedGuidance = guidance?.trim();
+        if (trimmedGuidance) {
+          turn.guidance = turn.guidance ? `${turn.guidance}\n\n${trimmedGuidance}` : trimmedGuidance;
+        }
 
-      updateToolEntry(
-        assistantMessageId,
-        toolCallId,
-        { approved: isApprovingToolDecision(decision), requiresApproval: true },
-        turn.conversationId,
-      );
-
-      const selectedMessage = findConversationMessage(turn.conversationId, assistantMessageId);
-      const selectedMetadata: MessageMetadata = {
-        ...selectedMessage?.metadata,
-        cloudApproval: projectPendingTurn(turn),
-      };
-      updateMessage(assistantMessageId, { metadata: selectedMetadata }, turn.conversationId);
-
-      const getAuthToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority) : async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
-      };
-      if (
-        turn.decisions.size < turn.calls.length &&
-        !turn.isTemporaryConversation &&
-        selectedMessage
-      ) {
-        await saveMessageToDb(
-          turn.conversationId,
-          {
-            id: assistantMessageId,
-            role: selectedMessage.role,
-            content: selectedMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-            model: selectedMessage.model ?? turn.model,
-            metadata: selectedMetadata,
-          },
-          getAuthToken,
-        ).catch((error) => notifyPersistenceFailure('assistant', error));
-      }
-
-      if (!tokenOwnerCurrent(getAuthToken)) return;
-      if (turn.decisions.size < turn.calls.length) return;
-      if (turn.resolving) return;
-      turn.resolving = true;
-
-      for (const call of turn.calls) {
-        const callDecision = turn.decisions.get(call.toolCallId) ?? 'rejected';
         updateToolEntry(
           assistantMessageId,
-          call.toolCallId,
-          {
-            approved: isApprovingToolDecision(callDecision),
-            status: isApprovingToolDecision(callDecision) ? 'running' : 'failed',
-            requiresApproval: false,
-            ...(callDecision === 'rejected'
-              ? {
-                  error: 'You denied this tool.',
-                  result: 'The user denied permission to run this tool.',
-                }
-              : {}),
-          },
+          toolCallId,
+          { approved: isApprovingToolDecision(decision), requiresApproval: true },
           turn.conversationId,
         );
-      }
 
-      const restoreApprovalControls = async () => {
+        const selectedMessage = findConversationMessage(turn.conversationId, assistantMessageId);
+        const selectedMetadata: MessageMetadata = {
+          ...selectedMessage?.metadata,
+          cloudApproval: projectPendingTurn(turn),
+        };
+        updateMessage(assistantMessageId, { metadata: selectedMetadata }, turn.conversationId);
+
+        const accountToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority, requests) : async () => {
+          const token = await getToken();
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        };
+        const getAuthToken = settlementToken(accountToken, request, requests);
+        if (
+          turn.decisions.size < turn.calls.length &&
+          !turn.isTemporaryConversation &&
+          selectedMessage
+        ) {
+          await saveMessageToDb(
+            turn.conversationId,
+            {
+              id: assistantMessageId,
+              role: selectedMessage.role,
+              content: selectedMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              model: selectedMessage.model ?? turn.model,
+              metadata: selectedMetadata,
+            },
+            getAuthToken,
+          ).catch((error) => notifyPersistenceFailure('assistant', error));
+        }
+
         if (!tokenOwnerCurrent(getAuthToken)) return;
-        turn.resolving = false;
-        turn.decisions.clear();
+        if (turn.decisions.size < turn.calls.length) {
+          followRemoteApproval(assistantMessageId, getAuthToken);
+          return;
+        }
+        if (turn.resolving) return;
+        turn.resolving = true;
+
         for (const call of turn.calls) {
+          const callDecision = turn.decisions.get(call.toolCallId) ?? 'rejected';
           updateToolEntry(
             assistantMessageId,
             call.toolCallId,
             {
-              approved: undefined,
-              status: 'awaiting_approval',
-              requiresApproval: true,
-              error: undefined,
-              result: undefined,
+              approved: isApprovingToolDecision(callDecision),
+              status: isApprovingToolDecision(callDecision) ? 'running' : 'failed',
+              requiresApproval: false,
+              ...(callDecision === 'rejected'
+                ? {
+                    error: 'You denied this tool.',
+                    result: 'The user denied permission to run this tool.',
+                  }
+                : {}),
             },
             turn.conversationId,
           );
         }
-        const message = findConversationMessage(turn.conversationId, assistantMessageId);
-        const metadata: MessageMetadata = {
-          ...message?.metadata,
-          cloudApproval: projectPendingTurn(turn),
+
+        const restoreApprovalControls = async () => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          turn.resolving = false;
+          turn.decisions.clear();
+          for (const call of turn.calls) {
+            updateToolEntry(
+              assistantMessageId,
+              call.toolCallId,
+              {
+                approved: undefined,
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                error: undefined,
+                result: undefined,
+              },
+              turn.conversationId,
+            );
+          }
+          const message = findConversationMessage(turn.conversationId, assistantMessageId);
+          const metadata: MessageMetadata = {
+            ...message?.metadata,
+            cloudApproval: projectPendingTurn(turn),
+          };
+          updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
+          if (!turn.isTemporaryConversation && message) {
+            await saveMessageToDb(
+              turn.conversationId,
+              {
+                id: assistantMessageId,
+                role: message.role,
+                content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                model: message.model ?? turn.model,
+                metadata,
+              },
+              getAuthToken,
+            ).catch((error) => notifyPersistenceFailure('assistant', error));
+          }
+          if (tokenOwnerCurrent(getAuthToken)) followRemoteApproval(assistantMessageId, getAuthToken);
         };
-        updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
-        if (!turn.isTemporaryConversation && message) {
+
+        const closeAnsweredApprovalTurn = async (reason: string) => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          pendingTurns.delete(assistantMessageId);
+          for (const call of turn.calls) {
+            updateToolEntry(
+              assistantMessageId,
+              call.toolCallId,
+              { status: 'failed', requiresApproval: false, error: reason },
+              turn.conversationId,
+            );
+          }
+          const message = findConversationMessage(turn.conversationId, assistantMessageId);
+          const { cloudApproval: _answered, ...metadata } = message?.metadata ?? {};
+          updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
+          if (turn.isTemporaryConversation || !message) return;
           await saveMessageToDb(
             turn.conversationId,
             {
@@ -5291,200 +5406,172 @@ export function useResolveToolApproval(
             },
             getAuthToken,
           ).catch((error) => notifyPersistenceFailure('assistant', error));
-        }
-      };
+        };
 
-      const closeAnsweredApprovalTurn = async (reason: string) => {
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        pendingTurns.delete(assistantMessageId);
-        for (const call of turn.calls) {
-          updateToolEntry(
-            assistantMessageId,
-            call.toolCallId,
-            { status: 'failed', requiresApproval: false, error: reason },
-            turn.conversationId,
-          );
-        }
-        const message = findConversationMessage(turn.conversationId, assistantMessageId);
-        const { cloudApproval: _answered, ...metadata } = message?.metadata ?? {};
-        updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
-        if (turn.isTemporaryConversation || !message) return;
-        await saveMessageToDb(
-          turn.conversationId,
-          {
-            id: assistantMessageId,
-            role: message.role,
-            content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-            model: message.model ?? turn.model,
-            metadata,
-          },
-          getAuthToken,
-        ).catch((error) => notifyPersistenceFailure('assistant', error));
-      };
-
-      let authToken: string;
-      try {
-        authToken = await getAuthToken();
-      } catch {
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        await restoreApprovalControls();
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        setError('Your session has expired. Please sign in again.', turn.conversationId);
-        return;
-      }
-
-      const previousController = abortControllers.current.get(turn.conversationId);
-      if (previousController) {
-        abortControllers.current.delete(turn.conversationId);
-        previousController.abort();
-      }
-      const abortController = new AbortController();
-      abortControllers.current.set(turn.conversationId, abortController);
-
-      const assistantMessage = findConversationMessage(turn.conversationId, assistantMessageId);
-      const assistantContent = assistantMessage?.content ?? '';
-      const toolApprovals = turn.calls.map((c) => ({
-        tool_call_id: c.toolCallId,
-        decision: turn.decisions.get(c.toolCallId) ?? 'rejected',
-      }));
-
-      const seedTools = assistantMessage?.metadata?.tools;
-
-      startStreaming(assistantMessageId, turn.conversationId);
-      setLoading(true, turn.conversationId);
-      setError(null, turn.conversationId);
-
-      try {
-        const resumeOperationId = crypto.randomUUID();
-        const hostContext = await readChatHostContext(turn.conversationId);
-        const headers = await addCsrfHeaders({
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-          'X-AGI-Surface': hostContext.surface,
-          'Idempotency-Key': createManagedChatIdempotencyKey({
-            surface: hostContext.surface,
-            purpose: 'tool-resume',
-            operationId: resumeOperationId,
-          }),
-          ...hostContext.headers,
-        });
-        const response = await ownerFetch(getAuthToken)(TOOL_APPROVAL_RESUME_PATH, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            run_id: turn.runId,
-            tool_approvals: toolApprovals,
-            ...(turn.guidance ? { guidance: turn.guidance } : {}),
-          }),
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          throw await chatApiErrorFromResponse(response, `Resume failed: ${response.status}`);
-        }
-
-        const outcome = await consumeAssistantStream({
-          response,
-          signal: abortController.signal,
-          assistantMessageId,
-          model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
-          conversationId: turn.conversationId,
-          isTemporaryConversation: turn.isTemporaryConversation,
-          getAuthToken,
-          seedContent: assistantContent,
-          seedMetadata: assistantMessage?.metadata ?? {},
-          seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
-        });
-
-        assertTokenOwner(getAuthToken);
-        let settled = outcome;
-        if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
-          settled = await driveDeviceSteps(
-            {
-              assistantMessageId,
-              conversationId: turn.conversationId,
-              isTemporaryConversation: turn.isTemporaryConversation,
-              model: turn.model,
-              runId: settled.runHandle.runId,
-              getAuthToken,
-              signal: abortController.signal,
-            },
-            settled.pendingDeviceSteps,
-          );
-        }
-
-        assertTokenOwner(getAuthToken);
-        if (settled.suspended && settled.pendingCalls.length > 0) {
-          if (!settled.runHandle) {
-            throw new Error('The managed agent continuation lost its durable run handle.');
-          }
-          pendingTurns.set(assistantMessageId, {
-            authority: getAuthToken.authority,
-            runId: settled.runHandle.runId,
-            model: turn.model,
-            conversationId: turn.conversationId,
-            isTemporaryConversation: turn.isTemporaryConversation,
-            calls: settled.pendingCalls,
-            decisions: new Map(),
-            resolving: false,
-          });
-          autoResolvePendingApprovals(
-            assistantMessageId,
-            settled.pendingCalls,
-            resolveToolApproval,
-          );
-          followRemoteApproval(assistantMessageId, getAuthToken);
-        } else {
-          pendingTurns.delete(assistantMessageId);
-        }
-        if (settled.suspended && settled.pendingInputs.length > 0) {
-          if (!settled.runHandle) {
-            throw new Error('The managed agent continuation lost its durable run handle.');
-          }
-          pendingInputTurns.set(assistantMessageId, {
-            authority: getAuthToken.authority,
-            runId: settled.runHandle.runId,
-            model: turn.model,
-            conversationId: turn.conversationId,
-            isTemporaryConversation: turn.isTemporaryConversation,
-            calls: settled.pendingInputs,
-            responses: new Map(),
-            resolving: false,
-          });
-        }
-      } catch (error) {
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        if (error instanceof ChatApiError) {
-          if (error.status !== undefined && ANSWERED_APPROVAL_STATUSES.has(error.status)) {
-            await closeAnsweredApprovalTurn(getVisibleErrorMessage(error));
-          } else {
-            await restoreApprovalControls();
-          }
+        let authToken: string;
+        try {
+          authToken = await getAuthToken();
+        } catch {
           if (!tokenOwnerCurrent(getAuthToken)) return;
-          setError(getVisibleErrorMessage(error), turn.conversationId);
-          stopStreaming(turn.conversationId);
-          setLoading(false, turn.conversationId);
+          await restoreApprovalControls();
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          if (!abortController.signal.aborted) setError('Your session has expired. Please sign in again.', turn.conversationId);
           return;
         }
-        pendingTurns.delete(assistantMessageId);
-        await handleStreamError(error, {
-          assistantMessageId,
-          model: turn.model,
-          conversationId: turn.conversationId,
-          isTemporaryConversation: turn.isTemporaryConversation,
-          getAuthToken,
-          setError,
-          stopStreaming,
-          setLoading,
-          updateMessage,
-        });
-      } finally {
-        if (abortControllers.current.get(turn.conversationId) === abortController) {
-          abortControllers.current.delete(turn.conversationId);
+
+        if (!tokenOwnerCurrent(getAuthToken)) return;
+        if (abortController.signal.aborted) {
+          await restoreApprovalControls();
+          return;
         }
+
+        const assistantMessage = findConversationMessage(turn.conversationId, assistantMessageId);
+        const assistantContent = assistantMessage?.content ?? '';
+        const toolApprovals = turn.calls.map((c) => ({
+          tool_call_id: c.toolCallId,
+          decision: turn.decisions.get(c.toolCallId) ?? 'rejected',
+        }));
+
+        const seedTools = assistantMessage?.metadata?.tools;
+
+        startStreaming(assistantMessageId, turn.conversationId);
+        setLoading(true, turn.conversationId);
+        setError(null, turn.conversationId);
+
+        try {
+          const resumeOperationId = crypto.randomUUID();
+          const hostContext = await readChatHostContext(turn.conversationId);
+          const headers = await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            'X-AGI-Surface': hostContext.surface,
+            'Idempotency-Key': createManagedChatIdempotencyKey({
+              surface: hostContext.surface,
+              purpose: 'tool-resume',
+              operationId: resumeOperationId,
+            }),
+            ...hostContext.headers,
+          });
+          const response = await ownerFetch(getAuthToken)(TOOL_APPROVAL_RESUME_PATH, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              run_id: turn.runId,
+              tool_approvals: toolApprovals,
+              ...(turn.guidance ? { guidance: turn.guidance } : {}),
+            }),
+            signal: abortController.signal,
+          });
+
+          if (!response.ok) {
+            throw await chatApiErrorFromResponse(response, `Resume failed: ${response.status}`);
+          }
+
+          const outcome = await consumeAssistantStream({
+            response,
+            signal: abortController.signal,
+            assistantMessageId,
+            model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            getAuthToken,
+            seedContent: assistantContent,
+            seedMetadata: assistantMessage?.metadata ?? {},
+            seedTools: seedTools ? seedTools.map((t) => ({ ...t })) : undefined,
+          });
+
+          assertTokenOwner(getAuthToken);
+          let settled = outcome;
+          if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
+            settled = await driveDeviceSteps(
+              {
+                assistantMessageId,
+                conversationId: turn.conversationId,
+                isTemporaryConversation: turn.isTemporaryConversation,
+                model: turn.model,
+                runId: settled.runHandle.runId,
+                getAuthToken,
+                signal: abortController.signal,
+              },
+              settled.pendingDeviceSteps,
+            );
+          }
+
+          assertTokenOwner(getAuthToken);
+          if (settled.suspended && settled.pendingCalls.length > 0) {
+            if (!settled.runHandle) {
+              throw new Error('The managed agent continuation lost its durable run handle.');
+            }
+            pendingTurns.set(assistantMessageId, {
+              authority: getAuthToken.authority,
+              runId: settled.runHandle.runId,
+              model: turn.model,
+              conversationId: turn.conversationId,
+              isTemporaryConversation: turn.isTemporaryConversation,
+              calls: settled.pendingCalls,
+              decisions: new Map(),
+              resolving: false,
+            });
+            autoResolvePendingApprovals(
+              assistantMessageId,
+              settled.pendingCalls,
+              resolveToolApproval,
+            );
+            followRemoteApproval(assistantMessageId, getAuthToken);
+          } else {
+            pendingTurns.delete(assistantMessageId);
+          }
+          if (settled.suspended && settled.pendingInputs.length > 0) {
+            if (!settled.runHandle) {
+              throw new Error('The managed agent continuation lost its durable run handle.');
+            }
+            pendingInputTurns.set(assistantMessageId, {
+              authority: getAuthToken.authority,
+              runId: settled.runHandle.runId,
+              model: turn.model,
+              conversationId: turn.conversationId,
+              isTemporaryConversation: turn.isTemporaryConversation,
+              calls: settled.pendingInputs,
+              responses: new Map(),
+              resolving: false,
+            });
+          }
+        } catch (error) {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          if (error instanceof ChatApiError) {
+            if (error.status !== undefined && ANSWERED_APPROVAL_STATUSES.has(error.status)) {
+              await closeAnsweredApprovalTurn(getVisibleErrorMessage(error));
+            } else {
+              await restoreApprovalControls();
+            }
+            if (!tokenOwnerCurrent(getAuthToken)) return;
+            setError(getVisibleErrorMessage(error), turn.conversationId);
+            stopStreaming(turn.conversationId);
+            setLoading(false, turn.conversationId);
+            return;
+          }
+          pendingTurns.delete(assistantMessageId);
+          await handleStreamError(error, {
+            assistantMessageId,
+            model: turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            getAuthToken,
+            setError,
+            stopStreaming,
+            setLoading,
+            updateMessage,
+          });
+        } finally {
+          if (abortControllers.current.get(turn.conversationId) === abortController) {
+            abortControllers.current.delete(turn.conversationId);
+          }
+        }
+      } finally {
+        request.finish();
       }
     },
-    [abortControllers, getToken],
+    [abortControllers, getToken, requests],
   );
 }
 
@@ -5494,6 +5581,7 @@ const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
 function useResolveToolInput(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
   resolveToolApproval: UseChatStreamReturn['resolveToolApproval'],
+  requests: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolInput'] {
   const { getToken } = useSession();
   const abortControllers = sharedAbortControllers;
@@ -5522,219 +5610,224 @@ function useResolveToolInput(
 
       turn.responses.set(toolCallId, inputResponses);
       if (turn.responses.size < turn.calls.length) return true;
-      turn.resolving = true;
+      const request = requests.begin(turn.conversationId, assistantMessageId);
+      const abortController = request.controller;
+      try {
+        turn.resolving = true;
 
-      for (const call of turn.calls) {
-        updateToolEntry(
-          assistantMessageId,
-          call.toolCallId,
-          { status: 'running', inputRequests: undefined },
-          turn.conversationId,
-        );
-      }
-
-      const getAuthToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority) : async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
-      };
-
-      const restoreInputControls = () => {
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        turn.resolving = false;
-        turn.responses.clear();
         for (const call of turn.calls) {
           updateToolEntry(
             assistantMessageId,
             call.toolCallId,
-            { status: 'awaiting_input', inputRequests: call.inputRequests },
+            { status: 'running', inputRequests: undefined },
             turn.conversationId,
           );
         }
-        updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
-      };
 
-      const closeInactiveTurn = async (reason: string) => {
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        pendingInputTurns.delete(assistantMessageId);
-        for (const call of turn.calls) {
-          updateToolEntry(
-            assistantMessageId,
-            call.toolCallId,
-            { status: 'failed', error: reason, inputRequests: undefined },
-            turn.conversationId,
-          );
-        }
-        updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
-        const message = findConversationMessage(turn.conversationId, assistantMessageId);
-        if (turn.isTemporaryConversation || !message) return;
-        await saveMessageToDb(
-          turn.conversationId,
-          {
-            id: assistantMessageId,
-            role: message.role,
-            content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-            model: message.model ?? turn.model,
-            ...(message.metadata ? { metadata: message.metadata } : {}),
-          },
-          getAuthToken,
-        ).catch((error) => notifyPersistenceFailure('assistant', error));
-      };
+        const accountToken: AuthTokenProvider = turn.authority ? authorityToken(turn.authority, requests) : async () => {
+          const token = await getToken();
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        };
+        const getAuthToken = settlementToken(accountToken, request, requests);
 
-      let authToken: string;
-      try {
-        authToken = await getAuthToken();
-      } catch {
-        if (!tokenOwnerCurrent(getAuthToken)) return false;
-        restoreInputControls();
-        setError('Your session has expired. Please sign in again.', turn.conversationId);
-        return false;
-      }
-
-      const previousController = abortControllers.current.get(turn.conversationId);
-      if (previousController) {
-        abortControllers.current.delete(turn.conversationId);
-        previousController.abort();
-      }
-      const abortController = new AbortController();
-      abortControllers.current.set(turn.conversationId, abortController);
-
-      const assistantMessage = findConversationMessage(turn.conversationId, assistantMessageId);
-      const seedTools = assistantMessage?.metadata?.tools;
-      const resumeRequest: ToolInputResumeRequest = {
-        run_id: turn.runId,
-        tool_inputs: turn.calls.map((call) => ({
-          tool_call_id: call.toolCallId,
-          input_responses: turn.responses.get(call.toolCallId) ?? {},
-        })),
-      };
-
-      startStreaming(assistantMessageId, turn.conversationId);
-      setLoading(true, turn.conversationId);
-      setError(null, turn.conversationId);
-
-      try {
-        const hostContext = await readChatHostContext(turn.conversationId);
-        const headers = await addCsrfHeaders({
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-          'X-AGI-Surface': hostContext.surface,
-          'Idempotency-Key': createManagedChatIdempotencyKey({
-            surface: hostContext.surface,
-            purpose: 'tool-resume',
-            operationId: crypto.randomUUID(),
-          }),
-          ...hostContext.headers,
-        });
-        const response = await ownerFetch(getAuthToken)(TOOL_INPUT_RESUME_PATH, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(resumeRequest),
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          throw await chatApiErrorFromResponse(response, `Resume failed: ${response.status}`);
-        }
-
-        let settled = await consumeAssistantStream({
-          response,
-          signal: abortController.signal,
-          assistantMessageId,
-          model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
-          conversationId: turn.conversationId,
-          isTemporaryConversation: turn.isTemporaryConversation,
-          getAuthToken,
-          seedContent: assistantMessage?.content ?? '',
-          seedMetadata: assistantMessage?.metadata ?? {},
-          ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
-        });
-
-        if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
-          settled = await driveDeviceSteps(
-            {
+        const restoreInputControls = () => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          turn.resolving = false;
+          turn.responses.clear();
+          for (const call of turn.calls) {
+            updateToolEntry(
               assistantMessageId,
-              conversationId: turn.conversationId,
-              isTemporaryConversation: turn.isTemporaryConversation,
-              model: turn.model,
-              runId: settled.runHandle.runId,
-              getAuthToken,
-              signal: abortController.signal,
-            },
-            settled.pendingDeviceSteps,
-          );
-        }
-
-        assertTokenOwner(getAuthToken);
-        const pendingCalls = settled.suspended ? settled.pendingCalls : [];
-        const pendingInputs = settled.suspended ? settled.pendingInputs : [];
-        const runId = settled.runHandle?.runId;
-        if (!runId && (pendingCalls.length > 0 || pendingInputs.length > 0)) {
-          throw new Error('The managed agent continuation lost its durable run handle.');
-        }
-        if (runId && pendingCalls.length > 0) {
-          pendingTurns.set(assistantMessageId, {
-            authority: getAuthToken.authority,
-            runId,
-            model: turn.model,
-            conversationId: turn.conversationId,
-            isTemporaryConversation: turn.isTemporaryConversation,
-            calls: pendingCalls,
-            decisions: new Map(),
-            resolving: false,
-          });
-          autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
-          followRemoteApproval(assistantMessageId, getAuthToken);
-        }
-        if (runId && pendingInputs.length > 0) {
-          pendingInputTurns.set(assistantMessageId, {
-            authority: getAuthToken.authority,
-            runId,
-            model: turn.model,
-            conversationId: turn.conversationId,
-            isTemporaryConversation: turn.isTemporaryConversation,
-            calls: pendingInputs,
-            responses: new Map(),
-            resolving: false,
-          });
-        } else {
-          pendingInputTurns.delete(assistantMessageId);
-        }
-        return true;
-      } catch (error) {
-        if (!tokenOwnerCurrent(getAuthToken)) return false;
-        if (error instanceof ChatApiError) {
-          if (error.status !== undefined && INACTIVE_INPUT_STATUSES.has(error.status)) {
-            await closeInactiveTurn(getVisibleErrorMessage(error));
-          } else {
-            restoreInputControls();
+              call.toolCallId,
+              { status: 'awaiting_input', inputRequests: call.inputRequests },
+              turn.conversationId,
+            );
           }
+          updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
+        };
+
+        const closeInactiveTurn = async (reason: string) => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          pendingInputTurns.delete(assistantMessageId);
+          for (const call of turn.calls) {
+            updateToolEntry(
+              assistantMessageId,
+              call.toolCallId,
+              { status: 'failed', error: reason, inputRequests: undefined },
+              turn.conversationId,
+            );
+          }
+          updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
+          const message = findConversationMessage(turn.conversationId, assistantMessageId);
+          if (turn.isTemporaryConversation || !message) return;
+          await saveMessageToDb(
+            turn.conversationId,
+            {
+              id: assistantMessageId,
+              role: message.role,
+              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              model: message.model ?? turn.model,
+              ...(message.metadata ? { metadata: message.metadata } : {}),
+            },
+            getAuthToken,
+          ).catch((error) => notifyPersistenceFailure('assistant', error));
+        };
+
+        let authToken: string;
+        try {
+          authToken = await getAuthToken();
+        } catch {
           if (!tokenOwnerCurrent(getAuthToken)) return false;
-          setError(getVisibleErrorMessage(error), turn.conversationId);
-          stopStreaming(turn.conversationId);
-          setLoading(false, turn.conversationId);
+          restoreInputControls();
+          if (!abortController.signal.aborted) setError('Your session has expired. Please sign in again.', turn.conversationId);
           return false;
         }
-        pendingInputTurns.delete(assistantMessageId);
-        await handleStreamError(error, {
-          assistantMessageId,
-          model: turn.model,
-          conversationId: turn.conversationId,
-          isTemporaryConversation: turn.isTemporaryConversation,
-          getAuthToken,
-          setError,
-          stopStreaming,
-          setLoading,
-          updateMessage,
-        });
-        return false;
-      } finally {
-        if (abortControllers.current.get(turn.conversationId) === abortController) {
-          abortControllers.current.delete(turn.conversationId);
+
+        if (!tokenOwnerCurrent(getAuthToken)) return false;
+        if (abortController.signal.aborted) {
+          restoreInputControls();
+          return false;
         }
+
+        const assistantMessage = findConversationMessage(turn.conversationId, assistantMessageId);
+        const seedTools = assistantMessage?.metadata?.tools;
+        const resumeRequest: ToolInputResumeRequest = {
+          run_id: turn.runId,
+          tool_inputs: turn.calls.map((call) => ({
+            tool_call_id: call.toolCallId,
+            input_responses: turn.responses.get(call.toolCallId) ?? {},
+          })),
+        };
+
+        startStreaming(assistantMessageId, turn.conversationId);
+        setLoading(true, turn.conversationId);
+        setError(null, turn.conversationId);
+
+        try {
+          const hostContext = await readChatHostContext(turn.conversationId);
+          const headers = await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            'X-AGI-Surface': hostContext.surface,
+            'Idempotency-Key': createManagedChatIdempotencyKey({
+              surface: hostContext.surface,
+              purpose: 'tool-resume',
+              operationId: crypto.randomUUID(),
+            }),
+            ...hostContext.headers,
+          });
+          const response = await ownerFetch(getAuthToken)(TOOL_INPUT_RESUME_PATH, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(resumeRequest),
+            signal: abortController.signal,
+          });
+
+          if (!response.ok) {
+            throw await chatApiErrorFromResponse(response, `Resume failed: ${response.status}`);
+          }
+
+          let settled = await consumeAssistantStream({
+            response,
+            signal: abortController.signal,
+            assistantMessageId,
+            model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            getAuthToken,
+            seedContent: assistantMessage?.content ?? '',
+            seedMetadata: assistantMessage?.metadata ?? {},
+            ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
+          });
+
+          if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
+            settled = await driveDeviceSteps(
+              {
+                assistantMessageId,
+                conversationId: turn.conversationId,
+                isTemporaryConversation: turn.isTemporaryConversation,
+                model: turn.model,
+                runId: settled.runHandle.runId,
+                getAuthToken,
+                signal: abortController.signal,
+              },
+              settled.pendingDeviceSteps,
+            );
+          }
+
+          assertTokenOwner(getAuthToken);
+          const pendingCalls = settled.suspended ? settled.pendingCalls : [];
+          const pendingInputs = settled.suspended ? settled.pendingInputs : [];
+          const runId = settled.runHandle?.runId;
+          if (!runId && (pendingCalls.length > 0 || pendingInputs.length > 0)) {
+            throw new Error('The managed agent continuation lost its durable run handle.');
+          }
+          if (runId && pendingCalls.length > 0) {
+            pendingTurns.set(assistantMessageId, {
+              authority: getAuthToken.authority,
+              runId,
+              model: turn.model,
+              conversationId: turn.conversationId,
+              isTemporaryConversation: turn.isTemporaryConversation,
+              calls: pendingCalls,
+              decisions: new Map(),
+              resolving: false,
+            });
+            autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
+            followRemoteApproval(assistantMessageId, getAuthToken);
+          }
+          if (runId && pendingInputs.length > 0) {
+            pendingInputTurns.set(assistantMessageId, {
+              authority: getAuthToken.authority,
+              runId,
+              model: turn.model,
+              conversationId: turn.conversationId,
+              isTemporaryConversation: turn.isTemporaryConversation,
+              calls: pendingInputs,
+              responses: new Map(),
+              resolving: false,
+            });
+          } else {
+            pendingInputTurns.delete(assistantMessageId);
+          }
+          return true;
+        } catch (error) {
+          if (!tokenOwnerCurrent(getAuthToken)) return false;
+          if (error instanceof ChatApiError) {
+            if (error.status !== undefined && INACTIVE_INPUT_STATUSES.has(error.status)) {
+              await closeInactiveTurn(getVisibleErrorMessage(error));
+            } else {
+              restoreInputControls();
+            }
+            if (!tokenOwnerCurrent(getAuthToken)) return false;
+            setError(getVisibleErrorMessage(error), turn.conversationId);
+            stopStreaming(turn.conversationId);
+            setLoading(false, turn.conversationId);
+            return false;
+          }
+          pendingInputTurns.delete(assistantMessageId);
+          await handleStreamError(error, {
+            assistantMessageId,
+            model: turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            getAuthToken,
+            setError,
+            stopStreaming,
+            setLoading,
+            updateMessage,
+          });
+          return false;
+        } finally {
+          if (abortControllers.current.get(turn.conversationId) === abortController) {
+            abortControllers.current.delete(turn.conversationId);
+          }
+        }
+      } finally {
+        request.finish();
       }
     },
-    [abortControllers, getToken, resolveToolApproval],
+    [abortControllers, getToken, resolveToolApproval, requests],
   );
 }
 
@@ -5925,7 +6018,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     if (paywall.freeLimit && !isTemporaryConversation && userMessagePersisted) {
       trackMessageSave(
         assistantMessageId,
-        saveMessageToDb(
+        trackSettlement(getAuthToken, saveMessageToDb(
           conversationId,
           {
             id: assistantMessageId,
@@ -5947,7 +6040,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
           .catch((err) => {
             notifyPersistenceFailure('assistant', err);
             return null;
-          }),
+          })),
       );
     }
     // The composer already names an account-wide block with its reset and
@@ -5992,7 +6085,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
 
   if (!isTemporaryConversation && userMessagePersisted) {
     const metadata = findConversationMessage(conversationId, assistantMessageId)?.metadata;
-    saveMessageToDb(
+    void trackSettlement(getAuthToken, saveMessageToDb(
       conversationId,
       {
         id: assistantMessageId,
@@ -6010,7 +6103,9 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
           updateMessage(assistantMessageId, { id: saved.id }, conversationId);
         }
       })
-      .catch((err) => notifyPersistenceFailure('assistant', err));
+      .catch((err) => {
+        if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', err);
+      }));
   }
 
   stopStreaming(conversationId);
