@@ -232,9 +232,40 @@ completed inference/bookkeeping, or solve general deletion, persistence/sync or
 Cloud settlement ownership. Fixture assertions are source-only, not native or
 runtime acceptance.
 
+## ExecuTorch generation and load ownership
+
+Reconstructed commit: `cd0126679cf627ff9e9c4b211724e97f11bf884f`.
+The four-file slice changes shared `packages/platform/local-llm/src/tier2.ts`,
+mobile performance settings, and two unexecuted regression sources.
+
+`tier2Generate` acquires an exact Symbol lease before loading or installing the
+singleton instance's token callback. Overlapping generation and public load or
+release refuse while that lease is held. Tokens require the current lease and a
+non-aborted signal. Abort requests native interruption and suppresses tokens but
+does not release ownership before the native operation settles; `finally` retires
+only its own lease. This prevents the inspected overlapping call from replacing
+the active callback. Existing native busy refusal is not evidence of use-after-free.
+
+Public model loads reserve a promise tail before awaiting prior loads and test
+cached readiness only after that tail drains, including A/B/A reservations.
+Release increments the load generation without discarding the pending tail;
+stale loads cannot publish their late instance, which is disposed. Later loads
+remain serialized even when earlier loads fail. An invalidated load may resolve
+without a loaded result, retaining prior behavior rather than introducing a
+success guarantee. Configuration failure disposes the newly created instance.
+Mobile unload handling now exposes a retryable unload-specific failure and always
+refreshes displayed loaded state instead of remaining busy after refusal.
+
+This concerns the ExecuTorch preset path, not dormant GGUF installation/cancel or
+tier-3 ownership. Forced native stop and native event ordering remain unverified.
+Deferred fixture sources specify leases, load reservations and unload retry but
+are unexecuted; aborted native rejection, callback/onDone throws and configuration
+disposal do not have dedicated regression coverage in this slice. No runtime
+acceptance or universal local-runtime safety guarantee is claimed.
+
 ## Reconstruction boundary
 
-Only the six accepted production slices traced above are represented as
+Only the seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
