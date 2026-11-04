@@ -8896,3 +8896,47 @@ changed public-sharing semantics is approved. Commit `976bd4582f` separately
 fences post-create completion by the existing caller predicate; it does not repair
 snapshot selection, revoke a created link or strengthen task selection ABA.
 Source-only review; no tests, checks, network or sharing actions.
+
+## MOBILE-IOS-SHARE-INBOX-DELIVERY-01
+
+Severity: Medium. Status: OPEN source-backed received-copy preservation and
+acknowledgment design constraint, 2026-11-04. No runtime reproduction or observed
+production loss; no native implementation change is approved by this finding.
+
+`apps/mobile/native/ios/AGIShareInbox.swift::consumePendingShares` aggregates JSON
+manifests, then `stageSharedFiles` processes `files.prefix(maximumSharedFiles)`
+with a ten-file limit and skips failed moves. It subsequently removes all listed
+manifests and the whole `PendingShares/files` directory best-effort before the JS
+consumer confirms delivery. Thus more than ten aggregate pending attachments can
+leave unstaged copies scheduled for deletion; even within the limit, a failed
+move can leave a received copy deleted by directory cleanup. Missing staging
+storage can similarly return no staged files before cleanup. These are pending
+App Group copies, not deletion of the sender's original files. Aggregate text is
+bounded separately with an explicit truncation flag. The source comment claiming
+cleanup never silently loses unreviewed content is not supported by these paths.
+
+The extension's `ShareViewController.swift::persistForReview` copies files into
+UUID-named paths, skips copy failures, and atomically writes a manifest containing
+only successful copies. That protects manifest publication from partial JSON,
+but is not an all-files acceptance receipt and does not serialize against main-app
+cleanup. A concurrent extension publication can place bytes into the shared files
+directory after the consumer's manifest listing, before whole-directory removal.
+Native consumption uses `DispatchQueue.global`, not a serialized cross-process
+claim. `iosShareInbox.ts` has only a per-subscription consuming flag; disposal
+suppresses callbacks after destructive native consumption. Root `_layout.tsx`
+passes returned attachments through `sharedAttachments.ts` to
+`composerHandoff.ts`'s in-memory Map, deleted on take. Callback/router success is
+not a durable delivery acknowledgment; a lost callback can strand staged bytes
+without a recoverable manifest rather than prove their physical deletion.
+
+Design must cover stable manifest/attachment identity, cross-process claim and
+publication coordination, bounded admission without silent prefix loss, retained
+source/manifest until durable idempotent receipt acknowledgment, and cleanup of
+only the exact manifest-owned outputs. Count/text preflight could reduce one harm
+but needs visible refusal and starvation handling; throwing after partial moves
+is not rollback. Crash/retry, duplicate receipt, partial staging failure, concurrent
+producer/consumer and disposed JS delivery need explicit recovery semantics.
+No implementation-ready design, automatic discard, broad cleanup or migration
+policy is asserted. Share Preview commit `079b2485b5` only fixes downstream local
+send admission and does not repair this native-to-JS durability boundary.
+Source-only inspection; no tests, checks, native execution or destructive actions.

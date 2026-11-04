@@ -2218,9 +2218,42 @@ change after leaf publication. They are unexecuted. Integrated execution-caller,
 hydration and post-message-publication subscriber cases remain uncovered by this
 slice; no native, live sync or runtime acceptance is asserted.
 
+## Share Preview waits for send admission, not generation completion
+
+Accepted commit `079b2485b5376b63e04ca944f7deb3cc1f31c43f` changes the
+Share Preview screen, its new admission helper and one helper fixture source.
+`sharePreviewAdmission.ts` acquires synchronous single-flight ownership before
+conversation creation. An explicit false send result preserves the preview and
+allows deliberate retry using the created conversation; a missing conversation,
+nonboolean result or rejection is uncertain and offers Check chat rather than
+blind resend. The admission callback (or explicit true fallback) marks accepted
+and navigates without waiting for generation completion. A later false/rejection
+does not erase callback admission; routing failure leaves Check chat available.
+Admission is local send acceptance, not a server delivery acknowledgment.
+
+The screen captures original mode, payload/handoff identity and, for Cloud,
+canonical account epoch plus Clerk owner/sign-in state. Currentness checks and
+mode/auth subscriptions retire stale work, including observed mode round trips;
+Local does not retire for account-only changes. Mounted lifetime, payload changes
+and dismissal fence publication/navigation. Once send has entered, this helper
+does not cancel it or undo conversation creation. Add to chat and Ask about retain
+their existing active-destination/volatile draft handoff rather than gaining a
+new destination lease or durable receipt. Helper fixtures cover explicit refusal,
+uncertainty, stale ownership, callback timing and routing failure; all remain
+unexecuted and do not establish mounted component, native or StrictMode behavior.
+
+Separate OPEN `MOBILE-IOS-SHARE-INBOX-DELIVERY-01` concerns native received-copy
+preservation, not this UI admission correction. `AGIShareInbox.swift` aggregates
+manifests, moves only the first ten file records and skips failed moves, then
+removes consumed manifests and the entire shared files directory. JS disposal can
+suppress the returned callback; root navigation stages attachments in an in-memory
+Map with destructive take and no durable acknowledgment. Cross-process claims,
+manifest-owned cleanup and retryable durable delivery need a coherent design;
+no native fix, original-source deletion or observed runtime loss is claimed.
+
 ## Reconstruction boundary
 
-Only the eighty-four accepted production slices traced above are represented as
+Only the eighty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
