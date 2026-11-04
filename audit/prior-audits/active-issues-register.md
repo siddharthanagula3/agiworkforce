@@ -8380,3 +8380,24 @@ handoff/receipt semantics, restart and old-record migration, and server-side
 idempotency/receipt authority where retries would otherwise duplicate work. No new
 schema, product semantics, automatic retry/refund, deletion policy or migration
 is implemented or approved by this note; the design is not implementation-ready.
+
+## CLI-CHAT-LEGACY-CONFLICT-BASE-01
+
+Severity: Medium. Status: OPEN source-backed migration/design constraint,
+2026-11-04; actual affected caches and production data loss are unknown.
+
+Before `0e6b7d63f5ae03efd6ca8b28ea9d6276ec906881`, chat push conflicts recorded
+the remote version without adopting its content. The accepted correction prevents
+new conflict-version adoption, but `apps/cli/src/cloud/state.rs::SyncState::load`
+still accepts same-owner persisted version maps without recording whether a base
+came from applied content or a historical conflict. `cloud/chat.rs::build_push`
+uses those versions with local snapshot content. A previously advanced base can
+therefore still match the remote version and authorize stale content replacement;
+this is a conditional source trace, not a reproduced overwrite.
+
+No repair or migration is approved. A design must distinguish verified content
+baselines from ambiguous legacy versions and define preservation/reconciliation
+and user-visible resolution before deciding whether to invalidate or migrate
+records. Blind version adoption, deleting snapshots, or claiming a normal pull
+already reconciles content is not justified. Accepted new conflict handling and
+its unexecuted fixtures do not resolve this legacy-state boundary.

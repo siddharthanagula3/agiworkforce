@@ -525,9 +525,78 @@ copy overwrite semantics remain. Preflight is not an atomic filesystem operation
 concurrent replacement, hardlinks, partial multi-file failure and rollback remain
 outside its guarantee. No filesystem/runtime regression was executed.
 
+## CLI chat conflict-base preservation
+
+Reconstructed commit: `0e6b7d63f5ae03efd6ca8b28ea9d6276ec906881` changes
+`apps/cli/src/cloud/chat.rs` and `cloud/mod.rs`, including unexecuted regressions.
+`apply_push_response` advances versions only for server-applied rows. Conflict
+versions remain at their prior local bases because conflict content has not been
+adopted; merely receiving a newer version must not authorize the next push to
+overwrite that remote content with the unchanged local snapshot. Push replies do
+not advance pull cursors. Successful rows and new IDs still apply normally.
+
+The actual sync path warns about unresolved conflicts and recommends exporting a
+separate Markdown copy for comparison, not automatic merge or resume. Read helpers
+are unchanged: `apply_pull_response` has only a test caller in the inspected CLI
+source, and current single-conversation fetch rows carry empty sync versions, so
+`record_hosted` does not advance them. Previously poisoned version caches are not
+repaired; imported rows can continue conflicting until separately reconciled.
+This is source-level prevention of new conflict rebasing, not runtime convergence
+or recovery of earlier overwritten data. The same-owner cache loader retains
+ambiguous old version maps; `CLI-CHAT-LEGACY-CONFLICT-BASE-01` records the separate
+OPEN migration constraint without claiming an affected deployed cache.
+
+## VS Code resolved outbound-file guard
+
+Reconstructed commit: `63c5563e853b3c4ffbb5252d553d97ceec078e10` changes
+`apps/extension-vscode/src/core/outboundContentGuard.ts` and five unexecuted
+fixture files. On the declared workspace extension host, file and vscode-remote
+paths are checked against the credential-path policy both as presented and after
+synchronous filesystem realpath resolution. Resolution errors refuse outbound
+content rather than treating an unresolved path as safe.
+
+Existing workspace-trust refusal and undefined-document, untitled/other URI
+behavior remain unchanged. This is path-policy containment, not content-secret
+classification or atomic protection against filesystem changes between checking
+and reading. Mocked fixture sources do not establish real-filesystem execution,
+remote deployment behavior or downstream diagnostic error presentation; no
+separate diagnostics-wrapper correction is claimed here.
+
+## VS Code diagnostic refusal outcome
+
+Reconstructed commit: `abd4192d8a52cf87753215a48b37f8a1730d2221` changes the
+local diagnostic provider/command wrapper and two unexecuted fixture files.
+A typed `not-reviewed` result carries outbound refusal or empty-selection reason;
+the command displays a warning and does not report zero issues as a completed
+review. Completed reviews retain their diagnostic count. This narrowly supersedes
+the prior path-guard section's diagnostic presentation exclusion. The shared model
+response parser's no-valid-issue-lines behavior is unchanged; arbitrary malformed
+model output is not newly classified by this slice.
+
+## Electron Local routine pending-start ownership
+
+Reconstructed commit: `ad176e412a6f79c0c8b0a7dd7121d5e7dea67efe` changes
+`electron/runtime/localRoutineEngine.ts` and one unexecuted regression source.
+The engine retains pending-start and stop-request ownership instead of declaring
+an unidentified in-flight start cancelled. Only the exact returned turn ID gives
+cancellation authority; it is never guessed from an early event. Unacknowledged
+starts remain retained/disabled with an unknown-outcome explanation. Known-ID
+cancellation deduplicates its attempt and rechecks terminal state immediately
+before queued dispatch.
+
+Before the start reply, at most 100 minimal lifecycle events are retained for the
+matching thread. After the reply, only events matching its returned turn ID are
+applied; overflow requests stop and disables the routine while identity is unknown.
+Pre-ack native notifications are suppressed and are not replayed by this buffer;
+the runtime UI still receives original events. Terminal events clear exact routine
+ownership and keep-awake state. Stop failure remains unconfirmed rather than
+claiming effects were undone. This is not native cancellation, restart recovery,
+all-process exclusion or a guarantee that a rejected start had no effects.
+No native/event ordering or regression execution was performed.
+
 ## Reconstruction boundary
 
-Only the twenty accepted production slices traced above are represented as
+Only the twenty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
