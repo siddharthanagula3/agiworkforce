@@ -3815,9 +3815,34 @@ late receipts/errors, epoch propagation and a stale rendered Restore callback.
 No tests, checks, builds, native UI, database mutation or network actions were run;
 all regression sources remain unexecuted.
 
+## Archived deletion confirmations retain their rendered account
+
+Accepted commit `db823e82d30f70d43871d77af7f00ef9b6a26ae4` changes the
+Archived Chats screen/service and three fixture sources. Row and bulk delete
+entry receive the rendered list's account epoch, carry it through saved native
+confirmations, and pass it to the API boundary. Each confirmation is consumed
+synchronously before dispatch; Cancel also retires it. Services require the epoch
+and assert it before and after the request. Retired receipts, failures and row
+finally cleanup cannot alter a replacement account's list, alerts or busy state.
+
+The unrelated archive-all/delete-all helpers retain their existing signatures
+and two-argument API calls. The shared bulk helper accepts optional ownership
+only internally; archived deletion requires it. Server row deletion still matches
+ID, authenticated user and organization, and bulk deletion filters the current
+user/organization's archived rows. This is a client-intent correction, not a
+server authorization-bypass claim: an old bulk button rebound to another account
+could target that account's own archived rows. No live deletion was demonstrated.
+
+General mutation sequencing, focus/mode lifetimes and page/read ordering remain
+separate. Independent source review accepted the bounded change. Deferred fixture
+sources cover saved buttons and confirmations, account ABA, Cancel and repeated
+reuse, original-epoch forwarding, retired receipt/error publication and replacement
+busy state. No tests, checks, builds, native UI, database mutation or network
+actions were run; all regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty accepted production slices traced above are represented as
+Only the one hundred and thirty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
