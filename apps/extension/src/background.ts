@@ -1,3 +1,4 @@
+import { replayScheduledShortcut, ScheduledShortcutReplayDeferredError, ScheduledShortcutReplayCancelledError } from './features/background/scheduled-shortcut-replay';
 import { platformRequestHeaders } from './platformHeaders';
 import { createManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import { createScheduledTaskTransport, ScheduledTaskTransportControl, type ScheduledTaskTransport, type ScheduledTaskFetch } from './features/background/scheduled-task-transport';
@@ -3147,14 +3148,15 @@ async function executeScheduledTask(
     }
     let result: unknown;
     if (task.shortcutId) {
-      result = await handleReplayShortcut(
-        {
-          type: 'REPLAY_SHORTCUT',
-          shortcutId: task.shortcutId,
-        } as import('./types').ReplayShortcutMessage,
-        undefined,
-        false,
-      );
+      result = await replayScheduledShortcut(task, {
+        isCurrent: () => scheduledTaskExecutions.isCurrent(lease),
+        loadShortcuts,
+        queryActiveTab: async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0],
+        getTab: (tabId) => chrome.tabs.get(tabId),
+        loadPolicy: loadScheduledSitePolicyInput,
+        liveGrantedOrigins: oneTimeGrantedOrigins,
+        forward: forwardToContentScript,
+      });
     }
 
     assertScheduledExecutionSucceeded(result);
@@ -3167,7 +3169,7 @@ async function executeScheduledTask(
       signal: lease.controller.signal,
     });
   } catch (error) {
-    if (error instanceof ScheduledTaskSourceUnavailableError) {
+    if (error instanceof ScheduledTaskSourceUnavailableError || error instanceof ScheduledShortcutReplayDeferredError) {
       logger.warn('Scheduled source authority could not be read; preserving work', { taskId: task.id });
       return;
     }
@@ -3179,7 +3181,7 @@ async function executeScheduledTask(
       if (journal) await abandonScheduledTaskRun(journal, credential);
       return;
     }
-    if (error instanceof ScheduledTaskCancelledError || lease.controller.signal.aborted) {
+    if (error instanceof ScheduledTaskCancelledError || error instanceof ScheduledShortcutReplayCancelledError || lease.controller.signal.aborted) {
       logger.info('Scheduled task execution lost authority', { taskId: task.id });
       return;
     }
