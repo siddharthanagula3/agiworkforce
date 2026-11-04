@@ -306,9 +306,38 @@ refusals retain audit writes. No SQL/RLS runtime behavior, continuous revocation
 across later awaits, persisted one-use approval payload, provider cancellation or
 voice settlement correction is established. Regression sources remain unexecuted.
 
+## Restrictive country-policy composition
+
+Reconstructed commit: `f655deee37ce90af9be744775852b5210d331758`.
+The 21-file slice includes nine unexecuted regression files. Canonical
+`workspace-controls.ts` distinguishes configured unrestricted empty countries
+from a resolved active restriction whose empty intersection denies every country.
+The required resolved flag survives narrowing and re-resolution, preventing later
+layers from reopening the empty intersection. Shared authorization and Web policy
+evaluation use the same normalized country predicate; shared authorization still
+skips this stage when `ask.country` is undefined.
+
+The effective endpoint emits schema version 2 and includes it in ETags. The
+shared client projects noncurrent or malformed country authority to active empty
+while retaining other feature/Code fields and the received version; noncurrent
+cache validators are not reused. This is not full-envelope provenance validation.
+Stored schema version 2/minimum 1 and the separate effective artifact registry are
+descriptive, non-negotiated contracts, not upgraded-old-binary enforcement.
+Stored nonempty arrays retain restrictive intent even when invalid entries filter
+out; malformed non-array storage is not comprehensively repaired.
+
+Settings requests strip derived authority, preserve unrelated country restrictions
+when omitted, and permit explicit clearing. Input validation and diagnostics
+represent deny-all without treating it as unrestricted. Diagnostics rendering and
+real settings-hook integration have no dedicated fixture in this slice. No live
+API/cache/deployment execution occurred; native country enforcement and old-client
+rollout are not established (CLI feature policy is not country enforcement).
+The existing `SHARED-WORKSPACE-CODE-DISJOINT-ALLOWLIST-01` remains open for host/MCP
+empty-intersection ambiguity; country source correction does not close it.
+
 ## Reconstruction boundary
 
-Only the nine accepted production slices traced above are represented as
+Only the ten accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

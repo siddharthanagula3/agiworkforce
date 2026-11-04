@@ -5451,6 +5451,22 @@ Additional source: `scripts/check-mock-exports.mjs:662-688; scripts/lib/producti
 
 ## SHARED-WORKSPACE-CODE-DISJOINT-ALLOWLIST-01
 
+Reconstruction update, 2026-11-04: `f655deee37ce90af9be744775852b5210d331758`
+source-corrects the country portion only. Canonical active-country state preserves
+empty deny-all through narrowing/re-resolution; server and shared authorization
+reuse the normalized predicate (shared undefined-country stage skip remains).
+Effective schema v2/ETag and fail-closed noncurrent country projection preserve
+other feature/Code advice. Settings strip derived authority and distinguish
+unrelated edits from explicit clearing. Invalid nonempty stored arrays retain
+restriction intent; malformed non-array storage remains outside comprehensive
+repair. Stored schema 2/minimum 1 is descriptive, not negotiated. Nine regression
+files are authored but unexecuted; no live cache/API, SQL/native or deployment
+acceptance, old-binary upgrade, diagnostics-render or real-settings-hook integrated
+fixture is established. Host/MCP empty-intersection ambiguity remains **OPEN**.
+The October evidence below describes the historical country behavior, not the
+corrected country path; its host/MCP scope remains unresolved. No earlier probe
+was rerun for this reconstruction.
+
 Severity: High, conditional on conflicting applicable policy layers. Status: open current source defect; root consolidated October 9, 2026.
 
 Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main added opt-in workspace features, but disjoint country, host and MCP lists still intersect to the empty list that means unrestricted. Main also moved the Web resolver into `readMemberControls` and the Code session checks into `openCloudCodeSession`; line numbers for the files main changed are main's.
