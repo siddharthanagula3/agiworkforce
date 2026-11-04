@@ -2318,13 +2318,49 @@ seeds the new backing snapshot with current approval/plan and restores the same
 in-memory plan path/feedback after adoption. The public enable guards and metadata
 synchronization ordering remain intact. The initializer permits a temporary-store
 fixture without requiring production config/metadata operations; that fixture
-and the target approval/plan matrix were only source-read, not executed. No Rust,
-actual session/credential/cache/environment or DB data was accessed. Snapshot
-save-baseline design is separate and is not represented as implemented here.
+and the target approval/plan matrix were only source-read, not executed. No Rust
+was executed, and no actual session/credential/cache/environment or DB data was
+accessed. This plan-state slice does not change snapshot save authority; the
+following section traces that separate correction.
+
+## CLI overwrite authority belongs to the loaded snapshot
+
+Accepted commit `17476e18af7472d5e2b876497825f37abfc9cc4f` changes
+`platform/runtime/session.rs` and fixture initializers in `session_control.rs`.
+The process-global per-path baseline is replaced by nonserialized snapshot-local
+`SessionPersistence`: canonical-parent target path, SHA-256 of captured bytes and
+completeness. Clone copies the baseline into an independent mutex; new/forked or
+plain deserialized snapshots do not acquire another snapshot's authority. A file
+load establishes its baseline only after parsing the bounded captured bytes.
+Unrelated listing reads and failed loads cannot refresh an active writer's
+baseline. Tolerated unreadable JSONL lines mark an incomplete snapshot, requiring
+preservation even if the current file still matches its digest.
+
+Save validates and serializes before locking, avoiding serialization's clone
+reentering the baseline mutex. A process-wide save mutex serializes cooperating
+saves within this binary process. The bounded regular-file reader distinguishes
+absence from access errors, rejects observed symlinks/special files and oversize
+input, and reads at most the existing limit plus one. A known destination that
+has disappeared is refused rather than recreated. Unknown, changed or incomplete
+existing contents are copied to a uniquely allocated recovery tempfile, written,
+file-synced and retained before replacement. Failure to preserve refuses overwrite;
+the original is not renamed away to create recovery. Only a successful target
+write refreshes the baseline to the exact serialized bytes written.
+
+The separate agent length/mtime freshness API remains unchanged. This is not
+cross-process compare-and-swap: a foreign writer can change the target after the
+read, and metadata/open/path races remain. Recovery uses the pinned `tempfile`
+3.27.0 API, whose dependency internals were not verified here; file sync does not
+establish directory-fsync or full crash durability, and the existing replacement
+writer is not redesigned. Source fixtures cover independent clones/reads, damaged
+JSONL, unique recovery copies, known disappearance, deserialization/different
+paths, equal-length changes and nonregular targets. All are unexecuted; no actual
+session, credential, cache, environment or DB data, Rust execution, tests or checks
+were used. Pending host identity work is outside this snapshot slice.
 
 ## Reconstruction boundary
 
-Only the eighty-eight accepted production slices traced above are represented as
+Only the eighty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
