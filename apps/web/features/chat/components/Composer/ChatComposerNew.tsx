@@ -59,6 +59,7 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
+import { useReadonlyIdentityLifetime } from '@/lib/identity/useSessionSnapshot';
 import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
 import { getConversationProviderMode } from '@features/chat/lib/localByokHandoff';
 import { conversationHoldsLocalTurns } from '@features/chat/lib/local-origin';
@@ -457,7 +458,7 @@ interface ChatComposerProps {
   /** Callback fired after prefillText has been consumed and applied. */
   onPrefillConsumed?: () => void;
   draftReplacement?: DraftReplacement | null;
-  onDraftReplacementApplied?: () => void;
+  onDraftReplacementApplied?: (nonce: number) => void;
   /** Files dropped onto the message area that should be added as attachments. */
   droppedFiles?: File[] | null;
   /** Callback fired after droppedFiles have been consumed and added to attachments. */
@@ -890,6 +891,7 @@ const ChatComposerNewComponent = ({
   messageRef.current = message;
   const setDraftContent = useChatStore((state) => state.setDraftContent);
   const clearDraftContent = useChatStore((state) => state.clearDraftContent);
+  const captureDraftIdentity = useReadonlyIdentityLifetime();
   const parkedDraft = useChatStore(selectDraftContent(conversationId));
   const deferredUnsentDraft = useChatStore(selectDeferredUnsentDraft(conversationId));
   const clearDeferredUnsentDraft = useChatStore((state) => state.clearDeferredUnsentDraft);
@@ -4074,6 +4076,7 @@ const ChatComposerNewComponent = ({
    */
   useEffect(() => {
     const owner = conversationId ?? null;
+    const identity = captureDraftIdentity();
     const pendingCleanup = pendingDraftCleanupRef.current;
     if (pendingCleanup?.owner === owner) {
       pendingCleanup.cancelled = true;
@@ -4092,18 +4095,20 @@ const ChatComposerNewComponent = ({
     writeComposerMessage(claimedArrivalDraftRef.current.content);
     return () => {
       const outgoing = messageRef.current;
+      const draftOwner = conversationId
+        ? useChatStore.getState().draftOwnersByConversation[conversationId]
+        : undefined;
       const cleanup = { owner, cancelled: false };
       pendingDraftCleanupRef.current = cleanup;
       queueMicrotask(() => {
-        if (cleanup.cancelled || !conversationId) return;
-        if (outgoing.trim()) {
-          setDraftContent(outgoing, conversationId);
-        } else {
-          clearDraftContent(conversationId);
-        }
+        if (
+          cleanup.cancelled || !conversationId || !identity.isCurrent() ||
+          useChatStore.getState().draftOwnersByConversation[conversationId] !== draftOwner
+        ) return;
+        setDraftContent(outgoing.trim() ? outgoing : '', conversationId);
       });
     };
-  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage, retireClipboardDraft]);
+  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage, retireClipboardDraft, captureDraftIdentity]);
 
   // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
   // into the local message and notify the parent it was consumed. This runs in an EFFECT,
@@ -4172,12 +4177,13 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (!draftReplacement || draftReplacement.nonce === appliedDraftReplacementRef.current) return;
     if (draftReplacement.conversationId !== conversationId) return;
+    if (!draftReplacement.isCurrent()) return;
     appliedDraftReplacementRef.current = draftReplacement.nonce;
     seenParkedDraftRef.current = draftReplacement.content;
     deferredHandbackRef.current = null;
     retireClipboardDraft();
     writeComposerMessage(draftReplacement.content);
-    onDraftReplacementApplied?.();
+    onDraftReplacementApplied?.(draftReplacement.nonce);
   }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage, retireClipboardDraft]);
 
   useEffect(() => {

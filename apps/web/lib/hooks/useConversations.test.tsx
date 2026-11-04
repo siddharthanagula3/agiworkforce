@@ -577,7 +577,12 @@ describe('useConversations.loadConversation pagination races', () => {
       expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
     });
     expect(
-      await saveConversationDraft(DEEP_LINK_CONVERSATION.id, 'edited draft', async () => ({})),
+      await saveConversationDraft(DEEP_LINK_CONVERSATION.id, 'edited draft', {
+        userId: authMocks.userId,
+        sessionId: authMocks.sessionId,
+        isCurrent: () => true,
+        getToken: authMocks.getToken,
+      }, () => true),
     ).toBe('saved');
 
     const putCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');

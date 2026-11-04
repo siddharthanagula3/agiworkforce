@@ -723,7 +723,7 @@ export function useConversations(): UseConversationsReturn {
         }
         const loadedConversation = toWebConversation(loadedConversationWire);
         upsertConversation(loadedConversation);
-        observeConversationDraftRevision(id, loadedConversationWire.draft_updated_at);
+        observeConversationDraftRevision(id, loadedConversationWire.draft_updated_at, authority.session);
 
         // A draft this device has not seen belongs in the composer: it was
         // typed on another machine, or before a reload here. A draft already
