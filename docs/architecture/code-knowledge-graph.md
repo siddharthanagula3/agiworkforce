@@ -860,9 +860,33 @@ recovery constraints are tracked as Medium OPEN
 exposure. Durable cost, publication and cleanup recovery semantics remain a
 separate design decision; no refund or financial repair is implemented here.
 
+## Durable tool-control errors and bounded fanout
+
+Reconstructed commit: `9ab06bf7bd1218064b16e63f5c07ec88c12c0a49` changes
+`tool-loop.ts` and two unexecuted hardening/e2e fixture sources. The durable
+invocation already supplies a predicate recognizing Workflow `FatalError` and
+`RetryableError`; timeout wrappers and AGI planning now preserve those selected
+errors rather than converting them into ordinary tool failures or continuing
+planning fallback. Ordinary errors retain their existing result/fallback behavior.
+The early stored-result reader now uses the same nested deadline and predicate,
+but its underlying storage query is not cancelled by that deadline.
+
+Only read-only tool fanout opts into `mapWithConcurrency` draining: on first
+failure it stops dequeuing, waits for already-admitted bounded wrappers and then
+rethrows the exact first value, including undefined. The default remains fail-fast;
+attachment hydration does not opt in and its existing behavior is unchanged.
+This orders tool-loop unwind/shared-sandbox release after those wrappers settle,
+not after every underlying native/network operation necessarily stops. Abort is
+cooperative, and a timed-out write may still land.
+
+Source-reviewed cleanup ordering is not an executed parallel cleanup integration
+test. Fixtures cover selected/ordinary error handling, planning and stored-result
+deadlines plus concurrency behavior, but remain unexecuted; no provider, storage,
+Workflow or runtime cancellation guarantee is established.
+
 ## Reconstruction boundary
 
-Only the thirty-five accepted production slices traced above are represented as
+Only the thirty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
