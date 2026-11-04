@@ -1293,12 +1293,66 @@ timer. Asynchronous beforeunload/veto/failure and permission-timeout semantics
 are unchanged; `restarting` reports dispatch, not successful installation or exit.
 Mocked lifecycle cases were source-read only, not executed. The existing updater
 status conflation of capability with downloading and latest-versus-staged version
-ambiguity is outside these narrow corrections; no status redesign, install,
-network, native runtime or deployment acceptance is claimed.
+ambiguity is outside these narrow corrections; the later phase section traces
+that separate source correction. No install, network, native runtime or
+deployment acceptance is claimed.
+
+## Cloud desktop latest lookup distinguishes unavailable from absent
+
+Accepted commit `caea839a49f2f65076457a9c79e706a3d689a75e` changes
+`apps/web/lib/releases/github-desktop-releases.ts`,
+`app/api/releases/desktop-cloud/latest/route.ts` and a regression source using the
+real helper with mocked fetch. Only this route opts into `throwOnError`.
+HTTP, network, JSON, schema failure on any fetched page, and incomplete pagination
+at the existing page limit become typed `DesktopReleaseLookupError`; the route
+returns safe `RELEASE_LOOKUP_UNAVAILABLE` with 503 and `Cache-Control: no-store`.
+A valid empty/filtered release list or missing supported DMG still returns 404.
+An early candidate does not override a later unreadable/incomplete page.
+
+Other helper callers retain default null-on-error behavior. Existing selectors,
+GitHub fetch caching/timeouts, release security and route rate-limit admission
+are unchanged. This narrowly corrects failure-versus-absence metadata reporting
+when the new route is deployed, not installed-binary behavior, updater phase
+truth or latest-versus-staged identity. Fixtures include compatibility and
+rate-limit boundaries but were not run; no network/deployment acceptance is
+claimed.
+
+## Electron updater phase and staged identity are separate from metadata
+
+Accepted commit `c8ff485d01821f4d4189aa7105c768b1ed8132b2` spans eleven files:
+shared HostBridge contract, Electron updater/metadata/main ownership, hosted-web
+notice/settings row and unexecuted regression sources. `desktopAutoUpdate.ts`
+tracks unsupported/idle/checking/downloading/ready/failed separately from native
+capability. Feed configuration must succeed before checks; checking/downloading
+and ready suppress duplicate checks. Synchronous configuration/check errors
+record failure, no-update records idle, and a staged package retains ready state
+across later events. A missing/invalid/non-newer release name leaves staged
+identity unknown rather than substituting installed or published versions.
+
+`cloudUpdateAvailability` exposes actual native state and keeps staged version B
+separate from latest published C. `latestVersion` comes only from parsed release
+metadata. Known or unknown staged readiness survives metadata failure; unknown
+identity is explicit `stagedVersion: null` with conservative legacy `version: ''`.
+Native and modern hosted-web copy say an update is ready/downloading without
+inventing a version. Downloading takes priority over absent-newer metadata, and
+capability alone no longer implies an active download. Manual installer fallback
+remains available when there is no active download or restart capability.
+
+`DesktopUpdateNotice` uses a host/effect revision so a late check cannot overwrite
+a newer ready event; retired-host events are ignored. `DesktopUpdateRow` fences
+check publication/cleanup by request generation and host lifetime. These are
+bounded UI guards, not proof of all native event orderings or overlapping row
+actions. Old web Notice code may hide an unknown-version ready event, and old
+Settings copy can show awkward blank-version wording; no installed binary or old
+web deployment is silently updated. Prior installer-only and synchronous-throw
+quit-permission corrections remain, including asynchronous veto/timeout limits
+and restart-as-dispatch semantics. Fixtures are unexecuted; full event ordering,
+StrictMode, row overlap and native runtime acceptance remain unproven. Feed,
+signing/security and quit policy are not redesigned.
 
 ## Reconstruction boundary
 
-Only the fifty-four accepted production slices traced above are represented as
+Only the fifty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
