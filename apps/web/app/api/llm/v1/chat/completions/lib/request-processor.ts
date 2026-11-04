@@ -6252,6 +6252,7 @@ async function processAdmittedRequest(
     agentAllowsImageGeneration(ownership.agentTurn) &&
     (await imageChatSourceAvailable({
       userId,
+      organizationId: contextPolicyScope.organizationId,
       db: (await scopedDbPromise).db,
       conversationId: chatRequest.conversation_id ?? null,
       latestAttachedImage: () =>

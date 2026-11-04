@@ -779,6 +779,7 @@ async function resolveVideoInputImages(input: {
   request: NextRequest;
   db: ManagedUsageRequestReservation['db'];
   userId: string;
+  organizationId: string | null;
   provider: VideoProvider;
   model: ModelMetadata;
   firstFrameImage: ManagedMediaImageRef | undefined;
@@ -801,7 +802,7 @@ async function resolveVideoInputImages(input: {
   let images: Uint8Array[];
   try {
     images = await Promise.all(
-      refs.map((ref) => resolveImageRefBytes(ref, input.userId, input.db)),
+      refs.map((ref) => resolveImageRefBytes(ref, input.userId, input.db, input.organizationId)),
     );
   } catch (error) {
     logger.warn(
@@ -1071,7 +1072,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }
     scopedDb = scoped.db;
-    organizationId = scoped.organizationId ?? null;
+    organizationId = scoped.organizationId;
 
     if (conversationId && assistantMessageId) {
       if (sourceSurface !== 'web') {
@@ -1186,6 +1187,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     request,
     db: scopedDb,
     userId,
+    organizationId,
     provider,
     model,
     firstFrameImage,

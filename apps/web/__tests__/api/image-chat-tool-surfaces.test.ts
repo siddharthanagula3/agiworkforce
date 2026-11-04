@@ -213,42 +213,45 @@ describe('image chat tool surfaces', () => {
     expect(pipeline.generate).not.toHaveBeenCalled();
   });
 
-  it('binds an explicit older image to the current conversation before editing', async () => {
-    imageSources.byId.mockResolvedValue({
-      id: '00000000-0000-4000-8000-000000000002',
-      kind: 'image',
-      userId: 'fixture-user',
-    });
-    const db = {} as DatabaseAdapter;
-    const result = await executeImageChatTool(
-      EDIT_IMAGE_TOOL_NAME,
-      {
-        prompt: 'Make the earlier image warmer',
-        image_asset_id: '00000000-0000-4000-8000-000000000002',
-      },
-      {
-        toolCallId: 'fixture-source-prior',
-        requestId: crypto.randomUUID(),
+  it.each([null, '00000000-0000-4000-8000-000000000004'])(
+    'binds an explicit older image to the current conversation and admitted workspace %s',
+    async (organizationId) => {
+      imageSources.byId.mockResolvedValue({
+        id: '00000000-0000-4000-8000-000000000002',
+        kind: 'image',
         userId: 'fixture-user',
-        organizationId: null,
+      });
+      const db = {} as DatabaseAdapter;
+      const result = await executeImageChatTool(
+        EDIT_IMAGE_TOOL_NAME,
+        {
+          prompt: 'Make the earlier image warmer',
+          image_asset_id: '00000000-0000-4000-8000-000000000002',
+        },
+        {
+          toolCallId: 'fixture-source-prior',
+          requestId: crypto.randomUUID(),
+          userId: 'fixture-user',
+          organizationId,
+          db,
+          surface: 'web',
+          conversationId: '00000000-0000-4000-8000-000000000003',
+          latestAttachedImage: () => null,
+          userMessage: 'Edit the earlier photo to make it warmer.',
+        },
+      );
+      expect(result.ok).toBe(true);
+      expect(imageSources.byId).toHaveBeenCalledWith(
+        'fixture-user',
+        '00000000-0000-4000-8000-000000000002',
         db,
-        surface: 'web',
-        conversationId: '00000000-0000-4000-8000-000000000003',
-        latestAttachedImage: () => null,
-        userMessage: 'Edit the earlier photo to make it warmer.',
-      },
-    );
-    expect(result.ok).toBe(true);
-    expect(imageSources.byId).toHaveBeenCalledWith(
-      'fixture-user',
-      '00000000-0000-4000-8000-000000000002',
-      db,
-      { conversationId: '00000000-0000-4000-8000-000000000003' },
-    );
-    expect(pipeline.generate).toHaveBeenCalledTimes(1);
-    const payload = await pipeline.generate.mock.calls[0]?.[0]?.readBody();
-    expect(payload).toMatchObject({
-      source_image: { asset_id: '00000000-0000-4000-8000-000000000002' },
-    });
-  });
+        { conversationId: '00000000-0000-4000-8000-000000000003', organizationId },
+      );
+      expect(pipeline.generate).toHaveBeenCalledTimes(1);
+      const payload = await pipeline.generate.mock.calls[0]?.[0]?.readBody();
+      expect(payload).toMatchObject({
+        source_image: { asset_id: '00000000-0000-4000-8000-000000000002' },
+      });
+    },
+  );
 });

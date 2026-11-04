@@ -272,13 +272,19 @@ async function resolveEditContext(input: {
     { asset_id: job.plan.sourceAssetId },
     job.userId,
     input.db,
+    job.organizationId,
   );
   const maskBytes = job.plan.maskAssetId
-    ? await resolveImageRefBytes({ asset_id: job.plan.maskAssetId }, job.userId, input.db)
+    ? await resolveImageRefBytes(
+        { asset_id: job.plan.maskAssetId },
+        job.userId,
+        input.db,
+        job.organizationId,
+      )
     : undefined;
   const referenceBytes = await Promise.all(
     (job.plan.referenceAssetIds ?? []).map((assetId) =>
-      resolveImageRefBytes({ asset_id: assetId }, job.userId, input.db),
+      resolveImageRefBytes({ asset_id: assetId }, job.userId, input.db, job.organizationId),
     ),
   );
   return {

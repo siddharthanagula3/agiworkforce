@@ -107,13 +107,18 @@ async function handleImageRetry(request: NextRequest): Promise<NextResponse> {
   let inlineEdit: ImageJobInlineEdit | undefined;
   if (parsed.data.source_image) {
     try {
-      const sourceBytes = await resolveImageRefBytes(parsed.data.source_image, userId, scoped.db);
+      const sourceBytes = await resolveImageRefBytes(
+        parsed.data.source_image,
+        userId,
+        scoped.db,
+        existing.organizationId,
+      );
       const maskBytes = parsed.data.mask_image
-        ? await resolveImageRefBytes(parsed.data.mask_image, userId, scoped.db)
+        ? await resolveImageRefBytes(parsed.data.mask_image, userId, scoped.db, existing.organizationId)
         : undefined;
       const referenceBytes = await Promise.all(
         (parsed.data.reference_images ?? []).map((reference) =>
-          resolveImageRefBytes(reference, userId, scoped.db),
+          resolveImageRefBytes(reference, userId, scoped.db, existing.organizationId),
         ),
       );
       inlineEdit = {

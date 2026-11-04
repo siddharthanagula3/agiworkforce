@@ -538,14 +538,19 @@ export async function generateManagedImage(
         'asset_id' in source_image ||
         (mask_image && 'asset_id' in mask_image) ||
         (reference_images ?? []).some((reference) => 'asset_id' in reference);
-      const editRefDb = referencesStoredAsset ? (await input.scope()).db : undefined;
-      sourceBytes = await resolveImageRefBytes(source_image, userId, editRefDb);
+      const editRefScope = referencesStoredAsset ? await input.scope() : undefined;
+      sourceBytes = await resolveImageRefBytes(
+        source_image,
+        userId,
+        editRefScope?.db,
+        editRefScope?.organizationId,
+      );
       maskBytes = mask_image
-        ? await resolveImageRefBytes(mask_image, userId, editRefDb)
+        ? await resolveImageRefBytes(mask_image, userId, editRefScope?.db, editRefScope?.organizationId)
         : undefined;
       referenceBytes = await Promise.all(
         (reference_images ?? []).map((reference) =>
-          resolveImageRefBytes(reference, userId, editRefDb),
+          resolveImageRefBytes(reference, userId, editRefScope?.db, editRefScope?.organizationId),
         ),
       );
     } catch (error) {
