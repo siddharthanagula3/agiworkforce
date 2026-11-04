@@ -30,20 +30,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
-  try {
-    const [row] = await db.query<ProfileRow>(
-      'select routing_preferences from profiles where id = $1 limit 1',
-      [userId],
-    );
-    return NextResponse.json(readStoredPreferences(row?.routing_preferences));
-  } catch (error) {
-    logger.warn(
-      { userId, error: error instanceof Error ? error.message : String(error) },
-      '[routing-preferences] read failed · returning {}',
-    );
-    const preferences: RoutingPreferences = {};
-    return NextResponse.json(preferences);
-  }
+  const [row] = await db.query<ProfileRow>(
+    'select routing_preferences from profiles where id = $1 limit 1',
+    [userId],
+  );
+  return NextResponse.json(readStoredPreferences(row?.routing_preferences));
 }
 
 async function handlePut(request: NextRequest): Promise<NextResponse> {
