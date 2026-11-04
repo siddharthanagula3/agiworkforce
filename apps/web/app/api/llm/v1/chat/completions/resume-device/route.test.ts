@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultAutoRoutingProfile } from '@agiworkforce/types';
@@ -156,6 +157,7 @@ function claimed(request: Record<string, unknown> = {}) {
       nextEventSequence: 4,
       completedSteps: 2,
       request: {
+        x_context_policy_snapshot: contextPolicySnapshotFixture(),
         model: 'claude-test',
         stream: true,
         conversation_id: CONVERSATION_ID,
@@ -283,6 +285,26 @@ beforeEach(() => {
 });
 
 describe('POST /api/llm/v1/chat/completions/resume-device', () => {
+  it.each([
+    undefined,
+    { ...contextPolicySnapshotFixture(), version: 2 },
+    contextPolicySnapshotFixture('other-user'),
+    contextPolicySnapshotFixture('user-1', 'other-org'),
+    { ...contextPolicySnapshotFixture(), policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false } },
+  ])('releases the claim before processing an invalid or changed policy snapshot: %j', async (snapshot) => {
+    const original = claimed();
+    mocks.claim.mockResolvedValue({
+      ...original,
+      checkpoint: { ...original.checkpoint, request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot } },
+    });
+    const response = await POST(resume(resumeBody()));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'context_policy_restart_required' } });
+    expect(mocks.release).toHaveBeenCalledOnce();
+    expect(mocks.processRequest).not.toHaveBeenCalled();
+    expect(mocks.runTurn).not.toHaveBeenCalled();
+  });
+
   it('continues the paused run from trusted state with what the device returned', async () => {
     const response = await POST(resume(resumeBody()));
     await response.text();
@@ -353,6 +375,9 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
           {},
           [],
           autoSelection,
+          undefined,
+          undefined,
+          contextPolicySnapshotFixture(),
         ),
       ),
     );
@@ -376,6 +401,8 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
           [],
           undefined,
           refusedCode,
+          undefined,
+          contextPolicySnapshotFixture(),
         ),
       ),
     );

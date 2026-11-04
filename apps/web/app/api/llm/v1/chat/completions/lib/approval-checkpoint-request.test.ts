@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { describe, expect, it } from 'vitest';
 import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
 
@@ -246,5 +247,35 @@ describe('the model selection a checkpoint keeps', () => {
 
     expect(processed.modelSelection).toEqual({ kind: 'picked', modelId: routedModel });
     expect(processed.llmRequest.messages).toEqual(transcript);
+  });
+});
+
+
+describe('server-owned context policy snapshot', () => {
+  const turn = { model: 'fixture-model', messages: [], stream: true } as ChatCompletionRequest;
+
+  it('strips caller-supplied authority and only persists the explicit server snapshot', () => {
+    const incoming = { ...turn, x_context_policy_snapshot: contextPolicySnapshotFixture('attacker') };
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty('x_context_policy_snapshot');
+    const saved = contextPolicySnapshotFixture();
+    const request = buildApprovalCheckpointRequest(incoming, {}, [], undefined, undefined, undefined, saved);
+    expect(request['x_context_policy_snapshot']).toEqual(saved);
+    for (const isFree of [true, false]) {
+      expect(checkpointRequestForResume(request, isFree)).not.toHaveProperty('x_context_policy_snapshot');
+    }
+  });
+
+  it('restoring old transcript fields does not replace the already validated original snapshot', () => {
+    const saved = contextPolicySnapshotFixture();
+    const processed = {
+      chatRequest: turn,
+      llmRequest: { messages: [] },
+      contextPolicySnapshot: saved,
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, {
+      request: { x_context_policy_snapshot: contextPolicySnapshotFixture('different-user') },
+      messages: [],
+    });
+    expect(processed.contextPolicySnapshot).toBe(saved);
   });
 });
