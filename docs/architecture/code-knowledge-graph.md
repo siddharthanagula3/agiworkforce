@@ -1463,9 +1463,33 @@ known direct-child exit. Fixtures cover mocked stale ingress, exit waiting,
 replacement cancellation, spawn failure and handshake/worktree boundaries but
 were not executed. No process, network, native or deployment acceptance is claimed.
 
+## Electron worktree receipts preserve uncertain outcomes
+
+Accepted commit `23a04cd1b8ba2140e7f46f952b6940b84173dce2` changes
+`apps/desktop/electron/runtime/developerSessionService.ts` and unexecuted fixtures.
+Deletion forgets root admission only after a receipt matches the requested
+worktree ID and contains nonblank snapshot ref and commit. Timeout/error or
+incomplete/mismatched receipt retains local admission and reports uncertainty;
+legacy incomplete receipts are not accepted. Start/admission failure no longer
+requests speculative worktree deletion. Error copy retains the original failure
+message, CLI-reported locator when known and shutdown uncertainty, asking for
+inspection before retry. Errors are wrapped, not guaranteed to preserve the
+original error class. No immediate UI refresh or automatic recovery is added.
+
+A matching native archive receipt still is not physical-removal proof. The
+separate High OPEN [NATIVE-WORKTREE-ARCHIVE-LIFECYCLE-01](../../audit/prior-audits/active-issues-register.md#native-worktree-archive-lifecycle-01)
+traces `managed.rs` one-time active check before awaited snapshot/ref, ignored
+unlock/removal/prune errors, lock-inspection failure becoming empty and ignored
+lock-acquisition failure. Creation also invokes automatic cleanup. Private-index
+snapshot locking is not runtime/archive exclusion; all ignored contents are not
+guaranteed preserved. Native cross-process lifecycle/recovery/migration authority
+remains design-only and not implementation-ready. No observed loss, atomic
+archive/delete, all-writer stop or deployed/native acceptance is claimed. This
+slice's mocked lifecycle fixtures remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the sixty-one accepted production slices traced above are represented as
+Only the sixty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

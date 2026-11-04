@@ -8642,3 +8642,53 @@ empty/missing-stop EOF and cancellation independently. No production change or
 financial-policy decision is approved by this note. Source reading only: no tests,
 DB, provider, billing actions or deployment verification. Managed commit
 `119de96dcd3a5ed7cb27e871b53a4f11d33f0b5b` does not resolve this direct-path issue.
+
+
+## NATIVE-WORKTREE-ARCHIVE-LIFECYCLE-01
+
+Severity: High. Status: OPEN source-backed user-data lifecycle risk, 2026-11-04.
+No observed loss, reproduced race or runtime/deployment impact is established.
+This is the native cross-process/storage boundary, not a duplicate of Electron's
+bounded direct-child exit and receipt handling findings.
+
+`crates/agiworkforce-worktree/src/managed.rs::archive` (508–557) checks the
+worktree's active state once, then awaits snapshot creation, commit and archive-ref
+update before discard. No shared runtime/exclusive lifecycle lease spans those
+operations. A writer can become active after the check, or write after the
+snapshot, before removal. `locked_checkouts` (425–443) returns an empty set when
+inspection fails; `lock_checkout` (917 onward) ignores Git lock failure.
+`discard` (391–419) unconditionally attempts unlock and ignores checkout removal,
+reserved-directory removal and prune failures. Archive then returns ID/ref/commit
+without a verified physical-removal result. This supports possible post-snapshot
+write loss and misleading completion, not proof either occurred.
+
+Existing counterguards: detected active worktrees are refused; snapshot/ref
+failure prevents the normal archive removal path; pinned/active/spared worktrees
+are skipped by automatic cleanup. But `create` invokes `clean_up` independently
+(around 277; cleanup 562–585), so an Electron-only delete gate cannot cover all
+native archive callers. `apps/cli/src/app_server/developer_host.rs::delete_worktree`
+uses request admission then calls archive. Protocol `WorktreeArchive` contains
+only worktree ID, snapshot ref and commit. A matching receipt reports a snapshot,
+not authoritative operation/removal status. `snapshot.rs` holds its private index,
+not all worktree writers; ordinary Git staging also does not establish preservation
+of every ignored file. Do not repeat the protocol comment's universal recovery
+claim as verified behavior.
+
+Accepted Electron `23a04cd1b8ba2140e7f46f952b6940b84173dce2` validates the matching
+complete receipt before forgetting local admission and preserves reported
+worktrees on startup/admission failure instead of speculative deletion. It does
+not change native archive/storage semantics or serialize deletion against relaunch.
+Unknown create/delete outcomes require inspection, not blind retry. No immediate
+UI refresh or legacy incomplete-receipt compatibility is added.
+
+Design constraints, not an implementation-ready recommendation: require coherent
+cross-process lifecycle authority for all runtime/setup/write/archive/automatic
+cleanup participants, fail closed on unknown lock/inspection state, and retain
+that authority through eligibility, snapshot and verified removal. Stable identity
+and guard storage must survive removal of the checkout. Persist operation/recovery
+state and truthful terminal receipts; reconcile partial removal and uncertain
+crash/descendant outcomes idempotently. Legacy binaries that ignore a new lease,
+migration/quiescence, lock ordering and recovery/product semantics require explicit
+decisions. A snapshot receipt alone or a single-process UI lock cannot supply them.
+No native edits, tests, filesystem deletion, subprocess or network actions were
+performed for this finding.
