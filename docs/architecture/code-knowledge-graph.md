@@ -1910,12 +1910,54 @@ button to visibility. Shared native recognition configuration still requests
 on-device recognition; this is not proof of OS offline/privacy behavior or actual
 native event ordering. Source fixtures cover selected natural-final, stale handle,
 permission/file cancellation, bounded stop, button ownership and draft-delivery
-cases, with mock migrations; none were executed. Pending CloudCode audit work is
-not represented as corrected here.
+cases, with mock migrations; none were executed. The following web Code slice is separate from mobile
+Code dictation destination ownership.
+
+## Web Code binds transport invocations and pane publication separately
+
+Accepted commit `1a1fde1c2eed19c067b0f7b8f1d8d06e3799ee93` changes five
+production files and four fixture sources. `use-cloud-code-authority.ts` captures
+the canonical session and a fresh layout-effect lifetime per hook instance.
+Disposing one pane retires its pending authorities, not a sibling's; StrictMode
+setup obtains a new lifetime rather than reviving the first one. The owned API
+wrapper captures RequestAuthority at method invocation, before asynchronous
+mutation-header construction, and retains it through full method decoding and
+success/error completion. Production requests use the original session bearer
+and omitted cookies through the existing same-origin API authority. Retirement
+requests abort and rejects stale completion; it does not undo dispatched effects.
+
+`CloudCodePage` and `SharedCodeSessionPage` key their owned bodies by authenticated
+readiness/account/session, with share token also part of the viewer key. The
+shared viewer remains authenticated under the existing `/code` layout, including
+publicly shareable Code sessions; this is not an anonymous-access feature. Page
+selection and draft revisions reject observed selection/draft round trips, while
+list/filter and changes-request generations prevent old publications and cleanup
+from replacing newer state. Creation intentionally rebinds its accepted chain to
+the newly created selection; edits during creation/provisioning stop automatic
+continuation. An account-current background receipt may still update the session
+list, while selected-pane callbacks, errors, approvals, task restoration and busy
+cleanup require the original view. Exact submission symbols protect replacement
+work. Close/delete confirmation captures ownership when opened and rechecks it
+before dispatch; existing ConfirmAction keyed cleanup is not a new correction.
+
+`use-code-first-run.ts` fences late account results and writes to the existing
+global completion setting; it does not migrate that setting to per-account
+storage. Split panes receive the original injected API rather than another pane's
+owned wrapper. Notebook receives a guarded session-publication callback only:
+its transport, Local/native operations, workspace pinning and server authorization
+are outside this slice. Entirely unobserved SDK changes and already-dispatched
+remote work are not resolved by these client checks.
+
+Source fixtures cover selected account/readiness and share-token changes,
+selection ABA with newer busy state, create/provision edits, stale confirmations,
+first-run writes, token/JSON boundaries and independent sibling hook lifetimes.
+The sibling case is a hook fixture, not a full split-pane UI exercise. All fixtures
+remain unexecuted; no browser, StrictMode runtime or deployment acceptance is
+claimed.
 
 ## Reconstruction boundary
 
-Only the seventy-five accepted production slices traced above are represented as
+Only the seventy-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
