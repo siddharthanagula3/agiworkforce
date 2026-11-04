@@ -1,6 +1,7 @@
 import { api } from '@/services/api';
 import {
   archiveConversation,
+  fetchArchivedConversations,
   restoreArchivedConversation,
   deleteArchivedConversation,
   deleteAllArchivedConversations,
@@ -12,7 +13,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 
-jest.mock('@/services/api', () => ({ api: { put: jest.fn(), delete: jest.fn(), post: jest.fn() } }));
+jest.mock('@/services/api', () => ({ api: { get: jest.fn(), put: jest.fn(), delete: jest.fn(), post: jest.fn() } }));
 
 const response = { conversation: {
   id: 'chat-original', title: 'Original chat', model: null, project_id: null,
@@ -22,6 +23,7 @@ const response = { conversation: {
 
 let account: CloudAccountEpoch;
 beforeEach(() => {
+  jest.mocked(api.get).mockReset();
   jest.mocked(api.put).mockReset();
   jest.mocked(api.delete).mockReset();
   jest.mocked(api.post).mockReset();
@@ -97,4 +99,53 @@ it.each([archiveConversation, restoreArchivedConversation])('refuses a receipt a
   activateCloudAccount('replacement-account');
   resolve(response);
   expect(await settled).toMatchObject({ name: 'StaleCloudAccountOperationError' });
+});
+
+it('binds archived reads to their original epoch and caller signal', async () => {
+  const signal = new AbortController().signal;
+  jest.mocked(api.get).mockResolvedValueOnce({
+    conversations: [response.conversation], hasMore: true, nextOffset: 51,
+  });
+  const page = await fetchArchivedConversations(50, account, signal);
+  expect(api.get).toHaveBeenCalledWith(expect.stringContaining('offset=50'),
+    { accountEpoch: account, signal });
+  expect(page.nextOffset).toBe(51);
+  expect(page.conversations[0]?.id).toBe('chat-original');
+});
+
+it('rejects a read with a retired epoch before dispatch', async () => {
+  activateCloudAccount('replacement-account');
+  activateCloudAccount('original-account');
+  await expect(fetchArchivedConversations(0, account)).rejects.toMatchObject({
+    name: 'StaleCloudAccountOperationError',
+  });
+  expect(api.get).not.toHaveBeenCalled();
+});
+
+it('rejects a read receipt after its epoch retires', async () => {
+  let resolve!: (value: unknown) => void;
+  jest.mocked(api.get).mockReturnValueOnce(new Promise((yes) => { resolve = yes; }));
+  const pending = fetchArchivedConversations(0, account).catch((error: unknown) => error);
+  activateCloudAccount('replacement-account');
+  activateCloudAccount('original-account');
+  resolve({ conversations: [response.conversation], hasMore: false, nextOffset: 1 });
+  expect(await pending).toMatchObject({ name: 'StaleCloudAccountOperationError' });
+});
+
+it('forwards optional signals for the archived screen without changing archive menu callers', async () => {
+  const signal = new AbortController().signal;
+  jest.mocked(api.put).mockResolvedValueOnce(response);
+  jest.mocked(api.delete).mockResolvedValueOnce({ success: true });
+  jest.mocked(api.post).mockResolvedValueOnce({
+    success: true, action: 'delete_archived', affectedCount: 1,
+  });
+  await restoreArchivedConversation('chat-original', account, signal);
+  await deleteArchivedConversation('chat-original', account, signal);
+  await deleteAllArchivedConversations(account, signal);
+  expect(api.put).toHaveBeenCalledWith('/api/chat/conversations/chat-original',
+    { archived: false }, { accountEpoch: account, signal });
+  expect(api.delete).toHaveBeenCalledWith('/api/chat/conversations/chat-original',
+    { accountEpoch: account, signal });
+  expect(api.post).toHaveBeenCalledWith('/api/chat/conversations/bulk',
+    { action: 'delete_archived' }, { accountEpoch: account, signal });
 });

@@ -29,11 +29,12 @@ const BulkConversationResponseSchema = z.object({
 async function postBulkConversationAction(
   action: BulkConversationAction,
   account?: CloudAccountEpoch,
+  signal?: AbortSignal,
 ): Promise<number> {
   if (account !== undefined) assertCloudAccountEpochCurrent(account);
   const response = account === undefined
     ? await api.post<unknown>('/api/chat/conversations/bulk', { action })
-    : await api.post<unknown>('/api/chat/conversations/bulk', { action }, { accountEpoch: account });
+    : await api.post<unknown>('/api/chat/conversations/bulk', { action }, { accountEpoch: account, ...(signal ? { signal } : {}) });
   if (account !== undefined) assertCloudAccountEpochCurrent(account);
   const data = BulkConversationResponseSchema.parse(response);
   return data.affectedCount;
@@ -52,16 +53,19 @@ export interface ArchivedConversationPage {
 }
 
 export async function fetchArchivedConversations(
-  offset = 0,
+  offset: number,
+  account: CloudAccountEpoch,
   signal?: AbortSignal,
 ): Promise<ArchivedConversationPage> {
+  assertCloudAccountEpochCurrent(account);
   const data = ManagedCloudConversationListResponseSchema.parse(
     await api.get<unknown>(
       `/api/chat/conversations?archived=only&limit=${PAGE_SIZE}&offset=${Math.max(0, offset)}`,
-      signal ? { signal } : undefined,
+      { accountEpoch: account, ...(signal ? { signal } : {}) },
     ),
   );
 
+  assertCloudAccountEpochCurrent(account);
   return {
     conversations: data.conversations.map((wire) => {
       const conversation = normalizeManagedCloudConversation(wire);
@@ -80,12 +84,13 @@ async function setConversationArchived(
   id: string,
   archived: boolean,
   account: CloudAccountEpoch,
+  signal?: AbortSignal,
 ): Promise<void> {
   assertCloudAccountEpochCurrent(account);
   const response = await api.put<unknown>(
     managedCloudConversationPath(id),
     { archived },
-    { accountEpoch: account },
+    { accountEpoch: account, ...(signal ? { signal } : {}) },
   );
   assertCloudAccountEpochCurrent(account);
   ManagedCloudUpdateConversationResponseSchema.parse(response);
@@ -94,27 +99,35 @@ async function setConversationArchived(
 export async function restoreArchivedConversation(
   id: string,
   account: CloudAccountEpoch,
+  signal?: AbortSignal,
 ): Promise<void> {
-  return setConversationArchived(id, false, account);
+  return setConversationArchived(id, false, account, signal);
 }
 
 export async function archiveConversation(id: string, account: CloudAccountEpoch): Promise<void> {
   return setConversationArchived(id, true, account);
 }
 
-export async function deleteArchivedConversation(id: string, account: CloudAccountEpoch): Promise<void> {
+export async function deleteArchivedConversation(
+  id: string,
+  account: CloudAccountEpoch,
+  signal?: AbortSignal,
+): Promise<void> {
   assertCloudAccountEpochCurrent(account);
   const response = await api.delete<unknown>(
     managedCloudConversationPath(id),
-    { accountEpoch: account },
+    { accountEpoch: account, ...(signal ? { signal } : {}) },
   );
   assertCloudAccountEpochCurrent(account);
   ManagedCloudDeleteConversationResponseSchema.parse(response);
 }
 
-export async function deleteAllArchivedConversations(account: CloudAccountEpoch): Promise<number> {
+export async function deleteAllArchivedConversations(
+  account: CloudAccountEpoch,
+  signal?: AbortSignal,
+): Promise<number> {
   assertCloudAccountEpochCurrent(account);
-  return postBulkConversationAction('delete_archived', account);
+  return postBulkConversationAction('delete_archived', account, signal);
 }
 
 export async function archiveAllConversations(): Promise<number> {
