@@ -15,7 +15,7 @@ const localStore = vi.hoisted(() => ({
 }));
 
 vi.mock('../../stores/memoryStore', () => ({
-  useMemoryStore: (selector: (state: typeof localStore) => unknown) => selector(localStore),
+  useMemoryStore: (selector?: (state: typeof localStore) => unknown) => selector ? selector(localStore) : localStore,
 }));
 
 beforeEach(() => {
@@ -47,7 +47,7 @@ function adapter(facts: MemoryFact[]): MemoryEditorDataAdapter {
   };
 }
 
-describe('MemoryEditor pinning', () => {
+describe('MemoryEditor pinning (unexecuted fixture alignment)', () => {
   it('lists pinned facts first and exposes a pressed pin control on them', () => {
     render(
       <MemoryEditor

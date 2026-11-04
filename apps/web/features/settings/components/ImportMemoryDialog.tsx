@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import {
   Dialog,
@@ -23,7 +23,8 @@ import {
   type ManagedMemoryImportRequest,
   type ManagedMemoryRecord,
 } from '@agiworkforce/types';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useCloudMemory, useMemoryView } from '@/features/memory/use-cloud-memory';
+import type { CloudMemoryController } from '@/features/memory/cloud-memory-controller';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -55,33 +56,36 @@ export function useImportMemoryDialog() {
   };
 }
 
-interface RequestErrorPayload {
-  error?: { message?: string };
-}
-
 async function requestImport<T>(
+  controller: CloudMemoryController,
+  current: () => boolean,
   request: ManagedMemoryImportRequest,
   parse: (value: unknown) => T | null,
 ): Promise<T> {
-  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-  const response = await fetch(IMPORT_ENDPOINT, {
+  return controller.request(IMPORT_ENDPOINT, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
-  });
-  const data: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = (data as RequestErrorPayload | null)?.error?.message;
-    const error = new Error(message ?? `HTTP ${response.status}`) as Error & { status?: number };
-    error.status = response.status;
-    throw error;
-  }
-  const parsed = parse(data);
-  if (parsed === null) throw new Error(`HTTP ${response.status}`);
-  return parsed;
+  }, parse, { current, mutation: request.mode === 'commit', changesFacts: request.mode === 'commit' });
 }
 
-export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMemoryDialogProps) {
+export function ImportMemoryDialog(props: ImportMemoryDialogProps) {
+  const controller = useCloudMemory();
+  return props.open && controller
+    ? <OwnedImportMemoryDialog key={controller.key} {...props} controller={controller} /> : null;
+}
+
+function OwnedImportMemoryDialog({ open, onOpenChange, onImported, controller }: ImportMemoryDialogProps & { controller: CloudMemoryController }) {
+  const capture = useMemoryView(controller);
+  const closed = useRef(false);
+  const readerRef = useRef<FileReader | null>(null);
+  const requestGeneration = useRef(0);
+  const commitPending = useRef(false);
+  useEffect(() => () => { readerRef.current?.abort(); }, []);
+  const captureDialog = useCallback(() => {
+    const current = capture();
+    return () => current() && !closed.current;
+  }, [capture]);
   const [step, setStep] = useState<DialogStep>('compose');
   const [text, setText] = useState('');
   const [sourcePreset, setSourcePreset] = useState<ImportSourcePreset>('ChatGPT');
@@ -118,6 +122,10 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (!next && committing) return;
+      if (!next) {
+        closed.current = true;
+        readerRef.current?.abort();
+      }
       onOpenChange(next);
       if (!next) resetState();
     },
@@ -125,38 +133,60 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
   );
 
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const current = captureDialog();
+    if (!current()) return;
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    requestGeneration.current += 1;
+    setPreviewing(false);
+    readerRef.current?.abort();
     setFileError(null);
     if (file.size > MAX_IMPORT_TEXT_CHARS) {
       setFileError('That file is too large to import.');
       return;
     }
     const reader = new FileReader();
+    readerRef.current?.abort();
+    readerRef.current = reader;
     reader.onload = () => {
-      if (typeof reader.result === 'string') setText(reader.result);
+      if (current() && readerRef.current === reader && typeof reader.result === 'string') {
+        requestGeneration.current += 1;
+        setPreviewing(false);
+        setText(reader.result);
+      }
     };
-    reader.onerror = () => setFileError('Could not read that file.');
+    reader.onerror = () => { if (current() && readerRef.current === reader) setFileError('Could not read that file.'); };
     reader.readAsText(file);
-  }, []);
+  }, [captureDialog]);
 
   const handleCopyPrompt = useCallback(async () => {
-    setPromptCopy((await safeClipboard.writeText(EXPORT_PROMPT)) ? 'copied' : 'failed');
-  }, []);
+    const current = captureDialog();
+    if (!current()) return;
+    const copied = await safeClipboard.writeText(EXPORT_PROMPT);
+    if (current()) setPromptCopy(copied ? 'copied' : 'failed');
+  }, [captureDialog]);
 
   const resolvedSourceName = sourcePreset === 'Other' ? customSourceName : sourcePreset;
 
   const handlePreview = useCallback(async () => {
+    readerRef.current?.abort();
+    readerRef.current = null;
+    const dialogCurrent = captureDialog();
+    const generation = ++requestGeneration.current;
+    const current = () => dialogCurrent() && generation === requestGeneration.current;
+    if (!current()) return;
     const trimmed = text.trim();
     if (!trimmed) return;
     setPreviewError(null);
     setPreviewing(true);
     try {
       const result = await requestImport(
+        controller, current,
         { mode: 'dry-run', text: trimmed, sourceName: resolvedSourceName },
         parseManagedMemoryImportPreviewResponse,
       );
+      if (!current()) return;
       setPreview(result);
       setSelected(
         new Set(
@@ -167,11 +197,11 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
       );
       setStep('preview');
     } catch (error) {
-      setPreviewError(toUserMessage(error, 'Could not read that text.'));
+      if (current()) setPreviewError(toUserMessage(error, 'Could not read that text.'));
     } finally {
-      setPreviewing(false);
+      if (current()) setPreviewing(false);
     }
-  }, [text, resolvedSourceName]);
+  }, [text, resolvedSourceName, controller, captureDialog]);
 
   const toggleItem = useCallback((index: number) => {
     setSelected((current) => {
@@ -193,27 +223,34 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
   }, [allSelected, preview]);
 
   const handleCommit = useCallback(async () => {
+    if (commitPending.current) return;
+    const current = captureDialog();
+    if (!current()) return;
     if (!preview) return;
     const items = preview.items
       .filter((_, index) => selected.has(index))
       .map((item) => item.content);
     if (items.length === 0) return;
+    commitPending.current = true;
     setCommitError(null);
     setCommitting(true);
     try {
       const result = await requestImport(
+        controller, current,
         { mode: 'commit', items, sourceName: preview.sourceName },
         parseManagedMemoryImportCommitResponse,
       );
+      if (!current()) return;
       setCommitResult(result);
       setStep('done');
       onImported?.(result.memories);
     } catch (error) {
-      setCommitError(toUserMessage(error, 'Could not import these memories.'));
+      if (current()) setCommitError(toUserMessage(error, 'Could not confirm the import. Check your saved memories before trying again.'));
     } finally {
-      setCommitting(false);
+      commitPending.current = false;
+      if (current()) setCommitting(false);
     }
-  }, [preview, selected, onImported]);
+  }, [preview, selected, onImported, controller, captureDialog]);
 
   const charCount = text.length;
   const overCharLimit = charCount > MAX_IMPORT_TEXT_CHARS;
@@ -301,7 +338,11 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
               <select
                 id="import-memory-source"
                 value={sourcePreset}
-                onChange={(event) => setSourcePreset(event.target.value as ImportSourcePreset)}
+                onChange={(event) => {
+                  requestGeneration.current += 1;
+                  setPreviewing(false);
+                  setSourcePreset(event.target.value as ImportSourcePreset);
+                }}
                 className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
               >
                 {IMPORT_SOURCE_PRESETS.map((preset) => (
@@ -314,7 +355,11 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
                 <input
                   type="text"
                   value={customSourceName}
-                  onChange={(event) => setCustomSourceName(event.target.value)}
+                  onChange={(event) => {
+                    requestGeneration.current += 1;
+                    setPreviewing(false);
+                    setCustomSourceName(event.target.value);
+                  }}
                   placeholder="Assistant name"
                   aria-label="Custom source name"
                   className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground"
@@ -346,7 +391,12 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
               <textarea
                 id="import-memory-text"
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(event) => {
+                  requestGeneration.current += 1;
+                  setPreviewing(false);
+                  readerRef.current?.abort();
+                  setText(event.target.value);
+                }}
                 rows={8}
                 placeholder="- Prefers concise answers&#10;- Works as a backend engineer&#10;- Lives in Berlin"
                 className="resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"

@@ -18,6 +18,7 @@ export interface RequestAuthority {
 export function createRequestAuthority(
   session: SessionAuthority,
   isOwner: () => boolean = () => true,
+  onDispatch?: () => void,
 ): RequestAuthority {
   const controller = new AbortController();
   const retire = () => controller.abort();
@@ -56,14 +57,17 @@ export function createRequestAuthority(
       const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
       headers.set('Authorization', `Bearer ${token}`);
       const inputSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
-      const response = await fetch(input, {
+      const requestInit: RequestInit = {
         ...init,
         headers,
         credentials: 'omit',
         signal: inputSignal
           ? AbortSignal.any([controller.signal, inputSignal])
           : controller.signal,
-      });
+      };
+      assertCurrent();
+      onDispatch?.();
+      const response = await fetch(input, requestInit);
       if (!isCurrent()) {
         void response.body?.cancel().catch(() => undefined);
         assertCurrent();

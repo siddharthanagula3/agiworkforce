@@ -89,3 +89,54 @@ describe('immutable request authority', () => {
     await expect(authority.getToken()).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
+
+describe('request dispatch observation source fixtures (unexecuted)', () => {
+  it('does not observe dispatch before token resolution or after owner retirement', async () => {
+    const owner = session();
+    const token = deferred<string>();
+    owner.identity.getToken = () => token.promise;
+    const dispatched = vi.fn();
+    const transport = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', transport);
+    const authority = createRequestAuthority(owner.identity, () => true, dispatched);
+    const request = authority.fetch('/api/memory', { method: 'POST' });
+    const rejected = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    expect(dispatched).not.toHaveBeenCalled();
+    owner.switchAccount();
+    token.resolve('retired-token');
+    await rejected;
+    expect(dispatched).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('observes exactly one dispatch immediately before each fetch invocation', async () => {
+    const owner = session();
+    const order: string[] = [];
+    const dispatched = vi.fn(() => { order.push('dispatch'); });
+    vi.stubGlobal('fetch', vi.fn(async () => { order.push('fetch'); return new Response('{}'); }));
+    const authority = createRequestAuthority(owner.identity, () => true, dispatched);
+    await authority.getToken();
+    expect(dispatched).not.toHaveBeenCalled();
+    await authority.fetch('/api/memory', { method: 'POST' });
+    expect(dispatched).toHaveBeenCalledTimes(1);
+    await authority.fetch('/api/memory', { method: 'GET' });
+    expect(dispatched).toHaveBeenCalledTimes(2);
+    expect(order).toEqual(['dispatch', 'fetch', 'dispatch', 'fetch']);
+  });
+
+  it('reports invocation, not proof that an already-aborted request reached a server', async () => {
+    const owner = session();
+    const input = new AbortController();
+    input.abort();
+    const dispatched = vi.fn();
+    const transport = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      expect(init?.signal?.aborted).toBe(true);
+      throw new DOMException('Aborted input', 'AbortError');
+    });
+    vi.stubGlobal('fetch', transport);
+    const authority = createRequestAuthority(owner.identity, () => true, dispatched);
+    await expect(authority.fetch('/api/memory', { signal: input.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(dispatched).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+});

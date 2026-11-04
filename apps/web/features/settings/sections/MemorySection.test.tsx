@@ -1,6 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => getCloudMemoryFixtureSession,
+  useReadonlyIdentityLifetime: () => () => {
+    const session = getCloudMemoryFixtureSession();
+    return { isCurrent: () => session?.isCurrent() === true };
+  },
+}));
+
+let cloud: ReturnType<typeof createCloudMemoryFixture>;
+beforeEach(() => { cloud = createCloudMemoryFixture(); });
+afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
 
 const { mockCapabilities, memoryState, openImport } = vi.hoisted(() => ({
   mockCapabilities: vi.fn(),
@@ -24,15 +39,25 @@ vi.mock('@/features/settings/components/ImportMemoryDialog', () => ({
   useImportMemoryDialog: () => ({ isOpen: false, open: openImport, close: vi.fn() }),
 }));
 
-vi.mock('@agiworkforce/unified-chat', () => ({
-  MemoryEditor: () => null,
-  useMemoryStore: (selector: (state: unknown) => unknown) =>
-    selector({ memories: [], clear: vi.fn(), hydrateFromServer: vi.fn() }),
-  selectMemoryCount: () => memoryState.count,
-}));
-
 import { MemorySection } from './MemorySection';
 import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
+
+const transport = vi.fn<typeof fetch>();
+function memoryResponse(input: RequestInfo | URL) {
+  const path = String(input);
+  const rows = Array.from({ length: memoryState.count }, (_, index) => ({
+    id: `cloud-${index}`, content: `Saved fact ${index}`, category: null, source: 'web',
+    createdAt: '2026-10-01', updatedAt: '2026-10-01',
+  }));
+  return new Response(JSON.stringify(path.startsWith('/api/memory?') ? { memories: rows, hasMore: false }
+    : { summary: { about: [], preferences: [] }, memoryCount: rows.length, generatedAt: null }));
+}
+beforeEach(() => {
+  memoryState.count = 0;
+  transport.mockReset();
+  transport.mockImplementation(async (input) => memoryResponse(input));
+  vi.stubGlobal('fetch', transport);
+});
 
 const TOGGLES = [
   'Persistent memory',
@@ -63,12 +88,12 @@ function capabilities(organizationMemoryAllowed: boolean) {
   };
 }
 
-describe('MemorySection under a workspace policy', () => {
+describe('Unexecuted cloud MemorySection under a workspace policy', () => {
   beforeEach(() => mockCapabilities.mockReset());
 
   it('says the workspace turned memory off and names where it changes', () => {
     mockCapabilities.mockReturnValue(capabilities(false));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     expect(screen.getByText(/workspace has memory turned off/i)).toBeInTheDocument();
     expect(screen.getByText(/Workspace → Policy/)).toBeInTheDocument();
@@ -76,7 +101,7 @@ describe('MemorySection under a workspace policy', () => {
 
   it('disables every memory toggle while the workspace gate is closed', () => {
     mockCapabilities.mockReturnValue(capabilities(false));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     for (const label of TOGGLES) {
       expect(screen.getByLabelText(label)).toBeDisabled();
@@ -88,7 +113,7 @@ describe('MemorySection under a workspace policy', () => {
   // does to the facts already saved.
   it('explains account, workspace and project scope, and what disabling memory does', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const explanation = screen.getByRole('region', { name: 'Where a memory applies' });
     expect(explanation).toHaveTextContent('Account');
@@ -100,7 +125,7 @@ describe('MemorySection under a workspace policy', () => {
 
   it('says the history switch saves details on its own, not that it reads old chats', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     expect(screen.getByRole('switch', { name: 'Save memories from chats' })).toBeInTheDocument();
     expect(
@@ -111,7 +136,7 @@ describe('MemorySection under a workspace policy', () => {
 
   it('leaves the toggles usable when the workspace allows memory', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     expect(screen.queryByText(/workspace has memory turned off/i)).toBeNull();
     for (const label of TOGGLES) {
@@ -120,7 +145,7 @@ describe('MemorySection under a workspace policy', () => {
   });
 });
 
-describe('MemorySection controls', () => {
+describe('Unexecuted cloud MemorySection controls', () => {
   const createObjectURL = vi.fn(() => 'blob:memories');
   const revokeObjectURL = vi.fn();
 
@@ -138,7 +163,7 @@ describe('MemorySection controls', () => {
   });
 
   it('heads Memory as a section of the pane that holds it', () => {
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     expect(screen.getByRole('heading', { level: 2, name: 'Memory' })).toBeVisible();
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
@@ -146,7 +171,7 @@ describe('MemorySection controls', () => {
   });
 
   it('draws the memory actions as pills and keeps their labels', () => {
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     for (const name of [
       'Start import',
@@ -162,7 +187,7 @@ describe('MemorySection controls', () => {
 
   it('starts an import from its own row, even before any memory exists', async () => {
     memoryState.count = 0;
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const start = screen.getByRole('button', { name: 'Start import' });
     expect(start.closest('li')).toHaveTextContent('Import memory from other AI providers');
@@ -173,14 +198,14 @@ describe('MemorySection controls', () => {
 
   it('offers no export while there is nothing to export', () => {
     memoryState.count = 0;
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     expect(screen.getByRole('button', { name: 'Export memories' })).toBeDisabled();
   });
 
   it('downloads the export under the name the server gives it', async () => {
     const fetchMock = vi.fn(
-      async () =>
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response('[]', {
           status: 200,
           headers: {
@@ -189,37 +214,34 @@ describe('MemorySection controls', () => {
           },
         }),
     );
-    vi.stubGlobal('fetch', fetchMock);
+    transport.mockImplementation(async (input, init) => String(input) === '/api/memory/export' ? fetchMock(input, init) : memoryResponse(input));
     const downloads: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
     ) {
       downloads.push(this.download);
     });
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: 'Export memories' }));
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/memory/export', { credentials: 'include' });
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    expect(fetchMock).toHaveBeenCalledWith('/api/memory/export', expect.objectContaining({ credentials: 'omit', cache: 'no-store' }));
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toMatch(/^Bearer fixture-token-/);
     expect(downloads).toEqual(['memories-2026-10-22.json']);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:memories');
     expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled();
   });
 
   it('says the export failed instead of downloading an error page', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
-            status: 429,
-            headers: { 'Content-Type': 'application/json' },
-          }),
-      ),
-    );
+    transport.mockImplementation(async (input) => String(input) === '/api/memory/export'
+      ? new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), { status: 429 })
+      : memoryResponse(input));
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click');
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: 'Export memories' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Rate limit exceeded');
@@ -227,7 +249,7 @@ describe('MemorySection controls', () => {
   });
 
   it('renders every memory control the settings search lists under Personalization', () => {
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const labels = (WEB_SETTINGS_NAV_FIELDS.personalization ?? []).map((field) => field.label);
     for (const label of MEMORY_FIELD_LABELS) {
@@ -237,13 +259,13 @@ describe('MemorySection controls', () => {
   });
 });
 
-describe('MemorySection while persistent memory is off', () => {
+describe('Unexecuted cloud MemorySection while persistent memory is off', () => {
   beforeEach(() => mockCapabilities.mockReset());
 
   it('says why the tool-assisted toggle is locked and links the reason to it', () => {
     const value = capabilities(true);
     mockCapabilities.mockReturnValue({ ...value, settings: { ...value.settings, memory: false } });
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const toggle = screen.getByRole('switch', {
       name: 'Allow memory generation from tool-assisted chats',
@@ -257,14 +279,14 @@ describe('MemorySection while persistent memory is off', () => {
 
   it('shows no locked hint once persistent memory is on', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     expect(screen.queryByText('Turn on persistent memory to change this.')).toBeNull();
   });
 
   it('lists the memory rows as one divided list instead of boxed cards', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
-    render(<MemorySection />);
+    render(<MemorySection />, { wrapper: cloud.wrapper });
 
     const row = screen.getByRole('switch', { name: 'Search past chats' }).closest('li');
     expect(row?.parentElement).toHaveClass('divide-y');
