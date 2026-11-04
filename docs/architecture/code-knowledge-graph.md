@@ -970,9 +970,34 @@ Fixture source exercises budgets, preview refusal and STORE reconstruction, but
 has no actual Mammoth-interception or late-event-after-pause coverage and was not
 executed. No browser, dependency-version or runtime acceptance is claimed.
 
+## Browser workbook serialized-output admission
+
+Reconstructed commit: `891ca6ac3dec5b2fcd1a454c2561d68db2824c46` changes three
+production files and three unexecuted fixture sources. `xlsxSheets` now applies a
+newly enforced cumulative 200,000 UTF-16-code-unit serialized CSV restriction
+across the workbook, using `MAX_FILE_TEXT_CHARS`. Sparse final-cell maps preserve
+duplicate-cell overwrite semantics; column arithmetic and exact rectangular
+padding, newline, quoting and escaping lengths are checked before allocating CSV
+output. Each accepted sheet spends its actual serialized length; a later-sheet
+overflow rejects the whole workbook with `WorkbookPreviewLimitError`, rather
+than publishing a partial workbook.
+
+`ArtifactPreview` and `MessageBubble` distinguish that refusal with an explicit
+notice directing the user to the original XLSX download. Existing download and
+saved-content behavior remains; failed cache promises retain the existing eviction
+path. The new cap is a product preview restriction, not universal memory safety:
+input buffers, parsed XML/DOM, shared strings, sparse maps, cache multiplicity and
+concurrent loads remain separate costs. PPTX rectangular-table expansion is not
+bounded by this XLSX cap.
+
+Authored source cases cover exact/over limits, sparse coordinates/padding,
+escaping, duplicate final values, repeated shared strings, cumulative sheets and
+UI notices, but none were executed. No browser runtime, CPU/heap bound or pending
+CLI recovery correction is claimed.
+
 ## Reconstruction boundary
 
-Only the forty accepted production slices traced above are represented as
+Only the forty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
