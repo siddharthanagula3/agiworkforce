@@ -431,9 +431,64 @@ provider catalogue and routes are unchanged. Any future supported handoff needs
 actual destination-specific transport and consent for the exact payload and
 attachment destinations; the refusal does not implement those semantics.
 
+## Runtime-owned interactive-card responses
+
+Reconstructed commit: `83fa7b5dbea2f02ce14724fc78a4ce40ab59ced7`
+(three production files and seven unexecuted fixture files). This supersedes the
+prior main-send slice's standalone-card exclusion only for this response path.
+`InteractiveCardBlock` obtains the optional chat runtime; without it, submission
+and automatic resume are disabled instead of falling back to a cookie-only
+module function. Runtime owns response pending state keyed by conversation,
+message and card.
+
+The runtime prefers retained original turn/conversation authority, including
+known retired evidence, rather than recapturing a new identity for that evidence.
+An unknown restored card can only capture invocation-time authority; no persisted
+original-account provenance is inferred. A child request authority fences CSRF,
+bearer/no-cookie dispatch and JSON decoding, validates returned card ID/kind and
+updates current message metadata. Stale response/error publication is suppressed;
+cleanup removes only the exact pending authority, and calls after runtime unmount
+refuse. Existing server owner/organization and pending-state compare-and-set
+checks are unchanged. Already dispatched server mutation is not undone, and the
+slice proves neither new server authorization nor durable replay provenance.
+
+## Mobile offline Cloud attachment refusal
+
+Reconstructed commit: `cc005bb461037dbb30633b12a42dde0333afe6d0`.
+The existing-conversation chat route now refuses attachment-bearing offline Cloud
+sends before quote/skill cleanup or text-only queue insertion. Returning false
+retains the composer draft/files under the existing not-sent behavior and asks
+the user to reconnect. Text-only offline queueing, Local sends and earlier media
+branches remain unchanged. The slice adds a ChatInput fixture and an explicitly
+source-shape route fixture, neither executed. It does not add a durable attachment
+queue, composer remount recovery or general offline-delivery guarantee.
+
+## Session-owned conversation loaders and shared list cache
+
+Reconstructed commit: `543b8310cac9d89228093a4b59b15f16d5c54638`.
+The three-file slice changes `useConversations.ts` and two unexecuted regression
+sources. Module-owned list cache/request captures session identity and authority;
+only matching current sessions share freshness or an in-flight request. A route
+subscriber's unmount does not abort another same-session subscriber's request or
+its bounded rate-limit retries. Replacing cache ownership retires the old request.
+Small busy-state subscriptions detach exactly and preserve idle UI during 429
+backoff, rather than claiming the network remains busy throughout the wait.
+
+History opening/refresh, pagination and project-list reads use captured session,
+hook lifetime and exact operation ownership across response/body waits and local
+publication. Superseded cleanup cannot clear a replacement operation. Read
+cancellation retains its existing true sentinel. Shared-list completion clears
+only its own cache entry; callbacks cannot publish through retired authority.
+
+Existing external-authority conversation creation/background send behavior and
+other mutations remain outside this read slice. Workspace pinning, general
+account-store restoration and cached transcript reconciliation semantics are
+unchanged. Entirely unobserved SDK identity ABA and runtime behavior remain
+unverified; the new fixture assertions were not executed.
+
 ## Reconstruction boundary
 
-Only the fifteen accepted production slices traced above are represented as
+Only the eighteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
