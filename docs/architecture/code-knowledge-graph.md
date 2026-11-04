@@ -3944,9 +3944,62 @@ malformed responses, adjusted denial/readback failure, uncertainty, notice renew
 and read retry. No tests, checks, builds, native UI, consent changes or network
 actions were run; all regression sources remain unexecuted.
 
+## Routing settings distinguish failed reads from authoritative absence
+
+Accepted commit `edc93db942746867596e986f348451345ca9b991` removes the
+routing-preference endpoint's successful empty fallback after a database read
+failure. The existing error wrapper now reports an ordinary rejected read as a
+sanitized non-success response. A successful missing row, null preference or empty
+object still means no stored preference; field-wise filtering still preserves valid
+supported fields when another stored field is invalid.
+
+Both production HTTP consumers reject a non-success response before admitting a
+replacement snapshot. Their initial controls stay disabled rather than offering a
+save based on unavailable preferences. PUT remains a complete validated replacement,
+including explicit empty-object clearing. Its authenticated user scope, rate limit,
+CSRF and absent-profile failure are unchanged. The independent inference routing
+resolver's fail-open policy is outside this settings-editor correction.
+
+Independent source review accepted the correction. Existing route fixture sources
+now distinguish successful absence from failed reads, retain both supported fields,
+pin replacement semantics and assert no privileged database fallback. Concurrent
+full-object edits and older-client field stripping remain separate limitations.
+No tests, checks, builds, database or network actions were run.
+
+## Mobile provider location choices own their ready account and tier lifetime
+
+Accepted commit `7cdf47f29c8dc63630fe708de9047c4e8277d5b5` changes the
+US-only privacy group and adds an unexecuted ownership fixture source. Each focused
+owner captures the Cloud account epoch and effective tier. Exact owner checks include
+loaded signed-in identity, Cloud mode and current tier; subscriptions retire account,
+auth, mode and tier transitions synchronously, including round trips. Blur/unmount
+also retire the owner and abort its observer.
+
+Save admission requires the original ready object, current eligible tier and an
+exclusive synchronous operation. GET and PUT carry the original account epoch and
+abort signal. Strict schema parsing accepts authoritative absence but no longer
+turns malformed successful responses into an empty replacement snapshot. A save
+retains supported fields such as geo_overlay while changing us_only. Old callbacks,
+results and cleanup cannot act for a replacement owner or release its operation.
+
+Acknowledgment requires a valid returned boolean, and reports that returned value
+rather than assuming the requested one. An unavailable or invalid write response
+is uncertain, not a proven rollback. Both outcomes reconcile through a fresh owned
+read without automatically repeating PUT. A failed readback keeps the control
+disabled, preserves any acknowledged boolean with explicit copy, and offers a
+read-only retry. Abort does not prove server rollback. Cached tier freshness,
+concurrent replacement writes and older-client field stripping are unchanged.
+
+Independent source review accepted the bounded lifecycle. Fixture sources cover
+duplicate and retained callbacks, account/identity/auth/mode/focus/tier round trips,
+pending read/write retirement, malformed reads, retained geo fields, adjusted
+receipts, lost responses, read retry and unmount. The canonical HTTP client is
+mocked and native focus is simulated. No tests, checks, builds, native UI, settings
+mutations or network actions were run; all fixture sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-four accepted production slices traced above are represented as
+Only the one hundred and thirty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

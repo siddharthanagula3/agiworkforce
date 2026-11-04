@@ -9244,9 +9244,11 @@ remains open.
 
 ## MOBILE-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
-Status: OPEN, source-backed on 2026-11-04. No runtime reproduction.
+Status: Provider-training ownership remains OPEN. US-only ownership was boundedly
+source-corrected in `7cdf47f29c`; runtime acceptance remains unverified. Source-backed
+on 2026-11-04, with no runtime reproduction.
 
-`ProviderTrainingOptOutGroup.tsx` and `UsOnlyRoutingGroup.tsx` load only on
+Original source evidence: `ProviderTrainingOptOutGroup.tsx` and `UsOnlyRoutingGroup.tsx` load only on
 mount and retain their local settings without original account/focus/mode
 ownership. A retained callback can dispatch through the current API account after
 the displayed choice originated elsewhere. React `saving` disables the next
@@ -9263,19 +9265,27 @@ Local-mode egress refusal is also not a context-round-trip lifetime. Server writ
 remain authenticated-user scoped; no authorization bypass or live cross-account
 write was demonstrated.
 
-Continue with a bounded original-owner/ready-snapshot admission and exclusive
-operation design, truthful acknowledgment/uncertainty, and authoritative read
-contracts. Analytics was separately source-corrected by `0eb6b9458c`; it does not
-close these controls. US-only additionally depends on
-`WEB-ROUTING-PREFERENCES-READ-01`. Device-scoped named-provider MMKV consent is a
-separate ownership model and must not be silently account-bound. No tests, checks,
-builds, native UI, settings mutation or network actions were performed.
+Accepted US-only correction `7cdf47f29c8dc63630fe708de9047c4e8277d5b5`
+owns the focused account/auth/mode/tier lifetime, original ready snapshot and one
+synchronous operation. It forwards the original epoch and abort signal, rejects
+malformed reads, preserves supported routing fields, validates the returned
+boolean and reconciles acknowledged or uncertain writes through an owned read.
+Failed reconciliation disables save and offers only read retry. Its endpoint's
+false-empty failure was separately corrected in `edc93db942`. Aborts do not prove
+rollback, cached tier may be stale, and concurrent replacement writes remain.
+
+Continue the original-owner/ready-snapshot and honest-read work for provider-training
+only. Analytics was separately source-corrected by `0eb6b9458c`. Device-scoped
+named-provider MMKV consent is a separate ownership model and must not be silently
+account-bound. No tests, checks, builds, native UI, settings mutation or network
+actions were performed; authored fixture sources remain unexecuted.
 
 ## WEB-ROUTING-PREFERENCES-READ-01
 
-Status: OPEN, source-backed on 2026-11-04. No runtime reproduction.
+Status: Bounded source correction accepted in `edc93db942`; runtime acceptance and
+concurrent replacement-write behavior remain unverified. No runtime reproduction.
 
-`apps/web/app/api/me/routing-preferences/route.ts` catches a database read failure
+Historical source evidence: `apps/web/app/api/me/routing-preferences/route.ts` catches a database read failure
 and returns HTTP 200 with `{}`. A valid absent preference and an unavailable read
 are therefore indistinguishable to callers. Its PUT replaces the complete stored
 routing JSON. Mobile's `UsOnlyRoutingGroup.tsx` spreads its loaded preferences and
@@ -9284,9 +9294,13 @@ as empty success, a later successful save can erase an existing `geo_overlay` or
 other supported routing field. No live erasure or provider-routing outcome was
 demonstrated.
 
-UI schema validation alone cannot establish whether `{}` was authoritative.
-Define an honest failure-versus-absence read contract and preserve the intended
-replacement/merge semantics across callers. Concurrent full-object edits are a
-separate lost-update concern, not solved merely by rejecting failed reads. Keep
-existing authenticated-user scoping and valid no-preference behavior. No tests,
-checks, builds, database calls, settings mutation or network actions were run.
+Accepted correction `edc93db942746867596e986f348451345ca9b991` propagates
+database read failure through the existing sanitized error wrapper. Successful
+absence and field-wise filtering remain valid; PUT stays a complete replacement.
+Both current HTTP consumers reject the failed read and retain no ready initial
+snapshot. Mobile strict parsing and owned reconciliation are additionally provided
+by `7cdf47f29c`. Existing authenticated scope, rate limits, CSRF and the independent
+inference resolver's policy are unchanged. Concurrent full-object edits remain a
+separate lost-update concern, not solved merely by rejecting failed reads. No tests,
+checks, builds, database calls, settings mutation or network actions were run;
+authored fixture sources remain unexecuted.
