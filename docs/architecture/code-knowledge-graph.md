@@ -1175,9 +1175,41 @@ decisions. The High OPEN risk is source-backed, not observed disclosure; no
 implementation, blanket legacy refusal or runtime acceptance is claimed, and this
 design is not implementation-ready.
 
+## Upload staging and known completion recovery
+
+Accepted commit `50652bc49736e84c8d4f9877ed14d1902aaa038f` changes four production
+files and six unexecuted regression sources. In
+`apps/web/lib/server/chat-attachment-completion.ts` and
+`project-knowledge-files.ts`, successful staged bytes are purged after durable
+media/project registration instead of before it. Existing safety-change refusal
+cleanup remains; the resumable upload route no longer deletes assembled project
+staging on a general non-safety registration refusal. Retaining staging has a
+storage cost and does not imply a claim that a user's original file was lost.
+
+`app/api/files/uploads/[uploadId]/route.ts` checks for an existing completion
+receipt after authenticated session admission, CSRF and rate limiting, before
+multipart assembly, and retains the closed-session recovery check. Project
+receipt lookup binds canonical `READABLE_PROJECT_SCOPE_SQL`, uploader, checksum
+and the exact sealed key derived from this upload; deleted/superseded records do
+not qualify. Its regression inspects query text/bindings, not actual PostgreSQL
+or RLS enforcement.
+
+The shared `managed-cloud-resumable-upload-client.ts` treats only progress 404 as
+a possible closed upload. A valid, unexpired cached session then probes completion
+and forgets the cache only after success; 401/403/409 progress errors propagate
+rather than silently creating replacements. Failed completion retains the cached
+intent, while existing explicit abort cleanup remains. Invalid/expired cache
+replacement is unchanged. Fingerprints still lack account/org identity; the
+authority-aware web chat caller uses `sessions: null`, so this does not introduce
+persisted upload adoption there. Existing chat quota cleanup and direct
+project/Drive registration-failure cleanup are outside this correction. Dedupe
+receipt mapping, concurrent duplicate insertion and exactly-once completion are
+not solved. Fixtures were source-read only; no runtime/storage acceptance or
+remote rollback guarantee is claimed.
+
 ## Reconstruction boundary
 
-Only the forty-eight accepted production slices traced above are represented as
+Only the forty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
