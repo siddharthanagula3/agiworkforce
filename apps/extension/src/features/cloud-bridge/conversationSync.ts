@@ -66,6 +66,7 @@ interface CloudSyncTombstone {
   cloudConversationId: string;
   organizationId: string | null;
   queuedAt: number;
+  generation?: string;
 }
 
 interface ScheduledFlush {
@@ -536,43 +537,72 @@ async function handleFlushError(
   });
 }
 
+// Production tombstone writers are background message/sweep handlers. This tail
+// serializes their storage operations, not unrelated extension contexts. Network
+// requests deliberately run outside it so a slow deletion cannot block enqueue.
+let tombstoneMutationTail: Promise<void> = Promise.resolve();
+
+function withTombstoneStore<T>(operation: () => Promise<T>): Promise<T> {
+  const result = tombstoneMutationTail.then(operation);
+  tombstoneMutationTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
 async function readTombstones(): Promise<CloudSyncTombstone[]> {
-  try {
-    const stored = await chrome.storage.local.get([CLOUD_SYNC_TOMBSTONE_KEY]);
-    const raw = stored[CLOUD_SYNC_TOMBSTONE_KEY];
-    if (!Array.isArray(raw)) return [];
-    const records: CloudSyncTombstone[] = [];
-    for (const candidate of raw) {
-      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
-      const record = candidate as Record<string, unknown>;
-      const accountId = record['accountId'];
-      const cloudConversationId = record['cloudConversationId'];
-      const rawOrganizationId = record['organizationId'];
-      const queuedAt = record['queuedAt'];
-      if (typeof accountId !== 'string' || accountId.length === 0) continue;
-      if (typeof cloudConversationId !== 'string' || !UUID_PATTERN.test(cloudConversationId)) {
-        continue;
-      }
-      const organizationId =
-        rawOrganizationId === null
-          ? null
-          : typeof rawOrganizationId === 'string' && UUID_PATTERN.test(rawOrganizationId)
-            ? rawOrganizationId
-            : undefined;
-      if (organizationId === undefined) continue;
-      if (typeof queuedAt !== 'number' || !Number.isFinite(queuedAt) || queuedAt < 0) continue;
-      records.push({
-        accountId,
-        cloudConversationId,
-        organizationId,
-        queuedAt,
-      });
+  const stored = await chrome.storage.local.get([CLOUD_SYNC_TOMBSTONE_KEY]);
+  const raw = stored[CLOUD_SYNC_TOMBSTONE_KEY];
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw new Error('Invalid cloud deletion queue');
+  const records: CloudSyncTombstone[] = [];
+  for (const candidate of raw) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error('Invalid cloud deletion record');
     }
-    return records;
-  } catch (error) {
-    logger.debug('Failed to read cloud sync tombstones', error);
-    return [];
+    const record = candidate as Record<string, unknown>;
+    const accountId = record['accountId'];
+    const cloudConversationId = record['cloudConversationId'];
+    const organizationId = record['organizationId'];
+    const queuedAt = record['queuedAt'];
+    const generation = record['generation'];
+    if (
+      typeof accountId !== 'string' ||
+      accountId.length === 0 ||
+      typeof cloudConversationId !== 'string' ||
+      !UUID_PATTERN.test(cloudConversationId) ||
+      (organizationId !== null &&
+        (typeof organizationId !== 'string' || !UUID_PATTERN.test(organizationId))) ||
+      typeof queuedAt !== 'number' ||
+      !Number.isFinite(queuedAt) ||
+      queuedAt < 0 ||
+      (generation !== undefined &&
+        (typeof generation !== 'string' || !UUID_PATTERN.test(generation)))
+    ) {
+      // Do not rewrite a partially understood queue and discard its other rows.
+      throw new Error('Invalid cloud deletion record');
+    }
+    records.push({
+      ...record,
+      accountId,
+      cloudConversationId,
+      organizationId,
+      queuedAt,
+      ...(generation === undefined ? {} : { generation }),
+    });
   }
+  return records;
+}
+
+function sameTombstoneGeneration(left: CloudSyncTombstone, right: CloudSyncTombstone): boolean {
+  return (
+    left.accountId === right.accountId &&
+    left.cloudConversationId === right.cloudConversationId &&
+    left.organizationId === right.organizationId &&
+    left.generation === right.generation &&
+    (left.generation !== undefined || left.queuedAt === right.queuedAt)
+  );
 }
 
 async function readConversationCursor(owner: ManagedCloudOwner): Promise<string> {
@@ -709,40 +739,47 @@ export async function queueCloudConversationDeletion(
     return false;
   }
   try {
-    const existing = await readTombstones();
-    const existingIndex = existing.findIndex(
-      (candidate) =>
-        candidate.accountId === owner.accountId &&
-        candidate.cloudConversationId === cloudConversationId,
-    );
-    if (existingIndex < 0 && existing.length >= MAX_TOMBSTONES) {
-      return false;
-    }
-    const next = existing.slice();
-    const tombstone: CloudSyncTombstone = {
-      accountId: owner.accountId,
-      cloudConversationId,
-      organizationId,
-      queuedAt: Date.now(),
-    };
-    if (existingIndex >= 0) next[existingIndex] = tombstone;
-    else next.push(tombstone);
-    await chrome.storage.local.set({ [CLOUD_SYNC_TOMBSTONE_KEY]: next });
+    const queued = await withTombstoneStore(async () => {
+      const existing = await readTombstones();
+      const existingIndex = existing.findIndex(
+        (candidate) =>
+          candidate.accountId === owner.accountId &&
+          candidate.cloudConversationId === cloudConversationId,
+      );
+      if (existingIndex < 0 && existing.length >= MAX_TOMBSTONES) {
+        return false;
+      }
+      const next = existing.slice();
+      const tombstone: CloudSyncTombstone = {
+        accountId: owner.accountId,
+        cloudConversationId,
+        organizationId,
+        queuedAt: Date.now(),
+        generation: crypto.randomUUID(),
+      };
+      if (existingIndex >= 0) next[existingIndex] = tombstone;
+      else next.push(tombstone);
+      await chrome.storage.local.set({ [CLOUD_SYNC_TOMBSTONE_KEY]: next });
+      return true;
+    });
+    if (!queued) return false;
   } catch (error) {
     logger.debug('Failed to queue cloud conversation deletion', error);
     return false;
   }
-  void drainCloudDeletionTombstones(owner);
+  void drainCloudDeletionTombstones(owner).catch((error) => {
+    logger.debug('Failed to read cloud deletion queue for draining', error);
+  });
   return true;
 }
 
 export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Promise<void> {
-  const tombstones = await readTombstones();
+  const tombstones = await withTombstoneStore(readTombstones);
   const mine = tombstones.filter((candidate) => candidate.accountId === owner.accountId);
   if (mine.length === 0) return;
 
   const client = createExtensionCloudChatClient(owner);
-  const settled = new Set<string>();
+  const settled: CloudSyncTombstone[] = [];
   for (const tombstone of mine) {
     const controller = new AbortController();
     try {
@@ -750,10 +787,10 @@ export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Pr
         signal: combineTimeoutSignal(controller),
         organizationId: tombstone.organizationId,
       });
-      settled.add(tombstone.cloudConversationId);
+      settled.push(tombstone);
     } catch (error) {
       if (error instanceof ManagedCloudChatHttpError && error.status === 404) {
-        settled.add(tombstone.cloudConversationId);
+        settled.push(tombstone);
         continue;
       }
       if (error instanceof ManagedCloudOwnerChangedError) return;
@@ -763,13 +800,14 @@ export async function drainCloudDeletionTombstones(owner: ManagedCloudOwner): Pr
       controller.abort();
     }
   }
-  if (settled.size === 0) return;
+  if (settled.length === 0) return;
   try {
-    const remaining = (await readTombstones()).filter(
-      (candidate) =>
-        candidate.accountId !== owner.accountId || !settled.has(candidate.cloudConversationId),
-    );
-    await chrome.storage.local.set({ [CLOUD_SYNC_TOMBSTONE_KEY]: remaining });
+    await withTombstoneStore(async () => {
+      const remaining = (await readTombstones()).filter(
+        (candidate) => !settled.some((attempted) => sameTombstoneGeneration(candidate, attempted)),
+      );
+      await chrome.storage.local.set({ [CLOUD_SYNC_TOMBSTONE_KEY]: remaining });
+    });
   } catch (error) {
     logger.debug('Failed to clear drained cloud sync tombstones', error);
   }

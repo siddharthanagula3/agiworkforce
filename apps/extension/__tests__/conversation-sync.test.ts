@@ -63,6 +63,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
 }));
 
 import {
+  drainCloudDeletionTombstones,
   flushConversation,
   flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
@@ -482,6 +483,155 @@ describe('conversation cloud sync', () => {
     ).toBe('personal');
     expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual([]);
   });
+
+  it('preserves concurrent enqueues from background handlers', async () => {
+    authContext.current = null;
+    const ids = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ];
+    expect(await Promise.all(ids.map((id) => queueCloudConversationDeletion(OWNER, id, null))))
+      .toEqual([true, true]);
+    await drainCloudDeletionTombstones(OWNER);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual(ids.map((id) => expect.objectContaining({
+      cloudConversationId: id,
+      generation: expect.any(String),
+    })));
+  });
+
+  it.each([
+    { organizationId: null, legacy: false },
+    { organizationId: '33333333-3333-4333-8333-333333333333', legacy: false },
+    { organizationId: null, legacy: true },
+    { organizationId: '33333333-3333-4333-8333-333333333333', legacy: true },
+  ])(
+    'does not settle a same-timestamp replacement ($organizationId, legacy=$legacy)',
+    async ({ organizationId, legacy }) => {
+      const cloudConversationId = '44444444-4444-4444-8444-444444444444';
+      const queuedAt = 1234;
+      _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+        accountId: OWNER.accountId,
+        cloudConversationId,
+        organizationId: null,
+        queuedAt,
+        ...(legacy ? {} : { generation: '55555555-5555-4555-8555-555555555555' }),
+      }];
+      let release!: (response: Response) => void;
+      let started!: () => void;
+      const requestStarted = new Promise<void>((resolve) => { started = resolve; });
+      vi.stubGlobal('fetch', vi.fn(() => {
+        started();
+        return new Promise<Response>((resolve) => { release = resolve; });
+      }));
+      const draining = drainCloudDeletionTombstones(OWNER);
+      await requestStarted;
+      authContext.current = null;
+      const dateSpy = vi.spyOn(Date, 'now').mockReturnValue(queuedAt);
+      try {
+        expect(await queueCloudConversationDeletion(OWNER, cloudConversationId, organizationId))
+          .toBe(true);
+      } finally {
+        dateSpy.mockRestore();
+      }
+      const replacement = structuredClone(_store[CLOUD_SYNC_TOMBSTONE_KEY]);
+      release(jsonResponse({ success: true }));
+      await draining;
+      await drainCloudDeletionTombstones(OWNER);
+      expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual(replacement);
+    },
+  );
+
+  it('preserves the queue on a failed read and recovers the serialization tail', async () => {
+    authContext.current = null;
+    const old = {
+      accountId: OWNER.accountId,
+      cloudConversationId: '66666666-6666-4666-8666-666666666666',
+      organizationId: null,
+      queuedAt: 1,
+    };
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [old];
+    chromeMock.storage.local.get.mockRejectedValueOnce(new Error('Storage unavailable'));
+    expect(await queueCloudConversationDeletion(
+      OWNER, '77777777-7777-4777-8777-777777777777', null,
+    )).toBe(false);
+    expect(chromeMock.storage.local.set).not.toHaveBeenCalled();
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual([old]);
+    expect(await queueCloudConversationDeletion(
+      OWNER, '77777777-7777-4777-8777-777777777777', null,
+    )).toBe(true);
+    await drainCloudDeletionTombstones(OWNER);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual([old, expect.objectContaining({
+      cloudConversationId: '77777777-7777-4777-8777-777777777777',
+    })]);
+  });
+
+  it('does not send a deletion when its snapshot read fails', async () => {
+    chromeMock.storage.local.get.mockRejectedValueOnce(new Error('Storage unavailable'));
+    await expect(drainCloudDeletionTombstones(OWNER)).rejects.toThrow('Storage unavailable');
+    expect(requests).toHaveLength(0);
+    expect(chromeMock.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  it('retains acknowledged deletions when the settlement read fails, then retries safely', async () => {
+    const pending = [{
+      accountId: OWNER.accountId,
+      cloudConversationId: '88888888-8888-4888-8888-888888888888',
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = pending;
+    respond = () => {
+      chromeMock.storage.local.get.mockRejectedValueOnce(new Error('Storage unavailable'));
+      return jsonResponse({ success: true });
+    };
+    await drainCloudDeletionTombstones(OWNER);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual(pending);
+    expect(chromeMock.storage.local.set).not.toHaveBeenCalled();
+    respond = () => jsonResponse({ error: 'Not found' }, 404);
+    await drainCloudDeletionTombstones(OWNER);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual([]);
+  });
+
+  it('settles valid legacy rows without a generation', async () => {
+    _store[CLOUD_SYNC_TOMBSTONE_KEY] = [{
+      accountId: OWNER.accountId,
+      cloudConversationId: '88888888-8888-4888-8888-888888888888',
+      organizationId: null,
+      queuedAt: 1,
+    }];
+    await drainCloudDeletionTombstones(OWNER);
+    expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual([]);
+  });
+
+  it.each([
+    null,
+    { unexpected: true },
+    [{ accountId: OWNER.accountId }],
+    [{
+      accountId: OWNER.accountId,
+      cloudConversationId: '88888888-8888-4888-8888-888888888888',
+      organizationId: null,
+      queuedAt: 1,
+      generation: 'invalid',
+    }],
+  ].map((malformed) => ({ malformed })))(
+    'preserves malformed stored queues without requests or writes: $malformed',
+    async ({ malformed }) => {
+      const valid = {
+        accountId: OWNER.accountId,
+        cloudConversationId: '99999999-9999-4999-8999-999999999999',
+        organizationId: null,
+        queuedAt: 1,
+      };
+      const stored = Array.isArray(malformed) ? [valid, ...malformed] : malformed;
+      _store[CLOUD_SYNC_TOMBSTONE_KEY] = stored;
+      expect(await queueCloudConversationDeletion(OWNER, valid.cloudConversationId, null)).toBe(false);
+      await expect(drainCloudDeletionTombstones(OWNER)).rejects.toThrow();
+      expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual(stored);
+      expect(chromeMock.storage.local.set).not.toHaveBeenCalled();
+      expect(requests).toHaveLength(0);
+    },
+  );
 
   it('does not expire a pending deletion and refuses capacity overflow without dropping one', async () => {
     const oldCloudId = '66666666-6666-4666-8666-666666666666';
