@@ -1440,9 +1440,32 @@ native cancellation are not redesigned. Fixtures cover mocked component/service
 lifetimes, not actual recycled-list/native/StrictMode runtime behavior. No tests,
 network, Photos/Clipboard/share actions or deployment acceptance were performed.
 
+## Electron runtime ownership lasts until observed direct-child exit
+
+Accepted commit `5eb99129a769d5763f148940d522eeb60db2ac9b` changes
+`apps/desktop/electron/runtime/developerSessionService.ts` and unexecuted mocked
+lifecycle fixtures. `ownsRuntime` requires exact registry identity and nonclosed
+state at chunk/line/notification ingress, requests and post-handshake readiness.
+Closed-owner interrupts are no-ops. Closing clears buffered input and retains the
+registry owner until observed direct-child exit or a no-PID spawn failure.
+Replacement waits on that exit with the existing bounded request timeout and
+rechecks launch permission. Known worktree runtime stop also waits before delete
+proceeds; signalling shutdown/kill is not itself proof of exit.
+
+`closeServer` already called `stopProcess` and retained `stopReason` before this
+slice; the old missing-disposal audit premise is stale. Web `use-local-session.ts`
+already filtered nonmatching/terminal turn IDs; this is not new renderer filtering.
+The three existing Electron lifecycle findings are source-corrected/requalified,
+not runtime-closed. Pending-launch ownership, deletion-versus-relaunch operations,
+failed-create cleanup and all-descendant/SSH remote completion remain outside
+this change. No atomic deletion or universal writer-stop guarantee follows from
+known direct-child exit. Fixtures cover mocked stale ingress, exit waiting,
+replacement cancellation, spawn failure and handshake/worktree boundaries but
+were not executed. No process, network, native or deployment acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the sixty accepted production slices traced above are represented as
+Only the sixty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

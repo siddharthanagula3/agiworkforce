@@ -4025,7 +4025,19 @@ not established by this source correction.
 
 ## ELECTRON-REJECTED-RUNTIME-NOT-DISPOSED-01
 
-Severity: Medium. Status: source-confirmed; mounted timing and deployment unverified.
+Severity: Medium. Current status and historical qualifications follow.
+
+Current-source correction, 2026-11-04: the historical missing-disposal premise
+below is stale. Immediately before accepted `5eb99129a769d5763f148940d522eeb60db2ac9b`,
+`closeServer` already invoked `stopProcess`, retained `stopReason`, ended stdin
+and scheduled the kill fallback. Do not credit that existing behavior to this
+slice. The new correction retains the closed registry owner until confirmed
+direct-child exit (or no-PID spawn failure) rather than treating a stop request
+as exit. This finding is source-requalified; native/deployment acceptance remains
+OPEN, not a newly reproduced missing-disposal defect.
+
+Historical report (not current behavior or rerun):
+
 
 The CLI is spawned with piped stdio. handshake throws after initialize; its catch calls closeServer. closeServer marks closed, rejects requests, removes the map entry and emits runtime-stopped, but neither ends stdin nor kills/detaches the child. The next ensureServer sees no registered server and spawns another. The rejected child retains its open pipe and is excluded from stopAllDeveloperRuntimes, which iterates the map.
 
@@ -4035,9 +4047,29 @@ Source: `apps/desktop/electron/runtime/developerSessionService.ts:678` in `49d0c
 
 Resolution/acceptance: Dispose failed handshakes and framing failures through the same owned shutdown path as explicit stop; retain child ownership until exit. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
+
+Current acceptance limits: mocked child/stream fixtures are unexecuted. No real
+process exit, native lifecycle, SSH or deployment proof exists. Pending launches,
+operation-level deletion versus relaunch, failed-create cleanup and outcomes of
+all descendants/remote processes are not serialized or resolved by this bounded
+slice. Known-owner exit waiting is not atomic worktree deletion or proof that
+all writers stopped. Historical evidence is retained, not rerun.
+
 ## ELECTRON-CLOSED-RUNTIME-STALE-EVENTS-01
 
-Severity: Medium. Status: source-confirmed; mounted timing and deployment unverified.
+Severity: Medium. Current status and historical qualifications follow.
+
+Current-source correction, 2026-11-04: accepted
+`5eb99129a769d5763f148940d522eeb60db2ac9b` adds exact nonclosed/current registry
+ownership fences at chunk/line/notification ingress, outgoing requests and after
+handshake readiness; closed-owner interrupts are no-ops. Existing web
+`apps/web/features/code/hooks/use-local-session.ts` already filters terminal and
+nonmatching turn IDs around 510–519. The historical assertion that it lacked
+turn filtering is stale and is not a new fix. Status: source-corrected host
+ingress, runtime/deployment acceptance OPEN.
+
+Historical report (not current behavior or rerun):
+
 
 The stdout listener captures the old server. acceptChunk/acceptLine/handleNotification have no early server.closed or registry-generation check. acceptChunk tests closed only after accepting one line, so each later chunk can still deliver its first notification. Notifications carry root/thread/turn ids but no runtime generation. The local session consumer filters the thread but does not check the event turn id before appending output, replacing approval or settling the current turn.
 
@@ -4047,9 +4079,29 @@ Source: `apps/desktop/electron/runtime/developerSessionService.ts:295` in `49d0c
 
 Resolution/acceptance: Fence old-child callbacks by current runtime identity and closed state; consumers should match the current turn before applying turn-specific events. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
 
+
+Current acceptance limits: mocked child/stream fixtures are unexecuted. No real
+process exit, native lifecycle, SSH or deployment proof exists. Pending launches,
+operation-level deletion versus relaunch, failed-create cleanup and outcomes of
+all descendants/remote processes are not serialized or resolved by this bounded
+slice. Known-owner exit waiting is not atomic worktree deletion or proof that
+all writers stopped. Historical evidence is retained, not rerun.
+
 ## ELECTRON-REPLACEMENT-BEFORE-SHUTDOWN-01
 
-Severity: Medium. Status: source-confirmed; mounted timing and deployment unverified.
+Severity: Medium. Current status and historical qualifications follow.
+
+Current-source correction, 2026-11-04: accepted
+`5eb99129a769d5763f148940d522eeb60db2ac9b` retains the closed owner in `servers`
+until a direct-child exit event (or no-PID spawn failure). Replacement waits on
+that exit promise with the existing request-timeout bound, then rechecks launch
+permission. A kill request alone is not completion. Known worktree-owner stop
+also awaits exit before proceeding, including an already-closed owner. Status:
+source-corrected bounded direct-child sequencing; runtime/deployment acceptance
+OPEN.
+
+Historical report (not current behavior or rerun):
+
 
 terminate ends stdin and schedules SIGKILL after 1,500 ms, then synchronously calls closeServer, which removes the map entry. stopDeveloperRuntime returns void and exposes no exit promise. ensureServer can immediately spawn a replacement; readyServer waits only for that new child handshake. The prior CLI releases its writer leases at the end of asynchronous host shutdown, after terminating process trees and waiting for managers/tasks.
 
@@ -4058,6 +4110,14 @@ Trigger/impact: Use Stop background coding runtime, then immediately open/resume
 Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.
 
 Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
+
+
+Current acceptance limits: mocked child/stream fixtures are unexecuted. No real
+process exit, native lifecycle, SSH or deployment proof exists. Pending launches,
+operation-level deletion versus relaunch, failed-create cleanup and outcomes of
+all descendants/remote processes are not serialized or resolved by this bounded
+slice. Known-owner exit waiting is not atomic worktree deletion or proof that
+all writers stopped. Historical evidence is retained, not rerun.
 
 ## MEMORY-SENSITIVE-OFF-KEEPS-SAVED-01
 
