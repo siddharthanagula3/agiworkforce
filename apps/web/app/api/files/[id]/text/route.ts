@@ -8,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMediaStorageConfigured, readStoredMedia } from '@/lib/server/media-storage';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
 import { fileTextPreviewKind, renderFileTextPreview } from '@/lib/server/file-text-preview';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -41,7 +42,18 @@ async function handleGetFileText(
     throw createError.notFound('File bytes are not available');
   }
 
-  const object = await readStoredMedia(asset.storagePathname);
+  const object = await readStoredMedia(asset.storagePathname, MAX_TEXT_SOURCE_BYTES).catch(
+    (error: unknown) => {
+      if (error instanceof StoredObjectTooLargeError) {
+        throw createError.validation(
+          error.contentLength === undefined
+            ? 'This file could not be read within the preview size limit'
+            : 'This file is too large to preview',
+        );
+      }
+      throw error;
+    },
+  );
   if (!object) throw createError.notFound('File bytes are not available');
 
   return NextResponse.json<FileTextPreview>(
