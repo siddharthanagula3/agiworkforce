@@ -78,7 +78,7 @@ class FakeStream extends EventEmitter {
 }
 
 class FakeChild extends EventEmitter {
-  readonly pid = 4242;
+  pid: number | undefined = 4242;
   readonly stdout = new FakeStream();
   readonly stderr = new FakeStream();
   readonly written: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -1094,7 +1094,11 @@ describe('developer session runtime', () => {
     vi.useFakeTimers();
 
     await expect(service.readDeveloperModels(root.id)).rejects.toThrow(/needs .* or newer/u);
-    await expect(service.readDeveloperModels(root.id)).rejects.toThrow(/needs .* or newer/u);
+    const retry = expect(service.readDeveloperModels(root.id)).rejects.toThrow(/needs .* or newer/u);
+    await Promise.resolve();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    children[0]?.emit('exit', 1, null);
+    await retry;
 
     const servers = children.filter(
       (_child, index) => spawn.mock.calls[index]?.[1][0] === 'app-server',
@@ -1104,10 +1108,7 @@ describe('developer session runtime', () => {
     expect(killProcess).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(2_000);
-    expect(killProcess.mock.calls).toEqual([
-      [-4242, 'SIGKILL'],
-      [-4242, 'SIGKILL'],
-    ]);
+    expect(killProcess.mock.calls).toEqual([[-4242, 'SIGKILL']]);
   });
 
   it('ends the process of a CLI that writes something that is not protocol', async () => {
@@ -2368,10 +2369,159 @@ describe('developer session runtime', () => {
     await service.listDeveloperSessions();
 
     service.stopDeveloperRuntime(root.id);
-    await service.listDeveloperSessions();
+    const replacement = service.listDeveloperSessions();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    children[0]?.emit('exit', 0, null);
+    await replacement;
 
     expect(children[0]?.ended).toBe(true);
     expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores every old child frame after stop and after replacement', async () => {
+    const { service, children, events } = await loadService();
+    await service.listDeveloperSessions();
+    const oldChild = children[0]!;
+    service.stopDeveloperRuntime(root.id);
+    const stoppedCount = events.length;
+    const late = () => {
+      oldChild.notify('turn/started', { threadId: thread.id, turnId: 'late-turn' });
+      oldChild.notify('turn/output_delta', {
+        threadId: thread.id,
+        turnId: 'late-turn',
+        delta: 'stale output',
+      });
+      oldChild.notify('approval/requested', {
+        threadId: thread.id,
+        turnId: 'late-turn',
+        requestId: 'late-approval',
+      });
+      oldChild.stdout.emit('data', 'invalid late protocol\n');
+    };
+    late();
+    expect(events).toHaveLength(stoppedCount);
+    oldChild.emit('exit', 0, null);
+    await service.listDeveloperSessions();
+    const replacementCount = events.length;
+    late();
+    expect(events).toHaveLength(replacementCount);
+    children[1]!.notify('turn/started', { threadId: thread.id, turnId: 'new-turn' });
+    expect(events.at(-1)?.event).toMatchObject({ type: 'turn-started', turnId: 'new-turn' });
+  });
+
+  it('does not interrupt a disposed owner retained while its child exits', async () => {
+    const { service, children, spawn } = await loadService();
+    await service.listDeveloperSessions();
+    service.stopDeveloperRuntime(root.id);
+    const writes = children[0]!.written.length;
+    await expect(
+      service.interruptOwnedDeveloperTurn(root.id, thread.id, 'turn-1'),
+    ).resolves.toBeUndefined();
+    expect(children[0]!.written).toHaveLength(writes);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses replacement after a kill request until actual exit is observed', async () => {
+    const { service, children, spawn } = await loadService();
+    await service.listDeveloperSessions();
+    vi.useFakeTimers();
+    service.stopDeveloperRuntime(root.id);
+    const replacement = expect(service.readDeveloperModels(root.id)).rejects.toThrow(
+      /stopped by this app.*not confirmed exit/u,
+    );
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await replacement;
+    expect(killProcess).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const retry = service.readDeveloperModels(root.id);
+    const concurrentRetry = service.readDeveloperModels(root.id);
+    await Promise.resolve();
+    expect(spawn).toHaveBeenCalledTimes(1);
+    children[0]!.emit('exit', null, 'SIGKILL');
+    await Promise.all([retry, concurrentRetry]);
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels a replacement waiting for the previous child to exit', async () => {
+    const { service, children, spawn } = await loadService();
+    await service.listDeveloperSessions();
+    service.stopDeveloperRuntime(root.id);
+    const replacement = expect(service.readDeveloperModels(root.id)).rejects.toThrow(/cancelled/u);
+    await Promise.resolve();
+    service.stopDeveloperRuntime(root.id);
+    children[0]!.emit('exit', 0, null);
+    await replacement;
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('retires a failed spawn without a pid even when no exit event follows', async () => {
+    const { service, children, spawn } = await loadService((method) =>
+      method === 'initialize' ? undefined : defaultResponder(method),
+    );
+    const initial = expect(service.readDeveloperModels(root.id)).rejects.toThrow(/not on/u);
+    await Promise.resolve();
+    children[0]!.pid = undefined;
+    children[0]!.emit('error', Object.assign(new Error('spawn failed'), { code: 'ENOENT' }));
+    await initial;
+    expect(killProcess).not.toHaveBeenCalled();
+    const replacement = service.readDeveloperModels(root.id);
+    await Promise.resolve();
+    expect(spawn).toHaveBeenCalledTimes(2);
+    children[1]!.reply(1, HANDSHAKE);
+    await replacement;
+  });
+
+  it('rejects a handshake response whose child exits before its continuation', async () => {
+    const { service, children } = await loadService((method) =>
+      method === 'initialize' ? undefined : defaultResponder(method),
+    );
+    const initial = expect(service.readDeveloperModels(root.id)).rejects.toThrow(/exited/u);
+    await Promise.resolve();
+    children[0]!.reply(1, HANDSHAKE);
+    children[0]!.emit('exit', 1, null);
+    await initial;
+    expect(children[0]!.written.some((entry) => entry.method === 'model/list')).toBe(false);
+  });
+
+  it('waits for worktree child exit after shutdown acknowledgment before requesting deletion', async () => {
+    const worktree = { ...root, id: `${root.id}::worktree::abcdef12` };
+    getRoot.mockImplementation((id) => (id === worktree.id ? worktree : root));
+    const { service, children } = await loadService((method) => {
+      if (method === 'shutdown') return { acknowledged: true };
+      if (method === 'worktree/managed/delete') return { snapshotRef: 'refs/kept/worktree' };
+      return defaultResponder(method);
+    });
+    await service.readDeveloperModels(worktree.id);
+    const child = children[0]!;
+    const deletion = service.deleteDeveloperWorktree(worktree.id);
+    await vi.waitFor(() => expect(child.ended).toBe(true));
+    expect(children).toHaveLength(1);
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
+    child.emit('exit', 0, null);
+    await expect(deletion).resolves.toEqual({ snapshotRef: 'refs/kept/worktree' });
+    expect(children[1]!.written).toContainEqual({
+      method: 'worktree/managed/delete',
+      params: { worktreeId: 'abcdef12' },
+    });
+    expect(forgetWorktreeRoot).toHaveBeenCalledWith(worktree.id);
+  });
+
+  it('refuses worktree deletion when an already stopped child has no confirmed exit', async () => {
+    const worktree = { ...root, id: `${root.id}::worktree::abcdef12` };
+    getRoot.mockImplementation((id) => (id === worktree.id ? worktree : root));
+    const { service, children } = await loadService();
+    await service.readDeveloperModels(worktree.id);
+    vi.useFakeTimers();
+    service.stopDeveloperRuntime(worktree.id);
+    const deletion = expect(service.deleteDeveloperWorktree(worktree.id)).rejects.toThrow(
+      /not confirmed exit/u,
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+    await deletion;
+    expect(children).toHaveLength(1);
+    expect(children[0]!.written.some((entry) => entry.method === 'worktree/managed/delete')).toBe(false);
+    expect(forgetWorktreeRoot).not.toHaveBeenCalled();
   });
 
   it('reads the running turn with the approvals and questions it waits on', async () => {
