@@ -165,16 +165,76 @@ These boundaries reject stale response delivery and prevent the inspected stale
 403 classification from tearing down a replacement account. They preserve
 same-owner terminal errors, including a legitimate account refusal whose own
 cleanup resets API ownership. This is not remote cancellation or rollback of an
-already dispatched request. Streaming transport is outside this accepted slice
-and remains pending/unprotected by these new buffered-delivery guards. Deferred
+already dispatched request. Streaming transport is outside this buffered slice; its separately accepted
+canonical-epoch boundary is described below. Deferred
 response/refresh, refusal, bodyless response and body-failure fixture sources are
 unexecuted; no runtime acceptance or complete account-lifecycle coverage is
 claimed. Checkpoint regression sources are recorded separately above, not as
 executed acceptance.
 
+## Mobile managed streaming account ownership
+
+Reconstructed commit: `ed24015c9af4a333b3ae004b47604de5626bbb73`.
+The fourteen-file slice changes streaming and API recovery production owners,
+adds deferred-operation regression sources and aligns ten existing fixture
+loaders. All regression sources remain unexecuted.
+
+`cloudAccountSession.ts` remains the canonical runtime owner/epoch authority.
+Managed/free stream and checkpoint-resume entry capture it once; absent account
+reports an explicit credential-unavailable error. `streaming.ts` retains that
+snapshot across consent, token acquisition, device headers, authentication retry,
+reconnect waits, response/refusal body reads and SSE chunk/frame processing.
+Wrapped public callbacks suppress retired-owner deltas, completion, errors and
+metadata. Same-owner reactivation does not itself retire valid continuation.
+`api.ts::recoverStreamSession` checks that original epoch inside refresh recovery
+before unrecoverable-auth teardown, alongside the existing API generation check.
+
+The mobile managed-run client binds its creation epoch to credential/header/fetch
+adapters, wait boundaries, JSON-returning operations and asynchronous follow
+callbacks. Durable reconnect uses the original stream snapshot rather than
+capturing a replacement account. Refusal notices check ownership after cloned
+body parsing before account or terms side effects. These guards preserve current
+owner errors while rejecting stale publication and subsequent work.
+
+This is canonical runtime-epoch ownership, not proof that SDK/token identity
+cannot change before canonical account activation observes it. It does not
+promise upstream body cancellation, provider cancellation or rollback: the
+unchanged shared SSE reader's `finally` only releases its reader lock. No native,
+network or runtime acceptance is established by the source fixtures.
+
+## Mobile Local reply settlement ownership
+
+Reconstructed commit: `bf47a400854ce5eec11b27902a70fd01fa0189df`.
+The two-file slice changes `chatExecutionStore.ts` and seven unexecuted regression
+cases in `chatStore.test.ts`; there is no dedicated model-resolution regression
+case. This is a Local branch correction, not a Cloud-flow redesign.
+
+The accepted Local turn owns its exact controller. After asynchronous model
+resolution, during token callbacks and after generation it requires that owner,
+a non-aborted signal, a live conversation and the exact streaming assistant row.
+After awaited usage bookkeeping, final publication uses a functional store update
+that rechecks those conditions and reads current rows. It preserves current
+message metadata and unrelated edits instead of publishing a pre-await array.
+Only successful publication proceeds to artifact capture and, for nonempty
+content, completed Local memory capture.
+
+Local catch retains existing partial content and only settles a still-live owned
+assistant. Local finalization is guarded by exact controller identity, so an old
+completion cannot clear a replacement turn's controller, timing or stream flags.
+The current conversation must still exist before residual-row settlement or
+follow-up flushing. Stop can remove the original owner, leaving queued follow-ups
+parked rather than letting retired finalization flush them. This compatibility
+tradeoff remains pending a separate queue-ownership design; automatic draining
+after Stop is not claimed restored.
+
+These source guards do not promise forced native cancellation, undo already
+completed inference/bookkeeping, or solve general deletion, persistence/sync or
+Cloud settlement ownership. Fixture assertions are source-only, not native or
+runtime acceptance.
+
 ## Reconstruction boundary
 
-Only the four accepted production slices traced above are represented as
+Only the six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
