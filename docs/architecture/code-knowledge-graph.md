@@ -3692,9 +3692,46 @@ account/mode round trips, focus/unmount, duplicate revoke and uncertain response
 No tests, checks, builds, native sharing, deletion or network actions were run;
 all regression sources remain unexecuted.
 
+## Web media retains its original session through persistence and recovery
+
+Accepted commit `063d69a1181b04f28f7524d4c79efd7200b958fa` changes the
+media hook/service, chat-page orchestration, image persistence helper/recovery store
+and four fixture sources. The page captures canonical session authority before
+conversation creation or prompt/placeholder saves; it carries that owner through
+image/video dispatch, result/failure persistence, status polling, progress and
+recovery. Authority-bearing token getters use the existing queued-save boundary,
+including CSRF waits. Direct media service calls require authority rather than
+reading a replacement global session. Same-origin dispatch omits ambient cookies
+and receipt/body checks suppress retired results, failures and notifications.
+
+Image cancellation retains the originating authority across retries. Registration
+still precedes token acquisition and the deadline begins at dispatch. Stop before
+dispatch refuses the request; an already-dispatched successful same-session paid
+image body preserves prior delivery semantics. Navigation/remount in the same
+session does not itself retire accepted work. Known image recovery authorities
+remain in the existing non-persisted store and cannot be rebound. Legacy unbound
+recovery admits at explicit retry; restored video tasks admit at first observation,
+without claiming historical provenance. Video observation is marked consumed only
+after admission so initial auth loading does not consume its automatic window.
+
+This is session fencing, not workspace pinning, remote cancellation, rollback,
+or durable provenance after losing in-memory ownership. Existing server owner
+checks and paid-attempt delivery/settlement are unchanged; the source trace does
+not demonstrate arbitrary cross-account database access or provider spending.
+Canonical unobserved SDK ABA limits and component-local revision error handling
+remain. A separate existing media-store cleanup gap was identified: auth cleanup
+names the store but no recognized reset method exists, so old generating jobs can
+remain pending. Fixing that lifecycle must not restore stale result publication.
+
+Independent source review accepted the bounded change. Authored deferred fixtures
+cover credential/body waits, same-account session/account changes, queued prompt
+and placeholder saves, polling sleep, cancel retries, recovery remount and paid
+late-body delivery. No tests, checks, builds, browser, authentication, provider or
+network actions were performed; regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-six accepted production slices traced above are represented as
+Only the one hundred and twenty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
