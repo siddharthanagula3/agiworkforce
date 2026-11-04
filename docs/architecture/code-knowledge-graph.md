@@ -3788,9 +3788,36 @@ no-op pruning, same-session remount and no-cookie registry reset. No tests, chec
 builds, browser, auth, provider or network actions were performed; all regression
 sources remain unexecuted.
 
+## Mobile archive and restore retain original account intent
+
+Accepted commit `96aca795929d56ac36485dfc4dc9144d8665d7c4` changes the
+archived-chat service, conversation-action hook and Archived Chats screen plus
+three fixture sources. Archive/restore require the captured Cloud account epoch,
+assert it before and after the request, and pass it to the canonical API boundary.
+Saved toast Undo checks its original owner before dispatch and consumes its intent
+synchronously once. Account round trips cannot rebind it. Retired archive/Undo
+receipts and errors cannot restore rows or show failure alerts for a replacement
+account. Settings Restore also takes the rendered row's account instead of
+capturing whichever account exists when an old callback is invoked.
+
+Restore and Undo failure copy describes an unconfirmed result and asks for refresh;
+a lost response no longer claims that the chat remains archived. A dispatched
+server mutation is not rolled back. Existing API generation guards remain, but
+those alone could not reject a saved callback newly invoked after account change.
+Server conversation PUT still filters by authenticated user and organization;
+wrong-context client dispatch is the defect, not demonstrated cross-account writes.
+
+This is original-account archive/restore admission and once-only toast intent,
+not a full Archived Chats focus, pagination or concurrent-mutation redesign.
+Delete/bulk entry ownership is a separate continuation. Independent source review
+accepted the patch. Mocked fixtures cover saved Undo ABA, duplicate and failed Undo,
+late receipts/errors, epoch propagation and a stale rendered Restore callback.
+No tests, checks, builds, native UI, database mutation or network actions were run;
+all regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-nine accepted production slices traced above are represented as
+Only the one hundred and thirty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
