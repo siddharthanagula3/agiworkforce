@@ -5563,10 +5563,20 @@ Status: **source-corrected within the reconstructed host/MCP and country scope;
 OPEN for runtime/deployment acceptance**. Severity remains High for the historical
 conditional defect. Existing production enforcement is bounded to web requested
 extra hosts and native MCP admission, not general web egress, ongoing connections
-or respawn/continuous revocation. Invalid configured arrays and literal intersection/
+or continuous revocation. The later stdio-only restart update below narrows the
+respawn exclusion. Invalid configured arrays and literal intersection/
 TS-versus-Rust wildcard matching semantics are not comprehensively corrected.
 All new fixtures and amended Rust cases are unexecuted; no live stored conflict,
 SQL, cache rollout, native transport or deployment proof is asserted.
+
+Bounded restart companion, 2026-11-04: `2e1475c2d43c10d53cbf8c69517b758adf3ecd52`
+adds current cached MCP policy to every CLI stdio-origin respawn hook before the
+existing optional project consent check. Existing engine `reopen` invokes the
+hook before opening transport and propagates typed `RespawnRefused`; no engine
+change or executed process proof. Synchronous admission cannot refresh unknown/
+expired policy, so it refuses until another refresh. HTTP/SSE, healthy connections,
+original-account epoch binding, atomic spawn and existing cache freshness limits
+remain excluded. Five source cases are unexecuted; runtime/deployment stays OPEN.
 
 ### Historical October evidence (not current corrected behavior)
 

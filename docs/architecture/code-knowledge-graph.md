@@ -2057,17 +2057,37 @@ trusted. Old sealed policies can retain feature restrictions but require MCP
 refresh/refusal; old offline binaries are not upgraded by this patch.
 
 Production coverage remains the existing web requested-extra-host gate and native
-MCP admission callers, not universal web egress enforcement. Ongoing connections,
-respawn behavior, continuous revocation and existing TS/Rust wildcard-apex
-matching differences are not corrected. Fixtures cover composition, projection,
+MCP admission callers, not universal web egress enforcement. Ongoing connections, continuous revocation and existing TS/Rust wildcard-apex
+matching differences are not corrected. The following slice separately adds a
+CLI stdio restart check, not general reconnect enforcement. Fixtures cover composition, projection,
 ETag, parsing, native admission and sealed semantic retention, but are unexecuted.
 The canonical allowlist finding is source-corrected within this scope and remains
 OPEN for runtime/deployment acceptance, not an observed live bypass or a blanket
 closure of the surrounding policy limits.
 
+## CLI stdio restart rechecks current cached MCP policy
+
+Accepted commit `2e1475c2d43c10d53cbf8c69517b758adf3ecd52` changes
+`apps/cli/src/mcp/mod.rs`, including five unexecuted regression cases. Every CLI
+stdio origin now installs a `respawn_check` hook. Each invocation calls current
+cached workspace policy first, then retains the existing optional project/plugin
+launch-consent check when a project context exists. User-origin restarts gain the
+policy check without gaining an unrelated project-consent requirement.
+
+The existing engine `client.rs::reopen` calls this synchronous hook before
+`open_conn`; its typed `RespawnRefused` exits reconnect without replaying the
+failed request. No engine code is changed. The hook cannot fetch policy: unknown
+or expired authority refuses until refreshed elsewhere. Existing seven-day cache
+age and hourly turn-driven refresh remain, not instantaneous policy observation.
+HTTP/SSE reconnects, healthy connections, original-account epoch binding and an
+atomic policy-check-to-spawn boundary remain outside this correction. Source
+fixtures simulate policy changes, origins, remote exclusions and project consent;
+they do not establish credential/cache-expiry integration or process/runtime
+acceptance. No server process, network request or test was run for this trace.
+
 ## Reconstruction boundary
 
-Only the seventy-nine accepted production slices traced above are represented as
+Only the eighty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
