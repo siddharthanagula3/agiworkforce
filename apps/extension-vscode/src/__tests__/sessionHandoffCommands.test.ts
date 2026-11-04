@@ -5,6 +5,7 @@ import { setupCommands } from '../core/commandSetup';
 import { Config } from '../platform/config';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
+import type { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 
 interface Terminal {
   name: string;
@@ -167,13 +168,17 @@ describe('taking a session somewhere else', () => {
 
 describe('reviewing the open file', () => {
   let handlers: Map<string, (...args: unknown[]) => unknown>;
-  let reviewCode: ReturnType<typeof vi.fn>;
+  let reviewCode: ReturnType<typeof vi.fn<AgiDiagnosticsProvider['reviewCode']>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     __resetStartupWorkForTests();
     handlers = new Map();
-    reviewCode = vi.fn().mockResolvedValue({ diagnosticCount: 2 });
+    reviewCode = vi.fn<AgiDiagnosticsProvider['reviewCode']>().mockResolvedValue({
+      status: 'completed',
+      diagnosticCount: 2,
+      summary: 'Two issues.',
+    });
     vi.mocked(vscode.commands.registerCommand).mockImplementation((id, handler) => {
       handlers.set(id, handler);
       return new vscode.Disposable(() => undefined);
@@ -243,7 +248,11 @@ describe('reviewing the open file', () => {
   });
 
   it('says the review found nothing rather than staying silent', async () => {
-    reviewCode.mockResolvedValue({ diagnosticCount: 0 });
+    reviewCode.mockResolvedValue({
+      status: 'completed',
+      diagnosticCount: 0,
+      summary: 'Looks fine.',
+    });
     vscode.window.activeTextEditor = {
       document: { uri: vscode.Uri.file('/repo/src/app.ts') },
       selection: new vscode.Selection(0, 0, 0, 0),
@@ -254,6 +263,22 @@ describe('reviewing the open file', () => {
     expect(
       vi.mocked(vscode.window.showInformationMessage).mock.calls.map(([text]) => String(text)),
     ).toContainEqual(expect.stringContaining('No issues found'));
+  });
+
+  it.each([
+    'This file could not be safely resolved, so its contents are not sent anywhere.',
+    'No code to review.',
+  ])('shows why no review occurred without reporting success: %s', async (reason) => {
+    reviewCode.mockResolvedValue({ status: 'not-reviewed', reason });
+    vscode.window.activeTextEditor = {
+      document: { uri: vscode.Uri.file('/repo/src/app.ts') },
+      selection: new vscode.Selection(0, 0, 0, 0),
+    } as unknown as vscode.TextEditor;
+
+    await handlers.get('agi-workforce.codeReview')?.();
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining(reason));
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
 
   it('asks for a file rather than reviewing nothing', async () => {
