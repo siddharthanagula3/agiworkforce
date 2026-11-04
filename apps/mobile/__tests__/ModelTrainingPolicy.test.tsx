@@ -1,6 +1,13 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
+jest.mock('@/src/features/auth/store', () => {
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  return { useAuthStore: create(() => ({
+    isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null,
+  })) };
+});
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
