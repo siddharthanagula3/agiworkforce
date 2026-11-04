@@ -3379,8 +3379,9 @@ no new SDK listener or cancellation API is asserted.
 
 This narrowly supersedes the earlier generic modal lifetime exclusion, not all
 security authority. Unobserved same-user SDK ABA remains possible; already-running
-shared SDK verification state is not cancelled. Captured-bearer HTTP401 still enters
-the existing global auth recovery path, which can affect a replacement session.
+shared SDK verification state is not cancelled. At this lifecycle slice, captured-bearer HTTP401 still entered global auth recovery;
+the separate caller-owned-401 correction below supersedes that step-up-grant
+residual only.
 The final supplied mutation callback may still obtain ambient authentication after
 the hook's invocation check, including a same-user replacement SDK session. Caller
 epoch guards protect observed account/sign-out transitions, not exact same-user
@@ -3393,9 +3394,34 @@ late-grant/readiness branches lack dedicated cases. No authentication, credentia
 SDK/native, network, database, test or checker execution establishes runtime
 acceptance here.
 
+## Explicit caller-owned bearer refusals bypass ambient 401 recovery
+
+Accepted commit `7b5debac1b46b1b0468fcf6a7a71ae66c5fa408b` changes three
+production files and three fixture sources. API `auth401Recovery` is an explicit
+`caller-owned` opt-in; omitted/default callers retain ambient behavior. Only
+step-up grant acquisition and push registration opt in here. Post-fetch generation
+and optional epoch checks still precede exposing HTTP401. Those requests return
+the refusal without ambient token refresh/retry or global session clearing.
+
+Existing raw, JSON and binary body readers retain their account guards and timeout
+release/finally behavior. Step-up treats HTTP401 as failed before classifying a
+body as a grant or verification challenge; push registration receives the normal
+typed API refusal and returns false through its existing catch. This narrowly
+supersedes the captured-step-up-bearer 401 recovery concern, not all authentication
+side effects or transport ownership.
+
+HTTP403 passkey/account-unavailable handling is unchanged, as are other streaming
+and upload recovery paths. Exact same-user session dispatch, push token provenance
+and successful `deliveredSignature` publication remain separate residuals: push
+still assigns that signature before its final context-current return check.
+Neither existing API callers nor server authorization policies are redesigned.
+Fixture sources cover opted-in refusal, retained body/epoch checks and default/
+403 behavior but are unexecuted; no authentication, credentials, network, runtime,
+tests or checks were exercised for this documentation.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifteen accepted production slices traced above are represented as
+Only the one hundred and sixteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
