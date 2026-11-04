@@ -3245,9 +3245,49 @@ blur/refocus, late collection, collision/allocation, partial-write cleanup and
 concurrent exports, with compatibility mock updates. All are unexecuted, with no
 native filesystem/share, database, network or runtime acceptance claimed.
 
+## Explicit mobile Local-to-Cloud text copy uses a reviewed transfer plan
+
+Accepted commit `27ee4d811bf26169e2316740465d70f28bf570b9` changes
+`localCloudSyncService.ts`, DataControls and two fixture sources. Dialog entry
+freezes account epoch, Cloud mode and copied payload into a single-use plan;
+confirmation cannot recapture a replacement destination. Manual Cloud-mode entry
+is required, with no automatic mode switch or egress-guard relaxation. Existing
+`guardedFetch` refusal in Local Mode remains a counterguard against an ordinary
+account-switch disclosure narrative; no such leak was demonstrated.
+
+The screen owns exact focus/operation cancellation, account/mode subscriptions and
+finally publication. The service rechecks that plan immediately before dispatch,
+including after the shared client's asynchronous mutation-header preparation, and
+passes original epoch plus abort signal to creation and bulk API calls. It requires
+the exact returned conversation ID before bulk upload. No Local conversation,
+message, file or memory is changed. Already-started native/API work is not recalled.
+
+Existing selection bounds remain explicit: first 50 eligible non-temporary Local
+conversations, last 100 completed/nonqueued messages per selected conversation,
+then blank text excluded. Empty chats are excluded and omission counts are shown
+before confirmation. Success says selected text copied, not whole-account migration.
+Bulk receipts separately count acknowledged messages and fully copied chats;
+malformed/missing or lost responses stop with uncertainty, while partial numeric
+receipts remain partial. UI directs the user to inspect Cloud before another copy;
+there is no automatic retry or speculative cleanup.
+
+Durable retry/idempotency remains unresolved. Non-UUID Local conversation IDs receive
+fresh UUIDs for each newly prepared plan; message payloads omit IDs and the server's
+existing insert supplies them. The in-memory consumed-plan WeakSet is not durable
+reconciliation. A new plan can duplicate prior accepted content, and repeating the
+same first eligible subset does not reach older-than-50 chats. A future complete
+migration needs explicit durable identity, receipt/recovery and selection semantics,
+not silent retries, deletions or changed temporary retention. Server authorization
+and optimistic storage contracts remain unchanged.
+
+Unexecuted fixtures cover frozen payloads, account/mode ABA, the real shared header
+await boundary, capped/excluded selection, partial/invalid receipts, unexpected
+created IDs and dialog ownership. They establish no native, database, network,
+cross-device or runtime acceptance. No tests/checks were run for this trace.
+
 ## Reconstruction boundary
 
-Only the one hundred and eleven accepted production slices traced above are represented as
+Only the one hundred and twelve accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
