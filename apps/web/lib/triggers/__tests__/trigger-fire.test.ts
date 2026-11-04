@@ -242,6 +242,64 @@ describe('fireEventTriggerJob', () => {
     );
   });
 
+  it.each([false, true])('filters policy-refused runs without retrying (replay=%s)', async (replay) => {
+    const run = {
+      id: 'run-1',
+      status: 'cancelled',
+      error: 'Subscription inactive',
+      result: {
+        cancellation: {
+          reason: 'managed_compute_access_denied',
+          code: 'subscription_inactive',
+          message: 'Subscription inactive',
+        },
+      },
+    };
+    if (replay) {
+      mocks.createEventTriggeredScheduleRun.mockResolvedValue({ claim: claim(), replay, run });
+    } else {
+      mocks.processClaimedScheduleRun.mockResolvedValue(run);
+    }
+
+    await expect(fireEventTriggerJob(context())).resolves.toMatchObject({
+      runId: 'run-1',
+      status: 'cancelled',
+      skipped: 'managed_compute_access_denied',
+      code: 'subscription_inactive',
+    });
+    expect(mocks.settleTriggerDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      'event-1',
+      'filtered',
+      'Subscription inactive',
+      { runId: 'run-1' },
+    );
+    if (replay) expect(mocks.processClaimedScheduleRun).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    { billingStatus: 'subscription_inactive' },
+    { cancellation: { reason: 'other', code: 'subscription_inactive', message: 'Stopped' } },
+    { cancellation: { reason: 'managed_compute_access_denied', code: 42, message: 'Stopped' } },
+  ])('preserves retry behavior for cancellation without a valid policy refusal: %j', async (result) => {
+    mocks.processClaimedScheduleRun.mockResolvedValue({
+      id: 'run-1',
+      status: 'cancelled',
+      error: 'Stopped',
+      result,
+    });
+
+    await expect(fireEventTriggerJob(context())).rejects.toThrow('Stopped');
+    expect(mocks.settleTriggerDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      'event-1',
+      'failed',
+      expect.stringContaining('cancelled'),
+      { runId: 'run-1' },
+    );
+  });
+
   it('refuses a payload it cannot act on instead of retrying it', async () => {
     const broken = context();
     broken.job.payload = { triggerId: TRIGGER_ID } as never;

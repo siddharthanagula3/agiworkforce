@@ -215,6 +215,30 @@ export interface ScheduledExecutionResult {
   usage?: Record<string, unknown>;
   billingStatus?: string;
   approval?: ScheduledRunApproval;
+  cancellation?: ScheduledExecutionCancellation;
+}
+
+export interface ScheduledExecutionCancellation {
+  reason: 'managed_compute_access_denied';
+  code: string;
+  message: string;
+}
+
+export function scheduleRunPolicyRefusal(
+  run: Pick<ScheduleRun, 'status' | 'result'>,
+): ScheduledExecutionCancellation | null {
+  if (run.status !== 'cancelled') return null;
+  const cancellation = run.result?.['cancellation'];
+  if (!cancellation || typeof cancellation !== 'object' || Array.isArray(cancellation)) return null;
+  const value = cancellation as Record<string, unknown>;
+  if (
+    value['reason'] !== 'managed_compute_access_denied' ||
+    typeof value['code'] !== 'string' ||
+    typeof value['message'] !== 'string'
+  ) {
+    return null;
+  }
+  return { reason: value['reason'], code: value['code'], message: value['message'] };
 }
 
 export type ScheduledTaskExecutor = (
@@ -1761,7 +1785,7 @@ async function announceScheduleRun(
   claim: ClaimedScheduleRun,
   status: ScheduleRunStatus,
 ): Promise<void> {
-  if (status === 'running' || status === 'cancelled') return;
+  if (status === 'running' || status === 'cancelled' || status === 'awaiting_approval') return;
   try {
     await enqueueJob(db, {
       kind: 'notifications.schedule-completed',
@@ -2235,11 +2259,12 @@ async function runClaimedSchedule(
           }
         : executed;
     const run = await finalizeScheduleRun(db, claim, {
-      status: 'success',
+      status: executed.cancellation ? 'cancelled' : 'success',
       result,
+      error: executed.cancellation?.message,
       completedAt: now(),
     });
-    await announceScheduleRun(db, claim, 'success');
+    await announceScheduleRun(db, claim, run.status);
     return run;
   } catch (error) {
     const externallyCancelled = options.signal?.aborted === true;
@@ -2255,7 +2280,7 @@ async function runClaimedSchedule(
       error: errorMessage(error),
       completedAt: now(),
     });
-    await announceScheduleRun(db, claim, status);
+    await announceScheduleRun(db, claim, run.status);
     return run;
   } finally {
     removeAbortListener();
