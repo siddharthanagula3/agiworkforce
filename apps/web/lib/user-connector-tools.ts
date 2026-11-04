@@ -2818,7 +2818,7 @@ export function makeUserConnectorExecutor(
     if (isGmailActionTool(serverId, toolName)) {
       return guarded(async (safeArgs) => ({
         handled: true,
-        ...(await executeGmailAction(userId, toolName, safeArgs)),
+        ...(await executeGmailAction(userId, toolName, safeArgs, organizationId)),
       }));
     }
 

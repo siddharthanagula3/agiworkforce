@@ -15,9 +15,13 @@ import {
   resolveConnectorAccessToken,
 } from '@/lib/connectors/oauth-access';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
-import { getMediaAssetById } from '@/lib/server/media-assets';
+import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { readStoredMedia } from '@/lib/server/media-storage';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  resolveActiveOrganizationId,
+  resolveOrganizationMembershipId,
+} from '@/lib/services/active-workspace-service';
 import { createDeadline, credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
 
 export const GMAIL_CONNECTOR_ID = 'gmail';
@@ -292,10 +296,22 @@ function mimeDraft(
   return `${headers.join('\r\n')}\r\n\r\n${parts.join('\r\n')}\r\n--${boundary}--\r\n`;
 }
 
-async function loadOwnedFile(userId: string, reference: string): Promise<DraftAttachment | string> {
+async function loadOwnedFile(
+  userId: string,
+  organizationId: string | null,
+  reference: string,
+): Promise<DraftAttachment | string> {
   const assetId = FILE_REFERENCE_RE.exec(reference)?.[1];
-  const asset = assetId ? await getMediaAssetById(assetId, getNeonDb()) : null;
-  if (!asset || asset.userId !== userId || asset.deletedAt || !asset.storagePathname) {
+  const asset = assetId
+    ? await getActiveWorkspaceMediaAssetById(userId, assetId, getNeonDb(), { organizationId })
+    : null;
+  if (
+    !asset ||
+    asset.userId !== userId ||
+    asset.organizationId !== organizationId ||
+    asset.deletedAt ||
+    !asset.storagePathname
+  ) {
     return `${reference} is not a file in this account.`;
   }
   const stored = await readStoredMedia(asset.storagePathname);
@@ -312,6 +328,7 @@ async function createDraftWithAttachments(
   userId: string,
   args: Record<string, unknown>,
   token: { accessToken: string; tokenType: string },
+  admittedOrganizationId?: string | null,
 ): Promise<GmailActionResult> {
   const parsed = DraftWithAttachmentsArgs.safeParse(args);
   if (!parsed.success) {
@@ -320,9 +337,20 @@ async function createDraftWithAttachments(
       isError: true,
     };
   }
+  const db = getNeonDb();
+  const organizationId =
+    admittedOrganizationId === undefined
+      ? await resolveActiveOrganizationId(db, userId)
+      : admittedOrganizationId;
+  if (
+    organizationId !== null &&
+    (await resolveOrganizationMembershipId(db, userId, organizationId)) !== organizationId
+  ) {
+    return { content: 'You are not an active member of this workspace.', isError: true };
+  }
   const attachments: DraftAttachment[] = [];
   for (const reference of parsed.data.files) {
-    const loaded = await loadOwnedFile(userId, reference);
+    const loaded = await loadOwnedFile(userId, organizationId, reference);
     if (typeof loaded === 'string') return { content: loaded, isError: true };
     attachments.push(loaded);
   }
@@ -437,6 +465,7 @@ export async function executeGmailAction(
   userId: string,
   toolName: string,
   args: Record<string, unknown>,
+  organizationId?: string | null,
 ): Promise<GmailActionResult> {
   const access = await resolveConnectorAccessToken(userId, GMAIL_CONNECTOR_ID);
   if (access.status === 'unreachable') {
@@ -452,7 +481,7 @@ export async function executeGmailAction(
   try {
     if (toolName === GMAIL_SEND_DRAFT_ACTION) return await sendDraft(args, token);
     if (toolName === GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION) {
-      return await createDraftWithAttachments(userId, args, token);
+      return await createDraftWithAttachments(userId, args, token, organizationId);
     }
     return await readAttachments(args, token);
   } catch (error) {

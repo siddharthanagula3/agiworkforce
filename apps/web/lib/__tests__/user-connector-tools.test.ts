@@ -15,6 +15,12 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 
 vi.mock('server-only', () => ({}));
 
+const gmailAction = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/connectors/gmail-actions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/gmail-actions')>()),
+  executeGmailAction: gmailAction,
+}));
+
 const mockNeonQuery = vi.fn();
 vi.mock('@/lib/server/neon-db', () => {
   const adapter = {
@@ -524,6 +530,22 @@ describe('organization workspace scope', () => {
 });
 
 describe('makeUserConnectorExecutor', () => {
+  it.each([ORGANIZATION_ID, null, undefined])(
+    'passes Gmail the original organization context %s unchanged',
+    async (organizationId) => {
+      stubDb({ activeConnectors: ['gmail'] });
+      gmailAction.mockResolvedValue({ content: 'fixture draft', isError: false });
+      const args = { files: ['/api/files/fixture'] };
+      const result = await makeUserConnectorExecutor('user-1', organizationId)(
+        'gmail', 'create_draft_with_attachments', args,
+      );
+      expect(result.isError).toBe(false);
+      expect(gmailAction).toHaveBeenCalledWith(
+        'user-1', 'create_draft_with_attachments', args, organizationId,
+      );
+    },
+  );
+
   it('executes a github diff tool via the GitHub integration', async () => {
     stubDb({
       installations: [
