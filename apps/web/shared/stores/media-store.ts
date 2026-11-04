@@ -2,6 +2,7 @@
 
 import type { LifecycleStatus } from '@agiworkforce/types';
 import { create } from 'zustand';
+import type { SessionAuthority } from '@/lib/identity/request-authority';
 
 export type MediaJobStatus =
   Extract<LifecycleStatus, 'pending' | 'completed' | 'failed'> | 'generating';
@@ -21,10 +22,15 @@ export interface MediaJob {
   completedAt?: string;
 }
 
+export interface OwnedMediaJob extends MediaJob {
+  readonly owner: SessionAuthority;
+}
+
 interface MediaState {
-  jobs: MediaJob[];
-  addJob: (job: MediaJob) => void;
+  jobs: OwnedMediaJob[];
+  addJob: (job: MediaJob, owner: SessionAuthority) => void;
   updateJob: (id: string, updates: Partial<MediaJob>) => void;
+  retireStaleJobs: () => void;
   reset: () => void;
 }
 
@@ -39,10 +45,16 @@ export const useMediaStore = create<MediaState>()((set) => ({
 
   reset: () => set({ jobs: [] }),
 
-  addJob: (job) =>
-    set((state) => ({
-      jobs: [job, ...state.jobs].slice(0, 50),
-    })),
+  addJob: (job, owner) =>
+    set((state) => owner.isCurrent()
+      ? { jobs: [{ ...job, owner }, ...state.jobs].slice(0, 50) }
+      : state),
+
+  retireStaleJobs: () =>
+    set((state) => {
+      const jobs = state.jobs.filter((job) => job.owner.isCurrent());
+      return jobs.length === state.jobs.length ? state : { jobs };
+    }),
 
   updateJob: (id, updates) =>
     set((state) => ({

@@ -19,10 +19,15 @@ vi.mock('@/features/connectors/hooks/use-connectors', () => ({}));
 vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({}));
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
-import { cleanupAllStores } from './authentication-store';
+import { cleanupAllStores, useAuthStore } from './authentication-store';
 import { useMediaStore } from './media-store';
 import { authService } from '@shared/services/authentication-manager';
 import { FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY } from '@/features/chat/components/FreePlanTrainingNotice';
+
+const mediaOwner = {
+  userId: 'media-user', sessionId: 'media-session',
+  isCurrent: () => true, getToken: async () => 'media-token',
+};
 
 describe('sign-out storage sweep', () => {
   beforeEach(() => {
@@ -40,18 +45,40 @@ describe('sign-out storage sweep', () => {
       useMediaStore.getState().addJob({
         ...original, id: `${original.id}-${status}`, status,
         resultUrl: '/old-result', errorMessage: 'old failure',
-      });
+      }, mediaOwner);
     }
-    useMediaStore.getState().addJob(original);
+    useMediaStore.getState().addJob(original, mediaOwner);
     await cleanupAllStores();
     expect(useMediaStore.getState().jobs).toEqual([]);
 
-    useMediaStore.getState().addJob({ ...original, id: 'new-media-job', prompt: 'new prompt' });
+    useMediaStore.getState().addJob({ ...original, id: 'new-media-job', prompt: 'new prompt' }, mediaOwner);
     useMediaStore.getState().updateJob(original.id, { status: 'completed', resultUrl: '/old-image' });
     expect(useMediaStore.getState().jobs).toEqual([
-      { ...original, id: 'new-media-job', prompt: 'new prompt' },
+      { ...original, id: 'new-media-job', prompt: 'new prompt', owner: mediaOwner },
     ]);
     expect(useMediaStore.getState().reset).toEqual(expect.any(Function));
+  });
+
+  it('synchronously clears media on cookie-absence resync without retiring SDK authority', async () => {
+    document.cookie = '__client_uat=; Max-Age=0; path=/';
+    document.cookie = '__session=; Max-Age=0; path=/';
+    useAuthStore.getState().reset();
+    const job = {
+      id: 'old-media-job', type: 'image' as const, prompt: 'old prompt',
+      status: 'generating' as const, createdAt: '2026-11-04T00:00:00.000Z',
+    };
+    useMediaStore.getState().addJob(job, mediaOwner);
+
+    const resync = useAuthStore.getState().resyncSession();
+    expect(useMediaStore.getState().jobs).toEqual([]);
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(mediaOwner.isCurrent()).toBe(true);
+    useMediaStore.getState().addJob({ ...job, id: 'replacement' }, mediaOwner);
+    await resync;
+    useMediaStore.getState().updateJob(job.id, { status: 'completed', resultUrl: '/old-result' });
+    expect(useMediaStore.getState().jobs).toEqual([
+      { ...job, id: 'replacement', owner: mediaOwner },
+    ]);
   });
 
   it('removes the legacy APIClient bearer and refresh tokens', async () => {

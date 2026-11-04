@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { authService, AuthUser } from '@shared/services/authentication-manager';
 import { logger } from '@shared/lib/logger';
+import { useMediaStore } from './media-store';
 import {
   clerkSessionCookieValue,
   hasClerkSessionCookie,
@@ -487,6 +488,7 @@ export const useAuthStore = create<AuthState>()(
         if (!hasClerkSessionCookie()) {
           _resolvedFromSessionToken = token;
           _sessionSettled = true;
+          useMediaStore.getState().reset();
           set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
           return;
         }

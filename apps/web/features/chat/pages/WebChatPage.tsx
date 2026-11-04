@@ -2053,7 +2053,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [showNotifBanner, setShowNotifBanner] = useState(false);
   const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingMediaJob = useMediaStore((state) =>
-    state.jobs.some((job) => job.status === 'pending' || job.status === 'generating'),
+    state.jobs.some((job) =>
+      (job.status === 'pending' || job.status === 'generating') && job.owner.isCurrent(),
+    ),
   );
   const isLongRunningTaskType =
     composerToggles?.researchEnabled === true ||

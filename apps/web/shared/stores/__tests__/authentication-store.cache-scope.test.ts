@@ -76,6 +76,10 @@ import { applyCacheScope } from '../authentication-store';
 import { useMediaStore } from '../media-store';
 
 const SCOPE_KEY = 'agi.cache-scope';
+const mediaOwner = {
+  userId: 'media-user', sessionId: 'media-session',
+  isCurrent: () => true, getToken: async () => 'media-token',
+};
 const MODEL_PREFERENCES = JSON.stringify([resolveModelFamilySlot('openai/gpt-fast')]);
 
 beforeEach(() => {
@@ -91,7 +95,7 @@ describe('applyCacheScope', () => {
     useMediaStore.getState().addJob({
       id: 'previous-scope-job', type: 'video', prompt: 'previous scope prompt',
       status: 'generating', createdAt: '2026-11-04T00:00:00.000Z',
-    });
+    }, mediaOwner);
     await applyCacheScope(kind === 'account'
       ? { accountId: 'user_2', workspaceId: null }
       : { accountId: 'user_1', workspaceId: 'org_a' });
@@ -103,11 +107,11 @@ describe('applyCacheScope', () => {
       id: 'current-job', type: 'image' as const, prompt: 'current prompt',
       status: 'generating' as const, createdAt: '2026-11-04T00:00:00.000Z',
     };
-    useMediaStore.getState().addJob(job);
+    useMediaStore.getState().addJob(job, mediaOwner);
     expect(await applyCacheScope({ accountId: 'user_1', workspaceId: null })).toBe(false);
-    expect(useMediaStore.getState().jobs).toEqual([job]);
+    expect(useMediaStore.getState().jobs).toEqual([{ ...job, owner: mediaOwner }]);
     expect(await applyCacheScope({ accountId: 'user_1', workspaceId: null })).toBe(false);
-    expect(useMediaStore.getState().jobs).toEqual([job]);
+    expect(useMediaStore.getState().jobs).toEqual([{ ...job, owner: mediaOwner }]);
   });
 
   it('does not purge or record scope after the captured owner retires during cancellation', async () => {

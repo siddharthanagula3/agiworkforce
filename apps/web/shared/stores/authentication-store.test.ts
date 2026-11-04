@@ -40,7 +40,9 @@ vi.mock('./layout-store', () => ({
 }));
 vi.mock('./web-chat-store', () => ({}));
 vi.mock('./web-settings-store', () => ({}));
-vi.mock('./media-store', () => ({}));
+vi.mock('./media-store', () => ({
+  useMediaStore: { getState: () => ({ reset: vi.fn() }) },
+}));
 vi.mock('./model-store', () => ({}));
 vi.mock('./thinking-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => ({}));

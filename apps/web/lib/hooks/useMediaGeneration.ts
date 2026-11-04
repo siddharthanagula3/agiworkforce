@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useLayoutEffect } from 'react';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils';
@@ -274,9 +274,13 @@ function isAbortError(err: unknown): boolean {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function useMediaGeneration() {
-  const { addJob, updateJob } = useMediaStore();
+  const { addJob, updateJob, retireStaleJobs } = useMediaStore();
   const captureSessionSnapshot = useSessionSnapshot();
+  useLayoutEffect(() => {
+    retireStaleJobs();
+  });
   const bindAuthority = useCallback((existing?: RequestAuthority): RequestAuthority => {
+    retireStaleJobs();
     if (existing) {
       existing.assertCurrent();
       return existing;
@@ -284,7 +288,7 @@ export function useMediaGeneration() {
     const session = captureSessionSnapshot();
     if (!session) throw new Error('Not authenticated');
     return createRequestAuthority(session);
-  }, [captureSessionSnapshot]);
+  }, [captureSessionSnapshot, retireStaleJobs]);
 
   const generateImage = useCallback(
     async (prompt: string, options: GenerateImageOptions = {}) => {
@@ -303,7 +307,7 @@ export function useMediaGeneration() {
         size: options.aspectRatio ?? options.size ?? '1024x1024',
         provider: options.provider,
         createdAt: new Date().toISOString(),
-      });
+      }, authority.session);
 
       const deadline = new AbortController();
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
@@ -442,9 +446,10 @@ export function useMediaGeneration() {
       } finally {
         if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
         activeImageGenerations.delete(jobId);
+        retireStaleJobs();
       }
     },
-    [addJob, updateJob, bindAuthority],
+    [addJob, updateJob, bindAuthority, retireStaleJobs],
   );
 
   const startVideo = useCallback(
@@ -458,7 +463,7 @@ export function useMediaGeneration() {
         status: 'generating',
         ...(options.provider ? { provider: options.provider } : {}),
         createdAt: new Date().toISOString(),
-      });
+      }, authority.session);
 
       try {
         const started = await startVideoGeneration({
@@ -503,9 +508,11 @@ export function useMediaGeneration() {
         const message = err instanceof Error ? err.message : 'Unknown error';
         updateJob(jobId, { status: 'failed', errorMessage: message });
         throw err;
+      } finally {
+        retireStaleJobs();
       }
     },
-    [addJob, updateJob, bindAuthority],
+    [addJob, updateJob, bindAuthority, retireStaleJobs],
   );
 
   const watchVideo = useCallback(
@@ -524,52 +531,56 @@ export function useMediaGeneration() {
       let lastStatus: 'queued' | 'processing' = 'queued';
       let lastProgress: number | undefined;
 
-      for (;;) {
-        await sleep(VIDEO_POLL_INTERVAL_MS);
-        authority.assertCurrent();
-        const status = await getVideoStatus(taskId, authority).catch((err: unknown) => {
-          throw toMediaGenerationError(err);
-        });
-
-        authority.assertCurrent();
-        if (status.status === 'completed') {
-          if (!status.video_url) throw new Error('Video finished with no URL');
-          const result: CompletedVideoGeneration = {
-            status: 'completed',
-            taskId,
-            videoUrl: status.video_url,
-            ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
-          };
-          updateJob(localJobId, {
-            status: 'completed',
-            resultUrl: result.videoUrl,
-            ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
-            completedAt: new Date().toISOString(),
+      try {
+        for (;;) {
+          await sleep(VIDEO_POLL_INTERVAL_MS);
+          authority.assertCurrent();
+          const status = await getVideoStatus(taskId, authority).catch((err: unknown) => {
+            throw toMediaGenerationError(err);
           });
-          return result;
-        }
-        if (status.status === 'failed' || status.status === 'timeout') {
-          const message = status.error || `Video generation ${status.status}`;
-          updateJob(localJobId, { status: 'failed', errorMessage: message });
-          return { status: 'failed', taskId, error: message };
-        }
-        lastStatus = status.status;
-        lastProgress = status.progress;
-        options.onProgress?.({
-          taskStatus: lastStatus,
-          ...(lastProgress === undefined ? {} : { progress: lastProgress }),
-        });
-        if (Date.now() >= deadline) {
-          return {
-            status: 'pending',
-            taskId,
+
+          authority.assertCurrent();
+          if (status.status === 'completed') {
+            if (!status.video_url) throw new Error('Video finished with no URL');
+            const result: CompletedVideoGeneration = {
+              status: 'completed',
+              taskId,
+              videoUrl: status.video_url,
+              ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
+            };
+            updateJob(localJobId, {
+              status: 'completed',
+              resultUrl: result.videoUrl,
+              ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
+              completedAt: new Date().toISOString(),
+            });
+            return result;
+          }
+          if (status.status === 'failed' || status.status === 'timeout') {
+            const message = status.error || `Video generation ${status.status}`;
+            updateJob(localJobId, { status: 'failed', errorMessage: message });
+            return { status: 'failed', taskId, error: message };
+          }
+          lastStatus = status.status;
+          lastProgress = status.progress;
+          options.onProgress?.({
             taskStatus: lastStatus,
             ...(lastProgress === undefined ? {} : { progress: lastProgress }),
-          };
+          });
+          if (Date.now() >= deadline) {
+            return {
+              status: 'pending',
+              taskId,
+              taskStatus: lastStatus,
+              ...(lastProgress === undefined ? {} : { progress: lastProgress }),
+            };
+          }
         }
+      } finally {
+        retireStaleJobs();
       }
     },
-    [updateJob, bindAuthority],
+    [updateJob, bindAuthority, retireStaleJobs],
   );
 
   const generateVideo = useCallback(

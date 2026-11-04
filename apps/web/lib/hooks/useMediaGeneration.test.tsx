@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mediaStoreMocks = vi.hoisted(() => ({
   addJob: vi.fn(),
   updateJob: vi.fn(),
+  retireStaleJobs: vi.fn(),
 }));
 
 vi.mock('@shared/stores/media-store', () => ({
@@ -182,6 +183,7 @@ describe('useMediaGeneration', () => {
     expect(randomUuid).toHaveBeenCalledOnce();
     expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(
       expect.objectContaining({ id: operationId, type: 'image', prompt: 'draw a lighthouse' }),
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
     );
     const request = fetchMock.mock.calls[0]?.[1];
     const key = new Headers(request?.headers).get('Idempotency-Key');
@@ -227,7 +229,10 @@ describe('useMediaGeneration', () => {
       provider: 'google',
       model: GOOGLE_IMAGE_MODEL.id,
     });
-    expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(expect.objectContaining({ size: '3:4' }));
+    expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: '3:4' }),
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
+    );
   });
 
   it('serializes a mask edit of an image the caller already holds', async () => {
@@ -686,6 +691,7 @@ describe('useMediaGeneration', () => {
         );
         expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(
           expect.objectContaining({ type: 'video', prompt: 'a cat surfing', status: 'generating' }),
+          expect.objectContaining({ isCurrent: expect.any(Function) }),
         );
         expect(mediaStoreMocks.updateJob).toHaveBeenCalledWith(
           expect.any(String),
