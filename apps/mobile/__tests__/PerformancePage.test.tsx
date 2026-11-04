@@ -86,6 +86,10 @@ jest.mock('@agiworkforce/local-llm', () => {
   };
 });
 
+jest.mock('@/src/features/model-picker/localModelRuntime', () => ({
+  resolveLocalModelRef: jest.fn(),
+}));
+
 const { NativeModules } = require('react-native');
 NativeModules.AGIFoundationModels = {
   getThermalState: jest.fn().mockReturnValue(0),
@@ -267,16 +271,16 @@ describe('performanceMonitor service', () => {
       .fn()
       .mockImplementation(async ({ onToken }: { prompt: string; onToken: (t: string) => void }) => {
         for (let i = 0; i < 20; i++) onToken('x');
-        return { text: 'done', tokenCount: 20 };
+        return { text: 'done', tokenCount: 20, runtime: 'executorch', aborted: false };
       });
 
     const result = await runBenchmark({
       modelId: DEFAULT_LOCAL_MODEL_ID,
-      backend: 'foundation_models',
       generate,
     });
 
     expect(result.modelId).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(result.backend).toBe('executorch');
     expect(result.outputTokens).toBe(20);
     expect(result.tokensPerSecond).toBeGreaterThan(0);
     expect(result.firstTokenLatencyMs).toBeGreaterThanOrEqual(0);
@@ -284,6 +288,14 @@ describe('performanceMonitor service', () => {
 
     const history = getBenchmarkHistory();
     expect(history[0]!.modelId).toBe(DEFAULT_LOCAL_MODEL_ID);
+  });
+
+  it('does not persist an aborted benchmark', async () => {
+    await expect(runBenchmark({
+      modelId: DEFAULT_LOCAL_MODEL_ID,
+      generate: async () => ({ text: '', tokenCount: 2, runtime: 'executorch', aborted: true }),
+    })).rejects.toThrow('interrupted');
+    expect(getBenchmarkHistory()).toEqual([]);
   });
 
   it('getThermalState returns a valid thermal state string', () => {
@@ -336,6 +348,14 @@ describe('PerformanceScreen rendering', () => {
   beforeEach(() => {
     mockStorage.clear();
     jest.clearAllMocks();
+    const { resolveLocalModelRef } = require('@/src/features/model-picker/localModelRuntime');
+    resolveLocalModelRef.mockReset();
+    resolveLocalModelRef.mockImplementation(async (modelId: string) => ({
+      modelId, displayName: 'Fixture local model', installed: true,
+    }));
+    (mockLocalLlm.loadedLocalModel as jest.Mock).mockReturnValue(null);
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
   });
 
   it('renders the "Performance" header', async () => {
@@ -459,6 +479,95 @@ describe('PerformanceScreen rendering', () => {
     });
   });
 
+  it('refuses unresolved local admission before generation or persistence', async () => {
+    const { resolveLocalModelRef } = require('@/src/features/model-picker/localModelRuntime');
+    resolveLocalModelRef.mockRejectedValue(new Error('not downloaded'));
+    const screen = await renderSettledPerformanceScreen();
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Run Benchmark' }));
+    });
+    expect(mockLocalLlm.localGenerate).not.toHaveBeenCalled();
+    expect(getBenchmarkHistory()).toEqual([]);
+    expect(screen.getByText(/Choose an available on-device model/)).toBeTruthy();
+  });
+
+  it('benchmarks an available system model without an installation row', async () => {
+    const { resolveLocalModelRef } = require('@/src/features/model-picker/localModelRuntime');
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    const systemModel = mockLocalLlm.getSystemModelForTier1Runtime('foundation_models')!;
+    useModelStore.setState({ selectedModel: systemModel.id });
+    resolveLocalModelRef.mockResolvedValue({
+      modelId: systemModel.id, displayName: systemModel.displayName, installed: false,
+    });
+    const screen = await renderSettledPerformanceScreen();
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Run Benchmark' }));
+    });
+    expect(mockLocalLlm.localGenerate).toHaveBeenCalledWith(undefined, expect.objectContaining({
+      modelId: systemModel.id,
+    }));
+    expect(getBenchmarkHistory()[0]).toMatchObject({
+      modelId: systemModel.id, backend: 'foundation_models',
+    });
+  });
+
+  it('captures the resolved model and path and ignores duplicate starts', async () => {
+    const { resolveLocalModelRef } = require('@/src/features/model-picker/localModelRuntime');
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    const path = 'file:///documents/models/fixture/model.gguf';
+    resolveLocalModelRef.mockResolvedValue({
+      modelId: DEFAULT_LOCAL_MODEL_ID, modelPath: path, displayName: 'Fixture', installed: true,
+    });
+    let finish!: (result: import('@agiworkforce/local-llm').GenerateResult) => void;
+    (mockLocalLlm.localGenerate as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
+      finish = resolve;
+    }));
+    const screen = await renderSettledPerformanceScreen();
+    await act(async () => {
+      const button = screen.getByRole('button', { name: 'Run Benchmark' });
+      fireEvent.press(button);
+      fireEvent.press(button);
+    });
+    expect(mockLocalLlm.localGenerate).toHaveBeenCalledTimes(1);
+    expect(mockLocalLlm.localGenerate).toHaveBeenCalledWith(path, expect.objectContaining({
+      modelId: DEFAULT_LOCAL_MODEL_ID,
+    }));
+    await act(async () => {
+      useModelStore.setState({ selectedModel: SYNTHETIC_LOCAL_MODEL_ID });
+      finish({ text: 'done', runtime: 'llama_rn', aborted: false });
+    });
+    expect(getBenchmarkHistory()).toHaveLength(1);
+    expect(getBenchmarkHistory()[0]).toMatchObject({
+      modelId: DEFAULT_LOCAL_MODEL_ID, backend: 'llama_rn',
+    });
+  });
+
+  it('shows interrupted generation without persisting success', async () => {
+    (mockLocalLlm.localGenerate as jest.Mock).mockResolvedValueOnce({
+      text: 'partial', runtime: 'executorch', aborted: true,
+    });
+    const screen = await renderSettledPerformanceScreen();
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Run Benchmark' }));
+    });
+    expect(getBenchmarkHistory()).toEqual([]);
+    expect(screen.getByText(/Benchmark could not finish/)).toBeTruthy();
+  });
+
+  it('does not label another resident preset as the selected model', async () => {
+    const other = mockLocalLlm.getShippableModels().find((model) =>
+      model.id !== DEFAULT_LOCAL_MODEL_ID && model.executorchPreset,
+    )!;
+    (mockLocalLlm.loadedLocalModel as jest.Mock).mockReturnValue({
+      runtime: 'executorch', preset: other.executorchPreset!.modelName,
+    });
+    const screen = await renderSettledPerformanceScreen();
+    expect(screen.getByText('Another local model is loaded in memory')).toBeTruthy();
+    expect(screen.queryByText('Loaded in memory')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Load model now' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Unload local models from memory' })).toBeNull();
+  });
+
   it('restores the unload action after a busy rejection and allows retry', async () => {
     const { useModelStore } = require('@/src/features/model-picker/store');
     const { loadedLocalModel, unloadLocalModels } = require('@agiworkforce/local-llm');
@@ -472,19 +581,19 @@ describe('PerformanceScreen rendering', () => {
 
     try {
       await act(async () => {
-        fireEvent.press(screen.getByRole('button', { name: 'Unload model from memory' }));
+        fireEvent.press(screen.getByRole('button', { name: 'Unload local models from memory' }));
       });
       expect(screen.getByText(
         'Failed to unload: Wait for any active response to finish, then try again.',
       )).toBeTruthy();
       expect(screen.getByRole('button', {
-        name: 'Unload model from memory',
+        name: 'Unload local models from memory',
       }).props.accessibilityState).toMatchObject({ disabled: false });
       expect(screen.queryByText('Working…')).toBeNull();
 
       loadedLocalModel.mockReturnValue(null);
       await act(async () => {
-        fireEvent.press(screen.getByRole('button', { name: 'Unload model from memory' }));
+        fireEvent.press(screen.getByRole('button', { name: 'Unload local models from memory' }));
       });
       expect(unloadLocalModels).toHaveBeenCalledTimes(2);
       expect(screen.getByRole('button', { name: 'Load model now' })).toBeTruthy();

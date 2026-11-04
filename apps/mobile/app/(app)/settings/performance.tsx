@@ -30,7 +30,10 @@ import {
   loadedLocalModel,
   unloadLocalModels,
 } from '@agiworkforce/local-llm';
-import { resolveLocalModelRef } from '@/src/features/model-picker/localModelRuntime';
+import {
+  resolveLocalModelRef,
+  type LocalModelRef,
+} from '@/src/features/model-picker/localModelRuntime';
 import type { DeviceCapabilities } from '@agiworkforce/local-llm';
 import {
   getThermalState,
@@ -39,7 +42,6 @@ import {
   getBenchmarkHistory,
   runBenchmark,
   type ThermalState,
-  type BackendName,
   type PerfEvent,
   type BenchmarkResult,
 } from '@/services/performanceMonitor';
@@ -316,6 +318,35 @@ export default function PerformanceScreen() {
   const thermalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [isBenchmarking, setIsBenchmarking] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const operationRunning = useRef(false);
+  const [runtimeState, setRuntimeState] = useState<
+    | { kind: 'idle' | 'busy' }
+    | { kind: 'failed'; action: 'load' | 'unload'; message: string; selectedId?: string }
+  >({ kind: 'idle' });
+  const [loadedModel, setLoadedModel] = useState(() => loadedLocalModel());
+  const [resolvedSelection, setResolvedSelection] = useState<{
+    selectedId: string;
+    ref: LocalModelRef;
+  } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setLoadedModel(loadedLocalModel());
+      setResolvedSelection(null);
+      if (selectedModelId) {
+        void resolveLocalModelRef(selectedModelId)
+          .then((ref) => {
+            if (active) setResolvedSelection({ selectedId: selectedModelId, ref });
+          })
+          .catch(() => undefined);
+      }
+      return () => {
+        active = false;
+      };
+    }, [selectedModelId]),
+  );
   const [lastBenchmark, setLastBenchmark] = useState<BenchmarkResult | null>(
     () => getBenchmarkHistory()[0] ?? null,
   );
@@ -369,38 +400,49 @@ export default function PerformanceScreen() {
     writeBool(PERF_CHIP_SHOW_KEY, v);
   }, []);
 
-  const benchmarkDisabled = isBenchmarking || !selectedModelId;
+  const benchmarkDisabled = isBenchmarking || runtimeState.kind === 'busy' || !selectedModelId;
 
   const handleBenchmark = useCallback(async () => {
-    if (isBenchmarking || !selectedModelId) return;
+    if (operationRunning.current || !selectedModelId) return;
+    operationRunning.current = true;
     setIsBenchmarking(true);
+    setBenchmarkError(null);
 
-    AccessibilityInfo.announceForAccessibility('Running benchmark. Please wait.');
-
+    let resultSaved = false;
     try {
+      AccessibilityInfo.announceForAccessibility('Running benchmark. Please wait.');
       const activeModelId = selectedModelId;
-      const localModel = getLocalModelById(activeModelId);
-      const backend: BackendName = caps?.tier1Runtime ?? 'llama_rn';
+      let ref: LocalModelRef;
+      try {
+        ref = await resolveLocalModelRef(activeModelId);
+        setResolvedSelection({ selectedId: activeModelId, ref });
+      } catch {
+        const message =
+          'Choose an available on-device model in Models before running a benchmark. Download it first if needed.';
+        setBenchmarkError(message);
+        AccessibilityInfo.announceForAccessibility(message);
+        return;
+      }
 
       const { localGenerate } = await import('@agiworkforce/local-llm');
 
       const result = await runBenchmark({
-        modelId: localModel?.id ?? activeModelId,
-        backend,
+        modelId: ref.modelId,
         generate: async ({ prompt, onToken }) => {
           let tokenCount = 0;
-          await localGenerate(localModel?.id ?? activeModelId, {
-            modelId: localModel?.id ?? activeModelId,
+          const generated = await localGenerate(ref.modelPath, {
+            modelId: ref.modelId,
             prompt,
             onToken: (tok) => {
               onToken(tok);
               tokenCount += 1;
             },
           });
-          return { text: '', tokenCount };
+          return { ...generated, tokenCount };
         },
       });
 
+      resultSaved = true;
       setLastBenchmark(result);
 
       const events = getPerfEventsLastDays(7);
@@ -413,11 +455,17 @@ export default function PerformanceScreen() {
           `${result.firstTokenLatencyMs} ms first token latency.`,
       );
     } catch {
-      AccessibilityInfo.announceForAccessibility('Benchmark failed. Try again.');
+      const message = resultSaved
+        ? 'The benchmark result was saved, but the display could not refresh. Reopen Performance to view it.'
+        : 'Benchmark could not finish. No new result was saved. Try again when the local model is available.';
+      setBenchmarkError(message);
+      AccessibilityInfo.announceForAccessibility(message);
     } finally {
+      setLoadedModel(loadedLocalModel());
+      operationRunning.current = false;
       setIsBenchmarking(false);
     }
-  }, [isBenchmarking, selectedModelId, caps]);
+  }, [selectedModelId]);
 
   const toksData = useMemo(() => toksEvents.map((e) => e.tokensPerSecond), [toksEvents]);
   const ttftData = useMemo(() => ttftEvents.map((e) => e.firstTokenLatencyMs), [ttftEvents]);
@@ -432,17 +480,24 @@ export default function PerformanceScreen() {
     return getLocalModelById(selectedModelId) ?? null;
   }, [selectedModelId]);
 
-  const [runtimeState, setRuntimeState] = useState<
-    { kind: 'idle' | 'busy' } | { kind: 'failed'; action: 'load' | 'unload'; message: string }
-  >({ kind: 'idle' });
-  const [loadedModel, setLoadedModel] = useState(() => loadedLocalModel());
   const systemManaged = activeLocalModel?.fileSizeBytes === 0;
+  const selectedRef =
+    resolvedSelection?.selectedId === selectedModelId ? resolvedSelection.ref : null;
+  const selectedModelLoaded =
+    loadedModel?.runtime === 'executorch'
+      ? loadedModel.preset === activeLocalModel?.executorchPreset?.modelName
+      : loadedModel?.runtime === 'llama_rn' && selectedRef?.modelPath === loadedModel.modelPath;
+  const visibleRuntimeFailure =
+    runtimeState.kind === 'failed' &&
+    (!runtimeState.selectedId || runtimeState.selectedId === selectedModelId);
 
   const handleLoadModel = useCallback(async () => {
-    if (!selectedModelId) return;
+    if (operationRunning.current || !selectedModelId) return;
+    operationRunning.current = true;
     setRuntimeState({ kind: 'busy' });
     try {
       const ref = await resolveLocalModelRef(selectedModelId);
+      setResolvedSelection({ selectedId: selectedModelId, ref });
       await loadLocalModel(ref.modelPath, ref.modelId);
       setLoadedModel(loadedLocalModel());
       setRuntimeState({ kind: 'idle' });
@@ -452,12 +507,17 @@ export default function PerformanceScreen() {
       setRuntimeState({
         kind: 'failed',
         action: 'load',
+        selectedId: selectedModelId,
         message: 'Try again, or choose a smaller model.',
       });
+    } finally {
+      operationRunning.current = false;
     }
   }, [selectedModelId]);
 
   const handleUnloadModel = useCallback(async () => {
+    if (operationRunning.current) return;
+    operationRunning.current = true;
     setRuntimeState({ kind: 'busy' });
     try {
       await unloadLocalModels();
@@ -471,6 +531,7 @@ export default function PerformanceScreen() {
       });
     } finally {
       setLoadedModel(loadedLocalModel());
+      operationRunning.current = false;
     }
   }, []);
 
@@ -691,26 +752,32 @@ export default function PerformanceScreen() {
                   style={{
                     flex: 1,
                     fontSize: typeScale.caption,
-                    color: runtimeState.kind === 'failed' ? c.agentError : c.textSecondary,
+                    color: visibleRuntimeFailure ? c.agentError : c.textSecondary,
                   }}
                 >
                   {systemManaged
-                    ? 'Managed by the system, ready when needed'
+                    ? 'Managed by the system; availability is checked on use'
                     : runtimeState.kind === 'busy'
                       ? 'Working…'
-                      : runtimeState.kind === 'failed'
+                      : runtimeState.kind === 'failed' && visibleRuntimeFailure
                         ? `Failed to ${runtimeState.action}: ${runtimeState.message}`
-                        : loadedModel
+                        : selectedModelLoaded
                           ? 'Loaded in memory'
-                          : 'Not loaded, loads on first use'}
+                          : loadedModel
+                            ? 'Another local model is loaded in memory'
+                            : 'Not loaded; an installed model loads on use'}
                 </Text>
                 {systemManaged ? null : (
                   <Pressable
-                    onPress={() => void (loadedModel ? handleUnloadModel() : handleLoadModel())}
-                    disabled={runtimeState.kind === 'busy'}
+                    onPress={() =>
+                      void (selectedModelLoaded ? handleUnloadModel() : handleLoadModel())
+                    }
+                    disabled={runtimeState.kind === 'busy' || isBenchmarking}
                     accessibilityRole="button"
-                    accessibilityLabel={loadedModel ? 'Unload model from memory' : 'Load model now'}
-                    accessibilityState={{ disabled: runtimeState.kind === 'busy' }}
+                    accessibilityLabel={
+                      selectedModelLoaded ? 'Unload local models from memory' : 'Load model now'
+                    }
+                    accessibilityState={{ disabled: runtimeState.kind === 'busy' || isBenchmarking }}
                     style={{
                       minHeight: 44,
                       paddingHorizontal: 14,
@@ -727,7 +794,7 @@ export default function PerformanceScreen() {
                         color: c.textPrimary,
                       }}
                     >
-                      {loadedModel ? 'Unload' : 'Load'}
+                      {selectedModelLoaded ? 'Unload local models' : 'Load'}
                     </Text>
                   </Pressable>
                 )}
@@ -884,8 +951,8 @@ export default function PerformanceScreen() {
             </Text>
           </View>
           <Text style={{ fontSize: typeScale.footnote, color: c.textMuted, marginBottom: 12 }}>
-            Runs a standardized 60-token prompt against the loaded model. Result is stored for
-            comparison across sessions.
+            Runs a standard prompt against the selected on-device model, loading it if installed.
+            Successful results are stored for comparison across sessions.
           </Text>
           <Pressable
             onPress={handleBenchmark}
@@ -922,6 +989,14 @@ export default function PerformanceScreen() {
               </Text>
             )}
           </Pressable>
+          {benchmarkError ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={{ fontSize: typeScale.footnote, color: c.agentError, marginTop: 8 }}
+            >
+              {benchmarkError}
+            </Text>
+          ) : null}
           {selectedModelId ? null : (
             <Text style={{ fontSize: typeScale.footnote, color: c.textMuted, marginTop: 8 }}>
               Download a model to run a benchmark.
