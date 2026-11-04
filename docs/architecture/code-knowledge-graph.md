@@ -67,10 +67,114 @@ unchanged and is not claimed resolved. Regression source covers cookie refusal,
 missing token, mapped account, unavailable admission, public-first reads and
 organization/invited fallback; no runtime acceptance is claimed.
 
+## Dirty-message sync merge ownership
+
+Reconstructed commit: `c521f9967d4f346e0cfad214c0f1749802632e50`.
+The five-file group contains three production files and two unexecuted regression
+sources. Shared `packages/client/sync/src/messages.ts` now owns `DirtyMessageRef`;
+mobile's sync-state store imports/re-exports that type rather than duplicating it.
+
+`cloudSyncEngine.ts` supplies current dirty references to shared delta merge.
+For a live existing dirty row with a syncable role, the merge derives exactly the
+push-owned role/content/metadata and explicitly supplied model/provider from
+`toMessagePushItem`. It still adopts remote server version, creation time and
+supplied parent metadata. Omitted parent retains learned lineage. Omitted model/
+provider is not an instruction to erase labels: server sync SQL distinguishes
+field presence and preserves existing columns when omitted, so the merged server
+labels remain appropriate. Absent local metadata normalizes through the existing
+push serializer rather than inventing a second payload contract.
+
+Remote tombstones remove rows before dirty preservation. On push conflict, a
+newer local edit rebases against live remote metadata and remains dirty; a
+conflict without a newer local edit, or with a remote tombstone, accepts the
+remote winner and clears the resolved dirty reference. References are scoped
+by conversation and message ID. Missing local rows are inserted through normal
+remote merge, not synthesized from an absent dirty snapshot.
+
+This is field ownership and retry rebasing, not a server deletion/tombstone
+redesign, protection against all delayed-create resurrection, or proof of
+cross-device convergence. Source fixtures cover in-flight echo/retry, omitted
+labels/metadata and reference scope; no tests, checks or runtime validation ran.
+
+## Checkpoint organization context-policy authority
+
+Reconstructed production commit: `d1becb90b4643d54d099a3fe74f51a11a61b21dc`
+(13 files). Accepted regression-source companion:
+`2461be995a02b490853951687e510267f381baa5` (16 files), unexecuted. The
+implementation worker reported only `git diff --check`, not tests; this
+documentation pass executed no checks.
+
+`context-policy-snapshot.ts` owns a strict version-1 snapshot of actor account,
+nullable organization and four source-class permissions: memory, past chats,
+connector results and web results. The policy reader distinguishes unreadable
+lookup from readable closed policy; Personal resolves the existing open policy,
+and an absent organization policy row resolves closed. Equality requires valid
+schemas and exact actor/organization/permission values, not caller-supplied prose.
+
+`request-processor.ts` captures this server policy from admitted scope, compares
+any trusted resume snapshot, supplies those exact flags to interactive context
+resolution, and rereads before the main reservation block. The checkpoint
+builder strips private fields from the replayable request before adding a valid
+server snapshot. All eleven production builder call sites carry it: three in
+the completion route, four in inline workflow startup and four in durable
+invocation execution.
+
+The approval, input, device and paused-run resume routes validate saved authority
+before `processRequest`, releasing their claim and returning restart-required on
+missing/malformed/changed authority. The processor supplies another comparison
+and the pre-reservation reread. Durable invocation execution also unconditionally
+checks after rehydration and before tool dispatch, including initial queued work,
+not only continuations. Thus legacy queued initial invocations without a snapshot
+also fail and require restarting; compatibility is intentionally narrower than
+“only legacy resume is refused.” Fatal workflow failure emits the restart reason
+and retains the existing failed-invocation/observed-cost settlement path, not a
+new refund policy.
+
+This is a source-class policy/actor/scope boundary, not per-source provenance,
+attachment-deletion validation, grant freshness throughout a running turn,
+continuous revocation or a transaction spanning all later work. It does not prove
+complete context privacy or deployed behavior. Runtime acceptance remains open.
+
+The companion specifies helper schema/equality/readability, checkpoint builder
+ownership, four resume-route refusal boundaries, processor propagation/read
+failure, durable transport and invocation refusal variants. Durable source cases
+include malformed snapshots, changed flags, different actors/organizations,
+unreadable policy, and both legacy initial work and continuations. Separate
+settlement fixtures call the settlement helper for managed/free-trial observed
+cost and predecessor failure. These are authored assertions, not executed
+results: no integrated workflow catch-to-error-frame-to-settlement chain or
+regression suite has been run. Their presence does not establish complete
+coverage or runtime correctness.
+
+## Mobile buffered API account ownership
+
+Reconstructed commit: `77ab88eead8f900c2161bc7241dfc7d156bb2205`.
+The two-file slice changes `apps/mobile/services/api.ts` and adds unexecuted
+regression sources in `api-paywall.test.ts`.
+
+The JSON request wrapper, buffered text `apiFetch` and binary `apiFetchBinary`
+capture the account generation at public request entry. `sendRequest` receives
+that original generation, checks it before/after credential acquisition and
+response receipt, and carries it unchanged through the single authentication
+refresh retry. Both asynchronous 403 classification reads recheck ownership
+before passkey notification, account-unavailable handling or identity-path
+sign-out. Buffered text and binary readers recheck after consuming the body and
+before exposing the result; timeout cleanup remains in `finally`.
+
+These boundaries reject stale response delivery and prevent the inspected stale
+403 classification from tearing down a replacement account. They preserve
+same-owner terminal errors, including a legitimate account refusal whose own
+cleanup resets API ownership. This is not remote cancellation or rollback of an
+already dispatched request. Streaming transport is outside this accepted slice
+and remains pending/unprotected by these new buffered-delivery guards. Deferred
+response/refresh, refusal, bodyless response and body-failure fixture sources are
+unexecuted; no runtime acceptance or complete account-lifecycle coverage is
+claimed. Checkpoint regression sources are recorded separately above, not as
+executed acceptance.
+
 ## Reconstruction boundary
 
-Checkpoint policy and dirty-sync work were pending when this snapshot was
-written. Neither is counted as reconstructed here. Add a source trace only after
-its accepted commit is available and independently read. Other remembered
-changes from the unavailable branch require fresh reconstruction or recoverable
-Git evidence before they can be represented as current implementation.
+Only the four accepted production slices traced above are represented as
+reconstructed here. Other remembered changes from the unavailable branch require
+fresh reconstruction or recoverable Git evidence before they can be represented
+as current implementation. Authored regression sources are not runtime acceptance.
