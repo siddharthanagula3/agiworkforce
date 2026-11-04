@@ -2005,28 +2005,26 @@ impl AgentSession {
         managed_session: ManagedSession,
         path: PathBuf,
     ) -> Result<()> {
-        if !managed_session.messages.is_empty() {
+        let mut messages = managed_session.messages.clone();
+        if !self.memory_enabled {
             let fresh_system_message = self
                 .messages
                 .first()
                 .filter(|message| message.role == "system")
                 .cloned();
-            self.messages = managed_session.messages.clone();
-            if !self.memory_enabled {
-                if let (Some(fresh), Some(stored)) =
-                    (fresh_system_message, self.messages.first_mut())
-                {
-                    if stored.role == "system" {
-                        *stored = fresh;
-                    }
+            if let (Some(fresh), Some(stored)) = (fresh_system_message, messages.first_mut()) {
+                if stored.role == "system" {
+                    *stored = fresh;
                 }
             }
         }
+        self.adopt_managed_session(managed_session, path)?;
+        self.messages = messages;
         self.context_usage_anchor = None;
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.memory_extracted_through = self.memory_extracted_through.min(self.messages.len());
-        self.adopt_managed_session(managed_session, path)
+        Ok(())
     }
 
     /// Claim, or renew, this process's writer lease on the backing session.
@@ -2903,6 +2901,108 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         }
+    }
+
+    #[test]
+    fn rejected_managed_load_preserves_the_active_conversation() {
+        for invalid_route in ["missing-model", "missing-authority", "incompatible-authority"] {
+            let temp = tempfile::tempdir().expect("session fixture");
+            let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+            session.set_session_persistence(false);
+            session.messages.push(Message::text("user", "active conversation"));
+            session.recent_tool_calls = vec![17];
+            session.loop_strike_count = 2;
+            session.memory_extracted_through = session.messages.len();
+            session.plan_approved = true;
+            let original_messages = serde_json::to_value(&session.messages).expect("messages");
+            let original_id = session.runtime_session_id.clone();
+            let original_model = session.model.clone();
+            let original_provider = session.provider.clone();
+            let original_activity = session.session_activity.clone();
+            let original_extracted = session.memory_extracted_through;
+            let mut incoming = ManagedSession::with_messages(
+                "rejected-target",
+                chrono::Utc::now(),
+                vec![Message::text("user", "rejected transcript")],
+            );
+            incoming.model = Some(session.model.clone());
+            incoming.routing_authority = Some(session.current_routing_authority());
+            match invalid_route {
+                "missing-model" => incoming.model = None,
+                "missing-authority" => incoming.routing_authority = None,
+                _ => incoming.routing_authority.as_mut().expect("authority").privacy_mode = PrivacyMode::Byok,
+            }
+
+            assert!(session
+                .load_managed_conversation(incoming, temp.path().join("target.json"))
+                .is_err());
+            assert_eq!(serde_json::to_value(&session.messages).expect("messages"), original_messages);
+            assert_eq!(session.runtime_session_id, original_id);
+            assert_eq!(session.model, original_model);
+            assert_eq!(session.provider, original_provider);
+            assert_eq!(session.privacy_mode, PrivacyMode::Local);
+            assert!(session.managed_session.is_none());
+            assert!(session.managed_session_path.is_none());
+            assert!(std::sync::Arc::ptr_eq(&session.session_activity, &original_activity));
+            assert_eq!(session.recent_tool_calls, vec![17]);
+            assert_eq!(session.loop_strike_count, 2);
+            assert_eq!(session.memory_extracted_through, original_extracted);
+            assert!(session.plan_approved);
+        }
+    }
+
+    #[test]
+    fn an_empty_managed_load_replaces_the_previous_transcript() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.messages.push(Message::text("user", "previous conversation"));
+        session.recent_tool_calls = vec![17];
+        session.loop_strike_count = 2;
+        session.memory_extracted_through = session.messages.len();
+        let mut incoming = ManagedSession::with_messages("empty-target", chrono::Utc::now(), Vec::new());
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+
+        session
+            .load_managed_conversation(incoming, temp.path().join("target.json"))
+            .expect("load empty target");
+
+        assert!(session.messages.is_empty());
+        assert_eq!(session.managed_session_id(), Some("empty-target"));
+        assert!(session.recent_tool_calls.is_empty());
+        assert_eq!(session.loop_strike_count, 0);
+        assert_eq!(session.memory_extracted_through, 0);
+    }
+
+    #[test]
+    fn managed_load_keeps_memory_disabled_system_prompt_handling() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.memory_enabled = false;
+        session.messages = vec![
+            Message::text("system", "fresh system prompt"),
+            Message::text("user", "previous conversation"),
+        ];
+        let mut incoming = ManagedSession::with_messages(
+            "loaded-target",
+            chrono::Utc::now(),
+            vec![
+                Message::text("system", "stored system prompt"),
+                Message::text("user", "loaded conversation"),
+            ],
+        );
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+
+        session
+            .load_managed_conversation(incoming, temp.path().join("target.json"))
+            .expect("load target");
+
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[0].text_content(), "fresh system prompt");
+        assert_eq!(session.messages[1].text_content(), "loaded conversation");
     }
 
     fn durable_local_handoff_session(
