@@ -1,10 +1,14 @@
 import NetInfo from '@react-native-community/netinfo';
-import { createDownloadResumable, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
+import { createDownloadResumable, deleteAsync, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
+import { getInstalledModel } from '@/storage/installedModels';
+import type { InstalledModel } from '@/storage/types';
 import {
   assertDownloadAllowed,
   assertFreeSpaceFor,
   cancelDownload,
   downloadModel,
+  deleteDownloadedModel,
+  modelRemovalUnsupportedReason,
   ModelDownloadError,
 } from '@/services/modelDownload';
 import {
@@ -34,6 +38,52 @@ const mockFetch = NetInfo.fetch as jest.Mock;
 const mockFreeSpace = getFreeDiskStorageAsync as jest.Mock;
 
 const GB = 1024 * 1024 * 1024;
+
+describe('owned model removal', () => {
+  const installed: InstalledModel = {
+    id: 'owned-fixture', display_name: 'Owned fixture', runtime: 'local', format: 'gguf',
+    size_bytes: GB, sha256: 'a'.repeat(64),
+    local_path: 'file:///documents/models/owned-fixture/model.gguf',
+    installed_at: 1, last_used_at: null, capabilities: null,
+  };
+
+  beforeEach(() => {
+    (deleteAsync as jest.Mock).mockClear();
+    (getInstalledModel as jest.Mock).mockResolvedValue(installed);
+  });
+
+  afterEach(() => { (getInstalledModel as jest.Mock).mockResolvedValue(null); });
+
+  it.each([
+    { format: 'pte', local_path: null },
+    { capabilities: JSON.stringify({ managedBy: 'react-native-executorch' }) },
+    { capabilities: '{invalid' },
+    { capabilities: 'null' },
+    { local_path: 'file:///elsewhere/model.gguf' },
+    { id: '..', local_path: 'file:///documents/models/../model.gguf' },
+    { id: '.', local_path: 'file:///documents/models/./model.gguf' },
+    { id: 'a/b', local_path: 'file:///documents/models/a_b/model.gguf' },
+  ])('rejects unsupported ownership %s without deleting files', async (overrides) => {
+    const unsupported = { ...installed, ...overrides } as InstalledModel;
+    expect(modelRemovalUnsupportedReason(unsupported)).not.toBeNull();
+    await expect(deleteDownloadedModel(unsupported)).rejects.toThrow();
+    expect(deleteAsync).not.toHaveBeenCalled();
+  });
+
+  it.each([null, { ...installed, installed_at: 2 }, { ...installed, sha256: 'b'.repeat(64) }])(
+    'rejects a missing or replaced installation before deletion', async (current) => {
+      (getInstalledModel as jest.Mock).mockResolvedValue(current);
+      await expect(deleteDownloadedModel(installed)).rejects.toThrow('installed model changed');
+      expect(deleteAsync).not.toHaveBeenCalled();
+    },
+  );
+
+  it('removes the confirmed owned directory despite last-used updates', async () => {
+    (getInstalledModel as jest.Mock).mockResolvedValue({ ...installed, last_used_at: 2 });
+    await expect(deleteDownloadedModel(installed)).resolves.toBeUndefined();
+    expect(deleteAsync).toHaveBeenCalledWith('file:///documents/models/owned-fixture/', { idempotent: true });
+  });
+});
 
 function onNetwork(type: string, isConnected = true) {
   mockFetch.mockResolvedValue({ type, isConnected, isInternetReachable: isConnected });
