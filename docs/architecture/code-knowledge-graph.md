@@ -992,12 +992,60 @@ bounded by this XLSX cap.
 
 Authored source cases cover exact/over limits, sparse coordinates/padding,
 escaping, duplicate final values, repeated shared strings, cumulative sheets and
-UI notices, but none were executed. No browser runtime, CPU/heap bound or pending
-CLI recovery correction is claimed.
+UI notices, but none were executed. This workbook slice does not establish a browser CPU/heap bound or runtime acceptance.
+
+## CLI session-bound recovery and credential transactions
+
+Reconstructed commit: `0b055d4e1ebb99ed79b7170bb3d9a149b60ee87d` changes seven
+CLI source files, including unexecuted inline regression sources. `CloudClient`
+retries with the exact token returned by recovery while retaining its original
+API/auth deployment, owner and HTTP client, rather than reconnecting under the
+latest login. Changed-token continuity requires nonempty matching `sub` and `sid`
+plus unchanged matching deployment. These decoded claims establish continuity,
+not token authenticity; the server remains the authenticator. Refresh replacement
+compares the exact selected grant, and second-401 removal targets only the rejected
+token. Developer-host late failure handling no longer mutates whatever current
+credential happens to exist without knowing the rejected token.
+
+`AuthStore` serializes fresh-load mutation/persistence under an OS file lock;
+refresh takes its session lock before short auth-store transactions and performs
+network renewal outside the auth lock. Public snapshot save is removed, writers
+use transactions, migration uses unlocked internals under the same lock, and
+Copilot dispatch no longer saves stale snapshots. Post-persistence callbacks
+invalidate caches/setup; sign-out removes locally before revoking its captured
+snapshot, so later login is not deleted after remote revocation returns.
+
+Compatibility and limits: missing session claims or split auth/API deployments
+require explicit login rather than unsafe recovery. Insecure/unreadable or
+unremovable legacy `auth.toml` blocks all AuthStore consumers even when canonical
+credentials exist; malformed legacy contents are ignored only when a current
+managed winner exists. Canonical migration persists before legacy retirement.
+Only cooperating same-version writers honor these locks; keyring/index writes can
+partially fail without rollback. This does not bind whole turns or recall
+in-flight requests. Source fixtures are unexecuted; no OS-lock, keyring, OAuth or
+runtime acceptance is claimed.
+
+## Browser presentation text and table admission
+
+Reconstructed commit: `2d4bbf0e7781901f8964916075ef1d40ab543835` changes three
+production files and three unexecuted fixture sources. PPTX conversion adds a
+new cumulative 200,000 UTF-16-code-unit text/framing budget. It accounts for nested
+text occurrences, escaping, exact rectangular table padding/separators and slide,
+bullet, footer and image-label framing before constructing expanded output.
+Width calculation and paragraph publication avoid unbounded argument spread.
+Whole-preview typed refusal reaches both `PptxFilePreview` and `MessageBubble`
+with explicit original-download guidance; download behavior is unchanged.
+
+Image base64 payloads are deliberately excluded from this text cap, retaining the
+existing 450,000-byte per-image skip and shared inflated-byte archive budget.
+Input buffers, DOM/textContent and label intermediates, traversal and base64 heap
+costs are not capped by this restriction. This supersedes the earlier PPTX table
+output gap narrowly, not the broader memory/CPU limitations. All authored fixture
+sources remain unexecuted; no browser/native or runtime acceptance is claimed.
 
 ## Reconstruction boundary
 
-Only the forty-one accepted production slices traced above are represented as
+Only the forty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
