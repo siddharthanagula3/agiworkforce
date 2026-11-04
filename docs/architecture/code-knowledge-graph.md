@@ -2391,9 +2391,39 @@ IDs with longer matches, canonical cache sharing and prefix mutation refusal.
 They are unexecuted; no real sessions, credentials, caches, DB or native host
 operations were accessed, and no Rust/tests/checks were run.
 
+## CLI Local HTTP uses a separate redirect-free, proxy-free client
+
+Accepted commit `207ac4394e0004ed0e581a4c2d63af50353db916` changes
+`local_models.rs` and `models/streaming.rs`. The shared Local builder applies
+`redirect(Policy::none())` and `no_proxy()`. Discovery returns Faulty probes with
+no models on client construction failure instead of falling back to `Client::new`.
+Streaming selects a cached fallible Local client through the existing canonical
+`provider_privacy_mode` classifier; failure propagates rather than selecting the
+Managed/BYOK client. Ollama Local, LM Studio and unauthenticated loopback custom/
+OpenAI-compatible providers use this path. Authenticated loopback remains BYOK;
+Managed/BYOK transport settings are unchanged.
+
+Current Local discovery/capability helpers receive that client, including Ollama
+availability and `/api/show`; inference carries the selected client into shared
+dialect `stream_chat` through `run_spec`. This newly refuses redirects, even to
+another local URL, and does not support Local configurations dependent on system/
+environment proxies. Public probe helpers still accept arbitrary caller clients;
+this is not blanket engine hardening or a restriction on a loopback server's own
+onward egress. The active CLI developer-session path is separate from unsupported
+direct Electron local-inference commands. Subscription selection is unchanged;
+this slice establishes no live Local-to-Copilot leak or broader routing redesign.
+
+Four added fixture sources cover discovery construction failure, redirect probes,
+canonical client selection and selected-client `run_spec` prompt redirection.
+They remain unexecuted: no proxy-environment or inference-client initialization
+failure injection, and the inference fixture does not exercise full auth-reading
+`stream_completion`. The lockfile pins reqwest 0.13.5; its dependency implementation
+was unavailable/uninspected here. No network, native, session/credential access,
+tests, checks or deployment acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the ninety accepted production slices traced above are represented as
+Only the ninety-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
