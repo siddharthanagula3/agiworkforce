@@ -8468,3 +8468,60 @@ A coherent design must distinguish publication/delivery from settlement, retain
 observed cost and cleanup obligations durably across attempts, and define
 idempotent recovery and truthful receipts. No full cancellation, automatic refund,
 financial repair or new product semantics are approved by this documentation.
+
+
+## CLI-TURN-HISTORY-AUTHORITY-01
+
+Severity: High. Status: OPEN source-backed accepted-turn/history authority design
+blocker, 2026-11-04. Potential transmission of retained account context under a
+replacement account/deployment makes this high impact; no real-data disclosure,
+production reproduction or runtime acceptance is established. This is distinct
+from `CLI-CHAT-LEGACY-CONFLICT-BASE-01` and narrower credential/cache corrections.
+
+Source chain in `apps/cli/src/`:
+
+- `agent/chat.rs::complete` retry (around 1952) and `complete_continuation`
+  (2057 onward) reuse `session.messages`. `models/streaming.rs` resolves the key
+  at each completion (around 970); `models/provider_dispatch.rs::resolve_key`
+  loads the current JWT for ManagedCloud. The retained transcript is not bound
+  to that later credential acquisition by an accepted account/deployment lease.
+- `subagent.rs::InheritedRoute` carries model/provider/privacy, not account
+  provenance. Detached memory consolidation/extraction in `agent/chat.rs`
+  (1537/1605 onward) and `SideQuery` (1643–1689 onward) retain old context and
+  later route work without such a lease. Existing Local/privacy validation is a
+  counterguard against changing privacy mode, not same-mode account ownership.
+- Project preparation (`agent/chat.rs` 1400, `project_conversation` 842 onward)
+  can synchronize a snapshot before inference. `agent/mod.rs::cloud_snapshot`
+  (2471 onward) emits full message history without origin ownership;
+  `sync_to_account` calls `cloud::sync_session`, which opens a fresh CloudSession.
+  Post-turn sync (chat.rs 1564), REPL exit (`repl/mod.rs` 699) and TUI exit
+  (`tui/tui_app.rs` 6607) use this path. Account-scoped sync cursors protect cursor
+  ownership, but do not prove that the supplied history belongs to that account.
+- Approval continuation is a different boundary: `run_managed_cloud` retains its
+  JWT across `managed_approvals::decide`; `managed_approval_resume_spec` rebuilds
+  a spec using the ambient trusted deployment base without a post-approval
+  currentness lease. It does **not** acquire a fresh JWT at that resume point.
+- `platform/runtime/session.rs::ManagedSessionRoutingAuthority` persists only
+  privacy/provider. `agent/mod.rs::SystemPromptParts::compose` (187–235 onward)
+  can incorporate cached account memory/project instructions, and
+  `prime_account_memory` (640–677 onward) is best-effort with cached fallback.
+  A session containing only a system message therefore is not proof of a clean,
+  account-independent prompt; checking for zero user messages is insufficient.
+
+Existing privacy/provider checks, trusted API-base validation, server-side
+request authorization and account-scoped cursors remain relevant. Accepted
+`0b055d4e1e` credential recovery, `28ad710521` account/catalog caches and
+`7f21d12a39` policy ownership protect their narrower boundaries; none supplies
+trusted transcript/prompt provenance across this entire chain. A server can
+validate the current requester without knowing the supplied text's prior owner.
+
+Required design: bind an accepted account/session/deployment lease and trusted
+history plus system-prompt provenance through preparation, retries, continuations,
+children/tools, side queries, detached memory work and automatic sync, checking
+actual outbound boundaries without claiming recall of dispatched work. Persisted
+legacy histories and derived prompts need an explicit transfer/migration product
+decision; ambient credentials or an empty user-message list cannot establish
+consent. Cancellation, background completion and availability semantics must be
+coherent across callers. This is **not implementation-ready**. No production
+change, blanket legacy-history refusal, new transfer policy or migration is
+approved by this note. Source reading only; no tests, network or real-data actions.

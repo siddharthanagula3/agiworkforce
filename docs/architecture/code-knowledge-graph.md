@@ -1149,6 +1149,32 @@ This is source admission, not arbitrary PDF-content validation or a new sandbox
 guarantee. Parameterized URL/MIME fixtures were read, not run; no browser or
 deployment acceptance is claimed.
 
+## Open CLI accepted-turn and history provenance boundary
+
+Source-only design finding `CLI-TURN-HISTORY-AUTHORITY-01` is recorded in the
+[canonical audit](../../audit/prior-audits/active-issues-register.md#cli-turn-history-authority-01).
+`agent/chat.rs` retries/continuations retain messages while
+`models/streaming.rs` → `models/provider_dispatch.rs::resolve_key` can acquire
+current Managed credentials. `InheritedRoute` carries privacy/provider/model,
+not account authority; SideQuery and detached memory work retain derived context.
+Project preflight, post-turn and REPL/TUI exit snapshots flow through
+`agent/mod.rs::cloud_snapshot` → `sync_to_account` → a fresh CloudSession without
+history-origin ownership. Existing privacy checks and account-scoped sync cursors
+do not establish that supplied history belongs to the newly selected account.
+Approval resume specifically keeps its original JWT but rebuilds the ambient
+trusted deployment spec after approval; it is not a fresh-JWT path.
+
+Persisted routing authority only records privacy/provider. System-only sessions
+can already contain cached account memory/project instructions, so an empty user
+history cannot establish account-independent provenance. The accepted recovery,
+cache and policy slices above do not close this whole-turn boundary. A coherent
+accepted lease plus trusted transcript/system-prompt provenance must span prep,
+actual sends, retries, children/tools, side queries, background work and autosync.
+Legacy transfer/migration and availability semantics require explicit product
+decisions. The High OPEN risk is source-backed, not observed disclosure; no
+implementation, blanket legacy refusal or runtime acceptance is claimed, and this
+design is not implementation-ready.
+
 ## Reconstruction boundary
 
 Only the forty-eight accepted production slices traced above are represented as
