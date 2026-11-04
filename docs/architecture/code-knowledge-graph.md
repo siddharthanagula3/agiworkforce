@@ -1756,6 +1756,25 @@ are narrowed only for superseded publication, not eliminated. Deferred helper
 fixtures and textual background wiring assertions are unexecuted and do not
 establish actual Chrome event order, startup enforcement or runtime acceptance.
 
+## Voice closure and accounting completion remain separate states
+
+[WEB-VOICE-CLOSED-BEFORE-SETTLEMENT-01](../../audit/prior-audits/active-issues-register.md#web-voice-closed-before-settlement-01)
+is Medium OPEN, source-revalidated without a production change. Close, expiry
+and supersede transition the voice row before settlement; duplicate close returns
+seconds without replay, and active-only expiry skips already-closed rows. Existing
+managed finalization can durably queue actual-cost reconciliation, and an explicit
+later finalization can correct a recovered outcome, but neither automatically
+reconstructs a lost voice/backend usage payload. Generic stale-reservation release
+is not voice settlement replay.
+
+Free allowance settlement is transactionally idempotent; separate provider-cost
+writes use stable references but can catch/log failure without a durable retry
+receipt. Design must retain immutable settlement inputs, component idempotency,
+retryable state and honest completion receipts across partial outcomes. No naive
+retry/refund policy, observed production loss, migration/cron/runtime acceptance
+or pending client correction is claimed. The canonical audit records source paths
+and narrower recovery counterpaths; this design note adds no reconstructed slice.
+
 ## Reconstruction boundary
 
 Only the seventy-one accepted production slices traced above are represented as

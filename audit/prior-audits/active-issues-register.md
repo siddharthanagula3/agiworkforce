@@ -8736,3 +8736,51 @@ explicit Personal/organization selectors, but current admission alone cannot
 reconstruct original intent. No endpoint-only patch, broad implementation, new
 compatibility/refusal semantics or implementation-ready design is approved here.
 Source-only: no tests, network, native, DB or upload actions.
+
+
+## WEB-VOICE-CLOSED-BEFORE-SETTLEMENT-01
+
+Severity: Medium. Status: OPEN source-backed settlement recovery design constraint,
+2026-11-04. No observed production loss, charge error or guaranteed refund is
+claimed; no financial behavior change is approved.
+
+`apps/web/app/api/voice/live/sessions/[sessionId]/close/route.ts` calls
+`closeVoiceSession` before `settleVoiceSession`. The store's update accepts only
+active rows. If settlement fails after closure, another close returns computed
+`billedSeconds` without replaying settlement. `lib/voice-session-store.ts` expiry
+and conversation-supersede updates also close active rows first; the settlement
+loop/start route catch and log later failures. The expiry selector only revisits
+active rows, so closure is not evidence that accounting completed. Authenticated
+owner/scoped admission, active-row transitions and bounded server metering remain
+counterguards; this is not unauthorized cross-account access.
+
+Recovery is partial, not absent. `managed-usage-request-service.ts` calls the
+SQL finalizer in `db/neon/0182_managed_usage_microusd_ledger.sql`, which binds
+request/hash/lease, atomically enqueues actual-cost reconciliation and records
+terminal usage. A pending credit job can subsequently drain. Its late-finalization
+path can enqueue a correction after `outcome_unknown` when a caller actually
+supplies completed usage again; it is not automatic replay of the voice close
+payload. The recovery cron runs abandoned-voice settlement then generic credit
+processing, subject to low-power/deployment/DB gates. Migration 0359's stale
+managed-request recovery includes `provider_started`: it releases the estimated
+reservation and records `outcome_unknown`, zero actual cost and empty usage.
+That operation does not reconstruct original voice seconds/backend usage or
+replay a closed voice settlement. Applied migrations and cron execution were not
+verified.
+
+Free voice has a separate partial boundary: `lib/voice/free-voice-allowance.ts`
+settles under a user lock/transaction and returns previously settled seconds on
+repeat. Provider cost recording follows afterward. `recordSettledProviderCost`
+and `recordLiveVoiceBackendCost` use stable source references but catch/log ledger
+write failures rather than establish a durable retry receipt. Paid finalization
+can likewise precede those separate writes. Blindly repeating the whole function
+is not a demonstrated repair for every partial state: a previously completed
+managed request does not take the same provider-cost branch as first finalization,
+and backend usage supplied only to the original request may no longer be present.
+
+Required design: durable retryable settlement state and immutable priced usage
+payload, exact idempotency per accounting component, truthful pending/complete
+receipts, and reconciliation for close/expiry/supersede and legacy closed rows.
+Specify partial credit/allowance/COGS outcomes without inventing refund or charge
+policy. No naive reopen/repeated-settlement patch or implementation-ready design
+is asserted. Source-only; no tests, checks, DB, billing or network actions.
