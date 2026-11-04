@@ -3729,9 +3729,34 @@ and placeholder saves, polling sleep, cancel retries, recovery remount and paid
 late-body delivery. No tests, checks, builds, browser, authentication, provider or
 network actions were performed; regression sources remain unexecuted.
 
+## Existing cache cleanup now clears tab-local media jobs
+
+Accepted commit `16cc3b65a49c64ddcc5313e1410813a987d32f4a` adds the missing
+`reset()` contract to `shared/stores/media-store.ts` and changes two fixture
+sources to use the real store. The existing authentication cleanup already lists
+media in account and workspace cleanup and recognizes this method. Explicit
+logout and successful account/workspace cache changes now clear prompts, results,
+errors and all job statuses. Map-only `updateJob` cannot recreate a removed ID or
+modify a different newly admitted job. First or unchanged cache-scope observation
+and ordinary same-session navigation do not reset the store.
+
+This does not cancel remote provider work or change transcript persistence. It
+also does not add exact-session cleanup: a same-account SDK-session replacement
+can retire request authority without changing cache scope, and cookie-absence
+resync clears auth state without running cleanup. Retired generating rows can
+therefore survive those paths even after settlement because stale result writes
+remain refused. That separate source-backed lifecycle gap is recorded as
+`WEB-MEDIA-SESSION-CLEANUP-01`, without weakening authority guards.
+
+Independent source review accepted the three-file patch. Real-store fixture
+sources cover all statuses/private fields, late-update non-resurrection, new-row
+preservation, account/workspace reset and first/unchanged scope retention. No
+tests, checks, builds, sign-out, browser or network actions were performed; all
+regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-seven accepted production slices traced above are represented as
+Only the one hundred and twenty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

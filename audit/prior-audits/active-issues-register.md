@@ -9192,3 +9192,31 @@ universal settings or memory lifecycle closure is established.
   how callers recover uncertain results. A metadata-only restoration or an ad-hoc
   database lock held across remote storage calls is not an established solution.
   No new retry/deletion policy, tests, checks, database or network actions were performed.
+
+
+## WEB-MEDIA-SESSION-CLEANUP-01
+
+Status: OPEN, source-reviewed lifecycle gap, not runtime reproduced.
+
+- `useSessionSnapshot.ts` retires authority when the observed Clerk session object
+  or incarnation changes, including a same-account replacement. The media hook
+  correctly refuses old terminal writes. `applyCacheScope` keys only account and
+  workspace, so that replacement alone does not run cache cleanup. A generating
+  job can remain in the non-persisted media store after its old operation settles.
+- `authentication-store.ts` also returns from its cookie-absence `resyncSession`
+  branch after setting auth null without cleanup. This does not establish that
+  every externally observed sign-out retains jobs; later account-scope resolution
+  or explicit logout can still clear them.
+- `WebChatPage.tsx` computes `hasPendingMediaJob` over all tab-local jobs, so a
+  retained generating row can leave the notification timing/task-active heuristic
+  true. The source trace does not show this heuristic blocking chat dispatch,
+  exposing a database row to another account, or starting provider work.
+- Commit `16cc3b65a49c64ddcc5313e1410813a987d32f4a` supplies the previously
+  missing media-store reset contract for existing explicit logout and successful
+  account/workspace cleanup. Map-only updates do not resurrect cleared jobs.
+  Original-session request guards from `063d69a118` remain intact.
+- Remaining work must define one exact-session owner and retire its tab-local
+  registry/observation state without cancelling same-session navigation or
+  rebinding paid remote work. Do not solve the stale pending row by allowing a
+  retired operation to publish success/failure into replacement session state.
+  No tests, checks, browser, auth or provider actions were run for this finding.
