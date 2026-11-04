@@ -1472,6 +1472,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {isAssistant && (message.type === 'image' || message.imageUrl) && message.imageUrl && (
               <GeneratedImage
+                key={`${message.id}:${message.imageUrl}`}
                 imageUrl={message.imageUrl}
                 revisedPrompt={message.revisedPrompt}
                 width={imageWidth}
@@ -1974,6 +1975,7 @@ export const MessageBubble = memo(function MessageBubble({
       />
 
       <ImageFullScreen
+        key={`${message.id}:${fullScreenImageUrl}`}
         imageUrl={fullScreenImageUrl}
         prompt={message.imageGenPrompt ?? message.revisedPrompt}
         model={message.model}

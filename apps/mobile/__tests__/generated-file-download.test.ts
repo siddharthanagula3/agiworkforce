@@ -14,6 +14,16 @@ jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { UTF8: 'utf8', Base64: 'base64' },
 }));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
+const mockPhotoPermission = jest.fn();
+const mockSaveToLibrary = jest.fn();
+const mockSetImage = jest.fn();
+jest.mock('expo-media-library/legacy', () => ({
+  requestPermissionsAsync: (...args: unknown[]) => mockPhotoPermission(...args),
+  saveToLibraryAsync: (...args: unknown[]) => mockSaveToLibrary(...args),
+}));
+jest.mock('expo-clipboard', () => ({
+  setImageAsync: (...args: unknown[]) => mockSetImage(...args),
+}));
 jest.mock('expo-print', () => ({ printToFileAsync: jest.fn() }));
 
 const mockGuardedFetch = jest.fn();
@@ -29,7 +39,7 @@ jest.mock('@/services/authSession', () => ({
 }));
 
 import * as Sharing from 'expo-sharing';
-import { downloadGeneratedFile, prepareLocalVideoPlayer, shareFile, shareGeneratedImage } from '@/services/fileCreation';
+import { downloadGeneratedFile, prepareLocalVideoPlayer, shareFile, shareGeneratedImage, saveGeneratedImageToPhotos, copyGeneratedImage } from '@/services/fileCreation';
 
 class FakeFileReader {
   onload: (() => void) | null = null;
@@ -59,6 +69,10 @@ describe('downloadGeneratedFile', () => {
     });
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
+    mockPhotoPermission.mockResolvedValue({ granted: true });
+    mockSaveToLibrary.mockResolvedValue(undefined);
+    mockSetImage.mockResolvedValue(undefined);
+    mockWriteAsStringAsync.mockResolvedValue(undefined);
   });
 
   it('fetches our-cloud urls through guardedFetch with the Bearer token and writes base64 bytes', async () => {
@@ -192,6 +206,53 @@ describe('downloadGeneratedFile', () => {
     await shareFile('file:///docs/video.mp4', { isCurrent: () => false });
     expect(Sharing.isAvailableAsync).not.toHaveBeenCalled();
     expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('retires image sharing during availability (%s)', async (available) => {
+    let current = true;
+    (Sharing.isAvailableAsync as jest.Mock).mockImplementationOnce(async () => {
+      current = false;
+      return available;
+    });
+    await shareGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222', 'kept-name', { isCurrent: () => current });
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('retires photo save during permission (%s)', async (granted) => {
+    let current = true;
+    mockPhotoPermission.mockImplementationOnce(async () => {
+      current = false;
+      return { granted };
+    });
+    await saveGeneratedImageToPhotos('/api/files/22222222-2222-4222-8222-222222222222', undefined, { isCurrent: () => current });
+    expect(mockGuardedFetch).not.toHaveBeenCalled();
+    expect(mockSaveToLibrary).not.toHaveBeenCalled();
+  });
+
+  it('retires photo save after the file write without dispatching Photos', async () => {
+    let current = true;
+    mockWriteAsStringAsync.mockImplementationOnce(async () => { current = false; });
+    await saveGeneratedImageToPhotos('/api/files/22222222-2222-4222-8222-222222222222', undefined, { isCurrent: () => current });
+    expect(mockWriteAsStringAsync).toHaveBeenCalled();
+    expect(mockSaveToLibrary).not.toHaveBeenCalled();
+  });
+
+  it('retires copy during download without dispatching Clipboard', async () => {
+    let current = true;
+    mockGuardedFetch.mockImplementationOnce(async () => {
+      current = false;
+      return { ok: true, headers: { get: () => 'image/png' }, blob: async () => ({}) };
+    });
+    await copyGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222', { isCurrent: () => current });
+    expect(mockSetImage).not.toHaveBeenCalled();
+  });
+
+  it('preserves default Photos and Clipboard callers and exact bytes', async () => {
+    const path = '/api/files/22222222-2222-4222-8222-222222222222';
+    await saveGeneratedImageToPhotos(path, 'kept-name');
+    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///docs/exports/export-1/kept-name.png');
+    await copyGeneratedImage(path);
+    expect(mockSetImage).toHaveBeenCalledWith('JVBERi0xLjc=');
   });
 
 });

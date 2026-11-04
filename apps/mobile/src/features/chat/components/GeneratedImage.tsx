@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { View, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Image } from 'expo-image';
@@ -21,7 +21,11 @@ interface GeneratedImageProps {
 
 type LoadState = 'loading' | 'loaded' | 'error';
 
-export function GeneratedImage({
+export function GeneratedImage(props: GeneratedImageProps) {
+  return <GeneratedImageOwner key={`${props.imageUrl}:${props.allowEphemeral ?? false}`} {...props} />;
+}
+
+function GeneratedImageOwner({
   imageUrl,
   revisedPrompt,
   width,
@@ -32,24 +36,44 @@ export function GeneratedImage({
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const { source, status: sourceStatus } = useGeneratedImageSource(imageUrl, allowEphemeral);
 
+  const lifetimeRef = useRef<symbol | null>(null);
+  const operationRef = useRef<symbol | null>(null);
+
+  useLayoutEffect(() => {
+    const lifetime = Symbol('image lifetime');
+    lifetimeRef.current = lifetime;
+    return () => {
+      lifetimeRef.current = null;
+      operationRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     setLoadState('loading');
   }, [source?.uri]);
 
   const handleLoad = useCallback(() => {
-    setLoadState('loaded');
+    if (lifetimeRef.current) setLoadState('loaded');
   }, []);
 
   const handleError = useCallback(() => {
-    setLoadState('error');
+    if (lifetimeRef.current) setLoadState('error');
   }, []);
 
   const handleLongPress = useCallback(async () => {
+    const lifetime = lifetimeRef.current;
+    if (!lifetime || operationRef.current) return;
+    const operation = Symbol('image share');
+    operationRef.current = operation;
+    const isCurrent = () =>
+      lifetimeRef.current === lifetime && operationRef.current === operation;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await shareGeneratedImage(imageUrl);
+      await shareGeneratedImage(imageUrl, undefined, { isCurrent });
     } catch {
-      Alert.alert('Could not share image', 'Save the image and try again.');
+      if (isCurrent()) Alert.alert('Could not share image', 'Save the image and try again.');
+    } finally {
+      if (isCurrent()) operationRef.current = null;
     }
   }, [imageUrl]);
 

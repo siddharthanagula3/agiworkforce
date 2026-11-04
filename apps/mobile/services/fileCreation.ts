@@ -434,12 +434,15 @@ const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeTy
 export async function shareGeneratedImage(
   imagePath: string,
   fileName = 'generated-image',
+  options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) {
     throw new Error('Only saved AGI Cloud images can be shared.');
   }
   const downloaded = await fetchGeneratedFileBytes(url);
+  if (options.isCurrent?.() === false) return;
   const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
   if (!imageType) {
     throw new Error('The saved image format is not supported for sharing.');
@@ -450,7 +453,10 @@ export async function shareGeneratedImage(
     `${baseName}.${imageType.extension}`,
     downloaded.base64,
   );
-  if (!(await Sharing.isAvailableAsync())) {
+  if (options.isCurrent?.() === false) return;
+  const available = await Sharing.isAvailableAsync();
+  if (options.isCurrent?.() === false) return;
+  if (!available) {
     throw new Error('Sharing is not available on this device.');
   }
   await Sharing.shareAsync(localUri, {
@@ -462,20 +468,25 @@ export async function shareGeneratedImage(
 export async function saveGeneratedImageToPhotos(
   imagePath: string,
   fileName = 'generated-image',
+  options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) throw new Error('Only saved AGI Cloud images can be saved.');
   const permission = await requestPhotoPermissionsAsync(true);
+  if (options.isCurrent?.() === false) return;
   if (!permission.granted) {
     throw new Error('Allow AGI Workforce to add photos in Settings to save images.');
   }
   const downloaded = await fetchGeneratedFileBytes(url);
+  if (options.isCurrent?.() === false) return;
   const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
   if (!imageType) throw new Error('The saved image format cannot be added to Photos.');
   const localUri = await writeGeneratedFileBytes(
     `${fileName}.${imageType.extension}`,
     downloaded.base64,
   );
+  if (options.isCurrent?.() === false) return;
   await saveToLibraryAsync(localUri);
 }
 
@@ -487,12 +498,17 @@ export async function readGeneratedImageBase64(
   return fetchGeneratedFileBytes(url);
 }
 
-export async function copyGeneratedImage(imagePath: string): Promise<void> {
+export async function copyGeneratedImage(
+  imagePath: string,
+  options: { isCurrent?: () => boolean } = {},
+): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) {
     throw new Error('Only saved AGI Cloud images can be copied.');
   }
   const downloaded = await fetchGeneratedFileBytes(url);
+  if (options.isCurrent?.() === false) return;
   if (!downloaded.contentType || !SHAREABLE_IMAGE_TYPES[downloaded.contentType]) {
     throw new Error('The saved image format cannot be copied.');
   }
