@@ -48,12 +48,15 @@ export interface VoicePartialResult {
 
 export interface VoiceCaptureSession {
   result: Promise<OnDeviceTranscriptResult>;
+  stop: () => Promise<void>;
+  cancel: () => Promise<void>;
 }
 
 export interface VoiceCaptureOptions {
   lang?: string;
   maxDurationMs?: number;
   audioRoute?: AudioRoute;
+  signal?: AbortSignal;
 }
 
 type MeteringCallback = (event: VoiceInputMeteringEvent) => void;
@@ -66,52 +69,97 @@ const STOP_GRACE_MS = 1_500;
 // The recognizer keeps the audio session on this device, so the chosen route has
 // to be named on every start or the last session's routing is what you get.
 
-let _active = false;
-let _startedAt = 0;
-let _listeners: Array<{ remove: () => void }> = [];
-let _finalResolve: ((result: OnDeviceTranscriptResult) => void) | null = null;
-let _finalReject: ((err: VoiceCaptureError) => void) | null = null;
-let _latestPartial = '';
-let _latestConfidence = -1;
-let _maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
-let _stopGraceTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearTimers(): void {
-  if (_maxDurationTimer !== null) clearTimeout(_maxDurationTimer);
-  if (_stopGraceTimer !== null) clearTimeout(_stopGraceTimer);
-  _maxDurationTimer = null;
-  _stopGraceTimer = null;
+interface CaptureAttempt {
+  result: Promise<OnDeviceTranscriptResult>;
+  resolve: (result: OnDeviceTranscriptResult) => void;
+  reject: (error: VoiceCaptureError) => void;
+  listeners: Array<{ remove: () => void }>;
+  startedAt: number;
+  started: boolean;
+  settled: boolean;
+  partial: string;
+  confidence: number;
+  durationTimer: ReturnType<typeof setTimeout> | null;
+  stopTimer: ReturnType<typeof setTimeout> | null;
+  removeAbort: () => void;
 }
 
-function clearListeners(): void {
-  for (const sub of _listeners) {
-    try {
-      sub.remove();
-    } catch {
-      // ignore
-    }
+let activeCapture: CaptureAttempt | null = null;
+
+function ownsCapture(attempt: CaptureAttempt): boolean {
+  return activeCapture === attempt && !attempt.settled;
+}
+
+function settleCapture(attempt: CaptureAttempt, error?: VoiceCaptureError): void {
+  if (attempt.settled) return;
+  attempt.settled = true;
+  if (activeCapture === attempt) activeCapture = null;
+  if (attempt.durationTimer !== null) clearTimeout(attempt.durationTimer);
+  if (attempt.stopTimer !== null) clearTimeout(attempt.stopTimer);
+  attempt.removeAbort();
+  for (const listener of attempt.listeners) {
+    try { listener.remove(); } catch {}
   }
-  _listeners = [];
+  attempt.listeners = [];
+  if (error) attempt.reject(error);
+  else attempt.resolve({ text: attempt.partial, confidence: attempt.confidence, isOnDevice: true });
 }
 
-function settleSuccess(text: string, confidence: number): void {
-  _active = false;
-  clearTimers();
-  clearListeners();
-  const resolver = _finalResolve;
-  _finalResolve = null;
-  _finalReject = null;
-  resolver?.({ text, confidence, isOnDevice: true });
+function cancelAttempt(attempt: CaptureAttempt): void {
+  const shouldAbort = ownsCapture(attempt) && attempt.started;
+  settleCapture(attempt, new VoiceCaptureError('aborted', 'Capture cancelled'));
+  if (shouldAbort) {
+    try {
+      ExpoSpeechRecognitionModule.abort();
+    } catch {}
+  }
 }
 
-function settleError(err: VoiceCaptureError): void {
-  _active = false;
-  clearTimers();
-  clearListeners();
-  const rejecter = _finalReject;
-  _finalResolve = null;
-  _finalReject = null;
-  rejecter?.(err);
+function createCapture(signal?: AbortSignal): CaptureAttempt {
+  if (activeCapture) throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
+  let resolve!: CaptureAttempt['resolve'];
+  let reject!: CaptureAttempt['reject'];
+  const result = new Promise<OnDeviceTranscriptResult>((accept, refuse) => {
+    resolve = accept;
+    reject = refuse;
+  });
+  void result.catch(() => undefined);
+  const attempt: CaptureAttempt = {
+    result, resolve, reject, listeners: [], startedAt: 0, started: false,
+    settled: false, partial: '', confidence: -1, durationTimer: null,
+    stopTimer: null, removeAbort: () => undefined,
+  };
+  activeCapture = attempt;
+  if (signal) {
+    const abort = () => cancelAttempt(attempt);
+    signal.addEventListener('abort', abort, { once: true });
+    attempt.removeAbort = () => signal.removeEventListener('abort', abort);
+    if (signal.aborted) abort();
+  }
+  return attempt;
+}
+
+function assertCapture(attempt: CaptureAttempt): void {
+  if (!ownsCapture(attempt)) throw new VoiceCaptureError('aborted', 'Capture cancelled');
+}
+
+function stopAttempt(attempt: CaptureAttempt, maximumDuration = false): void {
+  if (!ownsCapture(attempt) || attempt.stopTimer !== null) return;
+  if (!attempt.started) {
+    cancelAttempt(attempt);
+    return;
+  }
+  attempt.stopTimer = setTimeout(() => {
+    attempt.stopTimer = null;
+    if (!ownsCapture(attempt)) return;
+    settleCapture(attempt, maximumDuration && !attempt.partial.trim()
+      ? new VoiceCaptureError('max-duration-reached', 'Listening stopped after a minute. Tap the microphone to start again.')
+      : undefined);
+    try { ExpoSpeechRecognitionModule.abort(); } catch {}
+  }, STOP_GRACE_MS);
+  try {
+    ExpoSpeechRecognitionModule.stop();
+  } catch {}
 }
 
 export function getPlatformSTTBackend(): 'ios-speech' | 'android-speech-recognizer' | 'expo-av' {
@@ -130,7 +178,7 @@ export async function requestMicPermission(): Promise<boolean> {
 }
 
 export function isCapturing(): boolean {
-  return _active;
+  return activeCapture !== null;
 }
 
 function baseLanguage(tag: string): string {
@@ -194,88 +242,69 @@ async function assertOnDeviceRecognition(lang: string): Promise<void> {
   );
 }
 
-/**
- * Begin speech recognition. Returns a promise that resolves with the final
- * transcript when the user stops, the recognizer reports `isFinal: true`, or
- * the client-side maximum duration is reached.
- */
+function listenToCapture(
+  attempt: CaptureAttempt,
+  onMetering?: MeteringCallback,
+  onPartial?: PartialCallback,
+): void {
+  attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('result', (event) => {
+    if (!ownsCapture(attempt)) return;
+    const top = event.results?.[0];
+    if (!top) return;
+    attempt.partial = top.transcript;
+    attempt.confidence = top.confidence ?? -1;
+    onPartial?.({ text: top.transcript, isFinal: event.isFinal });
+    if (event.isFinal && ownsCapture(attempt)) settleCapture(attempt);
+  }));
+  attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('end', () => {
+    if (ownsCapture(attempt)) settleCapture(attempt);
+  }));
+  attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('error', (event) => {
+    if (!ownsCapture(attempt)) return;
+    const codes: Record<string, VoiceCaptureErrorCode> = {
+      'not-allowed': 'mic-permission-denied',
+      'service-not-allowed': 'on-device-recognition-unavailable',
+      'language-not-supported': 'on-device-recognition-unavailable',
+      aborted: 'aborted',
+    };
+    settleCapture(attempt, new VoiceCaptureError(
+      codes[event.error] ?? 'recognition-error', event.message || event.error, event.error,
+    ));
+  }));
+  if (onMetering) {
+    attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('volumechange', (event) => {
+      if (!ownsCapture(attempt)) return;
+      onMetering({
+        metering: Math.max(-160, Math.min(0, event.value * 16 - 160)),
+        durationMillis: Date.now() - attempt.startedAt,
+      });
+    }));
+  }
+}
+
+function captureError(error: unknown): VoiceCaptureError {
+  return error instanceof VoiceCaptureError ? error : new VoiceCaptureError(
+    'recognition-error', error instanceof Error ? error.message : 'Failed to start recognizer',
+  );
+}
+
 export async function startCaptureSession(
   onMetering?: MeteringCallback,
   onPartial?: PartialCallback,
   options?: VoiceCaptureOptions,
 ): Promise<VoiceCaptureSession> {
-  if (_active) {
-    throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
-  }
-  _active = true;
-  let result: Promise<OnDeviceTranscriptResult>;
-
+  const attempt = createCapture(options?.signal);
   try {
+    assertCapture(attempt);
     const granted = await requestMicPermission();
-    if (!granted) {
-      _active = false;
-      throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
-    }
-
+    assertCapture(attempt);
+    if (!granted) throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
     const lang = resolveRecognitionLocale(options?.lang);
     await assertOnDeviceRecognition(lang);
-
-    _startedAt = Date.now();
-    _latestPartial = '';
-    _latestConfidence = -1;
-
-    let resolveFinal: ((result: OnDeviceTranscriptResult) => void) | null = null;
-    let rejectFinal: ((err: VoiceCaptureError) => void) | null = null;
-    result = new Promise<OnDeviceTranscriptResult>((resolve, reject) => {
-      resolveFinal = resolve;
-      rejectFinal = reject;
-    });
-
-    _finalResolve = resolveFinal;
-    _finalReject = rejectFinal;
-
-    _listeners.push(
-      ExpoSpeechRecognitionModule.addListener('result', (ev) => {
-        const top = ev.results?.[0];
-        if (!top) return;
-        _latestPartial = top.transcript;
-        _latestConfidence = top.confidence ?? -1;
-        onPartial?.({ text: top.transcript, isFinal: ev.isFinal });
-        if (ev.isFinal) {
-          settleSuccess(top.transcript, top.confidence ?? -1);
-        }
-      }),
-    );
-
-    _listeners.push(
-      ExpoSpeechRecognitionModule.addListener('end', () => {
-        if (!_active) return;
-        settleSuccess(_latestPartial, _latestConfidence);
-      }),
-    );
-
-    _listeners.push(
-      ExpoSpeechRecognitionModule.addListener('error', (ev) => {
-        const map: Record<string, VoiceCaptureErrorCode> = {
-          'not-allowed': 'mic-permission-denied',
-          'service-not-allowed': 'on-device-recognition-unavailable',
-          'language-not-supported': 'on-device-recognition-unavailable',
-          aborted: 'aborted',
-        };
-        const code = map[ev.error] ?? 'recognition-error';
-        settleError(new VoiceCaptureError(code, ev.message || ev.error, ev.error));
-      }),
-    );
-
-    if (onMetering) {
-      _listeners.push(
-        ExpoSpeechRecognitionModule.addListener('volumechange', (ev) => {
-          const normalized = Math.max(-160, Math.min(0, ev.value * 16 - 160));
-          onMetering({ metering: normalized, durationMillis: Date.now() - _startedAt });
-        }),
-      );
-    }
-
+    assertCapture(attempt);
+    attempt.startedAt = Date.now();
+    listenToCapture(attempt, onMetering, onPartial);
+    attempt.started = true;
     ExpoSpeechRecognitionModule.start({
       lang,
       interimResults: true,
@@ -285,124 +314,48 @@ export async function startCaptureSession(
       iosCategory: audioSessionCategoryFor(options?.audioRoute ?? activeAudioRoute()),
       volumeChangeEventOptions: onMetering ? { enabled: true, intervalMillis: 100 } : undefined,
     });
-
-    startMaxDurationTimer(options?.maxDurationMs ?? MAX_LISTEN_MS);
-  } catch (err) {
-    _active = false;
-    clearTimers();
-    clearListeners();
-    _finalResolve = null;
-    _finalReject = null;
-    if (err instanceof VoiceCaptureError) throw err;
-    const msg = err instanceof Error ? err.message : 'Failed to start recognizer';
-    throw new VoiceCaptureError('recognition-error', msg);
-  }
-
-  return { result };
-}
-
-function startMaxDurationTimer(maxDurationMs: number): void {
-  if (!Number.isFinite(maxDurationMs) || maxDurationMs <= 0) return;
-  _maxDurationTimer = setTimeout(() => {
-    _maxDurationTimer = null;
-    if (!_active) return;
-    try {
-      ExpoSpeechRecognitionModule.stop();
-    } catch {
-      // The grace timer below settles the capture either way.
+    const duration = options?.maxDurationMs ?? MAX_LISTEN_MS;
+    if (ownsCapture(attempt) && Number.isFinite(duration) && duration > 0) {
+      attempt.durationTimer = setTimeout(() => stopAttempt(attempt, true), duration);
     }
-    _stopGraceTimer = setTimeout(() => {
-      _stopGraceTimer = null;
-      if (!_active) return;
-      if (_latestPartial.trim()) {
-        settleSuccess(_latestPartial, _latestConfidence);
-        return;
-      }
-      settleError(
-        new VoiceCaptureError(
-          'max-duration-reached',
-          'Listening stopped after a minute. Tap the microphone to start again.',
-        ),
-      );
-    }, STOP_GRACE_MS);
-  }, maxDurationMs);
+  } catch (error) {
+    const failure = captureError(error);
+    const shouldAbort = ownsCapture(attempt) && attempt.started;
+    settleCapture(attempt, failure);
+    if (shouldAbort) {
+      try { ExpoSpeechRecognitionModule.abort(); } catch {}
+    }
+    throw failure;
+  }
+  return {
+    result: attempt.result,
+    stop: async () => stopAttempt(attempt),
+    cancel: async () => cancelAttempt(attempt),
+  };
 }
 
 export async function stopCapture(): Promise<void> {
-  if (!_active) return;
-  try {
-    ExpoSpeechRecognitionModule.stop();
-  } catch {
-    // Best-effort: error path will be surfaced via the error listener.
-  }
+  if (activeCapture) stopAttempt(activeCapture);
 }
 
 export async function cancelCapture(): Promise<void> {
-  if (!_active) return;
-  try {
-    ExpoSpeechRecognitionModule.abort();
-  } catch {
-    // ignore
-  }
-  settleError(new VoiceCaptureError('aborted', 'Capture cancelled'));
+  if (activeCapture) cancelAttempt(activeCapture);
 }
 
-export function getLatestPartial(): string {
-  return _latestPartial;
-}
-
-/**
- * Transcribe a recording the user handed to the app, such as the Transcribe
- * App Intent's audio file. The recognizer reads the file directly; nothing is
- * captured from the microphone.
- */
 export async function transcribeAudioFile(
   uri: string,
   options?: VoiceCaptureOptions,
 ): Promise<OnDeviceTranscriptResult> {
   if (!uri) throw new VoiceCaptureError('recognition-error', 'No audio file was provided.');
-  if (_active) {
-    throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
-  }
-  _active = true;
-
+  const attempt = createCapture(options?.signal);
   try {
+    assertCapture(attempt);
     const lang = resolveRecognitionLocale(options?.lang);
     await assertOnDeviceRecognition(lang);
-    _latestPartial = '';
-    _latestConfidence = -1;
-    _startedAt = Date.now();
-
-    let resolveFinal: ((value: OnDeviceTranscriptResult) => void) | null = null;
-    let rejectFinal: ((err: VoiceCaptureError) => void) | null = null;
-    const result = new Promise<OnDeviceTranscriptResult>((resolve, reject) => {
-      resolveFinal = resolve;
-      rejectFinal = reject;
-    });
-    _finalResolve = resolveFinal;
-    _finalReject = rejectFinal;
-
-    _listeners.push(
-      ExpoSpeechRecognitionModule.addListener('result', (ev) => {
-        const top = ev.results?.[0];
-        if (!top) return;
-        _latestPartial = top.transcript;
-        _latestConfidence = top.confidence ?? -1;
-        if (ev.isFinal) settleSuccess(top.transcript, top.confidence ?? -1);
-      }),
-    );
-    _listeners.push(
-      ExpoSpeechRecognitionModule.addListener('end', () => {
-        if (!_active) return;
-        settleSuccess(_latestPartial, _latestConfidence);
-      }),
-    );
-    _listeners.push(
-      ExpoSpeechRecognitionModule.addListener('error', (ev) => {
-        settleError(new VoiceCaptureError('recognition-error', ev.message || ev.error, ev.error));
-      }),
-    );
-
+    assertCapture(attempt);
+    attempt.startedAt = Date.now();
+    listenToCapture(attempt);
+    attempt.started = true;
     ExpoSpeechRecognitionModule.start({
       lang,
       interimResults: false,
@@ -411,16 +364,14 @@ export async function transcribeAudioFile(
       addsPunctuation: true,
       audioSource: { uri },
     });
-
-    return await result;
-  } catch (err) {
-    _active = false;
-    clearTimers();
-    clearListeners();
-    _finalResolve = null;
-    _finalReject = null;
-    if (err instanceof VoiceCaptureError) throw err;
-    const msg = err instanceof Error ? err.message : 'The recording could not be transcribed.';
-    throw new VoiceCaptureError('recognition-error', msg);
+    return await attempt.result;
+  } catch (error) {
+    const failure = captureError(error);
+    const shouldAbort = ownsCapture(attempt) && attempt.started;
+    settleCapture(attempt, failure);
+    if (shouldAbort) {
+      try { ExpoSpeechRecognitionModule.abort(); } catch {}
+    }
+    throw failure;
   }
 }

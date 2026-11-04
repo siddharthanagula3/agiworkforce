@@ -48,10 +48,9 @@ import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
-import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import { VoiceInputButton, type VoiceInputHandle, type DictationIntent } from '@/src/features/voice/components/VoiceInputButton';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { Waveform } from '@/src/features/voice/components/Waveform';
-import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -185,7 +184,9 @@ export function ChatInput({
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
   const inputRef = useRef<TextInput>(null);
-  const transcriptionRunRef = useRef(0);
+  const voiceControlRef = useRef<VoiceInputHandle | null>(null);
+  const textRef = useRef(text);
+  textRef.current = text;
   const sendPendingRef = useRef(false);
   const heldSendRef = useRef<string | null>(null);
   const [sendHeld, setSendHeld] = useState(false);
@@ -630,16 +631,22 @@ ${current}`
   }, []);
 
   const handleTranscription = useCallback(
-    (transcribedText: string) => {
+    (transcribedText: string, intent: DictationIntent) => {
       setIsRecording(false);
+      setIsTranscribing(false);
       setAudioLevel(0);
       if (!cleanupVoiceDictation(transcribedText)) {
         handleDictationFailure();
         return;
       }
-      applyTranscript(transcribedText);
+      if (intent === 'send') {
+        const merged = mergeTranscript(textRef.current, transcribedText);
+        textRef.current = merged;
+        setText(merged);
+        sendComposerMessage(merged);
+      } else applyTranscript(transcribedText);
     },
-    [applyTranscript, handleDictationFailure],
+    [applyTranscript, handleDictationFailure, sendComposerMessage],
   );
 
   const resetRecordingUi = useCallback(() => {
@@ -660,59 +667,18 @@ ${current}`
   }, []);
 
   const handleDictationCancel = useCallback(() => {
-    transcriptionRunRef.current += 1;
+    voiceControlRef.current?.cancel();
     resetRecordingUi();
     setIsTranscribing(false);
-    setVoiceResetSignal((value) => value + 1);
-    VoiceService.cancelRecording().catch(() => {
-      // ignore cleanup errors
-    });
   }, [resetRecordingUi]);
 
-  const finishDictation = useCallback(
-    async ({ send }: { send: boolean }) => {
-      resetRecordingUi();
-      if (!VoiceService.isRecording()) {
-        setVoiceResetSignal((value) => value + 1);
-        return;
-      }
-      const run = transcriptionRunRef.current + 1;
-      transcriptionRunRef.current = run;
-      setIsTranscribing(true);
-      let transcript: string;
-      try {
-        const uri = await VoiceService.stopRecording();
-        if (transcriptionRunRef.current !== run) return;
-        const result = await VoiceService.transcribe(uri);
-        transcript = result.text.trim();
-      } catch {
-        transcript = '';
-      }
-      if (transcriptionRunRef.current !== run) return;
-      setIsTranscribing(false);
-      setVoiceResetSignal((value) => value + 1);
-      if (!cleanupVoiceDictation(transcript)) {
-        handleDictationFailure();
-        return;
-      }
-      if (send) {
-        const merged = mergeTranscript(text, transcript);
-        setText(merged);
-        sendComposerMessage(merged);
-      } else {
-        applyTranscript(transcript);
-      }
-    },
-    [applyTranscript, handleDictationFailure, resetRecordingUi, sendComposerMessage, text],
-  );
-
   const handleDictationStop = useCallback(() => {
-    void finishDictation({ send: false });
-  }, [finishDictation]);
+    voiceControlRef.current?.stop('insert');
+  }, []);
 
   const handleDictationSend = useCallback(() => {
-    void finishDictation({ send: true });
-  }, [finishDictation]);
+    voiceControlRef.current?.stop('send');
+  }, []);
 
   const handleVoiceError = useCallback(
     (message: string, permissionDenied?: boolean) => {
@@ -1314,6 +1280,9 @@ ${current}`
             ) : null}
             {voiceAllowed ? (
               <VoiceInputButton
+                controlRef={voiceControlRef}
+                scopeKey={JSON.stringify([draftIdentity, appMode, selectedModel])}
+                onProcessingChange={setIsTranscribing}
                 onTranscription={handleTranscription}
                 onRecordingStart={handleRecordingStart}
                 onRecordingStop={handleRecordingStop}

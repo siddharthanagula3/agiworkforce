@@ -171,6 +171,8 @@ describe('composer dictation follows the speech language', () => {
     startSpy.mockReset();
     startSpy.mockResolvedValue({
       result: Promise.resolve({ text: '', isOnDevice: true, confidence: 1 }),
+      stop: jest.fn(async () => undefined),
+      cancel: jest.fn(async () => undefined),
     });
     useChatAppModeStore.setState({ appMode: 'local' });
   });

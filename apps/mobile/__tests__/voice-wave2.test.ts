@@ -127,7 +127,7 @@ describe('voiceInput service', () => {
     });
 
     expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
-    expect(VoiceService.isRecording()).toBe(false);
+    expect(VoiceInput.isCapturing()).toBe(false);
   });
 
   it('does not start when on-device speech recognition is unavailable', async () => {
@@ -140,7 +140,7 @@ describe('voiceInput service', () => {
     });
 
     expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
-    expect(VoiceService.isRecording()).toBe(false);
+    expect(VoiceInput.isCapturing()).toBe(false);
   });
 });
 
