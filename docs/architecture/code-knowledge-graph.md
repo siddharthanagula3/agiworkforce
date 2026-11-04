@@ -2562,9 +2562,43 @@ refusal isolation and skipping queued stale preparation. There is no dedicated
 composer integration fixture or runtime acceptance for deferred-send behavior.
 No tests, checks or native/provider work ran for this slice.
 
+## Web clipboard reads retain draft groups and read-only identity lifetime
+
+Accepted commit `a6cd424fcb3031f42e261a081f7289c8ca0ac8e7` changes three
+production files and thirty-three fixture files. `useSessionSnapshot.ts` factors
+a read-only identity observer that permits a stable signed-out/loading lifetime
+without granting authenticated request authority. Authenticated token/null gates
+remain; observation also notices SDK loaded/session ID/session-user fields. SDK
+changes are observed at capture, render and currentness checks, not by a new SDK
+event subscription, so entirely unobserved identity ABA is not claimed covered.
+
+`use-clipboard-draft-lifetime.ts` owns a group with exact pending read tokens,
+rendered destination/project scope and identity lifetime. Concurrent same-draft
+reads remain valid independently; stale finalizers cannot clear replacement busy
+state. Chat/project and Local-selection subscriptions retire observed navigation
+or Local/non-Local boundary changes synchronously. A change between Local models
+alone is not that boundary. Explicit project composers ignore unrelated active
+chat/picker changes; picker-owned drafts and saved-conversation project moves
+follow their applicable store state. Rendered scope changes and unmount retire
+old groups and cancel deferred-send intent before exposing idle replacement state.
+
+The composer checks the operation after clipboard await before converting files,
+notices or admission, then invokes the current attachment-admission callback.
+Clear and explicit draft adoption paths retire clipboard work before mutating
+composer text, including prefill, parked/deferred restoration, replacement and
+queue editing. Passive adoption retires when that effect actually adopts, not
+merely when a prop arrives. Already admitted attachments and their carryover are
+not redesigned, nor is an issued native clipboard read cancelled or undone.
+
+Thirty fixture changes are compatibility partial mocks rather than new lifecycle
+coverage. Identity/helper and attachment-source integration fixtures cover stable
+signed-out reads, current group accounting, observed navigation/boundary changes,
+late data/empty/error suppression and replacement busy state. All are unexecuted;
+no native, browser, SDK event-order, tests/checks or runtime acceptance is asserted.
+
 ## Reconstruction boundary
 
-Only the ninety-five accepted production slices traced above are represented as
+Only the ninety-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
