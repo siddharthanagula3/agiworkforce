@@ -2620,9 +2620,50 @@ does not authorize retaining private legacy data across logout.
 Settings preference queues/caches are separate, not covered by this finding or
 pin correction. No tests/checks or live memory actions ran.
 
+## Workspace selection shares captured-session admission and uncertainty barriers
+
+Accepted commit `d6cf5e4c0280cee63573f19facbdb1cfcd2b02a4` changes thirteen
+files. `workspace-admission.ts` owns an in-memory session incarnation/epoch and
+resolving/admitted/switching/unavailable/uncertain state, shared across selection
+surfaces. `use-workspaces.ts` fetches through original RequestAuthority and parses
+the canonical account-workspaces schema before admission; query keys include
+owner/session/incarnation/epoch and nonadmitted data is masked. Missing or malformed
+scope is not inferred as Personal. Retired callbacks cannot publish into a new
+owner, and a validated refresh observing a changed canonical scope retires admission.
+
+Workspace-ID switching, organization-ID switching and organization creation use
+the same coordinator and captured mutation callback. A successful write is followed
+by canonical GET; finalization uses that admitted active organization rather than
+the submitted target. Menu confirmation retains its original callback/owner key,
+creation fields are owner-keyed, and Team's picker uses canonical workspace rows
+with organization IDs for the organization endpoint. This is not a migration of
+all settings/admin loaders or mutation forms.
+
+Availability is deliberately conservative: uncertain writes or an observed changed
+canonical scope block the same account until reload, including through replacement
+sessions. Switching is serialized in this module; no automatic mutation retry,
+remote rollback or cross-tab ordering guarantee is added. A subsequent GET/reload
+is a fresh observation, not proof that a prior unknown write stopped executing.
+Confirmed rejection can resolve via a fresh canonical read; unresolved outcomes
+retain the barrier rather than restoring guessed scope.
+
+Finalization checks the captured authority around query cancellation, guarded
+workspace cleanup and navigation. Nested module loads/method calls and storage
+purge/recording check currentness; a captured switch refuses to enter account-wide
+logout cleanup on account mismatch. Default cleanup callers and existing logout
+reset/purge remain unchanged. Ordinary successful switching still hard-reloads or
+replaces the page. The OPEN memory-store/backlog finding remains unfixed: this is
+an admission prerequisite, not a memory migration or permission to retain legacy
+bytes across logout.
+
+Fixture sources cover malformed admission, observed scope changes, same-ID session
+replacement, stale confirmations/token waits, canonical finalization, creation
+field ownership and nested cleanup retirement. All are unexecuted; no live SDK,
+query lifecycle, server selection or cross-tab runtime acceptance is established.
+
 ## Reconstruction boundary
 
-Only the ninety-seven accepted production slices traced above are represented as
+Only the ninety-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
