@@ -3206,9 +3206,48 @@ reads, exact cleanup and no-draft Cloud activation. They do not prove actual nat
 picker timing, SQLite rollback, network cancellation or runtime acceptance. No
 tests/checks, native, database or network actions were performed in this trace.
 
+## Mobile DSAR exports bind Cloud dependencies and isolate temporary files
+
+Accepted commit `e58223506a9363b6c3f8d31da33139194acc2091` changes fourteen
+production/fixture files. DataControls and Storage previously captured supplemental
+snapshots before asynchronous SQLite collection; Cloud-mode personalization and
+mixed Cloud artifacts could remain in that captured object after live-store logout
+cleanup. This does not establish that all Local chats were exposed. Existing
+inclusion semantics and original Cloud API account-epoch guards are retained.
+
+`buildLocalDataExportSnapshot` adds optional nonserialized authority only when
+Cloud-mode settings or Cloud-provenance artifacts are included. It requires the
+original canonical epoch and matching artifact owner; missing authority or a
+mismatched/missing Cloud owner refuses, without deleting device records. Pure
+device exports remain offline and account-free. The shared `useLocalDataExport`
+owns exact focus/operation identity for both local callers, observes canonical
+epoch changes and fences progress/cleanup/publication. Collection and file/share
+boundaries recheck caller plus snapshot authority. The Cloud exporter passes its
+original epoch to the API; stale-account alerts are suppressed rather than shown
+over a replacement account.
+
+Earlier ordinary export isolation did not cover these fixed DSAR paths. Both now
+use `withDsarTemporaryFile`: UUID operation directories, a shared in-process
+reservation Set, existence refusal and non-intermediate child creation, retaining
+`agi_data_export.json` / `agi_cloud_data_export.json` basenames. Cleanup removes
+only a successfully allocated operation directory, including after a partial write
+or later error. Rejected/uncertain allocation is not ownership. Cleanup failure is
+swallowed to preserve the original or successful outcome and may leave temporary
+bytes. Native mkdir implementation was unavailable, so this convention is not
+proof of cross-process atomic exclusivity.
+
+Currentness is checked before native share dispatch, including after availability
+await; no post-share assertion relabels an already accepted share as stopped.
+Already-issued native sharing cannot be recalled. Cache-clear/wipe root races and
+the existing 10,000-row collection limits/completeness remain separate unchanged
+boundaries; destructive paths were not modified. Fixtures simulate authority,
+blur/refocus, late collection, collision/allocation, partial-write cleanup and
+concurrent exports, with compatibility mock updates. All are unexecuted, with no
+native filesystem/share, database, network or runtime acceptance claimed.
+
 ## Reconstruction boundary
 
-Only the one hundred and ten accepted production slices traced above are represented as
+Only the one hundred and eleven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
