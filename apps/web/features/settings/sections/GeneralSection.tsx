@@ -1066,8 +1066,6 @@ function LiveVoicePaceRow() {
 function ReadAloudVoiceRow() {
   const { isSupported, voices, voiceUri, setVoiceUri, speak, stop, isSpeaking } = useTTS();
 
-  useEffect(() => () => stop(), [stop]);
-
   if (!isSupported || voices.length === 0) {
     return (
       <Row label="Backup read-aloud voice">

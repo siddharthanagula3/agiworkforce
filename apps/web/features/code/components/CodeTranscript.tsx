@@ -220,9 +220,9 @@ function StepGroup({ steps, verbose }: { steps: CloudCodeAgentStep[]; verbose: b
   );
 }
 
-function ReplyActions({ text, at }: { text: string; at: string }) {
+function ReplyActions({ text, at, readAloudScope }: { text: string; at: string; readAloudScope?: string }) {
   const [copied, setCopied] = useState(false);
-  const { isSpeaking, isSupported, speak, stop } = useTTS();
+  const { isSpeaking, isSupported, speak, stop } = useTTS(readAloudScope);
 
   const copy = async () => {
     await navigator.clipboard.writeText(text);
@@ -299,6 +299,7 @@ export function CodeTranscript({ session, ...rest }: CodeTranscriptProps) {
     <CodeTranscriptBody
       {...rest}
       header={<InitializedSession session={session} />}
+      readAloudScope={session.id}
       pending={cloning ? CODE_COPY.cloningRepository : null}
     />
   );
@@ -310,6 +311,8 @@ export interface CodeTranscriptBodyProps extends Omit<
 > {
   busySince: string | null;
   header?: React.ReactNode;
+  /** Playback lifetime only; this does not classify the content trust boundary. */
+  readAloudScope?: string;
   /** A one-line status between the transcript and the working row. */
   pending?: string | null;
   /** Offered on a task that began a turn the session can rewind to. */
@@ -330,6 +333,7 @@ export function CodeTranscriptBody({
   onDecideApproval,
   onRetryTask,
   header,
+  readAloudScope,
   pending,
   onRewindTask,
   rewindLabel,
@@ -423,7 +427,7 @@ export function CodeTranscriptBody({
                 {CODE_COPY.retryTask}
               </button>
             )}
-            {item.id === lastReplyId && item.text && <ReplyActions text={item.text} at={item.at} />}
+            {item.id === lastReplyId && item.text && <ReplyActions text={item.text} at={item.at} readAloudScope={readAloudScope} />}
           </div>
         );
       })}

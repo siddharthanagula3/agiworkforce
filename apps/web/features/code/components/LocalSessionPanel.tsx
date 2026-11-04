@@ -1116,6 +1116,7 @@ export function LocalSessionPanel({
 
               {!state.loading && (
                 <CodeTranscriptBody
+                  readAloudScope={JSON.stringify([session.rootId, session.id])}
                   items={items}
                   approvals={[]}
                   busy={busy}

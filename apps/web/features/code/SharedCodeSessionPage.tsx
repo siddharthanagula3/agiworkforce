@@ -146,6 +146,7 @@ function OwnedSharedCodeSessionPage({ token, api: injectedApi }: SharedCodeSessi
                         <p className={styles['statusLine']}>{CODE_COPY.sharedEmpty}</p>
                       ) : (
                         <CodeTranscriptBody
+                          readAloudScope={token}
                           items={items}
                           approvals={[]}
                           busy={false}

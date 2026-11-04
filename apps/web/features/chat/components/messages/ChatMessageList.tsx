@@ -1229,7 +1229,7 @@ const ChatMessageListComponent = ({
   turnErrorActive = false,
 }: ChatMessageListProps) => {
   const listApiRef = useRef<ListImperativeAPI | null>(null);
-  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
+  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS(conversationId);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   const [userScrolledUp, setUserScrolledUp] = useState(false);
