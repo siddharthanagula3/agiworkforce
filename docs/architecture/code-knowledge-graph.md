@@ -376,9 +376,64 @@ the main send pipeline. Composer request/draft guards are not universal account,
 workspace or remote cancellation guarantees. No pending main-send implementation,
 marketing restoration or pricing change is represented by this graph.
 
+## Web managed-send request authority
+
+Reconstructed commit: `900143abe16ec3ba06bf11be460cd17f7f98bb2b`
+(62 files including fixture migrations and new unexecuted regression sources).
+This extends the earlier media lookup's preforwarding boundary; it does not make
+that earlier commit independently responsible for later send awaits.
+
+`useSessionSnapshot` binds the captured live SDK session object/account and an
+observed identity generation, with a token getter on that session. Retirement is
+sticky after an observed mismatch. `request-authority.ts` owns request abort and
+currentness, enforces same-origin API destinations, and applies captured-session
+bearer credentials with cookies omitted. Entirely unobserved SDK ABA remains
+outside this observation model.
+
+`WebChatPage` captures authority before managed prestream creation, attachment
+preparation/upload, memory commands and provider consent, then hands it to stream
+ownership. Conversation creation checks after token/CSRF/body waits, separates
+publication from page activation and uses exact busy tokens so old cleanup neither
+sticks nor clears another creation. Uploads separate bearer API requests from
+credential-free signed PUT, check preparation/progress/settlement boundaries and
+set `sessions: null` to prevent adopting persisted upload sessions. Existing
+unowned callers are not universally migrated. Explicit memory commands omit the
+previous unowned hydration/backlog flush; confirmation owns a separate exact
+lifetime, and dialog completion cannot close a replacement dialog.
+
+`useChatStream` carries authority through stream delivery, continuation,
+approval/input recovery and request helpers. Verified recovered server runs retain
+their own authority for Stop/steer without replacing retired conversation/turn
+replay identities. Stop settlement compares the exact active-run object. Decoded
+durable Stop-tail ownership was source-inspected, not exercised by an integrated
+runtime fixture. Page teardown and handoff distinguish still-preparing work from
+accepted background work; this is not a blanket stop-on-navigation rule.
+
+No general account-store restoration, workspace pinning, standalone interactive
+card ownership, Local internals or remote rollback guarantee is established.
+Abort cannot undo already dispatched server/provider actions. All regression
+sources remain unexecuted; no build, checks or runtime acceptance is claimed.
+
+## Unsupported web direct-BYOK handoff containment
+
+Reconstructed commit: `60c16613f00d2bcaa61c5a98c419cfa148cf52cf`.
+The two-file slice replaces `WebChatPage` handoff confirmation's fork/system
+message/send sequence with an explicit unsupported refusal and adds an unexecuted
+source-shape regression. Confirmation no longer creates a cloud fork, saves a
+system message, navigates, clears the composer or forwards the raw pending prompt
+and attachments to ordinary send. Pending payload, preview and draft remain;
+cancel still closes the dialog. The shared dialog's default non-confirming state
+and error-disabled confirm behavior are unchanged.
+
+This is conservative containment of a dormant handoff path, not restored direct
+BYOK transport or an established normal-picker exploit. Shared handoff utilities,
+provider catalogue and routes are unchanged. Any future supported handoff needs
+actual destination-specific transport and consent for the exact payload and
+attachment destinations; the refusal does not implement those semantics.
+
 ## Reconstruction boundary
 
-Only the thirteen accepted production slices traced above are represented as
+Only the fifteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
