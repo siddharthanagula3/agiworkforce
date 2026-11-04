@@ -1043,9 +1043,36 @@ costs are not capped by this restriction. This supersedes the earlier PPTX table
 output gap narrowly, not the broader memory/CPU limitations. All authored fixture
 sources remain unexecuted; no browser/native or runtime acceptance is claimed.
 
+## CLI captured account and catalog cache ownership
+
+Reconstructed commit: `28ad710521a4a37e44b39b0018ab010702efe09d` changes ten
+CLI source files, including unexecuted inline fixtures. `ManagedRequestContext`
+captures token, trusted API base and cache owner while holding the auth snapshot
+lock. Owner hashes bind deployment plus subject/session; subject-bearing legacy
+tokens use a token digest for cache identity only, not the recovery replay rule.
+Verified credential absence gets a distinct anonymous catalog identity;
+configuration/store-read failure is not converted to anonymous discovery.
+Unidentifiable authenticated tokens do not acquire a reusable persistent owner.
+
+Account/tier/plan/live-catalog reads and publication, usage result publication and
+server-plan adoption check captured ownership. `AccountRoute` reads a coherent
+captured snapshot; model discovery is checked again against its original owner
+after local discovery before use. Late authorization failure invalidation is
+exact-token/deployment scoped, and tier invalidation also clears the live catalog.
+Ownerless legacy disk caches miss rather than being adopted under the new account,
+which can reduce offline availability until a fresh fetch.
+
+Account/tier retain their existing 300-second lifetime and now reject future
+timestamps. Plan-model and live-catalog lifetime deliberately remains indefinite
+for a matching owner; this is not a freshness-policy redesign. Environment writes
+are outside the auth lock, error/stale account status can return a blank signed-out
+snapshot, and no whole-turn or already-dispatched request protection follows.
+Connector and local-policy caches are separate unresolved scopes. Fixtures remain
+unexecuted; no Rust, lock, network or runtime acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the forty-three accepted production slices traced above are represented as
+Only the forty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
