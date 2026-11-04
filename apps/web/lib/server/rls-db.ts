@@ -4,8 +4,8 @@ import type { NextRequest } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { IdentityRequestAuth } from '@agiworkforce/identity';
-import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { createError, isAppError } from '@/lib/errors';
+import { getClerkAuthUser, getCookieSessionAuthUser, type AuthResult } from '@/lib/api-auth';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { traceDatabaseAdapter } from '@/lib/observability/database-span';
 import { setTenantScope } from '@/lib/observability/trace-context';
@@ -156,4 +156,27 @@ export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
   if (!token) return null;
   setTenantScope({ userId });
   return { db: getRlsCapableDb().withUser(token), userId };
+}
+
+export async function getCurrentCookieUserRlsDb(
+  request: NextRequest,
+): Promise<CurrentUserRlsDb | null> {
+  let session: IdentityRequestAuth;
+  try {
+    session = await getRequestIdentity();
+  } catch {
+    return null;
+  }
+  if (!session.subject) return null;
+
+  let principal: AuthResult;
+  try {
+    principal = await getCookieSessionAuthUser(request, session);
+  } catch (error) {
+    if (isAppError(error) && (error.statusCode === 401 || error.statusCode === 403)) return null;
+    throw error;
+  }
+  const token = await session.getToken();
+  if (!token) return null;
+  return { db: getRlsCapableDb().withUser(token), userId: principal.userId };
 }

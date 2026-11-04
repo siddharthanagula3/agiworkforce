@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/security-audit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  cookieReader: vi.fn(),
+  scopedQuery: vi.fn(),
   execute: vi.fn(),
   authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'owner-1' })),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
@@ -14,6 +17,11 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
+  getCookieSessionAuthUser: (...a: unknown[]) => mocks.authUser(...a),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<RlsDbModule>()),
+  getCurrentCookieUserRlsDb: mocks.cookieReader,
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a) }));
@@ -161,6 +169,7 @@ describe('DELETE /api/share/[token], revocation', () => {
 describe('GET /api/share/[token] after revocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.cookieReader.mockResolvedValue(null);
     mocks.authUser.mockResolvedValue({ userId: 'owner-1' });
     mocks.rateLimit.mockResolvedValue(null);
   });
@@ -193,5 +202,49 @@ describe('GET /api/share/[token] after revocation', () => {
 
     expect(response.status).toBe(404);
     expect(await response.text()).not.toContain('Planning');
+  });
+});
+
+describe('GET /api/share/[token] authenticated fallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.query.mockResolvedValue([]);
+    mocks.cookieReader.mockResolvedValue(null);
+  });
+
+  it('skips cookie admission for a public share', async () => {
+    mocks.query.mockResolvedValue([
+      { token: TOKEN, title: 'Planning', messages: [], total_messages: 0, expires_at: FUTURE },
+    ]);
+    expect((await get()).status).toBe(200);
+    expect(mocks.cookieReader).not.toHaveBeenCalled();
+  });
+
+  it('passes the actual request and reads the admitted RLS scope without selecting a workspace', async () => {
+    const request = new NextRequest(`https://agiworkforce.com/api/share/${TOKEN}`, {
+      headers: { 'x-real-ip': '192.0.2.1', 'x-agi-organization-id': 'personal' },
+    });
+    mocks.cookieReader.mockResolvedValue({ db: { query: mocks.scopedQuery }, userId: 'member' });
+    mocks.scopedQuery.mockResolvedValue([
+      { token: TOKEN, title: 'Shared', visibility: 'organization', messages: [], expires_at: FUTURE },
+    ]);
+    const response = await GET(request, context());
+    expect(response.status).toBe(200);
+    expect(mocks.cookieReader).toHaveBeenCalledWith(request);
+    expect(mocks.scopedQuery).toHaveBeenCalledTimes(1);
+    expect(mocks.scopedQuery.mock.calls[0]?.[1]).toEqual([TOKEN]);
+  });
+
+  it('does not query a transcript for a refused cookie', async () => {
+    const response = await get();
+    expect(response.status).toBe(404);
+    expect(mocks.scopedQuery).not.toHaveBeenCalled();
+  });
+
+  it('does not query a transcript when admission throws', async () => {
+    mocks.cookieReader.mockRejectedValue(new Error('admission unavailable'));
+    expect((await get()).status).toBe(500);
+    expect(mocks.scopedQuery).not.toHaveBeenCalled();
   });
 });

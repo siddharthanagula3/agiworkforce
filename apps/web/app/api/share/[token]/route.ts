@@ -6,7 +6,7 @@ import {
   type SharedConversation,
 } from '@agiworkforce/cloud-contracts';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getCurrentUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
+import { getCurrentCookieUserRlsDb, getUserScopedDb } from '@/lib/server/rls-db';
 import {
   requireSelectedWorkspace,
   resolveActiveOrganizationId,
@@ -44,11 +44,11 @@ const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
 type RouteContext = { params: Promise<{ token: string }> };
 
 /** Public rows first; workspace-only rows are left to the RLS-scoped read. */
-async function readSessionForCaller(token: string) {
+async function readSessionForCaller(request: NextRequest, token: string) {
   const publiclyVisible = await getPublicSharedSessionByToken(getNeonDb(), token);
   if (publiclyVisible) return publiclyVisible;
 
-  const scoped = await getCurrentUserRlsDb();
+  const scoped = await getCurrentCookieUserRlsDb(request);
   if (!scoped) return null;
   return getOrgReadableSessionByToken(scoped.db, token);
 }
@@ -63,7 +63,7 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const data = await readSessionForCaller(token);
+  const data = await readSessionForCaller(request, token);
 
   if (!data) {
     throw createError.notFound('Shared session not found');

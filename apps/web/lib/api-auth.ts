@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
+import type { IdentityRequestAuth } from '@agiworkforce/identity';
 import { AppError, ErrorCode, createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAuthFailure } from '@/lib/security-audit';
@@ -412,7 +413,15 @@ export async function getClerkAuthUser(
     throw createError.unauthorized();
   }
 
-  const { subject, sessionId } = await getRequestIdentity();
+  return getCookieSessionAuthUser(request, await getRequestIdentity(), options);
+}
+
+export async function getCookieSessionAuthUser(
+  request: NextRequest,
+  session: IdentityRequestAuth,
+  options: AuthOptions = {},
+): Promise<AuthResult> {
+  const { subject, sessionId } = session;
   const account = subject === null ? null : await accountForSubject(subject, request);
   if (account) {
     const userId = account.accountId;

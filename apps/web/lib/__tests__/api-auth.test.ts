@@ -1,3 +1,4 @@
+import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
@@ -953,6 +954,32 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
     });
   });
 
+  it('does not admit a suspended cookie to the shared reader', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('suspended-share-reader', 'suspended');
+    mockAuth.mockResolvedValueOnce(authSession('suspended-share-reader'));
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
+  });
+
+  it('does not admit a cookie that still requires passkey verification', async () => {
+    makeFakeDb();
+    const query = mockNeonQuery.getMockImplementation()!;
+    mockNeonQuery.mockImplementation((sql: string, params: unknown[] = []) =>
+      sql.toLowerCase().includes('from public.account_security_enrollments')
+        ? Promise.resolve([{ enrolled_at: new Date(Date.now() - 86_400_000).toISOString() }])
+        : query(sql, params),
+    );
+    mockAuth.mockResolvedValueOnce(authSession('unverified-share-reader'));
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
+  });
+
+  it('does not admit an erased cookie to the shared reader', async () => {
+    const db = makeFakeDb();
+    db.erasedAccounts.add('erased-share-reader');
+    mockAuth.mockResolvedValueOnce(authSession('erased-share-reader'));
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
+  });
+
   it('links an account that predates the mapping rather than failing its request', async () => {
     const db = makeFakeDb();
     mockAuth.mockResolvedValueOnce(authSession('unmapped-user'));
@@ -1416,6 +1443,14 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
     mockClerkGetSession.mockResolvedValue(providerSession(pastTheLimit));
 
     await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({ statusCode: 401 });
+    expect(mockClerkRevokeSession).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it('refuses an over-age cookie before constructing the shared-reader RLS scope', async () => {
+    makeFakeDb();
+    mockClerkGetSession.mockResolvedValue(providerSession(Date.now() - (30 * DAY_MS + 1000)));
+
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
     expect(mockClerkRevokeSession).toHaveBeenCalledWith(SESSION_ID);
   });
 
