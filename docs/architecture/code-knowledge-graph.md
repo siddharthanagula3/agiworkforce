@@ -3412,16 +3412,51 @@ side effects or transport ownership.
 
 HTTP403 passkey/account-unavailable handling is unchanged, as are other streaming
 and upload recovery paths. Exact same-user session dispatch, push token provenance
-and successful `deliveredSignature` publication remain separate residuals: push
-still assigns that signature before its final context-current return check.
+remain separate residuals. At this slice, push assigned `deliveredSignature`
+before its final context-current return check; the registration-lifetime correction
+below narrowly supersedes that local publication gap.
 Neither existing API callers nor server authorization policies are redesigned.
 Fixture sources cover opted-in refusal, retained body/epoch checks and default/
 403 behavior but are unexecuted; no authentication, credentials, network, runtime,
 tests or checks were exercised for this documentation.
 
+## Mobile push receipts and listeners belong to exact registration lifetimes
+
+Accepted commit `1b3a445cf17ca7bff8791b2c6418840522cb047e` changes two
+production files and two fixture sources. `pushPreferenceSync.ts` replaces shared
+receipt/listener state with an opaque registration handle for the exact context
+object and token. Repeating that live pair reuses its handle; replacement or Stop
+permanently retires the old handle, including a later identical-token restart.
+Post-authentication, device lookup and POST completion checks precede receipt
+publication and listener activation. A successful request on the same live handle
+remains useful even when a newer request on that handle failed.
+
+`notifications.ts` separately captures a discovery generation before permission,
+channel and Expo-token awaits. A native token refresh supersedes older pending
+Expo lookup before it can claim a registration; after POST begins, status belongs
+to the registration handle instead. Context replacement/null retires preference
+sync. Timers, preference/AppState subscriptions and native notification listeners
+capture their exact lifetime; stale callbacks and old cleanup cannot retire the
+replacement. Root account setup/cleanup, explicit enable and native-refresh callers
+use this chain. The exported registration entry still permits a new claim with a
+live context; it does not establish independent token provenance.
+
+Existing API account-generation fences and the server mobile-device owner-row
+refusal remain counterguards, not newly introduced cross-account authorization.
+This corrects local receipt publication/activation ownership, not remote write
+ordering, credential provenance or actual notification delivery. A failed new-token
+registration deliberately leaves prior sync retired; no fallback, automatic retry
+or unregister is added. Already-dispatched writes are not recalled.
+
+Seven added fixture cases cover replacement/Stop receipts, same-handle success,
+retired foreground/native callbacks, discovery ordering and context clearing.
+They are mocked and unexecuted; stale timer execution and caller status replacement
+lack dedicated cases. No native, network, authentication, tests or checks establish
+runtime acceptance here.
+
 ## Reconstruction boundary
 
-Only the one hundred and sixteen accepted production slices traced above are represented as
+Only the one hundred and seventeen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
