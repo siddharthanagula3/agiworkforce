@@ -1594,13 +1594,44 @@ This is background-local coordination, not cross-context locking, crash-atomic
 storage or exactly-once remote deletion. Malformed stored data blocks progress
 until repair; no automatic repair is added. The existing sweep catch returns
 pending work on errors and can retain its periodic alarm, but enqueue/alarm/auth
-wake liveness is not corrected by this slice. Concurrent enqueue, replacement,
+wake liveness is outside this atomicity slice; the following companion narrows
+that gap. Concurrent enqueue, replacement,
 legacy, read-failure and malformed-data fixtures use mocked storage/network and
 remain unexecuted; no browser scheduling or durable runtime guarantee is claimed.
 
+## Chrome maintenance demand reconciles actual alarm completion
+
+Accepted commit `5056ea3778d4502225fa1a2b18ed45f2b729c51d` changes three
+production files and three fixture sources. `maintenance-alarm.ts` owns one
+serialized reconciliation of actual alarm get/create/clear completion, retaining
+an existing matching periodic schedule rather than resetting its deadline. A
+demand revision prevents an older empty maintenance pass from erasing newer
+work; demand changes during successful alarm operations are reconciled after
+those operations finish. The background adapter uses the existing one-minute
+period and awaits create's callback/error and clear's completion.
+
+Successful durable deletion enqueue requests demand. `sweepConversationSync`
+counts remaining tombstones for the currently available account as well as dirty
+conversations, rereading auth after network work; other-account rows remain
+dormant. Null auth at either boundary reports unavailability and returns no
+account work. That callback resets the background's observed-owner wake memory,
+so a later successful `GET_CLOUD_AUTH_TOKEN` for even the same owner can request
+work again. Observed owner transitions wake work, not every successful token
+read; no forced refresh, recursive auth relay or polling is introduced.
+
+Alarm API failure exits reconciliation without spinning. A later external demand,
+alarm event or worker start is required; even demand arriving while the failed
+operation was pending is not guaranteed to be replayed. Non-forced auth's existing
+catch-to-null ambiguity and lack of an unattended recovery guarantee remain.
+Malformed queue repair is still absent. This narrowly extends the preceding
+atomicity slice, not cross-context storage coordination or guaranteed browser
+alarm delivery/persistence. Injected alarm-port fixtures, mocked sweeps and textual
+background wiring contracts were source-read only; none were executed in Chrome
+or a test runner.
+
 ## Reconstruction boundary
 
-Only the sixty-six accepted production slices traced above are represented as
+Only the sixty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
