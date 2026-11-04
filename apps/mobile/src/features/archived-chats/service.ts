@@ -26,10 +26,16 @@ const BulkConversationResponseSchema = z.object({
   affectedCount: z.number().int().nonnegative(),
 });
 
-async function postBulkConversationAction(action: BulkConversationAction): Promise<number> {
-  const data = BulkConversationResponseSchema.parse(
-    await api.post<unknown>('/api/chat/conversations/bulk', { action }),
-  );
+async function postBulkConversationAction(
+  action: BulkConversationAction,
+  account?: CloudAccountEpoch,
+): Promise<number> {
+  if (account !== undefined) assertCloudAccountEpochCurrent(account);
+  const response = account === undefined
+    ? await api.post<unknown>('/api/chat/conversations/bulk', { action })
+    : await api.post<unknown>('/api/chat/conversations/bulk', { action }, { accountEpoch: account });
+  if (account !== undefined) assertCloudAccountEpochCurrent(account);
+  const data = BulkConversationResponseSchema.parse(response);
   return data.affectedCount;
 }
 
@@ -96,14 +102,19 @@ export async function archiveConversation(id: string, account: CloudAccountEpoch
   return setConversationArchived(id, true, account);
 }
 
-export async function deleteArchivedConversation(id: string): Promise<void> {
-  ManagedCloudDeleteConversationResponseSchema.parse(
-    await api.delete<unknown>(managedCloudConversationPath(id)),
+export async function deleteArchivedConversation(id: string, account: CloudAccountEpoch): Promise<void> {
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.delete<unknown>(
+    managedCloudConversationPath(id),
+    { accountEpoch: account },
   );
+  assertCloudAccountEpochCurrent(account);
+  ManagedCloudDeleteConversationResponseSchema.parse(response);
 }
 
-export async function deleteAllArchivedConversations(): Promise<number> {
-  return postBulkConversationAction('delete_archived');
+export async function deleteAllArchivedConversations(account: CloudAccountEpoch): Promise<number> {
+  assertCloudAccountEpochCurrent(account);
+  return postBulkConversationAction('delete_archived', account);
 }
 
 export async function archiveAllConversations(): Promise<number> {

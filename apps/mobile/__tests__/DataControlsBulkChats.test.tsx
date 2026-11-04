@@ -116,6 +116,7 @@ import DataControlsScreen from '@/src/features/settings/data-controls';
 import { syncLocalConversationsToCloud } from '@/src/features/settings/data-controls/localCloudSyncService';
 import {
   activateCloudAccount,
+  captureCloudAccountEpoch,
   __resetCloudAccountSessionForTests,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
@@ -424,10 +425,12 @@ describe('archived-chats bulk service', () => {
     });
 
     mockPost.mockResolvedValue({ success: true, action: 'delete_archived', affectedCount: 0 });
-    await expect(deleteAllArchivedConversations()).resolves.toBe(0);
+    const account = captureCloudAccountEpoch();
+    if (!account) throw new Error('Missing fixture account');
+    await expect(deleteAllArchivedConversations(account)).resolves.toBe(0);
     expect(mockPost).toHaveBeenLastCalledWith('/api/chat/conversations/bulk', {
       action: 'delete_archived',
-    });
+    }, { accountEpoch: account });
   });
 
   it('rejects a response that does not match the server contract', async () => {

@@ -190,30 +190,31 @@ export default function ArchivedChatsScreen() {
   );
 
   const handleDelete = useCallback(
-    (conversation: ArchivedConversation) => {
-      const account = captureCloudAccountEpoch();
+    (conversation: ArchivedConversation, account: CloudAccountEpoch) => {
       if (!isCurrentCloudScope(account)) return;
+      let consumed = false;
       Alert.alert(
         'Delete this chat?',
         `"${conversation.title}" is removed from every device; restore it from Recently deleted on the web.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel', onPress: () => { consumed = true; } },
           {
             text: 'Delete',
             style: 'destructive',
             onPress: () => {
-              if (!isCurrentCloudScope(account)) return;
+              if (consumed || !isCurrentCloudScope(account)) return;
+              consumed = true;
               void (async () => {
                 setBusyId(conversation.id);
                 try {
-                  await deleteArchivedConversation(conversation.id);
+                  await deleteArchivedConversation(conversation.id, account);
                   if (isCurrentCloudScope(account)) removeFromList(conversation.id, account);
                 } catch {
                   if (isCurrentCloudScope(account)) {
                     Alert.alert('Could not delete', 'Refresh archived chats and try again.');
                   }
                 } finally {
-                  setBusyId(null);
+                  if (isCurrentCloudScope(account)) setBusyId(null);
                 }
               })();
             },
@@ -224,22 +225,23 @@ export default function ArchivedChatsScreen() {
     [removeFromList],
   );
 
-  const handleDeleteAll = useCallback(() => {
-    const account = captureCloudAccountEpoch();
+  const handleDeleteAll = useCallback((account: CloudAccountEpoch) => {
     if (!isCurrentCloudScope(account)) return;
+    let consumed = false;
     Alert.alert(
       'Delete all archived chats?',
       'Every archived chat is removed from every device; restore them from Recently deleted on the web.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => { consumed = true; } },
         {
           text: 'Delete all',
           style: 'destructive',
           onPress: () => {
-            if (!isCurrentCloudScope(account)) return;
+            if (consumed || !isCurrentCloudScope(account)) return;
+            consumed = true;
             void (async () => {
               try {
-                const deleted = await deleteAllArchivedConversations();
+                const deleted = await deleteAllArchivedConversations(account);
                 if (!isCurrentCloudScope(account)) return;
                 setState({
                   kind: 'ready',
@@ -458,7 +460,7 @@ export default function ArchivedChatsScreen() {
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => handleDelete(conversation)}
+                    onPress={() => handleDelete(conversation, visibleState.account)}
                     disabled={busyId === conversation.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Delete ${conversation.title}`}
@@ -496,7 +498,7 @@ export default function ArchivedChatsScreen() {
 
         {visibleState.kind === 'ready' && visibleState.conversations.length > 0 && (
           <Pressable
-            onPress={handleDeleteAll}
+            onPress={() => handleDeleteAll(visibleState.account)}
             accessibilityRole="button"
             accessibilityLabel="Delete all archived chats"
             style={{ alignSelf: 'center', paddingVertical: 14, marginTop: 4 }}
