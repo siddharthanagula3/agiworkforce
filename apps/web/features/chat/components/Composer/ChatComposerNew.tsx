@@ -213,6 +213,7 @@ import {
   readPersistedDraft,
   writePersistedDraft,
 } from './composer-draft-storage';
+import { useClipboardDraftLifetime } from './use-clipboard-draft-lifetime';
 import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
@@ -910,6 +911,14 @@ const ChatComposerNewComponent = ({
     Math.min(MAX_CHAT_ATTACHMENT_BYTES, getPlanMaxAttachmentBytes(attachmentPlanTier)),
   )} each`;
   const deferredSendRef = useRef(false);
+  const { readingClipboard, retire: retireClipboardDraft, begin: beginClipboardRead } =
+    useClipboardDraftLifetime({
+      conversationId,
+      projectId,
+      pickerProjectId: projectPicker?.activeProjectId ?? null,
+      pickerOwned: projectPicker !== undefined,
+      onRetire: () => { deferredSendRef.current = false; },
+    });
   const {
     attachments,
     previews,
@@ -925,9 +934,10 @@ const ChatComposerNewComponent = ({
     onError: (message) => setLocalNotice(message),
   });
   const clearAttachments = useCallback(() => {
+    retireClipboardDraft();
     deferredSendRef.current = false;
     clearAttachmentDraft();
-  }, [clearAttachmentDraft]);
+  }, [clearAttachmentDraft, retireClipboardDraft]);
   const uploadAttemptId = attachmentUploadAttempt?.id;
   const uploadAttemptFiles = attachmentUploadAttempt?.files;
   const [uploadAttemptPreviews, setUploadAttemptPreviews] = useState<
@@ -2034,7 +2044,6 @@ const ChatComposerNewComponent = ({
   const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
   const [localCommandOpen, setLocalCommandOpen] = useState(false);
   const [browserToolsOpen, setBrowserToolsOpen] = useState(false);
-  const [readingClipboard, setReadingClipboard] = useState(false);
   useEffect(() => {
     if (desktopHost === null) return undefined;
     return onLocalFolderAttachRequest(() => {
@@ -2254,26 +2263,31 @@ const ChatComposerNewComponent = ({
    * shell for it on its own, and the shell asks the user for the clipboard
    * permission the first time, so nothing is read in the background.
    */
+  const addClipboardAttachmentsRef = useRef(addChatAttachments);
+  addClipboardAttachmentsRef.current = addChatAttachments;
   const handleAttachClipboard = useCallback(async () => {
     setShowOverflowMenu(false);
-    setReadingClipboard(true);
+    const operation = beginClipboardRead();
     try {
-      const files = clipboardAttachments(await readHostClipboard(), Date.now());
+      const snapshot = await readHostClipboard();
+      if (!operation.isCurrent()) return;
+      const files = clipboardAttachments(snapshot, Date.now());
       if (files.length === 0) {
         setLocalNotice('Your clipboard is empty, so there was nothing to attach.');
         return;
       }
-      addChatAttachments(files);
+      addClipboardAttachmentsRef.current(files);
     } catch (cause) {
+      if (!operation.isCurrent()) return;
       setLocalNotice(
         cause instanceof DesktopRuntimeError
           ? `The clipboard was not attached. ${toUserMessage(cause, 'The desktop could not read it.')}`
           : 'The clipboard could not be read.',
       );
     } finally {
-      setReadingClipboard(false);
+      operation.finish();
     }
-  }, [addChatAttachments]);
+  }, [beginClipboardRead]);
 
   // A capture, a clipboard read and a picture's metadata removal land their file after an
   // await; an Enter pressed meanwhile would send without it. The send waits instead.
@@ -4074,6 +4088,7 @@ const ChatComposerNewComponent = ({
         content: parked || readPersistedDraft(owner),
       };
     }
+    retireClipboardDraft();
     writeComposerMessage(claimedArrivalDraftRef.current.content);
     return () => {
       const outgoing = messageRef.current;
@@ -4088,7 +4103,7 @@ const ChatComposerNewComponent = ({
         }
       });
     };
-  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
+  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage, retireClipboardDraft]);
 
   // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
   // into the local message and notify the parent it was consumed. This runs in an EFFECT,
@@ -4101,10 +4116,11 @@ const ChatComposerNewComponent = ({
       return;
     }
     consumedPrefillRef.current = prefillText;
+    retireClipboardDraft();
     writeComposerMessage(prefillText);
     onPrefillConsumed?.();
     setSendPendingFlag(false);
-  }, [prefillText, onPrefillConsumed, writeComposerMessage]);
+  }, [prefillText, onPrefillConsumed, writeComposerMessage, retireClipboardDraft]);
 
   /**
    * A draft can also be parked while this composer is on screen; a send that
@@ -4146,10 +4162,11 @@ const ChatComposerNewComponent = ({
     }
     if (messageRef.current.trim()) return;
     deferredHandbackRef.current = null;
+    retireClipboardDraft();
     writeComposerMessage(deferred.content);
     setLocalNotice(restoredDraftNotice());
     clearDraftContent(conversationId);
-  }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
+  }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage, retireClipboardDraft]);
 
   const appliedDraftReplacementRef = useRef(0);
   useEffect(() => {
@@ -4158,18 +4175,21 @@ const ChatComposerNewComponent = ({
     appliedDraftReplacementRef.current = draftReplacement.nonce;
     seenParkedDraftRef.current = draftReplacement.content;
     deferredHandbackRef.current = null;
+    retireClipboardDraft();
     writeComposerMessage(draftReplacement.content);
     onDraftReplacementApplied?.();
-  }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage]);
+  }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage, retireClipboardDraft]);
 
   useEffect(() => {
     if (!deferredUnsentDraft || messageRef.current.trim()) return;
     setSendPendingFlag(false);
+    retireClipboardDraft();
     writeComposerMessage(deferredUnsentDraft);
     setLocalNotice(restoredDraftNotice());
     clearDeferredUnsentDraft(conversationId);
   }, [
     clearDeferredUnsentDraft,
+    retireClipboardDraft,
     conversationId,
     deferredUnsentDraft,
     message,
@@ -4217,9 +4237,10 @@ const ChatComposerNewComponent = ({
     // this send's.
     if (live) return;
     setSendPendingFlag(false);
+    retireClipboardDraft();
     writeComposerMessage(parkedSend.content);
     setLocalNotice(RESTORED_BLOCKED_SEND_NOTICE);
-  }, [clearParkedSend, conversationId, parkedSend, writeComposerMessage]);
+  }, [clearParkedSend, conversationId, parkedSend, writeComposerMessage, retireClipboardDraft]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //
@@ -4394,6 +4415,7 @@ const ChatComposerNewComponent = ({
       const admission = queuedAdmissionRef.current.get(id);
       if (admission) admission.active = false;
       editingQueuedIdRef.current = id;
+      retireClipboardDraft();
       writeComposerMessage(target.args[0]);
       const attachmentsToRestore = target.args[1];
       if (attachmentsToRestore && attachmentsToRestore.length > 0) {
@@ -4401,7 +4423,7 @@ const ChatComposerNewComponent = ({
       }
       focusComposer();
     },
-    [addChatAttachments, writeComposerMessage, focusComposer],
+    [addChatAttachments, writeComposerMessage, focusComposer, retireClipboardDraft],
   );
 
   /**

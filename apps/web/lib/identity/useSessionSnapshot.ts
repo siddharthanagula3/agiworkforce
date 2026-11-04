@@ -6,26 +6,46 @@ import type { SessionAuthority } from './request-authority';
 
 export type IdentitySessionSnapshot = SessionAuthority;
 
-export function useSessionSnapshot(): () => IdentitySessionSnapshot | null {
+function useIdentityObservation() {
   const clerk = useClerk();
   const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
   const current = useRef({ clerk, isLoaded, isSignedIn, userId, sessionId });
   const generation = useRef(0);
   const renderedIdentity = `${isLoaded}:${isSignedIn}:${userId}:${sessionId}`;
-  const observed = useRef({ clerk, session: clerk.session, userId: clerk.user?.id, renderedIdentity });
+  const observed = useRef({ clerk, loaded: clerk.loaded, session: clerk.session, sessionId: clerk.session?.id, sessionUserId: clerk.session?.user?.id, userId: clerk.user?.id, renderedIdentity });
   const observe = useCallback(() => {
     const sdk = current.current.clerk;
     const previous = observed.current;
     const rendered = current.current;
     const identity = `${rendered.isLoaded}:${rendered.isSignedIn}:${rendered.userId}:${rendered.sessionId}`;
-    if (previous.clerk !== sdk || previous.session !== sdk.session || previous.userId !== sdk.user?.id || previous.renderedIdentity !== identity) {
+    if (previous.clerk !== sdk || previous.loaded !== sdk.loaded || previous.session !== sdk.session || previous.sessionId !== sdk.session?.id || previous.sessionUserId !== sdk.session?.user?.id || previous.userId !== sdk.user?.id || previous.renderedIdentity !== identity) {
       generation.current += 1;
-      observed.current = { clerk: sdk, session: sdk.session, userId: sdk.user?.id, renderedIdentity: identity };
+      observed.current = { clerk: sdk, loaded: sdk.loaded, session: sdk.session, sessionId: sdk.session?.id, sessionUserId: sdk.session?.user?.id, userId: sdk.user?.id, renderedIdentity: identity };
     }
   }, []);
   current.current = { clerk, isLoaded, isSignedIn, userId, sessionId };
   observe();
+  return { current, generation, observe };
+}
 
+export function useReadonlyIdentityLifetime(): () => { isCurrent: () => boolean } {
+  const { generation, observe } = useIdentityObservation();
+  return useCallback(() => {
+    observe();
+    const capturedGeneration = generation.current;
+    let retired = false;
+    return {
+      isCurrent: () => {
+        observe();
+        if (generation.current !== capturedGeneration) retired = true;
+        return !retired;
+      },
+    };
+  }, [generation, observe]);
+}
+
+export function useSessionSnapshot(): () => IdentitySessionSnapshot | null {
+  const { current, generation, observe } = useIdentityObservation();
   return useCallback(() => {
     const rendered = current.current;
     const sdk = rendered.clerk;
@@ -59,5 +79,5 @@ export function useSessionSnapshot(): () => IdentitySessionSnapshot | null {
           },
         }
       : null;
-  }, [observe]);
+  }, [current, generation, observe]);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew } from './ChatComposerNew';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
@@ -310,5 +310,100 @@ describe('ChatComposerNew attachment sources', () => {
       '[attachment unavailable: cut.jpg could not be sent because the location and camera details in it could not be removed.]',
     );
     expect(onSend.mock.calls[0]?.[1]).toBeUndefined();
+  });
+});
+
+const clipboardFixture = vi.hoisted(() => ({
+  auth: { isLoaded: true, isSignedIn: false, userId: null, sessionId: null },
+  sdk: { loaded: true, user: null, session: null },
+  read: vi.fn<() => Promise<{ text?: string; textTruncated: boolean }>>(),
+}));
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => clipboardFixture.auth,
+  useClerk: () => clipboardFixture.sdk,
+}));
+
+type DesktopHostModule = typeof import('@/features/desktop-host');
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<DesktopHostModule>()),
+  readHostClipboard: clipboardFixture.read,
+}));
+
+type PlusMenuModule = typeof import('./ComposerPlusMenu');
+vi.mock('./ComposerPlusMenu', async (importOriginal) => ({
+  ...(await importOriginal<PlusMenuModule>()),
+  ComposerPlusMenu: ({ onAttachClipboard, isReadingClipboard }: {
+    onAttachClipboard: () => void;
+    isReadingClipboard: boolean;
+  }) => (
+    <button onClick={onAttachClipboard} disabled={isReadingClipboard}>
+      Attach clipboard
+    </button>
+  ),
+}));
+
+function pendingClipboard() {
+  let resolve!: (snapshot: { text?: string; textTruncated: boolean }) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<{ text?: string; textTruncated: boolean }>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  clipboardFixture.read.mockReturnValueOnce(promise);
+  return { resolve, reject };
+}
+
+describe('deferred clipboard ownership in the real composer', () => {
+  beforeEach(() => {
+    clipboardFixture.auth.isLoaded = true;
+    clipboardFixture.sdk.loaded = true;
+    useChatStore.getState().reset();
+    useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
+  });
+
+  it('attaches a stable signed-out read without requiring session authority', async () => {
+    const pending = pendingClipboard();
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
+    expect(clipboardFixture.read).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Attach clipboard' })).toBeDisabled();
+    await act(async () => pending.resolve({ text: 'local clipboard', textTruncated: false }));
+    expect(await screen.findByRole('button', { name: /^Remove clipboard-.*\.txt$/ })).toBeTruthy();
+  });
+
+  it('discards late data after the rendered draft changes', async () => {
+    const pending = pendingClipboard();
+    const { rerender } = render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
+    rerender(<ChatComposerNew onSend={vi.fn()} conversationId="conversation-b" />);
+    await act(async () => pending.resolve({ text: 'old draft data', textTruncated: false }));
+    expect(screen.queryByRole('button', { name: /^Remove clipboard-/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Attach clipboard' })).toBeEnabled();
+  });
+
+  it('discards a late empty result after live identity readiness changes', async () => {
+    const pending = pendingClipboard();
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
+    clipboardFixture.sdk.loaded = false;
+    await act(async () => pending.resolve({ textTruncated: false }));
+    expect(screen.queryByText('Your clipboard is empty, so there was nothing to attach.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Attach clipboard' })).toBeEnabled();
+  });
+
+  it('discards a late error after navigation and does not unblock the newer read', async () => {
+    const first = pendingClipboard();
+    const { rerender } = render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
+    rerender(<ChatComposerNew onSend={vi.fn()} conversationId="conversation-b" />);
+    const second = pendingClipboard();
+    fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
+    await act(async () => first.reject(new Error('old clipboard failure')));
+    expect(screen.queryByText('The clipboard could not be read.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Attach clipboard' })).toBeDisabled();
+    await act(async () => second.resolve({ text: 'new draft data', textTruncated: false }));
+    expect(await screen.findByRole('button', { name: /^Remove clipboard-.*\.txt$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Attach clipboard' })).toBeEnabled();
   });
 });
