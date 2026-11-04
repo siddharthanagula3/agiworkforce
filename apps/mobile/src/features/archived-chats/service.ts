@@ -28,14 +28,13 @@ const BulkConversationResponseSchema = z.object({
 
 async function postBulkConversationAction(
   action: BulkConversationAction,
-  account?: CloudAccountEpoch,
+  account: CloudAccountEpoch,
   signal?: AbortSignal,
 ): Promise<number> {
-  if (account !== undefined) assertCloudAccountEpochCurrent(account);
-  const response = account === undefined
-    ? await api.post<unknown>('/api/chat/conversations/bulk', { action })
-    : await api.post<unknown>('/api/chat/conversations/bulk', { action }, { accountEpoch: account, ...(signal ? { signal } : {}) });
-  if (account !== undefined) assertCloudAccountEpochCurrent(account);
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.post<unknown>('/api/chat/conversations/bulk', { action },
+    { accountEpoch: account, ...(signal ? { signal } : {}) });
+  assertCloudAccountEpochCurrent(account);
   const data = BulkConversationResponseSchema.parse(response);
   return data.affectedCount;
 }
@@ -130,10 +129,16 @@ export async function deleteAllArchivedConversations(
   return postBulkConversationAction('delete_archived', account, signal);
 }
 
-export async function archiveAllConversations(): Promise<number> {
-  return postBulkConversationAction('archive_all');
+export async function archiveAllConversations(
+  account: CloudAccountEpoch,
+  signal?: AbortSignal,
+): Promise<number> {
+  return postBulkConversationAction('archive_all', account, signal);
 }
 
-export async function deleteAllConversations(): Promise<number> {
-  return postBulkConversationAction('delete_all');
+export async function deleteAllConversations(
+  account: CloudAccountEpoch,
+  signal?: AbortSignal,
+): Promise<number> {
+  return postBulkConversationAction('delete_all', account, signal);
 }

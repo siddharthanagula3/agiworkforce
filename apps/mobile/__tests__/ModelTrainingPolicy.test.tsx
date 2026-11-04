@@ -25,8 +25,10 @@ jest.mock('../stores/settingsStore', () => ({
 }));
 
 jest.mock('../src/features/waitlist/store', () => ({
-  useWaitlistStore: (selector: (state: { cloudUnlocked: boolean }) => unknown) =>
-    selector({ cloudUnlocked: false }),
+  useWaitlistStore: Object.assign(
+    (selector: (state: { cloudUnlocked: boolean }) => unknown) => selector({ cloudUnlocked: false }),
+    { getState: () => ({ cloudUnlocked: false }), subscribe: () => () => {} },
+  ),
 }));
 
 jest.mock('../lib/safeOpenURL', () => ({

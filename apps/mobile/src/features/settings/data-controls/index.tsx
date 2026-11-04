@@ -25,6 +25,7 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
@@ -38,6 +39,13 @@ import {
 
 type BulkChatAction = 'archive' | 'delete';
 
+type BulkChatScope = { account: CloudAccountEpoch | null; active: boolean };
+type BulkChatIntent = {
+  owner: BulkChatScope;
+  controller: AbortController;
+  phase: 'first' | 'second' | 'running' | 'finished';
+};
+
 export default function DataControlsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -47,6 +55,50 @@ export default function DataControlsScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const loadConversations = useChatMessageStore((s) => s.loadConversations);
+
+  const [bulkScope, setBulkScope] = useState<BulkChatScope | null>(null);
+  const bulkScopeRef = useRef<BulkChatScope | null>(null);
+  const bulkIntent = useRef<BulkChatIntent | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    const retire = () => {
+      if (bulkScopeRef.current) bulkScopeRef.current.active = false;
+      bulkScopeRef.current = null;
+      const intent = bulkIntent.current;
+      bulkIntent.current = null;
+      if (intent) {
+        intent.phase = 'finished';
+        intent.controller.abort();
+      }
+    };
+    const renew = () => {
+      retire();
+      const owner = { account: captureCloudAccountEpoch(), active: true };
+      bulkScopeRef.current = owner;
+      setBulkScope(owner);
+      setBulkAction(null);
+    };
+    renew();
+    const stopAccount = subscribeCloudAccountEpochChange(renew);
+    const stopMode = useChatAppModeStore.subscribe((next, previous) => {
+      if (next.appMode !== previous.appMode) renew();
+    });
+    const stopAuth = useAuthStore.subscribe((next, previous) => {
+      if (next.clerkUserId !== previous.clerkUserId ||
+        next.isClerkSignedIn !== previous.isClerkSignedIn ||
+        next.isClerkLoaded !== previous.isClerkLoaded) renew();
+    });
+    const stopAccess = useWaitlistStore.subscribe((next, previous) => {
+      if (next.cloudUnlocked !== previous.cloudUnlocked) renew();
+    });
+    return () => {
+      retire();
+      stopAccount();
+      stopMode();
+      stopAuth();
+      stopAccess();
+    };
+  }, []));
 
   const syncOperation = useRef<AbortController | null>(null);
   const focused = useRef(false);
@@ -136,119 +188,112 @@ export default function DataControlsScreen() {
     );
   };
 
-  const requireCloudChats = useCallback((): boolean => {
-    if (!cloudUnlocked) {
-      Alert.alert(
-        'AGI Cloud required',
-        'Sign in to AGI Cloud to archive or delete your cloud chat history.',
-      );
-      return false;
+  const beginBulkChatAction = useCallback((action: BulkChatAction) => {
+    const owner = bulkScope;
+    if (!owner?.active || bulkScopeRef.current !== owner || bulkIntent.current) return;
+    const auth = useAuthStore.getState();
+    if (!cloudUnlocked || !useWaitlistStore.getState().cloudUnlocked) {
+      Alert.alert('AGI Cloud required', 'Sign in to AGI Cloud to archive or delete your cloud chat history.');
+      return;
     }
-    if (appMode !== 'cloud') {
-      Alert.alert(
-        'Chat is set to Local Mode',
-        'Switch chat to AGI Cloud to archive or delete your Cloud chats.',
-      );
-      return false;
+    if (appMode !== 'cloud' || useChatAppModeStore.getState().appMode !== 'cloud') {
+      Alert.alert('Chat is set to Local Mode', 'Switch chat to AGI Cloud to archive or delete your Cloud chats.');
+      return;
     }
-    return true;
-  }, [appMode, cloudUnlocked]);
-
-  const runBulkChatAction = useCallback(
-    (action: BulkChatAction, account: CloudAccountEpoch) => {
-      if (
-        !isCloudAccountEpochCurrent(account) ||
-        useChatAppModeStore.getState().appMode !== 'cloud'
-      )
-        return;
-      setBulkAction(action);
-      const request = action === 'archive' ? archiveAllConversations() : deleteAllConversations();
-      request
-        .then(async (affectedCount) => {
-          if (!isCloudAccountEpochCurrent(account)) return;
+    const account = owner.account;
+    if (!isCloudAccountEpochCurrent(account) || !auth.isClerkLoaded ||
+      !auth.isClerkSignedIn || auth.clerkUserId !== account.ownerId) return;
+    const intent: BulkChatIntent = { owner, controller: new AbortController(), phase: 'first' };
+    bulkIntent.current = intent;
+    setBulkAction(action);
+    const isCurrent = () => {
+      const currentAuth = useAuthStore.getState();
+      return owner.active && bulkScopeRef.current === owner && bulkIntent.current === intent &&
+        !intent.controller.signal.aborted && isCloudAccountEpochCurrent(account) &&
+        useChatAppModeStore.getState().appMode === 'cloud' &&
+        useWaitlistStore.getState().cloudUnlocked && currentAuth.isClerkLoaded &&
+        currentAuth.isClerkSignedIn && currentAuth.clerkUserId === account.ownerId;
+    };
+    const finish = () => {
+      if (!isCurrent()) return;
+      intent.phase = 'finished';
+      bulkIntent.current = null;
+      setBulkAction(null);
+    };
+    const cancel = (phase: BulkChatIntent['phase']) => {
+      if (isCurrent() && intent.phase === phase) finish();
+    };
+    const run = async () => {
+      if (!isCurrent() || intent.phase !== 'second') return;
+      intent.phase = 'running';
+      try {
+        const affectedCount = await (action === 'archive'
+          ? archiveAllConversations(account, intent.controller.signal)
+          : deleteAllConversations(account, intent.controller.signal));
+        if (!isCurrent()) return;
+        let refreshFailed = false;
+        try {
           await loadConversations();
-          if (!isCloudAccountEpochCurrent(account)) return;
-          const noun = affectedCount === 1 ? 'chat' : 'chats';
-          Alert.alert(
-            action === 'archive' ? 'Chats archived' : 'Chats deleted',
-            action === 'archive'
-              ? `${affectedCount} ${noun} moved to Archived chats.`
-              : `${affectedCount} ${noun} deleted.`,
-          );
-        })
-        .catch(() => {
-          if (!isCloudAccountEpochCurrent(account)) return;
-          Alert.alert(
-            action === 'archive' ? 'Could not archive chats' : 'Could not delete chats',
-            'AGI could not reach your AGI Cloud chat history. Check your connection and try again.',
-          );
-        })
-        .finally(() => setBulkAction(null));
-    },
-    [loadConversations],
-  );
-
-  const handleArchiveAll = useCallback(() => {
-    if (!requireCloudChats()) return;
-    const account = captureCloudAccountEpoch();
-    if (!account) return;
+          refreshFailed = Boolean(useChatMessageStore.getState().conversationLoadError);
+        } catch {
+          refreshFailed = true;
+        }
+        if (!isCurrent()) return;
+        const noun = affectedCount === 1 ? 'chat' : 'chats';
+        Alert.alert(
+          action === 'archive' ? 'Chats archived' : 'Chats deleted',
+          (action === 'archive'
+            ? `${affectedCount} ${noun} moved to Archived chats.`
+            : `${affectedCount} ${noun} deleted.`) +
+          (refreshFailed ? '\n\nThe change was confirmed, but the chat list could not be refreshed. Refresh the list to see the current history.' : ''),
+        );
+      } catch {
+        if (!isCurrent()) return;
+        Alert.alert(
+          action === 'archive' ? 'Archive outcome unknown' : 'Delete outcome unknown',
+          'The change could not be confirmed. Some chats may already have changed. Check your Cloud chat history before starting another bulk action.',
+        );
+      } finally {
+        finish();
+      }
+    };
     Alert.alert(
-      'Archive all chats?',
-      'Every AGI Cloud chat moves to Archived chats, where you can restore it.',
+      action === 'archive' ? 'Archive all chats?' : 'Delete all chats?',
+      action === 'archive'
+        ? 'Every AGI Cloud chat moves to Archived chats, where you can restore it.'
+        : 'Deletes every AGI Cloud chat, archived ones too, on all devices; restorable on the web for 30 days.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => cancel('first') },
         {
-          text: 'Archive all',
+          text: action === 'archive' ? 'Archive all' : 'Delete all',
           style: 'destructive',
           onPress: () => {
+            if (!isCurrent() || intent.phase !== 'first') return;
+            intent.phase = 'second';
             Alert.alert(
-              'Archive every cloud chat?',
-              'Your chat list will be empty until you restore chats from Archived chats.',
+              action === 'archive' ? 'Archive every cloud chat?' : 'Are you absolutely sure?',
+              action === 'archive'
+                ? 'Your chat list will be empty until you restore chats from Archived chats.'
+                : 'Your entire AGI Cloud chat history will be deleted.',
               [
-                { text: 'Cancel', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel', onPress: () => cancel('second') },
                 {
-                  text: 'Yes, archive all',
+                  text: action === 'archive' ? 'Yes, archive all' : 'Yes, delete all chats',
                   style: 'destructive',
-                  onPress: () => runBulkChatAction('archive', account),
+                  onPress: () => { void run(); },
                 },
               ],
+              { cancelable: true, onDismiss: () => cancel('second') },
             );
           },
         },
       ],
+      { cancelable: true, onDismiss: () => cancel('first') },
     );
-  }, [requireCloudChats, runBulkChatAction]);
+  }, [appMode, bulkScope, cloudUnlocked, loadConversations]);
 
-  const handleDeleteAll = useCallback(() => {
-    if (!requireCloudChats()) return;
-    const account = captureCloudAccountEpoch();
-    if (!account) return;
-    Alert.alert(
-      'Delete all chats?',
-      'Deletes every AGI Cloud chat, archived ones too, on all devices; restorable on the web for 30 days.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete all',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Are you absolutely sure?',
-              'Your entire AGI Cloud chat history will be deleted.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Yes, delete all chats',
-                  style: 'destructive',
-                  onPress: () => runBulkChatAction('delete', account),
-                },
-              ],
-            );
-          },
-        },
-      ],
-    );
-  }, [requireCloudChats, runBulkChatAction]);
+  const handleArchiveAll = useCallback(() => beginBulkChatAction('archive'), [beginBulkChatAction]);
+  const handleDeleteAll = useCallback(() => beginBulkChatAction('delete'), [beginBulkChatAction]);
 
   const bulkBusy = bulkAction !== null;
 
