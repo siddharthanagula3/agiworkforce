@@ -2994,8 +2994,9 @@ Remote approval watching acquires an invalidatable observation lease; observing
 does not itself claim transport, and a progressed current watch begins its own
 request before following the run.
 
-Restored approval/input turns without stored authority still use the inherited
-raw `getToken` fallback. This is not full persisted provenance or workspace
+At this slice, restored approval/input turns without stored authority retained
+the inherited raw `getToken` fallback; the separate correction below supersedes
+that fallback only. Neither slice establishes persisted provenance or workspace
 pinning. The reader still awaits `reader.cancel()`, and continuation's Set claim
 is released in finalization; stalled cleanup can therefore retain liveness
 constraints. No already-dispatched server operation is undone. Server content and
@@ -3013,9 +3014,66 @@ controlled gates/streams and awaits recorded operations before resetting mocks.
 These authored fixtures and source review are not browser, database, delivery or
 runtime acceptance; no tests/checks were run for this documentation update.
 
+### Replay leaf correction requires an explicit compatibility contract
+
+Further source tracing leaves the server replay-leaf change held, not implemented.
+`apps/mobile/stores/chat/chatExecutionStore.ts:1191–1216` deliberately uses
+`writeCloudBranchPoint` to re-save an existing user question: the messages route
+stamps a previously linear history into parent links and selects that question as
+the branch anchor. The real send path at `1960–1982` invokes it for regeneration
+or an explicit branch; retry, research and plan variants reuse this machinery.
+`cloud-message-variants.test.ts` explicitly asserts re-saving the original question
+rather than creating another one. This fixture was read, not executed.
+
+A server-only `messageExists` guard that prevents all existing-row leaf promotion
+would change that established client contract. Conversation PUT validates the
+selected live message under owner/org scope and updates the leaf, but does not
+stamp linear parents; replacing the save with PUT alone therefore loses part of
+the operation. Save followed by PUT is not an atomic substitute and would require
+coherent original-owner, cancellation and subsequent history/read semantics.
+Existing mobile account-epoch/generation checks and post-write checks remain
+counterguards. The branch save has no turn abort signal, however, and precedes
+creation of the main turn controller; a later retirement cannot roll back an
+accepted branch point.
+
+The automatic assistant writer's existing replay guard and client single/bulk
+selection behavior must remain distinguished. A correction needs coordinated
+explicit intent, protocol/caller rollout and old-installed-client semantics,
+including linear conversion and intentional selection, rather than an unreviewed
+flag or blanket replay refusal. No implementation-ready design, observed loss,
+server migration or production correction is claimed here. This extends the
+existing graph boundary without adding a duplicate defect or production slice.
+
+## Restored chat actions bind once to a canonical session
+
+Accepted commit `26c524cebdbef29ce9b7c96a9ee7d296918ceb3a` changes
+`useChatStream.ts` and its settlement-ownership fixture source. The shared
+`bindPendingTurnAuthority` preserves a current existing authority, refuses a
+retired existing authority without rebinding, and captures a canonical session
+only when the pending record has none. Both approval and input resolvers bind
+before modifying decisions/responses, UI or request ownership; absent identity
+refuses the action. Their snapshot hooks replace the raw token fallback with
+captured bearer authority through the existing request settlement path.
+
+The restored approval follower uses the same helper. A newly bound restored
+record owns its authority rather than registering it for the current hook's
+unmount retirement. Partial input can consequently retain its original session
+across a same-session remount. This does not change retirement of older inherited
+turn authorities, or provide historical account/workspace provenance for a
+restored record that was previously unbound. Global pending-record retention,
+unobserved SDK transitions/ABA, workspace selection and server ordering remain
+outside this correction; no dispatched operation is rolled back.
+
+New unexecuted cases cover partial-input remount, replacement-session refusal,
+missing canonical identity, identity change during token acquisition and a
+standalone restored approval bearer. They disable active-conversation following;
+the follower's remount lifetime is source-traced, not directly established by a
+new regression case. No runtime or browser acceptance is claimed. The separate
+server replay/intent compatibility blocker above remains held and unchanged.
+
 ## Reconstruction boundary
 
-Only the one hundred and six accepted production slices traced above are represented as
+Only the one hundred and seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
