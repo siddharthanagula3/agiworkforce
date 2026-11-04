@@ -4235,6 +4235,7 @@ export function useChatStream(
             ? readLocalPersonalContext(
                 chatState.conversations.find((conversation) => conversation.id === conversationId)
                   ?.projectId ?? null,
+                authority?.session ?? null,
               )
             : null;
           const styleInstruction =

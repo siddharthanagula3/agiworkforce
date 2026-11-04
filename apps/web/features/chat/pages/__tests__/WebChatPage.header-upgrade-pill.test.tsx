@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
@@ -283,6 +284,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import promotionConfig from '@/config/free-model-promotion.json';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -342,7 +345,7 @@ describe('the chat header upgrade pill', () => {
 
   it('shows on the Free plan and opens the upgrade flow', async () => {
     setTier('free');
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const pill = await screen.findByTestId('header-upgrade-pill');
     expect(pill.textContent).toBe('Upgrade');
@@ -353,7 +356,7 @@ describe('the chat header upgrade pill', () => {
 
   it('is absent on a paid plan', async () => {
     setTier('pro');
-    const { container } = render(<WebChatPage />);
+    const { container } = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() => expect(container.querySelector('[data-app-header]')).not.toBeNull());
     expect(screen.queryByTestId('header-upgrade-pill')).toBeNull();

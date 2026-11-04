@@ -11,14 +11,14 @@ import { useLocalModelSelection } from '@features/desktop-host';
 import { useChatStream } from './useChatStream';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 
-const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
+const authMocks = vi.hoisted(() => ({ getToken: vi.fn(), isSignedIn: true, isLoaded: true }));
 vi.mock('@clerk/nextjs', async () => {
   const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
   return createClerkSessionFixture(() => ({
     getToken: authMocks.getToken,
     userId: 'user-1',
-    isSignedIn: true,
-    isLoaded: true,
+    isSignedIn: authMocks.isSignedIn,
+    isLoaded: authMocks.isLoaded,
     sessionId: 'session-1',
   }));
 });
@@ -99,6 +99,8 @@ function assistantMessage() {
 
 beforeEach(() => {
   runtimeListeners.clear();
+  authMocks.isSignedIn = true;
+  authMocks.isLoaded = true;
   seedConversation();
   useLocalModelSelection.getState().select(LOCAL_MODEL);
   chatOutcome = {
@@ -123,6 +125,20 @@ afterEach(() => {
 });
 
 describe('a turn on a model installed on this machine', () => {
+  it.each(['anonymous', 'initializing'] as const)('keeps %s Local generation usable without personal context or authentication requests', async (identity) => {
+    authMocks.isSignedIn = false;
+    authMocks.isLoaded = identity !== 'initializing';
+    authMocks.getToken.mockClear();
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      expect(await result.current.sendMessage('hi', { conversationId: CONVERSATION_ID })).toBe(true);
+    });
+    expect(assistantMessage()?.content).toBe('Hello from this Mac');
+    expect(assistantMessage()?.metadata?.localPersonalContextMissing).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(authMocks.getToken).not.toHaveBeenCalled();
+  });
+
   it('never calls the managed completions route or any other endpoint', async () => {
     const { result } = renderHook(() => useChatStream());
     await act(async () => {

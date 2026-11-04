@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -281,6 +282,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
@@ -331,7 +334,7 @@ const FREE_SUBSCRIPTION: SubscriptionPlan = {
 const QUESTION = 'Which planet has the most moons?';
 
 async function renderChat() {
-  render(<WebChatPage />);
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
   await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
   await act(async () => {
     await Promise.resolve();

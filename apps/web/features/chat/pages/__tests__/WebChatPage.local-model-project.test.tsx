@@ -1,3 +1,6 @@
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@shared/stores/query-client';
+import { MANAGED_CLOUD_WORKSPACES_PATH } from '@agiworkforce/cloud-contracts';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalModel } from '@agiworkforce/local-runtime-contract';
@@ -284,8 +287,12 @@ const PRIVATE_PROMPT = 'my biopsy result says the margins are clear';
 
 function stubFetch() {
   const fetchMock = vi.fn(
-    async () =>
-      new Response(JSON.stringify({}), {
+    async (url: RequestInfo | URL) =>
+      new Response(JSON.stringify(String(url).includes(MANAGED_CLOUD_WORKSPACES_PATH)
+        ? { workspaces: [], activeWorkspaceId: null, activeOrganizationId: null, scope: 'personal' }
+        : String(url).includes('/api/memory/local-context')
+          ? { instructions: null, memory: null, memoryCitations: [] }
+          : {}), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -316,12 +323,13 @@ describe('a chat on a model on this device, started inside a project', () => {
 
   afterEach(() => {
     useLocalModelSelection.getState().select(null);
+    queryClient.clear();
     vi.unstubAllGlobals();
   });
 
   it('is refused before any conversation, title or draft reaches the server', async () => {
     const fetchMock = stubFetch();
-    render(<WebChatPage />);
+    render(<QueryClientProvider client={queryClient}><WebChatPage /></QueryClientProvider>);
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {
@@ -338,7 +346,7 @@ describe('a chat on a model on this device, started inside a project', () => {
 
   it('starts a temporary chat filed under no project when no project is in scope', async () => {
     stubFetch();
-    render(<WebChatPage />);
+    render(<QueryClientProvider client={queryClient}><WebChatPage /></QueryClientProvider>);
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {

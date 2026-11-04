@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -245,6 +246,8 @@ vi.mock('../../services/document-export-service', () => ({
 }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 function seedConversation(): void {
@@ -297,7 +300,7 @@ describe('WebChatPage conversation export (WEB-42)', () => {
 
   it('downloads the open conversation when the header export entry point is used', async () => {
     const user = userEvent.setup();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await user.click(await screen.findByTestId('conversation-export'));
 

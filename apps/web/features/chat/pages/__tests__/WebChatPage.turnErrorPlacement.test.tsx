@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -238,6 +239,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 function openStalledTurn(sentAgoMs: number): void {
@@ -309,7 +312,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('states a reload with no reply directly above the composer', () => {
     openStalledTurn(120_000);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const notice = noticeFor(EMPTY_RESPONSE);
     const composer = screen.getByTestId('chat-composer');
@@ -323,7 +326,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('shares the composer column, so it is never wider than the composer', () => {
     openStalledTurn(120_000);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const column = noticeFor(EMPTY_RESPONSE).parentElement;
     expect(column).not.toBeNull();
@@ -335,7 +338,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('keeps the notice out of the scrolling transcript', () => {
     openStalledTurn(120_000);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     expect(screen.getByTestId('message-list').contains(noticeFor(EMPTY_RESPONSE))).toBe(false);
   });
@@ -343,7 +346,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('carries the retry control the founder used', () => {
     openStalledTurn(120_000);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const notice = noticeFor(EMPTY_RESPONSE);
     expect(notice.querySelector('button[aria-label="Retry this turn"]')).not.toBeNull();
@@ -353,7 +356,7 @@ describe('WebChatPage turn error notice placement', () => {
     openStalledTurn(0);
     useChatStore.getState().setError(SEND_FAILURE, CONVERSATION_ID);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const notice = noticeFor(SEND_FAILURE);
     expect(notice.parentElement).toBe(screen.getByTestId('chat-composer').parentElement);
@@ -363,7 +366,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('stays quiet while a fresh turn is still running', () => {
     openStalledTurn(0);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     expect(screen.queryByText(EMPTY_RESPONSE)).toBeNull();
   });
@@ -371,7 +374,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('names an image generation failure and links to the status page beside retry', () => {
     openFailedImageTurn();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const notice = noticeFor(IMAGE_FAILURE);
     const status = notice.querySelector('a');
@@ -385,7 +388,7 @@ describe('WebChatPage turn error notice placement', () => {
   it('keeps the status link but holds retry while the provider asked to wait', () => {
     openFailedImageTurn({ imageRetryAt: new Date(Date.now() + 60_000).toISOString() });
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const notice = noticeFor(IMAGE_FAILURE);
     expect(notice.querySelector('a[href="/status"]')).not.toBeNull();

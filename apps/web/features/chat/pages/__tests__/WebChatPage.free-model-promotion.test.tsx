@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
@@ -282,6 +283,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import promotionConfig from '@/config/free-model-promotion.json';
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { AVAILABLE_MODELS, useModelStore } from '@shared/stores/model-store';
@@ -316,7 +319,7 @@ function stubFetch() {
 }
 
 async function sentModelAfterSelecting(selected: string): Promise<unknown> {
-  render(<WebChatPage />);
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
   await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
   await waitFor(() => expect(useModelStore.getState().selectedModelId).toBe(PROMOTED_MODEL));
   act(() => {
@@ -384,7 +387,7 @@ describe('a Free account on the chat page while the free model promotion runs', 
       },
     ];
     try {
-      const view = render(<WebChatPage />);
+      const view = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
       await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
       await waitFor(() => expect(useModelStore.getState().selectedModelId).toBe(PROMOTED_MODEL));
       expect(view.queryByTestId('usage-warning')).toBeNull();

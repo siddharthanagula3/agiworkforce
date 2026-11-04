@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -248,6 +249,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 describe('WebChatPage settings deep link query parameter', () => {
@@ -270,7 +273,7 @@ describe('WebChatPage settings deep link query parameter', () => {
   it('opens the settings modal at the section named by ?settings= and strips the query', async () => {
     mocks.queryString = 'settings=archived';
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() => expect(mocks.openSettings).toHaveBeenCalledWith('archived'));
     await waitFor(() =>
@@ -281,7 +284,7 @@ describe('WebChatPage settings deep link query parameter', () => {
   it('ignores a settings query key the web modal cannot render', async () => {
     mocks.queryString = 'settings=not-a-real-section';
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.openSettings).not.toHaveBeenCalled();
@@ -290,7 +293,7 @@ describe('WebChatPage settings deep link query parameter', () => {
   it('does nothing when no settings query key is present', async () => {
     mocks.queryString = '';
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.openSettings).not.toHaveBeenCalled();
@@ -301,7 +304,7 @@ describe('WebChatPage settings deep link query parameter', () => {
     mocks.sessionId = '00000000-0000-4000-8000-000000000123';
     mocks.queryString = 'share=true';
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() =>
       expect(screen.getByTestId('share-conversation-dialog')).toHaveAttribute('data-open', 'true'),

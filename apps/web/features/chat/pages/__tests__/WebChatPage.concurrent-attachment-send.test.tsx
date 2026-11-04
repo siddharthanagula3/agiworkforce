@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');
@@ -278,6 +279,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { firstParkedSend, selectParkedSends, useChatStore } from '@shared/stores/web-chat-store';
@@ -319,7 +322,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   });
 
   it('blocks a second, different send while the first attachment upload is in flight and parks it where a remount can still find it', async () => {
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
@@ -369,7 +372,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   });
 
   it('lets the first send proceed normally once its upload settles', async () => {
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
@@ -390,7 +393,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   it('does not send or recover an old payload when the SDK switches during upload', async () => {
     const originalSession = mocks.sdk.session;
     const originalUser = mocks.sdk.user;
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     act(() => {
       mocks.composerOnSend!(FIRST_MESSAGE, [new File(['notes'], 'notes.txt', { type: 'text/plain' })]);
@@ -432,7 +435,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
         throw new Error('Storage unavailable');
       },
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
@@ -460,7 +463,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   });
 
   it('forwards the composer connector state to sendMessage', async () => {
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {
@@ -508,7 +511,7 @@ function conversationTitles(): unknown[] {
 }
 
 async function sendTyped() {
-  render(<WebChatPage />);
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
   await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
   act(() => {
     mocks.composerOnSend!(PROMPT, undefined, undefined, {});
@@ -557,7 +560,7 @@ describe('WebChatPage typed image request by plan', () => {
   it('does not dispatch a typed free image when catalogue authority is unknown', async () => {
     useBillingStore.setState({ subscription: subscription('free') });
     stubFetch();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     let outcome: Awaited<ReturnType<ComposerOnSend>>;
     await act(async () => { outcome = await mocks.composerOnSend!(PROMPT); });
@@ -574,7 +577,7 @@ describe('WebChatPage typed image request by plan', () => {
         ? new Promise<Response>((resolve) => { finishCatalogue = resolve; })
         : Promise.resolve(Response.json({})),
     ));
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     let pending!: ReturnType<ComposerOnSend>;
     act(() => { pending = mocks.composerOnSend!(PROMPT); });

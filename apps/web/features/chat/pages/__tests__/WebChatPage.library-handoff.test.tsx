@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -237,6 +238,8 @@ vi.mock('@features/library/lib/library-chat-handoff', () => ({
 }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 function lastDroppedFiles(): File[] | null {
@@ -275,7 +278,7 @@ describe('WebChatPage library hand-off', () => {
     mocks.takeStagedLibraryAttachments.mockReturnValueOnce([file]);
     mocks.params = {};
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() => expect(lastDroppedFiles()).toEqual([file]));
   });
@@ -299,7 +302,7 @@ describe('WebChatPage library hand-off', () => {
       },
     ]);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() => expect(mocks.composerDroppedFiles).toHaveBeenCalled());
     expect(mocks.takeStagedLibraryAttachments).not.toHaveBeenCalled();

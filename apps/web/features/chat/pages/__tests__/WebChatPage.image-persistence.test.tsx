@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import type { ImageRevisionRequest } from '../../components/ImageGenerationCard';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -401,6 +402,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
 import { useImageTranscriptRecoveryStore } from '../../stores/image-transcript-recovery-store';
 import { trackMessageSave } from '../../lib/pending-message-saves';
@@ -489,7 +492,7 @@ describe('WebChatPage paid image transcript recovery', () => {
         code: 'service_unavailable',
       });
     });
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger video generation' }));
 
@@ -550,7 +553,7 @@ describe('WebChatPage paid image transcript recovery', () => {
         code: 'service_unavailable',
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger video generation from an image' }));
 
@@ -571,7 +574,7 @@ describe('WebChatPage paid image transcript recovery', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     mocks.generateImage.mockResolvedValue(generatedImageResult());
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
 
@@ -621,7 +624,7 @@ describe('WebChatPage paid image transcript recovery', () => {
     mocks.generateImage.mockRejectedValue(
       new Error('HTTP 500: SELECT secret FROM customer_records trace 0xdeadbeef'),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
 
@@ -648,7 +651,7 @@ describe('WebChatPage paid image transcript recovery', () => {
         return jsonResponse(200, { message: { id: body['id'] } });
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
 
@@ -684,14 +687,14 @@ describe('WebChatPage paid image transcript recovery', () => {
       return jsonResponse(403, { error: { message: 'intercepted prompt save refusal' } });
     });
     vi.stubGlobal('fetch', fetchMock);
-    const initialPage = render(<WebChatPage />);
+    const initialPage = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     initialPage.unmount();
     mocks.deleteMessage = undefined;
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.deleteMessage).toBeTypeOf('function'));
     const pendingUserMessage = useChatStore
       .getState()
@@ -741,7 +744,7 @@ describe('WebChatPage paid image transcript recovery', () => {
           }),
       );
       vi.stubGlobal('fetch', fetchMock);
-      render(<WebChatPage />);
+      render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
       fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
       await act(async () => {
@@ -789,14 +792,14 @@ describe('WebChatPage paid image transcript recovery', () => {
       await providerGate;
       return generatedImageResult(GENERATED_ASSET_URL, executableModel.id);
     });
-    const initialPage = render(<WebChatPage />);
+    const initialPage = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
 
     await waitFor(() => expect(mocks.generateImage).toHaveBeenCalled());
     initialPage.unmount();
     mocks.deleteMessage = undefined;
-    const pendingPage = render(<WebChatPage />);
+    const pendingPage = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.deleteMessage).toBeTypeOf('function'));
     const pendingAssistant = useChatStore
       .getState()
@@ -824,7 +827,7 @@ describe('WebChatPage paid image transcript recovery', () => {
     await waitFor(() => {
       expect(Object.values(useImageTranscriptRecoveryStore.getState().recoveries)).toHaveLength(1);
     });
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     expect(await screen.findByText('Image saved, chat card not saved')).toBeVisible();
     expect(mocks.generateImage).toHaveBeenCalledTimes(1);
     const assistantMessageId = String(assistantBodies[0]?.['id']);
@@ -895,7 +898,7 @@ describe('WebChatPage paid image transcript recovery', () => {
       }),
     );
     mocks.generateImage.mockResolvedValue(generatedImageResult());
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     const regenerateImage = mocks.regenerateImage;
     expect(regenerateImage).toBeTypeOf('function');
 
@@ -989,7 +992,7 @@ describe('WebChatPage paid image transcript recovery', () => {
         }),
       )
       .mockResolvedValueOnce(generatedImageResult(regeneratedImageUrl));
-    const initialPage = render(<WebChatPage />);
+    const initialPage = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     const regenerateImage = mocks.regenerateImage;
     expect(regenerateImage).toBeTypeOf('function');
 
@@ -1027,7 +1030,7 @@ describe('WebChatPage paid image transcript recovery', () => {
     ]);
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-10T12:00:00.000Z'));
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     expect(screen.getByText(/Image generation failed:.*temporarily busy/i)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: /new version/i }));
@@ -1098,7 +1101,7 @@ describe('WebChatPage paid image transcript recovery', () => {
         resetAt: retryAt,
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     const regenerateImage = mocks.regenerateImage;
     expect(regenerateImage).toBeTypeOf('function');
 
@@ -1157,7 +1160,7 @@ describe('WebChatPage paid image transcript recovery', () => {
         resetAt: retryAt,
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
 
@@ -1237,7 +1240,7 @@ describe('WebChatPage saved free limit cards', () => {
         return jsonResponse(200, { success: true, activeLeafMessageId: QUESTION_ID });
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
 
     act(() => mocks.paywallDismiss?.(CARD_ID));
@@ -1263,7 +1266,7 @@ describe('WebChatPage saved free limit cards', () => {
           : jsonResponse(200, {}),
       ),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
 
     act(() => mocks.paywallDismiss?.(CARD_ID));
@@ -1309,7 +1312,7 @@ describe('WebChatPage saved free limit cards', () => {
           : jsonResponse(404, { error: { message: 'Message not found' } });
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
 
     act(() => mocks.paywallDismiss?.(CARD_ID));
@@ -1348,7 +1351,7 @@ describe('WebChatPage saved free limit cards', () => {
         return jsonResponse(200, { success: true, activeLeafMessageId: QUESTION_ID });
       }),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
 
     act(() => mocks.paywallDismiss?.(CARD_ID));
@@ -1369,7 +1372,7 @@ describe('WebChatPage saved free limit cards', () => {
           : jsonResponse(200, {}),
       ),
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.paywallDismiss).toBeTypeOf('function'));
 
     act(() => mocks.paywallDismiss?.(CARD_ID));

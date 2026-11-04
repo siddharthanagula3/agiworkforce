@@ -87,7 +87,7 @@ describe('GET /api/memory/local-context', () => {
   });
 
   it('resolves the caller personal context scoped to user, org and project', async () => {
-    const body = { instructions: 'be brief', memories: [] };
+    const body = { instructions: 'be brief', memory: null, memoryCitations: [] };
     mocks.resolveLocalTurnPersonalContext.mockResolvedValue(body);
 
     const response = await GET(request(`?projectId=${PROJECT}`));
