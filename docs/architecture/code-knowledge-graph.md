@@ -1116,9 +1116,42 @@ continuously observed, and returned policy is not a whole-turn revocation lease.
 Fixture isolation and owner/freshness/seal/refresh regression sources were read,
 not run. No keyring, SQL, network, Rust or deployment acceptance is claimed.
 
+## Workbook loader no longer reuses URI-only bytes
+
+Accepted commit `a521111d3b4224781f5a870bf4c2d6c58c4a5e78` changes
+`apps/web/features/chat/lib/office-file-preview.ts` and two regression sources.
+`loadWorkbookSheets` removes the module's URI-keyed fulfilled/in-flight promise
+cache. Each invocation now fetches with `credentials: 'same-origin'` and
+`cache: 'no-store'`, checks the HTTP result and converts fresh response bytes.
+Sequential and concurrent same-URI calls no longer inherit another invocation's
+cached response; a new authorization refusal is not hidden by that module cache.
+The loader signature, conversions and download behavior remain unchanged, at the
+cost of repeated download, parse and egress work. This is not an account lease
+for an already-running request and does not refresh mounted file-ID caches,
+same-URI effects or persisted previews. Regression sources cover sequential,
+concurrent and post-success refusal paths but remain unexecuted.
+
+## PDF source selection checks normalized origin and exact data MIME
+
+Accepted commit `2251443a34c2434051354244b734b8daf58b31b4` changes
+`apps/web/features/chat/components/artifacts/ArtifactPreview.tsx` and its
+regression source. Data URLs require the exact `application/pdf` MIME boundary
+and a payload comma, while permitting parameter/encoding forms; MIME prefixes
+such as `application/pdfx` no longer qualify. HTTP(S) and root-prefixed candidates
+are parsed against the current origin before checking actual protocol/origin and
+PDF extension or existing PDF metadata. This includes protocol-relative and
+backslash-normalized forms rather than treating a leading slash as sufficient.
+Valid same-origin PDF/metadata forms retain query and fragment; `/api/files/`
+sets the canonical preview query. A normalized pathname beginning with `//`
+remains an absolute verified-origin URL so rendering cannot reinterpret it as a
+new host. Blob MIME/source approval and downloads are unchanged by this slice.
+This is source admission, not arbitrary PDF-content validation or a new sandbox
+guarantee. Parameterized URL/MIME fixtures were read, not run; no browser or
+deployment acceptance is claimed.
+
 ## Reconstruction boundary
 
-Only the forty-six accepted production slices traced above are represented as
+Only the forty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
