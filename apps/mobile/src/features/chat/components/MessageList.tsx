@@ -24,6 +24,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import type { ChatMessage } from '@/types/chat';
 import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
+import type { VoiceOutputOwner } from '@/src/features/voice/services/voiceOutput';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
 const TIME_DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
@@ -84,6 +85,7 @@ function canRetry(message: ChatMessage): boolean {
 
 interface MessageListProps {
   messages: ChatMessage[];
+  speechOwner?: VoiceOutputOwner | null;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
@@ -128,6 +130,7 @@ function turnOutcomeAnnouncement(message: ChatMessage): string {
 
 export function MessageList({
   messages,
+  speechOwner,
   onDeleteMessage,
   onRetryMessage,
   onRetryWithModel,
@@ -203,6 +206,7 @@ export function MessageList({
         <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
           <MessageBubble
             message={item}
+            speechOwner={speechOwner}
             onDeleteMessage={onDeleteMessage}
             onRetryMessage={canRetry(item) ? onRetryMessage : undefined}
             onRetryWithModel={canRetry(item) ? onRetryWithModel : undefined}
@@ -230,6 +234,7 @@ export function MessageList({
     [
       colors,
       messages,
+      speechOwner,
       handleQuoteSelection,
       onDeleteMessage,
       onRetryMessage,

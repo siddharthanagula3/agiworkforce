@@ -5,7 +5,7 @@ import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   Check,
@@ -476,6 +476,7 @@ function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  speechOwner?: voiceOutput.VoiceOutputOwner | null;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
@@ -540,6 +541,7 @@ function MessageActionButton({
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  speechOwner,
   onDeleteMessage,
   onRetryMessage,
   onEditImageArea,
@@ -860,30 +862,49 @@ export const MessageBubble = memo(function MessageBubble({
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
+  const speechRef = useRef<voiceOutput.VoiceOutputHandle | null>(null);
+  const speechScopeRef = useRef<object | null>(null);
+  const speechScope = useMemo(
+    () => ({}),
+    [message.id, message.content, speechOwner],
+  );
+
+  useLayoutEffect(() => {
+    const scope = speechScope;
+    speechScopeRef.current = scope;
+    setIsSpeaking(false);
+    return () => {
+      if (speechScopeRef.current !== scope) return;
+      speechScopeRef.current = null;
+      const speech = speechRef.current;
+      speechRef.current = null;
+      void speech?.stop().catch(() => undefined);
+    };
+  }, [speechScope, setIsSpeaking]);
 
   const handleToggleReadAloud = useCallback(() => {
-    if (isSpeaking) {
-      void voiceOutput.stop();
+    if (speechScopeRef.current !== speechScope) return;
+    const previous = speechRef.current;
+    if (previous) {
+      speechRef.current = null;
+      void previous.stop().catch(() => undefined);
       setIsSpeaking(false);
       return;
     }
-    void voiceOutput.stop();
+    const scope = speechScope;
+    if (!speechOwner?.isCurrent()) return;
+    const speech = speechOwner.start(message.content, {
+      ...voiceOutput.speechOptionsFromSettings(),
+      serverVoice: speechOwner.source?.scope === 'cloud',
+    });
+    speechRef.current = speech;
     setIsSpeaking(true);
-    void voiceOutput
-      .speak(message.content, {
-        ...voiceOutput.speechOptionsFromSettings(),
-        serverVoice: appMode === 'cloud',
-        onDone: () => setIsSpeaking(false),
-        onStopped: () => setIsSpeaking(false),
-      })
-      .catch(() => setIsSpeaking(false));
-  }, [appMode, isSpeaking, message.content, setIsSpeaking]);
-
-  useEffect(() => {
-    return () => {
-      if (isSpeaking) void voiceOutput.stop();
-    };
-  }, [isSpeaking]);
+    void speech.done.then(() => {
+      if (speechRef.current !== speech || speechScopeRef.current !== scope) return;
+      speechRef.current = null;
+      setIsSpeaking(false);
+    });
+  }, [speechOwner, speechScope, message.content, setIsSpeaking]);
 
   const handleShowExport = useCallback(() => {
     setShowExportSheet(true);

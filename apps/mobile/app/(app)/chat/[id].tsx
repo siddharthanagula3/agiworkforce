@@ -74,7 +74,8 @@ import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
 } from '@/src/features/voice/hooks/useVoiceConversation';
-import * as TTS from '@/src/features/voice/services/tts';
+import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
+import { speechSettings } from '@/src/features/voice/services/speechSettings';
 import {
   createMessageIdSet,
   findNewAssistantResponse,
@@ -137,7 +138,6 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
-import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
@@ -314,6 +314,7 @@ export default function ChatScreen() {
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
+  const speechOwner = useVoiceOutputOwner(conversationExecutionMode, id ?? 'unavailable');
   const inFlightTurn = useInFlightTurnRecovery({
     conversationId: id,
     isCloud: conversationExecutionMode === 'cloud',
@@ -408,14 +409,8 @@ export default function ChatScreen() {
   }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
 
   const stopSpeaking = useCallback(() => {
-    void VoiceOutput.stop();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-    };
-  }, [stopSpeaking]);
+    void speechOwner?.stop().catch(() => undefined);
+  }, [speechOwner]);
 
   useEffect(() => {
     if (paywallError) {
@@ -1655,9 +1650,8 @@ export default function ChatScreen() {
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
-    speak: (text, callbacks) =>
-      TTS.speak(text, { ...TTS.speechOptionsFromSettings(), ...callbacks }),
-    stopSpeaking: () => TTS.stop(),
+    speechOwner,
+    speechOptions: speechSettings(),
     onCaptureError: (err) => {
       setVoiceInlineVisible(false);
       Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
@@ -1864,6 +1858,7 @@ export default function ChatScreen() {
           ) : (
             <MessageList
               messages={conversationMessages}
+              speechOwner={speechOwner}
               onDeleteMessage={handleDeleteMessage}
               onReaction={handleReaction}
               onRetryMessage={handleRetryMessage}

@@ -16,6 +16,7 @@ import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import * as TTS from '@/src/features/voice/services/tts';
+import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
 
@@ -172,6 +173,7 @@ function SystemDefaultRow({
 
 export default function VoiceLanguageScreen() {
   const colors = useThemeColors();
+  const speechOwner = useVoiceOutputOwner('local', 'voice-preview');
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
@@ -249,13 +251,13 @@ export default function VoiceLanguageScreen() {
 
   const handlePreview = useCallback(
     (voice: VoiceInfo) => {
-      TTS.speak('This is how AGI will sound.', {
+      speechOwner?.start('This is how AGI will sound.', {
         voice: voice.identifier,
         rate: speechRate,
         pitch: speechPitch,
-      }).catch(() => undefined);
+      });
     },
-    [speechPitch, speechRate],
+    [speechOwner, speechPitch, speechRate],
   );
 
   return (

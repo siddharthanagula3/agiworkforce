@@ -46,7 +46,8 @@ import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
 } from '@/src/features/voice/hooks/useVoiceConversation';
-import * as TTS from '@/src/features/voice/services/tts';
+import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
+import { speechSettings } from '@/src/features/voice/services/speechSettings';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   takeStartWithVoiceOnLaunch,
@@ -196,6 +197,7 @@ export default function ChatTabScreen() {
     (s) => s.jobs[DEFAULT_LOCAL_MODEL_ID]?.status === 'downloading',
   );
   const activeMode = appMode;
+  const speechOwner = useVoiceOutputOwner(activeMode, 'new-chat');
   const activeCloudProjectId = useCloudProjectStore((s) => s.activeProjectId);
   const projectDefaultModelId = useCloudProjectStore((s) =>
     s.activeProjectId ? (s.details[s.activeProjectId]?.defaultModelId ?? null) : null,
@@ -881,9 +883,8 @@ export default function ChatTabScreen() {
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
-    speak: (text, callbacks) =>
-      TTS.speak(text, { ...TTS.speechOptionsFromSettings(), ...callbacks }),
-    stopSpeaking: () => TTS.stop(),
+    speechOwner,
+    speechOptions: speechSettings(),
     onCaptureError: (err) => {
       setVoiceInlineVisible(false);
       Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));

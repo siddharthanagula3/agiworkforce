@@ -6,6 +6,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import * as TTS from '@/src/features/voice/services/tts';
+import type { VoiceOutputOwner } from '@/src/features/voice/services/voiceOutput';
 import {
   activeSpeechLanguage,
   autoListenEnabled,
@@ -72,13 +73,20 @@ describe('speech settings reach every speaking surface', () => {
   });
 });
 
+const speechOwner: VoiceOutputOwner = {
+  source: { scope: 'local' },
+  isCurrent: () => true,
+  start: () => ({ done: Promise.resolve({ status: 'done' }), stop: async () => undefined }),
+  stop: async () => undefined,
+  dispose: async () => undefined,
+};
+
 function Harness({ onCaptureError }: { onCaptureError: (err: unknown) => void }) {
   const conversation = useVoiceConversation({
     enabled: true,
     hapticsEnabled: false,
     sendMessage: async () => 'ok',
-    speak: async () => undefined,
-    stopSpeaking: () => undefined,
+    speechOwner,
     onCaptureError,
   });
   return (
@@ -120,7 +128,11 @@ describe('the Voice Input toggle gates the microphone', () => {
   it('opens a capture in the chosen speech language while Voice Input is on', async () => {
     useSettingsStore.setState({ voiceEnabled: true });
     useLocalSettingsStore.setState({ speechLanguage: 'es' });
-    startSpy.mockResolvedValue({ result: new Promise(() => {}) });
+    startSpy.mockResolvedValue({
+      result: new Promise(() => {}),
+      stop: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    });
 
     const { getByTestId } = render(<Harness onCaptureError={jest.fn()} />);
     await act(async () => {
@@ -128,13 +140,18 @@ describe('the Voice Input toggle gates the microphone', () => {
     });
 
     await waitFor(() => expect(startSpy).toHaveBeenCalled());
-    expect(startSpy.mock.calls[0]?.[2]).toEqual({ lang: 'es' });
+    expect(startSpy.mock.calls[0]?.[2]).toEqual({ lang: 'es', signal: expect.anything() });
+    expect(startSpy.mock.calls[0]?.[2]?.signal?.aborted).toBe(false);
   });
 
   it('surfaces a recognition failure that happens after the capture started', async () => {
     useSettingsStore.setState({ voiceEnabled: true });
     const failure = new VoiceInput.VoiceCaptureError('recognition-error', 'recognizer died');
-    startSpy.mockResolvedValue({ result: Promise.reject(failure) });
+    startSpy.mockResolvedValue({
+      result: Promise.reject(failure),
+      stop: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    });
 
     const onCaptureError = jest.fn();
     const { getByTestId } = render(<Harness onCaptureError={onCaptureError} />);
@@ -148,7 +165,11 @@ describe('the Voice Input toggle gates the microphone', () => {
   it('stays silent when the capture was deliberately aborted', async () => {
     useSettingsStore.setState({ voiceEnabled: true });
     const aborted = new VoiceInput.VoiceCaptureError('aborted', 'Capture cancelled');
-    startSpy.mockResolvedValue({ result: Promise.reject(aborted) });
+    startSpy.mockResolvedValue({
+      result: Promise.reject(aborted),
+      stop: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    });
 
     const onCaptureError = jest.fn();
     const { getByTestId } = render(<Harness onCaptureError={onCaptureError} />);

@@ -28,7 +28,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import { useSettingsStore } from '@/stores/settingsStore';
-import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
+import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import { VoiceCaptureError, transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
@@ -142,6 +142,7 @@ export default function VoiceScreen() {
   const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const speechOwner = useVoiceOutputOwner(appMode, 'voice');
   const subscriptionTier = useTierStore((s) => s.tier);
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
@@ -225,8 +226,8 @@ export default function VoiceScreen() {
     pttMode,
     hapticsEnabled,
     sendMessage: sendVoiceMessage,
-    speak: (text, callbacks) => VoiceOutput.speak(text, { ...speechSettings(), ...callbacks }),
-    stopSpeaking: () => VoiceOutput.stop().catch(() => {}),
+    speechOwner,
+    speechOptions: speechSettings(),
     onCaptureError: (err) => {
       const message = voiceCaptureErrorMessage(err);
       if (err instanceof VoiceCaptureError && err.code === 'mic-permission-denied') {
