@@ -3754,9 +3754,43 @@ preservation, account/workspace reset and first/unchanged scope retention. No
 tests, checks, builds, sign-out, browser or network actions were performed; all
 regression sources remain unexecuted.
 
+## Media registry retirement follows the captured session owner
+
+Accepted commit `d37734df30a95f22e6672596401e5f3c4a10ccc6` changes four
+production files, two new fixture sources and four fixture migrations. Each
+non-persisted media job requires its original `SessionAuthority`; already-retired
+admission is refused. Atomic pruning filters only retired owners and returns the
+same state when nothing changes. The media hook prunes on identity-render layout,
+before authority admission and after image/video/observation settlement. The page
+pending predicate ignores retired owners immediately. Existing stale result writes
+remain refused, and a late map-only update cannot resurrect a removed job ID.
+
+This owner is the session, not a navigation/request predicate. Same-session
+unmount/remount retains work, and a current-session video observation deadline or
+network failure remains pending for later observation. The existing no-cookie
+auth-resync branch also resets media synchronously beside its auth-null update,
+without an asynchronous broad cleanup or a claim that missing cookies invalidate
+otherwise-current SDK bearer authority. Early-returned resync calls do not enter
+that cleanup. Provider work, remote cancellation and paid result delivery are
+unchanged.
+
+The source correction requalifies `WEB-MEDIA-SESSION-CLEANUP-01`. A snapshot from
+an unmounted hook still cannot observe an entirely replaced Clerk object on a
+later mount; mutation of the same SDK session resource is observed. No continuous
+observer is added while the page is unmounted: settlement/remount supplies the
+next observation. These limits and runtime acceptance remain open rather than
+being represented as comprehensive identity cleanup.
+
+Independent source review accepted the bounded patch. Actual-store fixture
+sources cover identical-ID session resource replacement, deferred token/body and
+video start/poll waits, failed admission, replacement-row preservation, repeated
+no-op pruning, same-session remount and no-cookie registry reset. No tests, checks,
+builds, browser, auth, provider or network actions were performed; all regression
+sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-eight accepted production slices traced above are represented as
+Only the one hundred and twenty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

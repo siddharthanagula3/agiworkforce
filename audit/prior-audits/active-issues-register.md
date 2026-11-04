@@ -9196,7 +9196,10 @@ universal settings or memory lifecycle closure is established.
 
 ## WEB-MEDIA-SESSION-CLEANUP-01
 
-Status: OPEN, source-reviewed lifecycle gap, not runtime reproduced.
+Status: Bounded source correction accepted at `d37734df30`; unmounted SDK-object
+replacement and runtime acceptance remain OPEN. No runtime reproduction.
+
+Historical source evidence before that correction:
 
 - `useSessionSnapshot.ts` retires authority when the observed Clerk session object
   or incarnation changes, including a same-account replacement. The media hook
@@ -9220,3 +9223,20 @@ Status: OPEN, source-reviewed lifecycle gap, not runtime reproduced.
   rebinding paid remote work. Do not solve the stale pending row by allowing a
   retired operation to publish success/failure into replacement session state.
   No tests, checks, browser, auth or provider actions were run for this finding.
+
+Accepted correction `d37734df30a95f22e6672596401e5f3c4a10ccc6` stores each
+job's captured SessionAuthority, refuses retired admission, and atomically prunes
+retired rows at identity-render, operation-admission and settlement boundaries.
+The pending predicate excludes stale owners. Same-session navigation and current
+pending video observations remain; remote work is not cancelled or restarted.
+The entered no-cookie resync branch synchronously resets only media; it neither
+awaits broad cleanup nor invalidates still-current SDK bearer authority. Early
+resync returns are outside this branch-specific reset.
+
+Remaining boundary: old snapshots retained after their hook unmounts observe
+mutations to the same SDK object, but cannot observe an entirely new SDK object
+installed on a later mount. No always-mounted identity coordinator or continuous
+unmounted observation was introduced. Exact-session/request guards remain intact;
+this is not evidence of cross-account remote access. Actual-store fixture sources
+were independently reviewed but not executed, and runtime/deployment acceptance
+remains open.
