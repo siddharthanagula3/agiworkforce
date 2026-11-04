@@ -38,7 +38,7 @@ async function readArtifactForViewer(
   const scoped = await getCurrentCookieUserRlsDb(request).catch(() => null);
   if (!scoped) return { artifact: null, signedIn: false };
   const shared =
-    (await getOrgReadableArtifactByToken(scoped.db, token).catch(() => null)) ??
+    (await getOrgReadableArtifactByToken(scoped.db, token, scoped.userId).catch(() => null)) ??
     (await getInvitedReadableArtifactByToken(scoped.db, token).catch(() => null));
   return { artifact: shared, signedIn: true };
 }

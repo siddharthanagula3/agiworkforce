@@ -3,6 +3,7 @@ import 'server-only';
 import { CONVERSATION_SHARE_VISIBILITIES } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { assertOrganizationSharedViewerAdmission } from '@/lib/services/organization-shared-viewer-admission';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
@@ -238,6 +239,7 @@ export async function getPublicSharedSessionByToken(
 export async function getOrgReadableSessionByToken(
   db: DatabaseAdapter,
   token: string,
+  viewerUserId: string,
 ): Promise<OrgReadableSession | null> {
   if (!token || !SHARE_TOKEN_REGEX.test(token)) return null;
   const rows = await db.query<OrgReadableSessionRow>(
@@ -247,7 +249,15 @@ export async function getOrgReadableSessionByToken(
       limit 1`,
     [token],
   );
-  return rows[0] ? rowToSession(rows[0]) : null;
+  if (!rows[0]) return null;
+  const session = rowToSession(rows[0]);
+  await assertOrganizationSharedViewerAdmission(db, viewerUserId, {
+    type: 'session',
+    id: session.id,
+    ownerUserId: session.ownerUserId,
+    visibility: session.visibility,
+  });
+  return session;
 }
 
 export async function readSharedSessionSharerName(

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   cookieReader: vi.fn(),
   scopedQuery: vi.fn(),
+  lockdown: vi.fn(),
   execute: vi.fn(),
   authUser: vi.fn(async (..._args: unknown[]) => ({ userId: 'owner-1' })),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
@@ -14,6 +15,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/feature-flags/tenant-lockdown', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/feature-flags/tenant-lockdown')>()),
+  assertTenantNotLockedDown: mocks.lockdown,
+}));
 vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
@@ -170,6 +175,7 @@ describe('GET /api/share/[token] after revocation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.cookieReader.mockResolvedValue(null);
+    mocks.lockdown.mockResolvedValue(undefined);
     mocks.authUser.mockResolvedValue({ userId: 'owner-1' });
     mocks.rateLimit.mockResolvedValue(null);
   });
@@ -211,6 +217,7 @@ describe('GET /api/share/[token] authenticated fallback', () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.query.mockResolvedValue([]);
     mocks.cookieReader.mockResolvedValue(null);
+    mocks.lockdown.mockResolvedValue(undefined);
   });
 
   it('skips cookie admission for a public share', async () => {
@@ -226,14 +233,31 @@ describe('GET /api/share/[token] authenticated fallback', () => {
       headers: { 'x-real-ip': '192.0.2.1', 'x-agi-organization-id': 'personal' },
     });
     mocks.cookieReader.mockResolvedValue({ db: { query: mocks.scopedQuery }, userId: 'member' });
-    mocks.scopedQuery.mockResolvedValue([
-      { token: TOKEN, title: 'Shared', visibility: 'organization', messages: [], expires_at: FUTURE },
-    ]);
+    mocks.scopedQuery.mockResolvedValueOnce([
+      { id: 'share-1', owner_id: 'owner-1', token: TOKEN, title: 'Shared', visibility: 'organization', messages: [], expires_at: FUTURE },
+    ]).mockResolvedValueOnce([{ organization_id: ORG }]);
     const response = await GET(request, context());
     expect(response.status).toBe(200);
     expect(mocks.cookieReader).toHaveBeenCalledWith(request);
-    expect(mocks.scopedQuery).toHaveBeenCalledTimes(1);
+    expect(mocks.scopedQuery).toHaveBeenCalledTimes(2);
+    expect(mocks.lockdown).toHaveBeenCalledWith(ORG);
     expect(mocks.scopedQuery.mock.calls[0]?.[1]).toEqual([TOKEN]);
+  });
+
+  it('refuses the actual shared organization lockdown despite Personal selection', async () => {
+    const { createError } = await import('@/lib/errors');
+    const request = new NextRequest(`https://agiworkforce.com/api/share/${TOKEN}`, {
+      headers: { 'x-agi-organization-id': 'personal' },
+    });
+    mocks.cookieReader.mockResolvedValue({ db: { query: mocks.scopedQuery }, userId: 'member' });
+    mocks.scopedQuery.mockResolvedValueOnce([
+      { id: 'share-1', owner_id: 'owner-1', token: TOKEN, title: 'Secret', visibility: 'organization', messages: [], expires_at: FUTURE },
+    ]).mockResolvedValueOnce([{ organization_id: ORG }]);
+    mocks.lockdown.mockRejectedValueOnce(createError.forbidden('Workspace locked down'));
+    const response = await GET(request, context());
+    expect(response.status).toBe(403);
+    expect(mocks.lockdown).toHaveBeenCalledWith(ORG);
+    expect(await response.text()).not.toContain('Secret');
   });
 
   it('does not query a transcript for a refused cookie', async () => {

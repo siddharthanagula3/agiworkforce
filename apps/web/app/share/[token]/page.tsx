@@ -35,7 +35,7 @@ async function readSessionForViewer(
   });
   const scoped = await getCurrentCookieUserRlsDb(request).catch(() => null);
   if (!scoped) return null;
-  const session = await getOrgReadableSessionByToken(scoped.db, token).catch(() => null);
+  const session = await getOrgReadableSessionByToken(scoped.db, token, scoped.userId).catch(() => null);
   if (!session) return null;
   const sharedBy =
     session.visibility === 'organization'

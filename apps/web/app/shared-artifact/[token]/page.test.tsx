@@ -72,14 +72,14 @@ describe('published artifact cookie admission', () => {
     mocks.orgArtifact.mockResolvedValue(artifact);
     await expect(Page(props)).resolves.toBeTruthy();
     expect(mocks.cookieReader.mock.calls[0]?.[0].headers.get('x-real-ip')).toBe('192.0.2.1');
-    expect(mocks.orgArtifact).toHaveBeenCalledWith(db, TOKEN);
+    expect(mocks.orgArtifact).toHaveBeenCalledWith(db, TOKEN, 'member');
     expect(mocks.invitedArtifact).not.toHaveBeenCalled();
   });
 
   it('preserves the admitted invited-reader fallback', async () => {
     const db = {};
     mocks.cookieReader.mockResolvedValue({ db, userId: 'invitee' });
-    mocks.invitedArtifact.mockResolvedValue(artifact);
+    mocks.invitedArtifact.mockResolvedValue({ ...artifact, visibility: 'invited' });
     await expect(Page(props)).resolves.toBeTruthy();
     expect(mocks.invitedArtifact).toHaveBeenCalledWith(db, TOKEN);
   });

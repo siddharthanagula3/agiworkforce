@@ -121,7 +121,7 @@ describe('/share/[token] cookie admission', () => {
     });
     await expect(SharedSessionPage(props)).resolves.toBeTruthy();
     expect(mocks.cookieReader.mock.calls[0]?.[0].headers.get('x-real-ip')).toBe('192.0.2.1');
-    expect(mocks.orgSession).toHaveBeenCalledWith(db, TOKEN);
+    expect(mocks.orgSession).toHaveBeenCalledWith(db, TOKEN, 'account-1');
   });
 
   it('does not read organization content when admission fails', async () => {

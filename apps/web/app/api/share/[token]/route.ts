@@ -50,7 +50,7 @@ async function readSessionForCaller(request: NextRequest, token: string) {
 
   const scoped = await getCurrentCookieUserRlsDb(request);
   if (!scoped) return null;
-  return getOrgReadableSessionByToken(scoped.db, token);
+  return getOrgReadableSessionByToken(scoped.db, token, scoped.userId);
 }
 
 async function handleGetShare(request: NextRequest, context: RouteContext) {
