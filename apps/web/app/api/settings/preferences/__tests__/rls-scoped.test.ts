@@ -33,7 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.query.mockImplementation(async (sql: string) =>
     String(sql).includes('user_settings')
-      ? [{ settings: { general: { preferredName: 'Sid' } } }]
+      ? [{ settings: { general: { preferredName: 'Sid' } }, version: 'v2' }]
       : [],
   );
   h.getUserScopedDb.mockResolvedValue({ db: { query: h.query }, userId: 'user-1' });
@@ -181,7 +181,7 @@ describe('settings preferences reads through the RLS-scoped client', () => {
   });
 
   it('writes through the scoped client too', async () => {
-    h.query.mockResolvedValue([{ settings: { general: {} } }]);
+    h.query.mockResolvedValue([{ settings: { general: {} }, version: 'v2' }]);
 
     await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
@@ -230,7 +230,7 @@ describe('the migration that backs it', () => {
 
 describe('a write that touches the workspace namespace invalidates the active-org cache', () => {
   it('invalidates when the namespace patch targets workspace', async () => {
-    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: 'org-1' } } }]);
+    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: 'org-1' } }, version: 'v2' }]);
 
     await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
@@ -244,7 +244,7 @@ describe('a write that touches the workspace namespace invalidates the active-or
   });
 
   it('does not invalidate for an unrelated namespace', async () => {
-    h.query.mockResolvedValue([{ settings: { general: { preferredName: 'Sid' } } }]);
+    h.query.mockResolvedValue([{ settings: { general: { preferredName: 'Sid' } }, version: 'v2' }]);
 
     await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
@@ -258,7 +258,7 @@ describe('a write that touches the workspace namespace invalidates the active-or
   });
 
   it('invalidates for a whole-document patch that includes the workspace key', async () => {
-    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: null } } }]);
+    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: null } }, version: 'v2' }]);
 
     await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {

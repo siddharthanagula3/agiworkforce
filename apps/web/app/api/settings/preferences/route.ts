@@ -148,10 +148,9 @@ async function handlePut(request: NextRequest) {
     throw createError.validation('Settings payload is too large');
   }
 
-  let merged: Record<string, unknown> = estimated;
-  let version: string | null = current.version;
+  let row: UserSettingsRow | undefined;
   try {
-    const [row] = await db.query<UserSettingsRow>(
+    [row] = await db.query<UserSettingsRow>(
       `insert into public.user_settings (user_id, settings, updated_at)
        values ($1, $2::jsonb, timezone('utc'::text, now()))
        on conflict (user_id)
@@ -161,19 +160,21 @@ async function handlePut(request: NextRequest) {
        returning settings, updated_at::text as version`,
       [userId, JSON.stringify(delta), expectedVersion],
     );
-    if (!row && expectedVersion !== null) return settingsVersionConflict(db, userId, parsed);
-    if (row?.settings) merged = row.settings;
-    version = row?.version ?? version;
   } catch (error) {
     logger.error({ error, userId }, 'Failed to persist user settings');
     throw createError.internal('Failed to save settings');
   }
 
+  if (!row && expectedVersion !== null) return settingsVersionConflict(db, userId, parsed);
   if (touchesActiveOrganizationNamespace(delta)) {
     await invalidateActiveOrganizationCache(userId);
   }
 
-  return NextResponse.json({ settings: merged, version });
+  if (!row?.settings || typeof row.settings !== 'object' || Array.isArray(row.settings) ||
+    typeof row.version !== 'string' || !row.version.trim()) {
+    throw createError.internal('Settings write was not confirmed');
+  }
+  return NextResponse.json({ settings: row.settings, version: row.version });
 }
 
 async function settingsVersionConflict(

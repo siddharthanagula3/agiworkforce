@@ -131,6 +131,88 @@ describe('the preferences PUT can be made conditional', () => {
     expect(response.status).toBe(200);
     expect(writeCalls()[0]?.[1]?.[2]).toBeNull();
   });
+
+  it.each([undefined, null])('does not invent a receipt for an absent unconditional write row (%s)', async (expectedVersion) => {
+    stubStore({ settings: { workspace: {} }, version: null, writeAccepted: false });
+
+    const response = await PUT(put({
+      namespace: 'workspace', patch: { activeOrganizationId: null }, expectedVersion,
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).not.toHaveProperty('settings');
+    expect(writeCalls()[0]?.[1]?.[2]).toBeNull();
+    expect(h.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
+  });
+
+  it('does not invalidate the workspace cache for a refused conditional write', async () => {
+    stubStore({ settings: { workspace: {} }, version: STORED_VERSION, writeAccepted: false });
+
+    const response = await PUT(put({
+      namespace: 'workspace', patch: { activeOrganizationId: null }, expectedVersion: STORED_VERSION,
+    }));
+
+    expect(response.status).toBe(412);
+    expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing cache policy when the database query rejects', async () => {
+    h.query.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes('insert into public.user_settings')) throw new Error('Database unavailable');
+      return [{ settings: { workspace: {} }, version: STORED_VERSION }];
+    });
+
+    const response = await PUT(put({
+      namespace: 'workspace', patch: { activeOrganizationId: null }, expectedVersion: STORED_VERSION,
+    }));
+
+    expect(response.status).toBe(500);
+    expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {},
+    { settings: null, version: NEXT_VERSION },
+    { settings: [], version: NEXT_VERSION },
+    { settings: false, version: NEXT_VERSION },
+    { settings: 'invalid', version: NEXT_VERSION },
+    { settings: {} },
+    { settings: {}, version: null },
+    { settings: {}, version: '' },
+    { settings: {}, version: ' ' },
+    { settings: {}, version: 1 },
+  ])('refuses a malformed returned row rather than supplying estimated values: %j', async (row) => {
+    h.query.mockImplementation(async (sql: unknown) =>
+      String(sql).includes('insert into public.user_settings')
+        ? [row]
+        : [{ settings: { workspace: {} }, version: STORED_VERSION }],
+    );
+
+    const response = await PUT(put({
+      namespace: 'workspace', patch: { activeOrganizationId: null },
+      expectedVersion: STORED_VERSION,
+    }));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).not.toHaveProperty('settings');
+    expect(h.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
+  });
+
+  it('returns only the actual stored settings and revision, including an empty settings object', async () => {
+    h.query.mockImplementation(async (sql: unknown) =>
+      String(sql).includes('insert into public.user_settings')
+        ? [{ settings: {}, version: NEXT_VERSION }]
+        : [{ settings: { privacy: { keepOutOfProviderTraining: false } }, version: STORED_VERSION }],
+    );
+
+    const response = await PUT(put({
+      namespace: 'privacy', patch: { keepOutOfProviderTraining: true },
+      expectedVersion: STORED_VERSION,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ settings: {}, version: NEXT_VERSION });
+  });
 });
 
 describe('a namespace can be patched rather than replaced', () => {
