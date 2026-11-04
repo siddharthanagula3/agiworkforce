@@ -284,10 +284,6 @@ export default function CloudAccountScreen() {
     exportCloudUserData(account)
       .catch((error: unknown) => {
         if (isStaleCloudAccountOperation(error) || !isCloudAccountEpochCurrent(account)) {
-          Alert.alert(
-            'Account changed',
-            'The export was stopped because the active AGI Cloud account changed.',
-          );
           return;
         }
         Alert.alert(

@@ -1,3 +1,4 @@
+import { useLocalDataExport } from '@/src/features/settings/data-controls/useLocalDataExport';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Alert, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -13,12 +14,10 @@ import { listInstalledModels, deleteInstalledModel } from '@/storage/installedMo
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { deleteDownloadedModel, getModelStorageBytes } from '@/services/modelDownload';
 import {
-  exportAllUserData,
   wipeAllLocalData,
   type DsarExportProgress,
 } from '@/services/dsarExport';
 import {
-  buildLocalDataExportSnapshot,
   resetLocalInMemoryState,
 } from '@/src/features/settings/data-controls/localDataSnapshot';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
@@ -79,8 +78,7 @@ export default function StorageManagerScreen() {
   const setAllowCellularDownloads = useModelInstallStore((s) => s.setAllowCellularDownloads);
   const forgetInstalledModel = useModelInstallStore((s) => s.forgetInstalledModel);
 
-  const [exportProgress, setExportProgress] = useState<DsarExportProgress | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const { exporting: isExporting, progress: exportProgress, handleExport } = useLocalDataExport();
   const [isWiping, setIsWiping] = useState(false);
 
   const loadStorageInfo = useCallback(async () => {
@@ -146,22 +144,6 @@ export default function StorageManagerScreen() {
         },
       ],
     );
-  }, []);
-
-  const handleExport = useCallback(async () => {
-    setIsExporting(true);
-    setExportProgress(null);
-    try {
-      await exportAllUserData(
-        (progress) => setExportProgress(progress),
-        buildLocalDataExportSnapshot(),
-      );
-    } catch {
-      Alert.alert('Export failed', 'Could not prepare your local data export. Try again.');
-    } finally {
-      setIsExporting(false);
-      setExportProgress(null);
-    }
   }, []);
 
   const handleDeleteEverything = useCallback(() => {

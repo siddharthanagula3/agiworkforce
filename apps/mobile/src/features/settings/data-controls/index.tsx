@@ -14,10 +14,9 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
-import { exportAllUserData } from '@/services/dsarExport';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { buildLocalDataExportSnapshot } from './localDataSnapshot';
+import { useLocalDataExport } from './useLocalDataExport';
 import { syncLocalConversationsToCloud } from './localCloudSyncService';
 import {
   SettingsGroup,
@@ -41,23 +40,12 @@ type BulkChatAction = 'archive' | 'delete';
 export default function DataControlsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const [exporting, setExporting] = useState(false);
+  const { exporting, handleExport } = useLocalDataExport();
   const [syncing, setSyncing] = useState(false);
   const [bulkAction, setBulkAction] = useState<BulkChatAction | null>(null);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const loadConversations = useChatMessageStore((s) => s.loadConversations);
-
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      await exportAllUserData(undefined, buildLocalDataExportSnapshot());
-    } catch {
-      Alert.alert('Export failed', 'AGI could not create the local data export.');
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const handleSyncToCloud = () => {
     if (!cloudUnlocked) {

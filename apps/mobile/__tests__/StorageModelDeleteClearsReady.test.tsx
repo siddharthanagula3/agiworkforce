@@ -56,6 +56,7 @@ jest.mock('@/services/dsarExport', () => ({
 }));
 
 jest.mock('@/src/features/settings/data-controls/localDataSnapshot', () => ({
+  LocalExportAuthorityError: class LocalExportAuthorityError extends Error {},
   buildLocalDataExportSnapshot: jest.fn().mockReturnValue({}),
   resetLocalInMemoryState: jest.fn(),
 }));

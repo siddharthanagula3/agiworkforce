@@ -1,3 +1,4 @@
+jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => 'cloud-export-id') }));
 const mockApiGet = jest.fn();
 const mockGetInfoAsync = jest.fn();
 const mockMakeDirectoryAsync = jest.fn();
@@ -67,17 +68,17 @@ describe('Cloud account data export', () => {
 
     await exportCloudUserData(account);
 
-    expect(mockApiGet).toHaveBeenCalledWith('/api/user/export', { timeout: 120_000 });
+    expect(mockApiGet).toHaveBeenCalledWith('/api/user/export', { timeout: 120_000, accountEpoch: account });
     expect(mockMakeDirectoryAsync).toHaveBeenCalledWith('file:///cache/dsar_exports/', {
       intermediates: true,
     });
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///cache/dsar_exports/agi_cloud_data_export.json',
+      'file:///cache/dsar_exports/cloud-export-id/agi_cloud_data_export.json',
       expect.stringContaining('"conversations"'),
       { encoding: 'utf8' },
     );
     expect(mockShareAsync).toHaveBeenCalledWith(
-      'file:///cache/dsar_exports/agi_cloud_data_export.json',
+      'file:///cache/dsar_exports/cloud-export-id/agi_cloud_data_export.json',
       {
         mimeType: 'application/json',
         dialogTitle: 'Save your AGI Cloud data export',
@@ -85,7 +86,7 @@ describe('Cloud account data export', () => {
       },
     );
     expect(mockDeleteAsync).toHaveBeenCalledWith(
-      'file:///cache/dsar_exports/agi_cloud_data_export.json',
+      'file:///cache/dsar_exports/cloud-export-id/',
       { idempotent: true },
     );
   });
@@ -108,4 +109,34 @@ describe('Cloud account data export', () => {
     expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
     expect(mockShareAsync).not.toHaveBeenCalled();
   });
+  it.each(['write', 'availability'])('does not share after account changes during %s', async (boundary) => {
+    let entered!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    if (boundary === 'write') {
+      mockWriteAsStringAsync.mockImplementationOnce(async () => { entered(); await pending; });
+    } else {
+      mockIsAvailableAsync.mockImplementationOnce(async () => { entered(); await pending; return true; });
+    }
+    const account = captureCloudAccountEpoch();
+    if (!account) throw new Error('Expected account');
+    const exporting = exportCloudUserData(account);
+    const rejected = expect(exporting).rejects.toThrow('Cloud account changed');
+    await started;
+    activateCloudAccount('account-b');
+    release();
+    await rejected;
+    expect(mockShareAsync).not.toHaveBeenCalled();
+    expect(mockDeleteAsync).toHaveBeenCalledWith('file:///cache/dsar_exports/cloud-export-id/', { idempotent: true });
+  });
+
+  it('does not relabel accepted native sharing as stopped after account changes', async () => {
+    mockShareAsync.mockImplementationOnce(async () => { activateCloudAccount('account-b'); });
+    const account = captureCloudAccountEpoch();
+    if (!account) throw new Error('Expected account');
+    await expect(exportCloudUserData(account)).resolves.toBeUndefined();
+    expect(mockShareAsync).toHaveBeenCalledTimes(1);
+  });
+
 });
