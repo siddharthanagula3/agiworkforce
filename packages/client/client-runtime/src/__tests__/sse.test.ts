@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { ServerSentEventDecoder, ServerSentEventFrameLimitError } from '../sse';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  readServerSentEvents,
+  ServerSentEventDecoder,
+  ServerSentEventFrameLimitError,
+} from '../sse';
 
 function decodeInChunks(chunks: string[], limit: number) {
   const decoder = new ServerSentEventDecoder(limit);
@@ -61,5 +65,104 @@ describe('ServerSentEventDecoder frame limit', () => {
     expect(() => decodeInChunks([`event: ${'e'.repeat(20)}\ndata: a\n\n`], 12)).toThrow(
       ServerSentEventFrameLimitError,
     );
+  });
+});
+
+describe('readServerSentEvents body ownership', () => {
+  const bytes = (text: string) => new TextEncoder().encode(text);
+
+  function openBody(text: string, cancel: () => void | Promise<void> = vi.fn()) {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes(text));
+      },
+      cancel,
+    });
+    return { body, cancel };
+  }
+
+  it('cancels and unlocks when the consumer stops before EOF', async () => {
+    const { body, cancel } = openBody('data: first\n\ndata: unread\n\n');
+    for await (const event of readServerSentEvents(body)) {
+      expect(event.data).toBe('first');
+      break;
+    }
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it('preserves callback failure while cancelling unread bytes', async () => {
+    const { body, cancel } = openBody('data: first\n\n');
+    const failure = new Error('retired account');
+    const iterator = readServerSentEvents(body, {
+      onChunk: () => {
+        throw failure;
+      },
+    });
+    await expect(iterator.next()).rejects.toBe(failure);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it('cancels on frame-limit failure', async () => {
+    const { body, cancel } = openBody('data: too long\n\n');
+    const iterator = readServerSentEvents(body, { maximumFrameCharacters: 4 });
+    await expect(iterator.next()).rejects.toBeInstanceOf(ServerSentEventFrameLimitError);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it('preserves read failure and releases an errored body', async () => {
+    const failure = new Error('transport failed');
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(failure);
+      },
+    });
+    await expect(readServerSentEvents(body).next()).rejects.toBe(failure);
+    expect(body.locked).toBe(false);
+  });
+
+  it('flushes an accepted final frame at EOF without cancelling', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes('data: tail'));
+        controller.close();
+      },
+      cancel,
+    });
+    const events = [];
+    for await (const event of readServerSentEvents(body, { acceptUnterminatedFinalFrame: true })) {
+      events.push(event.data);
+    }
+    expect(events).toEqual(['tail']);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(body.locked).toBe(false);
+  });
+
+  it('does not replace the original failure when cancellation rejects', async () => {
+    const cancel = vi.fn(() => Promise.reject(new Error('cancel failed')));
+    const { body } = openBody('data: first\n\n', cancel);
+    const failure = new Error('callback failed');
+    await expect(
+      readServerSentEvents(body, {
+        onChunk: () => {
+          throw failure;
+        },
+      }).next(),
+    ).rejects.toBe(failure);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it('does not wait for a source that never finishes cancellation', async () => {
+    const cancel = vi.fn(() => new Promise<void>(() => {}));
+    const { body } = openBody('data: first\n\n', cancel);
+    const iterator = readServerSentEvents(body);
+    await expect(iterator.next()).resolves.toMatchObject({ value: { data: 'first' }, done: false });
+    await expect(iterator.return(undefined)).resolves.toMatchObject({ done: true });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
   });
 });
