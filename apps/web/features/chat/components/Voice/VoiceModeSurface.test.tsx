@@ -77,6 +77,7 @@ function session(overrides: Record<string, unknown> = {}) {
 function renderSurface(overrides: Partial<Record<string, unknown>> = {}) {
   return render(
     <VoiceModeSurface
+          managed={true}
       variant={VOICE_SURFACE_VARIANT.chat}
       turnActive={false}
       conversationId={null}

@@ -4024,8 +4024,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       attachments?: File[],
       skillId?: string,
       meta?: SendMeta,
+      voiceOwner?: { conversationId: string; authority: RequestAuthority },
     ): false | typeof SEND_GUARD_BLOCKED | void => {
-      const session = captureSessionSnapshot();
+      if (voiceOwner && !voiceOwner.authority.isCurrent()) return false;
+      const session = voiceOwner?.authority.session ?? captureSessionSnapshot();
       if (localModelSelection === null && (!session || !session.isCurrent())) return false;
       let resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
       const outgoingContent = content;
@@ -4050,6 +4052,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       }).model;
       const providerNotice = freeModelNoticeFor(servingModelId);
       if (providerNotice && providerConsentStatusOf(providerNotice.providerId) === 'missing') {
+        if (voiceOwner) return false;
         setPendingProviderNotice({
           notice: providerNotice,
           send: {
@@ -4074,6 +4077,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const localTaskType = classifyTaskLocally(content, []).type;
       const hasExplicitArtifactDestination = explicitlyRequestsArtifact(content);
       if (
+        !voiceOwner &&
         !attachments?.length &&
         (localTaskType === 'image_generation' || hasExplicitArtifactDestination)
       ) {
@@ -4138,6 +4142,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ]);
           }
           void sendContent(outgoingContent, {
+            ...(voiceOwner ? { conversationId: voiceOwner.conversationId } : {}),
             session: session ?? undefined,
             attachments,
             meta: resolvedMeta,
@@ -6193,12 +6198,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const voiceTranscriptIdsRef = useRef(new Set<string>());
 
-  const handleVoiceEnsureConversation = useCallback(async () => {
+  const handleVoiceEnsureConversation = useCallback(async (authority: RequestAuthority, bindConversation: (id: string) => void) => {
+    authority.assertCurrent();
     if (displayedConversationId && conversations.some((c) => c.id === displayedConversationId)) {
       return displayedConversationId;
     }
-    const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId);
+    const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId, {
+      authority, shouldActivate: () => false,
+    });
+    authority.assertCurrent();
     if (!created) return null;
+    bindConversation(created.id);
     adoptPendingComposerToggles(created.id);
     if (!urlConversationId) setBareChatSessionId(created.id);
     keepVoiceSessionAcrossNavigation();
@@ -6217,7 +6227,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   ]);
 
   const handleVoiceTranscript = useCallback(
-    (conversationId: string, turn: VoiceTranscriptTurn) => {
+    (conversationId: string, turn: VoiceTranscriptTurn, authority: RequestAuthority) => {
+      if (!authority.isCurrent()) return;
       if (voiceTranscriptIdsRef.current.has(turn.turnId)) {
         updateMessage(
           turn.turnId,
@@ -6238,23 +6249,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         );
       }
       if (!turn.final) return;
-      void addCsrfHeaders({ 'Content-Type': 'application/json' })
-        .then((headers) =>
-          fetch(`/api/chat/conversations/${conversationId}/messages`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              id: turn.turnId,
-              role: turn.role,
-              content: turn.text,
-              skipLlm: true,
-            }),
-          }),
-        )
+      void authority.fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: turn.turnId,
+          role: turn.role,
+          content: turn.text,
+          skipLlm: true,
+        }),
+      })
         .then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
         })
         .catch((error: unknown) => {
+          if (!authority.isCurrent()) return;
           console.warn('[voice] Could not save a voice turn to history:', error);
           toast.error('Part of this voice conversation could not be saved to your history.', {
             id: `voice-transcript-save-${conversationId}`,
@@ -6279,11 +6288,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const handleVoiceStartWorkTask = useCallback(
-    (goal: string) => {
+    (goal: string, conversationId: string, authority: RequestAuthority) => {
+      if (!authority.isCurrent()) return false;
       const outcome = handleSend(goal, undefined, undefined, {
         workMode: AGI_WORK_MODE,
         agiWorkGoal: buildAgiWorkGoalInput(goal),
-      });
+      }, { conversationId, authority });
       return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
     },
     [handleSend],
@@ -6308,7 +6318,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleConversationModelChange],
   );
 
+  const voiceProviderMode = getProviderModeForModel(activeModelId);
+  const voiceManaged = localModelSelection === null && !conversationHoldsLocalTurns(displayedMessages) &&
+    (voiceProviderMode === 'ManagedGateway' || voiceProviderMode === 'ManagedNative');
   const voiceSurfaceProps = {
+    managed: voiceManaged,
     turnActive: isLoading || isStreaming,
     conversationId: displayedConversationId ?? null,
     onSend: handleVoiceSend,

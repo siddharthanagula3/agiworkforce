@@ -21,7 +21,7 @@ import {
   liveVoicePaceInstruction,
   type LiveVoiceReasoning,
 } from '@agiworkforce/types/live-voices';
-import { getCsrfToken } from '@/lib/client/csrf';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
 import {
@@ -40,7 +40,6 @@ export interface LiveVoiceToolOutcome {
 
 export const LIVE_SESSION_ENDPOINT = '/api/voice/live/sessions';
 const EVENTS_CHANNEL = 'oai-events';
-const CSRF_HEADER = 'x-csrf-token';
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
 const CLOSE_TIMEOUT_MS = 3_000;
 const DISCONNECT_GRACE_MS = 5_000;
@@ -193,6 +192,7 @@ export interface LiveVoiceSettings {
 }
 
 export interface LiveVoiceSessionOptions {
+  authority: RequestAuthority;
   voice: string | null;
   conversationId: string | null;
   memoryEnabled?: boolean;
@@ -300,20 +300,39 @@ function microphoneError(error: unknown): LiveVoiceSessionError {
   return new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.connectionFailed, 'microphone_failed');
 }
 
-function waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
+function waitForIceGathering(peer: RTCPeerConnection, signal: AbortSignal): Promise<void> {
   if (peer.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise((resolve) => {
     const timer = window.setTimeout(finish, ICE_GATHERING_TIMEOUT_MS);
     function finish() {
       window.clearTimeout(timer);
       peer.removeEventListener('icegatheringstatechange', onChange);
+      signal.removeEventListener('abort', finish);
       resolve();
     }
     function onChange() {
       if (peer.iceGatheringState === 'complete') finish();
     }
     peer.addEventListener('icegatheringstatechange', onChange);
+    signal.addEventListener('abort', finish, { once: true });
+    if (signal.aborted) finish();
   });
+}
+
+async function closeCreatedVoiceSession(
+  sessionId: string,
+  capturedToken: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  if (!capturedToken.trim() || !sessionId) throw new Error('Voice cleanup authority is unavailable');
+  const response = await fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(sessionId)}/close`, {
+    method: 'POST',
+    credentials: 'omit',
+    keepalive: true,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${capturedToken}` },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
 
 export class LiveVoiceSession {
@@ -336,6 +355,10 @@ export class LiveVoiceSession {
   private lastAudioAt = 0;
   private speaking = false;
   private started = false;
+  private readonly authority: RequestAuthority;
+  private readonly cleanupToken: string;
+  private releaseSetup: (() => void) | null = null;
+  private settlementPromise: Promise<void> | null = null;
   private closing = false;
   private disposed = false;
   private clientEventSeq = 0;
@@ -369,7 +392,11 @@ export class LiveVoiceSession {
     audio: HTMLAudioElement,
     created: CreateSessionResponse,
     callbacks: LiveVoiceSessionCallbacks,
+    authority: RequestAuthority,
+    cleanupToken: string,
   ) {
+    this.authority = authority;
+    this.cleanupToken = cleanupToken;
     this.microphone = microphone;
     this.peer = peer;
     this.channel = channel;
@@ -416,56 +443,86 @@ export class LiveVoiceSession {
   }
 
   static async start(options: LiveVoiceSessionOptions): Promise<LiveVoiceSession> {
+    const { authority } = options;
+    authority.assertCurrent();
     if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.unsupported, 'unsupported');
     }
-    let microphone: MediaStream;
-    try {
-      microphone = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-    } catch (error) {
-      throw microphoneError(error);
-    }
-
-    const peer = new RTCPeerConnection();
-    const audio = document.createElement('audio');
-    audio.autoplay = true;
-    audio.hidden = true;
-    const remote = new MediaStream();
-    audio.srcObject = remote;
-    document.body.append(audio);
-    const channel = peer.createDataChannel(EVENTS_CHANNEL);
-    const inbox: MessageEvent[] = [];
+    const cleanupToken = await authority.getToken();
+    authority.assertCurrent();
+    let microphone: MediaStream | null = null;
+    let peer: RTCPeerConnection | null = null;
+    let audio: HTMLAudioElement | null = null;
+    let channel: RTCDataChannel | null = null;
     let session: LiveVoiceSession | null = null;
-    const teardown = () => {
-      microphone.getTracks().forEach((track) => track.stop());
-      peer.close();
-      audio.srcObject = null;
-      audio.remove();
+    let created: CreateSessionResponse | null = null;
+    let released = false;
+    const remote = new MediaStream();
+    const release = () => {
+      released = true;
+      microphone?.getTracks().forEach((track) => track.stop());
+      remote.getTracks().forEach((track) => track.stop());
+      channel?.close();
+      peer?.close();
+      if (audio) {
+        audio.pause();
+        audio.srcObject = null;
+        audio.remove();
+      }
     };
-
-    peer.addEventListener('track', (event) => {
-      event.streams[0]?.getTracks().forEach((track) => remote.addTrack(track));
-      if (event.streams.length === 0) remote.addTrack(event.track);
-      session?.watchRemoteAudio(remote);
-      session?.startPlayback();
-    });
-    channel.addEventListener('message', (event) => {
-      if (session) session.handleMessage(event);
-      else inbox.push(event);
-    });
-    microphone.getTracks().forEach((track) => peer.addTrack(track, microphone));
-
+    const abort = () => {
+      if (session?.closing && authority.session.isCurrent()) return;
+      if (session) session.dispose();
+      else release();
+    };
+    authority.signal.addEventListener('abort', abort, { once: true });
     try {
+      try {
+        microphone = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+      } catch (error) {
+        authority.assertCurrent();
+        throw microphoneError(error);
+      }
+      authority.assertCurrent();
+      peer = new RTCPeerConnection();
+      audio = document.createElement('audio');
+      audio.autoplay = true;
+      audio.hidden = true;
+      audio.srcObject = remote;
+      document.body.append(audio);
+      channel = peer.createDataChannel(EVENTS_CHANNEL);
+      const inbox: MessageEvent[] = [];
+      peer.addEventListener('track', (event) => {
+        if (released || session?.closing || !authority.isCurrent()) {
+          event.track.stop();
+          event.streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+          return;
+        }
+        event.streams[0]?.getTracks().forEach((track) => remote.addTrack(track));
+        if (event.streams.length === 0) remote.addTrack(event.track);
+        session?.watchRemoteAudio(remote);
+        session?.startPlayback();
+      });
+      channel.addEventListener('message', (event) => {
+        if (released) return;
+        if (session) session.handleMessage(event);
+        else if (authority.isCurrent()) inbox.push(event);
+      });
+      const activePeer = peer;
+      microphone.getTracks().forEach((track) => activePeer.addTrack(track, microphone!));
       const offer = await peer.createOffer();
+      authority.assertCurrent();
       await peer.setLocalDescription(offer);
-      await waitForIceGathering(peer);
+      authority.assertCurrent();
+      await waitForIceGathering(peer, authority.signal);
+      authority.assertCurrent();
       const sdp = peer.localDescription?.sdp;
       if (!sdp) throw new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.connectionFailed, 'no_offer');
-      const response = await fetch(LIVE_SESSION_ENDPOINT, {
+      const response = await authority.fetch(LIVE_SESSION_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sdp,
           voice: options.voice,
@@ -481,20 +538,58 @@ export class LiveVoiceSession {
         }),
       });
       if (!response.ok) throw await readLiveSessionError(response);
-      const created = (await response.json()) as CreateSessionResponse;
+      created = (await response.json()) as CreateSessionResponse;
+      authority.assertCurrent();
       await peer.setRemoteDescription({ type: 'answer', sdp: created.sdp });
-      session = new LiveVoiceSession(microphone, peer, channel, audio, created, options.callbacks);
+      authority.assertCurrent();
+      session = new LiveVoiceSession(
+        microphone, peer, channel, audio, created, options.callbacks, authority, cleanupToken,
+      );
+      session.releaseSetup = () => {
+        authority.signal.removeEventListener('abort', abort);
+        release();
+      };
       session.watchRemoteAudio(remote);
       session.startPlayback();
       session.watchConnection();
       for (const event of inbox) session.handleMessage(event);
+      authority.assertCurrent();
+      if (session.disposed) throw new DOMException('Voice session ended during setup', 'AbortError');
       return session;
     } catch (error) {
-      teardown();
-      throw error instanceof LiveVoiceSessionError
+      authority.signal.removeEventListener('abort', abort);
+      if (session) session.dispose();
+      release();
+      if (created?.sessionId) {
+        void closeCreatedVoiceSession(created.sessionId, cleanupToken, {
+          seconds: session?.lastUsageSeconds ?? 0,
+          reason: 'setup_failed',
+        }).catch((cleanupError: unknown) => {
+          console.warn('[voice] The created session close was not recorded:', cleanupError);
+        });
+      }
+      throw error instanceof LiveVoiceSessionError || !authority.isCurrent()
         ? error
         : new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.connectionFailed, 'connection_failed');
     }
+  }
+
+  settle(closed: LiveSessionClosed): Promise<void> {
+    this.settlementPromise ??= closeCreatedVoiceSession(this.sessionId, this.cleanupToken, {
+      seconds: closed.seconds ?? this.lastUsageSeconds ?? 0,
+      reason: closed.reason,
+      ...(this.lastTurnId ? { lastTurnId: this.lastTurnId } : {}),
+      ...(this.backendUsage ? { backend: this.backendUsage } : {}),
+    });
+    return this.settlementPromise;
+  }
+
+  extend(block: number): Promise<Response> {
+    return this.authority.fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(this.sessionId)}/extend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ block }),
+    });
   }
 
   get microphoneLabel(): string {
@@ -539,8 +634,13 @@ export class LiveVoiceSession {
   }
 
   private async playAudio(): Promise<boolean> {
+    if (this.disposed || this.closing || !this.authority.isCurrent()) return false;
     try {
       await this.audio.play();
+      if (this.disposed || this.closing || !this.authority.isCurrent()) {
+        this.audio.pause();
+        return false;
+      }
       return true;
     } catch (error) {
       return !(error instanceof Error && error.name === PLAYBACK_BLOCKED_ERROR);
@@ -554,6 +654,7 @@ export class LiveVoiceSession {
    * documented way to change behaviour mid-session, and only when they changed.
    */
   async updateSettings(settings: LiveVoiceSettings): Promise<void> {
+    if (this.closing || this.disposed || !this.authority.isCurrent()) return;
     const body: Record<string, unknown> = {};
     const instructions: string[] = [];
     if (settings.language !== undefined && settings.language !== this.appliedLanguage) {
@@ -570,9 +671,9 @@ export class LiveVoiceSession {
     }
     if (instructions.length === 0) return;
     this.appendInstruction(instructions.join(' '));
-    await fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(this.sessionId)}/settings`, {
+    await this.authority.fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(this.sessionId)}/settings`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).catch(() => undefined);
   }
@@ -595,6 +696,7 @@ export class LiveVoiceSession {
         ? Math.min(advertised, DEFAULT_DATA_CHANNEL_MESSAGE_BYTES)
         : DEFAULT_DATA_CHANNEL_MESSAGE_BYTES;
     const prepared = await prepareVoiceAttachment(file, maxBytes, downscale);
+    if (this.closing || this.disposed || !this.authority.isCurrent()) return 'unavailable';
     if (!prepared.ok) return prepared.reason;
     const noun = prepared.kind === 'image' ? 'a photo' : 'a file';
     this.send({
@@ -623,13 +725,14 @@ export class LiveVoiceSession {
   }
 
   private async callTool(request: LiveVoiceToolCallRequest): Promise<LiveVoiceToolCallResponse> {
-    const response = await fetch(liveVoiceToolCallPath(this.sessionId), {
+    const response = await this.authority.fetch(liveVoiceToolCallPath(this.sessionId), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
     if (!response.ok) throw await readLiveSessionError(response);
     const parsed = LiveVoiceToolCallResponseSchema.parse(await response.json());
+    this.authority.assertCurrent();
     if (
       request.name !== LIVE_VOICE_WORK_TASK_TOOL ||
       parsed.status !== 'completed' ||
@@ -690,6 +793,8 @@ export class LiveVoiceSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.releaseSetup?.();
+    this.releaseSetup = null;
     this.toolBridge.dispose();
     this.stopTimers();
     this.microphone.getTracks().forEach((track) => track.stop());
@@ -703,6 +808,7 @@ export class LiveVoiceSession {
   }
 
   private send(event: Record<string, unknown>): void {
+    if (this.disposed || (event['type'] !== 'session.close' && (this.closing || !this.authority.isCurrent()))) return;
     if (this.channel.readyState !== 'open') return;
     if (!this.started && event['type'] !== 'session.close') return;
     this.clientEventSeq += 1;
@@ -713,6 +819,7 @@ export class LiveVoiceSession {
 
   private watchConnection(): void {
     this.peer.addEventListener('connectionstatechange', () => {
+      if (this.closing || this.disposed) return;
       const state = this.peer.connectionState;
       if (state === 'connected') {
         this.clearDisconnectTimer();
@@ -773,6 +880,7 @@ export class LiveVoiceSession {
 
   private fail(recoverable = false): void {
     if (this.closing || this.disposed) return;
+    this.finalizeTurns();
     const started = this.started;
     const reconnect = recoverable && started && this.callbacks.onConnectionLost;
     if (!reconnect) {
@@ -780,13 +888,12 @@ export class LiveVoiceSession {
         started ? LIVE_SESSION_MESSAGE.connectionDropped : LIVE_SESSION_MESSAGE.connectionFailed,
       );
     }
-    this.finalizeTurns();
     this.dispose();
     if (reconnect) this.callbacks.onConnectionLost?.(LIVE_SESSION_MESSAGE.connectionDropped);
   }
 
   private watchRemoteAudio(remote: MediaStream): void {
-    if (this.context || remote.getAudioTracks().length === 0) return;
+    if (this.disposed || this.closing || !this.authority.isCurrent() || this.context || remote.getAudioTracks().length === 0) return;
     const AudioContextCtor =
       (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -842,6 +949,15 @@ export class LiveVoiceSession {
     } catch {
       return;
     }
+    if (this.disposed) return;
+    if (this.closing) {
+      if (!this.authority.session.isCurrent()) { this.dispose(); return; }
+      if (parsed.type === 'response.event') {
+        this.backendMeter.observe(parsed['event'] as { type?: string } | undefined);
+        return;
+      }
+      if (!['session.closed', 'session.usage.updated', 'session.input_transcript.delta', 'session.output_transcript.delta'].includes(parsed.type)) return;
+    } else if (!this.authority.isCurrent()) return;
     switch (parsed.type) {
       case 'session.started': {
         this.started = true;
