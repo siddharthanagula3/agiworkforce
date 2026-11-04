@@ -2482,7 +2482,11 @@ provenance and this caller captures the current active page rather than proving
 continuity with the menu's original tab. Active-tab continuity, cross-panel races,
 non-draft equality ABA and later account observation remain outside this slice.
 The fixtures extract and compile repository function text with mocked dependencies;
-all are unexecuted, not browser/runtime race proof. The following companion traces general submit/queue boolean propagation; memory
+all are unexecuted, not browser/runtime race proof. Fixture-only `c1953bd361b35dd8f7863dc0880652be7c6d9727` replaces a stand-in
+owner/comparator with the canonical accountId/authIncarnation comparator and
+adds incarnation changes before storage delivery and after capture. These sources
+remain unexecuted and do not add a production slice.
+The following companion traces general submit/queue boolean propagation; memory
 notice ownership remains outside this capture slice.
 
 ## Chrome composer and follow-up queue retain proven refusals
@@ -2536,9 +2540,31 @@ no cross-tenant exposure or observed loss is claimed. An exact reviewed-target
 receipt/version and explicit changed-target behavior need coherent design, not
 just client notice ownership or a boolean confirmation.
 
+## Web attachment clear retires queued preparation and deferred send
+
+Accepted commit `55bdf46f14b2fce99a8fb927a5eae525765e9bdc` changes
+`use-attachments.ts`, the composer wrapper and one hook fixture source. `clearAll`
+advances the existing draft generation, detaches the old admission promise chain,
+resets pending-batch count/preparing state and clears held files/previews/refusals.
+Old queued work checks generation before starting preparation; old finalizers
+cannot decrement a replacement batch's count or release its preparing state.
+Existing generation-aware settlement suppresses stale results/refusals. Already
+started metadata preparation may still finish; no cancellation of its computation
+is added. Replacement input need not wait for that abandoned chain.
+
+The composer routes both whole-draft and attachment-only clearing through a
+wrapper that first cancels `deferredSendRef`. This deliberately prevents an earlier
+Enter waiting on attachment preparation from later sending after files are
+cleared; attachment-only clear retains text and requires another send action.
+It is not a clipboard-operation lease or same-instance destination replacement
+fix. Three unexecuted hook fixtures cover replacement documents, old finalizer/
+refusal isolation and skipping queued stale preparation. There is no dedicated
+composer integration fixture or runtime acceptance for deferred-send behavior.
+No tests, checks or native/provider work ran for this slice.
+
 ## Reconstruction boundary
 
-Only the ninety-four accepted production slices traced above are represented as
+Only the ninety-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
