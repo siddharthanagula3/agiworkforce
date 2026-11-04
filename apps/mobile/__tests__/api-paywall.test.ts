@@ -42,6 +42,11 @@ jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
   clearLocalCloudAccountState: () => mockClearLocalCloudAccountState(),
 }));
 
+const mockAnnouncePasskeyRequired = jest.fn();
+jest.mock('../src/features/auth/services/accountSecurityEvents', () => ({
+  announcePasskeyRequired: () => mockAnnouncePasskeyRequired(),
+}));
+
 const mockGetInfoAsync = jest.fn();
 const mockUploadAsync = jest.fn();
 const mockCancelUploadAsync = jest.fn();
@@ -55,7 +60,15 @@ jest.mock('expo-file-system/legacy', () => ({
   createUploadTask: (...args: unknown[]) => mockCreateUploadTask(...args),
 }));
 
-import { api, ApiFreeCapacityError, ApiPaywallError, resetApiAccountState } from '../services/api';
+import {
+  api,
+  apiFetch,
+  apiFetchBinary,
+  ApiFreeCapacityError,
+  ApiPaywallError,
+  resetApiAccountState,
+} from '../services/api';
+import { Alert } from 'react-native';
 import {
   paywallActivityErrorFromApiError,
   paywallErrorStateFromApiError,
@@ -92,6 +105,28 @@ function makeResponse(status: number, body: unknown, contentType = 'application/
   } as unknown as Response;
 }
 
+function deferredBody<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((done) => {
+    markStarted = done;
+  });
+  const body = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return {
+    started,
+    resolve,
+    reject,
+    read: jest.fn(() => {
+      markStarted();
+      return body;
+    }),
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   resetApiAccountState();
@@ -108,6 +143,204 @@ beforeEach(() => {
 });
 
 describe('Cloud account request isolation', () => {
+  const requests = [
+    ['JSON', (path: string) => api.get(path)],
+    ['text', (path: string) => apiFetch(path)],
+    ['binary', (path: string) => apiFetchBinary(path)],
+  ] as const;
+
+  it.each(requests)('rejects stale %s passkey refusal without security events', async (_, run) => {
+    const body = deferredBody<unknown>();
+    const response = makeResponse(403, {});
+    response.json = body.read;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+
+    const pending = run('/api/account-scoped');
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    await body.started;
+    resetApiAccountState();
+    body.resolve({ error: { details: { reason: 'passkey_required' } } });
+    await rejected;
+
+    expect(mockAnnouncePasskeyRequired).not.toHaveBeenCalled();
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it.each(requests)('rejects stale %s account refusal without signing out', async (_, run) => {
+    const body = deferredBody<unknown>();
+    const response = makeResponse(403, {});
+    response.json = jest.fn().mockResolvedValueOnce({}).mockImplementationOnce(body.read);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+
+    const pending = run('/api/me');
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    await body.started;
+    resetApiAccountState();
+    body.resolve({ error: { code: 'ACCOUNT_UNAVAILABLE', message: 'Account unavailable' } });
+    await rejected;
+
+    expect(mockAnnouncePasskeyRequired).not.toHaveBeenCalled();
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('does not fall through a stale malformed identity refusal into sign-out', async () => {
+    const body = deferredBody<unknown>();
+    const response = makeResponse(403, {});
+    response.json = jest.fn().mockResolvedValueOnce({}).mockImplementationOnce(body.read);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+
+    const pending = api.get('/api/me');
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    await body.started;
+    resetApiAccountState();
+    body.reject(new Error('Invalid JSON'));
+    await rejected;
+
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects buffered text that settles after account teardown', async () => {
+    const body = deferredBody<string>();
+    const response = makeResponse(200, {});
+    response.text = body.read;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+
+    const pending = apiFetch('/api/account-scoped');
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    await body.started;
+    resetApiAccountState();
+    body.resolve('account-a');
+    await rejected;
+  });
+
+  it('rejects buffered binary that settles after account teardown', async () => {
+    const body = deferredBody<ArrayBuffer>();
+    const response = makeResponse(200, {});
+    response.arrayBuffer = body.read;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+
+    const pending = apiFetchBinary('/api/account-scoped');
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    await body.started;
+    resetApiAccountState();
+    body.resolve(new ArrayBuffer(4));
+    await rejected;
+  });
+
+  it('keeps the original owner through a refresh and deferred binary body', async () => {
+    const body = deferredBody<ArrayBuffer>();
+    const response = makeResponse(200, {});
+    response.arrayBuffer = body.read;
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, {}))
+      .mockResolvedValueOnce(response);
+
+    const pending = apiFetchBinary('/api/account-scoped');
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: 'StaleApiAccountOperationError',
+    });
+    await body.started;
+    resetApiAccountState();
+    body.resolve(new ArrayBuffer(4));
+    await rejected;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+  });
+
+  it('preserves a same-owner passkey refusal', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, { error: { details: { reason: 'passkey_required' } } }),
+    );
+
+    await expect(api.get('/api/account-scoped')).rejects.toMatchObject({
+      name: 'ApiHttpError',
+      code: 'PASSKEY_REQUIRED',
+    });
+    expect(mockAnnouncePasskeyRequired).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+  });
+
+  it('preserves a same-owner account refusal even when cleanup resets API ownership', async () => {
+    mockClearLocalCloudAccountState.mockImplementationOnce(resetApiAccountState);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, { error: { code: 'ACCOUNT_UNAVAILABLE', message: 'Account unavailable' } }),
+    );
+
+    await expect(api.get('/api/me')).rejects.toThrow('HTTP 403: Account unavailable');
+    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
+    expect(mockClearLocalCloudAccountState).toHaveBeenCalledTimes(1);
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns same-owner binary bytes and preserves bodyless responses', async () => {
+    const bytes = new ArrayBuffer(4);
+    const response = makeResponse(200, {});
+    response.arrayBuffer = jest.fn().mockResolvedValue(bytes);
+    const bodyless = makeResponse(204, {});
+    bodyless.arrayBuffer = jest.fn();
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response)
+      .mockResolvedValueOnce(bodyless);
+
+    await expect(apiFetchBinary('/api/account-scoped')).resolves.toMatchObject({ bytes });
+    const empty = await apiFetchBinary('/api/account-scoped');
+    expect(empty.status).toBe(204);
+    expect(empty.bytes.byteLength).toBe(0);
+    expect(bodyless.arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it('returns same-owner text and preserves bodyless text responses', async () => {
+    const response = new Response('account-b', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain' },
+    });
+    const bodyless = new Response(null, { status: 204 });
+    const readBodyless = jest.spyOn(bodyless, 'text');
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response)
+      .mockResolvedValueOnce(bodyless);
+
+    const result = await apiFetch('/api/account-scoped');
+    await expect(result.text()).resolves.toBe('account-b');
+    expect(result.headers.get('content-type')).toBe('text/plain');
+    const empty = await apiFetch('/api/account-scoped');
+    expect(empty.status).toBe(204);
+    await expect(empty.text()).resolves.toBe('');
+    expect(readBodyless).not.toHaveBeenCalled();
+  });
+
+  it('preserves same-owner binary body failures', async () => {
+    const failure = new Error('Body read failed');
+    const response = makeResponse(200, {});
+    response.arrayBuffer = jest.fn().mockRejectedValue(failure);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response);
+
+    await expect(apiFetchBinary('/api/account-scoped')).rejects.toBe(failure);
+  });
+
   it('rejects an account-A response that resolves after account teardown', async () => {
     let resolveResponse: ((response: Response) => void) | undefined;
     jest.spyOn(globalThis, 'fetch').mockReturnValueOnce(
@@ -134,6 +367,7 @@ describe('Cloud account request isolation', () => {
   });
 
   it('invalidates and clears Cloud account state synchronously on terminal 401', async () => {
+    mockClearLocalCloudAccountState.mockImplementationOnce(resetApiAccountState);
     mockRefreshAuthSession.mockResolvedValueOnce(false);
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
 

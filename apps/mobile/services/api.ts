@@ -293,8 +293,9 @@ async function sendRequest(
   path: string,
   init: RequestInit,
   options: RequestOptions,
+  accountGeneration: number,
 ): Promise<SentRequest> {
-  const accountGeneration = _accountGeneration;
+  assertApiAccountGeneration(accountGeneration);
   const authHeaders = await getAuthHeaders();
   const headers = {
     'Content-Type': 'application/json',
@@ -348,7 +349,7 @@ async function sendRequest(
         assertApiAccountGeneration(accountGeneration);
         if (refreshed) {
           release();
-          return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+          return sendRequest(path, init, { ...options, _skipAuthRetry: true }, accountGeneration);
         }
       }
       release();
@@ -356,14 +357,17 @@ async function sendRequest(
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
 
-    if (response.status === 403 && (await refusedForPasskey(response))) {
-      release();
-      announcePasskeyRequired();
-      throw new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
-    }
-
     if (response.status === 403) {
+      const passkeyRequired = await refusedForPasskey(response);
+      assertApiAccountGeneration(accountGeneration);
+      if (passkeyRequired) {
+        release();
+        announcePasskeyRequired();
+        throw new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
+      }
+
       const refusal = await readAccountUnavailable(response);
+      assertApiAccountGeneration(accountGeneration);
       if (refusal) {
         release();
         handleAccountUnavailable(refusal);
@@ -391,9 +395,11 @@ export async function apiFetch(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<Response> {
-  const { response, release } = await sendRequest(path, init, options);
+  const accountGeneration = _accountGeneration;
+  const { response, release } = await sendRequest(path, init, options, accountGeneration);
   try {
     const body = BODYLESS_STATUSES.has(response.status) ? '' : await response.text();
+    assertApiAccountGeneration(accountGeneration);
     return new Response(body.length > 0 ? body : null, {
       status: response.status,
       statusText: response.statusText,
@@ -416,11 +422,13 @@ export async function apiFetchBinary(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<ApiBinaryResponse> {
-  const { response, release } = await sendRequest(path, init, options);
+  const accountGeneration = _accountGeneration;
+  const { response, release } = await sendRequest(path, init, options, accountGeneration);
   try {
     const bytes = BODYLESS_STATUSES.has(response.status)
       ? new ArrayBuffer(0)
       : await response.arrayBuffer();
+    assertApiAccountGeneration(accountGeneration);
     return {
       ok: response.ok,
       status: response.status,
@@ -438,7 +446,7 @@ async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const accountGeneration = _accountGeneration;
-  const { response, release } = await sendRequest(path, init, options);
+  const { response, release } = await sendRequest(path, init, options, accountGeneration);
 
   try {
     if (response.status === 429) {
