@@ -2794,9 +2794,45 @@ rejection, and an in-place consumer queue account change are not established by
 these fixtures. No runtime, deployment, SDK-event, cross-tab ordering, remote
 rollback or universal preference ownership guarantee is claimed.
 
+## Read-aloud playback belongs to its captured identity and navigation lifetime
+
+Accepted commit `41c522b44f` changes six production files and two fixture sources.
+`useTTS.ts` captures render identity, hook lifetime, scope generation and an exact
+speech operation. Retained speak/stop/unlock callbacks refuse retired render or
+scope ownership; layout cleanup retires its own operation on unmount or an
+observed identity/navigation change. Chat supplies conversation ID; Code supplies
+session ID, hosted Local Code root/session pair, and the authenticated shared
+viewer its token. These are playback lifetimes, not content trust-mode decisions.
+
+Cloud speech uses captured SessionAuthority through RequestAuthority bearer
+transport with cookies omitted. Ownership is checked around AudioContext resume,
+token acquisition, response bytes, decode, each chunk and playback completion.
+Retirement aborts its request, stops/disconnects its exact AudioBufferSourceNode,
+detaches handlers and releases its playback wait without publishing over a
+replacement. Already dispatched server/provider processing is not undone.
+
+Device speech uses an exact module-level cancellation lease because browser
+`speechSynthesis.cancel()` is global. Passive hooks and old cleanup cannot cancel
+a newer owned voice. An intentional owned replacement retires the old lease;
+when the synthesizer is already busy without a known lease, acquisition refuses
+instead of claiming/cancelling unrelated speech. Anonymous and explicit device
+speech remain available, as does same-owner first-chunk fallback. Later chunk
+failure ends playback rather than replaying all text. Settings preview remains
+explicit device speech and relies on hook cleanup instead of a redundant stop
+effect.
+
+This does not redesign Local/BYOK speech routing, consent or trust-mode semantics.
+Browser/device synthesis is not an offline/privacy guarantee. Entirely unobserved
+SDK transitions and arbitrary external synthesizer writers remain limitations;
+there is no universal global-synthesis coordination or native cancellation proof.
+Hook fixtures use mocked audio/synthesis/identity boundaries; caller scope fixtures
+are textual wiring assertions. They include stale callbacks, cross-hook cleanup,
+resume/token/body/decode waits and same-owner fallback/chunks, but all remain
+unexecuted. No browser/audio/network tests, checks or runtime acceptance occurred.
+
 ## Reconstruction boundary
 
-Only the one hundred and one accepted production slices traced above are represented as
+Only the one hundred and two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
