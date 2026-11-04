@@ -3167,9 +3167,48 @@ advertisement were read but not run. No Rust, workbook I/O, native build or depl
 proof exists in this tranche. Re-enabling requires a separately accepted preserving
 backend, not simply reattaching sheets or restoring the registry entry.
 
+## Mobile memory import retains the preview's original destination
+
+Accepted commit `3d97d59ab324e83abbfa8523d9f8d6458a12ef4f` changes four
+production files and three fixture sources. Previously a completed preview could
+outlive its owner/mode while a later Commit captured the then-current destination.
+Existing API account epochs/egress checks and Local SQLite routing were already
+counterguards, not new protections supplied by this slice.
+
+The import screen binds typed/picked text and preview to `AccountScopedUiState`.
+Direct canonical epoch events clear retired Cloud ephemeral drafts; device-owned
+Local drafts survive account-only changes and remain usable offline. Mode changes
+retire operations and suspend the original draft rather than rebinding it. The
+root Clerk bridge's existing activation/invalidation and account cleanup remain;
+the app uses its existing Slot/Drawer routing, so disposal is not assumed whenever
+a screen loses focus. Explicit blur invalidation covers retained mounted screens.
+
+Exact operation identity plus draft revision guards picker/file-read, preview,
+selection and commit publication/finally. Controls are disabled during pending
+work. Each Cloud preview/commit API call carries the captured original account
+epoch; Local operations check original scope around reads and each write. A fresh
+Cloud activation with no bound draft can enable entry without changing mode.
+Same-owner mode return retains the original preview/selection, but cannot revive
+an interrupted operation.
+
+`writeLocalMemoryFact` can insert before its later supersede step fails. Import
+now stops with uncertain-outcome guidance instead of counting that exception as a
+skipped successful item. Interrupted or failed commit blocks immediate repeat
+until an explicit fresh preview; it does not roll back inserted rows. Normal
+preview is bounded by the existing 500-item limit, so defensive multi-batch guards
+are not evidence of a normal UI multi-batch exploit. No migration, storage-schema
+change, logout weakening, native/API recall or general workspace/session-incarnation
+redesign is introduced.
+
+Unexecuted fixture sources cover mounted blur/refocus, original-owner preview and
+commit, mode round trips, Local draft preservation, Cloud retirement, late file
+reads, exact cleanup and no-draft Cloud activation. They do not prove actual native
+picker timing, SQLite rollback, network cancellation or runtime acceptance. No
+tests/checks, native, database or network actions were performed in this trace.
+
 ## Reconstruction boundary
 
-Only the one hundred and nine accepted production slices traced above are represented as
+Only the one hundred and ten accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
