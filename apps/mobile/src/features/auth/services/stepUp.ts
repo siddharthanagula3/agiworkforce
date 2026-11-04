@@ -2,6 +2,7 @@ import { getClerkInstance } from '@clerk/expo';
 import { api, apiFetch } from '@/services/api';
 import { ApiHttpError, parseJsonBody } from '@/services/apiErrors';
 import { CLERK_PUBLISHABLE_KEY } from '@/src/integrations/clerk';
+import { captureCloudAccountEpoch, isCloudAccountEpochCurrent, type CloudAccountEpoch } from './cloudAccountSession';
 
 export const STEP_UP_TOKEN_HEADER = 'x-step-up-token';
 
@@ -26,11 +27,28 @@ export type StepUpGrant =
   | { kind: 'verify'; level: StepUpLevel }
   | { kind: 'failed'; message: string };
 
+export type StepUpSession = NonNullable<ReturnType<typeof getClerkInstance>['session']>;
+
+export interface StepUpIdentity {
+  readonly session: StepUpSession;
+  readonly account: CloudAccountEpoch;
+  readonly isCurrent: () => boolean;
+}
+
+export interface StepUpRequestOptions {
+  accountEpoch: CloudAccountEpoch;
+  signal: AbortSignal;
+}
+
 export interface StepUpChallenge {
-  action: StepUpAction;
-  resourceId: string | null;
-  consequence: string;
-  level: StepUpLevel;
+  readonly attemptId: number;
+  readonly identity: StepUpIdentity;
+  readonly isCurrent: () => boolean;
+  readonly signal: AbortSignal;
+  readonly action: StepUpAction;
+  readonly resourceId: string | null;
+  readonly consequence: string;
+  readonly level: StepUpLevel;
 }
 
 export class StepUpCancelledError extends Error {
@@ -56,6 +74,7 @@ export async function requestStepUpGrant(
   action: StepUpAction,
   resourceId: string | null,
   sessionToken: string,
+  options: StepUpRequestOptions,
 ): Promise<StepUpGrant> {
   const response = await apiFetch(
     STEP_UP_ENDPOINT,
@@ -63,7 +82,7 @@ export async function requestStepUpGrant(
       method: 'POST',
       body: JSON.stringify({ action, ...(resourceId ? { resourceId } : {}) }),
     },
-    { headers: { Authorization: `Bearer ${sessionToken}` } },
+    { ...options, headers: { Authorization: `Bearer ${sessionToken}` } },
   );
   const body = parseJsonBody(await response.text());
   if (response.ok && typeof body?.['token'] === 'string') {
@@ -83,14 +102,40 @@ export async function requestStepUpGrant(
   };
 }
 
-export async function currentSessionToken(): Promise<string | null> {
-  const session = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).session;
-  return (await session?.getToken()) ?? null;
+export function captureStepUpIdentity(): StepUpIdentity {
+  const sdk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
+  const session = sdk.session;
+  const account = captureCloudAccountEpoch();
+  if (!session || !account || session.user?.id !== account.ownerId) {
+    throw new StepUpCancelledError();
+  }
+  const sessionId = session.id;
+  let retired = false;
+  return {
+    session,
+    account,
+    isCurrent: () => {
+      if (!isCloudAccountEpochCurrent(account) || sdk.session !== session ||
+          sdk.session?.id !== sessionId || session.user?.id !== account.ownerId) retired = true;
+      return !retired;
+    },
+  };
 }
 
-export async function readStepUpConsequence(action: StepUpAction): Promise<string> {
+export async function currentSessionToken(identity: StepUpIdentity): Promise<string | null> {
+  if (!identity.isCurrent()) throw new StepUpCancelledError();
+  const token = await identity.session.getToken();
+  if (!identity.isCurrent()) throw new StepUpCancelledError();
+  return token;
+}
+
+export async function readStepUpConsequence(
+  action: StepUpAction,
+  options: StepUpRequestOptions,
+): Promise<string> {
   const readiness = await api.get<{ actions?: Record<string, { consequence?: unknown }> }>(
     STEP_UP_ENDPOINT,
+    options,
   );
   const consequence = readiness.actions?.[action]?.consequence;
   return typeof consequence === 'string' ? consequence : 'Confirm it is you to continue.';
