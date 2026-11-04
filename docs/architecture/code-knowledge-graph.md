@@ -745,9 +745,36 @@ send-draft and read-attachment behavior is unchanged, as are remote POST outcome
 uncertainty and storage-size behavior. No retention, all-connector scope, runtime
 or deployment acceptance is claimed; fixtures remain source-only.
 
+## Gmail aggregate attachment read budget
+
+Reconstructed commit: `a6be9b8a59b7bd26a0471eefb9c4082aa9d245f1` changes three
+production files and three unexecuted fixture sources. Gmail attachment drafts
+read sequentially with the remaining 20,971,520-byte raw attachment budget,
+subtracting actual returned bytes before the next read. Size refusal stops before
+MIME construction and draft POST; unknown advertised size produces a truthful
+"could not be read within" limit response rather than an invented actual size.
+
+`media-storage.ts::readStoredMedia` adds optional nonnegative-safe-integer
+`maxBytes`; callers omitting it retain existing behavior. Bounded local reads
+check stat size, count actual streamed bytes and destroy the stream on exit.
+Bounded object reads use the existing SDK-backed HEAD and actual chunk-count
+gates. Oversized private reads throw rather than falling back to public storage;
+existing missing-object legacy fallback and sealed-private restrictions remain.
+The canonical object reader now releases its lock after its existing awaited
+cancellation; cancellation that never settles can still stall cleanup.
+
+This bounds accepted attachment payloads, not universal process memory: native/SDK
+chunk allocations, concatenation and MIME/base64 encoding retain transient copies.
+It adds no general caller migration, remote cancellation, deadline or storage
+transaction guarantee. Fixtures include remaining-budget, cumulative refusal,
+unknown HEAD size, local stream cleanup and exact-cap/empty behavior, but were not
+run. Explicit zero-budget/nonempty and unsafe-integer fixture cases remain absent;
+no runtime or deployment acceptance follows. Pending shared-project work is not
+represented as corrected here.
+
 ## Reconstruction boundary
 
-Only the thirty accepted production slices traced above are represented as
+Only the thirty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
