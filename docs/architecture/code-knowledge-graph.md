@@ -1944,8 +1944,8 @@ before dispatch; existing ConfirmAction keyed cleanup is not a new correction.
 global completion setting; it does not migrate that setting to per-account
 storage. Split panes receive the original injected API rather than another pane's
 owned wrapper. Notebook receives a guarded session-publication callback only:
-its transport, Local/native operations, workspace pinning and server authorization
-are outside this slice. Entirely unobserved SDK changes and already-dispatched
+its transport is addressed separately below. Local/native operations, workspace
+pinning and server authorization are outside this Code slice. Entirely unobserved SDK changes and already-dispatched
 remote work are not resolved by these client checks.
 
 Source fixtures cover selected account/readiness and share-token changes,
@@ -1955,9 +1955,51 @@ The sibling case is a hook fixture, not a full split-pane UI exercise. All fixtu
 remain unexecuted; no browser, StrictMode runtime or deployment acceptance is
 claimed.
 
+## Notebook keeps session drafts and request outcomes in original pane ownership
+
+Accepted commit `577cc763c7320f7dbf168c3db38839def69efe1d` changes seven
+production files and three fixture sources. The account/readiness-keyed
+`OwnedCloudCodePage` owns `useNotebookWorkspace`; its in-memory map stores separate
+session buckets for cells, outputs, run provenance, files and pending operations.
+`useNotebookCells` subscribes to the selected bucket. Switching notebooks or
+unmounting only the panel retains original drafts and in-flight work within that
+pane; disposing the owning page retires its authorities. These buckets have no
+eviction cap or reload persistence and are not shared across independent panes.
+
+`useNotebookWorkspace` captures original session RequestAuthority before each
+execute/run-all/list/upload operation. `notebook-api.ts` uses its bearer fetch
+with omitted cookies and checks currentness through body decoding; the legacy
+API defaults remain separate. Each bucket has an exact synchronous operation
+token, retained across panel subscriber changes. Execution blocks input edits;
+listing/uploading still permit edits but block other sandbox requests in that
+bucket. Confirmed results update only the original bucket, while panel selection
+revision, mounted state and deferred-focus checks guard current-view callbacks.
+There is no cross-pane or server-wide operation lock.
+
+Input edits clear affected outputs and whole-run provenance. Responses must match
+the requested session; run-all also validates unique ordered submitted cell IDs,
+from-top status and completion consistency before recording provenance. Failed or
+unconfirmed execution keeps submitted input, clears misleading output and warns
+that code may have run; an uncertain upload similarly warns that a file may have
+been written without automatically repeating it. Confirmed upload refreshes the
+original bucket. An interrupted initial list reports uncertainty and exposes an
+explicit Refresh files action, rather than automatically retrying. Exact-token
+cleanup releases only its operation when the request settles; a never-settling
+request can therefore continue to hold that bucket's lock.
+
+File downloads still use the existing cookie-authenticated anchor URL. They are
+outside this bearer/operation gate and may contend for the server lease; no
+bounded-Blob download replacement is introduced. Abort and stale-result rejection
+do not cancel a server kernel or recall remote execution/upload. Workspace scope,
+server authorization, persistence and recovery semantics are not redesigned.
+Source fixtures cover bucket switching, input/provenance guards, uncertain
+outcomes, exact cleanup, explicit refresh and token/body boundaries. Their
+ownership simulations are not actual hook StrictMode/account end-to-end proof;
+all remain unexecuted, with no browser or deployment acceptance claimed.
+
 ## Reconstruction boundary
 
-Only the seventy-six accepted production slices traced above are represented as
+Only the seventy-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
