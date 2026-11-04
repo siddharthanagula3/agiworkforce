@@ -3608,9 +3608,34 @@ patch fixed it. Mocked fixtures cover duplicate admission, revision changes, swa
 retirement, prefill and native/fallback cancellation boundaries; all are unexecuted.
 No tests, checks, native, network or storage actions were performed.
 
+## Translation fallback admits the exact default Local model
+
+Accepted commit `6c42b21aa2f96dd9adc68fd350b3fd7dea6d71c3` changes
+`translateService.ts` and two fixture sources. After native translation is absent
+or fails, the service resolves the existing catalog default through
+`resolveLocalModelRef` before generation. Missing installation refuses generation;
+admitted model ID and optional installation path are passed to `localGenerate`.
+The shared selector accepts model IDs as well as paths, so the prior defect was
+missing installation admission/path resolution, not treating every ID as a file.
+Neither auto-selection nor a different default is introduced. Native success
+returns before Local admission, without a new account requirement.
+
+Cancellation is rechecked after admission success and failure. An aborted signal
+therefore returns `AbortError` without starting generation, while an ordinary
+admission error remains intact. Admission trusts the existing install records;
+this does not establish that SDK-managed files still exist, reserve model/runtime
+ownership, or cancel an already-dispatched native translation. The native pair
+readiness/download constraint in the preceding slice remains unchanged.
+
+Mocked fixtures cover native bypass, refused admission, exact ID/path forwarding,
+and both successful and failed admission after cancellation. The screen fixture
+isolates the newly imported resolver. Independent source review accepted the
+bounded change; no tests, checks, builds, native, network or storage actions were
+performed for this slice. Regression sources remain unexecuted.
+
 ## Reconstruction boundary
 
-Only the one hundred and twenty-three accepted production slices traced above are represented as
+Only the one hundred and twenty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
