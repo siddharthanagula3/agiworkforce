@@ -1398,9 +1398,51 @@ attempt/delivery truth from charges and preserve observed usage without inventin
 refund policy. No direct-path production change, observed loss, DB action or
 runtime acceptance follows from the managed cancellation correction above.
 
+## Managed EOF recognizes the exact final canonical failure pair
+
+Accepted commit `94cd3c7ebba99320502839c320a140ee3a56b3bf` changes
+`managed-agent-stream.ts` and its unexecuted regression source. Canonical task
+state is tracked independently of journal state. After existing explicit-failure
+and cancellation precedence, only final task state `failed` plus final stop
+`error` selects failed EOF settlement, truncated persistence, no completed
+delivery marker and failed terminal callback. Canonical-only failure does not
+invent an error class; explicit reported failure codes retain precedence.
+Existing `tool-loop.ts` resume validation, managed step admission and free-limit
+producers emit this pair via `flushTerminal('error')`.
+
+Intermediate error events, other final-state/stop combinations, partial/timed-out
+and awaiting-input semantics are not broadly reclassified. Existing consumed-cost
+settlement behavior remains; mocked journal/no-journal and consumed-usage source
+cases are not live financial/journal proof. The separate direct-stream outcome
+coupling finding above remains OPEN. No tests or runtime acceptance are claimed.
+
+## Mobile image actions follow row, visible viewer and edit lifetime
+
+Accepted commit `3ad598653d7e67fccd3a2a6354ab8b5b64f49811` changes four production
+files and three unexecuted fixture sources. `MessageBubble` keys image rows and
+fullscreen viewers by message ID/media URL; `GeneratedImage` and
+`ImageFullScreen` internal owners additionally key URL/ephemeral mode. A hidden
+fullscreen viewer unmounts its owner, so same-URL reopening creates a new lifetime.
+Layout lifetime and exact action tokens prevent overlapping actions and suppress
+stale alerts, feedback and cleanup. Close retires synchronously; feedback timers
+are owned/cleared, and delayed delete confirmations require the original action.
+Exact edit-session identity plus keyed editor prevents cancelled/reopened edits
+from submitting an old callback.
+
+Optional currentness predicates in `fileCreation.ts` fence image share, Photos
+save and Clipboard copy after relevant permission/download/write/availability
+awaits before native dispatch. Default callers retain prior behavior. An old
+closure is retired rather than being allowed to act on its former image; this is
+not proof that a previous path sent replacement-image bytes. Already-issued
+native actions/downloads cannot be recalled, and editor-local computation may
+finish while its submission callback is retired. Account/workspace authority and
+native cancellation are not redesigned. Fixtures cover mocked component/service
+lifetimes, not actual recycled-list/native/StrictMode runtime behavior. No tests,
+network, Photos/Clipboard/share actions or deployment acceptance were performed.
+
 ## Reconstruction boundary
 
-Only the fifty-eight accepted production slices traced above are represented as
+Only the sixty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
