@@ -2906,9 +2906,66 @@ account epochs and lifecycle transitions; row/owner/voice-response and compatibi
 sources are all unexecuted. StrictMode-shaped fixtures are not native runtime
 proof. No tests/checks, actual audio/network or provider validation occurred.
 
+## Draft synchronization separates persistence authority from mounted UI
+
+Accepted commit `25d021d38c` changes six production files and six fixture sources.
+`conversation-draft.ts` owns per-session conversation queues, observed revisions,
+explicit conflict revision choices and active RequestAuthorities. Serialized saves
+use the original session bearer and final synchronous dispatch predicate after
+CSRF/token awaits. An accepted still-current save can continue after same-session
+hook unmount; UI publication/retries require their separate mounted owner. Response
+CAS bookkeeping is session-owned, so a dispatched acknowledgment can advance the
+revision without reviving obsolete draft UI. Explicit conflict choices, including
+null, retain their exact CAS independently of later observations and are consumed
+only by the matching successful write.
+
+`web-chat-store.ts` assigns ephemeral mutation objects to draft slots, preserving
+same-value parking but changing ownership on edits, explicit clears and rename.
+The hook captures text, slot token, session and UI owner; final eligibility checks
+current slot/text, temporary status and Local selection/history before dispatch.
+Empty clears retain their intended compatibility while temporary drafts are skipped.
+At an observed session transition, extant unclaimed slots bind to the previous
+session rather than being silently uploaded under the replacement; their bytes
+are not deleted. This is observed-transition quarantine, not durable provenance
+for initially unseen/restored data or a general account/workspace reconciliation.
+
+Conflict Compare/Close/Resolve, replacement nonce consumption, retry timers/actions
+and cleanup check exact objects. Composer replacement checks currentness before
+insertion; outgoing microtask parking checks captured identity and slot ownership.
+Pending-clear records gain UUID marker identity while legacy records remain
+readable; successful matching acknowledgments clear only their captured token.
+Storage compare/remove is not cross-tab atomic. No already dispatched server write
+is undone, and this slice does not pin workspace or migrate persisted draft owners.
+Fixtures cover final dispatch gates, same-session unmount, stale bodies/choices,
+clear replacement, observed account transitions, retry bounds and parking. All are
+unexecuted; no browser, server CAS or cross-tab runtime acceptance is claimed.
+
+### Separate unresolved temporary-conversion semantics
+
+Source reading of WebChatPage's `handleSetTemporaryChat` shows enabling Temporary
+can PUT the flag on an existing displayed conversation. Project-bound conversion
+is refused. The general conversation PUT retains existing `draft`,
+`draft_updated_at` and messages; its temporary follow-up marks media jobs only.
+Separate draft PUT normalizes temporary drafts to null, but conversion does not
+invoke it and the draft-sync client skips temporary rows. Composer clears its
+local persisted draft. Ordinary history listing excludes temporary conversations,
+while direct owner/org-scoped GET still selects existing draft and message rows.
+These authorization and visibility guards preclude treating retention alone as
+proven disclosure.
+
+`content/support/temporary-chats.md` permits bounded retention of the conversation
+record/research/resume data/files, but promises temporary messages are not written
+to history. It does not explicitly resolve pre-conversion drafts/history; the
+composer's stronger no-leftover-draft rationale is not server cleanup. Purge uses
+original conversation `created_at` with legal-hold exclusions, not conversion time,
+so an old newly converted row can already meet age eligibility. No actual purge,
+loss or disclosure was observed. Product semantics for pre-existing content and
+the retention clock must be decided before a coherent change; no destructive
+cleanup, retention alteration or implementation-ready solution is supplied here.
+
 ## Reconstruction boundary
 
-Only the one hundred and four accepted production slices traced above are represented as
+Only the one hundred and five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
