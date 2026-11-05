@@ -8878,8 +8878,8 @@ is asserted. Source-only; no tests, checks, DB, billing or network actions.
 
 ## MOBILE-MESSAGE-DELETE-TOPOLOGY-ROLLBACK-01
 
-Severity: Medium. Status: OPEN, source-backed design dependency reviewed
-2026-11-04; no reproduced loss or exploit and no production correction.
+Severity: Medium. Status: OPEN, source-backed design dependency independently
+re-read 2026-11-05; no reproduced loss or exploit and no production correction.
 
 `apps/mobile/app/(app)/chat/[id].tsx::handleDeleteMessage` captures the complete
 Cloud array, removes the target optimistically, then restores that old array on
@@ -8890,6 +8890,14 @@ filters the target. `cloudMessageMutations.ts::deleteCloudMessagesRemote` ignore
 successful JSON and treats 404 as success. By contrast, the server message DELETE
 transaction locks the thread, splices direct children to the deleted parent,
 settles the active leaf and returns it. The mobile path does not apply that receipt.
+
+The re-read also confirms that DELETE can commit before api.ts response.json()
+rejects. Treating that rejection as proof of failure can resurrect the target
+locally; a later generic 404 cannot reconstruct its parent/leaf outcome and also
+covers an unavailable conversation. Later explicit leaf selection, including ABA,
+must survive reconciliation, and same-account cache removal/hydration needs its
+own incarnation fence. Multi-ID edit/retry callers can partially complete and
+must not be silently reinterpreted as one atomic delete.
 
 `resolveVisibleThread` stops at a missing parent when walking a known leaf; thus
 removing an interior row without splicing can hide older ancestors in the visible
