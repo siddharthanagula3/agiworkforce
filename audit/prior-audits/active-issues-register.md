@@ -11501,3 +11501,63 @@ retention or cancellation policy is introduced by this patch.
 
 No tests, lint, typechecks, builds, installations, application execution, live
 DB/provider actions, push or deployment ran. This is source acceptance only.
+
+
+## WEB-STORE-CONSENT-PREFLIGHT-01
+
+Severity: Medium. Status: Recorded consent withdrawal is source-corrected at
+purchase preflight on 2026-11-05; race fencing and runtime acceptance remain open.
+Accepted production commit: `67ea34fcda5734acf41e91fd307f59c383043955`.
+
+The mobile catalogue previously did not check the existing account-wide store
+consent-rescission signal. This is distinct from scheduled account deletion:
+`mobile-iap-ledger-service.ts::hasWithdrawnStoreConsent` joins every app transaction
+registered to the account to recorded rescissions, regardless of the current
+install or purchase platform. New grants already refuse that condition after
+store verification.
+
+The actual mobile `canPurchase()` gate reads local OS age-assurance storage.
+It correctly refuses verification-required and applicable minor/guardian states,
+but permits absent or nonblocking age assurance and does not read account
+rescissions. Another eligible install or platform can therefore pass this gate
+for an account associated with a previously rescinded Apple app transaction.
+`useMobileIap.ts` then refreshes the catalogue before the native store request.
+The app-transaction registration response includes `consentWithdrawn`, but
+`apps/mobile/src/features/age-assurance/appTransaction.ts` ignores that response
+and records only registration completion. Server withdrawal ends Apple-owned
+entitlement; it does not suspend account authentication. This supports a fresh
+purchase-sheet path, not an observed store charge or a claim that the local minor
+gate never works. Product configuration, native distribution and store acceptance
+were not verified live.
+
+The catalogue now calls the canonical withdrawal helper with the authenticated,
+parameter-bound user ID after caller-scoped profile/deletion admission and before
+plan lookup or token upsert. It uses the service adapter: migration 0377 forces
+RLS on the service-owned app transaction/rescission tables without an app_rls
+read policy. A scoped query could silently miss the hold and is not equivalent.
+No policy or migration is changed. A recorded withdrawal returns disabled offers,
+empty products and no token for either platform, using the existing refusal copy.
+Lookup errors reach the existing 503 path. Consumable product IDs remain present
+for already-granted purchase recovery.
+
+Existing deployment/kill-switch, account epoch, pricing, ownership and duplicate-tap
+counterguards remain. Verification, new-grant refusal, refund-review filing and
+notification behavior are unchanged. Already-recorded receipts can still return
+`already_processed` before the grant's consent check; this is settlement retry,
+not a new entitlement. Restore and unfinished-transaction processing do not depend
+on `catalog.enabled`. The patch neither undoes settled purchases nor drops
+recovery callbacks.
+
+Independent source review accepted the two-file patch and unrun fixtures. Cases
+cover both platforms with matching provider ownership, exact bound-user helper
+SQL on a separate service adapter, no subsequent token write on withdrawal/error,
+allowed consent-query-before-upsert order and prior deletion/plan failure behavior.
+Mocks do not prove live RLS, driver or native behavior. The catalogue read is not
+an atomic fence: later withdrawal, already-open checkout and external renewals
+still require coordinated handling. Incomplete app-transaction registration and
+mobile use of its returned withdrawal receipt are not corrected here. Broader
+billing/erasure custody remains separately open under
+`WEB-STORE-BILLING-ERASURE-CUSTODY-01`.
+
+No tests, lint, typechecks, builds, installations, application execution, live
+DB/provider actions, push or deployment ran. This is source acceptance only.

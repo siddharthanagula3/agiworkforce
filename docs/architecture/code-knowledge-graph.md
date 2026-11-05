@@ -4909,9 +4909,22 @@ retaining the original pending request and store recovery custody. Provider sett
 fencing remain open under `WEB-STORE-BILLING-ERASURE-CUSTODY-01`. The narrow patch
 and new fixtures are independently source-reviewed, not executed or release-ready.
 
+## Store purchase preflight reads account-wide consent withdrawal
+
+Accepted `67ea34fcda5734acf41e91fd307f59c383043955` adds the canonical store
+consent-withdrawal read to mobile catalogue admission before plan lookup or token
+upsert. Local mobile age assurance is install-specific and does not observe this
+account-wide server signal; another eligible install/platform can otherwise
+receive fresh offers. The service database is required by the existing forced-RLS,
+service-owned consent tables. Both platforms refuse observed withdrawal or read
+failure, while disabled responses retain consumable recovery IDs. Verification,
+duplicate settlement, notifications and restore remain unchanged. Independently
+source-reviewed fixtures are unrun; later withdrawal and external renewals are
+not fenced. See `WEB-STORE-CONSENT-PREFLIGHT-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-nine accepted production slices traced above are represented as
+Only the one hundred and ninety accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
