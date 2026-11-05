@@ -265,33 +265,35 @@ async function recordDeliveries(
     redeliveryOf?: string | null;
   },
 ): Promise<DeveloperWebhookDelivery[]> {
-  const deliveries: DeveloperWebhookDelivery[] = [];
-  for (const endpointId of endpointIds) {
-    const [row] = await db.query<DeliveryRow>(
-      `insert into public.developer_webhook_deliveries
-         (endpoint_id, user_id, event_id, event_type, payload, redelivery_of)
-       values ($1, $2, $3, $4, $5::jsonb, $6)
-       returning ${DELIVERY_COLUMNS}`,
-      [
-        endpointId,
+  return db.transaction(async (tx) => {
+    const deliveries: DeveloperWebhookDelivery[] = [];
+    for (const endpointId of endpointIds) {
+      const [row] = await tx.query<DeliveryRow>(
+        `insert into public.developer_webhook_deliveries
+           (endpoint_id, user_id, event_id, event_type, payload, redelivery_of)
+         values ($1, $2, $3, $4, $5::jsonb, $6)
+         returning ${DELIVERY_COLUMNS}`,
+        [
+          endpointId,
+          userId,
+          event.id,
+          event.type,
+          JSON.stringify(event.payload),
+          event.redeliveryOf ?? null,
+        ],
+      );
+      if (!row) throw createError.internal('The webhook delivery could not be queued.');
+      await enqueueJob(tx, {
+        kind: DELIVERY_JOB_KIND,
         userId,
-        event.id,
-        event.type,
-        JSON.stringify(event.payload),
-        event.redeliveryOf ?? null,
-      ],
-    );
-    if (!row) continue;
-    await enqueueJob(db, {
-      kind: DELIVERY_JOB_KIND,
-      userId,
-      idempotencyKey: `developer-webhook:${row.id}`,
-      payload: { deliveryId: row.id },
-      maxAttempts: DEVELOPER_WEBHOOK_MAX_ATTEMPTS,
-    });
-    deliveries.push(toDelivery(row));
-  }
-  return deliveries;
+        idempotencyKey: `developer-webhook:${row.id}`,
+        payload: { deliveryId: row.id },
+        maxAttempts: DEVELOPER_WEBHOOK_MAX_ATTEMPTS,
+      });
+      deliveries.push(toDelivery(row));
+    }
+    return deliveries;
+  });
 }
 
 function eventEnvelope(type: string, data: Record<string, unknown>) {
