@@ -23,6 +23,7 @@ jest.mock('@/services/api', () => ({
 import {
   fetchAccountSettings,
   fetchPreferenceNamespace,
+  patchPreferenceNamespace,
   saveAccountSettings,
   savePreferenceNamespace,
 } from '@/services/preferences';
@@ -68,5 +69,13 @@ describe('mobile preference paths come from the cloud contract', () => {
     await saveAccountSettings({ session_timeout: 30 });
 
     expect(mockPut.mock.calls.map((call) => call[0])).toEqual([RELOCATED, RELOCATED]);
+  });
+
+  it('patches a namespace through the relocated path without a replacement value', async () => {
+    await patchPreferenceNamespace('notifications', { mobilePushAgentActivity: false });
+
+    expect(mockPut.mock.calls).toEqual([
+      [RELOCATED, { namespace: 'notifications', patch: { mobilePushAgentActivity: false } }],
+    ]);
   });
 });

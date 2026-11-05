@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
+import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
@@ -76,14 +76,14 @@ export function useAgentActivityPushSync(): AgentActivityPushSync {
       setEnabledState(value);
       if (!isCloud) return;
 
-      // The namespace is replaced wholesale by the settings route, so the
-      // sibling keys web owns have to be written back with it.
       const previousNamespace = storedNamespace.current;
       const next = { ...previousNamespace, [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: value };
       storedNamespace.current = next;
       setStatus('saving');
       setError(null);
-      void savePreferenceNamespace(ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, next)
+      void patchPreferenceNamespace(ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, {
+        [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: value,
+      })
         .then(() => setStatus('synced'))
         .catch(() => {
           if (storedNamespace.current === next) {

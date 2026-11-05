@@ -4,10 +4,12 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockFetchPreferenceNamespace = jest.fn();
 const mockSavePreferenceNamespace = jest.fn();
+const mockPatchPreferenceNamespace = jest.fn();
 
 jest.mock('@/services/preferences', () => ({
   fetchPreferenceNamespace: (...args: unknown[]) => mockFetchPreferenceNamespace(...args),
   savePreferenceNamespace: (...args: unknown[]) => mockSavePreferenceNamespace(...args),
+  patchPreferenceNamespace: (...args: unknown[]) => mockPatchPreferenceNamespace(...args),
 }));
 
 jest.mock('expo-router', () => ({
@@ -61,14 +63,19 @@ import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 const AGENT_PUSH_SWITCH_LABEL = 'Agent Run Push';
+const AGENT_PUSH_SYNCED_COPY =
+  'Applied by the server before it sends, on every device on this account.';
 
 describe('agent activity push preference', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSavePreferenceNamespace.mockResolvedValue(undefined);
+    mockPatchPreferenceNamespace.mockReset().mockResolvedValue(undefined);
     mockFetchPreferenceNamespace.mockImplementation((namespace: string) =>
       Promise.resolve(
-        namespace === ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE ? { browserReplyReady: true } : {},
+        namespace === ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE
+          ? { browserReplyReady: true, emailDigest: false }
+          : {},
       ),
     );
     act(() => {
@@ -84,27 +91,27 @@ describe('agent activity push preference', () => {
     });
   });
 
-  it('writes the opt-out the cloud agent sender reads, preserving the keys web owns', async () => {
+  it('patches only the agent push opt-out after loading web-owned sibling settings', async () => {
     const screen = render(<NotificationPreferencesScreen />);
 
     await waitFor(() => {
-      expect(mockFetchPreferenceNamespace).toHaveBeenCalledWith(
-        ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE,
-      );
+      expect(screen.getByText(AGENT_PUSH_SYNCED_COPY)).toBeTruthy();
     });
 
     const toggle = screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL);
     fireEvent(toggle, 'valueChange', false);
 
     await waitFor(() => {
-      expect(mockSavePreferenceNamespace).toHaveBeenCalledWith(
-        ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE,
-        { browserReplyReady: true, [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false },
-      );
+      expect(mockPatchPreferenceNamespace.mock.calls).toEqual([
+        [ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false }],
+      ]);
+      expect(screen.getByText(AGENT_PUSH_SYNCED_COPY)).toBeTruthy();
     });
+    expect(mockSavePreferenceNamespace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(false);
   });
 
-  it('treats a stored opt-out as off and leaves an absent key on', async () => {
+  it('treats a stored opt-out as off', async () => {
     mockFetchPreferenceNamespace.mockImplementation((namespace: string) =>
       Promise.resolve(
         namespace === ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE
@@ -118,5 +125,62 @@ describe('agent activity push preference', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(false);
     });
+  });
+
+  it('leaves an absent key on after hydration without writing defaults', async () => {
+    const screen = render(<NotificationPreferencesScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText(AGENT_PUSH_SYNCED_COPY)).toBeTruthy();
+    });
+    expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(true);
+    expect(mockPatchPreferenceNamespace).not.toHaveBeenCalled();
+    expect(mockSavePreferenceNamespace).not.toHaveBeenCalled();
+  });
+
+  it('rolls back an optimistic toggle when its patch fails', async () => {
+    let rejectPatch!: (reason: Error) => void;
+    mockPatchPreferenceNamespace.mockReturnValueOnce(
+      new Promise<void>((_resolve, reject) => {
+        rejectPatch = reject;
+      }),
+    );
+    const screen = render(<NotificationPreferencesScreen />);
+    await waitFor(() => {
+      expect(screen.getByText(AGENT_PUSH_SYNCED_COPY)).toBeTruthy();
+    });
+
+    fireEvent(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL), 'valueChange', false);
+    expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(false);
+    expect(screen.getByText('Saving to your account…')).toBeTruthy();
+
+    await act(async () => {
+      rejectPatch(new Error('Patch failed'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(true);
+      expect(
+        screen.getByText('Could not save agent run notifications. Check your connection and try again.'),
+      ).toBeTruthy();
+    });
+    expect(mockPatchPreferenceNamespace.mock.calls).toEqual([
+      [ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false }],
+    ]);
+    expect(mockSavePreferenceNamespace).not.toHaveBeenCalled();
+  });
+
+  it('disables agent push changes in Local mode without reading or writing cloud preferences', () => {
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+    });
+    const screen = render(<NotificationPreferencesScreen />);
+
+    const toggle = screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL);
+    expect(toggle.props.disabled).toBe(true);
+    fireEvent(toggle, 'valueChange', false);
+    expect(mockFetchPreferenceNamespace).not.toHaveBeenCalled();
+    expect(mockPatchPreferenceNamespace).not.toHaveBeenCalled();
+    expect(mockSavePreferenceNamespace).not.toHaveBeenCalled();
   });
 });
