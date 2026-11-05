@@ -390,6 +390,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<DeleteAccountResult, Error, void>({
+    retry: false,
     mutationFn: async (): Promise<DeleteAccountResult> => {
       const res = await withStepUp(async (stepUpHeaders) =>
         fetch('/api/user/delete-account', {
