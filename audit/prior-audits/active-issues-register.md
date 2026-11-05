@@ -9168,6 +9168,40 @@ coherent snapshots, query-plan performance and legacy owner/backlog risks remain
 outside this correction.
 
 
+Accepted receipt correction `fce8309a4612f22d62772d23270ae827ee8a31bc` on
+2026-11-05 adds `parseManagedMemoryStrictPageResponse` in canonical
+`packages/contracts/types/src/memory-wire.ts` and opts in only the admitted Web
+controller. It requires actual boolean continuation and rejects the whole page
+if the existing record reader rejects any member. Previously a successful body
+such as `{memories: [valid, null], hasMore: false}` could normalize to a shortened
+list and replace confirmed display facts as synced. Missing/nonboolean hasMore
+could likewise become a false terminal receipt. This is a source-derived display
+completeness risk, not an observed loss or deletion of server rows.
+
+The original permissive reader remains deliberately unchanged for the shared
+legacy store and extension; its filtering/default behavior is explicitly
+specified by existing contract/extension fixtures. Current server GET supplies
+boolean continuation and the required record fields. The strict page reader
+reuses current record semantics, including optional-field normalization; it is
+not a stricter date/provenance schema, page-size assumption or global migration.
+
+First/later malformed reads retain the prior confirmed facts by reference and
+revision, set error status, and never publish the locally accumulated partial
+pages. Acknowledged writes still apply their confirmed reduction once and remain
+successful when refresh fails. Unknown-write barriers remain intact. Independent
+review accepted two production and two fixture files covering those cases,
+optional-field compatibility and successful controls; none ran. Valid-looking
+truncated receipts, concurrent snapshots and server truthfulness remain outside
+this structure-validation claim.
+
+Separate retained Tauri `apps/desktop/src/api/cloudMemory.ts::listCloudMemories`
+still uses page length and a 10,000 offset cap rather than hasMore, returning a
+successful bounded prefix at exhaustion. It rejects malformed rows and checks
+its request boundary, and its legacy fixture accepts omitted continuation. That
+native compatibility/completion question is not changed by the Web reader.
+Public Electron uses hosted Web; mobile's Local SQLite cap is a different lane.
+
+
 Separate Local-context correction `efdb7f495aa5fa6e94cfae101078348e071c85c1`
 replaces the unowned project-only query cache with ephemeral canonical admitted
 owner/epoch/scope and per-project entries. Prefetch uses captured bearer plus

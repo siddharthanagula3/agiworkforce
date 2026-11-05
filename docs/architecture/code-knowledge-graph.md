@@ -4546,9 +4546,25 @@ expiry, concurrent writes, cap exhaustion, snapshots and query-plan cost remain
 outside this correction. Legacy memory ownership/backlog and recall/consolidation
 selection are not migrated. See `WEB-MEMORY-OWNER-BACKLOG-01`.
 
+## Admitted memory reads require complete page receipts
+
+Accepted commit `fce8309a4612f22d62772d23270ae827ee8a31bc` adds a canonical
+strict page reader requiring boolean continuation and rejecting any row rejected
+by the existing record reader. Only the admitted Web controller opts in. The
+legacy/extension parser's deliberate permissive behavior, optional record fields,
+native adapter and all mutation/summary/import/command readers remain unchanged.
+
+Malformed successful first/later pages cannot replace confirmed display facts
+with a shortened terminal result. Failed refresh preserves prior facts/revision;
+acknowledged mutation reductions remain successful without replay or a new write
+barrier. Independent source review accepted authored compatibility, read-failure
+and four-mutation fixtures; none ran. Receipt structure does not prove truthful
+server contents or a coherent cross-page snapshot. Native cap exhaustion remains
+a separate issue under `WEB-MEMORY-OWNER-BACKLOG-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-nine accepted production slices traced above are represented as
+Only the one hundred and sixty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
