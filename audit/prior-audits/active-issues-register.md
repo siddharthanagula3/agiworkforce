@@ -9339,3 +9339,66 @@ contract. Do not treat a client retry, receipt validation or exact UI owner as a
 complete server concurrency fix. `a51e3c459c` corrects receipt truthfulness only;
 `7f4d7f00fc` correctly sends its ready revision but does not redefine null semantics.
 No tests, checks, builds, database calls or network actions were run.
+
+Implementation is held on the size/error boundary. The current limit is a
+preflight `JSON.stringify(estimated).length > 100_000`, measured in JavaScript
+UTF-16 code units. Two unconditional callers can each read an empty namespace and
+add a different approximately 60,000-character value. Both estimates pass; current
+replacement loses one value, while a naive atomic merge retains approximately
+120,000 characters. The existing concurrent root-merge size gap does not make
+that namespace change behavior-preserving. PostgreSQL formatted JSON text length
+or byte size is not the same contract, and a size predicate's no-row result must
+not masquerade as a 412 version conflict or an unknown 500 write.
+
+Before implementation, establish either compatible serialized read/validation/write
+ownership including first insertion, exact atomic size semantics, or an explicitly
+approved replacement size policy. Existing-row locking alone does not establish
+absent-row safety. The repository-native root merge plus `jsonb_build_object` in
+`active-workspace-service.ts` is a useful current-row merge precedent, not proof
+that this endpoint's concurrency and size/error requirements are complete.
+
+## WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
+
+Status: OPEN, source-backed on 2026-11-05. No runtime reproduction or demonstrated
+cross-account server authorization bypass.
+
+`PrivacySection.tsx` reads the legacy privacy namespace only on mount/retry and
+saves without original account/view ownership. It already has a synchronous
+save-in-flight ref, so duplicate dispatch is not the same defect as the US-only
+panel. Its saved callbacks, pending whole-namespace retry payload and post-await
+browser-consent side effects are not retired on section unmount or session change.
+Legacy preference parsing normalizes malformed envelopes/namespaces, and its write
+helper accepts a successful response with unparseable JSON, ignores stored values
+and announces submitted values. Backend stored receipt validation does not make
+these permissive client reads authoritative.
+
+`UsOnlyRoutingPanel.tsx` uses mount-only cookie GET/PUT without original session/view
+ownership or synchronous mutation exclusion. Its callback does not recheck current
+eligibility or ready-snapshot identity; disabling the rendered switch alone is not
+admission. It ignores the PUT receipt and treats unconfirmed failure as definitely
+unsaved. The endpoint's failed-read-to-empty bug is already source-corrected by
+`edc93db942`; it must not be reported as still present.
+
+The settings modal unmounts on close, and switching sections unmounts Privacy.
+Current save lifetimes do not follow that boundary. These settings are account
+scoped (`resolveOrganization: false`); workspace selection alone does not establish
+a different stored privacy owner. Reuse existing `usePreferenceOwner`,
+`usePreferenceView` and request authority rather than inventing an identity copy.
+Preserve server RLS/user scope, CSRF and rate limits.
+
+Telemetry needs its own browser-intent boundary as well as session/view ownership.
+`confirmTelemetryConsent(true)` in `sentry-shared.ts` removes the pending local
+opt-out marker before enabling consent. A stale successful opt-in can therefore
+clear a newer browser opt-out, including one originating in another tab, even if
+both account sessions remain valid. The existing pending-denial gate, fail-closed
+storage reads, redaction and server-rendered consent signal are real controls and
+must be preserved. `TelemetryConsentSync.tsx` separately uses a legacy read keyed
+only by loaded/signed-in booleans, not exact account/session identity.
+
+Do not merely swap helper names: owned namespace helpers still have permissive
+response parsing, and guarding React state alone does not guard browser-global
+consent effects. Separate original ready revision, stored receipt and fresh
+user-choice retry from browser intent ordering; preserve existing device-local
+opt-out behavior rather than silently binding it to a different account model.
+Namespace concurrency and routing full-object replacement remain separate issues.
+No tests, checks, builds, browser/auth, database, telemetry or network actions ran.
