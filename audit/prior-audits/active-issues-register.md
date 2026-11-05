@@ -10700,6 +10700,43 @@ Unreadable/lost responses mean unconfirmed outcome, not failed leave. Current
 membership reconciliation cannot establish completed credential cleanup or stop
 an in-flight server operation. Original session/workspace authority, warning
 retention, lifecycle-safe navigation and any cleanup resumption need explicit
-design and acceptance. No receipt/UI patch is represented by the two intent
+design and acceptance. No receipt/UI patch is represented by the intent/selection
 slices above. All review remained source-only; no tests, checks, builds,
 installations, live/database actions, push or deployment ran.
+
+## WEB-DEPROVISION-SESSION-COVERAGE-01
+
+Severity: Medium. Status: Listing-cap reporting source-corrected in
+`0c7870e22a7d9300923b355a65bbbb3ca5f9543d`, 2026-11-05; runtime/provider
+acceptance and complete cleanup remain open.
+
+The deprovision service requests at most ten pages of fifty active sessions.
+Previously ten full pages ended enumeration with no coverage warning. If more
+than five hundred sessions existed, the collected five hundred could be revoked
+and errors remain empty. Organization/team removal routes derive audit outcome
+from those errors, and directory-sync/SCIM callers propagate them. This is a
+source-backed reporting defect, not evidence of an affected deployed account.
+
+The loop now records whether a short page was observed. Reaching the cap with
+only full pages appends an uncertainty warning, then still revokes the collected
+IDs. Exactly five hundred receives that warning too: the last full page does
+not prove enumeration ended. Unknown or unattempted sessions do not inflate
+the failed-revocation count. The numeric totalCount is not used to suppress
+the warning because the identity contract and Clerk adapter provide no
+snapshot/consistency guarantee for it. No extra page or unbounded sweep was
+added; workspace scope, list-before-revoke sequencing and batch size remain.
+
+Independent source review accepted the exact two-file diff. The fixture identity
+adapter now honors offset and limit instead of returning every supplied session
+at offset zero. Unrun fixtures cover 51, 499, 500 and 501 sessions, underreported
+totalCount, cap plus attempted revocation failure, page-two listing rejection,
+and no provider calls when another workspace is selected. They exercise mocked
+provider/database boundaries in source only; none ran.
+
+List failure still returns before revoking previously collected IDs and reports
+that none were revoked, while independent local credential cleanup continues.
+Offset pagination is not a snapshot: concurrent session changes, duplicate IDs,
+provider page-shape violations, retries and full cleanup recovery remain outside
+this correction. It does not change the self-leave selection gate or repair
+the Web client's ignored cleanup warnings. No tests, checks, builds,
+installations, live/database actions, push or deployment ran for this slice.

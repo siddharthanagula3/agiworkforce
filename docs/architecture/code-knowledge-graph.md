@@ -4663,9 +4663,21 @@ the receipt and claims full revocation before reloading. No warning/reconciliati
 repair is represented here. See `WEB-WORKSPACE-MUTATION-INTENT-01` and
 `WEB-WORKSPACE-LEAVE-RECEIPT-01`.
 
+## Session cleanup reports capped enumeration
+
+Accepted `0c7870e22a7d9300923b355a65bbbb3ca5f9543d` reports uncertain session
+coverage when deprovisioning consumes ten full listing pages without observing
+a short page. It still attempts the collected revocations within the existing
+batches; exactly five hundred sessions also receive a warning rather than an
+unsupported completion claim. Scope, read budget, failure counts and early
+listing-error behavior remain unchanged. Independent source review accepted
+realistically paged but unrun fixtures, including cap, failure and other-workspace
+controls. Provider concurrency and complete cleanup are not established. See
+`WEB-DEPROVISION-SESSION-COVERAGE-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and sixty-nine accepted production slices traced above are represented as
+Only the one hundred and seventy accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
