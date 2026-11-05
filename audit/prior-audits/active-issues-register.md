@@ -9146,6 +9146,28 @@ SDK, DB/RLS, deployment or memory action validation occurred; broader closure is
 not justified.
 
 
+Bounded management-list ordering correction `ec37a9446453e8035c74e38cbf15c589031610d1`
+on 2026-11-05 adds `m.id desc` after pinned and update-time descending order in
+GET `/api/memory`. Batch sync can give several memories identical timestamps;
+offset requests previously left their order unspecified. The current Web
+controller, legacy store and native clients accumulate pages, so owner-bound
+publication alone cannot repair repeated/missing members of tied pages. ID is
+unique under the query's fixed user predicate under either original global-PK
+or intended per-user-PK schema. This is source migration evidence, not a deployed
+schema check. DESC follows the existing keyset convention, not a memory-wide
+user preference or an authored-order claim. Joins, lifecycle/workspace filters,
+lookahead, bounds, response mapping, recall and consolidation remain unchanged.
+
+Independent source review accepted the three-file patch and prescribed-row
+SQL-contract fixtures for personal/organization scope, pinned/recency priority,
+tie boundaries, sentinel trimming and continuation. They remain unexecuted; the
+SQL assertions detect the tie order, while mocked distinct outputs do not prove
+database behavior. Determinism requires unchanged eligible rows and sort values.
+Expiry can alter eligibility without writes; concurrent changes, cap exhaustion,
+coherent snapshots, query-plan performance and legacy owner/backlog risks remain
+outside this correction.
+
+
 Separate Local-context correction `efdb7f495aa5fa6e94cfae101078348e071c85c1`
 replaces the unowned project-only query cache with ephemeral canonical admitted
 owner/epoch/scope and per-project entries. Prefetch uses captured bearer plus
@@ -9628,6 +9650,16 @@ The canonical 30-day server recovery policy is unchanged.
 This does not establish global cross-view mutation serialization, exactly-once
 server execution, rollback after abort, or a database snapshot across multiple
 rebuild requests. Other concurrent server writers can still change pagination.
+Comment-only commit `d652554fb97643308a5fcf4e471babdbbf9098c9` removes broader
+snapshot-like claims from the shared keyset helper and conversation/project list
+routes. The cursor saves the last sort tuple; deleting its row does not invalidate
+that tuple. An unseen project renamed to a newer timestamp can move above a
+descending cursor and be missed. A previously returned pinned conversation can
+be unpinned below a still-pinned boundary and repeat. Current writers support
+both timelines; draft and active-leaf-only updates do not always change sort
+time. Scope, sharing and other filters are reevaluated per request. This is
+source-grounded documentation, not a runtime reproduction, behavioral repair
+or additional reconstructed production slice.
 Independent source review accepted the patch and unexecuted fixtures. Identity
 fixtures use real session/workspace/request authority with mocked Clerk/transport;
 hook fixtures also cover exact callbacks, read locks, retries, streaming, StrictMode

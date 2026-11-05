@@ -4525,9 +4525,30 @@ concurrent offset shifts, separate metadata/count reads, timestamp normalization
 and query-plan performance remain unverified. The coherent share-snapshot issue
 `MOBILE-SHARE-TRANSCRIPT-SNAPSHOT-01` stays open.
 
+Comment-only companion `d652554fb9` removes unsupported concurrent-snapshot
+promises from keyset documentation. Mutable sort keys or visibility still change
+later pages. This does not add a reconstructed production slice.
+
+## Managed memory lists have a unique tie order
+
+Accepted commit `ec37a9446453e8035c74e38cbf15c589031610d1` adds descending ID
+after pinned and update-time priority in the canonical management GET. Under the
+fixed user predicate, both original global-ID and intended per-user-ID schemas
+provide uniqueness. The existing descending keyset convention supplies a stable
+tie direction; no memory-wide sort preference is inferred. Lifecycle/workspace
+filters, joins, lookahead, response mapping and consumers are unchanged.
+
+Independent source review accepted one production line and two authored fixture
+files for exact SQL, prescribed page boundaries, priority, trimming, continuation
+and personal/organization scope. None ran. Mocked distinct outputs are not
+database proof. Eligible rows and sort values must remain unchanged; time-driven
+expiry, concurrent writes, cap exhaustion, snapshots and query-plan cost remain
+outside this correction. Legacy memory ownership/backlog and recall/consolidation
+selection are not migrated. See `WEB-MEMORY-OWNER-BACKLOG-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-eight accepted production slices traced above are represented as
+Only the one hundred and fifty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
