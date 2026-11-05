@@ -4936,6 +4936,19 @@ API-wrapper fixtures are independently source-reviewed but unrun; successful
 repair and complete consent delivery remain unverified. See
 `MOBILE-APP-TRANSACTION-OWNERSHIP-01`.
 
+## Push cleanup needs durable server registration ownership
+
+The client push lifetime fences receipts and listeners, but the server POST can
+still upsert an A-owned token after both sign-out DELETEs have cleared it. This
+ordering can occur during later Siri cleanup before SDK sign-out, without assuming
+revoked credentials remain valid. The server then selects non-null tokens for A.
+Separately, ordinary cleanup retains the A-owned installation row, so B's next
+registration with the same stable ID is refused. Owner checks and RLS remain
+necessary; neither cross-owner takeover nor rotating a shared Siri/companion/device
+identifier is a safe shortcut. These open source findings are
+`MOBILE-PUSH-REVOCATION-ORDER-01` and `MOBILE-PUSH-ACCOUNT-HANDOFF-01`, not newly
+implemented slices or observed notification incidents.
+
 ## Reconstruction boundary
 
 Only the one hundred and ninety-one accepted production slices traced above are represented as

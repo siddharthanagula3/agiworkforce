@@ -11619,3 +11619,82 @@ This is a bounded producer-lifetime correction supporting
 `WEB-STORE-CONSENT-PREFLIGHT-01`, not complete consent delivery or a rewrite of
 identity session authority. No tests, lint, typechecks, builds, installations,
 application execution, native/provider/database actions, push or deployment ran.
+
+
+## MOBILE-PUSH-REVOCATION-ORDER-01
+
+Severity: High. Status: Open source design finding, 2026-11-05.
+No production correction or reconstructed slice is counted here.
+
+The existing mobile push registration lifetime fences client token discovery,
+receipts and listeners; captured bearer credentials, account abort signals and
+caller-owned 401 behavior are meaningful controls. They do not durably revoke a
+registration already admitted by the server. The POST in
+`apps/web/app/api/mobile/push-token/route.ts` authenticates the account, reads
+existing device ownership and then upserts token/preferences using only the
+matching-owner condition. DELETE nulls that owner's token but leaves no revoked
+lifetime or version predicate for the pending POST.
+
+A source-permitted ordering avoids any assumption about revoked JWT acceptance:
+A's authenticated POST waits before its write, for example during owner lookup;
+A signs out; both the explicit sign-out cleanup and root-layout account-lifecycle
+cleanup finish their push DELETEs; sign-out is still awaiting Siri network or
+SecureStore cleanup; the pending A POST now restores A's token; only then does
+the Clerk SDK sign-out finish. `auth/store.ts::signOut` performs push cleanup,
+then Siri cleanup, then `clearAuthSession`, with no final push clear. The separate
+`pushTokenAccountLifecycle.ts` queue serializes cleanups, not server POST commits.
+Accounting for both possible DELETEs is necessary: another finite cleanup is a
+real counterguard but is not a permanent revocation fence.
+
+Both operations are authenticated and scoped to A; route ownership checks and
+migration 0054 RLS therefore permit this ordering. Client abort cannot undo a
+server write that proceeds. `push-notification-service.ts::getPushTokensForUser`
+then selects A's non-null token, and its sender can submit title/body/data to that
+installation after local sign-out. Delivery preferences and token validity still
+apply. No live race, deployment or notification delivery was exercised. This is
+not the broader overlapping SDK/Siri logout defect tracked separately under
+`MOBILE-LOGOUT-SESSION-LIFETIME-01`.
+
+A safe correction needs a durable registration lifetime bound to authenticated
+owner and installation, with atomic registration/revocation ordering. Revocation
+must apply even when it arrives before the first POST, and a later POST must not
+recreate that revoked lifetime. Stale cleanup must not revoke a replacement
+lifetime. Preserve owner isolation; neither rotating the shared device identifier
+nor allowing cross-owner row takeover provides this fence. This requires a
+coordinated contract/client/route and append-only schema design, not a one-line
+client receipt guard. Required acceptance includes late POST after acknowledged
+DELETE, DELETE-before-first-POST, replacement lifetime, repeated revocation and
+uncertain request outcomes. Existing deferred client fixtures mock the API; they
+do not establish backend commit ordering. Tests and all product checks remain
+unrun, and no migration or provider/database action was performed.
+
+
+## MOBILE-PUSH-ACCOUNT-HANDOFF-01
+
+Severity: Medium. Status: Open source design finding, 2026-11-05.
+No production correction or reconstructed slice is counted here.
+
+`apps/mobile/lib/deviceId.ts` retains one installation UUID in SecureStore and
+memory. Ordinary sign-out push cleanup clears only `mobile_devices.push_token`;
+it does not delete the A-owned row or change its owner. The next signed-in B
+account therefore submits the same installation ID, and the push registration
+route correctly refuses it as belonging to another user. RLS and the upsert's
+matching-owner predicate are security counterguards, not the proposed defect.
+The account handoff flow's successful cleanup does not establish that B can
+subsequently register push delivery on that install.
+
+The only current `clearDeviceId` production caller is full local-data reset.
+That installation ID also supports Siri, companion pairing, the device registry
+and phone-device operations, so rotating it during sign-out would change more
+than push routing. Deleting the old row or permitting takeover would also need
+to handle stale A registrations and the revocation ordering above. No such
+workaround is implemented. An explicit push binding/handoff design must define
+which identifier is installation-wide, which registration is account-scoped,
+and how old authority is retired without disrupting those other consumers.
+
+This is a deterministic source condition for a retained A-owned device row,
+not proof of a deployed registration failure. Account erasure or full local-data
+reset can remove the particular condition; neither is an ordinary account-switch
+solution. No token registration, notification send, device reset, tests, database
+or provider action was performed. See `MOBILE-PUSH-REVOCATION-ORDER-01` for the
+separate stale-write privacy boundary.
