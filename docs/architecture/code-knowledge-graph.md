@@ -5200,9 +5200,24 @@ account-owned named-provider consent gate. New negative fixtures remain unrun.
 The older missing-server-record assertion is not current; Mobile/device consent
 convergence and non-Free-quota route coverage remain open under AGI-22.
 
+## Workspace invitation consumption preserves presented-token authority
+
+Accepted `4a3807de3e` binds both accept and decline
+UPDATEs to the presented token hash as well as pending status and existing expiry.
+An old lookup cannot consume a newer resend credential under the documented
+READ COMMITTED update predicate. Empty receipts stop acceptance before membership
+or workspace writes. No new locks, migration, public API or email semantics were
+introduced; authenticated-email and server-derived workspace checks remain.
+
+Authored mock fixtures are unrun and do not prove SQL concurrency or rollback.
+Transaction-start expiry, concurrent resend admission and email ordering retain
+their existing semantics. Real database and deployment acceptance remain open.
+The separate historical denied-tool provider400 has no accepted narrow repair;
+source tracing preserves the finding rather than guessing its request failure.
+
 ## Reconstruction boundary
 
-Only the two hundred eight accepted production slices traced above are represented as
+Only the two hundred nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

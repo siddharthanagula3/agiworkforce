@@ -12643,3 +12643,74 @@ assumption that these choices already agree. The shared server check is a real
 control, but its refusal returning to ordinary routing is not proof of policy
 coverage on the eventual route. Quota-first negative fixtures are authored and
 unrun, not a live routing or legal-compliance claim.
+
+## WEB-WORKSPACE-INVITATION-TOKEN-CONTINUITY-01
+
+Severity: Medium. Source correction `4a3807de3e` independently reviewed on
+2026-11-05; database concurrency and deployment acceptance remain open.
+
+Accept and decline read a pending invitation by the presented token hash and
+expiry, then checked the authenticated profile email. Their final mutations
+previously used only row ID and pending status. An authorized resend can rotate
+the hash of that same pending row between lookup and mutation; an already-read
+old token could therefore accept or decline the replacement invitation under
+READ COMMITTED. Acceptance can insert membership and select the workspace;
+decline can invalidate the fresh link. The authenticated email, server-selected
+workspace and terminal-status counterguards remain. This is not anonymous or
+cross-email access, or bypass of a completed revocation.
+
+Both final UPDATEs now require the presented token hash, pending status and the
+existing expiry predicate. An empty receipt uses the existing conflict path;
+acceptance then stops before membership/workspace writes or post-commit seat
+resolution. No early row lock or advisory-lock reorder was introduced. The
+existing adapter transaction commits or rolls back as before. The source
+adapters issue bare BEGIN; deployment isolation configuration is unverified.
+
+The invitation seat trigger does not enforce hash continuity; pending-to-pending
+resend has no seat delta. PostgreSQL's documented READ COMMITTED UPDATE behavior
+rechecks WHERE against a concurrently updated row. See
+https://www.postgresql.org/docs/current/transaction-iso.html, read 2026-11-05.
+The retained now() predicate uses transaction-start time, not strict wall-clock
+expiry at mutation/commit; see
+https://www.postgresql.org/docs/current/functions-datetime.html, read the same day.
+Resend delivery ordering and concurrent resend-limit
+admission are not corrected by this bounded patch.
+
+Authored unrun fixtures assert final SQL predicates and parameter slots, success
+behavior, empty-receipt conflicts before downstream writes, and unchanged resend
+rotation/pending restrictions. Their mocked callback/receipts do not execute SQL,
+model rollback or prove concurrency. Later authorized database coverage should
+pause each consumer after lookup, commit resend on another connection, and
+confirm refusal, fresh token retention, unchanged seats and no new membership or
+workspace selection; also cover consumption winning before resend. No tests,
+lint, typechecks, builds, database actions, provider calls, push or deployment ran.
+
+## WEB-CHAT-DENIED-TOOL-PROVIDER-400-01
+
+Source qualification, 2026-11-05: no narrow repair accepted. The historical
+lost-answer/provider400 report remains open; its provider error body and sanitized
+translated request are not available in this review.
+
+The ordinary approval path preserves assistant tool-call IDs and signed thinking
+through the checkpoint. The resume path appends a tool result for an unresolved
+denial, runs approved unresolved calls, and adds guidance only after settlement.
+The canonical request/wire converter preserves tool IDs and the Anthropic
+translator emits corresponding tool_result blocks. One/all-denied and mixed
+batches therefore do not have an established missing-result defect merely from
+this source trace. Consecutive user messages are not by themselves proof of the
+historical provider rejection.
+
+Sources: `completions/lib/tool-loop.ts` resume and checkpoint blocks;
+`lib/services/cloud-agent-run-service.ts` checkpoint serialization;
+`completions/lib/approval-checkpoint-request.ts`; `completions/lib/canonical-request.ts`;
+`packages/ai/provider-protocol/src/openai-wire-compat.ts`; and
+`packages/ai/providers/anthropic/src/translate.ts`.
+
+A separate discrepancy remains uncorrected: canonical execution-end denial events
+set isError true, legacy denial events use false, and persisted tool messages/wire
+conversion do not carry a structured error flag. Correcting that needs coordinated
+contract, persistence and conversion review and is not an established provider400
+fix. Existing single-denial fixtures mock provider streaming; they do not capture
+actual Anthropic behavior. Obtain the actual error/request or authorized offline
+contract acceptance before choosing a protocol repair. No product code changed
+for this finding, and no provider was contacted.
