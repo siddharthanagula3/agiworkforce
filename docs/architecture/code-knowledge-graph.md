@@ -4271,9 +4271,33 @@ under `WEB-DATA-EXPORT-VIEW-OWNERSHIP-01`. The broader consent protocol remains
 held for passive-versus-explicit admission, bootstrap provenance and server write
 concurrency; no nonce protocol or strict endpoint was introduced.
 
+## Account export panels retain original request and view ownership
+
+Accepted commit `1dda0828b1a67a9943ef6d369bef1dd5a4c300a7` gives DataExportRow
+an owner/view/setup-scoped lane built on existing preference/session and request
+authority. GET and POST pin original bearer identity and omit cookies. Exact
+snapshot admission and synchronous mutation reservation retire previous reads;
+late initial JSON cannot overwrite an accepted export. Setup/timer identities,
+request identity and view currency guard every completion and saved callback.
+
+Definitely-unsent failures permit a new explicit attempt. Dispatched unknown
+outcomes reconcile by GET only and retain uncertainty for the mounted lane;
+null/old archive state cannot prove the work was not started. Read-only Check
+again and terminal copy preserve that distinction. Existing visible/hidden
+polling, capped backoff, approximate wall-clock budget and multipart archive
+rendering remain. The client guards click/auxiliary activation of stale links;
+server user-ID/readiness/expiry/volume checks still protect native navigation.
+
+This is account-wide, not selected-workspace ownership. Closing/reopening creates
+a new lane, not a persistent duplicate-job reservation. Cross-tab atomic server
+admission and cancellation of already-started work remain outside the repair.
+Independent source review accepted production and authored lifecycle fixtures;
+none were executed. See `WEB-DATA-EXPORT-VIEW-OWNERSHIP-01` for exact fixture gaps
+and runtime boundaries. No tests, lint, typechecks, builds, live export or deploy ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-seven accepted production slices traced above are represented as
+Only the one hundred and forty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

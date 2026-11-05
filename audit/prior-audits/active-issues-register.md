@@ -9757,25 +9757,27 @@ anchoring are separate response-boundary observations, not fixed by ownership.
 
 ## WEB-DATA-EXPORT-VIEW-OWNERSHIP-01
 
-Status: OPEN. Source-backed on 2026-11-05; no runtime reproduction.
+Status: Boundedly source-corrected in
+`1dda0828b1a67a9943ef6d369bef1dd5a4c300a7` on 2026-11-05. Runtime,
+server concurrency and cross-view acceptance remain open.
 
-`DataExportRow.tsx` reads archives with ambient cookies, retains its initial GET
-for the whole mount, and polls without original account/session authority.
-Privacy mounts it without an owner key. An A response or ready archive can remain
-in a still-mounted B view, while later polling can silently replace it with B's
-archive. Observed same-user session replacement and account round trips are also
-unfenced. The initial GET can resolve after an accepted POST with earlier null or
+The prior `DataExportRow.tsx` read archives with ambient cookies, retained its initial GET
+for the whole mount, and polled without original account/session authority.
+Privacy mounted it without an owner key. An A response or ready archive could remain
+in a still-mounted B view, while later polling could silently replace it with B's
+archive. Observed same-user session replacement and account round trips were also
+unfenced. The initial GET could resolve after an accepted POST with earlier null or
 ready state, overwrite the newly preparing archive and stop its polling.
 
-The POST waits for CSRF headers before ambient-cookie dispatch without a current
+The prior POST waited for CSRF headers before ambient-cookie dispatch without a current
 view/session check. An A token with B cookies fails CSRF, a real counterguard; an
 acquisition bound to B during transition or same-subject session replacement is
-not excluded by subject-only CSRF. Close before header resolution does not retire
-that write. Closing does retire initial-read/poll effects, and old component
+not excluded by subject-only CSRF. Close before header resolution did not retire
+that write. Closing did retire initial-read/poll effects, and old component
 setters do not directly update a newly mounted component, but server work can
 start after close and race the reopened view's read.
 
-Only React requesting state prevents reentry; there is no synchronous operation
+Only React requesting state previously prevented reentry; there was no synchronous operation
 lock. This is not an executed ordinary double-click reproduction. Server archive
 admission reads prior state before creating a random job ID, so it is not atomic
 cross-request deduplication; the per-hour rate limit is not serialization.
@@ -9787,13 +9789,39 @@ links clicked as B therefore do not establish access to A's archive bytes. The
 export is intentionally account-wide; selected workspace alone is not a new
 export owner and must not be imposed as an invented archive restriction.
 
-The bounded client repair should reuse canonical preference/session/view and
-request authority, hide retired-lane state immediately, pin bearer requests,
-claim a synchronous mutation lane, retire older reads at POST admission, and own
-all response/body/catch/finally, timers and polling budgets. Failed/ambiguous
-writes need read reconciliation, never automatic mutation replay. Download
-activation needs current-view admission in addition to the existing server gate.
-Cross-tab atomic export admission remains a separate server concern.
+The accepted client repair reuses canonical preference/session/view and request
+authority. State belongs to its exact owner, setup generation and rendered
+snapshot; retired state is masked rather than waiting for effect-only cleanup.
+The local lane reserves POST synchronously, retires initial/poll reads before
+header acquisition and pins GET/POST to the original bearer with credentials
+omitted. Every response/body/catch/finally, timer and saved callback rechecks its
+authority. Setup replay creates fresh generations; timer identity separately
+fences cancelled callbacks. No selected-workspace ownership was invented.
+
+Dispatch tracking distinguishes definitely-unsent failure from unknown POST
+outcomes. Unknown writes reconcile only through GET and keep the mounted lane
+blocked from another POST, even when GET returns null or an old terminal archive:
+collection/upload can precede job creation. Copy identifies the latest available
+archive without falsely confirming the particular request. Check again refreshes
+status, never replays the write. Normal visible/hidden polling, three-second first
+delay, capped backoff, approximate 30-minute wall-clock budget and manual reset
+remain; the budget is not a hard request timeout.
+
+Current-view click/auxiliary guards protect retained download handlers; native
+context-menu navigation still depends on server authentication. Closing/reopening
+creates a fresh local lane and can admit a new explicit request, so no global
+cross-view reservation or cross-tab atomic server admission is claimed. Abort
+does not retract started server work.
+
+Author and independent source reviews accepted the patch and authored fixtures
+for owner/session transitions, delayed response/JSON, exact saved-callback reentry,
+CSRF/token waits, stale link activation, old body/finally, StrictMode/reopen,
+uncertainty/terminal copy, visibility and polling budget. Fixtures use canonical
+owner/view/request helpers with a mocked session source and transport. Cancelled
+timer callbacks after replacement and out-of-order successive reconciliation
+reads have no direct authored fixture; those remain acceptance cases, not proven
+source defects. No tests, lint, typechecks, builds, browser/auth, server export,
+push or deployment ran for this slice.
 
 ## WEB-CSRF-ACQUISITION-RETIREMENT-01
 
