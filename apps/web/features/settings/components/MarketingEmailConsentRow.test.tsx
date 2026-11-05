@@ -29,13 +29,19 @@ function ledger(granted: boolean | null) {
   };
 }
 
-function account(initial: boolean | null, save: () => Response = () => Response.json({})) {
+function account(
+  initial: boolean | null,
+  save: (requested: boolean) => Response = (requested) =>
+    Response.json({
+      recorded: [{ purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id, granted: requested }],
+    }),
+) {
   let granted = initial;
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
     if (init?.method !== 'POST') return Response.json(ledger(granted));
-    const response = save();
+    const body = JSON.parse(init.body as string) as { decisions: { granted: boolean }[] };
+    const response = save(body.decisions[0]?.granted === true);
     if (response.ok) {
-      const body = JSON.parse(init.body as string) as { decisions: { granted: boolean }[] };
       granted = body.decisions[0]?.granted ?? granted;
     }
     return response;
@@ -77,7 +83,9 @@ describe('marketing email choice in settings', () => {
   it('reads and writes the marketing_email purpose, never the waitlist product updates one', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
       init?.method === 'POST'
-        ? Response.json({})
+        ? Response.json({
+            recorded: [{ purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id, granted: true }],
+          })
         : Response.json({
             noticeVersion: NOTICE_VERSION,
             consents: [
@@ -179,6 +187,20 @@ describe('marketing email choice in settings', () => {
     ]);
   });
 
+  it('reports an unconfirmed receipt even when the following read shows the grant', async () => {
+    const fetchMock = account(null, () => Response.json({}));
+    render(<MarketingEmailConsentRow />);
+    await waitFor(() => expect(choice()).toBeEnabled());
+
+    await userEvent.click(choice());
+
+    await waitFor(() => expect(choice()).toBeChecked());
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not confirm that change was saved.');
+    expect(choice()).toBeEnabled();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(screen.queryByText(GLOBAL_PRIVACY_CONTROL_BLOCKS_GRANT_NOTICE)).toBeNull();
+  });
+
   it.each([
     [500, 'That change was not saved. Try again.'],
     [409, 'The privacy notice changed. Review it and choose again.'],
@@ -237,7 +259,6 @@ describe('marketing email choice in settings', () => {
         init?.method === 'POST'
           ? Response.json({
               recorded: [
-                { purpose: 'product_analytics', granted: true },
                 { purpose: MARKETING_EMAIL_CONSENT_PURPOSE.id, granted: false },
               ],
             })
