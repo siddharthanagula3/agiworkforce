@@ -4811,6 +4811,19 @@ guessed. Source-reviewed fixtures for explicit repair/retry and the actual parse
 were not run. Operator reconciliation, extant bytes and full erasure remain
 unproven. See `WEB-ACCOUNT-KNOWLEDGE-REFERENCE-ERASURE-01`.
 
+## Export snapshots need provenance beyond current query authorization
+
+Fresh archive file queries retain the active-membership RLS chain, including the
+later permission-based shared-project helpers. Completed account-owned archives
+are a distinct snapshot: their download path checks owner/state/expiry but not
+current scope rights. JSON collection precedes payload workspace capture, so a
+membership-list-only patch would not prove the provenance of every archived byte.
+`WEB-EXPORT-SNAPSHOT-REVOCATION-01` records this open design dependency, not an
+accepted production slice. The existing export-erasure custody issue also now
+traces the unfenced running-writer race; ordinary erased-account download guards
+remain counterguards. No source or runtime acceptance is claimed for either
+unresolved design.
+
 ## Reconstruction boundary
 
 Only the one hundred and eighty-four accepted production slices traced above are represented as

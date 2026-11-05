@@ -11166,3 +11166,60 @@ Retries alone do not repair an obsolete base; operator reconciliation may be
 needed. This is not a legacy-data migration, broad URL acceptance, proof of
 stored-byte absence or complete erasure. No tests, lint, typechecks, builds,
 installations, live/database actions, push or deployment ran.
+
+
+## WEB-EXPORT-SNAPSHOT-REVOCATION-01
+
+Severity: High. Status: OPEN, source-backed archive-access design dependency,
+2026-11-05. No production correction or deployed incident is claimed.
+
+Current fresh archive file queries are not a generic stale-membership bypass.
+The claimed-scope adapter sets transaction-local app_rls and user/organization
+claims. The latest owner visibility predicate (0272) requires active workspace
+membership. For shared projects, the latest SELECT policies (0315, after 0090
+removed the older FOR ALL policy) use app_org_resource_is_readable, whose 0200
+replacement calls app_has_org_permission. Its latest membership permissions
+function in 0314 derives grants only from active membership. The knowledge-file
+owner subquery also inherits user_projects RLS. An older helper definition alone
+does not describe this current authorization chain.
+
+A separate boundary remains: completed archives contain already-staged bytes.
+readExportJob checks account ownership and job kind; resolveDataExportDownload
+checks state, expiry and requested volume, but does not revalidate the workspace
+rights represented in the archive. The account-owned background job has null
+organization_id and a subject-only read policy (0208). A still-valid Personal
+session can reach the archive download route after workspace removal, which can
+issue a fresh five-minute signed URL. This concerns snapshot bytes already
+captured, not arbitrary new workspace row reads or an erased-account sign-in.
+W21 requires export across permitted workspaces; W22 requires removal of access
+to close subsequent reads/actions. No live download or revoked-account incident
+was exercised.
+
+A payload.workspaces-only check would not establish complete enforcement.
+requestDataExportArchive collects and stages JSON before separately recording
+that membership list, while collectUserData derives its own workspace inventory.
+Revocation between those steps can leave earlier workspace JSON unrepresented in
+the later list. The payload also describes traversal scopes, not actual per-volume
+content provenance. Blocking an entire mixed archive when one scope changes can
+withhold unrelated Personal content, and a route check cannot recall signed URLs
+already issued before the change.
+
+Resolve snapshot access semantics and authoritative collection/volume provenance
+together, then enforce subsequent retrieval using that provenance. Preserve the
+current RLS counterguards and account-erasure gates; do not add an export-specific
+SQL-helper migration based on superseded policy definitions. Source review only:
+no tests, lint, typechecks, builds, database actions, push or deployment ran.
+
+### WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01: running-writer boundary
+
+Follow-on source tracing confirmed the worker-fencing limit already recorded in
+WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01. Account erasure removes existing export
+objects before deleting job rows. A worker already holding a job can finish a
+multipart upload after that removal pass: buildDataExportArchiveVolume requires
+a user ID but has no erasure admission/finalization fence, a missing job is not
+itself cancellation in the cancellation helper, and stale completeJob rejection
+cannot undo stored output. Ordinary later archive downloads still pass erased-
+account/lifecycle authentication guards. This is an object-retention race, not a
+proven erased-account download bypass. Coordinated writer admission/finalization
+and erasure fencing remain open; the earlier pointer-retention correction does
+not solve that race. No worker, database or storage operation was exercised.
