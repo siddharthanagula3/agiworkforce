@@ -63,6 +63,7 @@ const ALL_SHARES: ShareFixture[] = [LEAVER_SHARE, LEAVER_OTHER_ORG_SHARE, COLLEA
 
 function identityStub({
   sessions = ['sess_1', 'sess_2'],
+  totalCount = sessions.length,
   listThrows = false,
   failIds = [] as string[],
 } = {}) {
@@ -79,11 +80,14 @@ function identityStub({
   return {
     revoked,
     identity: {
-      listUserSessions: vi.fn(async (_userId: string, options: { offset?: number } = {}) => {
-        if (listThrows) throw new Error('identity provider unavailable');
-        const page = (options.offset ?? 0) === 0 ? sessions.map(listed) : [];
-        return { sessions: page, totalCount: sessions.length };
-      }),
+      listUserSessions: vi.fn(
+        async (_userId: string, options: { offset?: number; limit?: number } = {}) => {
+          if (listThrows) throw new Error('identity provider unavailable');
+          const offset = options.offset ?? 0;
+          const page = sessions.slice(offset, offset + (options.limit ?? 50)).map(listed);
+          return { sessions: page, totalCount };
+        },
+      ),
       revokeSession: vi.fn(async (id: string) => {
         if (failIds.includes(id)) throw new Error('revoke failed');
         revoked.push(id);
@@ -427,7 +431,7 @@ describe('deprovisionMember', () => {
   });
 
   it('pages through more sessions than one request returns', async () => {
-    const many = Array.from({ length: 50 }, (_, i) => `sess_${i}`);
+    const many = Array.from({ length: 51 }, (_, i) => `sess_${i}`);
     const identity = identityStub({ sessions: many });
     const db = dbStub();
 
@@ -436,8 +440,148 @@ describe('deprovisionMember', () => {
       organizationId: ORG,
     });
 
-    expect(result.sessionsRevoked).toBe(50);
+    expect(result.sessionsRevoked).toBe(51);
+    expect(identity.revoked).toEqual(many);
+    expect(result.errors).toEqual([]);
     expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(2);
+    expect(identity.identity.listUserSessions).toHaveBeenNthCalledWith(2, USER, {
+      status: 'active',
+      limit: 50,
+      offset: 50,
+    });
+  });
+
+  it('accepts an exhausted final page within the session listing bound', async () => {
+    const many = Array.from({ length: 499 }, (_, i) => `sess_${i}`);
+    const identity = identityStub({ sessions: many });
+    const db = dbStub();
+
+    const result = await deprovisionMember(db.db, identity.identity, {
+      userId: USER,
+      organizationId: ORG,
+    });
+
+    expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(10);
+    expect(result.sessionsRevoked).toBe(499);
+    expect(result.sessionsFailed).toBe(0);
+    expect(result.errors).toEqual([]);
+    expect(identity.revoked).toEqual(many);
+  });
+
+  it.each([500, 501])(
+    'reports uncertain session coverage after ten full pages with %i listed sessions',
+    async (count) => {
+      const many = Array.from({ length: count }, (_, i) => `sess_${i}`);
+      const identity = identityStub({ sessions: many });
+      const db = dbStub();
+
+      const result = await deprovisionMember(db.db, identity.identity, {
+        userId: USER,
+        organizationId: ORG,
+      });
+
+      expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(10);
+      expect(identity.identity.listUserSessions).toHaveBeenNthCalledWith(10, USER, {
+        status: 'active',
+        limit: 50,
+        offset: 450,
+      });
+      expect(identity.revoked).toEqual(many.slice(0, 500));
+      expect(result.sessionsRevoked).toBe(500);
+      expect(result.sessionsFailed).toBe(0);
+      expect(result.errors).toEqual([
+        'Session listing reached its limit; additional sessions may still be live.',
+      ]);
+      expect(result.deviceTokensRevoked).toBe(1);
+      expect(result.apiKeysRevoked).toBe(1);
+    },
+  );
+
+  it('preserves the listing-failure refusal after an earlier full page', async () => {
+    const identity = identityStub({
+      sessions: Array.from({ length: 51 }, (_, i) => `sess_${i}`),
+    });
+    const list = identity.identity.listUserSessions.getMockImplementation()!;
+    identity.identity.listUserSessions.mockImplementation(async (userId, options = {}) => {
+      if (options.offset === 50) throw new Error('second page unavailable');
+      return list(userId, options);
+    });
+    const db = dbStub();
+
+    const result = await deprovisionMember(db.db, identity.identity, {
+      userId: USER,
+      organizationId: ORG,
+    });
+
+    expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(2);
+    expect(identity.identity.revokeSession).not.toHaveBeenCalled();
+    expect(result.sessionsRevoked).toBe(0);
+    expect(result.errors).toEqual([
+      'Could not list sessions, so none were revoked: second page unavailable',
+    ]);
+    expect(result.deviceTokensRevoked).toBe(1);
+    expect(result.apiKeysRevoked).toBe(1);
+  });
+
+  it('does not treat an underreported total count as proof of complete coverage', async () => {
+    const identity = identityStub({
+      sessions: Array.from({ length: 501 }, (_, i) => `sess_${i}`),
+      totalCount: 1,
+    });
+    const db = dbStub();
+
+    const result = await deprovisionMember(db.db, identity.identity, {
+      userId: USER,
+      organizationId: ORG,
+    });
+
+    expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(10);
+    expect(result.sessionsRevoked).toBe(500);
+    expect(result.errors).toEqual([
+      'Session listing reached its limit; additional sessions may still be live.',
+    ]);
+  });
+
+  it('reports both incomplete listing and attempted revocation failures', async () => {
+    const identity = identityStub({
+      sessions: Array.from({ length: 501 }, (_, i) => `sess_${i}`),
+      failIds: ['sess_1'],
+    });
+    const db = dbStub();
+
+    const result = await deprovisionMember(db.db, identity.identity, {
+      userId: USER,
+      organizationId: ORG,
+    });
+
+    expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(10);
+    expect(identity.identity.revokeSession).toHaveBeenCalledTimes(500);
+    expect(result.sessionsRevoked).toBe(499);
+    expect(result.sessionsFailed).toBe(1);
+    expect(result.errors).toEqual([
+      'Session listing reached its limit; additional sessions may still be live.',
+      '1 session(s) could not be revoked and may still be live.',
+    ]);
+  });
+
+  it('does not list a large session set when another workspace is selected', async () => {
+    const identity = identityStub({
+      sessions: Array.from({ length: 501 }, (_, i) => `sess_${i}`),
+    });
+    const db = dbStub({ activeWorkspace: OTHER_ORG });
+
+    const result = await deprovisionMember(db.db, identity.identity, {
+      userId: USER,
+      organizationId: ORG,
+    });
+
+    expect(identity.identity.listUserSessions).not.toHaveBeenCalled();
+    expect(identity.identity.revokeSession).not.toHaveBeenCalled();
+    expect(result.sessionsRevoked).toBe(0);
+    expect(result.sessionsFailed).toBe(0);
+    expect(result.errors).toEqual([]);
+    expect(result.deviceTokensRevoked).toBe(1);
+    expect(result.apiKeysRevoked).toBe(1);
   });
 
   describe('connectors the leaver shared with the workspace', () => {

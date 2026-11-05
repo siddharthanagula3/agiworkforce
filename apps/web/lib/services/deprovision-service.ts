@@ -65,6 +65,7 @@ async function revokeProviderSessions(
 ): Promise<{ revoked: number; failed: number; errors: string[] }> {
   const ids: string[] = [];
   const errors: string[] = [];
+  let listingExhausted = false;
 
   try {
     for (let page = 0; page < MAX_SESSION_PAGES; page++) {
@@ -74,7 +75,10 @@ async function revokeProviderSessions(
         offset: page * SESSION_PAGE_SIZE,
       });
       ids.push(...response.sessions.map((session) => session.id));
-      if (response.sessions.length < SESSION_PAGE_SIZE) break;
+      if (response.sessions.length < SESSION_PAGE_SIZE) {
+        listingExhausted = true;
+        break;
+      }
     }
   } catch (error) {
     // Listing failed, so we cannot know what to revoke. Say so rather than
@@ -85,6 +89,10 @@ async function revokeProviderSessions(
       }`,
     );
     return { revoked: 0, failed: 0, errors };
+  }
+
+  if (!listingExhausted) {
+    errors.push('Session listing reached its limit; additional sessions may still be live.');
   }
 
   let revoked = 0;
