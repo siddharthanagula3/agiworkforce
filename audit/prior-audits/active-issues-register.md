@@ -12714,3 +12714,84 @@ fix. Existing single-denial fixtures mock provider streaming; they do not captur
 actual Anthropic behavior. Obtain the actual error/request or authorized offline
 contract acceptance before choosing a protocol repair. No product code changed
 for this finding, and no provider was contacted.
+
+## SUPPORT-API-KEY-ROTATION-ATOMICITY-01
+
+Severity: High. Bounded source correction `73a38f177b` independently reviewed
+on 2026-11-05; runtime/database acceptance and broader lifecycle issues remain open.
+
+The support regeneration executor previously read only ID, name and scopes,
+committed revocation, then independently hashed/inserted a replacement. A hash or
+insert failure could leave the working key revoked with no replacement. Creation
+also received default null expiry and project values, so a time-limited key
+became non-expiring and project association was dropped. This is a source-backed
+failure/authority change, not an observed production incident or established
+project-budget bypass. Ownership, Personal scope, CSRF, step-up and single-use
+proposal checks already existed and remain.
+
+The executor now uses one caller-scoped transaction. It reads the owned live row
+FOR UPDATE, validates retained expiry/project metadata, requires exactly one
+revocation and calls the canonical creator with the same name, effective scopes,
+expiry and project. Invalid, expired, missing or newly-disallowed expiry and
+invalid/missing project metadata refuse before revocation. A null expiry remains
+null. Existing legacy scope resolution is unchanged. The shared revocation helper
+now returns its affected count; the ordinary settings DELETE still ignores that
+value and retains its prior behavior. Result construction follows transaction
+completion, rather than exposing a secret from inside its callback.
+
+The production caller supplies an outer scoped adapter and opens no surrounding
+transaction. PostgreSQL adapters preserve that scope and roll back callback
+failures; no migration, privileged fallback or workspace rebinding is introduced.
+Support routes remain Personal-only. Source atomicity does not prove a deployed
+database outcome. A commit error may be uncertain rather than rolled back, and
+post-commit proposal finalization or secret delivery can still fail. Proposal
+consumption remains outside rotation: failed execution consumes that proposal;
+a fresh proposal can target an original key retained by a confirmed rollback.
+No automatic retry/idempotency or guaranteed secret recovery is claimed.
+
+Preserving project metadata does not establish project-archive concurrency safety.
+Archive updates the project before revoking keys, while this correction locks the
+key. A complete coordinated admission design must retain project-first ordering,
+check a current owned live project with an archive-conflicting lock, then re-read
+the key and reject changed metadata. That broader correction is not implemented.
+
+Authored fixtures are unrun. A dedicated distinct outer/transaction-handle model
+covers supplied metadata, refusal, receipt checks and staged success/failure;
+it does not execute SQL, RLS, database locking or real concurrent proposals. The
+existing full-support fake only preserves metadata and remains nontransactional.
+No tests, lint, typechecks, builds, provider calls, push or deployment ran.
+
+## WEB-SECURITY-SESSION-COMPLETION-01: emailed undo and recovery custody
+
+Additional independently reviewed source finding, 2026-11-05. The earlier
+password/support-recovery correction does not cover emailed enrollment undo.
+`account-security/undo.ts` consumes the one-time link and disables enrollment
+through the store transaction before awaiting mobile-intent revocation. If that
+await rejects, enrolling-session revocation, password reset and general
+containment are skipped. The link hash is already cleared, so retrying it does
+not resume cleanup. No durable operation receipt was found in this flow.
+
+The shared compromise response processes a sweep containing failed session IDs
+or incompleteness. Its public result omits enumeration completeness and mobile-cleanup
+outcome, while undo ignores even the failed count. Undo's event context and
+`AccountSecurityUndo.tsx` success copy claim every session/device was signed out.
+The shared notice title also says the account was secured, though its body reports
+a count rather than literally all sessions/devices. The shared audit does mark
+failure for failed IDs, incomplete enumeration or mobile failure; this is not an
+entirely unrecorded failure. Its detail status is based only on incompleteness.
+
+Counterguards remain: route CSRF, rate limiting and validated token input; store
+hash/expiry/enrollment checks with transaction locking; a deliberate UI click
+and fragment removal; cache write-error handling; caught enrolling-session and
+password-reset failures. Provider enumeration rejection can separately stop the
+shared response before device-refresh cleanup. None of this establishes an
+actual compromised-account incident or bypass of the one-time-link protections.
+
+Acceptance requires explicit subsystem outcomes, truthful partial/pending
+notifications and UI, independent cleanup attempts, and durable owner-scoped
+reconciliation state created with token consumption. Preserve one-time authority
+without blindly replaying password changes. Include failures in mobile cleanup,
+provider enumeration, individual session revocation, device cleanup and
+post-action notification/response, plus concurrent token use. Suppressing one
+success string or catching one await alone is not complete recovery. Product
+code is unchanged for this finding; no service or runtime was exercised.

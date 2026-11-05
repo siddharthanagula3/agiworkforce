@@ -5215,9 +5215,26 @@ their existing semantics. Real database and deployment acceptance remain open.
 The separate historical denied-tool provider400 has no accepted narrow repair;
 source tracing preserves the finding rather than guessing its request failure.
 
+## Support key rotation retains credential restrictions atomically
+
+Accepted `73a38f177b` locks the current owned key and
+keeps expiry/project metadata through revocation and canonical replacement inside
+one caller-scoped transaction. Exactly-one revocation is required. Invalid or
+unavailable retained metadata refuses rather than silently issuing an unrestricted
+replacement; null expiry and canonical legacy scope semantics are unchanged.
+The once-only result is constructed after the transaction returns.
+
+Authored fixtures are unrun models, not database concurrency or RLS acceptance.
+Project archive admission, uncertain commits, consumed-proposal recovery and lost
+secret delivery remain separate limits. The same audit extended the existing
+session-completion record for emailed security undo: failures can strand cleanup
+after link consumption; returned partial results can still produce universal-success
+copy. That coordinated outcome/
+reconciliation issue is recorded, not repaired by the key-rotation change.
+
 ## Reconstruction boundary
 
-Only the two hundred nine accepted production slices traced above are represented as
+Only the two hundred ten accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
