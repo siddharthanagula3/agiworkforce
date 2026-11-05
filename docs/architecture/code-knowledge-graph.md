@@ -4874,9 +4874,24 @@ step-up fixtures are independently source-reviewed but unrun. Stale receipts,
 original-session authority, cancellation/worker fencing and complete erasure
 remain open under `WEB-ACCOUNT-DELETION-INTENT-01`.
 
+
+## Billing invoice exports disclose bounded omissions
+
+Accepted `89b7c18f2cefed3c6efcfcc7d54aed79b1fd5af7` preserves provider page
+metadata in a shared invoice reader while retaining the ordinary array wrapper.
+The export marks outer invoice limits and individual embedded line limits partial,
+distinguishes unavailable configuration from a successful empty lookup, and
+refuses malformed flags instead of treating unknown completeness as false.
+Strict refusal also applies to the ordinary wrapper; valid DTO projection and
+one bounded provider call remain. Official pinned-version pagination contracts
+were read; installed SDK sources were unavailable, and the compiler and authored
+fixtures were not run.
+No omitted history is retrieved. See
+`WEB-BILLING-INVOICE-EXPORT-COMPLETENESS-01` for evidence and remaining limits.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-seven accepted production slices traced above are represented as
+Only the one hundred and eighty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -11347,3 +11347,57 @@ They cover invalid/blank/nullish/non-string timestamp values, expiry at/before n
 valid future expiry and unchanged non-ready job states. No presigned URL, object
 fetch, live database or fixture was executed. No tests, lint, typechecks, builds,
 installations, live/database actions, push or deployment ran.
+
+
+## WEB-BILLING-INVOICE-EXPORT-COMPLETENESS-01
+
+Severity: Medium. Status: Bounded invoice completeness reporting source-corrected
+in `89b7c18f2cefed3c6efcfcc7d54aed79b1fd5af7`, 2026-11-05. Runtime acceptance
+and retrieval of omitted history remain open.
+
+listUserBillingInvoices fetched one Stripe invoice page capped at 24 and mapped
+only each invoice's embedded lines.data. It discarded both pagination flags.
+The user export marked billing_invoices unavailable only when this reader threw,
+so a successful truncated page or an unconfigured provider returning an empty
+array could contribute to a complete export. No affected production account,
+provider result or live incident was observed.
+
+readUserBillingInvoicePage now preserves availability, outer has_more and each
+truncated embedded list's invoice ID and returned count. The 24-item constant has
+one shared owner. The export keeps returned DTOs and records outer/nested limits
+in its existing completeness ledger, propagating partial status to JSON receipts
+and download headers. Exactly 24 invoices with has_more=false are not marked
+truncated; a smaller page with true is. A missing client is unavailable, while a
+successful customer lookup with no linkage remains an available empty result
+under the existing linkage model. Missing/nonboolean pagination metadata throws:
+unknown completeness is not silently treated as false or claimed as proven
+truncation. The existing catch classifies that section as unavailable, not as
+proof of provider downtime.
+
+The ordinary billing endpoint retains its array wrapper and explicit DTO mapping
+for valid responses. It also now rejects malformed pagination metadata; that is
+an intentional shared-reader behavior change, not an unchanged error contract.
+There is still only one bounded invoice-list request and no line-item fetch or
+autopagination. Retry wording no longer implies repeating the same bounded
+export retrieves omitted history or that every truncated list is newest-first.
+
+Official Stripe documentation was read on 2026-11-05, including the repository's
+pinned API version 2026-04-22.dahlia:
+- https://docs.stripe.com/api/invoices/list?api-version=2026-04-22.dahlia
+- https://docs.stripe.com/api/pagination
+- https://docs.stripe.com/api/invoice-line-item/retrieve?api-version=2026-04-22.dahlia
+
+These distinguish outer and embedded pagination and describe embedded lines as
+an initial subset. No documented embedded page size is invented from the separate
+line endpoint's default. Installed Stripe/Vitest sources were unavailable; public
+contracts do not establish local SDK/compiler compatibility.
+
+Independent source review accepted nine files, including the new service fixture
+and all six existing export mock factories. Unrun cases cover full/short/empty
+pages, independent embedded limits, exact DTO projection, unavailable/no-customer
+states, malformed flags through both readers, DB/provider/mapping errors and
+JSON/download propagation. Mock reset and module initialization were reviewed.
+This reports omissions; it does not retrieve older invoices/lines, recover
+historical or unlinked customers, verify other providers, or solve archive
+snapshot/erasure custody. No tests, lint, typechecks, builds, installations,
+live database/provider actions, push or deployment ran.
