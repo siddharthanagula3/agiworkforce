@@ -58,10 +58,6 @@ jest.mock('../stores/agentControlStore', () => ({
   useAgentControlStore: { getState: jest.fn() },
 }));
 
-jest.mock('../stores/settings/cloudSettingsStore', () => ({
-  useCloudSettingsStore: { setState: jest.fn() },
-}));
-
 jest.mock('../src/features/billing/store', () => ({
   useTierStore: { getState: jest.fn() },
 }));
@@ -112,6 +108,17 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn(),
+  rehydrateWhenMmkvReady: jest.fn(),
+  mmkvStorage: {
+    getItem: jest.fn().mockReturnValue(null),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
 jest.mock('../src/features/waitlist/store', () => ({
@@ -175,9 +182,6 @@ const { useSettingsSyncStateStore } = require('../stores/settings/settingsSyncSt
 const { useAgentControlStore } = require('../stores/agentControlStore') as {
   useAgentControlStore: { getState: jest.Mock };
 };
-const { useCloudSettingsStore } = require('../stores/settings/cloudSettingsStore') as {
-  useCloudSettingsStore: { setState: jest.Mock };
-};
 const { useTierStore } = require('../src/features/billing/store') as {
   useTierStore: { getState: jest.Mock };
 };
@@ -226,6 +230,9 @@ const { useChatMessageStore } = require('../stores/chat/chatMessageStore') as {
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
+import { mmkvStorage } from '../lib/mmkv';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
+import { applyCloudSettings, toCloudSettings } from '../services/cloudSettingsMapping';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
 
 describe('clearLocalCloudAccountState', () => {
@@ -249,6 +256,7 @@ describe('clearLocalCloudAccountState', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    useCloudSettingsStore.setState(useCloudSettingsStore.getInitialState());
     mmkvReadyCallbacks = [];
     whenMmkvReady.mockImplementation((callback: () => void) => {
       mmkvReadyCallbacks.push(callback);
@@ -318,35 +326,69 @@ describe('clearLocalCloudAccountState', () => {
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
-    expect(useCloudSettingsStore.setState).toHaveBeenCalledWith({
-      themeMode: 'system',
-      accentColor: 'neutral',
-      fontPreference: 'default',
-      notificationsEnabled: true,
-      speechLanguage: 'auto',
-      autoListenEnabled: true,
-      referencePastChats: false,
-      generateMemoryFromHistory: true,
-      memoryPolicyInitialized: false,
-      connectorDiscoveryEnabled: true,
-      personalization: {
-        fullName: '',
-        nickname: '',
-        occupation: '',
-        instructions: '',
-        style: 'default',
-        warmth: 50,
-        enthusiasm: 50,
-        headersLists: 50,
-        emoji: 50,
-      },
-      settingsUpdatedAt: null,
-    });
+    expect(useCloudSettingsStore.getState()).toEqual(useCloudSettingsStore.getInitialState());
     expect(useChatAppModeStore.setState).toHaveBeenCalledWith({ appMode: 'local' });
     expect(clearManagedCloudAccess).toHaveBeenCalledTimes(1);
 
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
+  });
+
+  it('clears prior account memory consent even when the next settings omit capabilities', () => {
+    const cloud = useCloudSettingsStore.getState();
+    cloud.setMemoryEnabled(true);
+    cloud.setIncludeSensitiveTopics(true);
+    cloud.setReferencePastChats(true);
+    cloud.setPersonalization({ aboutYou: 'Account A', responseLanguage: 'fr' });
+
+    clearLocalCloudAccountState();
+    applyCloudSettings({ appearance: { theme: 'dark' } });
+
+    expect(useCloudSettingsStore.getState()).toMatchObject({
+      memoryEnabled: false,
+      includeSensitiveTopics: false,
+      referencePastChats: false,
+      memoryPolicyInitialized: false,
+      personalization: useCloudSettingsStore.getInitialState().personalization,
+    });
+    expect(toCloudSettings(useCloudSettingsStore.getState())).not.toHaveProperty('capabilities');
+    expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
+
+    applyCloudSettings({ capabilities: { memory: true, includeSensitiveTopics: true } });
+    expect(useCloudSettingsStore.getState()).toMatchObject({
+      memoryEnabled: true,
+      includeSensitiveTopics: true,
+      memoryPolicyInitialized: true,
+    });
+  });
+
+  it('keeps canonical reset defaults after the real persist middleware hydrates account settings', async () => {
+    const initial = useCloudSettingsStore.getInitialState();
+    (mmkvStorage.getItem as jest.Mock).mockReturnValueOnce(
+      JSON.stringify({
+        version: 2,
+        state: {
+          memoryEnabled: true,
+          includeSensitiveTopics: true,
+          memoryPolicyInitialized: true,
+          personalization: { aboutYou: 'Persisted account A' },
+        },
+      }),
+    );
+
+    await useCloudSettingsStore.persist.rehydrate();
+    expect(useCloudSettingsStore.getState().includeSensitiveTopics).toBe(true);
+    expect(useCloudSettingsStore.getInitialState()).toBe(initial);
+    expect(initial.memoryEnabled).toBe(false);
+    expect(initial.includeSensitiveTopics).toBe(false);
+    expect(initial.personalization.aboutYou).toBe('');
+
+    clearLocalCloudAccountState();
+
+    expect(useCloudSettingsStore.getState()).toEqual(initial);
+    useCloudSettingsStore.getState().setPersonalization({ nickname: 'Account B' });
+    expect(useCloudSettingsStore.getState().personalization.nickname).toBe('Account B');
+    expect(initial.personalization.nickname).toBe('');
   });
 
   it('is safe to repeat when explicit sign-out is followed by Clerk expiry', () => {
@@ -384,7 +426,16 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudChats).toHaveBeenCalledTimes(1);
     expect(mmkvReadyCallbacks).toHaveLength(1);
 
+    useCloudSettingsStore.setState({
+      memoryEnabled: true,
+      includeSensitiveTopics: true,
+      memoryPolicyInitialized: true,
+    });
     mmkvReadyCallbacks[0]?.();
+
+    expect(useCloudSettingsStore.getState()).toEqual(useCloudSettingsStore.getInitialState());
+    expect(useCloudSettingsStore.getState().memoryEnabled).toBe(false);
+    expect(useCloudSettingsStore.getState().includeSensitiveTopics).toBe(false);
 
     expect(clearCloudChats).toHaveBeenCalledTimes(2);
     expect(clearAccountScopedArtifactState).toHaveBeenCalledTimes(2);
