@@ -83,6 +83,143 @@ function deferredFetch(): {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+describe('CSRF acquisition retirement', () => {
+  beforeEach(() => {
+    clearCsrfToken();
+  });
+
+  afterEach(() => {
+    clearCsrfToken();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    'fetch-success',
+    'fetch-failure',
+    'http-failure',
+    'json-success',
+    'json-failure',
+  ] as const)('retires immediately and preserves the newer pending slot after late %s', async (outcome) => {
+    const oldFetch = deferred<Response>();
+    const oldBody = deferred<{ token: string; expiresIn: number }>();
+    const bodyStarted = deferred<void>();
+    const nextFetch = deferred<Response>();
+    const response = {
+      ok: true,
+      json: vi.fn(() => {
+        bodyStarted.resolve();
+        return oldBody.promise;
+      }),
+    } as unknown as Response;
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => oldFetch.promise)
+      .mockImplementationOnce(() => nextFetch.promise);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const old = getCsrfToken();
+    const joined = addCsrfHeaders();
+    const oldRejected = expect(old).rejects.toMatchObject({ name: 'AbortError' });
+    const joinedRejected = expect(joined).rejects.toMatchObject({ name: 'AbortError' });
+    const signal = (fetchMock.mock.calls[0]?.[1] as RequestInit).signal;
+    if (outcome.startsWith('json-')) {
+      oldFetch.resolve(response);
+      await bodyStarted.promise;
+    }
+
+    clearCsrfToken();
+    const next = getCsrfToken();
+    await Promise.all([oldRejected, joinedRejected]);
+    expect(signal?.aborted).toBe(true);
+
+    if (outcome === 'fetch-failure') {
+      oldFetch.reject(new Error('Late network failure'));
+    } else if (outcome === 'http-failure') {
+      oldFetch.resolve({ ok: false, status: 503, statusText: 'Unavailable' } as Response);
+    } else if (outcome === 'fetch-success') {
+      oldBody.resolve({ token: 'retired', expiresIn: EXPIRES_IN_MS });
+      oldFetch.resolve(response);
+    } else if (outcome === 'json-failure') {
+      oldBody.reject(new Error('Late JSON failure'));
+    } else {
+      oldBody.resolve({ token: 'retired', expiresIn: EXPIRES_IN_MS });
+    }
+    await oldFetch.promise.catch(() => undefined);
+    if (outcome.startsWith('json-')) await oldBody.promise.catch(() => undefined);
+    await Promise.resolve();
+
+    const nextJoined = getCsrfToken();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    nextFetch.resolve({
+      ok: true,
+      json: async () => ({ token: 'current', expiresIn: EXPIRES_IN_MS }),
+    } as Response);
+    await expect(next).resolves.toBe('current');
+    await expect(nextJoined).resolves.toBe('current');
+    await expect(getCsrfToken()).resolves.toBe('current');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('cannot replace a newer cached token when a retired JSON body finishes last', async () => {
+    const oldBody = deferred<{ token: string; expiresIn: number }>();
+    const bodyStarted = deferred<void>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => {
+          bodyStarted.resolve();
+          return oldBody.promise;
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'current', expiresIn: EXPIRES_IN_MS }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const old = getCsrfToken();
+    const rejected = expect(old).rejects.toMatchObject({ name: 'AbortError' });
+    await bodyStarted.promise;
+    clearCsrfToken();
+    await rejected;
+    await expect(getCsrfToken()).resolves.toBe('current');
+    oldBody.resolve({ token: 'retired', expiresIn: EXPIRES_IN_MS });
+    await oldBody.promise;
+    await Promise.resolve();
+
+    await expect(getCsrfToken()).resolves.toBe('current');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a completed cache entry without retracting an already resolved token', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'previous', expiresIn: EXPIRES_IN_MS }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ token: 'current', expiresIn: EXPIRES_IN_MS }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const completed = getCsrfToken();
+    await expect(completed).resolves.toBe('previous');
+    clearCsrfToken();
+    await expect(completed).resolves.toBe('previous');
+    await expect(getCsrfToken()).resolves.toBe('current');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('csrf token fetching', () => {
   beforeEach(() => {
     clearCsrfToken();

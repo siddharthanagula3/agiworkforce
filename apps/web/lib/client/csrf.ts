@@ -23,21 +23,29 @@ export class CsrfTokenError extends Error {
 
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
-let inFlight: Promise<string> | null = null;
+interface CsrfAcquisition {
+  promise: Promise<string>;
+  retire: () => void;
+}
 
-async function fetchCsrfToken(): Promise<string> {
+let inFlight: CsrfAcquisition | null = null;
+
+async function fetchCsrfToken(signal: AbortSignal): Promise<string> {
   const response = await fetch('/api/csrf', {
     method: 'GET',
+    signal,
     headers: {
       'Content-Type': 'application/json',
     },
   });
+  signal.throwIfAborted();
 
   if (!response.ok) {
     throw new CsrfTokenError(response.status, response.statusText);
   }
 
   const data: CsrfTokenResponse = await response.json();
+  signal.throwIfAborted();
 
   // Cache the token with a safety margin (refresh 5 minutes before expiry)
   cachedToken = data.token;
@@ -50,12 +58,26 @@ export async function getCsrfToken(): Promise<string> {
   if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
     return cachedToken;
   }
-  if (inFlight) return inFlight;
+  if (inFlight) return inFlight.promise;
 
-  inFlight = fetchCsrfToken().finally(() => {
-    inFlight = null;
+  const controller = new AbortController();
+  let rejectRetired!: (reason: DOMException) => void;
+  const retired = new Promise<never>((_, reject) => {
+    rejectRetired = reject;
   });
-  return inFlight;
+  const acquisition: CsrfAcquisition = {
+    promise: Promise.race([fetchCsrfToken(controller.signal), retired]).finally(() => {
+      if (inFlight === acquisition) inFlight = null;
+      controller.signal.throwIfAborted();
+    }),
+    retire: () => {
+      const reason = new DOMException('CSRF token acquisition retired', 'AbortError');
+      rejectRetired(reason);
+      controller.abort(reason);
+    },
+  };
+  inFlight = acquisition;
+  return acquisition.promise;
 }
 
 /**
@@ -88,5 +110,7 @@ export async function addCsrfHeaders(
 export function clearCsrfToken(): void {
   cachedToken = null;
   tokenExpiry = null;
+  const acquisition = inFlight;
   inFlight = null;
+  acquisition?.retire();
 }
