@@ -15,6 +15,7 @@ import {
 import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { SKILL_SETTINGS_NAMESPACE } from '@/lib/services/skill-install-service';
+import { serializeUserSettings } from '@/lib/services/user-settings-payload';
 import { autonomousToolApprovalsAvailable } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { TOOL_APPROVAL_PREFERENCE_NAMESPACE } from '@shared/types/toolApprovalPolicy';
 
@@ -80,9 +81,7 @@ function validatedSettingsDelta(current: Record<string, unknown>, parsed: Settin
           : (parsed.value ?? parsed.settings ?? {}),
       }
     : (parsed.settings ?? {});
-  if (JSON.stringify({ ...current, ...delta }).length > 100_000) {
-    throw createError.validation('Settings payload is too large');
-  }
+  serializeUserSettings({ ...current, ...delta });
   return delta;
 }
 
