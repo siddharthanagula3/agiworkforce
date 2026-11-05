@@ -66,8 +66,8 @@ async function handleGetConversations(request: NextRequest) {
       MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
     ) || MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
-  // A cursor names the last row, so a conversation touched while the reader
-  // pages cannot repeat or hide a row. Offset stays for clients still sending it.
+  // A cursor avoids offset shifts, but pin, timestamp or filter-membership
+  // changes can still affect later pages. Offset stays for clients still sending it.
   const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
   const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
