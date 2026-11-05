@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@sentry/nextjs', () => ({ init: mocks.init }));
+vi.mock('./sentry-client-options', () => ({
+  clientSentryInitOptions: mocks.commonInitOptions,
+  makeConsentAwareSentryTransport: vi.fn(),
+}));
 vi.mock('@/lib/sentry-shared', () => ({
   DEFAULT_TRACES_SAMPLE_RATE: vi.fn(),
   TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE: vi.fn(),
