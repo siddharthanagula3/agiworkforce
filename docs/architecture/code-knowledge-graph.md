@@ -4988,9 +4988,31 @@ open coordinated-lifecycle requirement, including queued account ownership and
 Local cleanup semantics. This is a source finding, not an implemented slice or
 an observed native incident.
 
+## Failed Siri launch rotation can retry for its current owner
+
+Accepted `cb6f9baf5c` retains eager rotation deduplication but rearms a failed
+attempt only while its identity and captured canonical account epoch remain
+current. Sign-out retires the attempt before resetting launch state. This
+restores later-heartbeat recovery after ordinary API/native publication failure
+without letting a stale rejection clear a replacement attempt. It does not fence
+late successful publication or compensate an unknown remote commit. Fixtures are
+independently source-reviewed and unrun; see `MOBILE-SIRI-ROTATION-RETRY-01`.
+
+## Cloud preference teardown uses canonical initial defaults
+
+Accepted `866b91efe9` removes an incomplete duplicate reset object and applies
+the Cloud settings store's canonical initial state. Sign-out, changed-owner
+activation and deferred readiness cleanup now restore both memory consent
+booleans and the complete personalization defaults without resetting Local
+preferences. Locked Zustand persist source keeps the initial configuration
+separate from hydrated state; authored unrun fixtures exercise that distinction
+and partial next-account settings. Existing server policy and sync counterguards
+limit the finding to stale client preferences, not proven unauthorized memory
+collection. See `MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety-three accepted production slices traced above are represented as
+Only the one hundred and ninety-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -11876,3 +11876,95 @@ This is distinct from `MOBILE-LOGOUT-SESSION-LIFETIME-01` and the accepted
 local-wipe prerequisite correction. No serialization implementation is accepted
 here, no reconstructed production slice is added, and no tests, lint, typechecks,
 builds, app/native execution, real token request, push or deployment ran.
+
+
+## MOBILE-SIRI-ROTATION-RETRY-01
+
+Severity: Medium. Status: Current-owner failed launch-rotation retry
+source-corrected on 2026-11-05; runtime acceptance remains open.
+Accepted production commit: `cb6f9baf5c`.
+
+An accepted device heartbeat invokes `settleAskIntentOnLaunch`. Its eager
+`rotatedThisLaunch` guard prevents duplicate rotation, but previously stayed true
+after `storeFreshToken` rejected. A normal non-success API status, network error
+or SecureStore publication failure therefore suppressed later automatic retries
+for that module lifetime. If issuance had not happened, the old token could
+remain valid. If server rotation committed before response/publication failure,
+the old token was revoked and automatic recovery was suppressed. Manual
+disable/re-enable, sign-out or process restart were existing recovery paths.
+
+The helper keeps eager single-flight admission and records an attempt identity
+with the canonical Cloud account epoch. Failure rearms only that identical
+attempt while its epoch is current; null/stale epochs do not rearm. Explicit
+sign-out retires the attempt identity before resetting the launch flag. A late
+old failure cannot clear a newer attempt or rearm a replacement account.
+Success deduplication, Local-disable behavior and ordinary rejection reporting
+remain unchanged. This bookkeeping snapshot is not passed into transport and
+does not establish full issuance/publication ownership.
+
+Independent source review accepted the two-file patch. Authored, unrun fixtures
+load the real epoch module and SecureStore mock inside the same Jest isolate.
+They cover API rejection followed by retry, simultaneous heartbeats, successful
+deduplication, pending/native publication failure, explicit sign-out before an
+old failure, same-account replacement before old failure, and stale changed/same-
+owner epochs. HTTP-labelled cases mock API rejection rather than execute status
+parsing; the actual API rejects those non-success responses. Publication cases
+wait for an explicit start signal and attach rejection assertions before failure.
+
+Unknown remote commits are not compensated, and a stale successful native write
+is not repaired. `MOBILE-SIRI-ROTATION-DISABLE-01` and
+`MOBILE-LOGOUT-SESSION-LIFETIME-01` remain open. No tests, lint, typechecks, builds,
+app/native execution, real token request, push or deployment ran.
+
+
+## MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01
+
+Severity: Medium. Status: Canonical Cloud preference reset source-corrected on
+2026-11-05; runtime acceptance remains open. Accepted production commit:
+`866b91efe9`. This re-verifies and updates the existing historical issue.
+
+The former `cloudAccountTeardown` reset passed a duplicated partial object to
+Zustand's merging `setState`. It omitted `memoryEnabled` and
+`includeSensitiveTopics`, retaining A's enabled preferences after sign-out or
+direct account change. It also replaced personalization with an incomplete
+default shape. Explicit sign-out, Clerk signed-out handling and changed-owner
+activation all call this teardown; its deferred MMKV-ready callback repeated
+the same omission. Same-owner startup intentionally retains settings.
+
+The next account's settings pull is not guaranteed to repair the retained fields
+immediately: `/api/settings/sync` can return an empty/partial settings document,
+and `cloudSettingsMapping.applyCloudSettings` applies only supplied booleans.
+Counterguards materially limit the effect. Teardown resets
+`memoryPolicyInitialized`, so outgoing generic settings sync initially omits
+memory capabilities; sensitive-topic opt-in is never sent through that generic
+projection. Memory pull restores server memory enablement, and opening memory
+settings rereads sensitive-topic consent. Cloud chat bypasses client memory
+context/consolidation and the server enforces actual account capabilities. This
+is a stale client preference/cache defect, not evidence of unauthorized server
+sensitive-memory collection.
+
+Teardown now resets from the canonical
+`useCloudSettingsStore.getInitialState()`, restoring both false defaults and the
+complete current personalization shape without duplicating values or touching
+Local settings. Mobile's locked Zustand 5.0.15 persist implementation captures
+`configResult` for `getInitialState` separately from hydrated `stateFromStorage`.
+The store's custom merge and personalization setter create new objects rather
+than mutate those initial defaults. Versioned official source was independently
+read at https://github.com/pmndrs/zustand/blob/v5.0.15/src/middleware/persist.ts
+(blob `abd9c042ef1ba69dd7f2bcd8b4036b2deb5df794`). This dependency inspection is
+not module execution or runtime validation.
+
+Independent source review accepted three files. Authored, unrun fixtures use the
+real Cloud store, persist middleware and settings mapping with mocked MMKV. They
+assert enabled prior-account settings reset when the next payload omits
+capabilities, explicit later server values still apply, hydrated state does not
+replace initial defaults, and reset actions remain usable without mutating
+initial personalization. Deferred readiness is modeled separately from the real
+persist hydration case, not an end-to-end native timing test. The auth-storage
+fixture exposes the new getter through its actual canonical store and accepts
+the complete personalization defaults; related mock consumers were reviewed.
+
+General synchronization/edit races, legacy migration semantics, native hydration
+timing and broader session lifetimes remain unverified. No tests, lint,
+typechecks, builds, installs, app/module execution, live native/provider/database
+actions, push or deployment ran.
