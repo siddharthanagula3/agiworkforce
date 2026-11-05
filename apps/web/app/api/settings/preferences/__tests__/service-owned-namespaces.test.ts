@@ -5,6 +5,8 @@ vi.mock('server-only', () => ({}));
 const h = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   query: vi.fn(),
+  txQuery: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
@@ -48,19 +50,26 @@ function put(body: unknown) {
 }
 
 function writeCalls() {
-  return h.query.mock.calls.filter((call) =>
-    String(call[0]).includes('insert into public.user_settings'),
+  return h.txQuery.mock.calls.filter((call) =>
+    String(call[0]).includes('update public.user_settings'),
   );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.getUserScopedDb.mockResolvedValue({ db: { query: h.query }, userId: 'user-1' });
-  h.query.mockImplementation(async (sql: unknown, params?: unknown[]) => {
-    if (String(sql).includes('insert into public.user_settings')) {
-      return [{ settings: JSON.parse(String(params?.[1])), version: 'v2' }];
+  h.getUserScopedDb.mockResolvedValue({ db: { query: h.query, transaction: h.transaction }, userId: 'user-1' });
+  h.query.mockImplementation(async () => { throw new Error('Unexpected outer query'); });
+  h.transaction.mockImplementation(async (callback: (tx: { query: typeof h.txQuery }) => Promise<unknown>) =>
+    callback({ query: h.txQuery }),
+  );
+  h.txQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+    if (sql.includes('from public.user_settings') && sql.includes('for update')) {
+      return [{ settings: {}, version: 'v1' }];
     }
-    return [{ settings: {}, version: 'v1' }];
+    if (sql.includes('update public.user_settings')) {
+      return [{ settings: JSON.parse(String(params[1])), version: 'v2' }];
+    }
+    throw new Error(`Unexpected transaction query: ${sql}`);
   });
 });
 
@@ -79,6 +88,8 @@ describe('the preferences PUT leaves skill installs to the skills endpoint', () 
     const payload = (await response.json()) as { error?: { message?: string } };
     expect(JSON.stringify(payload)).toContain('skills');
     expect(h.query).not.toHaveBeenCalled();
+    expect(h.txQuery).not.toHaveBeenCalled();
+    expect(h.transaction).not.toHaveBeenCalled();
     expect(writeCalls()).toHaveLength(0);
   });
 
