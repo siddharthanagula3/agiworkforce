@@ -12404,3 +12404,102 @@ readback is not a server ordering barrier. Multiple screen mounts/clients are no
 globally serialized, and the broader account-security/logout lifecycle remains
 outside this slice. No tests, checks, lint, typechecks, builds, formatters,
 application/native/provider/database execution, push or deployment ran.
+
+
+## CONNECTOR-SESSION-GRANT-WORKSPACE-SCOPE-01
+
+Severity: Medium. Status: Source-corrected in `5fe835a74b132efa67a34771de5aa6c07d861a92`
+on 2026-11-05; migration and restricted-role acceptance remain open.
+
+Standing connector verdicts are user-wide, but the previous session-grant DELETE
+joined only the active workspace's conversations and was constrained by the same
+workspace RLS policy. Changing a tool to Ask left existing session approvals in
+other workspaces. Migration 0393 adds a narrow definer function that binds its
+subject from `current_app_user_id()` and deletes only that user's grants for the
+requested connector/tool. Category resets retain conservative connector-wide
+session revocation. The function accepts no user or workspace override and
+returns only a count. It requires a superuser/BYPASSRLS owner, a fixed catalog-first
+search path with temporary schema last, revoked public execution and explicit
+`app_rls` execution. `row_security = off` detects unexpected RLS filtering; it is
+not itself a privilege grant.
+
+PUT and DELETE now pair revocation with the standing-permission mutation in one
+scoped transaction. A failed save throws inside that transaction; missing or
+malformed revocation receipts fail closed. Audit and success responses follow
+COMMIT. The shared approval writer already supplies its own scoped transaction.
+No fallback to active-workspace-only removal or unrestricted application queries
+was introduced.
+
+Independent source review accepted three production files, the up/down migration
+and four authored unrun fixture files. The fixtures model cross-workspace removal,
+unrelated-grant preservation, failed/ambiguous commits and malformed receipts.
+Migration assertions inspect source text only. Acceptance still requires applying
+0393 with the correct owner and exercising actual PostgreSQL privileges, RLS,
+rollback and personal/workspace boundaries. Deployment without the function fails
+permission writes closed. Concurrent new session approvals are a separate open
+issue below; this correction is not a global revocation fence.
+
+Primary PostgreSQL documentation read on 2026-11-05:
+https://www.postgresql.org/docs/current/sql-createfunction.html and
+https://www.postgresql.org/docs/current/ddl-rowsecurity.html. No tests, lint,
+typechecks, builds, formatters, application/database/provider execution, push or
+deployment ran.
+
+## CONNECTOR-OAUTH-DISCONNECT-REFRESH-RACE-01
+
+Severity: Medium. Status: Source-corrected in `dd9720e9ee1c43e5c39f860b1bb3cb3c72fbac57`
+on 2026-11-05; database/provider interleaving acceptance remains open.
+
+Disconnect formerly read revocable credentials without the grant row lock, then
+called the provider before clearing local rows. A refresh could replace the
+credential between those steps. Disconnect now selects live rows in stable ID
+order FOR UPDATE, decodes that locked version, clears only those exact IDs and
+promotes any surviving default inside one transaction. It requires an exact
+mutation receipt and withholds captured tokens until the adapter confirms COMMIT.
+Refresh uses the same row-lock owner. A new uncaptured account is not erased by
+this operation. The application does not retry ambiguous commits or fall back to
+an unlocked path.
+
+After local commit, the captured credentials are handed to their providers on a
+best-effort basis. Missing/unreadable credentials and provider exceptions are
+reported as unconfirmed revocation. Local disconnect is not proof of upstream
+revocation. A process loss or lost COMMIT acknowledgement after local erasure can
+leave upstream credentials live without retained local retry material. There is
+no durable revocation outbox in this correction. Provider-wide effects on a later
+reconnect, account erasure's separate provider-only cleanup, Plaid item removal,
+and uncaptured concurrent authorizations remain outside this row-lock guarantee.
+
+Independent source review accepted two production and five authored unrun fixture
+files. Fixtures model transaction ordering, refreshed credential capture, exact-ID
+mutation, default-promotion failure, missing receipts and commit uncertainty;
+they do not run PostgreSQL locking. Actual lock waits/deadlocks, provider effects
+and end-to-end reconnection require execution acceptance. The lifecycle fixture
+remains sequential and explicitly does not establish concurrency behavior.
+
+Primary PostgreSQL row-lock documentation read on 2026-11-05:
+https://www.postgresql.org/docs/current/explicit-locking.html. No tests, lint,
+typechecks, builds, formatters, application/database/provider execution, push or
+deployment ran.
+
+## CONNECTOR-SESSION-GRANT-RESET-RACE-01
+
+Severity: Medium. Status: Open source finding, independently confirmed on
+2026-11-05; no runtime interleaving reproduced and no correction included.
+
+`insertConnectorToolSessionGrants` inserts a session allowance without a shared
+permission revision or reset fence. A request that already passed the approval
+policy read can insert after a concurrent reset's grant DELETE snapshot, even
+before that reset transaction commits. `withSessionGrants` then lets this grant
+override the newly saved Ask verdict. User-wide deletion and atomic standing
+mutation correct the separate workspace-scope defect but do not serialize this
+new grant against the permission intent it was approved under. A Deny verdict
+still wins at decision time; the concrete stale-allow case concerns Ask/reset.
+
+Acceptance requires binding approved grants to the permission generation that
+was actually reviewed and rejecting a stale approval at persistence, with one
+ordering contract covering all standing reset/category/connector mutations and
+session-grant writers. A lock around only the INSERT or DELETE is insufficient
+if the policy/review state was observed before that lock. Preserve unrelated
+users, tools, workspaces and newer valid approvals. Exercise both orderings,
+category resets, no pre-existing grant row, rollback and uncertain commits under
+real PostgreSQL before claiming race-safe revocation.

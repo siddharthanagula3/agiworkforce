@@ -5159,9 +5159,30 @@ Observed eligibility round trips are fenced; unrendered transitions, cross-view/
 ordering, remote cancellation/CAS and late unknown commits remain separate limits.
 See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01`. Runtime acceptance remains open.
 
+## Connector revocation matches scope and locked credential ownership
+
+Accepted `5fe835a74b` aligns existing session-grant removal with account-global
+standing verdicts through migration 0393's narrow, subject-bound definer function.
+It retains workspace-scoped grant reads/inserts, validates the count receipt and
+commits reset plus standing mutation atomically before audit/success. Migration
+installation and actual restricted-role/RLS acceptance remain pending.
+
+Accepted `dd9720e9ee` captures OAuth credentials and removes their exact locked
+rows in one transaction shared with refresh's locking contract, then performs
+best-effort provider revocation only after confirmed COMMIT. Missing credentials
+and vendor failures stay explicit. Neither local completion nor an authored
+transaction model proves provider revocation; process loss/unknown commits lack
+a durable upstream cleanup outbox. Uncaptured new authorizations are preserved.
+
+Both slices received independent source review; no product execution ran.
+An in-flight session approval can still insert after a reset's DELETE snapshot
+and override Ask. That requires a separate reviewed permission-generation contract,
+not merely the new transaction boundaries. See the three CONNECTOR IDs in
+`audit/prior-audits/active-issues-register.md` for acceptance and limitations.
+
 ## Reconstruction boundary
 
-Only the two hundred five accepted production slices traced above are represented as
+Only the two hundred seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
