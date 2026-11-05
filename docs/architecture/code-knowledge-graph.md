@@ -4922,9 +4922,23 @@ duplicate settlement, notifications and restore remain unchanged. Independently
 source-reviewed fixtures are unrun; later withdrawal and external renewals are
 not fenced. See `WEB-STORE-CONSENT-PREFLIGHT-01`.
 
+## Native consent registration retains its initiating account
+
+Accepted `b8a48e9521105e595609e1a19cc31e848b1927bb` captures the active Cloud
+account epoch before native app-transaction preparation, rejects stale work,
+passes that epoch to the API transport and checks again before marking success.
+The old helper could start transport only after switching accounts and falsely
+mark the original account registered; this requires the replacement account to
+have enabled Cloud. Server bindings are many-to-many, so no exclusive takeover
+is claimed. Version-two markers allow a fresh idempotent registration instead of
+trusting an old marker, without deleting existing bindings. Authored unit and
+API-wrapper fixtures are independently source-reviewed but unrun; successful
+repair and complete consent delivery remain unverified. See
+`MOBILE-APP-TRANSACTION-OWNERSHIP-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety accepted production slices traced above are represented as
+Only the one hundred and ninety-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

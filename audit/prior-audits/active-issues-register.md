@@ -11561,3 +11561,61 @@ billing/erasure custody remains separately open under
 
 No tests, lint, typechecks, builds, installations, application execution, live
 DB/provider actions, push or deployment ran. This is source acceptance only.
+
+
+## MOBILE-APP-TRANSACTION-OWNERSHIP-01
+
+Severity: Medium. Status: Native registration account lifetime source-corrected
+on 2026-11-05; runtime and broader registration acceptance remain open.
+Accepted production commit: `b8a48e9521105e595609e1a19cc31e848b1927bb`.
+
+`apps/mobile/src/features/age-assurance/appTransaction.ts` previously retained
+only the caller's user ID before awaiting the native signed-app-transaction
+result. After an A-to-B account switch, that continuation could enter `api.post`
+under B's current transport generation and credentials, then mark A registered.
+The API's existing generation checks are meaningful after request entry, but
+cannot identify native work that started before that entry.
+
+This is a conditional source sequence, not an observed native incident. The
+layout activates A before registration. Switching accounts resets app mode to
+Local, whose egress policy refuses this route. B must then enable Cloud and stay
+stable while the delayed native result and API request finish. Auth/CSRF, Apple
+signature verification and mobile surface proof still apply; both credentials
+and proof can legitimately belong to B at that later dispatch. The server binds
+the authenticated subject and models `(app_transaction_id, user_id)` as a
+many-to-many relation, so this is not an exclusive-install ownership takeover.
+The defect is A's false completion marker and resulting skipped registration.
+Without another A/install association, later consent rescission cannot discover
+A through that missing relation; the catalogue cannot infer a nonexistent link.
+
+The registration helper now captures the active Cloud owner and epoch before
+native preparation, requires that owner to match its caller, discards stale
+native results and passes the captured epoch into the existing API transport.
+It rechecks before persisting success and writes the captured owner's marker.
+Epoch changes detect A-to-B-to-A as well as a different current owner. The normal
+API credential/response/retry guards and Local-mode refusal remain unchanged.
+A request already dispatched under its legitimate owner is not undone.
+
+The marker prefix advances from v1 to v2 so a potentially false old completion
+can receive one fresh idempotent registration. Existing markers and server
+bindings are not deleted. Repair requires a later successful registration under
+the intended account; there is no claim that every old install is already repaired
+or that missing native support, sign-in retries, Local-mode refusal or ignored
+consent-withdrawal response handling are solved. The server upsert is already
+idempotent on the transaction/account pair.
+
+Independent source review accepted the three-file patch. Unrun unit fixtures
+cover matching-owner success, mismatched/absent owner, retry, Android refusal,
+legacy marker re-registration, delayed native switch/sign-out/round-trip and a
+late receipt after the same account returns. The API-backed fixture includes a
+current-owner positive control and a stale-native negative case that obtains no
+replacement credentials and dispatches no fetch. It uses the real API wrapper
+with mocked credentials, egress and fetch, not native execution or server writes.
+The new fixture group explicitly resets its fetch mock and queues no unconsumed
+success in the no-dispatch case; mock clearing alone would not remove such a
+queued result. None of these sources establishes test, compiler or live success.
+
+This is a bounded producer-lifetime correction supporting
+`WEB-STORE-CONSENT-PREFLIGHT-01`, not complete consent delivery or a rewrite of
+identity session authority. No tests, lint, typechecks, builds, installations,
+application execution, native/provider/database actions, push or deployment ran.
