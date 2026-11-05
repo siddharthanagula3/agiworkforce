@@ -11088,3 +11088,38 @@ proof that historical copies are gone. Unknown stored references, concurrent
 replication, shared-reference races, sequential/unpaginated work and complete
 account erasure remain outside this correction. No tests, lint, typechecks,
 builds, installations, live/database actions, push or deployment ran.
+
+
+## WEB-ACCOUNT-IDENTITY-ERASURE-CLASSIFICATION-01
+
+Severity: High. Status: Ambiguous identity-deletion errors retain retry custody,
+source-corrected in `c3d095b126f9347de75e7545d847ee4df3268394`, 2026-11-05.
+Provider-port guarantees and runtime acceptance remain open.
+
+Scheduled account erasure previously accepted any thrown message containing
+not found or 404 as successful identity deletion, including a configuration
+failure or a numeric 503 with an incidental 404 request identifier. The current
+Clerk deleteUser adapter directly propagates SDK/client-initialization errors;
+its void-returning provider contract does not define message text as absence.
+False success then deleted the profile and reported purged. The job handler only
+raises for failed results, cron's due-account scan requires a profile, and later
+profile-absent tombstone resweeps skip provider identity deletion. Thus the false
+success could discard this flow's identity-retry path. No provider incident or
+application authentication bypass is established; tombstone-aware identity and
+account-lifecycle gates remain counterguards.
+
+The classifier now accepts only a non-null error object with numeric status 404.
+Unknown errors, message-only 404/not-found text, string status values and
+statusCode-only objects remain identity failures, preserving the profile for
+existing retry paths. This matches the current propagated SDK status convention
+and the session-revocation consumer, but is not a formal provider-neutral
+missing-user proof. Tombstone settlement ordering and profile-absent resweep
+behavior were deliberately left unchanged.
+
+Independent source review accepted the two-file diff. Unrun fixtures cover
+numeric 404 Error/plain-object controls, misleading messages with non-404
+statuses, string/statusCode/nullish rejections, due-profile retention followed
+by successful retry, and failure while re-erasing a resurrected profile. They
+mock erasure/storage/identity boundaries; no SDK error, job dispatch, provider
+operation, database transition or fixture was executed. No tests, lint,
+typechecks, builds, installations, live/database actions, push or deployment ran.

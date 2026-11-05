@@ -4787,9 +4787,21 @@ review accepted stateful mocked retry and other-user fixtures; none ran.
 Configuration history, unrecognized references, concurrent replication and
 complete erasure remain unproven. See `WEB-ACCOUNT-KNOWLEDGE-BACKUP-ERASURE-01`.
 
+## Ambiguous identity deletion preserves the retryable profile
+
+Accepted `c3d095b126f9347de75e7545d847ee4df3268394` replaces message-substring
+success with numeric status 404 classification in scheduled identity erasure.
+Other failures keep the profile and return the identity failure stage, allowing
+existing scheduled/resurrection retry paths to call the provider again. This
+avoids falsely reporting purged and moving into a profile-absent resweep that
+skips identity deletion. Tombstone settlement order remains unchanged, and its
+access counterguards are not claimed bypassed. Independent source review accepted
+unrun boundary-mocked cases; the provider port still lacks a formal missing-user
+error. See `WEB-ACCOUNT-IDENTITY-ERASURE-CLASSIFICATION-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-two accepted production slices traced above are represented as
+Only the one hundred and eighty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
