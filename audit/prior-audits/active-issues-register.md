@@ -9441,7 +9441,8 @@ reconciliation fails. This is per-view intent ownership, not global cross-view
 serialization, an authoritative refreshed history list, or exactly-once server
 execution. A prior request can still execute after abort/unmount; a fresh explicit
 confirmation does not establish that it stopped. Archived/deleted managers and
-other legacy callers are not migrated by this slice. Their one-argument service
+other legacy callers were not migrated by this slice. The managers are now
+source-corrected under `WEB-CHAT-MANAGER-OWNERSHIP-01`. One-argument service
 calls remain compatible; all bulk callers now require a matching action receipt.
 
 Independent source review accepted the bounded implementation. Fixture sources
@@ -9472,3 +9473,40 @@ Independent source review accepted the four-file patch. Unexecuted fixtures
 inspect generated SQL shape and mocked receipts, not actual database time
 boundaries, legal-hold integration or concurrency. No tests, lint, typechecks,
 builds, database, push or deploy ran.
+
+## WEB-CHAT-MANAGER-OWNERSHIP-01
+
+Status: Boundedly source-corrected in `dbdc21d082` on 2026-11-05. Runtime and
+deployment acceptance remain open.
+
+Archived and Recently deleted views used cookie-current reads/writes without an
+original account/workspace/view owner. Saved confirmations could target a newly
+selected workspace, and late restore receipts could upsert into a replacement
+account's sidebar. React busy state did not serialize callbacks, pagination and
+row removals: an older page could overwrite a decremented offset or revive a
+removed row. Server user/org gates remained intact; no authorization bypass was
+demonstrated. Restore helpers validated response shape but not requested identity.
+
+The shared manager hook now owns exact ready page/row tokens, operations and
+confirmation phases with canonical session/workspace/request authority. Reads
+and writes pin the explicit original organization/personal header; stale bodies,
+CSRF/token continuations, notices, navigation and store changes are fenced.
+Destructive dispatch rechecks live streaming after token acquisition. Modal close
+retires both subtrees before exit animation. Restore receipts must match ID;
+unarchive must return archived=false, while deleted restore preserves archived/pinned.
+
+One view serializes reads, confirmations and mutations. After every write attempt,
+read-only reconciliation rebuilds a bounded loaded span from offset zero, with
+advancing/nonempty continuation checks and valid terminal-empty handling. A failed
+read locks dependent actions; Retry reads only and retains confirmed/unknown outcome
+context. Ordinary workspace loading/switching is not reported as a failed list.
+The canonical 30-day server recovery policy is unchanged.
+
+This does not establish global cross-view mutation serialization, exactly-once
+server execution, rollback after abort, or a database snapshot across multiple
+rebuild requests. Other concurrent server writers can still change pagination.
+Independent source review accepted the patch and unexecuted fixtures. Identity
+fixtures use real session/workspace/request authority with mocked Clerk/transport;
+hook fixtures also cover exact callbacks, read locks, retries, streaming, StrictMode
+and pagination. Close gating is source-asserted, not animation-tested. No tests,
+lint, typechecks, builds, browser/auth, database, push or deploy ran.

@@ -4115,7 +4115,8 @@ mutation outcome. There is no automatic retry and no claim of rollback, global
 cross-view single-flight or exactly-once server execution. Counts/IDs are not an
 authoritative refreshed list. Existing server user/org filtering, soft delete,
 share/artifact revocation and sandbox cleanup are unchanged. Legacy archived and
-deleted managers remain separate work. See `WEB-BULK-CHAT-INTENT-01`.
+deleted managers were separate work at that checkpoint and are corrected below.
+See `WEB-BULK-CHAT-INTENT-01`.
 
 Independent source review accepted the patch and authored fixtures for exact
 confirmation reuse/cancel, workspace epochs, session replacement, delayed token
@@ -4143,9 +4144,37 @@ receipts only. No tests, lint, typechecks, builds, database, push or deploy ran.
 Runtime cutoff, legal-hold integration and concurrency acceptance remain open
 under `CHAT-RECOVERY-WINDOW-01`.
 
+## Archived and deleted chat managers own snapshots and reconciliation
+
+Accepted commit `dbdc21d082ac7d93fbdef36fc205dfb250e34eb5` introduces the
+shared `useManagedChatList` for both settings managers and extends their existing
+service helpers with optional original request/workspace authority. Exact rendered
+page/row tokens and confirmation phases serialize each view's reads and writes.
+Canonical owner/epoch checks, explicit organization/personal headers, and modal
+close gates fence late page/body/CSRF/token continuations and local effects.
+Restore receipts must match the requested ID; unarchive acknowledges archived=false.
+Recently deleted restoration retains the server's archived/pinned state.
+
+Mutations recheck streaming at dispatch and only reconcile current, acknowledged
+receipts into the sidebar. Every attempt then performs owned read reconciliation,
+never mutation replay. A bounded rebuild from offset zero avoids a stale pending
+page undoing a removal or overwriting shifted offsets. It rejects nonadvancing,
+empty-more and duplicate-only-more continuations while allowing a terminal empty
+page. Read failure disables dependent actions; manual read Retry preserves the
+confirmed/unknown outcome. Workspace loading is distinct from list failure.
+
+This is per-view ownership, not global cross-view serialization, exactly-once
+server execution or a database snapshot across pages. Aborted writes can still
+commit. Existing server scopes, soft deletion and canonical recovery window remain
+unchanged. Independent source review accepted the source and authored lifecycle,
+identity, confirmation, pagination, receipt and recovery fixtures. Some fixtures
+use actual canonical authority with mocked SDK/transport; others isolate the hook.
+No tests, lint, typechecks, builds, browser/auth, database, push or deploy ran.
+See `WEB-CHAT-MANAGER-OWNERSHIP-01` for the acceptance boundary.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-one accepted production slices traced above are represented as
+Only the one hundred and forty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
