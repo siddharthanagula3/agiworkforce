@@ -87,7 +87,7 @@ async function handleChangePassword(request: NextRequest) {
       failedCount: signOut.failed.length,
       revokedDeviceSessionCount,
     },
-    'Password changed; other sessions and device credentials ended',
+    'Password changed; other session and device revocation attempted',
   );
 
   await announceTwoFactorChange({
@@ -98,7 +98,8 @@ async function handleChangePassword(request: NextRequest) {
     detail: { source, count: signOut.ended.length },
   });
 
-  if (!(await finishIntentRevocation(signOut, userId))) {
+  const intentRevoked = await finishIntentRevocation(signOut, userId);
+  if (signOut.failed.length > 0 || signOut.incomplete || !intentRevoked) {
     throw createError
       .serviceUnavailable(
         'Your password was changed, but signing out your other devices did not finish. End your other sessions in Settings to finish.',

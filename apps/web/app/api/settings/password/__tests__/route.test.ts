@@ -138,7 +138,14 @@ describe('POST /api/settings/password', () => {
     mocks.factors.mockResolvedValue({ anySecondFactor: false, earlierEnrollmentPending: false });
     mocks.verifyPassword.mockResolvedValue(true);
     mocks.setPassword.mockResolvedValue(undefined);
-    mocks.revoke.mockResolvedValue({ ended: ['a', 'b'], failed: ['c'] });
+    mocks.revoke.mockResolvedValue({
+      ended: ['a', 'b'],
+      alreadyGone: [],
+      failed: [],
+      incomplete: false,
+      currentSession: undefined,
+      targetCount: 2,
+    });
     mocks.finishIntent.mockResolvedValue(true);
     mocks.revokeDevices.mockResolvedValue(3);
   });
@@ -230,7 +237,7 @@ describe('POST /api/settings/password', () => {
     await expect(response.json()).resolves.toEqual({
       success: true,
       otherSessionsEnded: 2,
-      otherSessionsRemaining: 1,
+      otherSessionsRemaining: 0,
       deviceCredentialsRevoked: 3,
     });
     expect(mocks.revokeDevices).toHaveBeenCalledWith(DB, 'user-1');
@@ -253,6 +260,31 @@ describe('POST /api/settings/password', () => {
     const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
     expect(response.status).toBe(503);
     expect(mocks.announce).toHaveBeenCalled();
+  });
+
+  it.each([
+    { failed: ['c'], incomplete: false },
+    { failed: [], incomplete: true },
+  ])('does not mask provider cleanup $failed/$incomplete with intent success', async (partial) => {
+    const sweep = {
+      ended: ['a'],
+      alreadyGone: [],
+      currentSession: undefined,
+      targetCount: 2,
+      ...partial,
+    };
+    mocks.revoke.mockResolvedValue(sweep);
+    mocks.finishIntent.mockResolvedValue(true);
+
+    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: expect.stringContaining('Your password was changed') },
+    });
+    expect(mocks.setPassword).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeDevices).toHaveBeenCalledWith(DB, 'user-1');
+    expect(mocks.finishIntent).toHaveBeenCalledWith(sweep, 'user-1');
   });
 
   it('does not report success when the device credentials could not be revoked', async () => {
