@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
-import {
-  fetchPreferenceNamespace,
-  savePreferenceNamespace,
-} from '@/app/settings/_lib/preferences-client';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { PreferenceOwner } from '@/app/settings/_lib/preferences-client';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { usePreferenceOwner, usePreferenceView } from '../hooks/use-preference-owner';
+import { readNotificationPreferences, saveNotificationPreferences } from '../services/notification-preferences-client';
+import { NOTIFICATION_DEFAULTS, type NotifKey, type NotificationValues } from '../lib/notification-preferences';
 import { Switch } from '@agiworkforce/ui';
 import { BrowserNotificationStatus, useWebPushToggle } from '@/features/notifications';
 import {
@@ -18,19 +19,11 @@ import { SaveStatusLine } from '../components/SaveStatusLine';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import styles from './NotificationsSection.module.css';
 
-const NAMESPACE = 'notifications';
-
-export type NotifKey =
-  | 'browserReplyReady'
-  | 'mobilePushScheduleDone'
-  | 'emailScheduleDone'
-  | 'emailSecurityAlerts'
-  | 'pushUsageReset';
+export type { NotifKey } from '../lib/notification-preferences';
 
 interface ChannelSpec {
   id: NotifKey;
   channel: string;
-  defaultValue: boolean;
   surface?: SurfaceId;
   browserDependent?: boolean;
 }
@@ -48,7 +41,7 @@ const EVENTS: ReadonlyArray<EventSpec> = [
     heading: 'Reply ready',
     subheading: 'When a reply finishes while this tab is in the background.',
     channels: [
-      { id: 'browserReplyReady', channel: 'Browser', defaultValue: true, browserDependent: true },
+      { id: 'browserReplyReady', channel: 'Browser', browserDependent: true },
     ],
   },
   {
@@ -56,11 +49,10 @@ const EVENTS: ReadonlyArray<EventSpec> = [
     subheading: 'When a scheduled task completes or fails.',
     detail: 'Runs continue on the server while you are away. Results remain available in Tasks.',
     channels: [
-      { id: 'emailScheduleDone', channel: 'Email', defaultValue: true },
+      { id: 'emailScheduleDone', channel: 'Email' },
       {
         id: 'mobilePushScheduleDone',
         channel: 'Mobile push',
-        defaultValue: true,
         surface: 'mobile',
       },
     ],
@@ -71,13 +63,13 @@ const EVENTS: ReadonlyArray<EventSpec> = [
     subheading: 'Always shown in-app, including quiet hours.',
     detail:
       'Includes sign-in, password, email, two-factor and device changes. Security alerts are sent during quiet hours. Email is optional unless Advanced Account Security requires it.',
-    channels: [{ id: 'emailSecurityAlerts', channel: 'Email', defaultValue: true }],
+    channels: [{ id: 'emailSecurityAlerts', channel: 'Email' }],
   },
   {
     heading: 'Usage',
     subheading: 'Usage-limit resets on registered browsers and mobile devices.',
     channels: [
-      { id: 'pushUsageReset', channel: 'Push', defaultValue: true, browserDependent: true },
+      { id: 'pushUsageReset', channel: 'Push', browserDependent: true },
     ],
   },
 ];
@@ -128,13 +120,6 @@ function offeredEvents(statuses: SurfaceStatusMap): EventSpec[] {
   }));
 }
 
-function defaultNotificationState(): Record<NotifKey, boolean> {
-  return EVENTS.flatMap((event) => event.channels).reduce(
-    (acc, channel) => ({ ...acc, [channel.id]: channel.defaultValue }),
-    {} as Record<NotifKey, boolean>,
-  );
-}
-
 const SELECT_STYLE = {
   height: 32,
   borderRadius: 'var(--radius-md)',
@@ -150,70 +135,144 @@ export function NotificationsSection({
 }: {
   surfaceStatus?: SurfaceStatusMap;
 } = {}) {
+  const owner = usePreferenceOwner();
+  const eligibility = offeredEvents(surfaceStatus).map((event) => event.channels.map((channel) => channel.id).join(',')).join(';');
+  const observed = useRef({ eligibility, generation: 0 });
+  if (observed.current.eligibility !== eligibility) {
+    observed.current = { eligibility, generation: observed.current.generation + 1 };
+  }
+  const generation = observed.current.generation;
+  const eligibilityCurrent = useCallback(() => observed.current.generation === generation, [generation]);
+  return <OwnedNotificationsSection owner={owner} eligibilityCurrent={eligibilityCurrent} surfaceStatus={surfaceStatus} />;
+}
+
+function OwnedNotificationsSection({ owner, eligibilityCurrent, surfaceStatus }: {
+  owner: PreferenceOwner | null;
+  eligibilityCurrent: () => boolean;
+  surfaceStatus: SurfaceStatusMap;
+}) {
   const browserStatusId = useId();
-  const [state, setState] = useState<Record<NotifKey, boolean>>(() => defaultNotificationState());
+  const capture = usePreferenceView(owner);
+  const [state, setState] = useState<NotificationValues>({ ...NOTIFICATION_DEFAULTS });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!owner);
   const [hasChanged, setHasChanged] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [failedChange, setFailedChange] = useState<Partial<Record<NotifKey, boolean>> | null>(null);
-  const saveInFlight = useRef(false);
+  const ready = useRef<object | null>(null);
+  const [readySnapshot, setReadySnapshot] = useState<object | null>(null);
+  const operation = useRef<RequestAuthority | null>(null);
+  const recovery = useRef<object | null>(null);
+  const [recoverySnapshot, setRecoverySnapshot] = useState<object | null>(null);
+  const [renderedOwner, setRenderedOwner] = useState({ owner, eligibilityCurrent });
+  if (renderedOwner.owner !== owner || renderedOwner.eligibilityCurrent !== eligibilityCurrent) {
+    operation.current?.retire();
+    operation.current = null;
+    ready.current = null;
+    recovery.current = null;
+    setRenderedOwner({ owner, eligibilityCurrent });
+    setReadySnapshot(null);
+    setRecoverySnapshot(null);
+    setState({ ...NOTIFICATION_DEFAULTS });
+    setLoading(!!owner);
+    setSaving(false);
+    setSaveError(null);
+    setHasChanged(false);
+    setLoadError(false);
+  }
+  const editable = !!owner?.isCurrent() && eligibilityCurrent() && ready.current !== null && ready.current === readySnapshot && !loading && !saving && !loadError;
 
   useEffect(() => {
-    let cancelled = false;
+    ready.current = null;
+    recovery.current = null;
+    if (!owner) return;
+    const viewCurrent = capture();
+    const authority = createRequestAuthority(owner.session, () => viewCurrent() && eligibilityCurrent());
+    operation.current = authority;
     setLoading(true);
     setSaveError(null);
-    fetchPreferenceNamespace<Record<NotifKey, boolean>>(NAMESPACE, defaultNotificationState())
-      .then((value) => {
-        if (!cancelled) {
-          setState({ ...defaultNotificationState(), ...value });
-          setLoadError(false);
-          setSaveError(null);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLoadError(true);
-          setSaveError(toUserMessage(error, 'Failed to load notifications'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void readNotificationPreferences(authority).then((snapshot) => {
+      if (!authority.isCurrent()) return;
+      setState({ ...NOTIFICATION_DEFAULTS, ...snapshot.stored });
+      setLoadError(false);
+      const snapshotIdentity = {};
+      ready.current = snapshotIdentity;
+      setReadySnapshot(snapshotIdentity);
+    }).catch((error: unknown) => {
+      if (!authority.isCurrent()) return;
+      const recoveryIdentity = {};
+      recovery.current = recoveryIdentity;
+      setRecoverySnapshot(recoveryIdentity);
+      setLoadError(true);
+      setSaveError(toUserMessage(error, 'Could not load notification preferences'));
+    }).finally(() => {
+      if (authority.isCurrent()) {
+        setLoading(false);
+        if (operation.current === authority) operation.current = null;
+      }
+      authority.retire();
+    });
     return () => {
-      cancelled = true;
+      ready.current = null;
+      authority.retire();
+      operation.current?.retire();
+      operation.current = null;
     };
-  }, [loadAttempt]);
+  }, [owner, capture, eligibilityCurrent, loadAttempt]);
 
-  async function saveChange(patch: Partial<Record<NotifKey, boolean>>) {
-    if (loading || loadError || saveInFlight.current) return;
-    saveInFlight.current = true;
-    const previous = state;
-    setState({ ...previous, ...patch });
+  async function setEventChannels(event: EventSpec, enabledIds: NotifKey[]) {
+    const viewCurrent = capture();
+    if (!owner || !viewCurrent() || !eligibilityCurrent() || !readySnapshot || ready.current !== readySnapshot || operation.current) return;
+    const offered = offeredEvents(surfaceStatus).find((candidate) => candidate.heading === event.heading);
+    if (!offered || enabledIds.some((id) => !offered.channels.some((channel) => channel.id === id))) return;
+    const patch = Object.fromEntries(offered.channels.map((channel) => [channel.id, enabledIds.includes(channel.id)]));
+    const authority = createRequestAuthority(owner.session, () => viewCurrent() && eligibilityCurrent());
+    operation.current = authority;
+    ready.current = null;
     setSaving(true);
     setSaveError(null);
-    setFailedChange(null);
+    setHasChanged(false);
     try {
-      await savePreferenceNamespace(NAMESPACE, patch, { merge: true });
-      setHasChanged(true);
-    } catch (error) {
-      setState(previous);
-      setFailedChange(patch);
-      setSaveError(toUserMessage(error, 'Your notification preferences could not be saved.'));
+      let confirmed = false;
+      try {
+        await saveNotificationPreferences(authority, patch);
+        if (!authority.isCurrent()) return;
+        confirmed = true;
+      } catch {
+        if (!authority.isCurrent()) return;
+      }
+      try {
+        const snapshot = await readNotificationPreferences(authority);
+        if (!authority.isCurrent()) return;
+        setState({ ...NOTIFICATION_DEFAULTS, ...snapshot.stored });
+        setLoadError(false);
+        setHasChanged(confirmed);
+        setSaveError(confirmed ? null : 'Save could not be confirmed. Latest account preferences loaded; review your selection before changing it again.');
+        const snapshotIdentity = {};
+        ready.current = snapshotIdentity;
+        setReadySnapshot(snapshotIdentity);
+      } catch (error) {
+        if (!authority.isCurrent()) return;
+        const recoveryIdentity = {};
+        recovery.current = recoveryIdentity;
+        setRecoverySnapshot(recoveryIdentity);
+        setLoadError(true);
+        setSaveError(toUserMessage(error, 'Could not refresh notification preferences'));
+      }
     } finally {
-      saveInFlight.current = false;
-      setSaving(false);
+      if (authority.isCurrent()) setSaving(false);
+      if (operation.current === authority) operation.current = null;
+      authority.retire();
     }
   }
 
-  function setEventChannels(event: EventSpec, enabledIds: NotifKey[]) {
-    const patch: Partial<Record<NotifKey, boolean>> = {};
-    for (const channel of event.channels) {
-      patch[channel.id] = enabledIds.includes(channel.id);
-    }
-    void saveChange(patch);
+  function retryLoad() {
+    if (!capture()() || !eligibilityCurrent() || operation.current || !loadError || !recoverySnapshot || recovery.current !== recoverySnapshot) return;
+    ready.current = null;
+    recovery.current = null;
+    setLoading(true);
+    setLoadAttempt((attempt) => attempt + 1);
   }
 
   return (
@@ -234,34 +293,25 @@ export function NotificationsSection({
         >
           Notifications
         </h1>
-        {loading || saving || saveError || hasChanged ? (
+        {!owner || loading || saving || saveError || hasChanged ? (
           <SaveStatusLine
             failed={saveError !== null}
             style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}
           >
-            {loading
+            {!owner
+              ? 'Sign in to load account preferences.'
+              : loading
               ? 'Loading account settings...'
               : saving
                 ? 'Saving...'
                 : saveError
-                  ? `${loadError ? 'Could not load preferences' : 'Changes were not saved'}: ${saveError}`
+                  ? saveError
                   : 'Saved'}
           </SaveStatusLine>
         ) : null}
-        {saveError && !loading && !saving ? (
-          <button
-            type="button"
-            className="text-sm underline underline-offset-4"
-            onClick={() => {
-              if (loadError) {
-                setLoading(true);
-                setLoadAttempt((attempt) => attempt + 1);
-              } else if (failedChange) {
-                void saveChange(failedChange);
-              }
-            }}
-          >
-            {loadError ? 'Retry loading' : 'Retry saving'}
+        {loadError && !loading && !saving ? (
+          <button type="button" className="text-sm underline underline-offset-4" onClick={retryLoad}>
+            Retry loading
           </button>
         ) : null}
       </div>
@@ -316,11 +366,11 @@ export function NotificationsSection({
                 aria-describedby={`${browserStatusId}-description-${index}${event.channels.some((channel) => channel.browserDependent) ? ` ${browserStatusId}` : ''}`}
                 className={`${styles['control']} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                 data-notification-control
-                disabled={loading || saving || loadError}
+                disabled={!editable}
                 value={value}
                 onChange={(changeEvent) => {
                   const option = options.find((o) => o.value === changeEvent.target.value);
-                  if (option) setEventChannels(event, option.ids);
+                  if (option) void setEventChannels(event, option.ids);
                 }}
                 style={SELECT_STYLE}
               >

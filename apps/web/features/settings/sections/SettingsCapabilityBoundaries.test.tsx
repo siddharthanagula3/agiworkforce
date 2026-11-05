@@ -19,7 +19,8 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   ) => selector({ subscription: { status: 'active', tier: 'pro' } }),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
   fetchStoredPreferenceNamespace: vi.fn(async () => ({})),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
@@ -123,3 +124,20 @@ describe('Web Settings capability boundaries', () => {
     expect(screen.getByRole('button', { name: 'Log out of all devices' })).toBeInTheDocument();
   });
 });
+
+const notificationOwner = vi.hoisted(() => ({
+  incarnation: 1,
+  isCurrent: () => true,
+  session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
+}));
+vi.mock('../hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => notificationOwner,
+}));
+vi.mock('../services/notification-preferences-client', () => ({
+  readNotificationPreferences: async () => ({ stored: await (async () => ({}))(), version: 'v1' }),
+  saveNotificationPreferences: async (_authority: unknown, patch: object) => {
+    await Promise.resolve();
+    return { stored: patch, version: 'v2' };
+  },
+}));
