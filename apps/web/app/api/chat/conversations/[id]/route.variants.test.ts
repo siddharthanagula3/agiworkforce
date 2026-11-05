@@ -113,7 +113,9 @@ describe('GET /api/chat/conversations/[id], thread columns', () => {
 
     expect(statementMatching(CONVERSATION_SELECT)?.[0]).toContain('active_leaf_message_id');
     expect(statementMatching(MESSAGE_SELECT)?.[0]).toContain('parent_id');
-    expect(statementMatching(MESSAGE_SELECT)?.[0]).toContain('order by created_at asc');
+    expect(statementMatching(MESSAGE_SELECT)?.[0].replace(/\s+/g, ' ')).toContain(
+      'order by created_at asc, id asc limit $2 offset $3',
+    );
   });
 
   it('answers for a conversation that predates variants with nulls and nothing else new', async () => {
@@ -141,6 +143,97 @@ describe('GET /api/chat/conversations/[id], thread columns', () => {
     expect(body.messages[0]?.['parent_id']).toBeNull();
     expect(body.total).toBe(1);
     expect(body.hasMore).toBe(false);
+  });
+});
+
+describe('GET /api/chat/conversations/[id], mocked offset SQL contract', () => {
+  it.each([null, LEAF_ID])(
+    'requests the unique tie order across pages without changing active leaf %s',
+    async (activeLeafId) => {
+      const conversation = { ...legacyConversation, active_leaf_message_id: activeLeafId };
+      const rows = [
+        { ...legacyMessage, id: LEAF_ID, metadata: { marker: 'first' } },
+        { ...legacyMessage, parent_id: activeLeafId === null ? null : LEAF_ID },
+        { ...legacyMessage, id: '44444444-4444-4444-8444-444444444444' },
+      ];
+      const pages = [rows.slice(0, 2), rows.slice(2), []];
+      const offsets = [0, 2, 3];
+
+      for (const [pageIndex, messages] of pages.entries()) {
+        mocks.query.mockClear();
+        givenDatabase([
+          { match: MESSAGE_COUNT, rows: [{ total: '3' }] },
+          { match: CONVERSATION_SELECT, rows: [{ ...conversation, server_version: '42' }] },
+          { match: MESSAGE_SELECT, rows: messages },
+        ]);
+
+        const response = await GET(
+          new NextRequest(
+            `https://agiworkforce.com/api/chat/conversations/${CONVERSATION_ID}?limit=2&offset=${offsets[pageIndex]}`,
+          ),
+          context,
+        );
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          conversation,
+          messages,
+          total: 3,
+          hasMore: pageIndex === 0,
+        });
+        expect(response.headers.get('etag')).toBe('"42"');
+        const messageStatement = statementMatching(MESSAGE_SELECT);
+        expect(messageStatement?.[0].replace(/\s+/g, ' ')).toContain(
+          'where conversation_id = $1 and deleted_at is null order by created_at asc, id asc limit $2 offset $3',
+        );
+        expect(messageStatement?.[1]).toEqual([CONVERSATION_ID, 2, offsets[pageIndex]]);
+        expect(statementMatching(MESSAGE_COUNT)?.[0]).toContain(
+          'where conversation_id = $1 and deleted_at is null',
+        );
+        expect(statementMatching(MESSAGE_COUNT)?.[1]).toEqual([CONVERSATION_ID]);
+        expect(statementMatching(CONVERSATION_SELECT)?.[0].replace(/\s+/g, ' ')).toContain(
+          'where id = $1 and user_id = $2 and organization_id is not distinct from $3 and deleted_at is null',
+        );
+        expect(statementMatching(CONVERSATION_SELECT)?.[1]).toEqual([
+          CONVERSATION_ID,
+          USER_ID,
+          ORGANIZATION_ID,
+        ]);
+      }
+    },
+  );
+
+  it.each([
+    ['', 100, 0],
+    ['?limit=1000&offset=7', 500, 7],
+    ['?limit=0&offset=-1', 1, 0],
+    ['?limit=invalid&offset=invalid', 100, 0],
+  ])('preserves page bounds for %s', async (query, limit, offset) => {
+    givenDatabase([
+      { match: MESSAGE_COUNT, rows: [{ total: '0' }] },
+      { match: CONVERSATION_SELECT, rows: [legacyConversation] },
+      { match: MESSAGE_SELECT, rows: [] },
+    ]);
+
+    await GET(
+      new NextRequest(`https://agiworkforce.com/api/chat/conversations/${CONVERSATION_ID}${query}`),
+      context,
+    );
+
+    expect(statementMatching(MESSAGE_SELECT)?.[1]).toEqual([CONVERSATION_ID, limit, offset]);
+  });
+
+  it('does not read messages or counts when the scoped conversation is unavailable', async () => {
+    givenDatabase([]);
+
+    const response = await GET(
+      new NextRequest(`https://agiworkforce.com/api/chat/conversations/${CONVERSATION_ID}`),
+      context,
+    );
+
+    expect(response.status).toBe(404);
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(statementMatching(MESSAGE_SELECT)).toBeUndefined();
   });
 });
 
