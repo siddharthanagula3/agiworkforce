@@ -10489,3 +10489,108 @@ Fixtures remain unexecuted; exact-limit acceptance and failure after partial bod
 data are direct fixture gaps. Declared-length underreporting/invalid declarations
 and broad request-helper classification are outside this correction. No tests,
 checks, builds, database operations, push or deployment ran.
+
+## WEB-MEMORY-SYNC-BODY-ADMISSION-01
+
+Severity: Low. Status: Boundedly source-corrected in
+`3192e9e1956dd3f774be0e83f7a7303c8feca2c2`, 2026-11-05. Runtime and deployment
+acceptance remain open.
+
+The optional memory-sync body catch converted malformed JSON, stream failures
+and metered ceiling errors into an empty object, followed by a scoped count
+SELECT and legacy 200 response. That branch did not write memories, acknowledge
+versions or advance cursors. Current mobile, VS Code and CLI response decoders
+reject its legacy shape before acknowledging modern pushes; no memory-loss or
+successful modern-sync claim follows from this defect.
+
+The route now reads text outside its parse catch. Exact-empty input and existing
+valid parsed no-memories values retain count-only compatibility. Malformed
+nonempty input, including whitespace, receives 400; read and ceiling errors
+reach the existing wrapper. Authentication, workspace, CSRF and rate admission
+still precede reading. Scoped-query refusal is not a claim of no authentication
+database work. The meter already bounded and cancelled oversized input.
+
+Independent source review accepted unrun fixtures for legacy values, modern
+validation, malformed input, bodyless reader failure, a real stream failure
+after partial content, oversized-stream cancellation and declared oversize.
+Existing valid modern push fixtures remain. Exact-ceiling acceptance, explicit
+client dirty-queue fixtures and runtime behavior remain unverified.
+
+## WEB-DEVICE-CODE-BODY-ADMISSION-01
+
+Severity: Low. Status: Boundedly source-corrected in
+`920366eb796d500f338fcc4e42b0ed0b687e5b97`, 2026-11-05. Runtime and deployment
+acceptance remain open.
+
+Device-code POST caught every JSON/read failure and defaulted to CLI, permitting
+a pending authorization row after malformed or unreadable input, including a
+metered ceiling refusal. No credentials were issued by that fallback alone:
+issuance remains fail-closed rate-limited, codes expire, polling refuses pending
+codes and approval requires interactive authenticated identity plus CSRF.
+Valid empty objects already permit the same pending allocation. This is body
+admission correctness, not an authentication or byte-enforcement bypass.
+
+Text reading now occurs outside a narrow parse catch. Exact-empty input retains
+CLI defaults; malformed nonempty input returns the route's flat 400 error;
+original read/ceiling errors reach the wrapper. Valid primitive/array/null
+fallback behavior, surface validation, expiry, rate admission and CORS remain.
+Inspected production clients serialize a surface; no whitespace dependency was
+found, and whitespace-only refusal is an intentional narrowing.
+
+Independent source review accepted unrun empty/default and four-surface controls,
+invalid input, failed reader, real failed/oversized streams with cancellation and
+declared-oversize fixtures. Failure fixtures refuse before database issuance. Primitive
+compatibility is source-inspected rather than directly added to the fixture
+table. Exact-limit and partial-read-then-failure cases remain direct gaps.
+
+## WEB-ORGANIZATION-LEAVE-BODY-ADMISSION-01
+
+Severity: Low. Status: Boundedly source-corrected in
+`1c37a8340fab7a502133aa0639d1647284a8a756`, 2026-11-05. Runtime and deployment
+acceptance remain open.
+
+The self-leave DELETE catch converted unreadable JSON to an empty optional
+successor body. A non-owner could then leave and be deprovisioned despite failed
+input. The caller had already explicitly targeted authenticated, CSRF-checked
+self-leave; owners without a successor were refused by the service. This did
+not bypass owner transfer or authorize another person's removal.
+
+The route now preserves successful exact-empty input but refuses malformed
+nonempty content and propagates read failures before workspace resolution,
+membership mutation, deprovisioning, cache invalidation or audit. Existing schema,
+successor step-up and leave-before-deprovision ordering remain unchanged.
+DELETE is excluded from both payload gates; this correction adds no body-size
+enforcement or ceiling response to this endpoint. Deprovisioning remains scoped
+and does not imply universal browser-session revocation.
+
+Independent source review accepted unrun empty/default controls, malformed and
+schema-invalid bodies, bodyless reader failure and an actual errored DELETE
+stream. Existing success/deprovision and separate successor step-up fixtures
+remain intact. Runtime, authentication-failure ordering and partial-read failure
+acceptance remain open.
+
+## WEB-JSON-READER-CEILING-CLASSIFICATION-01
+
+Severity: Low. Status: Boundedly source-corrected in
+`fb0ca3bc792b958e0b2b9e01ca8c4d60e1fb181e`, 2026-11-05. Runtime and deployment
+acceptance remain open.
+
+The shared JSON reader replaced the meter's PayloadCeilingExceededError with a
+400 validation error, preventing withErrorHandler from returning its dedicated
+413 response. The helper now rethrows only that class by identity, including
+through readValidatedJsonBody. Malformed/empty/whitespace JSON and ordinary read
+failures retain their prior 400 behavior; schema validation is unchanged. The
+same passthrough pattern already exists in multipart readers.
+
+Metering and cancellation already occurred before this catch; no buffering or
+authentication bypass is established. The helper does not install metering or
+generate responses itself. Non-wrapper consumers, including operator and some
+admin routes, retain their own error handling and are not covered by a universal
+413 claim. Separate direct route catches remain outside this correction.
+
+Independent source review accepted unrun helper error-identity and preserved-400
+fixtures, plus a real wrapper/helper/oversized-stream case with 413 code,
+cancellation, bounded production and no downstream effect. Valid and malformed
+below-ceiling controls remain. Exact-ceiling behavior, every consumer and runtime
+acceptance have not been exercised. None of this batch's fixtures ran; no tests,
+checks, builds, installations, live/database actions, push or deployment ran.

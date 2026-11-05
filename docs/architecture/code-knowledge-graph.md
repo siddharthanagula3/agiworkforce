@@ -4596,9 +4596,40 @@ one production and one fixture file with real wrapper and stream instrumentation
 none ran. Exact-limit/partial-read-failure fixtures and declared-length anomalies
 remain separate. See `WEB-CONVERSATION-CREATE-BODY-ADMISSION-01`.
 
+## Optional body admission and shared ceiling classification
+
+Three optional-body slices preserve successful empty-body compatibility; a
+fourth preserves shared ceiling classification:
+
+- `3192e9e1956dd3f774be0e83f7a7303c8feca2c2`: memory sync reads before parsing,
+  preserves exact-empty and valid no-memories legacy values, and refuses failed
+  reads rather than returning a count-only legacy success. The old branch did
+  not mutate facts or acknowledge modern pushes; inspected mobile, VS Code and
+  CLI clients reject its legacy response shape.
+- `920366eb796d500f338fcc4e42b0ed0b687e5b97`: device-code issuance no longer
+  allocates pending CLI codes after malformed/read failures. Empty and existing
+  valid parsed fallback values, surface validation, rate/expiry, authenticated
+  approval and CORS remain. This is not a credential-issuance bypass.
+- `1c37a8340fab7a502133aa0639d1647284a8a756`: organization self-leave refuses
+  malformed/read failures before membership and deprovisioning. Empty input,
+  schema, successor step-up and service owner guards remain. DELETE remains
+  outside payload metering; this slice does not add a size ceiling.
+- `fb0ca3bc792b958e0b2b9e01ca8c4d60e1fb181e`: the shared JSON helper preserves
+  the dedicated ceiling error for its wrapper's 413 response while keeping all
+  other read/parse failures as existing 400 validation. Non-wrapper consumers
+  and separate direct catches are outside that response guarantee.
+
+Independent source review accepted four production and five fixture files.
+Real-wrapper stream cases distinguish reader replacement from bodyless spies,
+assert cancellation and prevent downstream effects. Whitespace-only optional
+input now refuses intentionally. Stream byte limiting was already effective;
+these changes correct admission or response classification. All fixtures remain
+unrun, and exact-limit, all-consumer and runtime/deployment acceptance remain
+open. See the four corresponding body-admission/classification issue records.
+
 ## Reconstruction boundary
 
-Only the one hundred and sixty-two accepted production slices traced above are represented as
+Only the one hundred and sixty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
