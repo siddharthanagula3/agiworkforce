@@ -233,6 +233,7 @@ export function useChangePassword(): ChangePasswordMutation {
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<void, Error, ChangePasswordParams>({
+    retry: false,
     mutationFn: async ({ currentPassword, newPassword, confirmPassword }) => {
       if (newPassword !== confirmPassword) {
         throw new Error('Passwords do not match');
@@ -275,6 +276,7 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
+    retry: false,
     mutationFn: async ({
       name,
       scopes,
