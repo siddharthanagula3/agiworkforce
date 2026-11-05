@@ -4889,9 +4889,29 @@ fixtures were not run.
 No omitted history is retrieved. See
 `WEB-BILLING-INVOICE-EXPORT-COMPLETENESS-01` for evidence and remaining limits.
 
+## Store purchase preflight respects scheduled account deletion
+
+Accepted `4a901cd66bd9e76dbce1632b502a7183ec9320db` reads a caller-scoped
+profile before mobile catalogue offers or privileged token upsert. A non-null
+schedule disables all offers, while missing/malformed/error states refuse.
+Consumable IDs remain available for already-granted purchase recovery; receipt
+verification, duplicate settlement, lifecycle notifications and restore remain
+unchanged. The native purchase callback refreshes this catalogue immediately
+before the store request, but there is no atomic purchase/deletion fence.
+
+Request-time deletion admission's paid-plan check excludes paused store
+subscriptions; verified notifications can later reactivate the same linked plan.
+Due-time erasure attempts Stripe cancellation only and then removes operational
+store bindings and refund requests.
+Some financial records are anonymized and retained, and later unattributed
+charges can produce operator security-audit records. Neither is equivalent to
+retaining the original pending request and store recovery custody. Provider settlement policy and coordinated
+fencing remain open under `WEB-STORE-BILLING-ERASURE-CUSTODY-01`. The narrow patch
+and new fixtures are independently source-reviewed, not executed or release-ready.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-eight accepted production slices traced above are represented as
+Only the one hundred and eighty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

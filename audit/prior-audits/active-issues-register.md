@@ -11401,3 +11401,103 @@ This reports omissions; it does not retrieve older invoices/lines, recover
 historical or unlinked customers, verify other providers, or solve archive
 snapshot/erasure custody. No tests, lint, typechecks, builds, installations,
 live database/provider actions, push or deployment ran.
+
+
+## WEB-STORE-BILLING-ERASURE-CUSTODY-01
+
+Severity: High. Status: Catalogue preflight source-corrected on 2026-11-05;
+store billing settlement, erasure custody and runtime acceptance remain open.
+Accepted production commit: `4a901cd66bd9e76dbce1632b502a7183ec9320db`.
+
+Before the correction, the enabled mobile IAP catalogue checked deployment,
+kill switch and subscription ownership, but not account deletion. Scheduled
+accounts intentionally remain signed in so they can cancel deletion
+(`lib/auth/account-status.ts`). The native purchase callback refreshes this
+catalogue immediately before `requestPurchase`
+(`apps/mobile/src/features/billing/useMobileIap.ts`), so an already-scheduled
+account could receive a fresh store offer and token. The ledger's later deletion
+check refuses a new grant, after the external store step. Actual charging depends
+on configured products, native distribution and store acceptance; no live charge
+or deployed incident is established.
+
+The catalogue now queries the caller-scoped profile for the non-null deletion
+schedule before subscription lookup and before privileged account-token upsert.
+An observed schedule returns disabled purchases, no offers and no token, using
+existing plan-change refusal wording. Missing profiles, malformed/non-boolean
+flags and lookup errors fail closed through 503. Deployment and kill-switch
+refusals still short-circuit before these reads. The shared consumable-product
+list remains present on the deletion-disabled response, preserving classification
+of previously granted Android top-ups awaiting consumption. Existing account
+bindings, verification, notifications and restore paths are untouched. The iOS
+unfinished sweep and restore flow do not require `catalog.enabled`.
+
+This reuses canonical refusal text, not the entire `billing-plan-change-gate.ts`
+policy: `readAccountBillingHold` also includes disputes and its EXISTS query does
+not distinguish a missing profile. Its owner-scoped dispute read is permitted by
+migration 0299; lack of access is not a reason for the narrower query. No new
+purchase-dispute guarantee is claimed.
+
+Independent source review accepted production and authored, unrun fixtures for
+both platforms, exact bound-user SQL shape, separate scoped/admin adapters,
+missing/malformed/error states, plan lookup failure, and preserved existing
+catalogue filtering. The fixtures do not establish live RLS or driver behavior.
+
+### Remaining store relationship and cleanup boundary
+
+Current counterguards and the remaining source chain must be kept distinct:
+
+- Request-time deletion reads `SubscriptionService.getSubscription` and fails
+  closed on lookup errors. Its paid-plan check uses
+  `hasLiveBillingRelationship`, whose access rank excludes `paused`.
+- `lib/server/mobile-iap-lifecycle.ts` maps Google's paused state to `paused`;
+  `mobile-iap-notification-service.ts` persists that status. A paused paid plan
+  can therefore pass scheduling. A subsequent verified active lifecycle event
+  for the still-owning receipt updates the linked subscription to active without
+  checking deletion. For an existing recorded Google token, the notification
+  route skips new-grant admission and applies lifecycle processing directly.
+  Binding, environment, staleness and consent guards remain; the sequence assumes
+  a genuine verified active event with a paid-through expiry.
+  `on_hold` maps to `past_due`, not `unpaid`, and is normally blocked at scheduling.
+- `scheduled-account-erasure.ts::endStripeBilling` only handles Stripe. Its
+  `readStripeBillingOwner` projection discards the store identifiers available
+  from `billing-owner-row.ts`. No due-time store settlement/cancellation step
+  exists here; the store adapters do not expose a cancellation operation.
+- `mobile-iap-ledger-service.ts` still refuses new grants during deletion, while
+  duplicate receipts can return `already_processed` before that check. A refused
+  active production purchase can file `billing_refund_requests`; that records
+  review work, not a completed store refund or cancellation.
+- `account-erasure.ts` deletes that refund-request queue, mobile receipt/account
+  bindings and subscriptions. The notification processor needs the receipt/account
+  join to identify its owner. Separately anonymized provider costs, adjustments
+  and disputes are retained; this is not a claim that all financial evidence is
+  erased or that those retained records preserve operational store recovery.
+- Paid unbound/deleted-account notifications can produce unattributed-charge
+  security-audit records for operator investigation. That counterguard does not
+  preserve the original pending request, stop recurrence or make account-linked
+  resolution complete. Later charges are not claimed to be universally silent.
+
+Canonical privacy text (`apps/web/app/privacy/page.tsx`, Billing records)
+expressly preserves double-charge protection and payments still moving while
+promising erasure of ordinary account financial rows. Executable
+`FINANCIAL_ERASURE_DISPOSITION` / `UNDELETED_USER_TABLES` and the generated
+`docs/architecture/RETENTION_MATRIX.md` currently classify mobile bindings and
+refund requests for account erasure; their settlement exceptions do not cover
+these records. `docs/runbooks/mobile-store-products.md` describes operator
+resolution of pending store requests and unattributed-charge investigation.
+`billing-refund-service.ts::recordStoreRefund` records a refund already made at
+the store; it does not perform one. These sources support defining narrow
+unsettled-payment custody, not retaining whole accounts forever or inventing
+an upstream cancellation capability.
+
+The preflight change does not fence a deletion scheduled after the lookup, stop
+external renewals, settle an already-charged purchase or preserve unresolved
+refund work through erasure. A safe broader design needs authoritative provider
+ownership/settlement rules, coordinated scheduling/purchase/notification fencing,
+and explicit minimum recovery-record custody and retention. Entitlement rank or
+the existing three-day effective-expiry heuristic alone is not proof of store
+cancellation. Blocking lifecycle notifications would hide billing evidence rather
+than stop billing; a single due-time read would still race. No blanket indefinite
+retention or cancellation policy is introduced by this patch.
+
+No tests, lint, typechecks, builds, installations, application execution, live
+DB/provider actions, push or deployment ran. This is source acceptance only.
