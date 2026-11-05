@@ -5,6 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { cancelLiveStripeSubscriptionsNow } from '@/lib/server/payments/stripe-provider';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import { eraseBackupCopies } from '@/lib/server/object-backup-erasure';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { countActiveLegalHolds } from '@/lib/services/legal-hold-gate';
 import {
@@ -175,6 +176,8 @@ export interface OrganizationErasureReport {
   mediaObjectsDeleted: number;
   mediaObjectsFailed: number;
   mediaRowsDeleted: number;
+  backupObjectsDeleted: number;
+  backupObjectsFailed: number;
   tables: Record<string, { deleted: boolean; retainedForRetry?: boolean; error?: string }>;
   anonymized: Record<string, { updated: boolean; error?: string }>;
   complete: boolean;
@@ -189,7 +192,16 @@ export interface EraseOrganizationDataOptions {
 
 export async function eraseOrganizationMedia(
   organizationId: string,
-): Promise<{ mediaObjectsDeleted: number; mediaObjectsFailed: number; mediaRowsDeleted: number }> {
+): Promise<
+  Pick<
+    OrganizationErasureReport,
+    | 'mediaObjectsDeleted'
+    | 'mediaObjectsFailed'
+    | 'mediaRowsDeleted'
+    | 'backupObjectsDeleted'
+    | 'backupObjectsFailed'
+  >
+> {
   const db = getNeonDb();
   const rows = await db.query<{ id: string; storage_pathname: string | null }>(
     `select id, storage_pathname from public.media_assets where organization_id = $1`,
@@ -197,15 +209,31 @@ export async function eraseOrganizationMedia(
   );
 
   if (rows.length === 0) {
-    return { mediaObjectsDeleted: 0, mediaObjectsFailed: 0, mediaRowsDeleted: 0 };
+    return {
+      mediaObjectsDeleted: 0,
+      mediaObjectsFailed: 0,
+      mediaRowsDeleted: 0,
+      backupObjectsDeleted: 0,
+      backupObjectsFailed: 0,
+    };
   }
 
   const { deleted, failedPathnames } = await deleteStoredMediaObjects(
     rows.map((row) => row.storage_pathname),
   );
   const stillStored = new Set(failedPathnames);
+  const backup = await eraseBackupCopies(
+    rows
+      .map((row) => row.storage_pathname)
+      .filter((key): key is string => key !== null && !stillStored.has(key)),
+  );
+  const backupStillStored = new Set(backup.failedKeys);
   const deletableIds = rows
-    .filter((row) => !row.storage_pathname || !stillStored.has(row.storage_pathname))
+    .filter(
+      (row) =>
+        !row.storage_pathname ||
+        (!stillStored.has(row.storage_pathname) && !backupStillStored.has(row.storage_pathname)),
+    )
     .map((row) => row.id);
 
   let mediaRowsDeleted = 0;
@@ -221,6 +249,8 @@ export async function eraseOrganizationMedia(
     mediaObjectsDeleted: deleted,
     mediaObjectsFailed: failedPathnames.length,
     mediaRowsDeleted,
+    backupObjectsDeleted: backup.deleted,
+    backupObjectsFailed: backup.failedKeys.length,
   };
 }
 
@@ -247,6 +277,8 @@ function heldReport(
     mediaObjectsDeleted: 0,
     mediaObjectsFailed: 0,
     mediaRowsDeleted: 0,
+    backupObjectsDeleted: 0,
+    backupObjectsFailed: 0,
     tables: {
       legal_holds: {
         deleted: false,
@@ -270,6 +302,8 @@ function billingRetainedReport(organizationId: string, error: string): Organizat
     mediaObjectsDeleted: 0,
     mediaObjectsFailed: 0,
     mediaRowsDeleted: 0,
+    backupObjectsDeleted: 0,
+    backupObjectsFailed: 0,
     tables: {
       organizations: {
         deleted: false,
@@ -372,7 +406,10 @@ export async function eraseOrganizationData(
 
   for (const { table, column } of ORGANIZATION_SCOPED_TABLES) {
     if (table === 'media_assets') {
-      tables[table] = { deleted: true };
+      tables[table] =
+        media.mediaObjectsFailed === 0 && media.backupObjectsFailed === 0
+          ? { deleted: true }
+          : { deleted: false, retainedForRetry: true };
       continue;
     }
     if (table === 'organization_members') {
@@ -414,6 +451,7 @@ export async function eraseOrganizationData(
 
   const dataDisposed =
     media.mediaObjectsFailed === 0 &&
+    media.backupObjectsFailed === 0 &&
     Object.values(tables).every((result) => result.deleted) &&
     Object.values(anonymized).every((result) => result.updated);
 

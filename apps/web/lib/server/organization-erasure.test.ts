@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => ({
   deleteStoredMediaObjects: vi.fn(),
   invalidateActiveOrganizationCache: vi.fn(async (..._args: unknown[]) => undefined),
   cancelLiveStripeSubscriptionsNow: vi.fn(),
+  resolveObjectBackupTarget: vi.fn(
+    (): { store: unknown; bucket: string; region: string; endpoint: string } | null => null,
+  ),
+  deleteBackupObject: vi.fn(async (_key: string, _options?: unknown) => 'deleted'),
+  forgetBackupReplicas: vi.fn(async (_keys: readonly string[]) => 0),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -32,6 +37,11 @@ vi.mock('@/lib/server/payments/stripe-provider', () => ({
 vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: (...args: unknown[]) =>
     mocks.invalidateActiveOrganizationCache(...args),
+}));
+vi.mock('@/lib/server/object-backup', () => ({
+  resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
+  deleteBackupObject: (key: string, options?: unknown) => mocks.deleteBackupObject(key, options),
+  forgetBackupReplicas: (keys: readonly string[]) => mocks.forgetBackupReplicas(keys),
 }));
 
 import {
@@ -230,7 +240,152 @@ describe('organization erasure inventory', () => {
 });
 
 describe('eraseOrganizationData', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveObjectBackupTarget.mockReset().mockReturnValue(null);
+    mocks.deleteBackupObject.mockReset().mockResolvedValue('deleted');
+    mocks.forgetBackupReplicas.mockReset().mockResolvedValue(0);
+  });
+
+  it('retains failed backup pointers and the workspace until a later cleanup succeeds', async () => {
+    primeDb();
+    let rows = [
+      { id: 'a', organization_id: 'org-1', storage_pathname: 'private-media/a.png' },
+      { id: 'b', organization_id: 'org-1', storage_pathname: 'private-media/b.png' },
+      { id: 'c', organization_id: 'org-2', storage_pathname: 'private-media/c.png' },
+    ];
+    const query = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('select id, storage_pathname from public.media_assets')) {
+        return rows.filter((row) => row.organization_id === params[0]);
+      }
+      if (sql.includes('delete from public.media_assets where id = any')) {
+        const ids = params[0] as string[];
+        const removed = rows.filter((row) => ids.includes(row.id));
+        rows = rows.filter((row) => !ids.includes(row.id));
+        return removed;
+      }
+      return query(sql);
+    });
+    mocks.deleteStoredMediaObjects.mockImplementation(async (paths: string[]) => ({
+      deleted: paths.length,
+      failedPathnames: [],
+    }));
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteBackupObject.mockRejectedValueOnce(new Error('backup unavailable'));
+
+    const first = await eraseOrganizationData('org-1');
+
+    expect(first.backupObjectsFailed).toBe(1);
+    expect(first.backupObjectsDeleted).toBe(1);
+    expect(first.mediaRowsDeleted).toBe(1);
+    expect(first.complete).toBe(false);
+    expect(first.organizationRetained).toBe(true);
+    expect(first.tables['media_assets']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(rows.map(({ id }) => id)).toEqual(['a', 'c']);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.organizations')),
+    ).toBe(false);
+
+    const second = await eraseOrganizationData('org-1');
+
+    expect(second.backupObjectsFailed).toBe(0);
+    expect(second.backupObjectsDeleted).toBe(1);
+    expect(second.complete).toBe(true);
+    expect(second.organizationRetained).toBe(false);
+    expect(rows.map(({ id }) => id)).toEqual(['c']);
+    expect(mocks.deleteBackupObject.mock.calls.map(([key]) => key)).toEqual([
+      'private-media/a.png',
+      'private-media/b.png',
+      'private-media/a.png',
+    ]);
+    expect(mocks.forgetBackupReplicas).toHaveBeenNthCalledWith(1, ['private-media/b.png']);
+    expect(mocks.forgetBackupReplicas).toHaveBeenNthCalledWith(2, ['private-media/a.png']);
+  });
+
+  it('does not erase the backup while deletion of its primary failed', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({
+      deleted: 0,
+      failedPathnames: ['private-media/a.png'],
+    });
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
+    expect(report.complete).toBe(false);
+    expect(report.tables['media_assets']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('delete from public.media_assets')),
+    ).toBe(false);
+  });
+
+  it('retains the media row if backup target resolution throws after primary deletion', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    mocks.resolveObjectBackupTarget.mockImplementationOnce(() => {
+      throw new Error('invalid backup config');
+    });
+
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow('invalid backup config');
+
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('delete from public.media_assets')),
+    ).toBe(false);
+    expect(executedStatements().some((sql) => sql.startsWith('delete from'))).toBe(false);
+  });
+
+  it('does not start object or row disposal when the media inventory read fails', async () => {
+    primeDb();
+    const query = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('select id, storage_pathname from public.media_assets')) {
+        throw new Error('inventory unavailable');
+      }
+      return query(sql);
+    });
+
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow('inventory unavailable');
+
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
+    expect(executedStatements().some((sql) => sql.startsWith('delete from'))).toBe(false);
+  });
+
+  it('preserves the existing zero-count policy when no backup target is configured', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    const withoutTarget = await eraseOrganizationData('org-1');
+    expect(withoutTarget.backupObjectsDeleted).toBe(0);
+    expect(withoutTarget.backupObjectsFailed).toBe(0);
+    expect(withoutTarget.complete).toBe(true);
+  });
+
+  it('settles an absent backup even if replica metadata cleanup fails', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteBackupObject.mockResolvedValueOnce('absent');
+    mocks.forgetBackupReplicas.mockRejectedValueOnce(new Error('tracking unavailable'));
+
+    const withAbsentCopy = await eraseOrganizationData('org-1');
+    expect(withAbsentCopy.backupObjectsDeleted).toBe(1);
+    expect(withAbsentCopy.backupObjectsFailed).toBe(0);
+    expect(withAbsentCopy.complete).toBe(true);
+  });
 
   it.each([
     ['missing', 'The lockdown switch could not be prepared. Erasure did not start.'],
@@ -335,6 +490,8 @@ describe('eraseOrganizationData', () => {
     expect(report.complete).toBe(false);
     expect(report.blockedByLegalHold).toBe(true);
     expect(report.organizationRetained).toBe(true);
+    expect(report.backupObjectsDeleted).toBe(0);
+    expect(report.backupObjectsFailed).toBe(0);
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
@@ -571,6 +728,8 @@ describe('eraseOrganizationData', () => {
     expect(report.complete).toBe(false);
     expect(report.blockedByBilling).toBe(true);
     expect(report.organizationRetained).toBe(true);
+    expect(report.backupObjectsDeleted).toBe(0);
+    expect(report.backupObjectsFailed).toBe(0);
     expect(mocks.execute).not.toHaveBeenCalled();
     expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
   });
