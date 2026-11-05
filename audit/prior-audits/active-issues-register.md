@@ -12942,3 +12942,46 @@ A verifier archive check alone would not make all keys revoked or emit their
 revocation events. Future acceptance must cover both archive interleavings,
 concurrent rotations, changed association, rollback and multi-workspace keys.
 No such database or runtime checks ran here.
+
+
+## WEB-DEVELOPER-MUTATION-RETRY-01
+
+Severity: Medium. Bounded correction `d71368c558` independently source-reviewed
+on 2026-11-05; authored fixtures unrun. Uncertain-outcome recovery and request
+ownership remain open.
+
+The shared `QueryClient` defaults mutations to `retry: 1`. All eight mutations
+in `features/developers/hooks/use-developer-projects.ts` and
+`use-developer-webhooks.ts` previously inherited that retry. Their transport
+`sendAuthorizedJson` performs one request per invocation; neither these hooks nor
+the console routes supply a stable client operation key. A transport failure or
+response-body failure after server commitment could therefore repeat the mutation
+without a new user action. Endpoint creation generates another endpoint and secret;
+test events and redelivery create new delivery rows. The background job's
+idempotency key is derived from the new delivery row, so it does not deduplicate
+console submissions. Project-name uniqueness also does not replay a prior result.
+
+The correction explicitly sets `retry: false` for create/update/archive project,
+and create/update/delete endpoint, send-test and redeliver. It does not change
+read retries, shared defaults, success invalidation or explicit subsequent user
+actions. A transient failure now surfaces immediately instead of being retried.
+The existing `ProjectsPanel` and `WebhooksPanel` use these hooks.
+
+`features/developers/__tests__/developer-mutation-retry.test.tsx` authors 24
+unrun cases through the real mutation hooks and a real QueryClient with the old
+retry default enabled. For every operation, transport rejection and a successful
+HTTP response with failed JSON consumption must settle after one transport call;
+positive controls preserve cache invalidation counts and explicit later actions.
+Transport and cache invalidation are mocked; mutation scheduling is real. These
+are source-reviewed fixtures, not executed React, TanStack, route, database or
+delivery acceptance.
+
+An error still cannot distinguish a refused operation from a committed operation
+whose response was lost. Cache reconciliation, safe recovery of a once-only
+signing secret, stable server operation identity and duplicate manual submissions
+are outside this patch. Global project/webhook query keys and deferred
+current-session token lookup also remain separate request-ownership concerns;
+this correction does not claim account/workspace isolation. Workspace switching
+currently cancels queries, clears caches and reloads, which is a counterguard,
+not proof that all deferred mutation lifetimes are owned. No tests, lint,
+typechecks, builds, app execution, push or deployment ran.

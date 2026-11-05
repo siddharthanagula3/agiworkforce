@@ -5277,9 +5277,25 @@ coverage, and issuance/rotation need coordinated project-first admission. The
 Personal-scoped spend query does not establish organization-wide project limits.
 The earlier support rotation atomicity correction retains its narrower scope.
 
+## Developer console mutations do not automatically replay
+
+Accepted `d71368c558` disables inherited mutation retries in all eight project
+and webhook mutation hooks. These operations do not provide a stable client
+operation identity, so automatically repeating a request after a lost response
+can duplicate endpoints or event deliveries, or obscure an already-completed
+update/archive/delete. Shared query defaults and explicit later actions remain
+unchanged. Webhook job idempotency does not deduplicate console submissions.
+
+Production and 24 authored fixtures received independent source review. The
+fixtures use real hooks with the old retry default, mock transport and cache
+invalidation, and cover transport/body failure plus success callbacks and deliberate
+subsequent actions. They are unrun. Uncertain server outcomes, stale-cache
+reconciliation, lost once-only signing secrets, manual duplicates and session/
+workspace request ownership remain open under `WEB-DEVELOPER-MUTATION-RETRY-01`.
+
 ## Reconstruction boundary
 
-Only the two hundred thirteen accepted production slices traced above are represented as
+Only the two hundred fourteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
