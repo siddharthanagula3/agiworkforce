@@ -4336,9 +4336,26 @@ scheduling receipts, ambiguous-result wording and server idempotency remain open
 under `WEB-ACCOUNT-DELETION-INTENT-01`. Scheduling has a reversible grace period;
 no account deletion, live scheduling, test, build, push or deployment ran.
 
+## Step-up callbacks settle only their installed challenge
+
+Accepted commit `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` binds pending
+challenge callbacks to their exact object and clears ownership before settlement.
+A stale callback cannot hide, satisfy or cancel a replacement. Increasing
+hook-local challenge keys remount StepUpDialog even for identical action/resource
+pairs, preventing old verification continuations from reading replacement props
+through that component's latest ref. Replacement cancellation, single authorized
+replay and unrelated already-dispatched requests remain unchanged.
+
+Independent source review accepted six authored fixtures, including a real-dialog
+deferred verification across replacement; none ran. Its separately mounted test
+host is manually rerendered, so automatic DOM removal is not established by that
+fixture. Silent grants after unmount, original session/caller authority and ongoing
+SDK/grant work remain outside this repair. See `WEB-ACCOUNT-DELETION-INTENT-01`.
+No tests, checks, builds, live account action, push or deployment ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty accepted production slices traced above are represented as
+Only the one hundred and fifty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

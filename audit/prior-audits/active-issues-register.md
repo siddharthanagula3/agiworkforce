@@ -9860,7 +9860,9 @@ authorized attempt found no Git credentials; no remote branch was created.
 
 Status: Automatic deletion mutation retry source-corrected in
 `161faef68b792fd26f546dd5738a62bed2a6669b` on 2026-11-05. Original
-session/view, step-up lifecycle, receipt and server idempotency work remain OPEN.
+session/view, wider step-up lifecycle, receipt and server idempotency work remain OPEN.
+Exact installed-challenge settlement was separately source-corrected in
+`7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
 No live scheduling, deletion or runtime identity transition was performed.
 
 `useDeleteAccount` in `use-settings-queries.ts` previously inherited production
@@ -9881,11 +9883,31 @@ invalid schedule dates, producing unsupported success UI and a Continue action.
 
 The shared `useStepUp` cleanup cancels an installed challenge, not a still-pending
 silent grant acquisition. Late grant completion can replay the request after
-unmount, or install a new challenge after cleanup. Its close callback settles
-whatever pendingRef holds rather than the exact challenge that supplied the
-callback, so retained callbacks can settle a replacement challenge. These shared
-lifetimes need original request/view authority and challenge-specific settlement,
-not another identity store.
+unmount, or install a new challenge after cleanup. Before the bounded correction,
+its generic close callback settled whatever pendingRef held. Retained A callbacks
+could clear or settle replacement B; reusing the same StepUpDialog instance also
+let A's delayed verification read B through latest.current.
+
+The installed-challenge correction binds callbacks to the exact pending object,
+checks ownership before clearing any state, and releases ownership before settling.
+Each installed challenge receives a hook-local increasing ID used as the dialog
+key, including repeated identical action/resource challenges. The keyed remount
+keeps old dialog continuations on their original callback/resource. Both controls
+are necessary: an exact hook guard alone cannot stop a reused dialog from reading
+B's current callback, and remount alone cannot fix a generic close callback.
+Replacement still cancels the previous waiter; first settlement wins. Existing
+single proof-authorized replay, installed-challenge unmount cleanup, independent
+already-dispatched requests and transport/error contracts are unchanged.
+
+Independent source review accepted six authored, unexecuted fixtures: retained
+callbacks across identical challenges, repeated settlement, cancel/reopen keys,
+installed-challenge unmount, unrelated dispatched work and real-dialog delayed
+verification across replacement. The real-dialog fixture manually rerenders a
+separate mounted host, so it does not establish automatic DOM removal on close.
+Silent grants and SDK/grant work after unmount, stale acquisition ordering,
+original session authority and caller-send ownership remain open; a retired dialog
+may still perform old verification/grant work but cannot settle its replacement.
+These broader lifetimes need canonical request/view authority, not another store.
 
 Server counterguards remain substantial: rate limit, CSRF subject binding,
 authenticated account/status/session policy, scoped writes, billing and sole-owner
