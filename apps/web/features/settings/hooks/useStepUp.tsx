@@ -11,6 +11,7 @@ import {
 import type { StepUpLevel } from '@/lib/server/step-up/actions';
 
 interface PendingChallenge {
+  id: number;
   challenge: StepUpChallenge;
   level: StepUpLevel | null;
   settle: (token: string | null) => void;
@@ -26,11 +27,13 @@ export interface UseStepUp {
 export function useStepUp(): UseStepUp {
   const [pending, setPending] = useState<PendingChallenge | null>(null);
   const pendingRef = useRef<PendingChallenge | null>(null);
+  const nextChallengeId = useRef(0);
 
-  const close = useCallback((token: string | null) => {
-    pendingRef.current?.settle(token);
+  const close = useCallback((expected: PendingChallenge, token: string | null) => {
+    if (pendingRef.current !== expected) return;
     pendingRef.current = null;
     setPending(null);
+    expected.settle(token);
   }, []);
 
   // An unmount mid-challenge would otherwise leave the caller awaiting forever.
@@ -52,6 +55,7 @@ export function useStepUp(): UseStepUp {
           return new Promise<string | null>((resolve) => {
             pendingRef.current?.settle(null);
             const next: PendingChallenge = {
+              id: ++nextChallengeId.current,
               challenge,
               level: silent.kind === 'verify' ? silent.level : null,
               settle: resolve,
@@ -67,13 +71,14 @@ export function useStepUp(): UseStepUp {
 
   const dialog = pending ? (
     <StepUpDialog
+      key={pending.id}
       open
       action={pending.challenge.action}
       consequence={pending.challenge.consequence}
       resourceId={pending.challenge.resourceId}
       level={pending.level}
-      onCancel={() => close(null)}
-      onSatisfied={(token) => close(token)}
+      onCancel={() => close(pending, null)}
+      onSatisfied={(token) => close(pending, token)}
     />
   ) : null;
 
