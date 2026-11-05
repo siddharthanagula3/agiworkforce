@@ -9194,12 +9194,35 @@ optional-field compatibility and successful controls; none ran. Valid-looking
 truncated receipts, concurrent snapshots and server truthfulness remain outside
 this structure-validation claim.
 
-Separate retained Tauri `apps/desktop/src/api/cloudMemory.ts::listCloudMemories`
-still uses page length and a 10,000 offset cap rather than hasMore, returning a
-successful bounded prefix at exhaustion. It rejects malformed rows and checks
-its request boundary, and its legacy fixture accepts omitted continuation. That
-native compatibility/completion question is not changed by the Web reader.
-Public Electron uses hosted Web; mobile's Local SQLite cap is a different lane.
+Separate retained Tauri correction `1349d7b31d03b4ac8f93eaa795c5417ef3088e69`
+on 2026-11-05 repairs `apps/desktop/src/api/cloudMemory.ts::listCloudMemories`
+completion. Previously 10,101 eligible facts could return 101 full pages and
+resolve only 10,100 facts despite final hasMore=true. CloudMemoryTab then replaced
+its list and marked it synced. Its clear operation maps loaded fact IDs, so a
+truncated list could also limit that operation to the loaded prefix despite
+broader confirmation wording. These are source consequences, not observed loss.
+
+The native adapter now honors explicit boolean continuation, rejects present
+nonboolean values, and rejects empty continuing pages or cap exhaustion without
+completion. Explicit false accepts a full final page, including offset 10,000;
+no request is sent beyond the server's clamped offset. Actual row count advances
+the offset, so short continuing pages remain supported. The request bound is
+offset-based, not universally 101 requests. Canonical page size replaces the
+local literal without changing its current value.
+
+Omitted continuation retains length-only legacy behavior: the server in original
+adapter commit `274cb756fc` actually returned only memories, not just a loose
+fixture. A full legacy page at the cap remains ambiguous and now fails closed.
+Native four-field mapping, request context, post-body authority and mutations are
+unchanged; this is not adoption of the strict Web reader. Independent source
+review accepted three files and unexecuted normal/legacy/cap/malformed/later-error/
+boundary fixtures. Fetch mocks reset per case and new deferred-body fixtures
+release/observe settlement in finally. The caller fixture wraps the real editor,
+directly invokes its captured hydration, and asserts retained facts plus real
+error/reload UI; it is not native transport-to-UI integration. General view
+ownership, optimistic rollback, clear semantics and concurrent snapshots remain
+separate. Public Electron uses hosted Web; mobile's Local SQLite cap is a different
+lane. No tests, checks, builds, native or database actions ran.
 
 
 Separate Local-context correction `efdb7f495aa5fa6e94cfae101078348e071c85c1`

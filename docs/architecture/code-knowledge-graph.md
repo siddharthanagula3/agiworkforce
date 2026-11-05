@@ -4559,12 +4559,30 @@ with a shortened terminal result. Failed refresh preserves prior facts/revision;
 acknowledged mutation reductions remain successful without replay or a new write
 barrier. Independent source review accepted authored compatibility, read-failure
 and four-mutation fixtures; none ran. Receipt structure does not prove truthful
-server contents or a coherent cross-page snapshot. Native cap exhaustion remains
-a separate issue under `WEB-MEMORY-OWNER-BACKLOG-01`.
+server contents or a coherent cross-page snapshot. The following native correction
+is separate from this Web reader.
+
+## Retained native memory reads prove bounded completion
+
+Accepted commit `1349d7b31d03b4ac8f93eaa795c5417ef3088e69` honors explicit
+continuation in Tauri's list adapter while preserving historically supported
+omission/length fallback. Malformed present continuation, no-progress pages and
+unproven cap exhaustion reject instead of returning a partial list. Explicit
+false permits a full terminal page at offset 10,000. Actual-count advancement,
+native row shape, pinned request context and post-body authority remain unchanged.
+
+Independent source review accepted one production and two fixture files for
+normal/legacy bounds, all terminal cap outcomes, later failures and ownership
+changes. Fetch mocks reset and deferred bodies settle in finally. A real-editor
+wrapper exposes the caller's hydration for retained-facts/error UI assertions;
+this is not native transport-to-UI integration. None ran. View ownership,
+optimistic rollback, clear semantics and concurrent snapshots are not repaired.
+Public Electron's hosted Web and mobile Local data are separate surfaces. See
+`WEB-MEMORY-OWNER-BACKLOG-01`.
 
 ## Reconstruction boundary
 
-Only the one hundred and sixty accepted production slices traced above are represented as
+Only the one hundred and sixty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
