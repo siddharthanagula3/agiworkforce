@@ -522,6 +522,7 @@ export async function requestDataExportArchive(input: {
   const requestedAt = new Date().toISOString();
   const delivery = await resolveDataExportDelivery(input.userId);
   const json = Buffer.from(JSON.stringify(await input.collect(), null, 2));
+  const workspaces = await listDataExportWorkspaces(input.db, input.userId);
   await putPrivateObject({
     key: exportJsonKey(input.userId, exportId),
     data: json,
@@ -537,7 +538,7 @@ export async function requestDataExportArchive(input: {
       requestedAt,
       origin: input.origin,
       delivery,
-      workspaces: await listDataExportWorkspaces(input.db, input.userId),
+      workspaces,
       volume: 1,
       cursor: null,
       volumes: [],

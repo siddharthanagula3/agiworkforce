@@ -151,6 +151,82 @@ describe('requestDataExportArchive delivery', () => {
   });
 });
 
+describe('requestDataExportArchive staging order', () => {
+  it('does not stage an object when workspace discovery fails', async () => {
+    const error = new Error('workspace lookup unavailable');
+    const query = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(error);
+    const db = { query } as unknown as DatabaseAdapter;
+
+    await expect(requestWith(db)).rejects.toBe(error);
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[1]?.[0]).toContain('from organization_members');
+    expect(mocks.putPrivateObject).not.toHaveBeenCalled();
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it('collects data and discovers workspaces before staging and enqueueing', async () => {
+    const order: string[] = [];
+    const workspaceId = '00000000-0000-4000-8000-000000000001';
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('from public.background_jobs')) {
+        order.push('existing');
+        return [];
+      }
+      expect(sql).toContain('from organization_members');
+      order.push('workspaces');
+      return [{ organization_id: workspaceId }];
+    });
+    const db = { query } as unknown as DatabaseAdapter;
+    const account = { account: { id: USER_ID } };
+    mocks.putPrivateObject.mockImplementationOnce(async () => {
+      order.push('put');
+    });
+    mocks.enqueueJob.mockImplementationOnce(async () => {
+      order.push('enqueue');
+      return { id: 'job-1' };
+    });
+
+    const { archive, created } = await requestDataExportArchive({
+      db,
+      userId: USER_ID,
+      origin: 'https://agiworkforce.com',
+      collect: async () => {
+        order.push('collect');
+        return account;
+      },
+    });
+
+    expect(order).toEqual(['existing', 'collect', 'workspaces', 'put', 'enqueue']);
+    expect(created).toBe(true);
+    expect(mocks.putPrivateObject).toHaveBeenCalledOnce();
+    expect(mocks.putPrivateObject).toHaveBeenCalledWith({
+      key: `exports/${USER_ID}/${archive.id}/export.json`,
+      data: Buffer.from(JSON.stringify(account, null, 2)),
+      contentType: 'application/json',
+      contentLength: Buffer.byteLength(JSON.stringify(account, null, 2)),
+    });
+    expect(mocks.enqueueJob).toHaveBeenCalledOnce();
+    expect(enqueuedPayload()).toMatchObject({
+      exportId: archive.id,
+      workspaces: [null, workspaceId],
+      volume: 1,
+      cursor: null,
+      volumes: [],
+    });
+  });
+
+  it('does not enqueue a build when staging rejects', async () => {
+    const error = new Error('storage acknowledgment unavailable');
+    mocks.putPrivateObject.mockRejectedValueOnce(error);
+
+    await expect(requestWith(databaseWith([[], []]))).rejects.toBe(error);
+
+    expect(mocks.putPrivateObject).toHaveBeenCalledOnce();
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+});
+
 describe('readDataExportArchive delivery', () => {
   it('reads an export requested before delivery was recorded as in-app', async () => {
     const db = databaseWith([
