@@ -45,7 +45,7 @@ async function handleLeave(request: NextRequest) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
   const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!organizationId) {
     throw createError.notFound('Select a workspace before leaving it');
   }

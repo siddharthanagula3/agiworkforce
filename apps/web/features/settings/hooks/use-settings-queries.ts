@@ -21,6 +21,7 @@ import {
 import { z } from 'zod';
 import {
   MANAGED_CLOUD_APPROVAL_HISTORY_PATH,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
   type ManagedCloudWorkspaceOwnershipTransfer,
 } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
@@ -1161,7 +1162,7 @@ export function useLeaveOrganization(): LeaveOrganizationMutation {
           sendAuthorizedJson(
             '/api/settings/organization/leave',
             { method: 'DELETE', body: successorUserId ? { successorUserId } : {} },
-            headers,
+            { ...headers, [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId },
           ),
         organizationId,
       );

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const reverification = vi.hoisted(() => ({
@@ -86,6 +87,9 @@ function Harness() {
       >
         Transfer ownership and leave
       </button>
+      <button type="button" onClick={() => leave.mutate({ organizationId: ORG })}>
+        Leave workspace
+      </button>
       {leave.stepUpDialog}
       <output aria-label="Mutation status">{leave.status}</output>
     </>
@@ -143,6 +147,26 @@ describe('useLeaveOrganization step-up', () => {
     expect(init.method).toBe('DELETE');
     expect(JSON.parse(init.body as string)).toEqual({ successorUserId: 'successor' });
     expect((init.headers as Record<string, string>)[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
+    expect((init.headers as Record<string, string>)[MANAGED_CLOUD_ORGANIZATION_HEADER]).toBe(ORG);
+    const first = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect((first.headers as Record<string, string>)[MANAGED_CLOUD_ORGANIZATION_HEADER]).toBe(ORG);
+  });
+
+  it('binds an ordinary leave to its captured workspace without changing its body', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(new Response('Unavailable', { status: 503 }));
+
+    renderHarness();
+    await user.click(screen.getByRole('button', { name: /^leave workspace$/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Mutation status')).toHaveTextContent('error'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/settings/organization/leave');
+    expect(init.method).toBe('DELETE');
+    expect(JSON.parse(init.body as string)).toEqual({});
+    expect((init.headers as Record<string, string>)[MANAGED_CLOUD_ORGANIZATION_HEADER]).toBe(ORG);
+    expect((init.headers as Record<string, string>)[STEP_UP_TOKEN_HEADER]).toBeUndefined();
   });
 
   it('leaves nothing, and raises no alarm, when the challenge is dismissed', async () => {
