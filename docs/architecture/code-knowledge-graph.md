@@ -4377,9 +4377,39 @@ remain open. Mobile's missing-date immediate-erasure path and internal Tauri's
 optional-message success are recorded under `WEB-ACCOUNT-DELETION-INTENT-01`.
 No tests, checks, builds, live account action, push or deployment ran.
 
+## Native deletion surfaces use the same scheduling receipt
+
+Accepted commit `4149254b5944f73964e1e3bb50c79649d6ca5335` adopts the shared
+mutation receipts on mobile and internal Tauri. Mobile validates before sign-out,
+confirms scheduling rather than immediate erasure, and reconciles unknown outcomes
+with original-epoch GET only. Copy preserves uncertainty even after a status read.
+Complete true/false cancellation receipts retain their meanings; expired-window
+409 remains refusal. Original epochs, native step-up, meaningful billing refusals
+and auth recovery remain unchanged.
+
+Tauri preserves its request-context and post-body boundary checks before schema
+acceptance or uncertainty wrapping. Non-OK web step-up/MFA handoffs remain. The UI
+removes synthesized success, clears prior success when another submission starts,
+and describes the grace stage without a new duration literal. Typed confirmation
+and Local Mode exclusion remain; no native cancellation protocol was added.
+
+Independent source review accepted authored receipt, reconciliation, refusal,
+late-body and UI fixtures; none ran. Mocked API/step-up/sign-out/request context
+cannot establish transport or SDK correctness. UI blocking during unavailable
+status is not exactly-once callback admission. Original-owner display attribution,
+server idempotency, erasure-time precision and logout remain separate boundaries.
+See `WEB-ACCOUNT-DELETION-INTENT-01`.
+
+Read-only follow-on records `MOBILE-LOGOUT-SESSION-LIFETIME-01`: overlapping logout
+can submit a late unscoped Clerk command and clear replacement Siri state. Exact
+pinned official SDK source shows captured signOut sessionId or resource methods
+alone do not isolate asynchronous shared client/cache updates. No SDK swap or
+logout patch was applied. No tests, checks, builds, live account operations, push
+or deployment ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-two accepted production slices traced above are represented as
+Only the one hundred and fifty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

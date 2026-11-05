@@ -9863,6 +9863,8 @@ Status: Automatic deletion mutation retry source-corrected in
 session/view, wider step-up lifecycle and server idempotency work remain OPEN.
 Web scheduling/cancellation receipt validation and cancellation retry were
 source-corrected in `5c4d7e8d2a0dd3f388d378ee12303685adadf0b1` on 2026-11-05.
+Native receipt adoption was source-corrected in
+`4149254b5944f73964e1e3bb50c79649d6ca5335` the same day.
 Exact installed-challenge settlement was separately source-corrected in
 `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
 No live scheduling, deletion or runtime identity transition was performed.
@@ -9967,15 +9969,43 @@ production retry defaults plus an ordinary-retry positive control; component sui
 still explicitly disable retry and only cover their rendering/cache contract.
 No fixtures were executed.
 
-Native adoption remains open. Mobile's CloudAccountScreen currently accepts an
-optional schedule timestamp, signs out and labels a missing timestamp as immediate
-erasure; its owner-switch fixture asserts that unsupported path. Its captured
-account epoch and owned step-up transport are real counterguards, not receipt
-validation. Its cancellation already requires a boolean and refreshes unknown
-outcomes but has not adopted the full shared receipt. Internal Tauri's account
-adapter also accepts an optional message and DangerZone synthesizes success; it
-has existing request-boundary checks and explicit web step-up handoff. Public
-Electron uses hosted web. No native behavior changed in this slice.
+Native adoption now uses the same canonical schemas. Mobile previously accepted
+an optional schedule timestamp, signed out and labeled a missing date as immediate
+erasure, with a fixture asserting that unsupported path. It now validates before
+sign-out and only confirms scheduling. Existing captured account epoch and owned
+step-up sends remain. Unknown outcomes refresh status under the original epoch,
+without automatic mutation replay; copy explicitly warns that a status read may
+not reflect work still in progress. Unavailable status keeps the normal action UI
+hidden. This is UI gating, not consumed confirmation intent: saved callbacks and
+explicit repeated user actions are not made exactly-once.
+
+Mobile cancellation requires the complete shared receipt before applying no-pending
+state. Valid true/false retain their distinct meanings; a structured grace-expired
+409 shows refusal and refreshes status without claiming erasure is complete. Known
+subscription/sole-owner refusals and Billing remain. Real exhausted-401 transport
+already invalidates the epoch before screen error handling, normally selecting its
+stale-account branch rather than its newly worded session-expired branch. Original
+401 recovery and proof-authorized replay are preserved, not repaired.
+
+Internal Tauri's adapter uses the canonical path/type/parser while preserving
+original request-context checks before dispatch and after body parsing. Boundary
+failure remains prior to wrapping transport or malformed-success uncertainty;
+non-OK step-up/MFA/server handoffs are unchanged. DangerZone no longer fabricates
+success, clears a previous result on a new submission, and describes scheduling
+and a cancellable grace period without adding a duration literal. It retains typed
+confirmation and Local Mode exclusion. No native cancellation protocol or
+owner-keyed Tauri result reset was introduced. Public Electron still uses web.
+
+Independent source review accepted the seven-file native patch and authored receipt,
+reconciliation, refusal, late-body and UI fixtures. Mobile fixtures mock API,
+step-up and sign-out; desktop boundary fixtures mock request context. They do not
+establish real transport or SDK teardown. The identified missing RefreshCw icon
+mock export was supplied before commit. No fixtures ran. Intentional local sign-out
+invalidates the old epoch, so the validated original scheduling confirmation is
+not suppressed merely for that expected transition. This does not fix cross-owner
+SDK/Siri logout races, now tracked as `MOBILE-LOGOUT-SESSION-LIFETIME-01`, or original
+owner attribution after asynchronous logout. Scheduling success is not completed
+erasure or proof that remote sign-out succeeded.
 
 Wider work must bind confirmation, CSRF, original request, grant/replay/body and
 Continue effects to canonical account/view authority, and reconcile unknown
@@ -10041,3 +10071,71 @@ and POST, contradictory upgraded refusal, HTTP/network failures and separate
 intent/receipt callbacks. Marketing success mocks now reflect one submitted
 purpose. Local application is mocked; no browser analytics collection was run.
 No tests, lint, typechecks, builds, live consent changes, push or deployment ran.
+
+
+## MOBILE-LOGOUT-SESSION-LIFETIME-01
+
+Status: OPEN source-supported lifecycle defect and coordinated design requirement,
+reviewed 2026-11-05. No logout/session/Siri patch, SDK execution or observed user
+incident is claimed.
+
+The mobile auth store clears local state and invalidates the Cloud epoch before
+awaiting a captured token, push unregistration and Siri cleanup. It then calls
+services/authSession.ts clearAuthSession, which resolves the current Clerk singleton
+and invokes argument-free signOut. Neither the store nor this adapter retains the
+original SDK session or coalesces logout attempts. Epoch invalidation protects
+account work, not this later global command.
+
+A concrete source-reachable overlap requires two logout attempts, not immediate
+login after one: Settings keeps its Log Out row while either local auth is true or
+Clerk user exists, with no pending guard. L1 can wait on push cleanup; L2 independently
+finishes and clears Clerk. Login normally gates its forms on Clerk isSignedIn, so
+only then can B sign in. L1 subsequently submits the unscoped SDK sign-out command.
+ClerkTokenBridge can activate a loaded accepted session without a logout fence.
+This establishes a wrong-lifetime command path; actual scheduling and SDK effects
+have not been reproduced at runtime.
+
+The same cleanup chain calls revokeAskIntentForSignOut only after the push wait.
+That helper reads global Siri enabled/pending state at invocation, then clears
+pending state and always calls forgetLocalToken in finally. The latter clears the
+shared enabled flag/token ID and asynchronously deletes the shared keychain item.
+B can enable Siri during A's delayed cleanup and then lose its replacement token.
+A captured bearer scopes remote authentication, not local token storage. A correct
+repair must capture original Siri state before waits and serialize or fence native
+keychain deletion against replacement writes, not just guard final Clerk logout.
+
+Exact official source was inspected for the manifest/lockfile's Expo 4.10.1,
+clerk-js 6.39.0 and shared 4.40.0 at immutable commit
+`d0b1ccb58070145f188ad528648897bff307eb71`:
+
+- [Official release](https://github.com/clerk/javascript/releases/tag/@clerk%2Fexpo@4.10.1).
+- [signOut implementation](https://github.com/clerk/javascript/blob/d0b1ccb58070145f188ad528648897bff307eb71/packages/clerk-js/src/core/clerk.ts#L733-L829)
+  accepts a sessionId, but after an awaited hook chooses global removal when there
+  is only one currently signed-in session, regardless of whether it matches the
+  supplied ID. The multi-session current-session branch also clears accessors
+  after awaited removal without rechecking replacement.
+- [Session end/remove](https://github.com/clerk/javascript/blob/d0b1ccb58070145f188ad528648897bff307eb71/packages/clerk-js/src/core/resources/Session.ts#L97-L110)
+  target that resource's session endpoint but clear a shared token cache.
+- [Resource response handling](https://github.com/clerk/javascript/blob/d0b1ccb58070145f188ad528648897bff307eb71/packages/clerk-js/src/core/resources/Base.ts#L139-L186)
+  applies client payloads globally; 401 may invoke global unauthenticated handling.
+  [Client reconciliation](https://github.com/clerk/javascript/blob/d0b1ccb58070145f188ad528648897bff307eb71/packages/clerk-js/src/core/clerk.ts#L3284-L3330)
+  can clear B if the returned client omits it.
+- [Expo singleton hooks](https://github.com/clerk/javascript/blob/d0b1ccb58070145f188ad528648897bff307eb71/packages/expo/src/provider/singleton/createClerkInstance.ts)
+  read/write current token-cache authorization without an app generation guard.
+
+The tagged source matches the local lock; published package bytes were not
+independently compared. A captured ID or resource method alone is therefore not
+a complete race fix. Capture SDK/session resource plus immutable ID before awaits,
+coalesce the same lifetime, and refuse a replaced lifetime before invocation.
+Protecting replacement during the SDK operation additionally needs coordination
+with every activation path or an upstream stale-response isolation contract.
+Post-await checks cannot undo SDK cache/accessor mutations. No captured session
+must not fall back later to signing out whatever session appears.
+
+Existing auth-storage fixtures mock clearAuthSession, epoch invalidation and Siri
+cleanup; they establish ordering rather than replacement protection. Acceptance
+must cover L1/L2 overlap, same-user new session, A-to-B-to-A, no initial session,
+replacement during token/push/Siri/SDK awaits, cleanup failures and replacement
+Siri keychain writes. Preserve immediate local fail-closed behavior and original
+remote cleanup. Native deletion receipt validation is a separate boundary and
+does not resolve this logout design requirement.
