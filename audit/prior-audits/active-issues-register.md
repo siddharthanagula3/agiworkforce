@@ -9448,3 +9448,27 @@ Independent source review accepted the bounded implementation. Fixture sources
 were authored but not run. Modal-close coverage is a source assertion, not an
 animation run; DOM double-click coverage is not proof of saved chooser invocation.
 No tests, lint, typechecks, builds, browser/auth, database, push or deploy ran.
+
+## CHAT-RECOVERY-WINDOW-01
+
+Status: Boundedly source-corrected in `5d5fdd34a9` on 2026-11-05. Runtime
+database and deployment acceptance remain open.
+
+The deleted-conversation list and individual restore UPDATE used only
+`deleted_at is not null`, rather than the existing canonical recovery-window
+predicate. A delayed purge or a legal hold can leave old tombstones present;
+physical presence alone does not extend the product's 30-day recovery window.
+
+Both paths now use `restorableScopeSql('web_conversations')`, which obtains
+the registered policy and requires `deleted_at > now() - interval '30 days'`.
+Restore checks eligibility inside the same UPDATE, without a pre-read race.
+Owner/organization/CSRF gates, default live listing, archive filters, pinned
+ordering and restored fields remain unchanged. Restore still only clears
+`deleted_at`. No purge, legal hold, deletion or retained-record operation changed.
+The canonical strict cutoff excludes equality; the purge's strict older-than
+comparison can briefly leave the exact boundary stored but unrestorable.
+
+Independent source review accepted the four-file patch. Unexecuted fixtures
+inspect generated SQL shape and mocked receipts, not actual database time
+boundaries, legal-hold integration or concurrency. No tests, lint, typechecks,
+builds, database, push or deploy ran.

@@ -4126,9 +4126,26 @@ mock the new subtree. The close gate has a source assertion, not animation
 verification, and DOM double-click coverage does not prove saved chooser calls.
 No tests, lint, typechecks, builds, browser/auth, database, push or deploy ran.
 
+## Deleted chat discovery and restoration share the recovery window
+
+Accepted commit `5d5fdd34a973227d9221d6adfd1f492981a40c8f` changes only
+the deleted-list predicate, individual restore predicate and two fixture sources.
+Both paths now use the registered conversation policy through
+`restorableScopeSql('web_conversations')`. Rows retained past 30 days by a delayed
+sweep or legal hold are not offered as recoverable merely because they still
+exist. Eligibility is enforced inside the restore UPDATE, not in a pre-read.
+
+Default live reads, user/org scope, CSRF, archive filters, pagination/order and
+restored archived/pinned fields remain intact. Purge/hold policies and stored data
+are unchanged. The existing helper's strict cutoff excludes equality. Source
+review accepted this bounded correction; fixtures assert SQL shape and mocked
+receipts only. No tests, lint, typechecks, builds, database, push or deploy ran.
+Runtime cutoff, legal-hold integration and concurrency acceptance remain open
+under `CHAT-RECOVERY-WINDOW-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty accepted production slices traced above are represented as
+Only the one hundred and forty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
