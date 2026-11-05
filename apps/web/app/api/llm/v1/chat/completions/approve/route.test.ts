@@ -806,6 +806,18 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
       }),
     );
     db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('revoke_connector_tool_session_grants')) {
+        const existing = sessionGrants;
+        sessionGrants = existing.filter(
+          (row) =>
+            !(
+              row[0] === 'user-1' &&
+              row[2] === params[0] &&
+              (params[1] === null || row[3] === params[1])
+            ),
+        );
+        return [{ removed: existing.length - sessionGrants.length }];
+      }
       if (sql.includes('delete from public.connector_tool_session_grants')) {
         const existing = sessionGrants;
         sessionGrants = existing.filter((row) =>
