@@ -10597,9 +10597,11 @@ checks, builds, installations, live/database actions, push or deployment ran.
 
 ## WEB-WORKSPACE-MUTATION-INTENT-01
 
-Severity: Medium. Status: Automatic retry and new-Web leave target binding
+Severity: Medium. Status: Automatic retry, new-Web leave target binding and
+conditional recorded-selection cleanup
 boundedly source-corrected in `d31e49f4e0ea77113f003d12a940a0cb83310c0d` and
-`9432cc600f32a2fd5c566177d9a4cf952dae940a`, 2026-11-05. Original intent/session
+`9432cc600f32a2fd5c566177d9a4cf952dae940a`, plus
+`1a08b79d8ac0d8eea40eb4679e29b1eca2956274`, 2026-11-05. Original intent/session
 ownership, reconciliation and runtime/deployment acceptance remain open.
 
 Web leave and standalone ownership-transfer hooks inherited the production
@@ -10642,12 +10644,37 @@ but reads live organization/successor state on confirmation. A normal same-tab
 switch preserving that dialog was not established because switching reloads;
 the other-tab server-selection case does not need that sequence. Authentication
 is reacquired on sends; original principal/view ownership and late success effects
-remain unowned. The service still resets selection to personal even if another
-tab selected B. Without intervening selection, retry after committed leave sees
+remain unowned. Without intervening selection, retry after committed leave sees
 personal/null and fails, rather than spontaneously selecting another membership.
 Standalone transfer already carries its target in the body and rechecks owner.
 Unknown-outcome read reconciliation and dependable cleanup resumption need a
 separate receipt/operation design. Receipt truthfulness is tracked below.
+
+The conditional cleanup slice replaces the service's unconditional Personal
+upsert with one user-scoped UPDATE that requires the recorded nested workspace
+ID to equal the organization actually removed. It changes only that existing
+JSON path to the canonical Personal value. A recorded B, Personal, missing path
+or missing row is not overwritten or created. There is no read-then-write
+window in this cleanup statement. The helper performs no cache operation;
+the only production caller is the leave route, which invalidates after the
+membership transaction resolves.
+
+Independent source review accepted the exact four-file diff. Unrun fixtures
+assert conditional SQL shape and parameters, owner/member delegation, no
+cleanup after an unsuccessful delete, malformed-target refusal and propagated
+cleanup failure without cache writes. These are not PostgreSQL behavior,
+concurrent-transaction or rollback verification. A mocked SQL interpreter was
+not introduced as substitute evidence.
+
+This does not serialize workspace switches with membership removal. A switch
+can prove membership before deletion and write that stale target afterward;
+the resolver still revalidates membership. Other selection writers and reads
+can publish delayed or precommit cache values, so postcommit invalidation does
+not establish complete cache coherence. Self-leave already cleared the selected
+A before deprovision read it, skipping ordinary provider-session revocation;
+the conditional cleanup preserves that behavior and does not claim to fix it.
+No tests, checks, builds, installations, live/database actions, push or
+deployment ran for this slice.
 
 ## WEB-WORKSPACE-LEAVE-RECEIPT-01
 

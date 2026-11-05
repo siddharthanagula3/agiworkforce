@@ -4644,10 +4644,20 @@ Empty-body compatibility, owner/successor guards and proof resource binding rema
 Headerless and blank selectors still fall back; the target is captured at
 mutation invocation, not necessarily at original confirmation.
 
-Independent source review accepted both slices and unrun hook/actual-resolver
-fixtures. Original session/view ownership, late selection clearing, unknown
-outcomes and duplicate submission remain outside the correction. The service
-can still clear concurrently selected B after leaving A. Receipt warnings are a
+Accepted `1a08b79d8ac0d8eea40eb4679e29b1eca2956274` replaces unconditional
+selection clearing with one conditional nested JSON UPDATE in the canonical
+active-workspace service. Only a recorded selection equal to the organization
+actually removed becomes Personal; another selected workspace and unrelated
+settings survive. This helper performs no cache writes; the leave route already
+invalidates after the transaction resolves. Unrun fixtures check SQL shape,
+parameters, delegation and error propagation, not actual PostgreSQL concurrency
+or rollback.
+
+Independent source review accepted these slices. Original session/view
+ownership, switch/remove serialization, delayed cache publication, unknown
+outcomes and duplicate submission remain outside the correction. Self-leave's
+existing selection-before-deprovision order still skips normal provider-session
+revocation. Receipt warnings are a
 separate OPEN finding: the server can report incomplete cleanup while Web ignores
 the receipt and claims full revocation before reloading. No warning/reconciliation
 repair is represented here. See `WEB-WORKSPACE-MUTATION-INTENT-01` and
@@ -4655,7 +4665,7 @@ repair is represented here. See `WEB-WORKSPACE-MUTATION-INTENT-01` and
 
 ## Reconstruction boundary
 
-Only the one hundred and sixty-eight accepted production slices traced above are represented as
+Only the one hundred and sixty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
