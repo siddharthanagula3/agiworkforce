@@ -15,7 +15,7 @@ import {
   UserRound,
 } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
@@ -39,7 +39,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
-import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
+import { captureStepUpIdentity, isStepUpCancelled, type StepUpIdentity } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -47,6 +47,7 @@ import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { syncNow } from '@/services/cloudSyncEngine';
 import {
   captureCloudAccountEpoch,
+  subscribeCloudAccountEpochChange,
   isCloudAccountEpochCurrent,
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
@@ -57,6 +58,15 @@ import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
 
 const ORGANIZATION_PATH = '/api/settings/organization';
+
+type DeletionOwner = { account: CloudAccountEpoch | null; active: boolean };
+type DeletionReady = { ownerId: string; value: AccountDeletionStatus };
+type DeletionIntent = {
+  owner: DeletionOwner;
+  identity: StepUpIdentity;
+  ready: DeletionReady;
+  phase: 'confirming' | 'running' | 'finished';
+};
 
 function parseOrganizationId(body: unknown): string | null {
   if (typeof body !== 'object' || body === null || !('organization' in body)) return null;
@@ -105,26 +115,20 @@ export default function CloudAccountScreen() {
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [cancellingDeletion, setCancellingDeletion] = useState(false);
-  const [deletionStatus, setDeletionStatus] = useState<{
-    ownerId: string;
-    value: AccountDeletionStatus;
-  } | null>(null);
+  const [deletionStatus, setDeletionStatus] = useState<DeletionReady | null>(null);
   const [deletionStatusError, setDeletionStatusError] = useState(false);
   const deletionStatusRequest = useRef(0);
-  const cancellationInFlight = useRef(false);
+  const deletionOwner = useRef<DeletionOwner | null>(null);
+  const [deletionViewOwner, setDeletionViewOwner] = useState<DeletionOwner | null>(null);
+  const deletionReady = useRef<DeletionReady | null>(null);
+  const deletionIntent = useRef<DeletionIntent | null>(null);
   const [organization, setOrganization] = useState<{ ownerId: string; id: string } | null>(null);
   const [organizationCopied, setOrganizationCopied] = useState(false);
 
   useLayoutEffect(() => {
-    deletionStatusRequest.current += 1;
-    cancellationInFlight.current = false;
     setCopied(false);
     setLoggingOut(false);
     setExporting(false);
-    setDeleting(false);
-    setCancellingDeletion(false);
-    setDeletionStatus(null);
-    setDeletionStatusError(false);
     setOrganization(null);
     setOrganizationCopied(false);
     setEditingName(false);
@@ -140,30 +144,125 @@ export default function CloudAccountScreen() {
     if (await saveProfileName(userId, nameDraft)) setEditingName(false);
   }, [nameDraft, saveProfileName, userId]);
 
+  const retireConfirmation = useCallback(() => {
+    const intent = deletionIntent.current;
+    if (intent?.phase !== 'confirming') return;
+    intent.phase = 'finished';
+    deletionIntent.current = null;
+  }, []);
+
   const refreshDeletionStatus = useCallback(async (
-    account = captureCloudAccountEpoch(),
+    owner: DeletionOwner,
+    account = owner.account,
   ) => {
-    if (!isCloudAccountEpochCurrent(account) || !userId || account.ownerId !== userId) return;
+    if (!owner.active || deletionOwner.current !== owner || !isCloudAccountEpochCurrent(owner.account) ||
+      !isCloudAccountEpochCurrent(account) || !userId || account.ownerId !== userId ||
+      owner.account.epoch !== account.epoch) return;
+    retireConfirmation();
+    deletionReady.current = null;
     const request = ++deletionStatusRequest.current;
     setDeletionStatus(null);
     setDeletionStatusError(false);
+    const current = () => owner.active && deletionOwner.current === owner &&
+      isCloudAccountEpochCurrent(account) && request === deletionStatusRequest.current;
     try {
       const status = parseAccountDeletionStatus(
         await api.get<unknown>(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, { accountEpoch: account }),
       );
-      if (isCloudAccountEpochCurrent(account) && request === deletionStatusRequest.current) {
-        setDeletionStatus({ ownerId: account.ownerId, value: status });
+      if (current()) {
+        const ready = { ownerId: account.ownerId, value: status };
+        deletionReady.current = ready;
+        setDeletionStatus(ready);
       }
     } catch {
-      if (isCloudAccountEpochCurrent(account) && request === deletionStatusRequest.current) {
-        setDeletionStatusError(true);
-      }
+      if (current()) setDeletionStatusError(true);
     }
-  }, [userId]);
+  }, [retireConfirmation, userId]);
 
-  useEffect(() => {
-    void refreshDeletionStatus();
-  }, [refreshDeletionStatus]);
+  useFocusEffect(useCallback(() => {
+    const retire = () => {
+      if (deletionOwner.current) deletionOwner.current.active = false;
+      deletionOwner.current = null;
+      deletionReady.current = null;
+      const intent = deletionIntent.current;
+      if (intent) intent.phase = 'finished';
+      deletionIntent.current = null;
+      deletionStatusRequest.current += 1;
+    };
+    const renew = () => {
+      retire();
+      const account = captureCloudAccountEpoch();
+      const owner = { account, active: true };
+      deletionOwner.current = owner;
+      setDeletionViewOwner(owner);
+      setDeleting(false);
+      setCancellingDeletion(false);
+      setDeletionStatus(null);
+      setDeletionStatusError(false);
+      void refreshDeletionStatus(owner, account);
+    };
+    renew();
+    const unsubscribe = subscribeCloudAccountEpochChange(renew);
+    return () => {
+      retire();
+      unsubscribe();
+    };
+  }, [refreshDeletionStatus]));
+
+  const finishDeletionIntent = useCallback((intent: DeletionIntent) => {
+    if (deletionIntent.current !== intent) return;
+    intent.phase = 'finished';
+    deletionIntent.current = null;
+    if (intent.owner.active && deletionOwner.current === intent.owner) {
+      setDeleting(false);
+      setCancellingDeletion(false);
+    }
+  }, []);
+
+  const deletionIntentIsCurrent = useCallback((intent: DeletionIntent) =>
+    intent.owner.active && deletionOwner.current === intent.owner &&
+    deletionIntent.current === intent && intent.identity.isCurrent(), []);
+
+  const beginDeletionIntent = useCallback((action: 'schedule' | 'cancel'): DeletionIntent | null => {
+    const owner = deletionViewOwner;
+    const ready = deletionStatus;
+    if (!owner?.active || deletionOwner.current !== owner ||
+      !ready || deletionReady.current !== ready ||
+      !isCloudAccountEpochCurrent(owner.account) || owner.account.ownerId !== userId ||
+      ready.ownerId !== userId ||
+      (action === 'schedule' ? ready.value.pending : !ready.value.pending || !ready.value.canCancel)) {
+      return null;
+    }
+    const previous = deletionIntent.current;
+    if (previous?.phase === 'confirming' && !previous.identity.isCurrent()) {
+      finishDeletionIntent(previous);
+    }
+    if (deletionIntent.current) return null;
+    let identity: StepUpIdentity;
+    try {
+      identity = captureStepUpIdentity();
+    } catch (error) {
+      if (isStepUpCancelled(error)) return null;
+      throw error;
+    }
+    const intent: DeletionIntent = { owner, ready, identity, phase: 'confirming' };
+    deletionIntent.current = intent;
+    return intent;
+  }, [deletionStatus, deletionViewOwner, finishDeletionIntent, userId]);
+
+  const consumeDeletionIntent = useCallback((intent: DeletionIntent) => {
+    if (intent.phase !== 'confirming') return false;
+    if (!deletionIntentIsCurrent(intent) || deletionReady.current !== intent.ready) {
+      finishDeletionIntent(intent);
+      return false;
+    }
+    intent.phase = 'running';
+    return true;
+  }, [deletionIntentIsCurrent, finishDeletionIntent]);
+
+  const cancelDeletionIntent = useCallback((intent: DeletionIntent) => {
+    if (intent.phase === 'confirming') finishDeletionIntent(intent);
+  }, [finishDeletionIntent]);
 
   useEffect(() => {
     const account = captureCloudAccountEpoch();
@@ -304,23 +403,16 @@ export default function CloudAccountScreen() {
   }, [appMode, captureVisibleAccount, setAppMode]);
 
   const handleDeleteAccount = useCallback(() => {
-    if (cancellationInFlight.current) return;
-    const account = captureVisibleAccount();
-    if (!account) return;
+    const intent = beginDeletionIntent('schedule');
+    if (!intent) return;
+    const account = intent.identity.account;
     Alert.alert(DELETE_ACCOUNT_CONFIRMATION.title, DELETE_ACCOUNT_CONFIRMATION.message, [
-      { text: DELETE_ACCOUNT_CONFIRMATION.cancelLabel, style: 'cancel' },
+      { text: DELETE_ACCOUNT_CONFIRMATION.cancelLabel, style: 'cancel', onPress: () => cancelDeletionIntent(intent) },
       {
         text: DELETE_ACCOUNT_CONFIRMATION.confirmLabel,
         style: 'destructive',
         onPress: () => {
-          if (!isCloudAccountEpochCurrent(account)) {
-            Alert.alert(
-              'Account changed',
-              'This deletion confirmation is no longer valid. Open it again for the current account.',
-            );
-            return;
-          }
-          if (cancellationInFlight.current) return;
+          if (!consumeDeletionIntent(intent)) return;
           setDeleting(true);
           withStepUp('account.delete', null, (headers) =>
             api.delete<unknown>(
@@ -329,13 +421,7 @@ export default function CloudAccountScreen() {
             ),
           )
             .then(async (res) => {
-              if (!isCloudAccountEpochCurrent(account)) {
-                Alert.alert(
-                  'Account changed',
-                  'The active account changed. Check deletion status in the original account to confirm the outcome.',
-                );
-                return;
-              }
+              if (!deletionIntentIsCurrent(intent)) return;
               const receipt = parseAccountDeletionScheduleReceipt(res);
               await signOut().catch(() => {});
               Alert.alert(
@@ -343,15 +429,9 @@ export default function CloudAccountScreen() {
                 receipt.message,
               );
             })
-            .catch((err: unknown) => {
+            .catch(async (err: unknown) => {
               if (isStepUpCancelled(err)) return;
-              if (!isCloudAccountEpochCurrent(account)) {
-                Alert.alert(
-                  'Account changed',
-                  'The active account changed. Check deletion status in the original account to confirm the outcome.',
-                );
-                return;
-              }
+              if (!deletionIntentIsCurrent(intent)) return;
               const refusal = accountDeletionRefusal(err);
               if (refusal) {
                 Alert.alert(
@@ -379,35 +459,33 @@ export default function CloudAccountScreen() {
                   ? 'Your session expired. Sign in to the original account and check deletion status before taking another action.'
                   : 'The scheduling outcome is unknown. Check the refreshed status in this account before taking another action. A status check may not reflect a request still in progress.',
               );
-              void refreshDeletionStatus(account);
+              await refreshDeletionStatus(intent.owner, account);
             })
             .finally(() => {
-              if (isCloudAccountEpochCurrent(account)) setDeleting(false);
+              finishDeletionIntent(intent);
             });
         },
       },
-    ]);
-  }, [captureVisibleAccount, refreshDeletionStatus, router, signOut, withStepUp]);
+    ], { cancelable: true, onDismiss: () => cancelDeletionIntent(intent) });
+  }, [beginDeletionIntent, cancelDeletionIntent, consumeDeletionIntent, deletionIntentIsCurrent,
+    finishDeletionIntent, refreshDeletionStatus, router, signOut, withStepUp]);
 
   const handleCancelDeletion = useCallback(() => {
-    const account = captureVisibleAccount();
-    if (!account) return;
+    const intent = beginDeletionIntent('cancel');
+    if (!intent) return;
+    const account = intent.identity.account;
     Alert.alert(
       'Cancel account deletion?',
       'Your AGI Cloud account will stay active and its data will not be erased.',
       [
-        { text: 'Keep deletion scheduled', style: 'cancel' },
+        { text: 'Keep deletion scheduled', style: 'cancel', onPress: () => cancelDeletionIntent(intent) },
         {
           text: 'Cancel deletion',
           onPress: () => {
-            if (!isCloudAccountEpochCurrent(account)) {
-              Alert.alert('Account changed', 'Open this action again for the current account.');
-              return;
-            }
-            if (cancellationInFlight.current) return;
-            cancellationInFlight.current = true;
+            if (!consumeDeletionIntent(intent)) return;
             setCancellingDeletion(true);
             deletionStatusRequest.current += 1;
+            deletionReady.current = null;
             setDeletionStatus(null);
             setDeletionStatusError(false);
             api
@@ -417,13 +495,12 @@ export default function CloudAccountScreen() {
                 { accountEpoch: account },
               )
               .then((response) => {
-                if (!isCloudAccountEpochCurrent(account)) return;
+                if (!deletionIntentIsCurrent(intent)) return;
                 deletionStatusRequest.current += 1;
                 const receipt = parseAccountDeletionCancellationReceipt(response);
-                setDeletionStatus({
-                  ownerId: account.ownerId,
-                  value: NO_PENDING_ACCOUNT_DELETION,
-                });
+                const ready = { ownerId: account.ownerId, value: NO_PENDING_ACCOUNT_DELETION };
+                deletionReady.current = ready;
+                setDeletionStatus(ready);
                 setDeletionStatusError(false);
                 Alert.alert(
                   receipt.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
@@ -432,8 +509,8 @@ export default function CloudAccountScreen() {
                     : 'The server confirmed that no account deletion is pending.',
                 );
               })
-              .catch((error: unknown) => {
-                if (!isCloudAccountEpochCurrent(account)) return;
+              .catch(async (error: unknown) => {
+                if (!deletionIntentIsCurrent(intent)) return;
                 const expired =
                   error instanceof ApiHttpError && error.status === 409 &&
                   error.body?.['reason'] === 'grace_window_expired';
@@ -443,19 +520,18 @@ export default function CloudAccountScreen() {
                     ? 'The server refused cancellation because the grace window has closed. Check the refreshed deletion status. This does not confirm that erasure is complete.'
                     : 'The cancellation outcome is unknown. Check the refreshed deletion status before taking another action.',
                 );
-                void refreshDeletionStatus(account);
+                await refreshDeletionStatus(intent.owner, account);
               })
               .finally(() => {
-                if (isCloudAccountEpochCurrent(account)) {
-                  cancellationInFlight.current = false;
-                  setCancellingDeletion(false);
-                }
+                finishDeletionIntent(intent);
               });
           },
         },
       ],
+      { cancelable: true, onDismiss: () => cancelDeletionIntent(intent) },
     );
-  }, [captureVisibleAccount, refreshDeletionStatus]);
+  }, [beginDeletionIntent, cancelDeletionIntent, consumeDeletionIntent, deletionIntentIsCurrent,
+    finishDeletionIntent, refreshDeletionStatus]);
 
   return (
     <SettingsScreenShell title="Account">
@@ -731,7 +807,9 @@ export default function CloudAccountScreen() {
           <SettingsRow
             label={deletionStatusError ? 'Could not check deletion status. Retry' : 'Check deletion status'}
             icon={RefreshCw}
-            onPress={() => void refreshDeletionStatus()}
+            onPress={() => {
+              if (deletionViewOwner) void refreshDeletionStatus(deletionViewOwner);
+            }}
             isLast
           />
         ) : deletionStatus.value.pending ? (
