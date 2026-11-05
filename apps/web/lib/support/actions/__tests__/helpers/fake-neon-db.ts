@@ -27,6 +27,8 @@ export interface FakeApiKeyRow {
   name: string;
   scopes: string[];
   revoked_at: string | null;
+  expires_at?: string | null;
+  project_id?: string | null;
 }
 
 export interface FakeDbCall {
@@ -144,12 +146,15 @@ export function createFakeNeonDb(seed?: {
     if (/^delete from github_installations/iu.test(normalized)) return [];
     if (/^delete from public\.connector_tool_permissions/iu.test(normalized)) return [];
 
-    if (/^select id, name, scopes from public\.api_keys/iu.test(normalized)) {
+    if (/^select id, name, scopes, expires_at, project_id from public\.api_keys/iu.test(normalized)) {
       const [keyId, userId] = params as [string, string];
       const row = apiKeys.find(
         (k) => k.id === keyId && k.user_id === userId && k.revoked_at === null,
       );
-      return row ? [{ id: row.id, name: row.name, scopes: row.scopes }] : [];
+      return row ? [{
+        id: row.id, name: row.name, scopes: row.scopes,
+        expires_at: row.expires_at ?? null, project_id: row.project_id ?? null,
+      }] : [];
     }
     if (/^select count\(\*\) as count from public\.api_keys/iu.test(normalized)) {
       const userId = String(params[0]);
@@ -174,6 +179,8 @@ export function createFakeNeonDb(seed?: {
         name: String(params[1]),
         scopes: params[4] as string[],
         revoked_at: null,
+        expires_at: params[5] === null ? null : String(params[5]),
+        project_id: params[6] === null ? null : String(params[6]),
       };
       apiKeys.push(row);
       return [
@@ -186,7 +193,8 @@ export function createFakeNeonDb(seed?: {
           scopes: row.scopes,
           created_at: new Date().toISOString(),
           last_used_at: null,
-          expires_at: null,
+          expires_at: row.expires_at,
+          project_id: row.project_id,
           revoked_at: null,
         },
       ];
