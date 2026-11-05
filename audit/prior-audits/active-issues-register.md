@@ -12022,52 +12022,66 @@ account/database/provider actions, push or deployment ran.
 
 ## MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01
 
-Severity: Medium. Status: Open client preference/lifetime finding, 2026-11-05.
+Severity: Medium. Status: Shared client ownership source-corrected on 2026-11-05;
+runtime acceptance remains open. Accepted production commit: `cc94f3ea26`.
 
-`useToolApprovalPolicySync` optimistically writes the shared policy, then its
-save failure unconditionally restores captured `previous` and sets error.
-After unmount, a mode/account transition or another mounted view's newer choice,
-that old failure can overwrite the current persistent preference. Unmount only
-cancels the initial GET. Transport generation guards remain meaningful and may
-reject old-account requests, but that rejection still invokes the stale rollback.
-Success also updates hook status without lifetime ownership.
+The previous hook wrote Cloud approval policy into device-global persisted
+`settingsStore.toolApprovalPolicy`. Its old reads and unconditional failed-save
+rollback could overwrite newer choices after unmount, account/mode transitions
+or another hook instance's activity. Composer readiness and autonomy knowledge
+also outlived the owner. API generation rejection did not protect an unguarded
+failure callback. Loading/saving controls already blocked ordinary rapid taps;
+the stronger sequences involved lifetime changes and independently mounted views.
 
-The GET effect depends only on derived `isCloud`; account identity/epoch changes
-or a Cloud-to-Local-to-Cloud transition within one React batch can leave that
-boolean unchanged. `autonomyAllowed` also survives retirement. The policy is in
-device-global persisted `apps/mobile/stores/settingsStore.ts`, not the separate
-Local/Cloud preference facade stores. Cloud teardown does not reset this field.
-Both composer mounts and the standalone approval settings screen instantiate
-the hook over that shared value with separate load/save state. A later GET from
-one instance can overwrite another instance's newer selection. Composer
-`hasSynced` readiness is not scoped to its owner, so an old success can preserve
-visibility after the replacement owner's load error.
+The tool-approvals feature now owns one ephemeral Cloud snapshot, shared through
+`useSyncExternalStore`. Local continues to read and edit its existing persisted
+value. Cloud reads, optimistic writes and rollback never write that Local value.
+Canonical account epoch, matching loaded/signed-in Clerk identity and current
+mode admit the owner. Synchronous account/auth/mode subscriptions replace owner
+identity across transitions, including a same-account leave-and-return within a
+React batch. First subscription starts loading; additional subscriptions reuse
+it, one release preserves survivors, and the final idempotent release aborts
+and retires work and removes source subscriptions.
 
-Actual choice rows are disabled while loading/saving, so ordinary rapid taps are
-not the strongest source sequence. Unmount/re-entry, cross-instance operations
-and mode/account transitions remain relevant. Sources include
-`apps/mobile/src/features/settings/tool-approvals/useToolApprovalPolicySync.ts`,
-`apps/mobile/src/features/chat/components/ComposerApprovalModeControl.tsx`,
-`apps/mobile/services/preferences.ts`, `apps/mobile/services/api.ts`, and
-`apps/mobile/stores/settingsStore.ts`. This is not the Cloud-memory reset issue
-`MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01`.
+Owner identity and operation revision guard read/write completion, rollback and
+retained callbacks. A synchronous shared gate admits only one save; adding a
+consumer during a save does not start a competing GET. Admission is rechecked
+after publishing state in case a subscriber changed mode/account reentrantly.
+Rollback restores the last confirmed Cloud policy only for the current write.
+Fresh owners reset readiness and autonomy knowledge. Unloaded account state does
+not render as a selected default, and an initial read failure cannot admit a blind
+write. Optional epoch/signal forwarding was added to the canonical approval GET
+helper without changing its legacy no-options call shape.
 
-No server authorization bypass is established. Mobile policy consumers found
-in this review are UI/cache consumers, not outgoing chat policy configuration.
-Preferences GET returns server-derived autonomy availability.
-`apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts` rereads the
-authenticated account policy on chat entry/resume, enforces governing-organization
-restrictions and requires approval on read failure. Merely storing autonomous
-does not override those checks. Preserve the intentional Local default
-`ask_every_time` and Cloud account default `autonomous`; this finding does not
-authorize changing either default.
+Settings, composer, connector/plugin summary and capabilities all use the shared
+projection. The lifetime-unscoped composer `hasSynced` ref is removed. Shared
+Retry reloads by revision even while another consumer remains mounted; duplicate
+retry and retry during a save are refused, and signed-out state offers no dead
+Retry control. Save failure displays an unsynced indication and acknowledges that
+the server may have received the change. Initial approval-history mounting is
+now gated by readiness and non-Local status, avoiding an initial Local request;
+this is not a comprehensive history-lifecycle correction.
 
-A correction needs canonical account/mode lifetime plus shared operation and
-mutation ordering across all hook instances, not only a per-hook counter. All
-read/save/rollback continuations, autonomy knowledge and owner-specific readiness
-need ownership. Normal current-owner failed-save rollback remains useful only
-while that write owns the optimistic value. Transport epoch/signal plumbing
-should preserve server authority; aborting a sent PUT is not proof it never
-committed. No implementation is accepted and no production slice is added.
-Independent source review only; no tests, checks, app/native execution, live
-account/database/provider actions, push or deployment ran.
+Local default `ask_every_time`, missing Cloud namespace default `autonomous` and
+organization-forbidden effective fallback remain unchanged. Server chat entry
+and resume still reread account policy and enforce organization restrictions,
+with approval required on read failure. No server authorization bypass or new
+client authorization authority is claimed.
+
+Remaining limits: an aborted or failed PUT may already have committed; a reload
+or replacement owner's GET can race that older server write. Client retirement
+and rollback are not server cancellation or last-intent guarantees. The display
+cache can age without a reload while server enforcement remains current. Existing
+persisted Local values may already contain historical Cloud mirrors; this change
+preserves them rather than guessing or reconstructing lost Local history.
+
+Independent source review accepted seven production and eight fixture files.
+Authored, unrun fixtures cover multiple mounts and one surviving consumer, final
+release/reacquisition, account/epoch/mode transitions, stale GET/PUT settlements
+and callbacks, shared save admission, reentrant retirement, working Retry,
+readiness, defaults/organization fallback, Local preservation and both summary
+consumers. Existing UI fixtures now wait for rendered readiness and assert shared
+Cloud rollback separately from unchanged Local state. The real helper contract
+fixture covers epoch/signal forwarding and legacy arity. No tests, lint,
+typechecks, builds, app/native execution, live account/database/provider actions,
+push or deployment ran.

@@ -5023,20 +5023,23 @@ before the server read, not concurrent server read/merge/write loss. Authored
 fixtures are unrun. See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01` and the still-
 open `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`.
 
-## Mobile approval display needs shared operation ownership
+## Mobile approval display has one ephemeral Cloud owner
 
-The approval hook's multiple mounts mutate one device-global persisted policy.
-Old reads and failed-save rollback can replace newer local/view choices after
-unmount, mode or account transitions; composer readiness also outlives its owner.
-API generation rejection does not protect an unguarded failure callback. Server
-chat admission still reloads policy and enforces governing-organization limits,
-so no authorization bypass is claimed. `MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01`
-tracks the open shared-lifetime/revision design, distinct from Cloud-memory
-default reset. No implementation or additional production slice is accepted.
+Accepted `cc94f3ea26` separates Cloud policy projection from the existing persisted
+Local value. A shared owner observes canonical account/auth/mode transitions,
+retains work for surviving subscribers, and guards GET, save, rollback and Retry
+by lifetime/revision. Settings, composer and both summaries share readiness,
+organization availability and error state; initial history mounting is gated.
+Unknown/load-error state cannot admit blind writes, and retries work while other
+consumers remain mounted. Server policy/defaults and organization authority stay
+unchanged. Aborted/failed PUT outcomes, remote write ordering, cached-display
+freshness and historical Local mirrors remain limits. Independent source review
+and authored unrun fixtures support this bounded correction, not runtime
+acceptance. See `MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01`.
 
 ## Reconstruction boundary
 
-Only the one hundred and ninety-seven accepted production slices traced above are represented as
+Only the one hundred and ninety-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
