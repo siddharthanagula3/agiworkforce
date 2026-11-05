@@ -87,12 +87,13 @@ function Harness() {
         Transfer ownership and leave
       </button>
       {leave.stepUpDialog}
+      <output aria-label="Mutation status">{leave.status}</output>
     </>
   );
 }
 
 function renderHarness() {
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: 1, retryDelay: 0 } } });
   return render(
     <QueryClientProvider client={client}>
       <Harness />
@@ -155,8 +156,47 @@ describe('useLeaveOrganization step-up', () => {
     await waitFor(() =>
       expect(screen.queryByLabelText(/code from your authenticator app/i)).toBeNull(),
     );
+    await waitFor(() => expect(screen.getByLabelText('Mutation status')).toHaveTextContent('error'));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(toastMock.error).not.toHaveBeenCalled();
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it.each(['transport', 'server response'] as const)(
+    'does not resend a leave after an uncertain %s failure',
+    async (failure) => {
+      const user = userEvent.setup();
+      if (failure === 'transport') {
+        fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+      } else {
+        fetchMock.mockImplementation(async () => new Response('Unavailable', { status: 503 }));
+      }
+
+      renderHarness();
+      await user.click(screen.getByRole('button', { name: /transfer ownership and leave/i }));
+
+      await waitFor(() => expect(screen.getByLabelText('Mutation status')).toHaveTextContent('error'));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(toastMock.error).toHaveBeenCalledTimes(1);
+      expect(toastMock.success).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not restart the mutation when the proof-bearing leave loses its response', async () => {
+    const user = userEvent.setup();
+    fetchMock
+      .mockResolvedValueOnce(refusal())
+      .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
+      .mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderHarness();
+    await user.click(screen.getByRole('button', { name: /transfer ownership and leave/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Mutation status')).toHaveTextContent('error'));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const init = fetchMock.mock.calls[2]?.[1] as RequestInit;
+    expect((init.headers as Record<string, string>)[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
+    expect(toastMock.error).toHaveBeenCalledTimes(1);
     expect(toastMock.success).not.toHaveBeenCalled();
   });
 });

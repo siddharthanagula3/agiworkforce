@@ -1154,6 +1154,7 @@ export function useLeaveOrganization(): LeaveOrganizationMutation {
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<void, Error, LeaveOrganizationVariables>({
+    retry: false,
     mutationFn: async ({ organizationId, successorUserId }) => {
       const response = await withStepUp(
         (headers) =>
@@ -1212,6 +1213,7 @@ export function useTransferOrganizationOwnership(): TransferOwnershipMutation {
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<void, Error, TransferOwnershipVariables>({
+    retry: false,
     mutationFn: async ({ organizationId, toUserId, outgoingOwnerRole }) => {
       const response = await withStepUp(
         (headers) =>
