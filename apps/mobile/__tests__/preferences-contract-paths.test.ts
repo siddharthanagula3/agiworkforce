@@ -92,6 +92,19 @@ describe('mobile preference paths come from the cloud contract', () => {
     expect(mockPut.mock.calls.map((call) => call[0])).toEqual([RELOCATED, RELOCATED]);
   });
 
+  it('forwards patch ownership and cancellation', async () => {
+    const options = {
+      accountEpoch: { ownerId: 'account-a', epoch: 4 },
+      signal: new AbortController().signal,
+    };
+    await patchPreferenceNamespace('notifications', { mobilePushAgentActivity: false }, options);
+    expect(mockPut).toHaveBeenCalledWith(
+      RELOCATED,
+      { namespace: 'notifications', patch: { mobilePushAgentActivity: false } },
+      options,
+    );
+  });
+
   it('patches a namespace through the relocated path without a replacement value', async () => {
     await patchPreferenceNamespace('notifications', { mobilePushAgentActivity: false });
 

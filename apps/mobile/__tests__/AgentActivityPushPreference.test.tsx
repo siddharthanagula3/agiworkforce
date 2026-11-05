@@ -61,6 +61,11 @@ import {
 } from '../src/features/settings/notifications/useAgentActivityPushSync';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const AGENT_PUSH_SWITCH_LABEL = 'Agent Run Push';
 const AGENT_PUSH_SYNCED_COPY =
@@ -69,6 +74,8 @@ const AGENT_PUSH_SYNCED_COPY =
 describe('agent activity push preference', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('agent-push-account');
     mockSavePreferenceNamespace.mockResolvedValue(undefined);
     mockPatchPreferenceNamespace.mockReset().mockResolvedValue(undefined);
     mockFetchPreferenceNamespace.mockImplementation((namespace: string) =>
@@ -80,14 +87,14 @@ describe('agent activity push preference', () => {
     );
     act(() => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useAuthStore.setState({ isClerkSignedIn: true });
+      useAuthStore.setState({ isClerkSignedIn: true, isClerkLoaded: true, clerkUserId: 'agent-push-account' });
     });
   });
 
   afterEach(() => {
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
-      useAuthStore.setState({ isClerkSignedIn: false });
+      useAuthStore.setState({ isClerkSignedIn: false, isClerkLoaded: false, clerkUserId: null });
     });
   });
 
@@ -103,7 +110,8 @@ describe('agent activity push preference', () => {
 
     await waitFor(() => {
       expect(mockPatchPreferenceNamespace.mock.calls).toEqual([
-        [ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false }],
+        [ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false },
+          { accountEpoch: captureCloudAccountEpoch(), signal: expect.any(AbortSignal) }],
       ]);
       expect(screen.getByText(AGENT_PUSH_SYNCED_COPY)).toBeTruthy();
     });
@@ -153,6 +161,7 @@ describe('agent activity push preference', () => {
     fireEvent(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL), 'valueChange', false);
     expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(false);
     expect(screen.getByText('Saving to your account…')).toBeTruthy();
+    expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.disabled).toBe(true);
 
     await act(async () => {
       rejectPatch(new Error('Patch failed'));
@@ -161,13 +170,41 @@ describe('agent activity push preference', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(true);
       expect(
-        screen.getByText('Could not save agent run notifications. Check your connection and try again.'),
+        screen.getByText('Your notification preference could not be saved. The server may have received the change. Retry to reload it.'),
       ).toBeTruthy();
     });
     expect(mockPatchPreferenceNamespace.mock.calls).toEqual([
-      [ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false }],
+      [ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE, { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false },
+          { accountEpoch: captureCloudAccountEpoch(), signal: expect.any(AbortSignal) }],
     ]);
     expect(mockSavePreferenceNamespace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.disabled).toBe(true);
+    expect(screen.getByLabelText('Retry agent run notifications')).toBeTruthy();
+  });
+
+  it('offers an explicit retry after a failed read and disables the switch until hydrated', async () => {
+    mockFetchPreferenceNamespace.mockImplementation((namespace: string) =>
+      namespace === ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve({}),
+    );
+    const screen = render(<NotificationPreferencesScreen />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Retry agent run notifications')).toBeTruthy();
+    });
+    expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.disabled).toBe(true);
+    mockFetchPreferenceNamespace.mockImplementation((namespace: string) => Promise.resolve(
+      namespace === ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE
+        ? { [AGENT_ACTIVITY_PUSH_PREFERENCE_KEY]: false }
+        : {},
+    ));
+    fireEvent.press(screen.getByLabelText('Retry agent run notifications'));
+    await waitFor(() => {
+      expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.disabled).toBe(false);
+      expect(screen.getByLabelText(AGENT_PUSH_SWITCH_LABEL).props.value).toBe(false);
+    });
+    expect(screen.queryByLabelText('Retry agent run notifications')).toBeNull();
+    expect(mockPatchPreferenceNamespace).not.toHaveBeenCalled();
   });
 
   it('disables agent push changes in Local mode without reading or writing cloud preferences', () => {
