@@ -19,7 +19,11 @@ import {
   resolveSubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
 } from '@/lib/server/subscription-owner-handoff';
-import { ownsPaidPlanForTopUp } from '@/lib/services/mobile-iap-ledger-service';
+import {
+  hasWithdrawnStoreConsent,
+  ownsPaidPlanForTopUp,
+  STORE_PURCHASE_CONSENT_WITHDRAWN,
+} from '@/lib/services/mobile-iap-ledger-service';
 import { PLAN_CHANGE_REFUSED_DURING_DELETION } from '@/lib/services/billing-plan-change-gate';
 
 const QuerySchema = z.object({
@@ -117,6 +121,16 @@ async function handleCatalog(
         appAccountToken: null,
         products: [],
         unavailableReason: PLAN_CHANGE_REFUSED_DURING_DELETION,
+        consumableProductIds,
+      });
+    }
+    if (await hasWithdrawnStoreConsent(getNeonDb(), userId)) {
+      return NextResponse.json({
+        enabled: false,
+        platform: parsed.data.platform,
+        appAccountToken: null,
+        products: [],
+        unavailableReason: STORE_PURCHASE_CONSENT_WITHDRAWN,
         consumableProductIds,
       });
     }

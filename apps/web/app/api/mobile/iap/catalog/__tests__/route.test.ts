@@ -64,6 +64,8 @@ function harness(options: {
   accountRows?: Array<{ deletion_scheduled?: unknown }>;
   accountReadError?: boolean;
   planReadError?: boolean;
+  consentWithdrawn?: boolean;
+  consentReadError?: boolean;
 }) {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes('from public.profiles')) {
@@ -77,6 +79,10 @@ function harness(options: {
     throw new Error(`Unexpected scoped query: ${sql}`);
   });
   const adminQuery = vi.fn(async (sql: string) => {
+    if (sql.includes('from public.mobile_app_transactions app')) {
+      if (options.consentReadError) throw new Error('consent read unavailable');
+      return options.consentWithdrawn ? [{ app_transaction_id: 'app-transaction-1' }] : [];
+    }
     if (sql.includes('insert into public.mobile_iap_accounts')) {
       return [{ app_account_token: APP_ACCOUNT_TOKEN }];
     }
@@ -135,6 +141,17 @@ describe('GET /api/mobile/iap/catalog', () => {
     });
     expect(body).not.toHaveProperty('unavailableCode');
     expect(productIds(body)).toEqual([PRODUCT_ID]);
+    expect(h.adminQuery).toHaveBeenCalledTimes(2);
+    expect(h.adminQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('from public.mobile_app_transactions app'),
+      ['user-1'],
+    );
+    expect(h.adminQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('insert into public.mobile_iap_accounts'),
+      ['user-1'],
+    );
     expect(h.query).not.toHaveBeenCalledWith(
       expect.stringContaining('beta_redemptions'),
       expect.anything(),
@@ -224,7 +241,64 @@ describe('GET /api/mobile/iap/catalog', () => {
 
     expect(response.status).toBe(503);
     expect(h.query).toHaveBeenCalledTimes(2);
-    expect(h.adminQuery).not.toHaveBeenCalled();
+    expect(h.adminQuery).toHaveBeenCalledTimes(1);
+    expect(h.adminQuery).toHaveBeenCalledWith(
+      expect.stringContaining('from public.mobile_app_transactions app'),
+      ['user-1'],
+    );
+  });
+
+  it.each(['ios', 'android'])(
+    'withholds every %s offer after account-wide consent withdrawal, preserving recovery metadata',
+    async (platform) => {
+      const h = harness({
+        subscription: {
+          ...PAID_PLAY_PLAN,
+          google_purchase_token: platform === 'android' ? 'play-token-1' : null,
+          apple_original_transaction_id: platform === 'ios' ? 'apple-original-1' : null,
+        },
+        consentWithdrawn: true,
+      });
+
+      const response = await GET(request(`platform=${platform}&storefront=US`));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        enabled: false,
+        platform,
+        appAccountToken: null,
+        products: [],
+        unavailableReason:
+          "A parent or guardian withdrew consent for this account's use of the app, so store purchases can't be added to it.",
+        consumableProductIds: [TOP_UP_PRODUCT_ID],
+      });
+      expect(h.query).toHaveBeenCalledTimes(1);
+      expect(h.query).toHaveBeenCalledWith(
+        expect.stringContaining('from public.profiles where id = $1'),
+        ['user-1'],
+      );
+      expect(h.adminQuery).toHaveBeenCalledTimes(1);
+      expect(h.adminQuery).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /from public\.mobile_app_transactions app\s+join public\.mobile_app_consent_rescissions rescission[\s\S]+where app\.user_id = \$1/u,
+        ),
+        ['user-1'],
+      );
+    },
+  );
+
+  it('starts no purchase when account-wide consent cannot be read', async () => {
+    const h = harness({ consentReadError: true });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(503);
+    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(h.adminQuery).toHaveBeenCalledTimes(1);
+    expect(h.adminQuery).toHaveBeenCalledWith(
+      expect.stringContaining('from public.mobile_app_transactions app'),
+      ['user-1'],
+    );
   });
 
   it('sells top-ups in the app only to an account that holds a paid plan', async () => {
