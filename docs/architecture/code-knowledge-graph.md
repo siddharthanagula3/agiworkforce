@@ -4965,9 +4965,20 @@ and same-owner reads can overwrite edits. These remain separately open under
 `MOBILE-TIME-FOCUS-PAYLOAD-OWNERSHIP-01`; see
 `MOBILE-TIME-FOCUS-OWNERSHIP-01` for the accepted correction.
 
+## Local wipe retains cleanup prerequisites until sign-out settles
+
+Accepted `9fd26e4d0f` moves the existing sign-out to the start of canonical
+`wipeAllLocalData`, before database/MMKV destruction. Local account access still
+fails closed immediately; push cleanup retains the old install identity and
+Siri cleanup can still read its enabled/pending markers. The post-wipe callback
+then clears identity/defaults without a second logout. Independent source review
+and authored unrun fixtures support this ordering only: remote cleanup is best
+effort, lookup/abort-only timing and broader session/backend races remain open.
+See `MOBILE-LOCAL-WIPE-CLEANUP-ORDER-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety-two accepted production slices traced above are represented as
+Only the one hundred and ninety-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

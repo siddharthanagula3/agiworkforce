@@ -11772,3 +11772,54 @@ new-owner read pending/failure, partial edits, multiple hook mounts and out-of-
 order reads/writes, with explicit payload ownership and edit revisions. Merely
 adding another current-account check or claiming cancellation is insufficient.
 No implementation for that wider ownership contract is accepted here.
+
+
+## MOBILE-LOCAL-WIPE-CLEANUP-ORDER-01
+
+Severity: High. Status: Destructive reset ordering source-corrected on
+2026-11-05; runtime and complete remote-revocation acceptance remain open.
+Accepted production commit: `9fd26e4d0f`.
+
+The Storage screen's twice-confirmed local wipe called `wipeAllLocalData`,
+which deleted database data and cleared MMKV before `resetLocalInMemoryState`.
+That callback started device-ID clearing and sign-out concurrently. Device-ID
+clearing synchronously drops its cache and begins SecureStore deletion; sign-out
+first waits for captured credentials. Push cleanup can then generate a new ID
+and clear the wrong device row while receiving success for zero matched rows.
+The root layout's independent cleanup also resolves identity late, so it does
+not guarantee rescue. This sequence needs neither a delayed registration POST
+nor overlapping logout.
+
+Siri has a distinct ordering consequence: the preceding MMKV wipe erased its
+enabled/pending markers before the canonical helper checked them, normally
+skipping remote revocation entirely. Only when markers survive or reset is
+called independently does Siri also face the wrong-ID cleanup sequence. The
+server capability checks revocation/expiry rather than the current Clerk
+session. Local token deletion limits ordinary use; no subsequent token use or
+notification delivery was observed.
+
+The canonical wipe now awaits its existing sign-out once before destructive
+persistent clearing. That sign-out still fails local account/Cloud access closed
+before awaiting credentials. Existing explicit push and Siri cleanup attempts
+retain their prior identity/markers; only afterward does the callback reset
+defaults and clear installation identity, without a second logout. The sole
+production caller and its truthful sanitized wipe-failure UI remain unchanged.
+An unexpected sign-out rejection stops destructive clearing. Database deletion
+failure leaves the identity-reset callback uncalled, although the account is
+already locally signed out.
+
+Independent source review accepted four files. Unrun fixtures use real auth,
+epoch, push and Siri helpers against mocked network/native/storage boundaries.
+They cover deferred credentials, enabled/pending markers, old-ID requests,
+cleanup completion, failures, no token, database/reset failure and one logout.
+The identity-reset callback and Cloud-state clearing are substituted, so these
+fixtures do not establish native SecureStore or root-layout lifecycle behavior.
+Resolved sign-out is not proof of remote revocation: failures/no credentials
+remain best effort, credential lookup is unbounded, and Siri's timeout only
+aborts fetch. A hypothetical rejected credential promise would bypass local Siri
+cleanup, but the actual Clerk bridge converts ordinary token-read failures to
+null and the existing no-token path attempts local cleanup. Mocking a rejection
+alone does not establish a reachable production defect. Backend late-write,
+account-handoff and concurrent-session issues remain under their existing IDs.
+No product checks, app execution, live
+wipe, provider/database/native action, push or deployment ran.
