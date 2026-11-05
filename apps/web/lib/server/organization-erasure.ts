@@ -361,11 +361,8 @@ export async function eraseOrganizationData(
     return billingRetainedReport(organizationId, billing.error);
   }
 
-  // Isolate before deleting: from here the workspace reaches no route, agent or
-  // model, so nothing is still serving it while its rows go.
-  await lockdownTenantForErasure(organizationId).catch((error: unknown) => {
-    logger.error({ organizationId, error }, 'Could not isolate the workspace before erasure');
-  });
+  // Do not start deleting if the workspace admission lock cannot be established.
+  await lockdownTenantForErasure(organizationId);
 
   const media = await eraseOrganizationMedia(organizationId);
   await eraseSharedConnectorResponseCache(db, organizationId);

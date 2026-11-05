@@ -95,10 +95,37 @@ interface ErasureFixture {
   legalHoldError?: Error;
   members?: Array<{ user_id: string }>;
   seatSubscriptionId?: string;
+  lockdownDefinition?: 'missing' | 'read-error' | 'insert-error';
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('public.feature_flag_definitions')) {
+      if (fixture.lockdownDefinition === 'read-error') throw new Error('flag read unavailable');
+      if (fixture.lockdownDefinition === 'insert-error' && sql.includes('insert into')) {
+        throw new Error('flag insert unavailable');
+      }
+      if (fixture.lockdownDefinition) return [];
+      return [
+        {
+          key: 'tenant.lockdown',
+          description: '',
+          kill_switch: false,
+          variants: ['on', 'off'],
+          default_variant: 'on',
+          rules: [],
+          expires_at: null,
+          maturity: null,
+          release_channel: null,
+          availability: null,
+          owner_name: null,
+          archived_at: null,
+          version: 1,
+          created_at: '2026-09-01T00:00:00.000Z',
+          updated_at: '2026-09-01T00:00:00.000Z',
+        },
+      ];
+    }
     if (sql.includes('public.legal_holds')) {
       if (fixture.legalHoldError) throw fixture.legalHoldError;
       return [{ count: fixture.activeLegalHolds ?? (fixture.underLegalHold ? 1 : 0) }];
@@ -192,6 +219,101 @@ describe('organization erasure inventory', () => {
 
 describe('eraseOrganizationData', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['missing', 'The lockdown switch could not be prepared. Erasure did not start.'],
+    ['read-error', 'flag read unavailable'],
+    ['insert-error', 'flag insert unavailable'],
+  ] as const)(
+    'does not erase when the lockdown definition is %s',
+    async (lockdownDefinition, message) => {
+      primeDb({ lockdownDefinition });
+
+      await expect(eraseOrganizationData('org-1')).rejects.toThrow(message);
+
+      expect(mocks.execute).not.toHaveBeenCalled();
+      expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+      expect(mocks.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+      expect(
+        mocks.query.mock.calls.some(([sql]) =>
+          /public\.(media_assets|organization_shared_connectors|organization_mcp_servers)/.test(
+            String(sql),
+          ),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it('does not erase when writing the lockdown override fails', async () => {
+    primeDb({ failStatementMatching: 'insert into public.feature_flags' });
+
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow('deadlock detected');
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(executedStatements()[0]).toContain('insert into public.feature_flags');
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+    expect(
+      mocks.query.mock.calls.some(([sql]) =>
+        /public\.(media_assets|organization_shared_connectors|organization_mcp_servers)/.test(
+          String(sql),
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('waits for the non-expiring workspace lock before deleting media or rows', async () => {
+    primeDb({ mediaRows: [{ id: 'm1', storage_pathname: 'orgs/org-1/m1.png' }] });
+    let finishLock!: (value: number) => void;
+    let lockStarted!: () => void;
+    const pendingLock = new Promise<number>((resolve) => {
+      finishLock = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      lockStarted = resolve;
+    });
+    mocks.execute.mockImplementation(async (sql: string) => {
+      if (sql.includes('insert into public.feature_flags')) {
+        lockStarted();
+        return pendingLock;
+      }
+      return 1;
+    });
+
+    const pendingErasure = eraseOrganizationData('org-1');
+    await started;
+    try {
+      expect(mocks.execute).toHaveBeenCalledTimes(1);
+      expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+      expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('media_assets'))).toBe(false);
+    } finally {
+      finishLock(1);
+    }
+
+    await pendingErasure;
+
+    expect(executedStatements()[0]).toContain('insert into public.feature_flags');
+    expect(mocks.execute.mock.calls[0]?.[1]).toEqual(['org-1', 'tenant.lockdown', false, 'off', null]);
+    expect(mocks.deleteStoredMediaObjects.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.execute.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('can establish the lock and complete on a later retry after an isolation failure', async () => {
+    primeDb({ lockdownDefinition: 'missing' });
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow();
+
+    primeDb();
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.complete).toBe(true);
+    expect(report.organizationRetained).toBe(false);
+    expect(
+      mocks.execute.mock.calls.filter(([sql]) =>
+        String(sql).includes('insert into public.feature_flags'),
+      ),
+    ).toHaveLength(1);
+  });
 
   it('blocks the whole purge when an active legal hold exists, and touches nothing', async () => {
     primeDb({ underLegalHold: true });
@@ -288,8 +410,8 @@ describe('eraseOrganizationData', () => {
       deleted: 1,
       failedPathnames: ['orgs/org-1/m2.png'],
     });
+    const query = mocks.query.getMockImplementation()!;
     mocks.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('public.legal_holds')) return [{ held: false }];
       if (sql.includes('select id, storage_pathname from public.media_assets')) {
         return [
           { id: 'm1', storage_pathname: 'orgs/org-1/m1.png' },
@@ -299,7 +421,7 @@ describe('eraseOrganizationData', () => {
       if (sql.includes('delete from public.media_assets where id = any')) {
         return [{ id: 'm1' }];
       }
-      return [];
+      return query(sql);
     });
 
     const report = await eraseOrganizationData('org-1');
