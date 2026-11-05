@@ -10975,3 +10975,76 @@ Interactive challenge UI, actual provider/server writes, manual double submits,
 server idempotency, response-schema validation, automatic outcome reconciliation
 and session ownership remain outside this correction. No tests, lint, typechecks,
 builds, installations, live/database actions, push or deployment ran.
+
+
+## WEB-SESSION-REVOCATION-CLASSIFICATION-01
+
+Severity: High. Status: Generic bad-request revocations no longer count as gone,
+source-corrected in `a028aa8c46b8153e608cca5fffd6f59c76e740c6`, 2026-11-05.
+Provider semantics, enumeration consistency and runtime acceptance remain open.
+
+The shared revokeInBatches helper previously classified every numeric HTTP 400
+or 404 rejection as alreadyGone. IdentityProvider.revokeSession promises void
+or rejection, and the Clerk adapter forwards the SDK error without translating
+400 into a specific already-revoked condition. A bad request alone does not prove
+a session was removed. The attempted-ID counterguard can subsequently exhaust
+pending IDs with incomplete=false; incorrect alreadyGone credit then bypasses
+consumer checks of failed/incomplete. The sessions GET path also removes entries
+credited as already gone after a lifetime-expiry revocation. This is a source
+classification defect, not an observed provider incident or proof of session use.
+
+Only 400 was removed from the accepted-status set. Those errors now populate
+failed without an automatic revoke retry. Existing 404 treatment, 429 backoff,
+batch/pass limits and current-session-last ordering remain unchanged. Other
+callers' completion guards now receive the unresolved result; provider response
+classification and underlying sweep algorithms were not otherwise redesigned.
+
+Independent source review accepted the two-file diff. Unrun real-route fixtures
+with mocked provider boundaries cover DELETE returning partial failure without
+ending the current session or emitting full-success notice, and GET keeping an
+expired session visible when revocation gets 400. Existing 404/429 controls remain.
+These fixtures do not contact a provider or prove live revocation. No tests, lint,
+typechecks, builds, installations, live/database actions, push or deployment ran.
+
+## WEB-WORKSPACE-MEDIA-BACKUP-ERASURE-01
+
+Severity: High. Status: Configured backup disposal and retry custody source-corrected
+in `e04602267d55a95697cb2ba3c5f83b0a4c4118e4`, 2026-11-05. Configuration
+history, concurrent replication and runtime/deployment acceptance remain open.
+
+Workspace media erasure previously deleted primary media objects and their rows
+without removing backup copies. The backup cron scans media_assets without an
+organization filter, so workspace media can have such copies. Account media
+erasure already explicitly deletes them. Bounded reconciliation can eventually
+remove tracked replicas whose primary disappeared, but that separate sweep does
+not establish synchronous erasure completion. No surviving production object or
+deployed incident was observed.
+
+The existing account backup-erasure helper moved, with its body unchanged, into
+object-backup-erasure.ts for both callers. Workspace erasure now attempts backup
+removal only for keys whose primary deletion succeeded, retains media rows for
+primary or backup failures, reports backup counts and refuses final organization
+deletion while a backup failure remains. The media_assets table outcome also
+reports retained-for-retry when either object stage failed. This final guard is
+necessary because the declared organization FK cascades media rows; their
+conversation FK only sets its reference null. The replica inventory has no
+organization/media FK that would erase its tracking rows as a side effect.
+
+Existing helper policy is preserved: no configured backup target returns zero
+failures, which does not establish that historical copies are absent. Both deleted
+and already-absent outcomes count as settled backupObjectsDeleted, not necessarily
+newly removed objects. Replica-metadata cleanup errors remain warning-only after
+bytes are settled. Inventory-read errors stop before object disposal; target
+resolution errors can occur after primary deletion but propagate before media-row
+or later table deletion. Account behavior is unchanged by the extraction.
+
+Independent source review accepted the four-file diff. Unrun fixtures exercise the
+actual shared helper through mocked storage/database boundaries, including a
+stateful two-pass failed-copy retry, an unaffected second organization, primary
+failure, inventory/target errors, no-target behavior, absent copies, tracking
+failure and blocked-report zero counts. Existing account backup fixtures remain
+against the same mocked boundary. No actual bytes, rows, cascades or provider
+operations were exercised. Sequential/unpaginated work, concurrent replication,
+other object classes, historical backup configuration and full erasure remain
+outside this correction. No tests, lint, typechecks, builds, installations,
+live/database actions, push or deployment ran.

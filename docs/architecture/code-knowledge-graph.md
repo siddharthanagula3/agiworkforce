@@ -4757,9 +4757,28 @@ cleanup messages, but none ran. Server idempotency, session ownership, interacti
 verification and reconciliation remain outside the change. See
 `WEB-CREDENTIAL-MUTATION-RETRY-01`.
 
+## Revocation failures and backup disposal retain unresolved work
+
+Accepted `a028aa8c46b8153e608cca5fffd6f59c76e740c6` removes generic HTTP 400
+from the session helper's already-gone classification. Consumer failure guards
+can now see that unresolved result; lifetime-expiry listing also keeps the session
+visible. Existing 404 handling, bounded 429 retries and ordering remain. Independent
+source review accepted unrun route fixtures, not provider revocation evidence.
+See `WEB-SESSION-REVOCATION-CLASSIFICATION-01`.
+
+Accepted `e04602267d55a95697cb2ba3c5f83b0a4c4118e4` shares the unchanged
+account backup-erasure helper with workspace media disposal. Configured backup
+failures retain media rows and prevent final organization cascade; reports include
+backup counts and retained media-table outcomes. Stateful mocked retry fixtures
+preserve an unaffected organization and rediscover failed keys, but none ran.
+No-target zero-failure policy and warning-only tracking cleanup remain unchanged;
+concurrent replication, historical configuration, other object classes and actual
+storage/cascade acceptance are not established. See
+`WEB-WORKSPACE-MEDIA-BACKUP-ERASURE-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and seventy-nine accepted production slices traced above are represented as
+Only the one hundred and eighty-one accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
