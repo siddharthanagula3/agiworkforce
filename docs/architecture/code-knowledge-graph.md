@@ -4295,9 +4295,34 @@ Independent source review accepted production and authored lifecycle fixtures;
 none were executed. See `WEB-DATA-EXPORT-VIEW-OWNERSHIP-01` for exact fixture gaps
 and runtime boundaries. No tests, lint, typechecks, builds, live export or deploy ran.
 
+## Browser refusal is distinct from account consent confirmation
+
+Accepted commit `26b478111b8a278febf1a17fa92d8e2e0b04176c` removes the
+submitted-value fallback in AccountConsentRow. Its one-decision request requires
+exactly one matching boolean receipt; malformed, multiple or false-to-true
+upgrading receipts remain unconfirmed and do not invoke onSaved or infer a GPC
+refusal. GET reconciliation still updates the displayed account choice without
+retroactively applying an unconfirmed browser grant.
+
+Explicit browser withdrawal is a separate synchronous callback before CSRF or
+network awaits. ProductAnalytics maps it to its existing local false adapter, so
+receipt rejection does not remove local refusal. Valid receipts still invoke
+onSaved, including a server refusal of an attempted grant. The local helper skips
+an equal false only while effective readable preferences remain false; no blanket
+idempotency or new persistence behavior was introduced. Marketing has no local
+application callback and retains its read-derived state.
+
+Source review accepted the production revision and authored receipt/phase fixtures;
+none ran. The callback decision contract is narrower than a full envelope schema;
+analytics record notice and envelope policy versions remain distinct. Original
+owner/view and cross-tab browser-intent ordering are still open, and an older valid
+grant can still overwrite a later refusal. See `WEB-ACCOUNT-CONSENT-RECEIPT-01`.
+The read-only continuation separately records deletion retry/intent risks under
+`WEB-ACCOUNT-DELETION-INTENT-01`; no deletion action or shared step-up rewrite ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-eight accepted production slices traced above are represented as
+Only the one hundred and forty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

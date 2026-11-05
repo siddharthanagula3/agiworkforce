@@ -9855,3 +9855,110 @@ also cover joined waiters, transport abort and replacement acquisition before ol
 finalization. No tests, lint, typechecks, builds, browser/auth, telemetry or
 deployment ran. The earlier cumulative branch push remains pending after an
 authorized attempt found no Git credentials; no remote branch was created.
+
+## WEB-ACCOUNT-DELETION-INTENT-01
+
+Status: OPEN. Source-backed on 2026-11-05; no live scheduling, deletion or runtime
+identity transition was performed.
+
+`useDeleteAccount` in `use-settings-queries.ts` inherits production QueryClient
+mutation retry=1. StepUpCancelledError is suppressed only by onError, after retry
+processing. A cancelled challenge can therefore restart the DELETE/step-up flow;
+a lost successful response can repeat scheduling. Existing AccountSection delete
+fixtures explicitly disable mutation retries, so they do not establish production
+cancellation behavior. The server schedule UPDATE replaces requested/scheduled
+timestamps and is not idempotent admission for repeated requests.
+
+The hook awaits CSRF and sends with ambient cookies without original canonical
+session/view authority. AccountSection retains dialog/input state, not an exact
+confirmation intent or synchronous mutation claim. Its content is not explicitly
+unmounted at settings-close admission like the adjacent privacy section. Success
+Continue can invoke unowned logout/sign-out/navigation after a later identity
+change. Successful HTTP responses also tolerate unparseable bodies and missing or
+invalid schedule dates, producing unsupported success UI and a Continue action.
+
+The shared `useStepUp` cleanup cancels an installed challenge, not a still-pending
+silent grant acquisition. Late grant completion can replay the request after
+unmount, or install a new challenge after cleanup. Its close callback settles
+whatever pendingRef holds rather than the exact challenge that supplied the
+callback, so retained callbacks can settle a replacement challenge. These shared
+lifetimes need original request/view authority and challenge-specific settlement,
+not another identity store.
+
+Server counterguards remain substantial: rate limit, CSRF subject binding,
+authenticated account/status/session policy, scoped writes, billing and sole-owner
+checks, and signed action/resource/user/expiry step-up grants. A stale A CSRF or
+A grant alone does not authorize B. Wrong-owner scheduling requires matching B
+credentials and grant, potentially acquired by an unowned continuation; same-user
+session replacement and unmount cases are distinct. Grants are not session-bound
+or consumed once, but this is not an established signature/authentication bypass.
+The endpoint schedules a reversible 24-hour grace period; it does not itself purge
+account data or revoke sessions.
+
+The first bounded correction should disable deletion's automatic mutation retry,
+without changing global defaults or claiming server idempotency. Wider work must
+bind confirmation, CSRF, original request, grant/replay/body and Continue effects
+to canonical account/view authority, strictly validate the scheduling receipt,
+and reconcile unknown outcomes by reads rather than mutation replay. Abort is not
+rollback. Server scheduling idempotency and grant session/consumption policy remain
+separate decisions. No tests, checks, builds or live account operations ran.
+
+## WEB-ACCOUNT-CONSENT-RECEIPT-01
+
+Status: Boundedly source-corrected in
+`26b478111b8a278febf1a17fa92d8e2e0b04176c` on 2026-11-05. Runtime,
+original owner/view and browser-intent ordering remain open.
+
+The prior AccountConsentRow accepted the first matching boolean receipt or
+substituted the requested value after missing/malformed successful JSON. The
+server normally returns actual inserted records; no supported empty-success
+contract exists. ProductAnalytics immediately applied an assumed grant locally,
+while its following GET only refreshed the row and did not undo that browser
+record. Configured GA's browser gate consumes this record independently of the
+account event-ingestion gate. This is a malformed-response pathway, not evidence
+of a production malformed success or observed collection incident. Marketing has
+no local callback and derives its checked state from GET, so an optimistic checked
+state is not the demonstrated marketing defect.
+
+The row now requires exactly one record matching the submitted purpose with a
+boolean decision. A receipt upgrading requested false to true is unconfirmed;
+the real server may narrow a grant under GPC but cannot upgrade refusal. Invalid
+receipts never invoke onSaved or infer a server GPC refusal. They show an
+unconfirmed-result message and retain GET reconciliation, including when that read
+shows true. This validates the consumed decision only, not every envelope field.
+Analytics record notice version differs from the envelope's privacy-policy
+version; no false equality or new metadata policy was introduced.
+
+Explicit withdrawal has separate authority from server confirmation. The new
+optional withdrawal callback runs synchronously before header/network awaits;
+ProductAnalytics uses its existing local false adapter. This preserves browser
+refusal even when a withdrawal response is malformed, contradictory, rejected or
+lost, without pretending the account save was confirmed. Valid receipt handling
+still invokes onSaved, including false after attempted true. Repeated local false
+application is skipped only while readable effective preferences already equal
+false; storage/version or intervening intent changes can alter that condition.
+Cookie persistence internals and their limitations are unchanged.
+
+Server CSRF, rate limit, authenticated account, purpose/surface/version validation,
+duplicate-request-purpose rejection and GPC narrowing remain intact. Browser GPC
+also denies analytics independently. Product-event ingestion separately checks
+current account consent, exact analytics notice and workspace policy and fails
+closed on read failure. The local correction does not bypass or replace those
+gates and does not retract telemetry already sent.
+
+The row still lacks original session/view and synchronous mutation ownership.
+A valid delayed grant can still overwrite a newer same-tab/cross-tab browser
+refusal; this patch introduces no intent nonce or settlement protocol. Ordinary
+explicit auth reloads, stale-subject CSRF refusals and the separate telemetry
+protocol hold remain relevant counterevidence under
+`WEB-CSRF-CACHE-OWNERSHIP-01` and `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`.
+Existing non-2xx/network error wording is unchanged and does not establish that a
+server write definitely failed.
+
+Independent source review accepted the revised production path and authored
+fixtures for malformed/ambiguous decision shapes, true/false/stored-refusal,
+GET true/false/failure reconciliation, immediate withdrawal before deferred CSRF
+and POST, contradictory upgraded refusal, HTTP/network failures and separate
+intent/receipt callbacks. Marketing success mocks now reflect one submitted
+purpose. Local application is mocked; no browser analytics collection was run.
+No tests, lint, typechecks, builds, live consent changes, push or deployment ran.
