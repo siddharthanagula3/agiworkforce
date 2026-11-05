@@ -10594,3 +10594,85 @@ cancellation, bounded production and no downstream effect. Valid and malformed
 below-ceiling controls remain. Exact-ceiling behavior, every consumer and runtime
 acceptance have not been exercised. None of this batch's fixtures ran; no tests,
 checks, builds, installations, live/database actions, push or deployment ran.
+
+## WEB-WORKSPACE-MUTATION-INTENT-01
+
+Severity: Medium. Status: Automatic retry and new-Web leave target binding
+boundedly source-corrected in `d31e49f4e0ea77113f003d12a940a0cb83310c0d` and
+`9432cc600f32a2fd5c566177d9a4cf952dae940a`, 2026-11-05. Original intent/session
+ownership, reconciliation and runtime/deployment acceptance remain open.
+
+Web leave and standalone ownership-transfer hooks inherited the production
+QueryClient's mutation retry:1. A lost response or dismissed step-up could
+restart the whole mutation. Both hooks now explicitly disable automatic retries;
+the separate, authorized single replay after STEP_UP_REQUIRED is preserved.
+This is not server idempotency, duplicate-click exclusion or an assertion that a
+failed client response means the server did not commit.
+
+The leave hook also received organizationId but previously used it only for the
+step-up challenge, omitting it from the actual DELETE. The route selected the
+account's latest active workspace. A different tab selecting B while Tab A
+confirmed ordinary leave from A could therefore retarget the operation to B,
+provided the caller was a non-owner member of B. Membership, owner, transaction
+and successor-proof guards remained effective; no unauthorized-user or arbitrary
+ownership-transfer claim follows.
+
+The hook now puts its mutation invocation's organizationId in the canonical
+workspace header on initial and proof-bearing sends. The route passes request to
+the existing resolver, which validates a nonempty explicit UUID and active
+membership. The resolved target continues to feed step-up, successor access and
+the membership service. Bodies, including exact-empty compatibility, are unchanged.
+Headerless or blank/whitespace-only selectors retain the legacy fallback; not
+every supplied invalid selector is refused. Nonempty malformed, nonmember and
+personal selectors refuse rather than falling back.
+
+Independent source review accepted unrun retry fixtures using provider retry:1,
+terminal error status and exact request counts, with valid proof replay retained.
+Transport and server-error fixtures model uncertainty, not a committed server
+operation. Target fixtures inspect initial/proof headers and invoke the actual
+resolver with mocked cache/database for A versus B and refusal/legacy cases.
+The membership service remains mocked there, so these fixtures do not establish
+transaction or selected-workspace preservation. No installed dependency/runtime
+execution was performed; the successful leave fixture's dispatch count is not a
+terminal-success assertion.
+
+Remaining boundaries: the target is captured at mutation invocation, not
+necessarily when the person first confirms it. TeamSection stores leave kind
+but reads live organization/successor state on confirmation. A normal same-tab
+switch preserving that dialog was not established because switching reloads;
+the other-tab server-selection case does not need that sequence. Authentication
+is reacquired on sends; original principal/view ownership and late success effects
+remain unowned. The service still resets selection to personal even if another
+tab selected B. Without intervening selection, retry after committed leave sees
+personal/null and fails, rather than spontaneously selecting another membership.
+Standalone transfer already carries its target in the body and rechecks owner.
+Unknown-outcome read reconciliation and dependable cleanup resumption need a
+separate receipt/operation design. Receipt truthfulness is tracked below.
+
+## WEB-WORKSPACE-LEAVE-RECEIPT-01
+
+Severity: Medium. Status: OPEN, source-backed design finding, 2026-11-05.
+
+The deprovision service can record failed device-token/API-key revocation and
+continue. The leave route returns 200 with revoked counts and warnings, but the
+Web leave hook ignores the body, claims device tokens and API keys were revoked,
+clears query state and reloads. This is an explicit server partial-success path,
+not evidence that removed membership remains usable. Backend scope, audit and
+owner enforcement remain; no live incident was observed.
+
+The inline receipt has no affected organization ID or operation ID, and no
+canonical shared leave receipt schema exists. A bounded correction should consume
+a validated receipt, distinguish confirmed membership exit from incomplete
+credential cleanup, and display safe warning language rather than raw backend
+errors. An owner-bound result panel before explicit Continue/reload is preferable
+to a warning toast immediately erased by navigation. No existing navigation-
+surviving mutation-warning mechanism was found; do not repurpose unrelated
+sign-out-exempt notice storage.
+
+Unreadable/lost responses mean unconfirmed outcome, not failed leave. Current
+membership reconciliation cannot establish completed credential cleanup or stop
+an in-flight server operation. Original session/workspace authority, warning
+retention, lifecycle-safe navigation and any cleanup resumption need explicit
+design and acceptance. No receipt/UI patch is represented by the two intent
+slices above. All review remained source-only; no tests, checks, builds,
+installations, live/database actions, push or deployment ran.

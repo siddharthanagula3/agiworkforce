@@ -4627,9 +4627,35 @@ these changes correct admission or response classification. All fixtures remain
 unrun, and exact-limit, all-consumer and runtime/deployment acceptance remain
 open. See the four corresponding body-admission/classification issue records.
 
+## Web workspace mutations separate retry from target selection
+
+Accepted `d31e49f4e0ea77113f003d12a940a0cb83310c0d` disables automatic Query
+mutation retries for Web leave and standalone ownership transfer. The explicit
+single STEP_UP_REQUIRED proof replay remains. Fixtures now use provider retry:1
+and terminal-error assertions, so a transient call count before retry cannot
+masquerade as completion. This does not establish server outcome or idempotency.
+
+Accepted `9432cc600f32a2fd5c566177d9a4cf952dae940a` sends the leave mutation's
+captured target in the canonical workspace header on initial and proof-bearing
+requests. The route's existing resolver now sees that request and validates
+nonempty explicit membership selectors instead of always using the latest server
+selection. Other-tab selection changes no longer retarget those bound requests.
+Empty-body compatibility, owner/successor guards and proof resource binding remain.
+Headerless and blank selectors still fall back; the target is captured at
+mutation invocation, not necessarily at original confirmation.
+
+Independent source review accepted both slices and unrun hook/actual-resolver
+fixtures. Original session/view ownership, late selection clearing, unknown
+outcomes and duplicate submission remain outside the correction. The service
+can still clear concurrently selected B after leaving A. Receipt warnings are a
+separate OPEN finding: the server can report incomplete cleanup while Web ignores
+the receipt and claims full revocation before reloading. No warning/reconciliation
+repair is represented here. See `WEB-WORKSPACE-MUTATION-INTENT-01` and
+`WEB-WORKSPACE-LEAVE-RECEIPT-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and sixty-six accepted production slices traced above are represented as
+Only the one hundred and sixty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
