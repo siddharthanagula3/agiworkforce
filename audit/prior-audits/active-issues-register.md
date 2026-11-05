@@ -9865,6 +9865,8 @@ Web scheduling/cancellation receipt validation and cancellation retry were
 source-corrected in `5c4d7e8d2a0dd3f388d378ee12303685adadf0b1` on 2026-11-05.
 Native receipt adoption was source-corrected in
 `4149254b5944f73964e1e3bb50c79649d6ca5335` the same day.
+Mobile confirmation admission was source-corrected in
+`b3f84d4cc43e0008e13bb3448e4f015138c2eb09` the same day.
 Exact installed-challenge settlement was separately source-corrected in
 `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
 No live scheduling, deletion or runtime identity transition was performed.
@@ -9976,8 +9978,8 @@ sign-out and only confirms scheduling. Existing captured account epoch and owned
 step-up sends remain. Unknown outcomes refresh status under the original epoch,
 without automatic mutation replay; copy explicitly warns that a status read may
 not reflect work still in progress. Unavailable status keeps the normal action UI
-hidden. This is UI gating, not consumed confirmation intent: saved callbacks and
-explicit repeated user actions are not made exactly-once.
+hidden. The receipt correction alone was UI gating; the subsequent mobile intent
+correction below adds exact callback admission without promising server exactly-once.
 
 Mobile cancellation requires the complete shared receipt before applying no-pending
 state. Valid true/false retain their distinct meanings; a structured grace-expired
@@ -10006,6 +10008,39 @@ not suppressed merely for that expected transition. This does not fix cross-owne
 SDK/Siri logout races, now tracked as `MOBILE-LOGOUT-SESSION-LIFETIME-01`, or original
 owner attribution after asynchronous logout. Scheduling success is not completed
 erasure or proof that remote sign-out succeeded.
+
+Mobile confirmation admission now uses one synchronous schedule/cancel reservation
+before opening Alert. It binds the rendered focus/account owner, exact ready
+status object and canonical SDK session identity. Confirm consumes that exact
+intent once before entering step-up or cancellation. Cancel/dismiss retires only
+the matching unconsumed intent; dismissal after confirmation cannot cancel running
+work. Saved row handlers cannot adopt a newer ready snapshot, and old-focus
+refresh callbacks cannot invalidate a new owner's confirmation.
+
+Status refresh retires unconsumed confirmations and requires an explicit expected
+owner. Unknown scheduling/cancellation outcomes hold the running reservation
+through an awaited original-epoch status read. Failed reads leave readiness
+unavailable. Focus/account renewal clears the old lane, including same-owner
+invalidate/reactivate; old completions and finally callbacks cannot release its
+replacement. Canonical identity includes SDK session object and captured ID, so
+same-user session changes cannot reuse an old confirmation or start its sign-out.
+
+The gate surrounds entry into withStepUp, not each send: the initial request and
+one authorized proof replay retain their original epoch. Already-admitted proof
+work may continue after blur, but obsolete screen effects are suppressed. This
+is not transport cancellation, rollback, cross-screen exclusion or server
+idempotency. A fresh explicit action remains possible after settlement or a new
+view lifetime. Validated original confirmation still follows intentional sign-out;
+the broader asynchronous SDK/Siri logout and display-attribution limits remain.
+
+Independent source review accepted production and authored retained-handler,
+duplicate, cancel/dismiss, status replacement, focus/remount, A-to-B-to-A,
+same-owner renewal, stale-finally and unknown-result fixtures. Same-object ID
+mutation and replacement-object/same-ID cases are distinct, with ID reset between
+cases. Two fixtures use the real useStepUp hook and canonical identity service for
+normal proof replay and admitted proof work across blur; API transport, SDK
+execution, StepUpModal and native navigation/Alert guarantees remain mocked or
+unverified. No fixtures, tests, checks or builds were executed.
 
 Wider work must bind confirmation, CSRF, original request, grant/replay/body and
 Continue effects to canonical account/view authority, and reconcile unknown

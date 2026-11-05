@@ -4331,9 +4331,10 @@ later user invocation and unrelated mutation defaults are unchanged.
 Source review accepted the one-line production change and five authored fixtures
 using actual production mutation defaults, real deletion/step-up helpers and
 mocked transport/presentation, including a positive ordinary-retry control. None
-ran. Original intent/session/view ownership, challenge lifecycle, malformed
-scheduling receipts, ambiguous-result wording and server idempotency remain open
-under `WEB-ACCOUNT-DELETION-INTENT-01`. Scheduling has a reversible grace period;
+ran. Later accepted sections below address exact installed-challenge settlement,
+mutation receipts and native confirmation admission. Wider original session/view
+ownership and server idempotency remain open under
+`WEB-ACCOUNT-DELETION-INTENT-01`. Scheduling has a reversible grace period;
 no account deletion, live scheduling, test, build, push or deployment ran.
 
 ## Step-up callbacks settle only their installed challenge
@@ -4371,10 +4372,11 @@ remain. HTTP refusals and original sign-out behavior are unchanged. A 500 from
 an audit-write failure is not evidence that an earlier database change rolled back.
 
 Independent source review accepted authored contract, production-default retry and
-AccountSection fixtures; none ran. Native receipt adoption, original owner/view
-continuations, cross-tab races, server idempotency and precise erasure-time copy
-remain open. Mobile's missing-date immediate-erasure path and internal Tauri's
-optional-message success are recorded under `WEB-ACCOUNT-DELETION-INTENT-01`.
+AccountSection fixtures; none ran. Native adoption below subsequently removes
+mobile's missing-date immediate-erasure path and internal Tauri's optional-message
+success. Wider original owner/view continuations, cross-tab races, server
+idempotency and precise erasure-time copy remain open under
+`WEB-ACCOUNT-DELETION-INTENT-01`.
 No tests, checks, builds, live account action, push or deployment ran.
 
 ## Native deletion surfaces use the same scheduling receipt
@@ -4395,9 +4397,10 @@ and Local Mode exclusion remain; no native cancellation protocol was added.
 
 Independent source review accepted authored receipt, reconciliation, refusal,
 late-body and UI fixtures; none ran. Mocked API/step-up/sign-out/request context
-cannot establish transport or SDK correctness. UI blocking during unavailable
-status is not exactly-once callback admission. Original-owner display attribution,
-server idempotency, erasure-time precision and logout remain separate boundaries.
+cannot establish transport or SDK correctness. This receipt-only milestone did
+not provide exact callback admission; the next section adds that bounded guard.
+Original-owner display attribution, server idempotency, erasure-time precision
+and logout remain separate boundaries.
 See `WEB-ACCOUNT-DELETION-INTENT-01`.
 
 Read-only follow-on records `MOBILE-LOGOUT-SESSION-LIFETIME-01`: overlapping logout
@@ -4407,9 +4410,34 @@ alone do not isolate asynchronous shared client/cache updates. No SDK swap or
 logout patch was applied. No tests, checks, builds, live account operations, push
 or deployment ran.
 
+## Mobile deletion confirmation belongs to one admitted intent
+
+Accepted commit `b3f84d4cc43e0008e13bb3448e4f015138c2eb09` reserves one
+schedule/cancel intent synchronously before Alert, binding rendered focus/account
+owner, exact readiness snapshot and canonical SDK identity. Confirmation consumes
+once; cancellation/dismissal retires only an unconsumed matching intent. Old row,
+prompt, focus-refresh and finally callbacks cannot adopt or release replacements.
+Same-owner epoch renewal safely resets the lane.
+
+Unknown-result reconciliation is awaited before releasing running exclusion;
+failed status reads leave action readiness unavailable. The guard surrounds entry
+into step-up and preserves both original-epoch initial and proof-authorized sends.
+Already-admitted proof work may continue after blur, while obsolete UI/sign-out
+effects are suppressed. Intentional sign-out still permits the validated original
+scheduling confirmation. No server exactly-once, transport rollback, cross-screen
+exclusion or broad SDK/Siri logout protection is claimed.
+
+Independent source review accepted authored callback, identity, focus, readiness,
+mutual-exclusion and reconciliation fixtures, including separate session-object
+replacement and in-place ID mutation. Two cases use real useStepUp and canonical
+identity services with mocked transport/SDK presentation. None ran; native Alert,
+navigation and SDK behavior remain unverified. See
+`WEB-ACCOUNT-DELETION-INTENT-01` and `MOBILE-LOGOUT-SESSION-LIFETIME-01`.
+No tests, checks, builds, live account actions, push or deployment ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-three accepted production slices traced above are represented as
+Only the one hundred and fifty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
