@@ -27,10 +27,21 @@ import { SPEECH_LANGUAGE_AUTO } from '../src/features/voice/speechLanguage';
 import { useAuthStore } from '../src/features/auth/store';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { clearDeviceId } from '../lib/deviceId';
+import { clearBiometricFlag } from '../lib/biometricFlagStore';
 
 describe('Delete local data', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     useAuthStore.setState({ signOut: jest.fn().mockResolvedValue(undefined) });
+  });
+
+  it('clears local identity without starting a second sign-out', async () => {
+    await resetLocalInMemoryState();
+
+    expect(clearDeviceId).toHaveBeenCalledTimes(1);
+    expect(clearBiometricFlag).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().signOut).not.toHaveBeenCalled();
   });
 
   it('turns Start with Voice back off', async () => {

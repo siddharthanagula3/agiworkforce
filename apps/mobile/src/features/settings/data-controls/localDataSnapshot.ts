@@ -11,7 +11,6 @@ import {
   type DsarSupplementalLocalData,
 } from '@/services/dsarExport';
 import { useArtifactStore } from '@/src/features/artifacts/store';
-import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   executionModeForConversation,
@@ -174,7 +173,7 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
 }
 
 export async function resetLocalInMemoryState(): Promise<void> {
-  await Promise.all([clearBiometricFlag(), clearDeviceId(), useAuthStore.getState().signOut()]);
+  await Promise.all([clearBiometricFlag(), clearDeviceId()]);
 
   useChatMessageStore.setState({
     conversations: [],
