@@ -88,7 +88,6 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'organization_billing_invoices', column: 'organization_id' },
   { table: 'organization_commercial_agreements', column: 'organization_id' },
   { table: 'organization_subscription_state_transitions', column: 'organization_id' },
-  { table: 'feature_flags', column: 'organization_id' },
   { table: 'event_trigger_events', column: 'organization_id' },
   { table: 'event_triggers', column: 'organization_id' },
   { table: 'slack_assistant_runs', column: 'organization_id' },
@@ -141,6 +140,8 @@ export const ORGANIZATION_ANONYMIZED_COLUMNS: ReadonlyArray<{
 ];
 
 export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
+  feature_flags:
+    'organization_id is ON DELETE CASCADE (0211_feature_flag_targeting). The workspace lockdown override must survive every partial purge and retainOrganizationRow; delete these rows only with the final organizations cascade, never before erasure finishes.',
   user_projects:
     'organization_id is ON DELETE SET NULL (0053_projects_managed_cloud_contract). A member’s project demotes to Personal scope rather than being destroyed when the workspace is decommissioned; ownership stays with the member who created it.',
   video_generation_jobs:

@@ -203,6 +203,18 @@ describe('organization erasure inventory', () => {
     expect(retained.has('ediscovery_exports')).toBe(true);
   });
 
+  it('defers workspace flags, including the erasure lock, to the final organization cascade', () => {
+    expect(ORGANIZATION_SCOPED_TABLES.some(({ table }) => table === 'feature_flags')).toBe(false);
+    expect(ORGANIZATION_UNDELETED_TABLES['feature_flags']).toBeDefined();
+    const migration = readFileSync(
+      path.join(MIGRATIONS_DIR, '0211_feature_flag_targeting.sql'),
+      'utf8',
+    );
+    expect(migration).toContain(
+      'add column if not exists organization_id uuid references public.organizations(id) on delete cascade',
+    );
+  });
+
   it('keeps direct eDiscovery mutation blocked while admitting only the parent cascade', () => {
     const migration = readFileSync(
       path.join(MIGRATIONS_DIR, '0273_ediscovery_cascade_delete.sql'),
@@ -368,6 +380,7 @@ describe('eraseOrganizationData', () => {
       statements.some((sql) => sql.includes('delete from public.organizations where id = $1')),
     ).toBe(true);
     expect(report.tables['organization_members']).toEqual({ deleted: true });
+    expect(statements.some((sql) => sql.includes('delete from public.feature_flags'))).toBe(false);
   });
 
   it('retains the tenant audit trail, detaching only the organization reference', async () => {
@@ -431,6 +444,44 @@ describe('eraseOrganizationData', () => {
     expect(report.mediaRowsDeleted).toBe(1);
     expect(report.complete).toBe(false);
     expect(report.organizationRetained).toBe(true);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
+  });
+
+  it.each([
+    'delete from public.sso_connections',
+    'update public.organization_usage_ledger',
+    'delete from public.organizations where id = $1',
+  ])('keeps flag cleanup deferred when %s fails', async (failStatementMatching) => {
+    primeDb({ failStatementMatching });
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.organizationRetained).toBe(true);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
+  });
+
+  it('reestablishes the lock and reaches the final cascade on a retry after a partial purge', async () => {
+    primeDb({ failStatementMatching: 'delete from public.sso_connections' });
+    const first = await eraseOrganizationData('org-1');
+    expect(first.complete).toBe(false);
+    expect(first.organizationRetained).toBe(true);
+
+    primeDb();
+    const second = await eraseOrganizationData('org-1');
+
+    expect(second.complete).toBe(true);
+    expect(second.organizationRetained).toBe(false);
+    expect(
+      executedStatements().filter((sql) => sql.includes('insert into public.feature_flags')),
+    ).toHaveLength(2);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
   });
 
   it('leaves a failing table retained for retry and keeps the organization row', async () => {
@@ -478,6 +529,9 @@ describe('eraseOrganizationData', () => {
 
     expect(report.complete).toBe(true);
     expect(report.organizationRetained).toBe(true);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
     expect(
       executedStatements().some((sql) =>
         sql.includes('delete from public.organizations where id = $1'),
