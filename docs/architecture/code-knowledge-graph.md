@@ -2,7 +2,7 @@
 
 Status: Source snapshot, not runtime acceptance
 Owner: Platform + application maintainers
-Last updated: 2026-11-04
+Last updated: 2026-11-05
 
 ## Provenance and coverage
 
@@ -3997,9 +3997,69 @@ receipts, lost responses, read retry and unmount. The canonical HTTP client is
 mocked and native focus is simulated. No tests, checks, builds, native UI, settings
 mutations or network actions were run; all fixture sources remain unexecuted.
 
+## Account preference success requires an actual stored receipt
+
+Accepted commit `a51e3c459c606b8d4e5f02c7c2f8f44b3279a04c` changes the
+preferences PUT and related fixture sources. A successful database return must
+contain an object settings document and nonblank string version. The handler no
+longer invents success from its estimated settings and prior version when the
+write returns no row or malformed data. Missing conditional rows still take the
+existing 412 conflict path; missing unconditional rows and malformed receipts
+now produce an error without implying rollback.
+
+Fulfilled workspace writes retain conservative active-organization cache
+invalidation before receipt validation because an unconfirmed receipt does not
+prove no write occurred. Known conditional conflicts and rejected database
+queries retain their existing cache behavior. The SQL merge, user scope, CSRF,
+size limit, service-owned namespace refusal and unconditional null precondition
+semantics are unchanged. The migration defines non-null settings and updated_at;
+the string revision remains opaque and is not reparsed as a date.
+
+Independent source review accepted the correction after correcting cache-ordering
+in the draft. Fixture sources cover missing and malformed returned rows, exact
+stored receipts, conservative workspace invalidation and known conflict/rejection
+paths. Existing successful write mocks now supply the required returned revision.
+No tests, checks, builds, database calls or network actions were run.
+
+## Mobile provider-training settings retain focused choices and revisions
+
+Accepted commit `7f4d7f00fc7f5fc109d58c3748f584e0077a0ee3` changes the
+training privacy group, adds its narrow parser and two fixture sources. Focused
+owners retain the Cloud account epoch and loaded signed-in identity. Account,
+auth and mode transitions plus blur/unmount synchronously retire the owner.
+Exact ready-object identity and one synchronous operation fence old or duplicate
+callbacks. Captured epoch and abort signal accompany both reads and writes.
+
+GET parses the namespace response with its required opaque string-or-null version.
+An absent opt-out key in a valid settings object means off. Malformed settings,
+missing versions and nonboolean present values do not create an editable default.
+PUT sends only the existing namespace patch with the ready version. Its response
+is a full account document: acknowledgment requires a stored privacy opt-out
+boolean matching the submitted choice and a nonblank returned revision.
+
+An acknowledged write remains acknowledged if its owned readback fails. A lost,
+invalid or contradictory receipt remains uncertain and triggers only a read. A
+412 conflict requires a refreshed snapshot and a new deliberate choice, never
+an automatic PUT retry. Failed readback disables the control and offers a read
+retry. The generic legacy preference service and device-scoped named-provider
+MMKV consent are untouched.
+
+Null versions remain unconditional and do not assert absence. Existing-row
+version checks are not complete compare-and-swap across row deletion/recreation;
+pre-read namespace merging can still lose concurrent same-namespace updates on
+unconditional writes. This separate server contract remains tracked as
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`. Cancellation does not prove rollback.
+
+Independent source review accepted the bounded change. Fixture sources cover
+ready/operation ownership, account/identity/loading/auth/mode/focus round trips,
+delayed bodies/receipts, unmount, strict read and full-document receipt shapes,
+both contradictory booleans, preserved acknowledged state, uncertainty, version
+conflict and read retry. Canonical transport and native navigation remain mocked.
+No tests, checks, builds, native UI, settings mutations or network actions were run.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-six accepted production slices traced above are represented as
+Only the one hundred and thirty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

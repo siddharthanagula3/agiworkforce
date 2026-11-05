@@ -9244,9 +9244,9 @@ remains open.
 
 ## MOBILE-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
-Status: Provider-training ownership remains OPEN. US-only ownership was boundedly
-source-corrected in `7cdf47f29c`; runtime acceptance remains unverified. Source-backed
-on 2026-11-04, with no runtime reproduction.
+Status: Provider-training ownership was boundedly source-corrected in `7f4d7f00fc`
+and US-only ownership in `7cdf47f29c`; runtime acceptance remains unverified.
+Source-backed on 2026-11-04/05, with no runtime reproduction.
 
 Original source evidence: `ProviderTrainingOptOutGroup.tsx` and `UsOnlyRoutingGroup.tsx` load only on
 mount and retain their local settings without original account/focus/mode
@@ -9274,11 +9274,20 @@ Failed reconciliation disables save and offers only read retry. Its endpoint's
 false-empty failure was separately corrected in `edc93db942`. Aborts do not prove
 rollback, cached tier may be stale, and concurrent replacement writes remain.
 
-Continue the original-owner/ready-snapshot and honest-read work for provider-training
-only. Analytics was separately source-corrected by `0eb6b9458c`. Device-scoped
-named-provider MMKV consent is a separate ownership model and must not be silently
-account-bound. No tests, checks, builds, native UI, settings mutation or network
-actions were performed; authored fixture sources remain unexecuted.
+Accepted provider-training correction `7f4d7f00fc7f5fc109d58c3748f584e0077a0ee3`
+owns the focused account/auth/mode lifetime, original ready revision and exclusive
+operation. It strictly parses namespace GET and full-document PUT responses,
+requires a recorded boolean matching the submitted choice and a stored revision,
+then reconciles through a read without automatic mutation retry. A 412 requires
+a new choice; unknown receipts remain uncertain. Backend receipt correction
+`a51e3c459c` refuses estimated success without a valid stored RETURNING row while
+preserving conservative workspace cache invalidation for fulfilled writes.
+
+Analytics was separately source-corrected by `0eb6b9458c`. Device-scoped
+named-provider MMKV consent remains a separate ownership model and is unchanged.
+Unconditional namespace-patch concurrency remains tracked separately below.
+No tests, checks, builds, native UI, settings mutation or network actions were
+performed; authored fixture sources remain unexecuted.
 
 ## WEB-ROUTING-PREFERENCES-READ-01
 
@@ -9304,3 +9313,29 @@ inference resolver's policy are unchanged. Concurrent full-object edits remain a
 separate lost-update concern, not solved merely by rejecting failed reads. No tests,
 checks, builds, database calls, settings mutation or network actions were run;
 authored fixture sources remain unexecuted.
+
+## WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01
+
+Status: OPEN, source-backed on 2026-11-05. No runtime reproduction or observed loss.
+
+`apps/web/app/api/settings/preferences/route.ts` reads account settings, constructs
+a namespace patch in JavaScript from that snapshot, then merges the complete
+resulting namespace into the root document in SQL. With an unconditional version
+(null or omitted), two callers changing different keys in the same namespace can
+each preserve the old sibling value and the later write can overwrite the earlier
+independent change. Root-level JSON merge protects other namespaces, not siblings
+inside the same namespace. Multiple legacy callers omit expectedVersion; the
+mobile training control also legitimately uses null for an absent account row.
+
+Existing non-null version checks protect concurrent updates to an existing row.
+Null is explicitly unconditional, not create-if-absent. The INSERT branch does not
+apply the update precondition if the row disappeared; this is a contract limitation,
+not proof of a new authorization bypass. Authenticated user scoping, RLS, CSRF,
+service-owned namespace restrictions and size bounds remain real controls.
+
+Resolve namespace patch merging atomically while preserving documented whole-root
+and namespace replacement behavior, or define a stronger compatible revision
+contract. Do not treat a client retry, receipt validation or exact UI owner as a
+complete server concurrency fix. `a51e3c459c` corrects receipt truthfulness only;
+`7f4d7f00fc` correctly sends its ready revision but does not redefine null semantics.
+No tests, checks, builds, database calls or network actions were run.
