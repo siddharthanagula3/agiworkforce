@@ -10676,6 +10676,42 @@ the conditional cleanup preserves that behavior and does not claim to fix it.
 No tests, checks, builds, installations, live/database actions, push or
 deployment ran for this slice.
 
+Further target-binding slices accepted on 2026-11-05:
+
+- `7530e32e1b0ed2fba9f05a95f462bab0b3db3a4d` binds Web organization settings
+  PATCH to its invocation's organizationId using the canonical workspace header,
+  passes request to the route resolver, and disables automatic mutation retries.
+  The hook previously discarded the ID supplied by TeamSection and followed the
+  latest selected organization. A different B could be renamed only when the
+  caller had B's active membership, team entitlement and settings permission;
+  this was not an authorization bypass.
+- `b5d88e8c9ef1cc749e094a56cef193f71bf2abfe` captures the displayed workspace
+  and typed confirmation for scheduling deletion, and captures the displayed
+  workspace for cancellation. Both IDs survive CSRF acquisition and are sent in
+  canonical headers that the corresponding route resolvers now consume.
+  Scheduling B instead of A previously required ownership of B and a matching
+  name/slug confirmation; a shared display name could satisfy the latter.
+  Cancellation required B ownership and an open cancellation window but had no
+  typed discriminator, so it could preserve B while A remained scheduled.
+
+Independent source review accepted both exact diffs. New rename hook fixtures
+invoke the real hook under provider retry:1, observe terminal status, verify
+invalidation and deferred-CSRF target retention, and cover transport, 503 and
+unreadable receipt failures. The older wiring fixture's direct fetch calls and
+function-text check do not establish hook behavior. Deletion component fixtures
+observe an A-targeted write while server selection becomes B during CSRF, then
+the existing unscoped refresh displaying B. Route fixtures use the real resolver
+with mocked database/cache for explicit A/current B, malformed/nonmember/Personal
+refusals and headerless compatibility. No fixture proves real database effects,
+live principal/session binding, or runtime acceptance.
+
+Headerless/blank selectors retain legacy fallback. Original principal lifetime,
+duplicate submission, response validation and target-specific reconciliation
+remain open. Post-mutation GET remains unscoped and may show another workspace;
+the page as a whole is not pinned by these mutation headers. Deletion schedule
+overwrite and outcome-copy corrections are tracked separately below. No tests,
+checks, builds, installations, live/database actions, push or deployment ran.
+
 ## WEB-WORKSPACE-LEAVE-RECEIPT-01
 
 Severity: Medium. Status: OPEN, source-backed design finding, 2026-11-05.
@@ -10740,3 +10776,44 @@ provider page-shape violations, retries and full cleanup recovery remain outside
 this correction. It does not change the self-leave selection gate or repair
 the Web client's ignored cleanup warnings. No tests, checks, builds,
 installations, live/database actions, push or deployment ran for this slice.
+
+## WEB-WORKSPACE-DELETION-LIFECYCLE-01
+
+Severity: High. Status: Schedule overwrite and outcome/progress copy
+source-corrected in `5f507b62949c73bb4c52d5a1c36667ec210187db` and
+`bdd8f5d11fe64cda0c4f8a498284494bbb7178d1`, 2026-11-05. General purge fencing,
+target-specific reconciliation and runtime/deployment acceptance remain open.
+
+The scheduling route previously preserved an existing schedule only while its
+cancellation window remained open. An overdue schedule fell through to an
+unconditional UPDATE and received a new future deadline. The purge cron selects
+overdue organization IDs, then invokes eraseOrganizationData without rereading
+their schedule. Erasure checks legal holds and billing before its destructive
+work, but has no schedule-version guard. A reschedule before cron discovery could
+defer deletion; a reschedule after discovery could promise a new cancellation
+window while that earlier purge continued. This is source-backed lifecycle
+evidence, not an observed production deletion or authorization bypass.
+
+The route now refuses an already-pending noncancellable schedule. It keeps the
+existing future-schedule receipt and constrains initial scheduling to a row whose
+deletion_scheduled_for is still null. Zero affected rows return a changed-state
+409 without success audit rather than asserting a specific competing operation.
+This also changes concurrent disappearance from the former 404 to 409. Existing
+ownership, typed confirmation, legal-hold and subscription checks remain.
+Unrun fixtures assert preserved future date, overdue refusal, the null predicate,
+and zero-row conflict. They do not execute PostgreSQL or a real race.
+
+The Web page previously said nothing was scheduled after any schedule exception,
+and that deletion remained scheduled after any cancellation exception, including
+lost responses and unreadable successful receipts. It now reports that the
+outcome could not be confirmed. Page and cancellation-route copy also distinguish
+an expired cancellation deadline from actual erasure progress. Actual-component
+fixtures cover transport/malformed-200 schedule and cancellation responses,
+exactly one write, no success notice, and deadline wording; none ran.
+
+Independent source review accepted both exact diffs. The guidance to check current
+status is not implemented reconciliation: an unscoped refresh can still display
+B after a request concerning A. Receipt schemas, original-session ownership,
+general cron locking, schedule-version fencing, legal-hold races and complete
+erasure recovery remain outside these corrections. No tests, lint, typechecks,
+builds, installations, live/database actions, push or deployment ran.

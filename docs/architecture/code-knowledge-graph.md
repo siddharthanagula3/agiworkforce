@@ -4675,9 +4675,39 @@ realistically paged but unrun fixtures, including cap, failure and other-workspa
 controls. Provider concurrency and complete cleanup are not established. See
 `WEB-DEPROVISION-SESSION-COVERAGE-01`.
 
+## Workspace settings and deletion retain their mutation targets
+
+Accepted `7530e32e1b0ed2fba9f05a95f462bab0b3db3a4d` carries the settings
+mutation's supplied organization ID in the canonical header, makes PATCH resolve
+that request target, and disables automatic mutation retries. Accepted
+`b5d88e8c9ef1cc749e094a56cef193f71bf2abfe` binds deletion scheduling and
+cancellation to the displayed workspace through CSRF acquisition and route
+resolution. Scheduling also preserves the confirmation captured for that target.
+Active membership, permission/owner, typed confirmation, legal-hold, billing and
+cancellation-cutoff gates remain; these intent findings do not establish an
+authorization bypass. Headerless/blank clients keep legacy selection behavior.
+
+Accepted `5f507b62949c73bb4c52d5a1c36667ec210187db` refuses to replace an
+overdue schedule and conditions initial scheduling on a still-null deadline.
+The purge worker can already hold a due organization ID, so resetting a deadline
+must not promise a renewed grace period. A zero-row write reports changed state
+without success audit. This is not general cron/version fencing.
+
+Accepted `bdd8f5d11fe64cda0c4f8a498284494bbb7178d1` labels lost/unreadable
+schedule and cancellation responses as unconfirmed outcomes, and no longer
+describes deadline expiry as observed erasure progress. Status guidance is not
+automatic reconciliation: the page's refresh is still unscoped and may show B
+after a mutation of A. Receipt validation and original-session ownership remain
+unresolved.
+
+Independent source review accepted all four slices and their unrun actual-hook,
+actual-component and real-resolver fixtures with mocked external boundaries.
+No runtime, PostgreSQL, browser or deployment acceptance is claimed. See
+`WEB-WORKSPACE-MUTATION-INTENT-01` and `WEB-WORKSPACE-DELETION-LIFECYCLE-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and seventy accepted production slices traced above are represented as
+Only the one hundred and seventy-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
