@@ -4230,9 +4230,27 @@ retained-diagnostic and no-replay fixtures. See
 `WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01` for the remaining boundary. No tests,
 lint, typechecks, builds, telemetry sends, push or deploy ran.
 
+## CSRF decoration snapshots the full HeadersInit contract
+
+Accepted commit `e98292bf23eb8a7a11c22ab506437722b8718ac2` changes the shared
+browser CSRF decorator to clone native Headers before token acquisition, set its
+owned metadata case-insensitively, and return a plain object. Header instances and
+tuple arrays now retain HTTP semantics, and caller mutation during the token await
+cannot change the captured request headers. Spread-based step-up consumers remain
+compatible; output names normalize to lowercase. Minted tokens, caching and the
+existing unstamped incoming-build behavior remain unchanged.
+
+Source inventory found current production users supplying Records/defaults, so
+this corrects the helper's supported input contract rather than demonstrating a
+live header-loss incident. Independent source review accepted production changes;
+authored fixtures cover input forms, delayed snapshots, duplicates, reserved
+metadata, spread compatibility and early invalid-name rejection. Two casing-only
+assertions now use HTTP reads. No tests, lint, typechecks, builds, network, push or
+deploy ran. See `WEB-CSRF-HEADER-CONTRACT-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-five accepted production slices traced above are represented as
+Only the one hundred and forty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

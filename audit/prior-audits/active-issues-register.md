@@ -9415,6 +9415,36 @@ opt-out behavior rather than silently binding it to a different account model.
 Namespace concurrency and routing full-object replacement remain separate issues.
 No tests, checks, builds, browser/auth, database, telemetry or network actions ran.
 
+Further read-only design review on 2026-11-05 preserves first-use behavior. Legacy
+null expectedVersion is intentionally unconditional (including the Mobile training
+fixture); nonnull expectedVersion only guards conflict UPDATE and still permits
+INSERT if the row vanished. Do not relabel those semantics as complete CAS or
+change null globally. A separate strict route could reuse the existing
+user_settings.server_version owner from migration 0042/settings sync, but has not
+been introduced or verified in deployment. A body flag on the legacy path could
+be ignored by older servers before an unconditional mutation, so it is not a
+fail-closed rollout boundary.
+
+The full browser-consent rewrite remains HELD pending a reviewed transition
+specification. Retaining a unique denial nonce avoids opt-in erasing a newer
+successfully persisted denial, but a denial-only acknowledgment is insufficient
+for recovery after failed persistence. Counterexample: an old grant captures D0;
+a newer local denial cannot persist D; a later false read persists false plus
+settlement of D0 and clears local refusal; the old grant then writes true plus
+acknowledgment of D0 and re-enables consent. Successful recovery needs additional
+non-replayed settlement-generation evidence checked by every grant, not merely a
+matching denial token. No proposed nonce/settlement protocol has been implemented.
+
+Preserve the existing account-false acknowledgment followed by later passive
+account-true re-enable behavior; making local denial permanent until an explicit
+same-browser opt-in would silently change it. Any eventual protocol must also
+define legacy-marker compatibility, partial persistence, document-local failure
+generation, owner/view retirement and passive reads. Old unversioned clients can
+produce indistinguishable marker ABA; entirely unpersisted denial cannot survive
+a full page reload. Those limits must remain distinct from repairable current-page
+races. Client owner/receipt improvements can be bounded without claiming global
+ordering, but the coupled consent effects must not be replaced piecemeal.
+
 ## WEB-BULK-CHAT-INTENT-01
 
 Status: Privacy archive-all/delete-all boundedly source-corrected in `b3cb44fa19`.
@@ -9633,3 +9663,32 @@ and cover deferred-CSRF denial with normal/refused storage writes, document
 precedence, retained diagnostics, pre-flush drop and no replay. Existing positive,
 payload, budget and failed-send fixtures remain. Tests were not executed. No
 tests, lint, typechecks, builds, telemetry sends, push or deploy ran.
+
+## WEB-CSRF-HEADER-CONTRACT-01
+
+Status: Boundedly source-corrected in
+`e98292bf23eb8a7a11c22ab506437722b8718ac2` on 2026-11-05. Runtime and
+deployment acceptance remain open.
+
+`addCsrfHeaders` accepted HeadersInit but used object spread. A Headers instance
+loses its entries through that operation, while tuple arrays become numeric
+properties. Mixed-case reserved names could also survive beside generated names
+and combine when converted to HTTP headers. This is a real exported-helper
+contract defect, not a demonstrated production header-loss incident: inspected
+production callers pass Records/defaults. Attachment and knowledge wrappers that
+receive actual Headers use separate correct decorators.
+
+The helper now snapshots native Headers before token acquisition, sets owned CSRF,
+API version, request ID and configured build metadata case-insensitively, and
+returns Object.fromEntries as a plain object. It retains object-spread consumers
+in support confirmation, account deletion and SecuritySection. No production
+consumer requiring original output key casing was found; HTTP names normalize
+to lowercase. Minted-token bypass, token-cache/lifetime behavior and incoming
+client-version preservation when the bundle is unstamped remain unchanged.
+
+Independent source review accepted production code and authored fixtures for
+Record/Headers/tuple equivalence, input immutability, delayed-token snapshots,
+ordinary duplicates, owned-header replacement, plain-object spread, unstamped
+version preservation and invalid-name rejection before token fetch. Two original
+Content-Type fixture assertions now read HTTP semantics. These sources were not
+executed. No tests, lint, typechecks, builds, network, push or deploy ran.
