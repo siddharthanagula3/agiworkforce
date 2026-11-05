@@ -45,6 +45,10 @@ jest.mock('@/lib/mmkv', () => ({
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('@/lib/safeOpenURL', () => ({ openUntrustedUrlInAppBrowser: jest.fn() }));
+jest.mock('@/services/preferences', () => ({
+  fetchToolApprovalNamespace: jest.fn(async () => ({ settings: { defaultPolicy: 'ask_every_time' }, autonomousToolApprovalsAllowed: true })),
+  savePreferenceNamespace: jest.fn(async () => undefined),
+}));
 jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: jest.fn(async () => ({
     connectors: [{ connectorId: 'gmail', toolConnectorId: 'gmail' }],

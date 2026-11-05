@@ -23,6 +23,7 @@ jest.mock('@/services/api', () => ({
 import {
   fetchAccountSettings,
   fetchPreferenceNamespace,
+  fetchToolApprovalNamespace,
   patchPreferenceNamespace,
   saveAccountSettings,
   savePreferenceNamespace,
@@ -62,6 +63,26 @@ describe('mobile preference paths come from the cloud contract', () => {
     await savePreferenceNamespace('legacy', {});
     expect(mockGet).toHaveBeenLastCalledWith(`${RELOCATED}?namespace=legacy`);
     expect(mockPut).toHaveBeenLastCalledWith(RELOCATED, { namespace: 'legacy', value: {} });
+  });
+
+  it('forwards approval read ownership and cancellation while preserving legacy arity', async () => {
+    const options = {
+      accountEpoch: { ownerId: 'account-a', epoch: 4 },
+      signal: new AbortController().signal,
+    };
+    mockGet.mockResolvedValue({
+      settings: { defaultPolicy: 'autonomous' },
+      autonomousToolApprovalsAllowed: true,
+    });
+    expect(await fetchToolApprovalNamespace('tool approvals', options)).toEqual({
+      settings: { defaultPolicy: 'autonomous' },
+      autonomousToolApprovalsAllowed: true,
+    });
+    expect(mockGet).toHaveBeenLastCalledWith(
+      `${RELOCATED}?namespace=tool%20approvals`, options,
+    );
+    await fetchToolApprovalNamespace('legacy');
+    expect(mockGet).toHaveBeenLastCalledWith(`${RELOCATED}?namespace=legacy`);
   });
 
   it('writes namespaced and un-namespaced settings through the relocated path', async () => {

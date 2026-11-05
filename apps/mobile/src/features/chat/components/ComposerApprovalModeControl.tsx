@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Modal, View } from 'react-native';
 import { Check, ChevronDown, ShieldCheck, TriangleAlert } from 'lucide-react-native';
 import {
@@ -18,12 +18,10 @@ const AUTONOMOUS: ToolApprovalPolicy = 'autonomous';
 
 export function ComposerApprovalModeControl() {
   const colors = useThemeColors();
-  const { policy, autonomyForbidden, status, error, select } = useToolApprovalPolicySync();
+  const { policy, autonomyForbidden, status, error, ready, canRetry, select, retry } =
+    useToolApprovalPolicySync();
   const [open, setOpen] = useState(false);
-  const hasSynced = useRef(false);
-  if (status === 'synced') hasSynced.current = true;
-
-  if (status === 'local' || (status === 'error' && !hasSynced.current)) return null;
+  if (status === 'local' || !ready) return null;
 
   const busy = status === 'loading' || status === 'saving';
   const applied = toolApprovalPolicyOption(policy);
@@ -62,7 +60,7 @@ export function ComposerApprovalModeControl() {
         <Text
           style={{ color: colors.textSecondary, fontSize: typeScale.subhead, fontWeight: '600' }}
         >
-          {applied.shortLabel}
+          {status === 'error' ? `${applied.shortLabel} · Not synced` : applied.shortLabel}
         </Text>
         <ChevronDown size={16} color={colors.textMuted} />
       </PressableBox>
@@ -148,6 +146,16 @@ export function ComposerApprovalModeControl() {
             })}
             {error ? (
               <Text style={{ color: colors.agentError, fontSize: typeScale.subhead }}>{error}</Text>
+            ) : null}
+            {canRetry ? (
+              <PressableBox
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading approval default"
+                onPress={retry}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>Retry</Text>
+              </PressableBox>
             ) : null}
             <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead, marginTop: 6 }}>
               {SCOPE_NOTE}

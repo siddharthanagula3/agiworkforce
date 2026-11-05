@@ -35,7 +35,8 @@ const WORKSPACE_BLOCKS_AUTONOMY = 'Your workspace does not allow skipping approv
 
 export default function AutoApproveScreen() {
   const colors = useThemeColors();
-  const { policy, autonomyForbidden, status, error, select } = useToolApprovalPolicySync();
+  const { policy, autonomyForbidden, status, error, ready, canRetry, select, retry } =
+    useToolApprovalPolicySync();
   const selectedLabel = toolApprovalPolicyOption(policy).label;
 
   return (
@@ -61,8 +62,9 @@ export default function AutoApproveScreen() {
                 : option.description
             }
             tag={option.policy === RECOMMENDED_POLICY ? 'Recommended' : undefined}
-            selected={policy === option.policy}
+            selected={ready && policy === option.policy}
             disabled={
+              !ready ||
               status === 'loading' ||
               status === 'saving' ||
               (option.policy === 'autonomous' && autonomyForbidden)
@@ -94,11 +96,25 @@ export default function AutoApproveScreen() {
             marginTop: 4,
           }}
         >
-          {error ? error : `Current setting: ${selectedLabel}.`}
+          {error
+            ? error
+            : !ready
+              ? 'Loading account approval default…'
+              : `Current setting: ${selectedLabel}.`}
         </Text>
       </View>
 
-      {status === 'local' ? null : <ApprovalHistory />}
+      {canRetry ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading approval default"
+          onPress={retry}
+          style={{ minHeight: 44, justifyContent: 'center', marginBottom: 18 }}
+        >
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>Retry</Text>
+        </Pressable>
+      ) : null}
+      {ready && status !== 'local' ? <ApprovalHistory /> : null}
     </SettingsScreenShell>
   );
 }

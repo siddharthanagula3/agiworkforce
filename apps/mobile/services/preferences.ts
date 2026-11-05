@@ -18,10 +18,13 @@ interface PreferenceReadResponse {
 
 export async function fetchToolApprovalNamespace(
   namespace: string,
+  options?: PreferenceRequestOptions,
 ): Promise<{ settings: unknown; autonomousToolApprovalsAllowed: boolean }> {
-  const data = await api.get<PreferenceReadResponse>(
-    managedCloudPreferencesNamespacePath(namespace),
-  );
+  const path = managedCloudPreferencesNamespacePath(namespace);
+  const data =
+    options === undefined
+      ? await api.get<PreferenceReadResponse>(path)
+      : await api.get<PreferenceReadResponse>(path, options);
   const settings = data?.settings;
   return {
     settings: settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {},
