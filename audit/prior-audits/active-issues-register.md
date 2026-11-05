@@ -9397,10 +9397,12 @@ a different stored privacy owner. Reuse existing `usePreferenceOwner`,
 Preserve server RLS/user scope, CSRF and rate limits.
 
 Telemetry needs its own browser-intent boundary as well as session/view ownership.
-`confirmTelemetryConsent(true)` in `sentry-shared.ts` removes the pending local
-opt-out marker before enabling consent. A stale successful opt-in can therefore
-clear a newer browser opt-out, including one originating in another tab, even if
-both account sessions remain valid. The existing pending-denial gate, fail-closed
+`confirmTelemetryConsent(true)` in `sentry-shared.ts` still clears the pending
+local opt-out marker without an exact browser-intent token. A stale successful
+opt-in can therefore clear a newer browser opt-out, including one originating in
+another tab, even if both account sessions remain valid. The write-refusal slice
+`89dcffb0c6` changes persistence order and protects failed writes, but does not
+establish intent ordering. The existing pending-denial gate, fail-closed
 storage reads, redaction and server-rendered consent signal are real controls and
 must be preserved. `TelemetryConsentSync.tsx` separately uses a legacy read keyed
 only by loaded/signed-in booleans, not exact account/session identity.
@@ -9510,3 +9512,66 @@ fixtures use real session/workspace/request authority with mocked Clerk/transpor
 hook fixtures also cover exact callbacks, read locks, retries, streaming, StrictMode
 and pagination. Close gating is source-asserted, not animation-tested. No tests,
 lint, typechecks, builds, browser/auth, database, push or deploy ran.
+
+## WEB-TELEMETRY-STORAGE-REFUSAL-01
+
+Status: Boundedly source-corrected in `89dcffb0c67bdb579f0db41d43ad96d0d3713c4e`
+on 2026-11-05. Runtime and deployment acceptance remain open.
+
+Storage reads can succeed while writes fail, for example after a quota refusal.
+The previous opt-out catch retained no volatile denial. If its first pending
+marker write failed, readable old consent=true and a stale document=true could
+still open the consent/init gates. A failed false-cache write had the same gap.
+This was narrower than unavailable storage: read failures already denied, and a
+successfully persisted pending marker already overrode consent.
+
+A private module/page refusal is now set synchronously before denial persistence
+and consulted by pending, consent and initialization gates. Explicit opt-in
+writes true, removes pending, then clears refusal only after both succeed. A
+passive true mirror cannot clear it. A fully persisted server-false acknowledgment
+also clears the pending latch while keeping consent false. No-window behavior,
+redaction and server/edge configuration are unchanged.
+
+Independent source review accepted the small production change and ten authored,
+unexecuted failure/recovery cases. They cover readable old true, first/partial
+write failure, failed cache denial, failed opt-in write/removal, stale document
+consent, successful recovery and no-window isolation. Fixtures clear private state
+through successful public persistence; no production reset API was introduced.
+
+Failed persistence cannot establish denial after reload or in another tab. Stale
+explicit opt-in and cross-tab ordering remain open under
+`WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`. This latch does not stop an already
+initialized client's delivery; see `WEB-TELEMETRY-POST-INIT-DELIVERY-01`. No tests,
+lint, typechecks, builds, browser/auth, telemetry sends, push or deploy ran.
+
+## WEB-TELEMETRY-POST-INIT-DELIVERY-01
+
+Status: OPEN, source-backed on 2026-11-05; no production delivery correction yet.
+
+Both browser entrypoints gate initial Sentry setup, but initialized clients keep
+`enabled=isSentryConfigured()`. Error/transaction hooks always return redacted
+events and the static-span hook is scrub-only. Consent controls user-ID removal,
+not the final transport. No browser shutdown or send-time gate exists in these
+paths. This supports future scrubbed telemetry after opt-out, not an observed
+production disclosure. Existing redaction and disabled content collection remain
+real protections.
+
+Read-only upstream inspection of pinned Sentry 11.8.0 release commit
+`c6492ef78c7bfb97931e43075763ce84ee8fda7e` confirms that browser
+`makeFetchTransport` is exported through React/Next.js and browser init accepts a
+custom transport. `Transport.send` handles an envelope, and the default transport
+starts its request task synchronously rather than queueing a later retry. The
+client's `close()` calls flush before disabling, so shutdown must not be assumed
+to discard queued telemetry. Relevant upstream source:
+
+- [Next.js browser options and exports](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/nextjs/src/client/index.ts)
+- [Fetch transport](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/browser/src/transports/fetch.ts)
+- [Envelope transport and synchronous request task](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/core/src/transports/base.ts)
+- [Client envelope send and close](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/core/src/client.ts)
+
+A correction must gate browser envelopes, including standalone spans, without
+disabling server/edge observability or claiming to retract already-started sends.
+Hook-only error/transaction null returns would not cover every envelope category.
+Account/browser-intent ordering remains separate. Upstream source reads are not
+installed-SDK execution or runtime acceptance. No tests, lint, typechecks, builds,
+telemetry sends, push or deploy ran.

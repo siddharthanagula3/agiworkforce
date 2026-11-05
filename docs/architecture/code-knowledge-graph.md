@@ -4172,9 +4172,28 @@ use actual canonical authority with mocked SDK/transport; others isolate the hoo
 No tests, lint, typechecks, builds, browser/auth, database, push or deploy ran.
 See `WEB-CHAT-MANAGER-OWNERSHIP-01` for the acceptance boundary.
 
+## Telemetry denial survives current-page storage write refusal
+
+Accepted commit `89dcffb0c67bdb579f0db41d43ad96d0d3713c4e` adds a private
+page/module refusal to `sentry-shared.ts`. Denial is recorded before storage writes
+because a write can fail while reads still expose old consent=true. The existing
+pending/consent/init gates now consult that refusal; passive true mirrors and old
+document consent cannot override it. Explicit opt-in persists true and removes
+pending before clearing refusal; a successful server-false acknowledgment clears
+pending while retaining consent=false. Partial failures remain denied.
+
+Independent source review accepted the production change and authored failure,
+partial-write, recovery and no-window fixtures. These sources were not executed.
+The protection does not survive failed persistence across reloads, order stale
+opt-ins across tabs, or gate an already initialized SDK transport. Redaction and
+server/edge observability remain unchanged. See
+`WEB-TELEMETRY-STORAGE-REFUSAL-01`, `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`
+and `WEB-TELEMETRY-POST-INIT-DELIVERY-01` for distinct acceptance boundaries.
+No tests, lint, typechecks, builds, telemetry sends, push or deploy ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-two accepted production slices traced above are represented as
+Only the one hundred and forty-three accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
