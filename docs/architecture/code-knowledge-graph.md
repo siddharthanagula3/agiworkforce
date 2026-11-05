@@ -5010,9 +5010,22 @@ and partial next-account settings. Existing server policy and sync counterguards
 limit the finding to stale client preferences, not proven unauthorized memory
 collection. See `MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01`.
 
+## Notification edits send intent instead of stale sibling snapshots
+
+Accepted mobile `ce249b9ed6` sends only the agent-activity key through the
+canonical patch helper. Accepted Web `85356f1e53` sends only the selected event's
+offered channel keys with the existing merge option, including the same partial
+intent on retry. Loaded unknown/mobile siblings and hidden channels are omitted
+from unrelated writes; local optimistic display and rollback stay separate.
+Notification saved-event consumers already tolerate absent keys. These two
+source-reviewed slices prevent stale-client replacement of siblings committed
+before the server read, not concurrent server read/merge/write loss. Authored
+fixtures are unrun. See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01` and the still-
+open `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety-five accepted production slices traced above are represented as
+Only the one hundred and ninety-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

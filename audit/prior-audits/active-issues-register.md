@@ -11968,3 +11968,53 @@ General synchronization/edit races, legacy migration semantics, native hydration
 timing and broader session lifetimes remain unverified. No tests, lint,
 typechecks, builds, installs, app/module execution, live native/provider/database
 actions, push or deployment ran.
+
+
+## SETTINGS-NOTIFICATION-STALE-SIBLINGS-01
+
+Severity: Medium. Status: Mobile and Web stale-client notification payloads
+source-corrected on 2026-11-05; runtime acceptance remains open. Accepted
+production commits: mobile `ce249b9ed6`, Web `85356f1e53`.
+
+Both clients previously loaded a complete `notifications` namespace and sent
+that cached namespace as a replacement after changing one setting. An unrelated
+change committed by another client after that load could be overwritten even
+when the server requests themselves did not overlap. Mobile's agent-activity
+toggle resubmitted cached Web siblings. Web's event-channel selector resubmitted
+other events, defaults, hidden channels and any loaded mobile/unknown keys.
+
+Mobile now calls the canonical `patchPreferenceNamespace` with exactly
+`mobilePushAgentActivity`. Its cached object remains only for existing rollback
+identity bookkeeping; those siblings are no longer transmitted. Web now forms
+a partial patch from the selected event's offered channel keys and uses the
+existing `savePreferenceNamespace(..., { merge: true })` contract. Optimistic
+display merges locally, rollback restores the prior display and retry retains
+the same partial intent. A hidden unreleased mobile channel is omitted instead
+of replaying its cached value. Group selections intentionally patch every
+offered channel in that event, including channels explicitly turned off.
+
+The Web saved-event listener reads `browserReplyReady` only when that key has a
+boolean value; it ignores unrelated partial notification patches. Other event
+consumers filter other namespaces. No event-contract/helper change was needed.
+Loading/error/save-in-flight gates, Mobile opt-out/default/Local behavior,
+authentication, scoped DB, CSRF, rate limits, service-owned restrictions, size
+validation and write-receipt validation remain unchanged.
+
+The server's patch path merges against its current read, preserving sibling
+changes committed before that read. It still reads and merges outside an atomic
+namespace update; concurrent same-namespace requests can lose changes.
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01` remains open, including its
+size/error-contract dependency. These consumer patches do not claim atomic
+writes, repair prior overwrites, or introduce an account-lifetime fence. Mobile
+late reads/completions and legacy Web helper ownership remain separate limits.
+
+Independent source review accepted three Mobile files and two Web files.
+Authored, unrun Mobile fixtures wait for rendered synced state, assert exact
+one-key patch arguments with loaded siblings, and cover opt-out, absent key,
+failed-save rollback and Local mode. The contract fixture calls the real helper
+with a relocated canonical endpoint and checks `{ namespace, patch }`, not
+`value`. Web grouping fixtures load mobile and unknown siblings and assert
+exact changed-key payloads for combined channels, Off, unreleased mobile, Usage
+and identical failed/retried intent. They mock transport, not concurrent
+database behavior. No tests, lint, typechecks, builds, app execution, live
+account/database/provider actions, push or deployment ran.
