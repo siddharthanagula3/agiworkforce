@@ -39,23 +39,22 @@ import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { TwoFactorSection } from './TwoFactorSection';
+import {
+  useSecurityPreferences,
+  isSecuritySettingsOwnerCurrent,
+  type SecuritySettingsOwner,
+} from './useSecurityPreferences';
 import { AskFromSiriSetting } from '@/src/features/siri';
 import {
-  DEFAULT_SESSION_TIMEOUT,
-  SESSION_TIMEOUT_MINUTES,
   WEB_SECURITY_URL,
   changeAccountPassword,
   fetchAccountSecurityStatus,
   fetchAccountSessions,
   fetchAuditLog,
-  fetchLockdownMode,
-  fetchSessionTimeout,
   fetchSignInMethods,
   groupAuditEntries,
   revokeAccountSession,
   revokeAllAccountSessions,
-  saveLockdownMode,
-  saveSessionTimeout,
   type AccountSecurityStatus,
   type AccountSessionRow,
   type AccountSessions,
@@ -128,8 +127,10 @@ export default function AccountSecurityScreen() {
     && ownedStatus.account.ownerId === clerkUserId ? ownedStatus.value : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionTimeout, setSessionTimeout] = useState<SessionTimeoutMinutes | null>(null);
-  const [savingTimeout, setSavingTimeout] = useState(false);
+  const preferences = useSecurityPreferences();
+  const {
+    owner: settingsOwner, timeout: sessionTimeout, savingTimeout, lockdown, savingLockdown,
+  } = preferences;
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordAccount, setPasswordAccount] = useState<CloudAccountEpoch | null>(null);
@@ -160,12 +161,20 @@ export default function AccountSecurityScreen() {
   }, [closePassword]);
   const { withStepUp, modal: stepUpModal } = useStepUp();
   const hasPassword = clerkUser?.id === clerkUserId && clerkUser?.passwordEnabled === true;
-  const [sessions, setSessions] = useState<AccountSessions | null>(null);
+  const [ownedSessions, setOwnedSessions] = useState<{
+    owner: SecuritySettingsOwner;
+    value: AccountSessions;
+  } | null>(null);
+  const sessions = ownedSessions && ownedSessions.owner === settingsOwner &&
+    isSecuritySettingsOwnerCurrent(ownedSessions.owner) ? ownedSessions.value : null;
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
-  const [lockdown, setLockdown] = useState<boolean | null>(null);
-  const [savingLockdown, setSavingLockdown] = useState(false);
+  const singleRevokeIntent = useRef<{
+    owner: SecuritySettingsOwner;
+    phase: 'prompt' | 'request';
+  } | null>(null);
+  const sessionsRequest = useRef(0);
   const signOut = useAuthStore((state) => state.signOut);
   const appLockHydrated = useBiometricFlag((state) => state.hydrated);
   const appLockEnabled = useBiometricFlag((state) => state.enabled);
@@ -178,14 +187,12 @@ export default function AccountSecurityScreen() {
       setLoading(true);
       setError(null);
       try {
-        const [nextStatus, timeout, entries] = await Promise.all([
+        const [nextStatus, entries] = await Promise.all([
           fetchAccountSecurityStatus(signal),
-          fetchSessionTimeout().catch(() => DEFAULT_SESSION_TIMEOUT),
           fetchAuditLog(20, signal).catch(() => [] as AuditLogEntry[]),
         ]);
         if (!isCloudAccountEpochCurrent(account)) return;
         setOwnedStatus({ account, value: nextStatus });
-        setSessionTimeout(timeout);
         setAuditEntries(entries);
       } catch {
         if (signal?.aborted) return;
@@ -200,89 +207,76 @@ export default function AccountSecurityScreen() {
 
   const loadSessions = useCallback(
     async (signal?: AbortSignal) => {
-      const account = captureCloudAccountEpoch();
-      if (!account || account.ownerId !== clerkUserId) return;
-
+      const owner = settingsOwner;
+      if (!isSecuritySettingsOwnerCurrent(owner)) return;
+      const request = ++sessionsRequest.current;
+      const current = () => request === sessionsRequest.current && isSecuritySettingsOwnerCurrent(owner);
       try {
-        const next = await fetchAccountSessions(signal);
-        if (!isCloudAccountEpochCurrent(account)) return;
-        setSessions(next);
+        const next = await fetchAccountSessions(signal ?? owner.controller.signal, owner.account);
+        if (!current() || signal?.aborted) return;
+        setOwnedSessions({ owner, value: next });
         setSessionsError(null);
       } catch {
-        if (signal?.aborted) return;
-        if (!isCloudAccountEpochCurrent(account)) return;
-        setSessions(null);
+        if (signal?.aborted || !current()) return;
+        setOwnedSessions(null);
         setSessionsError('Could not load your devices. Retry.');
       }
     },
-    [clerkUserId],
+    [settingsOwner],
   );
 
   const confirmRevokeSession = useCallback(
     (row: AccountSessionRow) => {
+      const owner = settingsOwner;
+      if (!isSecuritySettingsOwnerCurrent(owner) || !sessions?.sessions.includes(row)) return;
+      if (
+        singleRevokeIntent.current &&
+        isSecuritySettingsOwnerCurrent(singleRevokeIntent.current.owner)
+      ) return;
+      const intent = { owner, phase: 'prompt' as 'prompt' | 'request' };
+      singleRevokeIntent.current = intent;
+      const current = () => singleRevokeIntent.current === intent && isSecuritySettingsOwnerCurrent(owner);
+      const cancel = () => {
+        if (singleRevokeIntent.current === intent && intent.phase === 'prompt') {
+          singleRevokeIntent.current = null;
+        }
+      };
       Alert.alert(
         'Sign out this device?',
         `${formatSessionLabel(row)} will lose access to your AGI account immediately.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel', onPress: cancel },
           {
             text: 'Sign out',
             style: 'destructive',
             onPress: () => {
+              if (!current() || intent.phase !== 'prompt') return;
+              intent.phase = 'request';
+              const active = current;
               void (async () => {
                 setRevokingSessionId(row.id);
                 try {
-                  await revokeAccountSession(row.id);
-                  await loadSessions();
+                  await revokeAccountSession(row.id, owner.account, owner.controller.signal);
+                  if (active()) await loadSessions();
                 } catch {
-                  Alert.alert('Could not sign out that device', 'Please try again.');
+                  if (!active()) return;
+                  Alert.alert(
+                    'Could not confirm device sign-out',
+                    'The server may have received the request. The device list will be refreshed.',
+                  );
+                  await loadSessions();
                 } finally {
-                  setRevokingSessionId(null);
+                  if (active()) setRevokingSessionId(null);
+                  if (singleRevokeIntent.current === intent) singleRevokeIntent.current = null;
                 }
               })();
             },
           },
         ],
+        { cancelable: true, onDismiss: cancel },
       );
     },
-    [loadSessions],
-  );
-
-  useEffect(() => {
-    if (!isClerkSignedIn || appMode !== 'cloud') return;
-    let cancelled = false;
-    fetchLockdownMode()
-      .then((enabled) => {
-        if (!cancelled) setLockdown(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setLockdown(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [appMode, isClerkSignedIn, clerkUserId]);
-
-  const changeLockdown = useCallback(
-    (next: boolean) => {
-      const previous = lockdown;
-      setLockdown(next);
-      void (async () => {
-        setSavingLockdown(true);
-        try {
-          await saveLockdownMode(next);
-        } catch (saveError) {
-          setLockdown(previous);
-          Alert.alert(
-            'Lockdown mode was not changed',
-            toUserMessage(saveError, 'Please try again.'),
-          );
-        } finally {
-          setSavingLockdown(false);
-        }
-      })();
-    },
-    [lockdown],
+    [loadSessions, sessions, settingsOwner],
   );
 
   const confirmRevokeAllSessions = useCallback(() => {
@@ -334,28 +328,6 @@ export default function AccountSecurityScreen() {
     [clerkUserId],
   );
 
-  const cycleSessionTimeout = useCallback(() => {
-    const current = sessionTimeout ?? DEFAULT_SESSION_TIMEOUT;
-    const index = SESSION_TIMEOUT_MINUTES.indexOf(current);
-    const next =
-      SESSION_TIMEOUT_MINUTES[(index + 1) % SESSION_TIMEOUT_MINUTES.length] ??
-      DEFAULT_SESSION_TIMEOUT;
-
-    void (async () => {
-      const previous = sessionTimeout;
-      setSessionTimeout(next);
-      setSavingTimeout(true);
-      try {
-        await saveSessionTimeout(next);
-      } catch {
-        setSessionTimeout(previous);
-        Alert.alert('Could not save session timeout', 'Please try again.');
-      } finally {
-        setSavingTimeout(false);
-      }
-    })();
-  }, [sessionTimeout]);
-
   const passwordIntentVersion = passwordRequest.current;
   const handleChangePassword = useCallback(
     (change: PasswordChange) => {
@@ -392,12 +364,11 @@ export default function AccountSecurityScreen() {
     setOwnedStatus(null);
     setLoading(false);
     setError(null);
-    setSessionTimeout(null);
     setAuditEntries(null);
-    setSessions(null);
+    setOwnedSessions(null);
     setSessionsError(null);
     setRevokingSessionId(null);
-  }, [clerkUserId]);
+  }, [clerkUserId, settingsOwner]);
 
   const [signInMethods, setSignInMethods] = useState<SignInMethods | null>(null);
   const [signInMethodsError, setSignInMethodsError] = useState(false);
@@ -570,14 +541,23 @@ export default function AccountSecurityScreen() {
           value={
             appMode !== 'cloud'
               ? 'Cloud mode required'
-              : sessionTimeout === null
+              : preferences.timeoutError && sessionTimeout === null
+                ? 'Unavailable'
+                : sessionTimeout === null
                 ? 'Checking…'
                 : savingTimeout
                   ? 'Saving…'
                   : formatTimeout(sessionTimeout)
           }
-          onPress={appMode === 'cloud' && sessionTimeout !== null ? cycleSessionTimeout : undefined}
+          onPress={appMode === 'cloud' && sessionTimeout !== null && !savingTimeout ? () => void preferences.cycleTimeout() : undefined}
         />
+        {preferences.timeoutError ? (
+          <SettingsRow
+            label={preferences.timeoutError}
+            value="Retry"
+            onPress={savingTimeout ? undefined : preferences.retryTimeout}
+          />
+        ) : null}
         {appMode !== 'cloud' ? (
           <SettingsRow label="Devices" icon={Laptop} value="Cloud mode required" />
         ) : sessionsError ? (
@@ -687,9 +667,19 @@ export default function AccountSecurityScreen() {
             description="Blocks connectors, web access, code execution and Deep Research in every chat."
             icon={Lock}
             value={lockdown}
-            onValueChange={changeLockdown}
+            onValueChange={(next) => void preferences.changeLockdown(next)}
             disabled={savingLockdown}
             isLast
+          />
+        </SettingsGroup>
+      ) : null}
+
+      {preferences.lockdownError ? (
+        <SettingsGroup>
+          <SettingsRow
+            label={preferences.lockdownError}
+            value="Retry lockdown"
+            onPress={savingLockdown ? undefined : preferences.retryLockdown}
           />
         </SettingsGroup>
       ) : null}

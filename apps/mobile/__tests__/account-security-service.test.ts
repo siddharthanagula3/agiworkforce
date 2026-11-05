@@ -1,6 +1,10 @@
 import { api } from '@/services/api';
 import {
   fetchAccountSecurityStatus,
+  fetchSessionTimeout,
+  saveSessionTimeout,
+  fetchLockdownMode,
+  saveLockdownMode,
   fetchAccountSessions,
   parseAccountSecurityStatus,
   parseAccountSessions,
@@ -11,6 +15,7 @@ jest.mock('@/services/api', () => ({
   api: {
     get: jest.fn(),
     delete: jest.fn(),
+    put: jest.fn(),
   },
 }));
 
@@ -133,8 +138,55 @@ describe('Mobile account security service', () => {
   it('revokes one session by id through the per-session route', async () => {
     apiMock.delete.mockResolvedValueOnce(undefined);
 
-    await revokeAccountSession('sess_laptop');
+    const account = { ownerId: 'fixture-account', epoch: 3 };
+    const controller = new AbortController();
+    await revokeAccountSession('sess_laptop', account, controller.signal);
 
-    expect(apiMock.delete).toHaveBeenCalledWith('/api/settings/sessions/sess_laptop');
+    expect(apiMock.delete).toHaveBeenCalledWith('/api/settings/sessions/sess_laptop', {
+      accountEpoch: account, signal: controller.signal,
+    });
   });
+  it('forwards the original owner and abort signal through security preference reads and writes', async () => {
+    const options = { accountEpoch: { ownerId: 'fixture-account', epoch: 5 }, signal: new AbortController().signal };
+    apiMock.get.mockResolvedValueOnce({ settings: { session_timeout: 30 } });
+    await expect(fetchSessionTimeout(options)).resolves.toBe(30);
+    expect(apiMock.get).toHaveBeenLastCalledWith(expect.any(String), options);
+    await saveSessionTimeout(120, options);
+    expect(apiMock.put).toHaveBeenLastCalledWith(expect.any(String), { settings: { session_timeout: 120 } }, options);
+    apiMock.get.mockResolvedValueOnce({ settings: { enabled: true } });
+    await expect(fetchLockdownMode(options)).resolves.toBe(true);
+    expect(apiMock.get).toHaveBeenLastCalledWith(expect.any(String), options);
+    await saveLockdownMode(false, options);
+    expect(apiMock.put).toHaveBeenLastCalledWith(expect.any(String), { namespace: 'lockdown', value: { enabled: false } }, options);
+  });
+
+  it.each([null, {}, { settings: null }, { settings: [] }, { settings: false }])(
+    'rejects malformed security preference envelopes instead of synthesizing defaults: %j',
+    async (body) => {
+      apiMock.get.mockResolvedValue(body);
+      await expect(fetchSessionTimeout()).rejects.toThrow();
+      await expect(fetchLockdownMode()).rejects.toThrow();
+    },
+  );
+
+  it.each([null, '60', 0, 45, false])('rejects a defined invalid timeout: %j', async (value) => {
+    apiMock.get.mockResolvedValue({ settings: { session_timeout: value } });
+    await expect(fetchSessionTimeout()).rejects.toThrow();
+  });
+
+  it.each([null, 'false', 0, {}])('rejects a defined invalid lockdown flag: %j', async (value) => {
+    apiMock.get.mockResolvedValue({ settings: { enabled: value } });
+    await expect(fetchLockdownMode()).rejects.toThrow();
+  });
+
+  it('preserves defaults for valid empty settings and strips strictSettings before transport', async () => {
+    apiMock.get.mockResolvedValue({ settings: {} });
+    await expect(fetchSessionTimeout()).resolves.toBe(60);
+    await expect(fetchLockdownMode()).resolves.toBe(false);
+    expect(apiMock.get).toHaveBeenLastCalledWith(expect.any(String), {});
+    for (const call of apiMock.get.mock.calls) {
+      expect(call[1]).not.toHaveProperty('strictSettings');
+    }
+  });
+
 });
