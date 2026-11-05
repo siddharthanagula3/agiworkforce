@@ -4320,9 +4320,25 @@ grant can still overwrite a later refusal. See `WEB-ACCOUNT-CONSENT-RECEIPT-01`.
 The read-only continuation separately records deletion retry/intent risks under
 `WEB-ACCOUNT-DELETION-INTENT-01`; no deletion action or shared step-up rewrite ran.
 
+## Account deletion does not inherit automatic mutation retry
+
+Accepted commit `161faef68b792fd26f546dd5738a62bed2a6669b` explicitly disables
+generic mutation retry for useDeleteAccount. Cancelling a step-up challenge or
+losing a scheduling response no longer starts another mutation cycle through the
+global retry=1 default. The original single proof-authorized replay, explicit
+later user invocation and unrelated mutation defaults are unchanged.
+
+Source review accepted the one-line production change and five authored fixtures
+using actual production mutation defaults, real deletion/step-up helpers and
+mocked transport/presentation, including a positive ordinary-retry control. None
+ran. Original intent/session/view ownership, challenge lifecycle, malformed
+scheduling receipts, ambiguous-result wording and server idempotency remain open
+under `WEB-ACCOUNT-DELETION-INTENT-01`. Scheduling has a reversible grace period;
+no account deletion, live scheduling, test, build, push or deployment ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-nine accepted production slices traced above are represented as
+Only the one hundred and fifty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

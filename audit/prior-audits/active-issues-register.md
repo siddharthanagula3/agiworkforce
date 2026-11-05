@@ -9858,13 +9858,15 @@ authorized attempt found no Git credentials; no remote branch was created.
 
 ## WEB-ACCOUNT-DELETION-INTENT-01
 
-Status: OPEN. Source-backed on 2026-11-05; no live scheduling, deletion or runtime
-identity transition was performed.
+Status: Automatic deletion mutation retry source-corrected in
+`161faef68b792fd26f546dd5738a62bed2a6669b` on 2026-11-05. Original
+session/view, step-up lifecycle, receipt and server idempotency work remain OPEN.
+No live scheduling, deletion or runtime identity transition was performed.
 
-`useDeleteAccount` in `use-settings-queries.ts` inherits production QueryClient
-mutation retry=1. StepUpCancelledError is suppressed only by onError, after retry
-processing. A cancelled challenge can therefore restart the DELETE/step-up flow;
-a lost successful response can repeat scheduling. Existing AccountSection delete
+`useDeleteAccount` in `use-settings-queries.ts` previously inherited production
+QueryClient mutation retry=1. StepUpCancelledError was suppressed only by onError,
+after retry processing. A cancelled challenge could therefore restart the
+DELETE/step-up flow; a lost successful response could repeat scheduling. Existing AccountSection delete
 fixtures explicitly disable mutation retries, so they do not establish production
 cancellation behavior. The server schedule UPDATE replaces requested/scheduled
 timestamps and is not idempotent admission for repeated requests.
@@ -9895,8 +9897,23 @@ or consumed once, but this is not an established signature/authentication bypass
 The endpoint schedules a reversible 24-hour grace period; it does not itself purge
 account data or revoke sessions.
 
-The first bounded correction should disable deletion's automatic mutation retry,
-without changing global defaults or claiming server idempotency. Wider work must
+The accepted correction explicitly sets retry=false only for useDeleteAccount.
+The original single replay after a STEP_UP_REQUIRED challenge and fresh proof is
+unchanged; it is not the same operation as a generic retry of a rejected mutation.
+An explicit later user invocation remains available as a new action. Global
+mutation defaults, cancellation classification, error wording, sign-out and server
+scheduling are untouched. This does not guarantee an ambiguous original write
+failed or prevent a user/cross-tab repeated request.
+
+Independent source review accepted the one-line production change and five
+authored fixtures. They copy actual production mutation defaults into an isolated
+QueryClient and use real deletion/step-up helper behavior with mocked transport
+and dialog presentation. Cases cover cancellation, rejected DELETE, failed
+proof-bearing replay, explicit later invocation and a positive ordinary-mutation
+control that retains default retry. They inspect request counts/sign-out effects
+beyond the configured interval. No fixture was executed.
+
+Wider work must
 bind confirmation, CSRF, original request, grant/replay/body and Continue effects
 to canonical account/view authority, strictly validate the scheduling receipt,
 and reconcile unknown outcomes by reads rather than mutation replay. Abort is not
