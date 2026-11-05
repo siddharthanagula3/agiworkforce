@@ -1,3 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
+import { queryKeys } from '@shared/stores/query-client';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -29,14 +32,8 @@ vi.mock('../components/Settings/ApiKeys', () => ({
   ApiKeysManager: () => <div>Scoped API key manager</div>,
 }));
 
-// This suite only exercises the API-key manager mount, not account deletion
-// (see AccountSection.delete.test.tsx for the real useDeleteAccount
-// integration, including a QueryClientProvider). Stub the hook here so
-// mounting AccountSection doesn't require a QueryClient.
 vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
   ...(await importOriginal()),
-  // The pane now carries a Recent activity panel under the sessions list; these
-  // files have no QueryClient, and these tests are about other rows.
   useUserActivity: () => ({ data: [], isPending: false, error: null, refetch: vi.fn() }),
   useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
@@ -64,7 +61,7 @@ vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
 
 describe('AccountSection API keys', () => {
   it('drills into the scoped API-key manager from the API keys row', async () => {
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(screen.queryByText('Scoped API key manager')).not.toBeInTheDocument();
 
@@ -77,3 +74,9 @@ describe('AccountSection API keys', () => {
     expect(screen.queryByText('Scoped API key manager')).not.toBeInTheDocument();
   });
 });
+
+function renderAccountSection() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.settings.accountDeletionStatus(), NO_PENDING_ACCOUNT_DELETION);
+  return render(<QueryClientProvider client={client}><AccountSection /></QueryClientProvider>);
+}

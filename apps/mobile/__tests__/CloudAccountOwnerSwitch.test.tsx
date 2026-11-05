@@ -669,6 +669,31 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockCancelDeletion).not.toHaveBeenCalled();
   });
 
+  it.each(['requestedAt', 'scheduledFor'] as const)('blocks deletion and cancellation on invalid %s', async (field) => {
+    mockGetDeletionStatus.mockResolvedValueOnce({ ...pendingDeletionStatus, [field]: 'not-a-date' });
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy());
+    expect(screen.queryByLabelText('Delete Account')).toBeNull();
+    expect(screen.queryByLabelText('Cancel Account Deletion')).toBeNull();
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
+    expect(mockCancelDeletion).not.toHaveBeenCalled();
+  });
+
+  it('retires a retained cancellation confirmation when a refresh returns an invalid date', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
+    render(<CloudAccountScreen />);
+    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    const old = deletionAlert('Cancel account deletion?');
+    mockGetDeletionStatus.mockResolvedValueOnce({ ...pendingDeletionStatus, scheduledFor: '' });
+    act(() => { refresh(); });
+    await waitFor(() => expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy());
+    await act(async () => { old.confirm(); });
+    expect(mockCancelDeletion).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Delete Account')).toBeNull();
+  });
+
   it('does not offer deletion when the server sends an inconsistent status', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce({
       pending: false,

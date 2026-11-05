@@ -7,8 +7,8 @@ export const AccountDeletionStatusSchema = z
   .object({
     pending: z.boolean(),
     canCancel: z.boolean(),
-    requestedAt: z.string().nullable(),
-    scheduledFor: z.string().nullable(),
+    requestedAt: z.string().datetime({ offset: true }).nullable(),
+    scheduledFor: z.string().datetime({ offset: true }).nullable(),
   })
   .refine((status) => status.pending === (status.scheduledFor !== null))
   .refine((status) => !status.canCancel || status.pending);

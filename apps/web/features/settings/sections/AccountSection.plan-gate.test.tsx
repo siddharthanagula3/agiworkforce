@@ -1,3 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
+import { queryKeys } from '@shared/stores/query-client';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getBillingPlanPricing } from '@agiworkforce/types';
@@ -104,7 +107,7 @@ beforeEach(() => {
 describe('AccountSection delete account while a paid plan is live', () => {
   it('disables Delete and tells the user to cancel the plan in Billing first', () => {
     billing.subscription = proPlan();
-    render(<AccountSection />);
+    renderAccountSection();
 
     const trigger = screen.getByTestId('delete-account-trigger');
     expect(trigger).toBeDisabled();
@@ -123,7 +126,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
   it('says when a plan already cancelled at period end stops blocking deletion', () => {
     billing.subscription = proPlan({ cancel_at_period_end: true });
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
@@ -133,7 +136,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
   it('blocks a past-due paid plan as the server does', () => {
     billing.subscription = proPlan({ status: 'past_due' });
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
   });
@@ -145,7 +148,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
       status: 'active',
       current_period_end: null,
     };
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(screen.getByTestId('delete-account-trigger')).toBeEnabled();
     expect(screen.queryByTestId('delete-account-plan-note')).toBeNull();
@@ -154,14 +157,14 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
   it('keeps Delete open once a paid plan has ended', () => {
     billing.subscription = proPlan({ status: 'canceled' });
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(screen.getByTestId('delete-account-trigger')).toBeEnabled();
   });
 
   it('holds Delete until the plan has been read', () => {
     billing.initialized = false;
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
   });
@@ -182,7 +185,7 @@ describe('AccountSection active sessions type scale', () => {
         isCurrent: true,
       },
     ]);
-    render(<AccountSection />);
+    renderAccountSection();
 
     const header = await screen.findByRole('columnheader', { name: 'Device' });
     expect(header.style.fontSize).toBe('14px');
@@ -191,3 +194,9 @@ describe('AccountSection active sessions type scale', () => {
     await waitFor(() => expect(screen.getByRole('table').style.fontSize).toBe('14px'));
   });
 });
+
+function renderAccountSection() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.settings.accountDeletionStatus(), NO_PENDING_ACCOUNT_DELETION);
+  return render(<QueryClientProvider client={client}><AccountSection /></QueryClientProvider>);
+}
