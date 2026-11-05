@@ -4835,9 +4835,22 @@ expiry remain counterguards, and no malformed deployed record is established.
 This does not solve the snapshot-provenance or erasure-fencing gaps above. See
 `WEB-EXPORT-ARCHIVE-TIMESTAMP-01`.
 
+
+## Workspace discovery precedes export staging
+
+Accepted `c126a2d8ded87a094305517ac4f3fd937947621a` resolves export workspace
+metadata after JSON collection and before the private-object PUT. A workspace
+query rejection therefore cannot strand a newly staged export without its job
+pointer. Unrun source-reviewed fixtures retain the happy-path order and payload
+and assert no enqueue after staging rejection. This narrow correction does not
+provide custody for uncertain PUT/enqueue outcomes or crashes; deleting on an
+uncertain enqueue error could destroy a committed job's input. Durable staging
+admission/reconciliation and the existing erasure fence remain open under
+`WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-five accepted production slices traced above are represented as
+Only the one hundred and eighty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

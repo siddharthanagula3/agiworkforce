@@ -10908,6 +10908,31 @@ new writes, malformed archive payloads and complete erasure remain outside scope
 No tests, lint, typechecks, builds, installations, live/database actions, push or
 deployment ran.
 
+
+Staging-order addendum, 2026-11-05: Source correction
+`c126a2d8ded87a094305517ac4f3fd937947621a` resolves the workspace query after
+JSON collection but before writing export.json. Previously that query was awaited
+inside the enqueue argument after the PUT; a query rejection left a completed
+private object without any build-job pointer. Job-based discovery and account
+erasure could not find it, and expiry is scheduled only after successful archive
+construction. The correction removes this specific failure path while preserving
+collection-before-workspace ordering and the same payload. Source-reviewed unrun
+fixtures cover query failure without PUT/enqueue, successful ordering and staged
+bytes/payload, and staging rejection without enqueue.
+
+Durable staging custody remains open. A process interruption, a PUT with an
+uncertain acknowledgment, or a failed/uncertain enqueue can still leave bytes
+without a discoverable pointer. No blanket delete-on-enqueue-error was added:
+job-service inserts within the claimed adapter's transaction, and a commit can
+succeed before its acknowledgment fails, leaving a runnable job that still needs
+the staged JSON. One failed reconciliation query cannot prove absence. Durable
+custody before writes, explicit build admission, reconciliation and erasure
+fencing need a coordinated design. Objects remain private and normal download
+resolution requires a job; no deployed occurrence or access bypass is established.
+External bucket lifecycle configuration is unknown. No storage, database, fixture
+or other product execution was performed.
+
+
 ## WEB-SECURITY-SESSION-COMPLETION-01
 
 Severity: High. Status: Password/recovery completion reporting source-corrected
