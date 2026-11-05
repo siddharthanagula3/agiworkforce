@@ -1,6 +1,6 @@
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactElement } from 'react';
+import { StrictMode, useEffect, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StepUpDialogProps } from '@/features/auth/StepUpDialog';
 import type { IdentityReverificationStep } from '@/lib/identity/client';
@@ -27,7 +27,11 @@ vi.mock('@/lib/identity/client', () => ({
   useSignOut: () => vi.fn(),
 }));
 
-import { isStepUpCancelled, STEP_UP_TOKEN_HEADER } from '@/features/auth/step-up-fetch';
+import {
+  isStepUpCancelled,
+  STEP_UP_TOKEN_HEADER,
+  type StepUpGrantOutcome,
+} from '@/features/auth/step-up-fetch';
 import { useStepUp } from '../useStepUp';
 
 function refusal(): Response {
@@ -56,8 +60,9 @@ function dialog(element: ReactElement | null): ReactElement<StepUpDialogProps> {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -69,6 +74,209 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe('useStepUp hook lifetime', () => {
+  it.each<StepUpGrantOutcome>([
+    { kind: 'granted', token: 'late-grant' },
+    { kind: 'verify', level: 'second_factor', message: 'Confirm.' },
+    { kind: 'failed', message: 'Try again.' },
+  ])('retires a delayed silent $kind outcome without replay or a new waiter', async (outcome) => {
+    const grant = deferred<StepUpGrantOutcome>();
+    requestGrant.mockReturnValueOnce(grant.promise);
+    const { result, unmount } = renderHook(useStepUp);
+    const send = sender();
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(1));
+    expect(result.current.dialog).toBeNull();
+    unmount();
+    grant.resolve(outcome);
+    expect(isStepUpCancelled(await operation)).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(requestGrant).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the exact delayed silent-grant rejection after retirement', async () => {
+    const grant = deferred<StepUpGrantOutcome>();
+    requestGrant.mockReturnValueOnce(grant.promise);
+    const { result, unmount } = renderHook(useStepUp);
+    const send = sender();
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(1));
+    unmount();
+    const failure = new Error('Grant response lost');
+    grant.reject(failure);
+    expect(await operation).toBe(failure);
+    expect(isStepUpCancelled(failure)).toBe(false);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks replay when cleanup follows silent satisfaction in the microtask queue', async () => {
+    const grant = deferred<StepUpGrantOutcome>();
+    requestGrant.mockReturnValueOnce(grant.promise);
+    const { result, unmount } = renderHook(useStepUp);
+    const send = sender();
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(1));
+    grant.resolve({ kind: 'granted', token: 'grant-before-cleanup' });
+    // The satisfier resumes first, then cleanup, then fetchWithStepUp's replay.
+    queueMicrotask(unmount);
+    expect(isStepUpCancelled(await operation)).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start a grant when the first refusal arrives after retirement', async () => {
+    const first = deferred<Response>();
+    const send = vi.fn(() => first.promise);
+    const { result, unmount } = renderHook(useStepUp);
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    expect(send).toHaveBeenCalledTimes(1);
+    unmount();
+    first.resolve(refusal());
+    expect(isStepUpCancelled(await operation)).toBe(true);
+    expect(requestGrant).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start a grant when refusal body parsing finishes after retirement', async () => {
+    const parsed = deferred<unknown>();
+    const response = refusal();
+    const clone = response.clone();
+    const json = vi.spyOn(clone, 'json').mockReturnValue(parsed.promise);
+    vi.spyOn(response, 'clone').mockReturnValue(clone);
+    const send = vi.fn(async () => response);
+    const { result, unmount } = renderHook(useStepUp);
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    await waitFor(() => expect(json).toHaveBeenCalledTimes(1));
+    unmount();
+    parsed.resolve(await refusal().json());
+    expect(isStepUpCancelled(await operation)).toBe(true);
+    expect(requestGrant).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a saved callback invoked after actual unmount before calling its sender', async () => {
+    const { result, unmount } = renderHook(useStepUp);
+    const saved = result.current.withStepUp;
+    unmount();
+    const send = sender();
+    await expect(saved(send)).rejects.toSatisfy(isStepUpCancelled);
+    expect(send).not.toHaveBeenCalled();
+    expect(requestGrant).not.toHaveBeenCalled();
+  });
+
+  it('preserves an ordinary refusal whose body finishes parsing after retirement', async () => {
+    const parsed = deferred<unknown>();
+    const response = new Response('{}', { status: 403 });
+    const clone = response.clone();
+    const json = vi.spyOn(clone, 'json').mockReturnValue(parsed.promise);
+    vi.spyOn(response, 'clone').mockReturnValue(clone);
+    const send = vi.fn(async () => response);
+    const { result, unmount } = renderHook(useStepUp);
+    const operation = result.current.withStepUp(send);
+    await waitFor(() => expect(json).toHaveBeenCalledTimes(1));
+    unmount();
+    parsed.resolve({ error: { code: 'FORBIDDEN' } });
+    expect(await operation).toBe(response);
+    expect(requestGrant).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks replay when cleanup occurs after satisfaction but before its continuation', async () => {
+    const { result, unmount } = renderHook(useStepUp);
+    const send = sender();
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    await waitFor(() => expect(result.current.dialog).not.toBeNull());
+    const installed = dialog(result.current.dialog);
+    act(() => {
+      void installed.props.onSatisfied('grant-before-cleanup');
+      unmount();
+    });
+    expect(isStepUpCancelled(await operation)).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['initial', 'proof'] as const)('preserves the already-invoked %s sender response after retirement', async (stage) => {
+    requestGrant.mockResolvedValue({ kind: 'granted', token: 'grant' });
+    const sent = deferred<Response>();
+    const send = vi.fn<(headers: Record<string, string>) => Promise<Response>>();
+    if (stage === 'proof') send.mockResolvedValueOnce(refusal());
+    send.mockImplementation(() => sent.promise);
+    const { result, unmount } = renderHook(useStepUp);
+    const operation = result.current.withStepUp(send);
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(stage === 'proof' ? 2 : 1));
+    unmount();
+    const response = new Response('{}', { status: 200 });
+    sent.resolve(response);
+    expect(await operation).toBe(response);
+  });
+
+  it.each(['initial', 'proof'] as const)('preserves the exact already-invoked %s sender error after retirement', async (stage) => {
+    requestGrant.mockResolvedValue({ kind: 'granted', token: 'grant' });
+    const sent = deferred<Response>();
+    const send = vi.fn<(headers: Record<string, string>) => Promise<Response>>();
+    if (stage === 'proof') send.mockResolvedValueOnce(refusal());
+    send.mockImplementation(() => sent.promise);
+    const { result, unmount } = renderHook(useStepUp);
+    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(stage === 'proof' ? 2 : 1));
+    unmount();
+    const uncertain = new Error('Connection lost after dispatch');
+    sent.reject(uncertain);
+    expect(await operation).toBe(uncertain);
+    expect(isStepUpCancelled(uncertain)).toBe(false);
+  });
+
+  it('keeps pre-cleanup invocations retired through real StrictMode effect re-setup', async () => {
+    const oldResponse = deferred<Response>();
+    const oldSend = vi.fn(() => oldResponse.promise);
+    const newSend = sender();
+    requestGrant.mockResolvedValue({ kind: 'granted', token: 'new-lifetime-grant' });
+    const operations: Promise<unknown>[] = [];
+    const callbacks: ReturnType<typeof useStepUp>['withStepUp'][] = [];
+    function Consumer() {
+      const { withStepUp, dialog: challenge } = useStepUp();
+      useEffect(() => {
+        callbacks.push(withStepUp);
+        operations.push(withStepUp(operations.length === 0 ? oldSend : newSend)
+          .catch((error: unknown) => error));
+      }, [withStepUp]);
+      return challenge;
+    }
+    render(<StrictMode><Consumer /></StrictMode>);
+    await waitFor(() => expect(newSend).toHaveBeenCalledTimes(2));
+    expect(operations).toHaveLength(2);
+    expect(callbacks[0]).toBe(callbacks[1]);
+    expect(await operations[1]).toHaveProperty('status', 200);
+    oldResponse.resolve(refusal());
+    expect(isStepUpCancelled(await operations[0])).toBe(true);
+    expect(oldSend).toHaveBeenCalledTimes(1);
+    expect(requestGrant).toHaveBeenCalledTimes(1);
+    expect(newSend).toHaveBeenLastCalledWith({ [STEP_UP_TOKEN_HEADER]: 'new-lifetime-grant' });
+  });
+
+  it('allows independent silent grants to replay out of invocation order', async () => {
+    const firstGrant = deferred<StepUpGrantOutcome>();
+    const secondGrant = deferred<StepUpGrantOutcome>();
+    requestGrant.mockReturnValueOnce(firstGrant.promise).mockReturnValueOnce(secondGrant.promise);
+    const { result } = renderHook(useStepUp);
+    const firstSend = sender();
+    const first = result.current.withStepUp(firstSend, 'org-1');
+    await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(1));
+    const secondSend = sender();
+    const second = result.current.withStepUp(secondSend, 'org-2');
+    await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(2));
+    secondGrant.resolve({ kind: 'granted', token: 'second-grant' });
+    expect((await second).status).toBe(200);
+    expect(firstSend).toHaveBeenCalledTimes(1);
+    firstGrant.resolve({ kind: 'granted', token: 'first-grant' });
+    expect((await first).status).toBe(200);
+    expect(firstSend).toHaveBeenCalledTimes(2);
+    expect(secondSend).toHaveBeenCalledTimes(2);
+    expect(firstSend).toHaveBeenLastCalledWith({ [STEP_UP_TOKEN_HEADER]: 'first-grant' });
+    expect(secondSend).toHaveBeenLastCalledWith({ [STEP_UP_TOKEN_HEADER]: 'second-grant' });
+    expect(result.current.dialog).toBeNull();
+  });
+});
 
 describe('useStepUp exact pending challenge ownership', () => {
   it('cancels a replaced waiter and ignores its saved callbacks, even for an identical challenge', async () => {
