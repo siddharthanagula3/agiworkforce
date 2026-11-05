@@ -223,6 +223,8 @@ vi.mock('@/lib/server/neon-db', () => {
         (g) => g['user_id'] === userId && g['connector_id'] === connectorId,
       );
       const row: Row = {
+        id: existing?.['id'] ?? '00000000-0000-0000-0000-000000000001',
+        account_key: params[11] ?? 'default',
         user_id: userId,
         connector_id: connectorId,
         access_token_enc: accessEnc,
@@ -240,16 +242,19 @@ vi.mock('@/lib/server/neon-db', () => {
       return [];
     }
     if (q.startsWith('update public.connector_oauth_grants set revoked_at')) {
-      const [userId, connectorId] = params as [string, string];
-      const row = mocks.grants.find(
-        (g) =>
-          g['user_id'] === userId && g['connector_id'] === connectorId && g['revoked_at'] === null,
+      const [userId, connectorId, target] = params as [string, string, string[] | string | undefined];
+      const rows = mocks.grants.filter(
+        (g) => g['user_id'] === userId && g['connector_id'] === connectorId &&
+          g['revoked_at'] === null &&
+          (Array.isArray(target) ? target.includes(String(g['id'])) :
+            target === undefined || g['account_key'] === target),
       );
-      if (!row) return [];
-      row['revoked_at'] = new Date().toISOString();
-      row['access_token_enc'] = null;
-      row['refresh_token_enc'] = null;
-      return [{ connector_id: connectorId }];
+      for (const row of rows) {
+        row['revoked_at'] = new Date().toISOString();
+        row['access_token_enc'] = null;
+        row['refresh_token_enc'] = null;
+      }
+      return rows.map((row) => ({ connector_id: connectorId, id: row['id'] }));
     }
     if (q.startsWith('update public.connector_oauth_grants set access_token_enc')) {
       const [userId, connectorId, accessEnc, refreshEnc, tokenType, scopes, expiresAt] = params as [
@@ -273,7 +278,13 @@ vi.mock('@/lib/server/neon-db', () => {
       row['access_token_expires_at'] = expiresAt;
       return [];
     }
-    // Disconnect first lists every live credential of the connector so each is revoked upstream.
+    if (q.startsWith('select id, access_token_enc, refresh_token_enc,')) {
+      const [userId, connectorId, accountKey] = params as [string, string, string | undefined];
+      return mocks.grants.filter(
+        (g) => g['user_id'] === userId && g['connector_id'] === connectorId &&
+          g['revoked_at'] === null && (accountKey === undefined || g['account_key'] === accountKey),
+      ).map((row) => ({ ...row }));
+    }
     if (q.startsWith('select access_token_enc, refresh_token_enc,')) {
       const [userId, connectorId] = params as [string, string];
       return mocks.grants.filter(
@@ -300,6 +311,7 @@ vi.mock('@/lib/server/neon-db', () => {
       run(sql, params);
       return 0;
     },
+    // This fixture models sequential transactions, not PostgreSQL lock scheduling.
     transaction: async (callback: (tx: unknown) => unknown) => callback(adapter),
   };
   return { getNeonDb: vi.fn(() => adapter) };
