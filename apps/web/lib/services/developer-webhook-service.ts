@@ -488,7 +488,7 @@ export async function attemptDeveloperWebhookDelivery(
     await db.query(
       `update public.developer_webhook_deliveries
           set status = 'failed', error = $3, last_attempt_at = now()
-        where id = $1 and user_id = $2`,
+        where id = $1 and user_id = $2 and status <> 'delivered'`,
       [row.id, userId, 'The endpoint was turned off before this event was sent.'],
     );
     return { outcome: 'skipped', reason: 'endpoint_disabled' };
