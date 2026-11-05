@@ -26,12 +26,21 @@ export interface BillingInvoiceRecord {
 }
 
 const stripe = getStripeClientOrNull();
+export const BILLING_INVOICE_PAGE_LIMIT = 24;
 
-export async function listUserBillingInvoices(
+export interface BillingInvoicePage {
+  invoices: BillingInvoiceRecord[];
+  available: boolean;
+  hasMore: boolean;
+  truncatedLineItems: Array<{ invoiceId: string; returnedCount: number }>;
+}
+
+export async function readUserBillingInvoicePage(
   db: DatabaseAdapter,
   userId: string,
-): Promise<BillingInvoiceRecord[]> {
-  if (!stripe) return [];
+): Promise<BillingInvoicePage> {
+  const empty = { invoices: [], hasMore: false, truncatedLineItems: [] };
+  if (!stripe) return { ...empty, available: false };
 
   type CustomerRow = Pick<SubscriptionRow, 'stripe_customer_id'>;
   const [subscription] = await db.query<CustomerRow>(
@@ -42,14 +51,20 @@ export async function listUserBillingInvoices(
     [userId],
   );
 
-  if (!subscription?.stripe_customer_id) return [];
+  if (!subscription?.stripe_customer_id) return { ...empty, available: true };
 
   const stripeInvoices = await stripe.invoices.list({
     customer: subscription.stripe_customer_id,
-    limit: 24,
+    limit: BILLING_INVOICE_PAGE_LIMIT,
   });
+  if (
+    typeof stripeInvoices.has_more !== 'boolean' ||
+    stripeInvoices.data.some((invoice) => typeof invoice.lines.has_more !== 'boolean')
+  ) {
+    throw new Error('Billing invoice pagination metadata is invalid');
+  }
 
-  return stripeInvoices.data.map((invoice) => ({
+  const invoices = stripeInvoices.data.map((invoice) => ({
     id: invoice.id,
     number: invoice.number ?? '',
     status: invoice.status ?? 'draft',
@@ -74,4 +89,21 @@ export async function listUserBillingInvoices(
       },
     })),
   }));
+  return {
+    invoices,
+    available: true,
+    hasMore: stripeInvoices.has_more,
+    truncatedLineItems: stripeInvoices.data.flatMap((invoice) =>
+      invoice.lines.has_more
+        ? [{ invoiceId: invoice.id, returnedCount: invoice.lines.data.length }]
+        : [],
+    ),
+  };
+}
+
+export async function listUserBillingInvoices(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<BillingInvoiceRecord[]> {
+  return (await readUserBillingInvoicePage(db, userId)).invoices;
 }
