@@ -4580,9 +4580,25 @@ optimistic rollback, clear semantics and concurrent snapshots are not repaired.
 Public Electron's hosted Web and mobile Local data are separate surfaces. See
 `WEB-MEMORY-OWNER-BACKLOG-01`.
 
+## Conversation creation separates empty bodies from failed reads
+
+Accepted commit `a97d52939f6f7e9822afe89a552b5ed0bf09d993` reads the optional
+creation body before a narrow JSON parse catch. Successful exact-empty decoded
+text retains default creation; malformed nonempty input refuses, and read/ceiling
+errors retain wrapper classification. Whitespace-only refusal is an intentional
+tightening. Existing schema and account/workspace/CSRF/rate/maintenance/model/
+project/allowance/SQL gates remain unchanged.
+
+The previous catch could turn a body failure into default non-temporary creation,
+including after the stream meter had cancelled an oversized body. The correction
+restores refusal/413, not byte enforcement. Independent source review accepted
+one production and one fixture file with real wrapper and stream instrumentation;
+none ran. Exact-limit/partial-read-failure fixtures and declared-length anomalies
+remain separate. See `WEB-CONVERSATION-CREATE-BODY-ADMISSION-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and sixty-one accepted production slices traced above are represented as
+Only the one hundred and sixty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

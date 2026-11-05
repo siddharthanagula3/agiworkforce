@@ -10450,3 +10450,42 @@ replacement during token/push/Siri/SDK awaits, cleanup failures and replacement
 Siri keychain writes. Preserve immediate local fail-closed behavior and original
 remote cleanup. Native deletion receipt validation is a separate boundary and
 does not resolve this logout design requirement.
+
+## WEB-CONVERSATION-CREATE-BODY-ADMISSION-01
+
+Severity: Medium. Status: Boundedly source-corrected in
+`a97d52939f6f7e9822afe89a552b5ed0bf09d993`, 2026-11-05. Runtime and deployment
+acceptance remain open; no unintended creation was observed.
+
+Conversation POST caught every request.json failure and continued with an empty
+object. After existing authentication/CSRF/rate/maintenance admission, malformed
+nonempty JSON or a body-read failure could therefore pass default schema values,
+reach allowance checks and insert a new non-temporary conversation without the
+intended project, provider pin or client UUID. Existing schema rejection of valid
+JSON with invalid shape and SQL ownership/scope gates remained effective.
+
+The catch also swallowed PayloadCeilingExceededError raised by the wrapper's
+undeclared-body meter, allowing default creation instead of the intended 413.
+The meter still bounded buffering and cancelled the oversized stream; this was
+not a byte-enforcement bypass. Declared oversize was refused before the handler.
+The collection endpoint has the default 4 MiB ceiling, not the 24 MiB prefix
+reserved for paths with a trailing slash.
+
+The route now awaits text outside the narrow JSON parse catch. Only a successful
+exact-empty decoded read gets defaults; malformed nonempty input receives 400,
+while stream/transport/ceiling errors retain existing wrapper classification.
+Empty-body compatibility is covered by original callers/fixtures. Whitespace-only
+input now refuses intentionally; inspected production clients serialize JSON,
+and no whitespace-only dependency was found. Global read-json-body.ts consumers,
+schema, admission, model/project validation, allowance and persistence are unchanged.
+
+Independent source review accepted the route and authored fixtures with the real
+wrapper, default/temporary controls, malformed/schema-invalid input, body-read
+failure, actual errored/oversized streams, cancellation and declared oversize.
+Refusals assert no allowance or scoped queries/writes. A no-body request makes the
+failed-text spy valid because the meter does not replace its reader. Declared
+oversize uses a tiny real body to isolate the header gate, not byte measurement.
+Fixtures remain unexecuted; exact-limit acceptance and failure after partial body
+data are direct fixture gaps. Declared-length underreporting/invalid declarations
+and broad request-helper classification are outside this correction. No tests,
+checks, builds, database operations, push or deployment ran.
