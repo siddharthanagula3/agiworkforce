@@ -9527,19 +9527,57 @@ size invariant is established.
 
 ## WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
-Status: Coupled training/telemetry lane remains OPEN. US-only ownership was
-boundedly source-corrected in `76c82feb1e`. Source-backed on 2026-11-05, with no
-runtime reproduction or demonstrated cross-account server authorization bypass.
+Status: Privacy request/view ownership and strict receipts source-corrected in
+`880ed1b4326ac1bdf7ae0453be16ea816ba6f432` on 2026-11-05. US-only ownership was
+boundedly source-corrected in `76c82feb1e`. Browser-wide intent ordering and runtime
+acceptance remain OPEN; no demonstrated cross-account server authorization bypass.
 
-`PrivacySection.tsx` reads the legacy privacy namespace only on mount/retry and
-saves without original account/view ownership. It already has a synchronous
-save-in-flight ref, so duplicate dispatch is not the same defect as the US-only
-panel. Its saved callbacks, pending whole-namespace retry payload and post-await
-browser-consent side effects are not retired on section unmount or session change.
+The original `PrivacySection.tsx` read the legacy privacy namespace only on
+mount/retry and saved without original account/view ownership. Its synchronous
+save-in-flight ref already excluded duplicate dispatch, unlike the US-only panel.
+Retained callbacks, pending whole-namespace retry payload and post-await browser
+consent effects were not retired on section unmount or session change.
 Legacy preference parsing normalizes malformed envelopes/namespaces, and its write
 helper accepts a successful response with unparseable JSON, ignores stored values
 and announces submitted values. Backend stored receipt validation does not make
 these permissive client reads authoritative.
+
+
+Accepted bounded correction `880ed1b432` adds a narrow privacy adapter using the
+canonical settings path, request authority and CSRF. Strict GET envelopes require
+object settings/privacy and valid defined privacy booleans; legitimate missing
+fields retain defaults. PUT sends exactly one field patch, preserving sibling
+settings rather than replaying a namespace snapshot. A stored matching field and
+nonempty stored version are required before publishing a saved event containing
+the actual stored namespace. Legacy helpers and route semantics remain unchanged.
+
+PrivacySection binds its lane, ready snapshot, retained callbacks and synchronous
+operation admission to canonical preference/session/view authority. Initial and
+post-save reads use that authority. Admitted telemetry denial remains immediate;
+only a current matching telemetry receipt confirms that choice. A training-only
+receipt does not implicitly grant telemetry. While the original owner/view remains
+current, every mutation outcome is followed by an owned GET before editing resumes;
+failed reconciliation exposes read-only
+Retry, never a retained mutation payload. Pending local denial can be submitted
+through a fresh account-off choice. Valid false reconciliation still settles the
+existing local denial, and a later passive true read can re-enable as before.
+
+TelemetryConsentSync now uses the same strict reader and exact session/view
+owner; its dynamic initializer is guarded again after lazy import. Its existing
+false-to-false skip and the shared browser consent protocol are unchanged.
+Independent source review accepted three production and eight authored unrun
+fixture files, covering strict/absent data, matching receipts and stored events,
+single-field patches, duplicate/stale callbacks, CSRF and response retirement,
+read-only recovery, local denial/training separation, false settlement/passive
+recovery and lazy-import retirement. The density fixture retains a real admitted
+save instead of asserting against a permanently disabled null-owner control.
+
+This correction does not establish same-session/cross-tab browser-intent ordering,
+server CAS, rollback of dispatched writes, cancellation of already-started
+telemetry, or global serialization across views/clients. Unknown outcomes can
+finish after a reconciliation read. The browser-protocol hold below remains.
+No tests, lint, typechecks, builds, formatters, application, browser, auth,
+telemetry, database or provider actions, push or deployment ran.
 
 Original US-only evidence: `UsOnlyRoutingPanel.tsx` uses mount-only cookie GET/PUT without original session/view
 ownership or synchronous mutation exclusion. Its callback does not recheck current
@@ -9558,7 +9596,7 @@ and server gates remain. Cached billing freshness and concurrent replacement wri
 remain separate limits; no runtime acceptance is established.
 
 The settings modal unmounts on close, and switching sections unmounts Privacy.
-The remaining coupled privacy save lifetime does not follow that boundary. These settings are account
+The original coupled privacy save lifetime did not follow that boundary. These settings are account
 scoped (`resolveOrganization: false`); workspace selection alone does not establish
 a different stored privacy owner. Reuse existing `usePreferenceOwner`,
 `usePreferenceView` and request authority rather than inventing an identity copy.
@@ -9572,8 +9610,8 @@ another tab, even if both account sessions remain valid. The write-refusal slice
 `89dcffb0c6` changes persistence order and protects failed writes, but does not
 establish intent ordering. The existing pending-denial gate, fail-closed
 storage reads, redaction and server-rendered consent signal are real controls and
-must be preserved. `TelemetryConsentSync.tsx` separately uses a legacy read keyed
-only by loaded/signed-in booleans, not exact account/session identity.
+must be preserved. The original `TelemetryConsentSync.tsx` separately used a legacy read keyed
+only by loaded/signed-in booleans; that identity gap is corrected by `880ed1b432`.
 
 Do not merely swap helper names: owned namespace helpers still have permissive
 response parsing, and guarding React state alone does not guard browser-global
@@ -11856,55 +11894,50 @@ wipe, provider/database/native action, push or deployment ran.
 
 ## MOBILE-SIRI-ROTATION-DISABLE-01
 
-Severity: High. Status: Open source ordering finding, 2026-11-05.
+Severity: High. Status: Ordinary-operation ordering source-corrected on
+2026-11-05 in `55502a614fca8341631f01b25a5a3d51f4ffffa2`. Native/sign-out,
+remote issuance and runtime acceptance remain OPEN.
 
-A same-account heartbeat rotation can publish a usable Siri token after an
-explicit disable succeeds. The application drawer mounts
-`useDeviceRegistryHeartbeat` while Settings is available. An accepted heartbeat
-starts `settleAskIntentOnLaunch`, which calls `storeFreshToken` to rotate the
-persisted enabled installation's token T0. Before its POST response arrives,
-`disableAskFromSiri` can capture T0, DELETE that token, and clear the keychain
-and markers. The delayed rotation response then writes T1 to SecureStore and
-the token-ID marker while the enabled flag remains false. The Swift
-`apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift` reads the keychain bearer directly;
-it does not read that MMKV enabled flag.
+Previously, an accepted heartbeat could start rotation of enabled token T0 while
+Settings disabled T0. A delayed response then published T1 to SecureStore and the
+token-ID marker after disable cleared local state. Swift
+`apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift` reads the bearer directly,
+not the MMKV enabled flag. Server token-ID DELETE of T0 does not revoke T1.
+This was a source ordering finding, not observed native use or an authorization
+bypass. Session registration and existing account/Cloud guards remain intact.
 
-This is a concrete source ordering, not observed native use. The Settings
-saving flag excludes another toggle only within that component, not heartbeat
-work. `rotatedThisLaunch` suppresses later launch rotations, not disable. API
-generation checks after credentials and JSON are meaningful, but same-account
-Cloud operations retain their generation. Local-mode refusal does not apply to
-this sequence. Server issuance requires a registered installation matching the
-current identity session, which the established enabled installation and
-accepted heartbeat can satisfy. Server rotation revokes older same-user/install
-tokens and inserts T1; token-ID DELETE revokes only T0, whether T1 inserts before
-or after that DELETE. The Ask endpoint still enforces token expiry/revocation,
-capability and account policy, but knows nothing of the local disabled flag.
+The canonical `askIntentToken.ts` now orders ordinary enable, disable, pending
+revocation and launch rotation through one failure-resilient FIFO, including
+network, native publication/removal and marker work. Disable reads its token ID
+inside its turn, after earlier rotation; later rotation rechecks enabled. Each
+admission captures canonical account epoch plus account, mode and sign-out
+lifetime generations. Synchronous account/mode subscriptions reject round trips;
+checks before queued work and after awaits prevent retired callbacks publishing
+markers or starting later local work. API requests retain their original epoch.
+Local disable with no account still attempts local cleanup after Cloud refusal,
+but a retired Local callback cannot clear a replacement lifetime.
 
-Sources: `apps/mobile/src/features/siri/askIntentToken.ts`,
-`apps/mobile/src/features/siri/AskFromSiriSetting.tsx`,
-`apps/mobile/src/features/device-registry/useDeviceRegistryHeartbeat.ts`,
-`apps/mobile/services/api.ts`,
-`apps/web/app/api/mobile/intent-token/route.ts`, and
-`apps/web/lib/server/mobile-intent-tokens.ts`. The existing Siri fixtures cover
-sequential failed-disable/re-enable recovery, not this overlapping rotation.
-The ordinary Clerk token failure-to-null counterguard is intact; no artificial
-credential rejection or account switch is needed for this finding.
+Rotation attempt and successful deduplication are lifetime-owned. A fresh owner
+can rotate after a retired attempt, while an old completion cannot clear newer
+bookkeeping. Sign-out invalidates ordinary authority synchronously when its Siri
+cleanup begins and stays outside the FIFO, so stalled ordinary work does not hold
+that cleanup. Ordinary work behind a stalled operation can still wait indefinitely;
+there is no timeout, queue reset or claimed cancellation of admitted operations.
 
-A safe correction must coordinate admission, server mutation, keychain
-publication/removal and markers, so disable selects the token after an admitted
-rotation and a later rotation rechecks enabled state. Queue failures must not
-poison subsequent work. Queued work also needs explicit account-lifetime
-admission; adding delay must not let an old action run under a replacement
-account. Local disable must still discard its local token when Cloud egress is
-refused. An uncoordinated delete after a stale keychain write could erase a
-newer token instead. Integration with sign-out needs separate scrutiny rather
-than blocking security cleanup indefinitely behind stalled work.
+Independent source review accepted one production and two authored unrun fixture
+files, including overlapping network/native publication and disable, subsequent
+rotation, failure recovery, account/mode round trips, null-owner Local cleanup,
+retired pending revocation and sign-out queue bypass. The local-wipe fixture adds
+only the app-mode mock needed by the new import. Fixtures do not execute native
+SecureStore, transport credentials, database issuance or actual UI lifecycle.
 
-This is distinct from `MOBILE-LOGOUT-SESSION-LIFETIME-01` and the accepted
-local-wipe prerequisite correction. No serialization implementation is accepted
-here, no reconstructed production slice is added, and no tests, lint, typechecks,
-builds, app/native execution, real token request, push or deployment ran.
+Already-started SecureStore mutations remain uncancellable and can race sign-out;
+delayed sign-out can still clear replacement state under
+`MOBILE-LOGOUT-SESSION-LIFETIME-01`. Mode changes entirely inside API credential
+awaits can still dispatch stale server work, although subsequent publication is
+refused. Server late issuance, unknown commit results and native-generation
+fencing are not repaired. No tests, lint, typechecks, builds, formatters,
+application/native/database/provider actions, push or deployment ran.
 
 
 ## MOBILE-SIRI-ROTATION-RETRY-01
@@ -11913,8 +11946,8 @@ Severity: Medium. Status: Current-owner failed launch-rotation retry
 source-corrected on 2026-11-05; runtime acceptance remains open.
 Accepted production commit: `cb6f9baf5c`.
 
-An accepted device heartbeat invokes `settleAskIntentOnLaunch`. Its eager
-`rotatedThisLaunch` guard prevents duplicate rotation, but previously stayed true
+An accepted device heartbeat invokes `settleAskIntentOnLaunch`. The original eager
+`rotatedThisLaunch` guard prevented duplicate rotation, but stayed true
 after `storeFreshToken` rejected. A normal non-success API status, network error
 or SecureStore publication failure therefore suppressed later automatic retries
 for that module lifetime. If issuance had not happened, the old token could
@@ -11922,14 +11955,14 @@ remain valid. If server rotation committed before response/publication failure,
 the old token was revoked and automatic recovery was suppressed. Manual
 disable/re-enable, sign-out or process restart were existing recovery paths.
 
-The helper keeps eager single-flight admission and records an attempt identity
-with the canonical Cloud account epoch. Failure rearms only that identical
-attempt while its epoch is current; null/stale epochs do not rearm. Explicit
-sign-out retires the attempt identity before resetting the launch flag. A late
-old failure cannot clear a newer attempt or rearm a replacement account.
+The initial correction kept eager single-flight admission and recorded an attempt
+identity with the canonical Cloud account epoch. Failure rearmed only that
+identical attempt while its epoch was current; null/stale epochs did not rearm.
+Explicit sign-out retired the attempt identity before resetting the launch flag.
+A late old failure could not clear a newer attempt or rearm a replacement account.
 Success deduplication, Local-disable behavior and ordinary rejection reporting
-remain unchanged. This bookkeeping snapshot is not passed into transport and
-does not establish full issuance/publication ownership.
+were unchanged. That initial snapshot was not passed into transport and did not
+establish full issuance/publication ownership.
 
 Independent source review accepted the two-file patch. Authored, unrun fixtures
 load the real epoch module and SecureStore mock inside the same Jest isolate.
@@ -11944,6 +11977,14 @@ Unknown remote commits are not compensated, and a stale successful native write
 is not repaired. `MOBILE-SIRI-ROTATION-DISABLE-01` and
 `MOBILE-LOGOUT-SESSION-LIFETIME-01` remain open. No tests, lint, typechecks, builds,
 app/native execution, real token request, push or deployment ran.
+
+
+Subsequent `55502a614f` replaces the unowned launch boolean with a successful
+owner snapshot and extends admission to the ordinary-operation FIFO. Fresh
+account/mode/lifecycle owners are not suppressed by old success or failure;
+requests now receive the original epoch. Existing retry fixtures were revised
+to reflect this deliberate fresh-owner behavior. See the preceding ordering
+entry for accepted guarantees and the still-open native/sign-out/server limits.
 
 
 ## MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01

@@ -4976,27 +4976,35 @@ and authored unrun fixtures support this ordering only: remote cleanup is best
 effort, lookup/abort-only timing and broader session/backend races remain open.
 See `MOBILE-LOCAL-WIPE-CLEANUP-ORDER-01`.
 
-## Siri rotation and disable need one lifecycle owner
+## Ordinary Siri token operations share ordered lifetime ownership
 
-An accepted heartbeat can rotate the enabled installation while Settings
-disables its previous token. A delayed rotation response then publishes the new
-keychain token even though the MMKV enabled flag is false. Native Ask reads the
-keychain directly; server token-ID revocation does not revoke the replacement.
-Existing account/Local/session-registration guards do not order these
-same-account Cloud operations. `MOBILE-SIRI-ROTATION-DISABLE-01` tracks the
-open coordinated-lifecycle requirement, including queued account ownership and
-Local cleanup semantics. This is a source finding, not an implemented slice or
-an observed native incident.
+Accepted `55502a614f` serializes ordinary enable, disable, pending revocation and
+rotation through a failure-resilient FIFO. Disable selects the token after earlier
+publication, and later rotation rechecks enabled. Captured account epoch and
+synchronous account/mode/sign-out generations retire queued work and post-await
+markers, while lifetime-owned deduplication permits fresh-owner recovery. Local
+no-account disable still clears locally after Cloud refusal. Sign-out invalidates
+ordinary authority when its Siri cleanup begins and bypasses the queue.
+
+One production and two authored unrun fixture files were independently reviewed.
+Stalled ordinary work can delay later ordinary actions. Already-admitted native
+mutations, delayed sign-out, mode transitions during API credential lookup and
+server late issuance remain separate limits. No native, server or runtime behavior
+is verified. See `MOBILE-SIRI-ROTATION-DISABLE-01` and
+`MOBILE-LOGOUT-SESSION-LIFETIME-01`.
 
 ## Failed Siri launch rotation can retry for its current owner
 
-Accepted `cb6f9baf5c` retains eager rotation deduplication but rearms a failed
-attempt only while its identity and captured canonical account epoch remain
-current. Sign-out retires the attempt before resetting launch state. This
-restores later-heartbeat recovery after ordinary API/native publication failure
-without letting a stale rejection clear a replacement attempt. It does not fence
-late successful publication or compensate an unknown remote commit. Fixtures are
-independently source-reviewed and unrun; see `MOBILE-SIRI-ROTATION-RETRY-01`.
+Initial correction `cb6f9baf5c` retained eager rotation deduplication but rearmed a
+failed attempt only while its identity and captured canonical account epoch were
+current. Sign-out retired the attempt before resetting launch state. This
+restored later-heartbeat recovery after ordinary API/native publication failure
+without letting a stale rejection clear a replacement attempt. It did not fence
+late successful publication or compensate an unknown remote commit. Subsequent
+`55502a614f` replaces that launch boolean with lifetime-owned deduplication and
+fences ordinary post-await publication as described above; already-admitted native
+mutations and remote uncertainty remain. Fixtures are independently source-reviewed
+and unrun; see `MOBILE-SIRI-ROTATION-RETRY-01`.
 
 ## Cloud preference teardown uses canonical initial defaults
 
@@ -5105,9 +5113,33 @@ auth/UI behavior, cross-view concurrency and remote cancellation/order remain
 unverified; the reload observes a value without proving an uncertain write cannot
 finish later. See `MOBILE-SECURITY-PREFERENCES-LIFETIME-01`.
 
+## Web privacy publishes owned stored receipts and reconciles uncertainty
+
+Accepted `880ed1b432` gives PrivacySection a canonical account/session/view lane,
+ready-snapshot admission and synchronous per-view operation exclusion. A narrow
+adapter validates full settings reads and matching stored write receipts, sends
+one-field privacy patches and publishes actual stored values. Valid absent fields
+retain defaults; malformed defined fields cannot create ready state. Legacy
+helpers, server routes, null-version semantics and US-only behavior stay unchanged.
+
+Telemetry denial is immediate on admitted user intent. Only a current telemetry
+receipt confirms consent; a training-only write cannot implicitly grant it. While
+the original owner/view remains current, each save reconciles through an owned GET
+before another edit; readback failure offers
+GET-only retry, and pending denial can use a fresh account-off choice. Existing
+false settlement followed by later passive true recovery is preserved. Telemetry
+sync uses exact owner/view authority and checks it after lazy initialization import.
+
+Three production and eight authored unrun fixture files were independently
+source-reviewed. Browser-wide intent ordering, server CAS, cancellation/rollback
+of dispatched work and cross-view serialization remain open. Reconciliation does
+not prove an uncertain write cannot finish later. Shared consent protocol changes
+remain held under `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`; no runtime acceptance
+is asserted.
+
 ## Reconstruction boundary
 
-Only the two hundred two accepted production slices traced above are represented as
+Only the two hundred four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
