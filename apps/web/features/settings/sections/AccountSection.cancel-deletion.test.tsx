@@ -185,6 +185,42 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();
   });
 
+  it.each([
+    { label: 'empty body', reply: () => new Response(null, { status: 204 }) },
+    { label: 'invalid JSON', reply: () => new Response('{', { status: 200 }) },
+    { label: 'missing receipt', reply: () => jsonResponse({}) },
+    { label: 'contradictory refusal', reply: () => jsonResponse({
+      message: 'No account deletion is pending.', cancelled: false, reason: 'grace_window_expired',
+    }) },
+  ])('leaves the schedule and confirmation dialog intact after $label', async ({ reply }) => {
+    stubFetch({
+      pending: true, canCancel: true, requestedAt: new Date().toISOString(), scheduledFor: FUTURE_DEADLINE,
+    }, (url, init) => url === '/api/user/delete-account/cancel' && init?.method === 'POST' ? reply() : null);
+    renderAccountSection();
+    fireEvent.click(await screen.findByTestId('cancel-deletion-trigger'));
+    fireEvent.click(await screen.findByTestId('cancel-deletion-confirm'));
+    expect(await screen.findByText(
+      'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.',
+    )).toBeInTheDocument();
+    expect(screen.getByTestId('pending-deletion-title')).toBeInTheDocument();
+    expect(screen.getByTestId('cancel-deletion-confirm')).toBeInTheDocument();
+    expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();
+  });
+
+  it('accepts the server confirmation that no deletion is pending without claiming it cancelled one', async () => {
+    stubFetch({
+      pending: true, canCancel: true, requestedAt: new Date().toISOString(), scheduledFor: FUTURE_DEADLINE,
+    }, (url, init) => url === '/api/user/delete-account/cancel' && init?.method === 'POST'
+      ? jsonResponse({ message: 'No account deletion is pending.', cancelled: false }) : null);
+    renderAccountSection();
+    fireEvent.click(await screen.findByTestId('cancel-deletion-trigger'));
+    fireEvent.click(await screen.findByTestId('cancel-deletion-confirm'));
+    expect(await screen.findByTestId('delete-account-trigger')).toBeInTheDocument();
+    expect(screen.queryByTestId('pending-deletion-title')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cancel-deletion-confirm')).not.toBeInTheDocument();
+    expect(screen.queryByText('Account deletion cancelled.')).not.toBeInTheDocument();
+  });
+
   it('does not expose operator details from a failed cancellation', async () => {
     stubFetch(
       {

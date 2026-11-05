@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-q
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StepUpDialogProps } from '@/features/auth/StepUpDialog';
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
-import { queryClient as productionQueryClient } from '@shared/stores/query-client';
-import { useDeleteAccount } from './use-settings-queries';
+import { queryClient as productionQueryClient, queryKeys } from '@shared/stores/query-client';
+import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
+import { toUserMessage } from '@/lib/user-error-message';
+import { useDeleteAccount, useCancelAccountDeletion } from './use-settings-queries';
 
 const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -54,9 +56,16 @@ vi.mock('@/features/auth/StepUpDialog', async (importOriginal) => ({
 
 const DELETE_PATH = '/api/user/delete-account';
 const GRANT_PATH = '/api/auth/step-up';
+const CANCEL_PATH = '/api/user/delete-account/cancel';
 const fetchMock = vi.fn<typeof fetch>();
 let client: QueryClient;
 let deletion: ReturnType<typeof useDeleteAccount>;
+let cancellation: ReturnType<typeof useCancelAccountDeletion>;
+
+const pendingStatus = {
+  pending: true, canCancel: true,
+  requestedAt: '2026-11-05T12:00:00.000Z', scheduledFor: '2026-11-06T12:00:00.000Z',
+};
 
 function productionRetryDelay(): number {
   const delay = productionQueryClient.getDefaultOptions().mutations?.retryDelay;
@@ -102,6 +111,16 @@ function DeletionHarness() {
 
 function renderDeletion() {
   render(<QueryClientProvider client={client}><DeletionHarness /></QueryClientProvider>);
+}
+
+function CancellationHarness() {
+  cancellation = useCancelAccountDeletion();
+  return <button onClick={() => cancellation.mutate()}>Cancel scheduled deletion</button>;
+}
+
+function renderCancellation() {
+  client.setQueryData(queryKeys.settings.accountDeletionStatus(), pendingStatus);
+  render(<QueryClientProvider client={client}><CancellationHarness /></QueryClientProvider>);
 }
 
 async function terminalError() {
@@ -174,6 +193,9 @@ describe('useDeleteAccount retry admission', () => {
     expect(deletionCalls()).toHaveLength(1);
     expect(grantCalls()).toHaveLength(0);
     expect(mocks.dialog).not.toHaveBeenCalled();
+    expect(toUserMessage(deletion.error, 'fallback')).toBe(
+      'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.',
+    );
     expectNoSignOut();
   });
 
@@ -206,6 +228,7 @@ describe('useDeleteAccount retry admission', () => {
     expect(deletionCalls()).toHaveLength(1);
     fetchMock.mockResolvedValue(response({
       message: 'Account deletion scheduled.', scheduledFor: '2026-11-06T12:00:00.000Z',
+      status: 'pending', statusReason: 'Deletion is scheduled and has not started.',
     }));
     fireEvent.click(screen.getByText('Schedule deletion'));
     await waitFor(() => expect(deletion.isSuccess).toBe(true));
@@ -229,5 +252,89 @@ describe('useDeleteAccount retry admission', () => {
       timeout: productionRetryDelay() * 3 + 1000,
     });
     expect(operation).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('account deletion mutation receipts with production retry defaults', () => {
+  it.each([
+    { label: 'empty body', reply: () => new Response(null, { status: 204 }) },
+    { label: 'invalid JSON', reply: () => new Response('{', { status: 200 }) },
+    { label: 'missing receipt', reply: () => response({}) },
+    { label: 'invalid date', reply: () => response({
+      message: 'Account deletion scheduled.', scheduledFor: 'bad-date',
+      status: 'pending', statusReason: 'Scheduled.',
+    }) },
+    { label: 'refusal in success body', reply: () => response({
+      message: 'Account deletion scheduled.', scheduledFor: pendingStatus.scheduledFor,
+      status: 'pending', statusReason: 'Scheduled.', error: 'Nothing was scheduled.',
+    }) },
+  ])('does not report scheduling success or replay after $label', async ({ reply }) => {
+    fetchMock.mockImplementation(async () => reply());
+    renderDeletion();
+    fireEvent.click(screen.getByText('Schedule deletion'));
+    await terminalError();
+    await beyondRetryWindow();
+    expect(deletion.isSuccess).toBe(false);
+    expect(toUserMessage(deletion.error, 'fallback')).toBe(
+      'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.',
+    );
+    expect(deletionCalls()).toHaveLength(1);
+    expectNoSignOut();
+  });
+
+  it.each([true, false])('clears the pending cache only after a valid cancelled=%s receipt', async (cancelled) => {
+    fetchMock.mockResolvedValue(response({
+      message: cancelled ? 'Account deletion cancelled.' : 'No account deletion is pending.',
+      cancelled,
+    }));
+    renderCancellation();
+    fireEvent.click(screen.getByText('Cancel scheduled deletion'));
+    await waitFor(() => expect(cancellation.isSuccess).toBe(true));
+    expect(cancellation.data?.cancelled).toBe(cancelled);
+    expect(client.getQueryData(queryKeys.settings.accountDeletionStatus())).toEqual(NO_PENDING_ACCOUNT_DELETION);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(CANCEL_PATH);
+    expectNoSignOut();
+  });
+
+  it.each([
+    { label: 'transport failure', reply: (): Response => { throw new TypeError('Failed to fetch'); } },
+    { label: 'empty body', reply: () => new Response(null, { status: 204 }) },
+    { label: 'invalid JSON', reply: () => new Response('{', { status: 200 }) },
+    { label: 'missing receipt', reply: () => response({}) },
+    { label: 'missing boolean', reply: () => response({ message: 'Account deletion cancelled.' }) },
+    { label: 'nonboolean cancellation', reply: () => response({ message: 'Account deletion cancelled.', cancelled: 'true' }) },
+    { label: 'contradictory refusal', reply: () => response({
+      message: 'No account deletion is pending.', cancelled: false, reason: 'grace_window_expired',
+    }) },
+  ])('preserves cached schedule and does not replay cancellation after $label', async ({ reply }) => {
+    fetchMock.mockImplementation(async () => reply());
+    renderCancellation();
+    fireEvent.click(screen.getByText('Cancel scheduled deletion'));
+    await waitFor(() => expect(cancellation.isError).toBe(true), {
+      timeout: productionRetryDelay() * 3 + 1000,
+    });
+    await beyondRetryWindow();
+    expect(cancellation.isSuccess).toBe(false);
+    expect(toUserMessage(cancellation.error, 'fallback')).toBe(
+      'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.',
+    );
+    expect(client.getQueryData(queryKeys.settings.accountDeletionStatus())).toEqual(pendingStatus);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expectNoSignOut();
+  });
+
+  it('preserves a meaningful expired-window HTTP refusal and the cached schedule without replay', async () => {
+    const message = 'The cancellation window has closed. Nothing was restored.';
+    fetchMock.mockResolvedValue(response({ error: message, cancelled: false, reason: 'grace_window_expired' }, 409));
+    renderCancellation();
+    fireEvent.click(screen.getByText('Cancel scheduled deletion'));
+    await waitFor(() => expect(cancellation.isError).toBe(true), {
+      timeout: productionRetryDelay() * 3 + 1000,
+    });
+    await beyondRetryWindow();
+    expect(toUserMessage(cancellation.error, 'fallback')).toBe(message);
+    expect(client.getQueryData(queryKeys.settings.accountDeletionStatus())).toEqual(pendingStatus);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

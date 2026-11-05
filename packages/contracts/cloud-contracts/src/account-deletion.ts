@@ -25,3 +25,31 @@ export const NO_PENDING_ACCOUNT_DELETION: AccountDeletionStatus = {
 export function parseAccountDeletionStatus(value: unknown): AccountDeletionStatus {
   return AccountDeletionStatusSchema.parse(value);
 }
+
+export const AccountDeletionScheduleReceiptSchema = z.object({
+  message: z.string().trim().min(1),
+  scheduledFor: z.string().datetime({ offset: true }),
+  status: z.literal('pending'),
+  statusReason: z.string().trim().min(1),
+  error: z.never().optional(),
+  reason: z.never().optional(),
+});
+
+export type AccountDeletionScheduleReceipt = z.infer<typeof AccountDeletionScheduleReceiptSchema>;
+
+export function parseAccountDeletionScheduleReceipt(value: unknown): AccountDeletionScheduleReceipt {
+  return AccountDeletionScheduleReceiptSchema.parse(value);
+}
+
+export const AccountDeletionCancellationReceiptSchema = z.object({
+  message: z.string().trim().min(1),
+  cancelled: z.boolean(),
+  error: z.never().optional(),
+  reason: z.never().optional(),
+});
+
+export type AccountDeletionCancellationReceipt = z.infer<typeof AccountDeletionCancellationReceiptSchema>;
+
+export function parseAccountDeletionCancellationReceipt(value: unknown): AccountDeletionCancellationReceipt {
+  return AccountDeletionCancellationReceiptSchema.parse(value);
+}

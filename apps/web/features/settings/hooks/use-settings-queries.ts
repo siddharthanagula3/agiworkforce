@@ -51,7 +51,11 @@ import {
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
   NO_PENDING_ACCOUNT_DELETION,
   parseAccountDeletionStatus,
+  parseAccountDeletionScheduleReceipt,
+  parseAccountDeletionCancellationReceipt,
   type AccountDeletionStatus,
+  type AccountDeletionScheduleReceipt,
+  type AccountDeletionCancellationReceipt,
 } from '@agiworkforce/cloud-contracts';
 
 // ============================================================================
@@ -341,18 +345,12 @@ export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
 }
 
 /** Parsed response from `DELETE /api/user/delete-account`. */
-export interface DeleteAccountResult {
-  message: string;
-  scheduledFor: string | null;
-}
+export type DeleteAccountResult = AccountDeletionScheduleReceipt;
 
-function readDeleteAccountMessage(data: unknown, fallback: string): string {
-  if (data !== null && typeof data === 'object' && 'message' in data) {
-    const message = (data as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
-}
+const DELETION_SCHEDULE_UNCONFIRMED =
+  'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.';
+const DELETION_CANCELLATION_UNCONFIRMED =
+  'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.';
 
 function readDeleteAccountError(data: unknown, fallback: string, status: number): string {
   let raw = '';
@@ -393,29 +391,26 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
     retry: false,
     mutationFn: async (): Promise<DeleteAccountResult> => {
       const res = await withStepUp(async (stepUpHeaders) =>
-        fetch('/api/user/delete-account', {
+        fetch(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, {
           method: 'DELETE',
           headers: {
             ...(await addCsrfHeaders({ 'Content-Type': 'application/json' })),
             ...stepUpHeaders,
           },
         }),
-      );
+      ).catch((error: unknown) => {
+        if (isStepUpCancelled(error)) throw error;
+        throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
+      });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(readDeleteAccountError(data, 'Account deletion failed.', res.status));
       }
-      const scheduledFor =
-        data !== null && typeof data === 'object' && 'scheduledFor' in data
-          ? (data as { scheduledFor?: unknown }).scheduledFor
-          : undefined;
-      return {
-        message: readDeleteAccountMessage(
-          data,
-          'Your account deletion has been scheduled. You will be signed out now.',
-        ),
-        scheduledFor: typeof scheduledFor === 'string' ? scheduledFor : null,
-      };
+      try {
+        return parseAccountDeletionScheduleReceipt(data);
+      } catch {
+        throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
+      }
     },
     onError: (error: Error): void => {
       if (isStepUpCancelled(error)) return;
@@ -432,7 +427,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
       await logout();
       await identitySignOut({ redirectUrl: destination });
     } catch (err) {
-      // The account is already deleted server-side by the time this runs
+      // Account deletion is already scheduled server-side by the time this runs
       // (it only fires after the mutation above succeeded), if
       // logout()/identitySignOut() fail here (e.g. a network blip), fall back
       // to a hard navigation instead of leaving the user stuck on a dead
@@ -490,10 +485,7 @@ export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus
   });
 }
 
-export interface CancelAccountDeletionResult {
-  message: string;
-  cancelled: boolean;
-}
+export type CancelAccountDeletionResult = AccountDeletionCancellationReceipt;
 
 /**
  * Cancels a pending account deletion inside its grace window. On success the
@@ -509,24 +501,29 @@ export function useCancelAccountDeletion(): UseMutationResult<
   const queryClient: QueryClient = useQueryClient();
 
   return useMutation<CancelAccountDeletionResult, Error, void>({
+    retry: false,
     mutationFn: async (): Promise<CancelAccountDeletionResult> => {
-      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const res = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
-        method: 'POST',
-        headers,
-      });
+      let res: Response;
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        res = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
+          method: 'POST',
+          headers,
+        });
+      } catch {
+        throw new Error(DELETION_CANCELLATION_UNCONFIRMED);
+      }
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
           readDeleteAccountError(data, 'Could not cancel account deletion.', res.status),
         );
       }
-      const record =
-        data !== null && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-      return {
-        message: readDeleteAccountMessage(data, 'Account deletion cancelled.'),
-        cancelled: record['cancelled'] === true,
-      };
+      try {
+        return parseAccountDeletionCancellationReceipt(data);
+      } catch {
+        throw new Error(DELETION_CANCELLATION_UNCONFIRMED);
+      }
     },
     onSuccess: (): void => {
       queryClient.setQueryData<AccountDeletionStatus>(
