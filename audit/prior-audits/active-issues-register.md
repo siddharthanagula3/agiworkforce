@@ -9520,6 +9520,11 @@ timestamp-version limitations and postcommit/cache failure uncertainty remain.
 No tests, lint, typechecks, builds, formatters, application/database/provider
 actions, push or deployment ran.
 
+The subsequent `WEB-SKILL-INSTALL-SETTINGS-ISOLATION-01` correction brings the
+skill-install writer under locked merge and the same exact size serializer.
+Sync and workspace writers still have their own size policies; no database-wide
+size invariant is established.
+
 ## WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
 Status: Coupled training/telemetry lane remains OPEN. US-only ownership was
@@ -12165,3 +12170,124 @@ ownership is subsequently source-corrected under
 provides neither last-intent nor exactly-once guarantees. No tests, lint,
 typechecks, builds, formatters, app/native execution, live account/provider/
 database actions, push or deployment ran.
+
+
+## WEB-SKILL-INSTALL-SETTINGS-ISOLATION-01
+
+Severity: Medium. Status: Locked settings merge and size validation
+source-corrected on 2026-11-05; database/runtime acceptance remains open.
+Accepted production commit: `4717f2058e`.
+
+The mounted skill install and uninstall routes called `setSkillInstallOverride`,
+which opened a transaction but read the complete settings document without a row
+lock. Its later upsert replaced the complete document from that earlier snapshot.
+A concurrent preference change, including a privacy denial, could commit between
+the read and replacement and be lost. Two skill changes could similarly overwrite
+each other. Transaction membership alone did not protect the read/merge sequence.
+The service also bypassed the preferences route's final-document size policy.
+
+The service now reads an existing row with SELECT FOR UPDATE on the callback's
+scoped transaction adapter. An absent row is created directly from the intended
+override with INSERT ON CONFLICT DO NOTHING RETURNING settings. A losing insert
+rereads and locks the winner once, then recomputes the nested skills/installs
+merge. A disappeared winner fails internally rather than inventing a receipt or
+retrying indefinitely. The locked update retains other namespaces, namespace
+siblings and unrelated install overrides. Its result is derived from the stored
+RETURNING object, not the estimated payload; missing or malformed receipts fail
+inside the transaction. The canonical adapter awaits COMMIT before returning.
+
+`user-settings-payload.ts` now owns the existing JSON.stringify UTF-16-code-unit
+size policy. The preferences route delegates its unchanged validation to that
+serializer; skill writes validate their complete merged candidate through it.
+Exactly 100,000 code units are allowed. Over-limit skill requests now return the
+existing validation error before the route's audit/list phase. This deliberately
+tightens install and uninstall behavior: an already oversized account document
+can refuse even a no-op or uninstall, because uninstall stores a false override
+rather than deleting data. No silent shrinking exception or automatic deletion
+is introduced. Sync and workspace writers still do not enforce this common cap.
+
+Independent source review accepted three production and two fixture files.
+Authored unrun fixtures distinguish transaction and outer adapters, assert
+SQL/order and user predicates, model insertion conflicts and locked-current
+privacy/skill siblings, and cover vanished rows, malformed receipts, exact
+UTF-16 boundaries, combined growth and oversized no-op refusal. Route fixtures
+use the real service/error envelope with explicit successful admission mocks;
+denial remains covered. Reinstall cases require a successful absent state before
+the successful reinstall, rather than passing on default visibility. Uncertain
+commit fixtures retain a possibly committed mutation while rejecting the receipt,
+without retry or route audit. This is a modeled outcome, not database proof.
+
+PostgreSQL 18 primary transaction-isolation and explicit-locking documentation
+was reread on 2026-11-05 at the URLs recorded under
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`. The reasoning assumes ordinary
+READ COMMITTED behavior; deployed isolation, triggers, migrations, actual lock
+contention and native SQL remain unverified. A failed commit acknowledgment can
+still follow a committed write. Audit/list work after commit can fail separately.
+Other stale writers, past lost settings, cross-client last-intent order and a
+database-wide size invariant are not resolved. No tests, checks, lint, typechecks,
+builds, formatters, application/database/provider execution, push or deployment
+ran.
+
+
+## MOBILE-SECURITY-PREFERENCES-LIFETIME-01
+
+Severity: Medium. Status: Account-owned timeout, lockdown and single-device
+revocation source-corrected on 2026-11-05; native/runtime acceptance remains open.
+Accepted production commit: `1fdc30b249`.
+
+Account Security previously kept timeout and lockdown values without a matching
+request owner. An old timeout save failure could restore account A's previous
+value after B's successful hydration; B's next cycle then derived its new value
+from that stale display. Lockdown was also retained while a replacement account
+loaded. Same-owner timeout edits could overlap, and a failed initial timeout read
+became an editable default. These are client-state and mutation-intent defects,
+not demonstrated cross-account server authorization bypasses.
+
+The new screen-lifetime `useSecurityPreferences` owns both values, loading and
+mutation gates. It observes canonical account epoch, matching loaded/signed-in
+Clerk identity and Cloud mode synchronously. Retirement aborts the owner and
+replaces identity, including leave-and-return within one React batch. Unmount
+removes subscriptions and invalidates retained callbacks. New owners expose no
+retained value until their reads succeed. Timeout and lockdown each admit one
+read/save at a time; their independent fields can progress separately.
+
+Reads and saves carry the original epoch and signal through the canonical
+preference helper. A save does not assert an optimistic or rollback value: its
+completion reloads that field. Failed reloads close editing and offer GET Retry,
+not replayed mutation. An uncertain save explains that the reported value may
+still be followed by the old write. Strict parsing is opt-in for the canonical
+account/namespace readers and is removed before transport. Security reads use
+it and reject malformed settings envelopes and defined invalid timeout/lockdown
+flags. Valid absent fields retain the existing defaults. Other callers keep
+legacy parsing and no-options call shapes; failed reads no longer fabricate an
+editable timeout default on this screen.
+
+Single-device sign-out previously retained an unowned native confirmation.
+The confirmation now binds to the displayed session's owner, original epoch and
+abort signal. A synchronous ref admits one prompt/request; confirmation is
+consumed once, and Cancel or native dismissal retires only its matching prompt.
+Old callbacks and finalizers cannot dispatch against or clear a replacement
+owner. Session lists carry that owner and a request revision, so older same-owner
+responses cannot replace newer lists. Failed sign-out reports uncertainty and
+refreshes instead of promising the server did nothing. The server's target-user
+check remains authoritative. Existing password/revoke-all protections and Local
+App Lock behavior are preserved rather than generalized by this correction.
+
+Independent source review accepted four production and two fixture files.
+Authored unrun screen fixtures cover failed hydration, stale account timeout and
+lockdown saves, serialization, readback/Retry, retained confirmation retirement
+through epoch/mode/auth-loaded ABA and unmount, duplicate confirmation and cancel.
+They use mocked stores, subscriptions, services and UI primitives. Service fixtures
+exercise real preference helpers with mocked API transport for epoch/signal,
+strict parsing, invalid fields and valid missing-field defaults. Session-list
+revision behavior was source-reviewed; native lifecycle, real Clerk ordering,
+out-of-order list rendering and cross-view concurrency remain unexecuted.
+
+React effect cleanup and React Native Alert primary documentation were read on
+2026-11-05: https://react.dev/reference/react/useEffect and
+https://reactnative.dev/docs/alert. These describe API behavior, not execution
+evidence for this application. Abort does not reverse remote acceptance, and
+readback is not a server ordering barrier. Multiple screen mounts/clients are not
+globally serialized, and the broader account-security/logout lifecycle remains
+outside this slice. No tests, checks, lint, typechecks, builds, formatters,
+application/native/provider/database execution, push or deployment ran.

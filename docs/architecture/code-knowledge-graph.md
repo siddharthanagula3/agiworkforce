@@ -5068,9 +5068,46 @@ unknown commit outcomes remain outside the correction. See
 `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01` for primary documentation and
 unrun acceptance work.
 
+## Skill installation preserves locked account settings
+
+Accepted `4717f2058e` replaces the skill service's unlocked whole-document upsert
+with scoped transaction-owned read/merge/write. Existing rows are locked before
+composing nested install overrides; absent-row insert conflicts cause one locked
+reread and recomputation. Stored object receipts are required inside the
+transaction, whose adapter awaits COMMIT. The new canonical settings serializer
+retains the preferences route's exact 100,000 UTF-16-code-unit policy and now
+applies it to skill writes. This newly refuses even uninstall/no-op on an already
+oversized root; other settings writers retain their own size policies.
+
+Independent review accepted three production and two authored unrun fixture
+files, including actual service/route wiring, scoped SQL, modeled interleavings,
+receipt failures, boundary sizes and unknown commit outcome without retry/audit.
+These are not PostgreSQL execution or runtime evidence. Deployed isolation,
+postcommit audit/list failures, other writers and historical lost updates remain
+limits. See `WEB-SKILL-INSTALL-SETTINGS-ISOLATION-01`.
+
+## Mobile security settings bind display and intent to one lifetime
+
+Accepted `1fdc30b249` gives timeout and lockdown a screen-lifetime owner spanning
+canonical epoch, loaded/signed-in Clerk identity, mode, abort signal and per-field
+admission. Synchronous transitions and unmount retire stale reads, saves and
+callbacks; new owners cannot edit retained account data. Saves reconcile through
+GET, failed hydration offers Retry, and opt-in strict parsing in the canonical
+preference readers refuses malformed security state while preserving valid
+missing-field defaults and unrelated legacy callers.
+
+Single-device sign-out binds its prompt/request to the displayed session owner,
+uses a synchronous one-shot gate, and forwards epoch/signal. Session lists reject
+obsolete owners and request revisions. Existing server authorization, Local App
+Lock, password and revoke-all paths remain in their established owners. Four
+production and two unrun fixture files were independently source-reviewed. Native
+auth/UI behavior, cross-view concurrency and remote cancellation/order remain
+unverified; the reload observes a value without proving an uncertain write cannot
+finish later. See `MOBILE-SECURITY-PREFERENCES-LIFETIME-01`.
+
 ## Reconstruction boundary
 
-Only the two hundred accepted production slices traced above are represented as
+Only the two hundred two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
