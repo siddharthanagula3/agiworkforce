@@ -22,6 +22,8 @@ import {
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
   NO_PENDING_ACCOUNT_DELETION,
   parseAccountDeletionStatus,
+  parseAccountDeletionScheduleReceipt,
+  parseAccountDeletionCancellationReceipt,
   type AccountDeletionStatus,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/Text';
@@ -35,6 +37,7 @@ import {
 } from '@/src/features/settings/Common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
@@ -48,7 +51,6 @@ import {
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
-import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
@@ -64,10 +66,6 @@ function parseOrganizationId(body: unknown): string | null {
   }
   return typeof organization.id === 'string' && organization.id ? organization.id : null;
 }
-
-const ACCOUNT_DELETE_FAILED =
-  'We could not delete your account. Check your connection and try again, ' +
-  `or contact ${SUPPORT_EMAIL}.`;
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
@@ -325,7 +323,7 @@ export default function CloudAccountScreen() {
           if (cancellationInFlight.current) return;
           setDeleting(true);
           withStepUp('account.delete', null, (headers) =>
-            api.delete<{ message?: string; scheduledFor?: string }>(
+            api.delete<unknown>(
               MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
               { headers, accountEpoch: account },
             ),
@@ -338,10 +336,11 @@ export default function CloudAccountScreen() {
                 );
                 return;
               }
+              const receipt = parseAccountDeletionScheduleReceipt(res);
               await signOut().catch(() => {});
               Alert.alert(
-                res?.scheduledFor ? 'Account deletion scheduled' : 'Account deleted',
-                res?.message ?? 'Your account deletion request was completed.',
+                'Account deletion scheduled',
+                receipt.message,
               );
             })
             .catch((err: unknown) => {
@@ -375,11 +374,12 @@ export default function CloudAccountScreen() {
               }
               const is401 = err instanceof Error && err.message.includes('401');
               Alert.alert(
-                'Could not delete account',
+                is401 ? 'Session expired' : 'Could not confirm deletion scheduling',
                 is401
-                  ? 'Your session expired. Please sign in again and retry.'
-                  : ACCOUNT_DELETE_FAILED,
+                  ? 'Your session expired. Sign in to the original account and check deletion status before taking another action.'
+                  : 'The scheduling outcome is unknown. Check the refreshed status in this account before taking another action. A status check may not reflect a request still in progress.',
               );
+              void refreshDeletionStatus(account);
             })
             .finally(() => {
               if (isCloudAccountEpochCurrent(account)) setDeleting(false);
@@ -387,7 +387,7 @@ export default function CloudAccountScreen() {
         },
       },
     ]);
-  }, [captureVisibleAccount, router, signOut, withStepUp]);
+  }, [captureVisibleAccount, refreshDeletionStatus, router, signOut, withStepUp]);
 
   const handleCancelDeletion = useCallback(() => {
     const account = captureVisibleAccount();
@@ -419,29 +419,29 @@ export default function CloudAccountScreen() {
               .then((response) => {
                 if (!isCloudAccountEpochCurrent(account)) return;
                 deletionStatusRequest.current += 1;
-                if (
-                  typeof response !== 'object' || response === null ||
-                  !('cancelled' in response) || typeof response.cancelled !== 'boolean'
-                ) {
-                  throw new Error('The server did not confirm deletion status.');
-                }
+                const receipt = parseAccountDeletionCancellationReceipt(response);
                 setDeletionStatus({
                   ownerId: account.ownerId,
                   value: NO_PENDING_ACCOUNT_DELETION,
                 });
                 setDeletionStatusError(false);
                 Alert.alert(
-                  response.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
-                  response.cancelled
+                  receipt.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
+                  receipt.cancelled
                     ? 'Your account deletion was cancelled.'
                     : 'The server confirmed that no account deletion is pending.',
                 );
               })
-              .catch(() => {
+              .catch((error: unknown) => {
                 if (!isCloudAccountEpochCurrent(account)) return;
+                const expired =
+                  error instanceof ApiHttpError && error.status === 409 &&
+                  error.body?.['reason'] === 'grace_window_expired';
                 Alert.alert(
-                  'Could not confirm cancellation',
-                  'The cancellation outcome is unknown. Check the refreshed deletion status before taking another action.',
+                  expired ? 'Cancellation window closed' : 'Could not confirm cancellation',
+                  expired
+                    ? 'The server refused cancellation because the grace window has closed. Check the refreshed deletion status. This does not confirm that erasure is complete.'
+                    : 'The cancellation outcome is unknown. Check the refreshed deletion status before taking another action.',
                 );
                 void refreshDeletionStatus(account);
               })

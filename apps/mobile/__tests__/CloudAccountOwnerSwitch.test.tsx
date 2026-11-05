@@ -154,6 +154,7 @@ jest.mock('lucide-react-native', () => {
     Mail: Icon,
     Pencil: Icon,
     Smartphone: Icon,
+    RefreshCw: Icon,
     Trash2: Icon,
     Undo2: Icon,
     UserRound: Icon,
@@ -163,12 +164,20 @@ jest.mock('lucide-react-native', () => {
 import { router } from 'expo-router';
 import CloudAccountScreen from '../src/features/settings/cloud-account';
 import { useCloudProfileStore } from '../src/features/settings/cloud-account/cloudProfileStore';
-import { httpErrorFrom } from '../services/apiErrors';
+import { ApiHttpError, httpErrorFrom } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
   captureCloudAccountEpoch,
+  invalidateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+
+const scheduledReceipt = {
+  message: 'Account deletion scheduled. Sign in to cancel before the grace window ends.',
+  scheduledFor: '2026-11-06T18:00:00.000Z',
+  status: 'pending',
+  statusReason: 'Grace window pending',
+};
 
 function destructiveActionFor(title: string): () => void {
   const call = (Alert.alert as jest.Mock).mock.calls.findLast(
@@ -219,7 +228,7 @@ describe('Cloud Account destructive action ownership', () => {
       routing_preferences: {},
     });
     mockPatchMe.mockResolvedValue({});
-    mockCancelDeletion.mockResolvedValue({ cancelled: true });
+    mockCancelDeletion.mockResolvedValue({ message: 'Account deletion cancelled.', cancelled: true });
     mockAppMode = 'cloud';
     mockSyncStatus = 'idle';
   });
@@ -383,7 +392,7 @@ describe('Cloud Account destructive action ownership', () => {
       await Promise.resolve();
     });
     await act(async () => {
-      resolveDeletion({ message: 'Account A deletion scheduled' });
+      resolveDeletion(scheduledReceipt);
       await Promise.resolve();
     });
 
@@ -394,20 +403,67 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
-  it('reports immediate erasure accurately when the server did not schedule deletion', async () => {
-    mockDeleteAccount.mockResolvedValueOnce({ message: 'Account deleted successfully.' });
+  it.each([
+    null,
+    {},
+    { message: 'Account deleted successfully.' },
+    { ...scheduledReceipt, message: ' ' },
+    { ...scheduledReceipt, scheduledFor: 'tomorrow' },
+    { ...scheduledReceipt, status: 'deleted' },
+    { ...scheduledReceipt, statusReason: '' },
+    { ...scheduledReceipt, message: undefined },
+    { ...scheduledReceipt, scheduledFor: undefined },
+    { ...scheduledReceipt, status: undefined },
+    { ...scheduledReceipt, statusReason: undefined },
+    { ...scheduledReceipt, error: 'Refused' },
+    { ...scheduledReceipt, reason: 'refused' },
+    new SyntaxError('Invalid JSON'),
+    new Error('Response lost'),
+  ])('reconciles unconfirmed scheduling %p without signing out or replaying', async (outcome) => {
+    if (outcome instanceof Error) mockDeleteAccount.mockRejectedValueOnce(outcome);
+    else mockDeleteAccount.mockResolvedValueOnce(outcome);
     render(<CloudAccountScreen />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    const account = captureCloudAccountEpoch();
     fireEvent.press(screen.getByLabelText('Delete Account'));
-    await act(async () => {
-      destructiveActionFor('Delete Account')();
-    });
+    await act(async () => { destructiveActionFor('Delete Account')(); });
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Could not confirm deletion scheduling',
+      expect.stringContaining('may not reflect a request still in progress'),
+    );
+    expect(mockGetDeletionStatus).toHaveBeenLastCalledWith('/api/user/delete-account', { accountEpoch: account });
+    expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).not.toHaveBeenCalledWith('Account deleted', expect.anything());
+  });
 
+  it('keeps actions unavailable when unknown scheduling cannot be reconciled', async () => {
+    mockDeleteAccount.mockRejectedValueOnce(new Error('Response lost'));
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    const account = captureCloudAccountEpoch();
+    mockGetDeletionStatus.mockRejectedValueOnce(new Error('Status unavailable'));
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => { destructiveActionFor('Delete Account')(); });
+    expect(mockGetDeletionStatus).toHaveBeenLastCalledWith('/api/user/delete-account', { accountEpoch: account });
+    expect(screen.queryByLabelText('Delete Account')).toBeNull();
+    expect(screen.queryByLabelText('Cancel Account Deletion')).toBeNull();
+    expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy();
+    expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('confirms scheduling after intentional local sign-out invalidates the original epoch', async () => {
+    mockDeleteAccount.mockResolvedValueOnce({ ...scheduledReceipt, unrelated: 'allowed' });
+    mockSignOut.mockImplementationOnce(async () => { invalidateCloudAccount(); });
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => { destructiveActionFor('Delete Account')(); });
     expect(mockSignOut).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).toHaveBeenCalledWith('Account deleted', 'Account deleted successfully.');
+    expect(captureCloudAccountEpoch()).toBeNull();
+    expect(Alert.alert).toHaveBeenCalledWith('Account deletion scheduled', scheduledReceipt.message);
+    expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
   });
 
   it('shows why a paid plan blocks deletion and offers Billing', async () => {
@@ -572,7 +628,7 @@ describe('Cloud Account destructive action ownership', () => {
   });
 
   it('binds deletion requests to the account whose confirmation was accepted', async () => {
-    mockDeleteAccount.mockResolvedValueOnce({ scheduledFor: '2026-09-28T18:00:00.000Z' });
+    mockDeleteAccount.mockResolvedValueOnce(scheduledReceipt);
     render(<CloudAccountScreen />);
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
     const account = captureCloudAccountEpoch();
@@ -603,7 +659,7 @@ describe('Cloud Account destructive action ownership', () => {
     });
     mockGetDeletionStatus.mockReturnValueOnce(new Promise((resolve) => { settleStatus = resolve; }));
     fireEvent.press(screen.getByLabelText('Check deletion status'));
-    await act(async () => { settleCancellation({ cancelled }); });
+    await act(async () => { settleCancellation({ message: 'Cancellation receipt', cancelled, unrelated: true }); });
     expect(Alert.alert).toHaveBeenLastCalledWith(
       cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
       expect.any(String),
@@ -614,7 +670,15 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
   });
 
-  it.each([null, {}, { cancelled: 'false' }, new Error('Response lost')])(
+  it.each([
+    null, {}, { cancelled: true },
+    { message: '', cancelled: false },
+    { message: 'receipt', cancelled: 'false' },
+    { message: 'receipt', cancelled: true, error: 'refused' },
+    { message: 'receipt', cancelled: false, reason: 'grace_window_expired' },
+    new SyntaxError('Invalid JSON'),
+    new Error('Response lost'),
+  ])(
     'reconciles unknown cancellation %p without claiming deletion is still scheduled', async (outcome) => {
       mockGetDeletionStatus.mockResolvedValueOnce({
         pending: true, canCancel: true,
@@ -642,6 +706,32 @@ describe('Cloud Account destructive action ownership', () => {
     },
   );
 
+  it('keeps an expired-window refusal separate from a no-pending receipt', async () => {
+    const pending = {
+      pending: true, canCancel: true,
+      requestedAt: '2026-11-04T18:00:00.000Z', scheduledFor: '2026-11-05T18:00:00.000Z',
+    };
+    mockGetDeletionStatus.mockResolvedValueOnce(pending);
+    mockCancelDeletion.mockRejectedValueOnce(new ApiHttpError(
+      'The cancellation window has closed.', 409, null,
+      { body: { reason: 'grace_window_expired', cancelled: false } },
+    ));
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    const account = captureCloudAccountEpoch();
+    mockGetDeletionStatus.mockResolvedValueOnce({ ...pending, canCancel: false });
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    await act(async () => {
+      const buttons = (Alert.alert as jest.Mock).mock.calls.findLast(
+        ([title]) => title === 'Cancel account deletion?',
+      )?.[2] as Array<{ text?: string; onPress?: () => void }>;
+      buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
+    });
+    expect(Alert.alert).toHaveBeenLastCalledWith('Cancellation window closed', expect.stringContaining('does not confirm that erasure is complete'));
+    expect(mockGetDeletionStatus).toHaveBeenLastCalledWith('/api/user/delete-account', { accountEpoch: account });
+    expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Delete Account')).toBeNull();
+  });
 
   it('keeps deletion disabled when a refresh finds no pending schedule during cancellation', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce({
@@ -664,7 +754,7 @@ describe('Cloud Account destructive action ownership', () => {
     fireEvent.press(screen.getByLabelText('Delete Account'));
     expect(Alert.alert).not.toHaveBeenCalledWith('Delete Account', expect.anything(), expect.anything());
     expect(mockDeleteAccount).not.toHaveBeenCalled();
-    await act(async () => { settleCancellation({ cancelled: false }); });
+    await act(async () => { settleCancellation({ message: 'No account deletion pending.', cancelled: false }); });
     fireEvent.press(screen.getByLabelText('Delete Account'));
     expect(Alert.alert).toHaveBeenCalledWith('Delete Account', expect.anything(), expect.anything());
   });
@@ -678,7 +768,7 @@ describe('Cloud Account destructive action ownership', () => {
       await new Promise<void>((resolve) => { resume = resolve; });
       return send({ 'x-step-up-token': 'fixture-proof' });
     });
-    mockDeleteAccount.mockResolvedValueOnce({ scheduledFor: '2026-09-28T18:00:00.000Z' });
+    mockDeleteAccount.mockResolvedValueOnce(scheduledReceipt);
     const view = render(<CloudAccountScreen />);
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
     const originalAccount = captureCloudAccountEpoch();

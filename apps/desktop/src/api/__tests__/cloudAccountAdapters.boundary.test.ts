@@ -107,6 +107,35 @@ describe('Desktop Managed Cloud account adapter boundaries', () => {
     await expect(pending).rejects.toThrow('account changed');
   });
 
+  it.each(['account-b:2', 'account-a:2'])(
+    'rejects deletion after its body resolves under %s', async (nextBoundary) => {
+      const body = deferred<unknown>();
+      mocks.fetch.mockResolvedValueOnce({ ok: true, status: 200, json: () => body.promise });
+      const pending = requestCloudAccountDeletion();
+      await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalledOnce());
+      boundaryKey = nextBoundary;
+      body.resolve({
+        message: 'Deletion scheduled', scheduledFor: '2026-11-06T18:00:00.000Z',
+        status: 'pending', statusReason: 'Grace window pending',
+      });
+      await expect(pending).rejects.toThrow('account changed');
+      expect(mocks.fetch).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['network', 'json'])(
+    'preserves the boundary failure before wrapping %s uncertainty', async (stage) => {
+      const fail = async () => {
+        boundaryKey = 'account-b:2';
+        throw new Error('Response lost');
+      };
+      if (stage === 'network') mocks.fetch.mockImplementationOnce(fail);
+      else mocks.fetch.mockResolvedValueOnce({ ok: true, status: 200, json: fail });
+      await expect(requestCloudAccountDeletion()).rejects.toThrow('account changed');
+      expect(mocks.fetch).toHaveBeenCalledOnce();
+    },
+  );
+
   it('rejects a destructive response after a same-account session epoch changes', async () => {
     const response = deferred<Response>();
     mocks.fetch.mockReturnValue(response.promise);

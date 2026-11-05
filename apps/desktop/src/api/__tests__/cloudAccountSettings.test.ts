@@ -634,17 +634,62 @@ describe('cloudAccountSettings', () => {
   });
 
   describe('account deletion', () => {
-    it('reports the server message rather than promising a grace window', async () => {
-      mocks.cloudFetch.mockResolvedValue(
-        jsonResponse({ message: 'Account deletion scheduled for 24 hours from now' }),
-      );
+    const receipt = {
+      message: 'Account deletion scheduled for 24 hours from now',
+      scheduledFor: '2026-11-06T18:00:00.000Z',
+      status: 'pending',
+      statusReason: 'Grace window pending',
+    };
 
-      await expect(requestCloudAccountDeletion()).resolves.toEqual({
-        message: 'Account deletion scheduled for 24 hours from now',
-      });
+    it('returns a complete scheduling receipt and tolerates unrelated fields', async () => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ ...receipt, unrelated: true }));
+      await expect(requestCloudAccountDeletion()).resolves.toEqual(receipt);
       const { url, init } = lastRequest();
       expect(url).toBe('https://cloud.agi.example/api/user/delete-account');
       expect(init.method).toBe('DELETE');
+    });
+
+    it.each([
+      null, {}, { message: 'Deleted' },
+      { ...receipt, scheduledFor: 'tomorrow' },
+      { ...receipt, status: 'deleted' },
+      { ...receipt, message: '' },
+      { ...receipt, statusReason: '' },
+      { ...receipt, message: undefined },
+      { ...receipt, scheduledFor: undefined },
+      { ...receipt, status: undefined },
+      { ...receipt, statusReason: undefined },
+      { ...receipt, error: 'refused' },
+      { ...receipt, reason: 'refused' },
+    ])('rejects unconfirmed scheduling receipt %p without replay', async (body) => {
+      mocks.cloudFetch.mockResolvedValue(jsonResponse(body));
+      await expect(requestCloudAccountDeletion()).rejects.toThrow('Could not confirm account deletion scheduling');
+      expect(mocks.cloudFetch).toHaveBeenCalledOnce();
+    });
+
+    it.each(['network', 'json'])('reports %s ambiguity without replay', async (stage) => {
+      if (stage === 'network') mocks.cloudFetch.mockRejectedValueOnce(new Error('Response lost'));
+      else mocks.cloudFetch.mockResolvedValueOnce({
+        ok: true, json: async () => { throw new SyntaxError('Invalid JSON'); },
+      });
+      await expect(requestCloudAccountDeletion()).rejects.toThrow('original account’s web settings');
+      expect(mocks.cloudFetch).toHaveBeenCalledOnce();
+      expect(mocks.assertManagedCloudBoundary).toHaveBeenCalled();
+    });
+
+    it.each([
+      ['STEP_UP_REQUIRED', 'confirm it is you'],
+      ['MFA_REQUIRED', 'Two-factor required'],
+    ])('preserves the %s handoff', async (code, message) => {
+      mocks.cloudFetch.mockResolvedValueOnce(jsonResponse({ error: { code, message: 'Two-factor required' } }, 403));
+      await expect(requestCloudAccountDeletion()).rejects.toThrow(message);
+      expect(mocks.cloudFetch).toHaveBeenCalledOnce();
+    });
+
+    it('preserves an explicit subscription refusal', async () => {
+      mocks.cloudFetch.mockResolvedValueOnce(jsonResponse({ error: 'Cancel your subscription first.', reason: 'active_subscription' }, 409));
+      await expect(requestCloudAccountDeletion()).rejects.toThrow('Cancel your subscription first.');
+      expect(mocks.cloudFetch).toHaveBeenCalledOnce();
     });
 
     it('throws with the server error when deletion fails', async () => {
