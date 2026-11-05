@@ -3036,57 +3036,48 @@ has expired.
 **Validation:** resolve-on-ingest unit tests, plus a grounded research turn
 asserting no provider host appears in any citation href.
 
-### `AGI-22` There is no server-side record of provider-jurisdiction consent
+### `AGI-22` Provider-consent coverage across routes and surfaces remains incomplete
 
 **Severity:** P2
-**Status:** Open, and larger than first recorded.
+**Status:** Requalified by source review on 2026-11-05. The earlier blanket claim
+that no server-owned provider consent record exists is superseded. Complete
+cross-surface enforcement is not established.
 **Area:** Compliance, routing
-**Corrected root cause:** The 2026-08-26 scan and the first draft of this entry
-both said the gate exists and nothing calls it, and that the fix is one call in
-the routing request builder. Checked on 2026-09-08, that is wrong in a way that
-matters. `isProviderRoutingAllowed` takes a `ConsentLedger`, and the only
-implementation of one is `apps/mobile/services/complianceLedger.ts`, which reads
-device storage. There is no table, no column, no API and no web or desktop
-surface that records this consent. The server has nothing to consult, so the
-call cannot be added: what is missing is the record, not the read.
-**Current behavior:** Auto routing can place a conversation on DeepSeek,
-Moonshot, Qwen or Zhipu with no consent recorded anywhere the server can see.
-Mobile's consent is real but local to one device and invisible to the backend
-that does the routing.
-**What now partially covers it:** the `usOnly` overlay is threaded as of this
-pass, and the providers it excludes are `deepseek`, `qwen`, `moonshot`, `zhipu`
-and `minimax`, which is the Chinese-HQ list plus one. A `max` or `enterprise`
-user who sets the preference is now genuinely excluded from all four. That is a
-user preference, not a compliance gate, and it does not apply below those tiers.
-**What the real fix needs, in order:** a durable per-user consent record with
-its disclosure version; an API to write it; a surface on web and desktop to
-collect it; then the read in `buildWebCloudAutoRoutingRequest` beside `usOnly`
-and `zeroDataRetentionOnly`. Whether existing users are grandfathered or
-blocked on their next turn is a disclosure decision, not an engineering one.
-**Evidence requalified October 9, 2026:** The September 8 claim of zero
-`@agiworkforce/compliance` imports anywhere in `apps/web` is contradicted by
-current source. `apps/web/lib/server/data-region.ts:5-15,41-45,311-317` imports
-and uses shared region selection and route exclusions;
-`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:15-19,1725-1728`
-imports and uses the shared transport-exclusion helper. These region-policy
-consumers do not establish a server-owned provider-consent record or a mounted
-jurisdiction-consent gate. The earlier provider/tier/routing and migration-absence
-claims above are dated September 8 assessments, not a new exhaustive current
-absence proof or live route test. The current compliance source review (`audit/checklist/reviews/coverage-shared-contract-compliance-2026-10-09-009.json`, untracked)
-keeps the consent/gate gap separate from existing region-policy imports; no
-legal-compliance, deployed-account or provider-routing acceptance is inferred.
-**User impact:** a consent the product presents on mobile is not enforced by the
-service that routes.
-**Dependencies:** Founder decision on the disclosure and on existing users,
-before any of it.
-**Acceptance criteria:** without a recorded consent, no Chinese-HQ provider is
-selected for any tier, on any surface.
-**Validation:** auto-route conformance fixtures on the web path, plus a
-migration test over the consent record.
-**Already tracked as:** `COMPLIANCE-LLM-GATE-SURFACE-COVERAGE-01` in
-`known-flaws.md`. That row's summary said only "compliance llm gate surface
-coverage", which is why a second sweep on 2026-09-08 reported this as a new
-finding; the row now names the jurisdiction angle and points here.
+**Current evidence:** `apps/web/lib/server/named-provider-consent.ts` reads the
+`provider_consent` namespace from account-owned `user_settings.settings`.
+`apps/web/features/models/lib/named-provider-consent-client.ts` writes versioned
+named-provider choices through the settings preferences API. A dedicated new
+consent table is therefore not a prerequisite for this existing path.
+
+The quota-first path delegates to `serveFreeQuotaTurn`. In
+`apps/web/lib/server/free-quota-turn.ts`, the provider notice must exist and its
+provider/version must match an accepted account consent before provider dispatch.
+A missing, revoked, stale or mismatched consent refuses the lane; a read failure
+also refuses. The quota-first wrapper may then return control to ordinary
+routing. This is not proof that the eventual ordinary route honors the same
+named-provider policy. Account-consent storage and this Free lane must not be
+reported as absent merely because another routing helper has no caller.
+
+**Open boundary:** Mobile named-provider switches still use the local MMKV ledger
+and the first-run disclosure hash in `apps/mobile/services/providerConsent.ts`
+and `complianceLedger.ts`. That is distinct from the server's per-provider notice
+version. These switches do not grant or revoke the account record, so an account
+accepted on Web and a local Mobile-off choice can disagree. The direct Mobile
+Free quota sender in `services/streaming.ts::streamFreeQuotaChat` checks general
+Cloud-send consent but does not call `ensureLlmGateOpen`; the server still checks
+its account consent. The intended precedence and convergence need a coordinated
+repair before claiming local-off semantics across devices.
+
+**Acceptance:** inventory normal Auto, direct provider, fallback, Free quota and
+all mounted surface entry points against the intended current consent policy.
+Converge account/device ownership, versioning and revocation without silently
+converting a general disclosure into a named-provider grant. Add route-specific
+negative and cross-surface acceptance coverage. The source review establishes
+neither universal bypass nor universal compliance, deployed consent state, legal
+acceptance or provider-routing behavior.
+**Tracked as:** `COMPLIANCE-LLM-GATE-SURFACE-COVERAGE-01` and
+`FREE-QUOTA-FIRST-MOBILE-CONSENT-01` in `known-flaws.md`. New quota-first negative
+fixtures are authored but unrun; no product execution was permitted.
 
 ### `AGI-23` A route the account's own data policy refuses is still offered
 
@@ -12612,3 +12603,43 @@ not silently added under that old contract. Keep custom exclusions and explicit
 user confirmation intact. Integrate with the permission-generation fence and
 exercise upstream failure, absent targets, mixed states, permission failure and
 retry before representing successful disconnect. No live service was contacted.
+
+## CONNECTOR-OAUTH-PARTIAL-CREDENTIAL-01
+
+Source correction `18883a1e24`, independently reviewed on 2026-11-05. The previous
+revocation decoder selected encrypted refresh credentials before decrypting;
+corrupt refresh ciphertext therefore discarded a readable access token. It now
+decodes both independently, prefers readable refresh and otherwise returns one
+access fallback with the correct hint and no duplicate companion. The account
+key and discovered-provider metadata are preserved.
+
+Unreadable refresh still marks disconnect cleanup incomplete, even when access
+revocation succeeds. Missing/unreadable access beside readable refresh remains
+incomplete too. Neither local deletion nor provider acceptance of one credential
+proves complete upstream revocation. Account erasure receives the same readable
+fallback, but its existing counts describe returned account outcomes and do not
+establish that every stored credential was revoked; reporting/locking semantics
+were not changed.
+
+Authored unrun fixtures cover broken, empty and wrong-purpose refresh, isolated
+incomplete propagation, corrupt/missing companions, unreadable pairs, registered
+and discovered cleanup, no companion duplication and erasure count semantics.
+No live provider, database, test, lint, typecheck or build ran. Runtime acceptance
+and the separately recorded coordinated connector lifecycle issues remain open.
+
+## FREE-QUOTA-FIRST-MOBILE-CONSENT-01
+
+Requalified on 2026-11-05. The old claim that quota-first never reads named-provider
+consent is contradicted by its call to the shared Free quota executor, which
+checks account consent before dispatch. The old first-run disclosure wording is
+also no longer current evidence. The existing lane opt-in and connector-tools
+conditions remain; this review found no Mobile sender enabling quota-first and
+does not infer release status from source.
+
+The remaining issue is account/device consent convergence, described in AGI-22.
+A local Mobile-off choice is not an account revocation, and local disclosure
+versions are not server notice versions. Do not enable Mobile quota-first on the
+assumption that these choices already agree. The shared server check is a real
+control, but its refusal returning to ordinary routing is not proof of policy
+coverage on the eventual route. Quota-first negative fixtures are authored and
+unrun, not a live routing or legal-compliance claim.

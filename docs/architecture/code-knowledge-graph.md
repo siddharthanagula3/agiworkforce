@@ -5185,9 +5185,24 @@ claims permission cleanup despite failure. Those paths remain unchanged pending
 the coordinated repair. See the CONNECTOR and SUPPORT-CONNECTOR entries in
 `audit/prior-audits/active-issues-register.md` for evidence and acceptance.
 
+## Connector cleanup retains readable credentials after partial corruption
+
+Accepted `18883a1e24` independently decrypts access and refresh credentials for
+revocation, retaining a readable access fallback when refresh cannot be opened.
+Readable refresh remains preferred; metadata and one returned credential entry
+per account remain intact. Disconnect still reports incomplete upstream cleanup for unreadable
+refresh, even after successful access revocation. Account-erasure reporting and
+locking were not expanded. Production and authored unrun fixtures received
+independent source review; real provider/database acceptance remains open.
+
+A separate source requalification confirms quota-first calls the shared executor's
+account-owned named-provider consent gate. New negative fixtures remain unrun.
+The older missing-server-record assertion is not current; Mobile/device consent
+convergence and non-Free-quota route coverage remain open under AGI-22.
+
 ## Reconstruction boundary
 
-Only the two hundred seven accepted production slices traced above are represented as
+Only the two hundred eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
