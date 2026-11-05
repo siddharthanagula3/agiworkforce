@@ -74,16 +74,15 @@ export async function addCsrfHeaders(
   headers: HeadersInit = {},
   mintedToken?: string,
 ): Promise<HeadersInit> {
+  const snapshot = new Headers(headers);
   const token = mintedToken ?? (await getCsrfToken());
   const build = process.env['NEXT_PUBLIC_APP_VERSION']?.trim();
 
-  return {
-    ...headers,
-    'x-csrf-token': token,
-    ...(build ? { [CLIENT_VERSION_HEADER]: build } : {}),
-    [API_VERSION_REQUEST_HEADER]: API_CONTRACT_VERSION,
-    [REQUEST_ID_HEADER]: newRequestId(),
-  };
+  snapshot.set('x-csrf-token', token);
+  if (build) snapshot.set(CLIENT_VERSION_HEADER, build);
+  snapshot.set(API_VERSION_REQUEST_HEADER, API_CONTRACT_VERSION);
+  snapshot.set(REQUEST_ID_HEADER, newRequestId());
+  return Object.fromEntries(snapshot.entries());
 }
 
 export function clearCsrfToken(): void {
