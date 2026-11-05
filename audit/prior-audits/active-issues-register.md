@@ -12800,8 +12800,9 @@ code is unchanged for this finding; no service or runtime was exercised.
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
 
 Severity: Medium. Bounded source correction `897e894683` independently reviewed
-on 2026-11-05; fixtures unrun. Database/RLS acceptance and durable producer
-capture remain open.
+on 2026-11-05, with terminal-receipt correction `028c557767` independently
+source-reviewed later that day; fixtures unrun. Database/RLS acceptance, durable
+producer capture and delivery cancellation remain open.
 
 `lib/services/developer-webhook-service.ts::recordDeliveries` previously committed
 each delivery row before independently enqueuing its background job. An enqueue
@@ -12845,6 +12846,36 @@ provider delivery or uncertain-commit behavior. Later authorized acceptance must
 cover late fan-out failure, no-row insertion, enqueue conflict, commit interruption,
 Personal and organization scopes, and worker recovery. No tests, lint, typechecks,
 builds, database/provider calls, push or deployment ran.
+
+The later terminal-receipt correction adds the existing success-preserving
+predicate to the disabled-endpoint UPDATE. An immediate after-response attempt
+and a queued attempt may overlap. One can read pending/enabled and send, while
+another reads pending/disabled; without the predicate, the disabled update can
+overwrite the first attempt's already-committed successful receipt with failed.
+Both normal outcome persistence and disabled persistence now refuse to modify a
+delivered row. Owner predicates and all success metadata remain intact. The
+disabled-undelivered path still records its existing failure, without a send.
+
+The new unrun fixture invokes the exported attempt function twice, delays its
+mocked HTTP result and the disabled UPDATE, then permits actual success-persistence
+source to finish before resuming the disabled write. Its adapter models the row
+predicate, so removal would overwrite the receipt and fail the state comparison.
+Additional source-authored controls cover disabled-undelivered, already-delivered,
+missing and other-owner rows. This is an interleaving model, not proof of database
+locking, RLS or transport behavior. It does not prevent duplicate sends or stop a
+request already started before disabling or deleting an endpoint.
+
+A separate source-confirmed cancellation boundary remains uncorrected:
+`deliverDeveloperWebhookJob` does not pass `context.signal` to the attempt or
+outbound request. `job-drain.ts` can acknowledge a cancellation through its
+Promise race while delayed handler work continues. The outbound request has its
+own timeout but can start after delayed lookup/DNS work even after the worker
+signal aborts. Future correction must propagate cancellation to checkpoints and
+transport while preserving the cancellation reason, not report it as an ordinary
+retryable network failure. The immediate callback is outside queued-job
+cancellation; worker signal plumbing alone would not establish cancellation for
+the entire delivery. Already-sent external effects cannot be undone. No service
+or runtime was exercised for this finding or the terminal-receipt correction.
 
 ## WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01
 

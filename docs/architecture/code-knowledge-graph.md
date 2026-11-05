@@ -5251,6 +5251,16 @@ source-confirmed organization mismatch still rejects these null-organization job
 when the caller has an organization selected. No Personal rebinding was added.
 See `WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01` for pending acceptance.
 
+Accepted `028c557767` also protects an already-delivered receipt from the
+disabled-endpoint persistence path. Both outcome UPDATE paths now retain terminal
+success under overlapping immediate/queued attempts. Independently source-reviewed,
+unrun fixtures drive both public attempts with deferred network/write boundaries
+and verify that the successful receipt remains unchanged. They do not prove real
+database locking or transport behavior. Duplicate sends, already-started external
+effects and endpoint changes remain separate. The worker signal is currently not
+propagated to delivery, and the immediate callback is outside queue cancellation;
+that source-confirmed gap remains open rather than being hidden by this guard.
+
 The same audit records `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01` without changing
 product code: user-global projects and workspace-scoped keys do not share archive
 coverage, and issuance/rotation need coordinated project-first admission. The
@@ -5259,7 +5269,7 @@ The earlier support rotation atomicity correction retains its narrower scope.
 
 ## Reconstruction boundary
 
-Only the two hundred eleven accepted production slices traced above are represented as
+Only the two hundred twelve accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
