@@ -3,7 +3,7 @@
 import {
   MANAGED_MEMORY_MAX_PAGE_SIZE,
   parseManagedMemoryItemResponse,
-  parseManagedMemoryListResponse,
+  parseManagedMemoryStrictPageResponse,
   parseManagedMemoryWriteResponse,
   type ManagedMemoryRecord,
   type ManagedMemoryWriteResponse,
@@ -180,7 +180,7 @@ export function createCloudMemoryController(owner: WorkspaceOwner, input: Manage
       for (let offset = 0; offset <= MAX_OFFSET; offset += MANAGED_MEMORY_MAX_PAGE_SIZE) {
         const page = await json(authority,
           `${MEMORY_PATH}?limit=${MANAGED_MEMORY_MAX_PAGE_SIZE}&offset=${offset}`,
-          { method: 'GET', cache: 'no-store' }, parseManagedMemoryListResponse);
+          { method: 'GET', cache: 'no-store' }, parseManagedMemoryStrictPageResponse);
         rows.push(...page.memories);
         if (!page.hasMore) {
           authority.assertCurrent();

@@ -147,6 +147,43 @@ describe('cloud memory owner source fixtures (unexecuted)', () => {
     expect(memory.getSnapshot()).toMatchObject({ facts: [], syncStatus: 'error' });
   });
 
+  it.each([
+    { memories: [record('replacement')] },
+    { memories: [record('replacement')], hasMore: 'false' },
+    { memories: [record('replacement'), null], hasMore: false },
+  ])('retains confirmed facts and revision after a malformed first page %#', async (page) => {
+    const { memory } = controller();
+    transport.mockResolvedValueOnce(response({ memories: [record('confirmed')], hasMore: false }));
+    await memory.hydrateFromServer();
+    const confirmed = memory.getSnapshot();
+    transport.mockResolvedValueOnce(response(page));
+    await expect(memory.hydrateFromServer()).rejects.toThrow();
+    expect(memory.getSnapshot()).toMatchObject({
+      facts: confirmed.facts, revision: confirmed.revision, syncStatus: 'error', writeBlocked: false,
+    });
+    expect(memory.getSnapshot().facts).toBe(confirmed.facts);
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { memories: [record('last')] },
+    { memories: [record('last')], hasMore: null },
+    { memories: [record('last'), null], hasMore: false },
+  ])('discards accumulated pages when a later receipt is malformed %#', async (page) => {
+    const { memory } = controller();
+    transport.mockResolvedValueOnce(response({ memories: [record('confirmed')], hasMore: false }));
+    await memory.hydrateFromServer();
+    const confirmed = memory.getSnapshot();
+    transport.mockResolvedValueOnce(response({ memories: [record('partial')], hasMore: true }))
+      .mockResolvedValueOnce(response(page));
+    await expect(memory.hydrateFromServer()).rejects.toThrow();
+    expect(memory.getSnapshot()).toMatchObject({
+      facts: confirmed.facts, revision: confirmed.revision, syncStatus: 'error', writeBlocked: false,
+    });
+    expect(memory.getSnapshot().facts).toBe(confirmed.facts);
+    expect(transport).toHaveBeenCalledTimes(3);
+  });
+
   it('serializes a mutation and its refresh behind an active read', async () => {
     const { memory } = controller();
     const read = deferred<Response>();
@@ -302,6 +339,30 @@ describe('cloud memory owner source fixtures (unexecuted)', () => {
     await expect(memory.adapter(alwaysCurrent).add('Saved')).resolves.toEqual(record('acknowledged'));
     expect(memory.getSnapshot()).toMatchObject({ facts: [{ id: 'acknowledged', text: 'Saved acknowledged' }], syncStatus: 'error', writeBlocked: false, revision: 1 });
     expect(transport.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
+  it.each(['add', 'update', 'remove', 'clear'] as const)('keeps acknowledged %s successful after a malformed refresh', async (operation) => {
+    const { memory } = controller();
+    transport.mockResolvedValueOnce(response({ memories: [record('first'), record('second')], hasMore: false }));
+    await memory.hydrateFromServer();
+    const revision = memory.getSnapshot().revision;
+    const receipt = operation === 'add' ? { memory: record('added') }
+      : operation === 'update' ? { memory: { ...record('first'), content: 'Updated' } }
+      : operation === 'remove' ? { success: true } : { deleted: 2 };
+    transport.mockResolvedValueOnce(response(receipt))
+      .mockResolvedValueOnce(response({ memories: [record('partial')], hasMore: true }))
+      .mockResolvedValueOnce(response({ memories: [record('last'), null], hasMore: false }));
+    const adapter = memory.adapter(alwaysCurrent);
+    if (operation === 'add') await expect(adapter.add('Saved')).resolves.toEqual(record('added'));
+    else if (operation === 'update') await expect(adapter.update('first', 'Updated')).resolves.toBeDefined();
+    else if (operation === 'remove') await expect(adapter.remove('first')).resolves.toBeDefined();
+    else await expect(adapter.clear()).resolves.toBeDefined();
+    expect(memory.getSnapshot()).toMatchObject({ syncStatus: 'error', writeBlocked: false, revision: revision + 1 });
+    expect(memory.getSnapshot().facts.map((fact) => fact.text)).toEqual(operation === 'add'
+      ? ['Saved added', 'Saved first', 'Saved second'] : operation === 'update'
+      ? ['Updated', 'Saved second'] : operation === 'remove' ? ['Saved second'] : []);
+    expect(transport.mock.calls.filter(([, init]) => init?.method !== 'GET')).toHaveLength(1);
+    expect(transport).toHaveBeenCalledTimes(4);
   });
 
   it('does not reopen a mutation marker for its acknowledged-write refresh', async () => {
