@@ -202,11 +202,14 @@ async function handleCreateConversation(request: NextRequest) {
       .asUserSafe();
   }
 
+  const bodyText = await request.text();
   let rawBody: unknown = {};
-  try {
-    rawBody = await request.json();
-  } catch {
-    // Empty body is fine - defaults will be applied by schema
+  if (bodyText !== '') {
+    try {
+      rawBody = JSON.parse(bodyText);
+    } catch {
+      throw createError.validation('Invalid JSON body');
+    }
   }
 
   const validationResult = CreateConversationSchema.safeParse(rawBody);
