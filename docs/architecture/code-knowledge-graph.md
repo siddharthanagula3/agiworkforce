@@ -4248,9 +4248,32 @@ metadata, spread compatibility and early invalid-name rejection. Two casing-only
 assertions now use HTTP reads. No tests, lint, typechecks, builds, network, push or
 deploy ran. See `WEB-CSRF-HEADER-CONTRACT-01`.
 
+## Cleared CSRF acquisitions cannot republish or retire replacements
+
+Accepted commit `9fc14736e41889db7533081c05a9dca7e8739e53` gives each pending
+browser token acquisition an owned promise and abort/retirement boundary. Clear
+detaches it, promptly rejects waiters with AbortError and aborts fetch. Signal
+checks after response/JSON awaits prevent late publication; only the matching
+acquisition can release the pending slot. Late failures remain handled through
+the raced source promise, with no automatic acquisition retry.
+
+Cache hits, concurrent acquisition sharing, expiry arithmetic, minted-token bypass
+and normalized header snapshots remain. Already resolved tokens cannot be revoked.
+This repairs the helper's clear contract; no production clear caller or canonical
+account integration was added. The conditional stale-subject availability defect
+remains under `WEB-CSRF-CACHE-OWNERSHIP-01`, with server CSRF subject validation
+failing closed. Independent source review accepted seven authored retirement cases;
+none ran. See `WEB-CSRF-ACQUISITION-RETIREMENT-01` for the exact boundary.
+
+The same read-only continuation identified the export panel's unowned client
+requests and initial-read/write race, with authenticated download counterguards,
+under `WEB-DATA-EXPORT-VIEW-OWNERSHIP-01`. The broader consent protocol remains
+held for passive-versus-explicit admission, bootstrap provenance and server write
+concurrency; no nonce protocol or strict endpoint was introduced.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-six accepted production slices traced above are represented as
+Only the one hundred and forty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -9445,6 +9445,37 @@ a full page reload. Those limits must remain distinct from repairable current-pa
 races. Client owner/receipt improvements can be bounded without claiming global
 ordering, but the coupled consent effects must not be replaced piecemeal.
 
+An independent transition review retains that hold. A fresh settlement nonce S
+paired with denial D could invalidate grants admitted before successful recovery,
+but pair equality alone is insufficient: a passive true read admitted after D1
+and before settlement could acknowledge D1 plus old S0 and override an unsettled
+denial. Passive admission must require settlement for the current denial; a new
+explicit opt-in needs a distinct admission rule so it can deliberately override
+an unsettled denial. Every refusal also needs a page-local generation, including
+failed durable writes, that old recovery or opt-in cannot clear. Storage events
+must re-read current validated records rather than replay their payloads.
+
+Settlement requires strict, owned false evidence and persistence of false before
+publishing a fresh, non-replayed S. Effective false-to-false equality cannot skip
+that recovery. The existing document boolean is replayable and carries neither
+request provenance nor browser-intent admission. `readServerTelemetryConsent`
+collapses missing identity/data and read failure to false, so document=false can
+deny but cannot prove settlement. Re-consuming old document=true after recovery
+would likewise relabel stale evidence if a fresh pair were captured only then.
+RootLayout currently emits no consent attribute; this is a dormant helper and
+future-bootstrap constraint, not evidence of a current rendered attribute.
+
+An eventual implementation must specify one-shot bootstrap freshness or restrict
+positive bootstrap to a pristine state and use a fresh owned read elsewhere.
+Preserving the fixture shortcut that lets document=false clear pending refusal
+conflicts with strict settlement; preserve user-facing recovery through an owned
+read instead. Server optimistic concurrency remains necessary independently:
+rejecting a stale local grant cannot stop its already dispatched true account
+write from overwriting false. Sequential storage calls and readback are not CAS;
+no linearizable latest-action order, atomic read-and-send, mixed-old-client
+enforcement or cancellation of already-started telemetry is claimed. No proposed
+transition protocol or new strict endpoint has been implemented.
+
 ## WEB-BULK-CHAT-INTENT-01
 
 Status: Privacy archive-all/delete-all boundedly source-corrected in `b3cb44fa19`.
@@ -9692,3 +9723,107 @@ ordinary duplicates, owned-header replacement, plain-object spread, unstamped
 version preservation and invalid-name rejection before token fetch. Two original
 Content-Type fixture assertions now read HTTP semantics. These sources were not
 executed. No tests, lint, typechecks, builds, network, push or deploy ran.
+
+## WEB-CSRF-CACHE-OWNERSHIP-01
+
+Status: OPEN account/session integration. Source-backed on 2026-11-05; no live
+identity transition or authorization bypass demonstrated.
+
+`client/csrf.ts` caches one token for roughly 55 minutes without a subject or
+canonical session lifetime. `clearCsrfToken` has no production caller. The token
+route binds to the authenticated subject when available, otherwise to its
+anonymous HttpOnly cookie; verification compares the current subject. Retaining
+A's cached token after an in-place transition to B therefore fails closed with
+403. Cookie-only account-consent, export and cookie-banner recording callers
+remain, while canonical RequestAuthority callers pin bearer identity and omit
+cookies. Valid bearer authentication bypasses CSRF by design.
+
+Ordinary explicit sign-in/sign-up finalization and billing sign-out reload the
+document, so those paths do not establish a retained-cache failure. A surviving
+tab after another tab changes shared credentials, a restored page, or anonymous
+minting during temporary session unavailability are the relevant conditional
+cases. Subject binding protects failed requests; no successful cross-account
+write is inferred from a stale token alone.
+
+The existing authentication-store cache coordinator is not sufficient by itself:
+its cleanup is asynchronous, no-cookie initialization bypasses scope cleanup, and
+its observed cookie key carries UAT/readiness rather than exact owner/session.
+Do not add another cookie parser or read the anonymous HttpOnly binding. A complete
+repair needs original canonical request lifetimes and a defined anonymous path,
+not only a logout clear. The separate clear/in-flight helper race must be retired
+before any such integration; its bounded correction is now recorded under
+`WEB-CSRF-ACQUISITION-RETIREMENT-01`. Malformed token/TTL parsing and response-delay expiry
+anchoring are separate response-boundary observations, not fixed by ownership.
+
+## WEB-DATA-EXPORT-VIEW-OWNERSHIP-01
+
+Status: OPEN. Source-backed on 2026-11-05; no runtime reproduction.
+
+`DataExportRow.tsx` reads archives with ambient cookies, retains its initial GET
+for the whole mount, and polls without original account/session authority.
+Privacy mounts it without an owner key. An A response or ready archive can remain
+in a still-mounted B view, while later polling can silently replace it with B's
+archive. Observed same-user session replacement and account round trips are also
+unfenced. The initial GET can resolve after an accepted POST with earlier null or
+ready state, overwrite the newly preparing archive and stop its polling.
+
+The POST waits for CSRF headers before ambient-cookie dispatch without a current
+view/session check. An A token with B cookies fails CSRF, a real counterguard; an
+acquisition bound to B during transition or same-subject session replacement is
+not excluded by subject-only CSRF. Close before header resolution does not retire
+that write. Closing does retire initial-read/poll effects, and old component
+setters do not directly update a newly mounted component, but server work can
+start after close and race the reopened view's read.
+
+Only React requesting state prevents reentry; there is no synchronous operation
+lock. This is not an executed ordinary double-click reproduction. Server archive
+admission reads prior state before creating a random job ID, so it is not atomic
+cross-request deduplication; the per-hour rate limit is not serialization.
+
+Download paths are authenticated ID/volume routes, not presigned storage URLs in
+component state. The route authenticates, reads the export job by current user ID
+and export ID, validates ready status, expiry and volume, then presigns. Stale A
+links clicked as B therefore do not establish access to A's archive bytes. The
+export is intentionally account-wide; selected workspace alone is not a new
+export owner and must not be imposed as an invented archive restriction.
+
+The bounded client repair should reuse canonical preference/session/view and
+request authority, hide retired-lane state immediately, pin bearer requests,
+claim a synchronous mutation lane, retire older reads at POST admission, and own
+all response/body/catch/finally, timers and polling budgets. Failed/ambiguous
+writes need read reconciliation, never automatic mutation replay. Download
+activation needs current-view admission in addition to the existing server gate.
+Cross-tab atomic export admission remains a separate server concern.
+
+## WEB-CSRF-ACQUISITION-RETIREMENT-01
+
+Status: Boundedly source-corrected in
+`9fc14736e41889db7533081c05a9dca7e8739e53` on 2026-11-05. Runtime acceptance
+and separate production identity integration remain open.
+
+Previously clear only nulled cache/pending slots. A prior fetch or JSON body could
+then repopulate cache, and its unconditional finally could clear a newer pending
+promise. This was an exported-helper lifetime defect, latent behind the absence
+of production clear callers, not a demonstrated account-transition fix.
+
+Each pending acquisition now owns its promise, retirement rejection and abort
+controller. Clear first detaches the slot, then rejects its waiters with AbortError
+and aborts transport. The fetch checks its signal after response and JSON awaits
+before cache publication. Settlement only removes its own slot and rejects if
+retirement won before finalization. Promise.race keeps late source rejection
+handled even after the public acquisition has retired. It never retries old
+intent under a new identity.
+
+Same-generation deduplication, cache-hit behavior, minted-token bypass, HeadersInit
+snapshot/plain-object output and expiry arithmetic remain unchanged. Clear cannot
+retract an already resolved token, cancel a consumer's later request, or make the
+ownerless cache account-aware. Browser support/runtime behavior and malformed
+response/expiry boundaries were not executed or broadened.
+
+Independent source review accepted the production patch and seven authored,
+unexecuted retirement cases: late fetch success/failure, HTTP failure, JSON
+success/failure, newer cache survival, and already-resolved-token limits. They
+also cover joined waiters, transport abort and replacement acquisition before old
+finalization. No tests, lint, typechecks, builds, browser/auth, telemetry or
+deployment ran. The earlier cumulative branch push remains pending after an
+authorized attempt found no Git credentials; no remote branch was created.
