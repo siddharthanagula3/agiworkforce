@@ -4213,9 +4213,26 @@ See `WEB-TELEMETRY-POST-INIT-DELIVERY-01`; the separate same-origin client-failu
 await gap is recorded in `WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01`.
 No tests, lint, typechecks, builds, telemetry sends, push or deploy ran.
 
+## Client failure reports recheck consent after CSRF
+
+Accepted commit `c3fbfd5fc464d0f95e583f1f783c0b90a2a97f2f` corrects the
+separate same-origin `client-failure-transport.ts` path. Network reporting now
+requires live local consent, and a document denial can only narrow permission.
+A final check after asynchronous CSRF acquisition prevents dispatch while local
+consent is denied, including when storage writes failed but stale true is readable.
+
+Local support diagnostics, page budget, detached queue discard, no retry/requeue,
+reset behavior and server auth/consent/schema gates remain unchanged. This does
+not add original-session ownership, detect revoke then regrant during the await,
+or retract started fetches. Independent source review accepted the production
+change and unexecuted local-consent, deferred-CSRF, storage-refusal, precedence,
+retained-diagnostic and no-replay fixtures. See
+`WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01` for the remaining boundary. No tests,
+lint, typechecks, builds, telemetry sends, push or deploy ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-four accepted production slices traced above are represented as
+Only the one hundred and forty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

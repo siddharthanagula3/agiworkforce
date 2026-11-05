@@ -9597,29 +9597,39 @@ typechecks, builds, telemetry sends, push or deploy ran.
 
 ## WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01
 
-Status: OPEN, source-backed on 2026-11-05; no production correction yet.
+Status: Boundedly source-corrected in
+`c3fbfd5fc464d0f95e583f1f783c0b90a2a97f2f` on 2026-11-05. Runtime and
+deployment acceptance remain open.
 
-`client-failure-transport.ts` detaches a batch and checks consent in flush, then
-post awaits CSRF headers and dispatches without checking again. Local opt-out
-during that await can still produce a request. If the account save is delayed
-or fails, the server can still see consent=true and record a closed-vocabulary
-failure metric. This is a browser dispatch race, not an observed disclosure or
+Previously `client-failure-transport.ts` detached a batch and checked consent in
+flush, then post awaited CSRF headers and dispatched without checking again.
+Local opt-out during that await could still produce a request. If the account
+save was delayed or failed, the server could still see consent=true and record a
+closed-vocabulary failure metric. This is a browser dispatch race, not an observed disclosure or
 server authorization bypass. The route independently checks CSRF, rate limit,
 authentication, bounded enum payload and current server consent before recording.
 Server denial returns 202 with accepted=0 and consent=withheld.
 
-The transport's document=true branch also overrides local denial, but RootLayout
-currently renders no consent attribute and no production writer was found. Keep
-that dormant precedence issue distinct from the reachable local-mirror/CSRF race.
-Existing fixtures grant only via document=true, missing the ordinary local path.
+The prior document=true branch also overrode local denial, but RootLayout
+currently renders no consent attribute and no production writer was found. This
+dormant precedence issue was distinct from the reachable local-mirror/CSRF race.
+Earlier fixtures granted only via document=true, missing the ordinary local path.
 
-A bounded correction should require live local consent (document=false remains a
-denial) and recheck immediately after CSRF before fetch. Preserve local diagnostic
-recording, detached-batch discard, conservative page budget and no retry/requeue.
-Current cookie identity at delayed dispatch can differ from the original batch's
-owner; no canonical account/view authority is captured. Final-state consent alone
-also cannot detect revoke then regrant during the await. Those wider queue/session
-and browser-intent lifetimes remain open with
+The accepted correction requires live local consent; document=false can still
+deny but document=true cannot bypass local refusal. Post rechecks this predicate
+immediately after CSRF acquisition and before fetch. Local diagnostic recording,
+detached-batch discard, conservative page budget, reset and no retry/requeue remain
+unchanged. The server implementation is untouched.
+
+Current cookie identity at delayed dispatch can still differ from the original
+batch's owner; no canonical account/view authority is captured. Final-state
+consent alone cannot detect revoke then regrant during the await. Those wider
+queue/session and browser-intent lifetimes remain open with
 `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`; no rollback of started fetches is claimed.
-No files were changed for this finding; no tests, lint, typechecks, builds,
-telemetry sends, push or deploy ran.
+
+Independent source review accepted the small production change and authored
+fixtures. They now grant through actual local consent with no document signal,
+and cover deferred-CSRF denial with normal/refused storage writes, document
+precedence, retained diagnostics, pre-flush drop and no replay. Existing positive,
+payload, budget and failed-send fixtures remain. Tests were not executed. No
+tests, lint, typechecks, builds, telemetry sends, push or deploy ran.
