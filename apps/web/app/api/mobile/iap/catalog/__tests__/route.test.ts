@@ -9,7 +9,7 @@ type ScanModule6 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 
 const { mockRequireCurrentUserId, mockDb, mockKillSwitchGate } = vi.hoisted(() => ({
   mockRequireCurrentUserId: vi.fn(),
-  mockDb: { current: null as unknown },
+  mockDb: { current: null as unknown, ownRows: null as unknown },
   mockKillSwitchGate: vi.fn(),
 }));
 
@@ -33,7 +33,7 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
   getUserScopedDb: vi.fn(async () => ({
-    db: mockDb.current,
+    db: mockDb.ownRows,
     userId: 'user-1',
     organizationId: null,
   })),
@@ -59,18 +59,32 @@ function request(query = 'platform=android&storefront=US') {
   ) as unknown as Parameters<typeof GET>[0];
 }
 
-function harness(options: { subscription?: Record<string, unknown> }) {
+function harness(options: {
+  subscription?: Record<string, unknown>;
+  accountRows?: Array<{ deletion_scheduled?: unknown }>;
+  accountReadError?: boolean;
+  planReadError?: boolean;
+}) {
   const query = vi.fn(async (sql: string) => {
+    if (sql.includes('from public.profiles')) {
+      if (options.accountReadError) throw new Error('account read unavailable');
+      return options.accountRows ?? [{ deletion_scheduled: false }];
+    }
     if (sql.includes('from subscriptions')) {
+      if (options.planReadError) throw new Error('plan read unavailable');
       return options.subscription ? [options.subscription] : [];
     }
+    throw new Error(`Unexpected scoped query: ${sql}`);
+  });
+  const adminQuery = vi.fn(async (sql: string) => {
     if (sql.includes('insert into public.mobile_iap_accounts')) {
       return [{ app_account_token: APP_ACCOUNT_TOKEN }];
     }
-    return [];
+    throw new Error(`Unexpected privileged query: ${sql}`);
   });
-  mockDb.current = { query, execute: vi.fn(), transaction: vi.fn() };
-  return { query };
+  mockDb.ownRows = { query, execute: vi.fn(), transaction: vi.fn() };
+  mockDb.current = { query: adminQuery, execute: vi.fn(), transaction: vi.fn() };
+  return { query, adminQuery };
 }
 
 function productIds(body: { products: Array<{ productId: string }> }): string[] {
@@ -141,10 +155,11 @@ describe('GET /api/mobile/iap/catalog', () => {
     });
     expect(body).not.toHaveProperty('unavailableCode');
     expect(h.query).not.toHaveBeenCalled();
+    expect(h.adminQuery).not.toHaveBeenCalled();
   });
 
   it('keeps naming the kill switch when purchases are switched off', async () => {
-    harness({});
+    const h = harness({});
     mockKillSwitchGate.mockResolvedValue({ capabilityAllowed: () => false });
 
     const response = await GET(request());
@@ -154,20 +169,62 @@ describe('GET /api/mobile/iap/catalog', () => {
       products: [],
       unavailableReason: expect.stringContaining('temporarily switched off'),
     });
+    expect(h.query).not.toHaveBeenCalled();
+    expect(h.adminQuery).not.toHaveBeenCalled();
   });
 
-  it('starts no purchase when the plan cannot be read', async () => {
-    mockDb.current = {
-      query: vi.fn(async () => {
-        throw new Error('database unavailable');
-      }),
-      execute: vi.fn(),
-      transaction: vi.fn(),
-    };
+  it.each(['ios', 'android'])(
+    'withholds every %s offer and binding while deletion is scheduled, retaining consumption metadata',
+    async (platform) => {
+      const h = harness({
+        subscription: PAID_PLAY_PLAN,
+        accountRows: [{ deletion_scheduled: true }],
+      });
+
+      const response = await GET(request(`platform=${platform}&storefront=US`));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        enabled: false,
+        platform,
+        appAccountToken: null,
+        products: [],
+        unavailableReason: 'Cancel the account deletion to change your plan.',
+        consumableProductIds: [TOP_UP_PRODUCT_ID],
+      });
+      expect(h.query).toHaveBeenCalledTimes(1);
+      expect(h.query).toHaveBeenCalledWith(
+        expect.stringMatching(/select \(deletion_scheduled_for is not null\) as deletion_scheduled\s+from public\.profiles where id = \$1 limit 1/u),
+        ['user-1'],
+      );
+      expect(h.adminQuery).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { name: 'missing profile', accountRows: [] },
+    { name: 'missing field', accountRows: [{}] },
+    { name: 'null field', accountRows: [{ deletion_scheduled: null }] },
+    { name: 'string field', accountRows: [{ deletion_scheduled: 'false' }] },
+    { name: 'account lookup rejection', accountReadError: true },
+  ])('starts no purchase when account state is unavailable: $name', async (options) => {
+    const h = harness(options);
 
     const response = await GET(request());
 
     expect(response.status).toBe(503);
+    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(h.adminQuery).not.toHaveBeenCalled();
+  });
+
+  it('starts no purchase when the plan cannot be read', async () => {
+    const h = harness({ planReadError: true });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(503);
+    expect(h.query).toHaveBeenCalledTimes(2);
+    expect(h.adminQuery).not.toHaveBeenCalled();
   });
 
   it('sells top-ups in the app only to an account that holds a paid plan', async () => {
