@@ -15,6 +15,11 @@ const capabilities = readFileSync(
 // first two on a WEB settings screen without saying they are not web invites a
 // user to believe this browser can keep a conversation on-device.
 describe('privacy copy names the surface each trust boundary applies to', () => {
+  it('retires the privacy subtree on close before the shared dialog exit animation', () => {
+    const modal = readFileSync(join(process.cwd(), 'features/settings/components/WebSettingsModal.tsx'), 'utf8');
+    expect(modal).toContain('privacy: open ? <PrivacySection /> : <></>');
+    expect(privacy).toContain('<BulkConversationControls />');
+  });
   it('scopes Local Mode and BYOK to the surfaces that have them', () => {
     expect(privacy).toMatch(/Local Mode and BYOK belong to the CLI\./);
     expect(privacy).toMatch(/\{BYOK_SURFACES\.availability\}/);

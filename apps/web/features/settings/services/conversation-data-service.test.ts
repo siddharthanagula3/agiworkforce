@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyBulkConversationAction,
+  fetchConversationHistoryStats,
   listArchivedConversations,
   listSharedLinks,
   restoreArchivedConversation,
 } from './conversation-data-service';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: Record<string, string> = {}) => ({
@@ -135,5 +138,29 @@ describe('conversation data settings service', () => {
       expect.objectContaining({ credentials: 'include' }),
     );
     expect(shares[0]?.title).toBe('Shared planning');
+  });
+
+  it('keeps an explicit original organization on the count and mutation after CSRF', async () => {
+    const request = createRequestAuthority({ userId: 'a', sessionId: 'session-a',
+      isCurrent: () => true, getToken: async () => 'token-a' });
+    const fetchMock = vi.fn().mockResolvedValueOnce(response({ historyStats: {
+      conversationCount: 8, activeConversationCount: 6, messageCount: 40,
+    } })).mockResolvedValueOnce(response({ success: true, action: 'delete_all', affectedCount: 8 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const scope = { request, organizationId: '11111111-1111-4111-8111-111111111111' };
+    expect((await fetchConversationHistoryStats(undefined, scope)).conversationCount).toBe(8);
+    expect(await applyBulkConversationAction('delete_all', scope)).toBe(8);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.credentials).toBe('omit');
+      expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(scope.organizationId);
+      expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token-a');
+    }
+    expect(new Headers(fetchMock.mock.calls[1]![1].headers).get('x-csrf-token')).toBe('csrf-token');
+    request.retire();
+  });
+
+  it.each(['delete_all', 'delete_archived'] as const)('rejects an archive receipt for %s', async (action) => {
+    vi.stubGlobal('fetch', vi.fn(async () => response({ success: true, action: 'archive_all', affectedCount: 3 })));
+    await expect(applyBulkConversationAction(action)).rejects.toThrow('not confirmed');
   });
 });

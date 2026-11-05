@@ -10,8 +10,11 @@ import {
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
   normalizeManagedCloudConversation,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 
 const ARCHIVED_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
@@ -23,6 +26,18 @@ const BulkConversationResponseSchema = z.object({
 
 export type BulkConversationAction = z.infer<typeof BulkConversationResponseSchema>['action'];
 export type SharedLinkSummary = ConversationShareSummary;
+
+export interface ConversationDataAuthority {
+  request: RequestAuthority;
+  organizationId: string | null;
+}
+
+function scopedHeaders(scope?: ConversationDataAuthority): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (scope) headers[MANAGED_CLOUD_ORGANIZATION_HEADER] =
+    scope.organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
+  return headers;
+}
 
 export interface ArchivedConversationSummary {
   id: string;
@@ -156,28 +171,45 @@ export interface ConversationHistoryStats {
 
 export async function fetchConversationHistoryStats(
   signal?: AbortSignal,
+  scope?: ConversationDataAuthority,
 ): Promise<ConversationHistoryStats> {
-  const response = await fetch('/api/chat/conversations?includeHistoryStats=1&statsOnly=1', {
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)('/api/chat/conversations?includeHistoryStats=1&statsOnly=1', {
     credentials: 'include',
     signal,
+    headers: scopedHeaders(scope),
+    cache: 'no-store',
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to load chat history size');
   }
-  return ConversationHistoryStatsSchema.parse(await response.json()).historyStats;
+  const data = ConversationHistoryStatsSchema.parse(await response.json());
+  scope?.request.assertCurrent();
+  return data.historyStats;
 }
 
-export async function applyBulkConversationAction(action: BulkConversationAction): Promise<number> {
-  const response = await fetch('/api/chat/conversations/bulk', {
+export async function applyBulkConversationAction(
+  action: BulkConversationAction,
+  scope?: ConversationDataAuthority,
+): Promise<number> {
+  scope?.request.assertCurrent();
+  const headers = scopedHeaders(scope);
+  headers['Content-Type'] = 'application/json';
+  const csrfHeaders = await addCsrfHeaders(headers);
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)('/api/chat/conversations/bulk', {
     method: 'POST',
     credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    headers: csrfHeaders,
     body: JSON.stringify({ action }),
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to update chats');
   }
-  return BulkConversationResponseSchema.parse(await response.json()).affectedCount;
+  const receipt = BulkConversationResponseSchema.parse(await response.json());
+  scope?.request.assertCurrent();
+  if (receipt.action !== action) throw new Error('Chat update was not confirmed');
+  return receipt.affectedCount;
 }
 
 export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkSummary[]> {

@@ -7,6 +7,8 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
+vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+
 vi.mock('../../components/UsOnlyRoutingPanel', async (importOriginal) => ({
   ...(await importOriginal<UsOnlyRoutingPanelModule>()),
   UsOnlyRoutingPanel: () => null,

@@ -2,10 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { useRouter } from 'next/navigation';
-import { Switch, useConfirm, translateUiPlural } from '@agiworkforce/ui';
+import { Switch } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   confirmTelemetryConsent,
   hasPendingTelemetryOptOut,
@@ -17,15 +15,11 @@ import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
-import {
-  applyBulkConversationAction,
-  fetchConversationHistoryStats,
-  type BulkConversationAction,
-} from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { DataExportRow } from '../components/DataExportRow';
+import { BulkConversationControls } from '../components/BulkConversationControls';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
 import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow';
@@ -189,28 +183,9 @@ export function PrivacySection() {
   const newChatsTemporary = useSettingsStore((state) => state.newChatsTemporary) ?? false;
   const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
 
-  const router = useRouter();
-  /**
-   * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
-   *
-   * Archive-all and delete-all-chats used native `window.confirm()`, an OS
-   * alert with browser chrome, not the product's own dialog. `useConfirm` is
-   * the shared promise-based wrapper around
-   * the styled AlertDialog primitive (packages/ui/ui/src/primitives/
-   * ConfirmDialog.tsx) already wired into WebChatPage/WebAppShell/
-   * MessageBubble for the same class of action. Same await-a-boolean shape as
-   * `window.confirm`, so the guards below read the same, but the user sees a
-   * dialog with a red confirm and copy naming the exact, specific
-   * consequence instead of a generic browser prompt.
-   */
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud =
     subscription?.status === 'active' && !isFreeBillingPlanTier(subscription.tier);
-  const conversations = useChatStore((state) => state.conversations);
-  const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
-  const updateConversationInStore = useChatStore((state) => state.updateConversation);
-  const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
   const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
@@ -222,10 +197,6 @@ export function PrivacySection() {
     null,
   );
   const saveInFlight = useRef(false);
-
-  const [bulkAction, setBulkAction] = useState<BulkConversationAction | null>(null);
-  const [conversationActionError, setConversationActionError] = useState<string | null>(null);
-  const [conversationActionNotice, setConversationActionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -294,106 +265,8 @@ export function PrivacySection() {
     void savePrivacy({ ...state, [key]: !state[key] });
   }
 
-  async function handleArchiveAllChats() {
-    let activeCount: number | null = null;
-    try {
-      activeCount = (await fetchConversationHistoryStats()).activeConversationCount;
-    } catch {
-      activeCount = null;
-    }
-    const scope =
-      activeCount === null
-        ? 'Every chat in the current workspace will move out of the sidebar'
-        : translateUiPlural('settings', 'counts.chatsToArchive', activeCount, {
-            one: '{{count}} chat in the current workspace will move out of the sidebar',
-            other: 'All {{count}} chats in the current workspace will move out of the sidebar',
-          });
-    const confirmed = await confirmDestructive({
-      title: 'Archive all chats in this workspace?',
-      description: `${scope}. You can restore them from Archived chats at any time; this does not delete anything.`,
-      confirmText: 'Archive all',
-      variant: 'default',
-    });
-    if (!confirmed) return;
-
-    setBulkAction('archive_all');
-    setConversationActionError(null);
-    setConversationActionNotice(null);
-    try {
-      const affectedCount = await applyBulkConversationAction('archive_all');
-      for (const conversation of conversations) {
-        if (!conversation.isArchived) {
-          updateConversationInStore(conversation.id, { isArchived: true });
-        }
-      }
-      setConversationActionNotice(
-        translateUiPlural('settings', 'counts.archivedChats', affectedCount, {
-          one: 'Archived {{count}} chat.',
-          other: 'Archived {{count}} chats.',
-        }),
-      );
-    } catch (caught) {
-      setConversationActionError(toUserMessage(caught, 'Failed to archive chats'));
-    } finally {
-      setBulkAction(null);
-    }
-  }
-
-  async function handleDeleteAllChats() {
-    if (streamingConversationIds.length > 0) {
-      setConversationActionError('Finish or stop active replies before deleting all chats.');
-      return;
-    }
-    // The sidebar store holds only the pages fetched so far, so its length
-    // understates the scope of a delete-everything action. Ask the server for
-    // the real total before naming a number in an irreversible-looking prompt.
-    let chatCount: number | null = null;
-    try {
-      chatCount = (await fetchConversationHistoryStats()).conversationCount;
-    } catch {
-      chatCount = null;
-    }
-    const scope =
-      chatCount === null
-        ? 'Every chat in the current workspace, active and archived, will be removed from your history'
-        : translateUiPlural('settings', 'counts.allChatsRemoved', chatCount, {
-            one: 'All {{count}} chat in the current workspace, active and archived, will be removed from your history',
-            other:
-              'All {{count}} chats in the current workspace, active and archived, will be removed from your history',
-          });
-    const confirmed = await confirmDestructive({
-      title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Personalization.`,
-      confirmText: 'Delete all chats',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-
-    setBulkAction('delete_all');
-    setConversationActionError(null);
-    setConversationActionNotice(null);
-    try {
-      const affectedCount = await applyBulkConversationAction('delete_all');
-      for (const conversation of conversations) {
-        deleteConversationFromStore(conversation.id);
-      }
-      router.replace('/chat');
-      setConversationActionNotice(
-        translateUiPlural('settings', 'counts.deletedChats', affectedCount, {
-          one: 'Deleted {{count}} chat.',
-          other: 'Deleted {{count}} chats.',
-        }),
-      );
-    } catch (caught) {
-      setConversationActionError(toUserMessage(caught, 'Failed to delete chats'));
-    } finally {
-      setBulkAction(null);
-    }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {destructiveConfirmDialog}
       <div>
         <h1
           style={{
@@ -704,97 +577,7 @@ export function PrivacySection() {
           </SettingsSectionLink>
         </div>
 
-        <div
-          style={{
-            padding: 'var(--space-4) 0',
-            borderBottom: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-              Archive all chats in this workspace
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Move every chat out of the sidebar. You can restore them later.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleArchiveAllChats()}
-            disabled={bulkAction !== null}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--text-1)',
-              background: 'transparent',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius-md)',
-              cursor: bulkAction !== null ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {bulkAction === 'archive_all' ? 'Archiving…' : 'Archive all'}
-          </button>
-        </div>
-
-        <div
-          style={{
-            padding: 'var(--space-4) 0',
-            borderBottom: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-              Delete all chats in this workspace
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Remove every active and archived conversation in this workspace from history. Restore
-              them from Recently deleted within 30 days.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleDeleteAllChats()}
-            disabled={bulkAction !== null || streamingConversationIds.length > 0}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--settings-destructive-text)',
-              background: 'transparent',
-              border: '1px solid var(--settings-destructive-text)',
-              borderRadius: 'var(--radius-md)',
-              cursor:
-                bulkAction !== null || streamingConversationIds.length > 0
-                  ? 'not-allowed'
-                  : 'pointer',
-            }}
-          >
-            {bulkAction === 'delete_all' ? 'Deleting…' : 'Delete all'}
-          </button>
-        </div>
-
-        {conversationActionError || conversationActionNotice ? (
-          <div
-            role={conversationActionError ? 'alert' : 'status'}
-            style={{
-              padding: 'var(--space-3) var(--space-5)',
-              borderBottom: '1px solid var(--settings-border)',
-              color: conversationActionError ? 'var(--chat-accent-primary)' : 'var(--text-2)',
-              fontSize: 14,
-            }}
-          >
-            {conversationActionError ?? conversationActionNotice}
-          </div>
-        ) : null}
+        <BulkConversationControls />
 
         {/*
           Start new chats temporary.

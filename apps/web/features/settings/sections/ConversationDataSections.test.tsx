@@ -36,6 +36,16 @@ const confirmStub = vi.hoisted(() => ({
   dialog: null as React.ReactNode,
 }));
 
+// Bulk intent behavior lives in BulkConversationControls.test.tsx, using the
+// actual owner/admission/transport stack. This suite checks section reachability.
+vi.mock('../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => <><button>Archive all</button><button>Delete all</button></>,
+}));
+vi.mock('../components/UsOnlyRoutingPanel', () => ({ UsOnlyRoutingPanel: () => null }));
+vi.mock('../components/ProductAnalyticsConsentRow', () => ({ ProductAnalyticsConsentRow: () => null }));
+vi.mock('../components/MarketingEmailConsentRow', () => ({ MarketingEmailConsentRow: () => null }));
+vi.mock('../components/NamedProviderConsentRows', () => ({ NamedProviderConsentRows: () => null }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
 }));
@@ -294,20 +304,8 @@ describe('Web conversation data settings', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Restore archived chats or permanently delete them.')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
-    expect(confirmStub.confirm).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        title: 'Archive all chats in this workspace?',
-        description: expect.stringContaining('current workspace'),
-      }),
-    );
-    expect(useChatStore.getState().conversations[0]?.isArchived).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-    expect(mocks.routerReplace).toHaveBeenCalledWith('/chat');
-    expect(useChatStore.getState().conversations).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Archive all' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete all' })).toBeInTheDocument();
   });
 
   it('asks for the export archive and says the download link is emailed when it will be', async () => {
@@ -347,78 +345,4 @@ describe('Web conversation data settings', () => {
     ).toBeInTheDocument();
   });
 
-  it('scopes delete-all by the current-workspace total, not the pages the sidebar holds', async () => {
-    mocks.historyStats.mockResolvedValue({
-      conversationCount: 812,
-      activeConversationCount: 800,
-      messageCount: 9001,
-    });
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('812');
-    expect(description).toContain('current workspace');
-    expect(description).not.toContain('in your account');
-    expect(description).not.toContain(`${useChatStore.getState().conversations.length} chat`);
-  });
-
-  it('states the number of active chats before archiving all of them', async () => {
-    mocks.historyStats.mockResolvedValue({
-      conversationCount: 812,
-      activeConversationCount: 640,
-      messageCount: 9001,
-    });
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
-
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('640');
-    expect(description).not.toContain('812');
-  });
-
-  it('falls back to the unnumbered archive text when the count cannot be read', async () => {
-    mocks.historyStats.mockRejectedValue(new Error('offline'));
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
-
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('Every chat in the current workspace');
-    expect(description).not.toMatch(/\d/);
-  });
-
-  it('does not claim a soft delete is irreversible', async () => {
-    mocks.historyStats.mockResolvedValue({
-      conversationCount: 3,
-      activeConversationCount: 3,
-      messageCount: 9,
-    });
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).not.toMatch(/cannot be undone/i);
-    expect(description).toMatch(/restore/i);
-  });
-
-  it('falls back to an unnumbered workspace scope when the total cannot be read', async () => {
-    mocks.historyStats.mockRejectedValue(new Error('offline'));
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('Every chat in the current workspace');
-    expect(description).not.toContain('in your account');
-    expect(description).not.toMatch(/\ball \d+ chat/i);
-  });
 });

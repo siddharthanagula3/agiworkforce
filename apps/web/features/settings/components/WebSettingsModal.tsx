@@ -256,7 +256,8 @@ export function WebSettingsModal({
     ),
     security: <SecuritySection />,
     safety: <SafetySection />,
-    privacy: <PrivacySection />,
+    // Retire privacy intents on close, before the dialog's exit animation ends.
+    privacy: open ? <PrivacySection /> : <></>,
     archived: <ArchivedChatsSection />,
     'deleted-chats': <DeletedChatsSection />,
     'shared-links': <SharedLinksSection />,

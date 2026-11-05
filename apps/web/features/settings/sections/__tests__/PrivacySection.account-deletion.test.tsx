@@ -22,6 +22,8 @@ import React from 'react';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
+vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
 }));

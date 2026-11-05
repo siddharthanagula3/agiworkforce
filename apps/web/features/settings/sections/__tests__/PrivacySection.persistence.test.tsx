@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
+vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
 }));
