@@ -4458,10 +4458,15 @@ limits; no local-generation or universal linearizability claim is made.
 
 Existing shared messages.test.ts and mobile cloud-sync-engine.test.ts fixtures
 cover dirty acknowledged echoes/retry, clean/conflict/tombstone and ownership
-paths. They were source-read, not executed. A direct deferred-GET case editing
-after a clean acknowledgement remains a useful coverage addition. No duplicate
-production fix was applied during this re-read, and the accepted slice count did
-not increase. Real native stores/auth/server/network/timing remain unverified;
+paths. They were source-read, not executed. Authored fixture commit
+`a8b93cc6587029c7262a28a6e0553e78b96888ee` now adds the direct deferred-GET
+case editing after a clean acknowledgement. It observes dirty clearing and base
+advancement before editing/re-marking, releases the pending pull in finally,
+awaits the whole first sync, then asserts the next push uses the acknowledged
+remote base. A race observes early swallowed engine completion so it cannot be
+mistaken for a pending GET. Independent source review accepted this instrument;
+it was not run. No duplicate production fix or additional slice was counted.
+Real native stores/auth/server/network/timing remain unverified;
 no deployed lost-edit event or Local/BYOK transfer is asserted.
 
 ## AUDIT-CONFIG-KEY-COMMENT-READER-01
@@ -9909,6 +9914,8 @@ Exact installed-challenge settlement was separately source-corrected in
 `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
 Hook-owned continuation retirement was source-corrected in
 `2af29ad0fdb74235a0dff489346d516c212c40ae` the same day.
+GET timestamp validation and Web query-readiness admission were source-corrected
+in `b46d2d0a98b30c6e206636bf21e8878878c4f49f` the same day.
 No live scheduling, deletion or runtime identity transition was performed.
 
 `useDeleteAccount` in `use-settings-queries.ts` previously inherited production
@@ -10019,7 +10026,8 @@ The additive shared receipt schemas now require scheduling message, valid timest
 pending status and statusReason, or cancellation message and boolean. Known
 error/reason refusal fields are rejected while unrelated added fields are allowed.
 Past timestamps remain valid receipts: client clock or delivery delay does not
-change what the server confirmed. Existing GET status schema is unchanged.
+change what the server confirmed. That receipt patch left GET status unchanged;
+the subsequent status-admission correction below validates its timestamp fields.
 
 Web uses these parsers before mutation success. Malformed/empty/contradictory 2xx
 responses cannot produce scheduling Continue or cancellation cache clearing.
@@ -10147,6 +10155,59 @@ has not started even after the cutoff; with no schedule it can still describe a
 requested deletion. It does not consult actual job/tombstone progress. The current
 client status parser consumes pending/canCancel/dates, not these extra progress
 fields. Neither legal-page copy nor actual-progress reporting was changed here.
+
+GET status previously accepted arbitrary requestedAt/scheduledFor strings. A
+pending/cancellable response with a nonsense scheduledFor could render an invalid
+deadline while offering cancellation. Both fields now require the same nullable,
+offset-aware datetime contract used by scheduling receipts. Null requestedAt,
+valid past dates, server canCancel flags and additive fields remain supported;
+no client-clock comparison or timestamp-order policy was added. Mobile's existing
+refresh clears ready authority before the request and rejects invalid status.
+Tauri has no GET-status admission flow and was not changed by this slice.
+
+Web's retained query data previously let a failed background refresh leave a
+cancel control usable, and existing confirmations did not recheck status.
+AccountSection now renders from the same canonical QueryState snapshot it uses
+for admission. A narrow useSyncExternalStore subscription to QueryCache observes
+outer-state changes, with a server snapshot callback supplied. Opening captures
+the original rendered snapshot, and confirmation synchronously requires that
+same object to remain successful, present, idle, non-invalidated and permitted by
+the server flags. Whole-state identity catches equal-data refreshes, cancellation
+reversion, invalidation and query replacement despite structural sharing.
+
+Old confirmations cannot adopt a recovered query snapshot. Invalidation without
+refetch offers Retry, including when already stale; ordinary stale-time alone is
+not a new refusal policy. Changed confirmations explain close/check/reopen, except
+while an already-admitted mutation remains pending. The mutation hooks, proof
+replay, server schedule and successful receipt/Continue flow are unchanged.
+
+This relies on pinned implementation evidence, not a future library guarantee:
+[TanStack Query 5.104.4 getQueryState](https://github.com/TanStack/query/blob/12199722dc3f7443b7bbb575611dce59cfd08534/packages/query-core/src/queryClient.ts#L352-L364)
+returns the stored state and its
+[reducer](https://github.com/TanStack/query/blob/12199722dc3f7443b7bbb575611dce59cfd08534/packages/query-core/src/query.ts#L879-L948)
+replaces the outer object on relevant transitions. Pinned
+[Zod 4.6.7 datetime regex](https://github.com/colinhacks/zod/blob/b500a2ee95134f81d74da7911d7378dd2853d042/packages/zod/src/v4/core/regexes.ts)
+includes month-length/leap-year validation. The exact
+[Neon 1.2.0 client](https://github.com/neondatabase/serverless/blob/0a891faf84df29b363778aadc00ce0ea71d244eb/src/client.ts)
+and build lock, plus
+[pg 8.23.1 dependencies](https://github.com/brianc/node-postgres/blob/0980cefebe0ae461da8883703be049fe13ca96cf/packages/pg/package.json),
+use pg-types 2.2.0 and postgres-date 1.0.7. Their finite timestamptz values become
+Date objects and JSON UTC ISO strings; repository adapters do not override that
+parser. This is upstream source compatibility evidence, not installed/deployed
+package-byte verification or a live database observation.
+
+Independent source review accepted two production files and eight fixture files:
+shared datetime cases, Date-valued GET serialization, mobile invalid-status
+retirement, Web retained confirmations and four previously provider-free suites
+using seeded real QueryClients. No fixture ran. Paused status is injected through
+Query.setState, not a real offline/resume exercise. Pending mock GETs never settle;
+fresh clients and observer cleanup/retryer cancellation provide source-based
+isolation, not verified transport abort or leak freedom. The old rendered trigger
+guard is source-reviewed, not separately intercepted by a retained-trigger fixture.
+Original account/session authority, full one-shot consumption, unchanged-state
+close/reopen replay and status changes during an already-started mutation remain
+outside this query-readiness correction. Synthesized progress and legal copy remain
+open; no end-to-end mutation authority or runtime acceptance is claimed.
 
 Wider work must bind confirmation, CSRF, original request, grant/replay/body and
 Continue effects to canonical account/view authority, and reconcile unknown

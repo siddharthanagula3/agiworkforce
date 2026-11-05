@@ -4362,7 +4362,8 @@ scheduling/cancellation receipt schemas and adopts them in the web hooks. Schedu
 success requires a meaningful message, valid timestamp, pending status and reason;
 cancellation requires a meaningful message and boolean. Known refusal fields are
 rejected, unrelated additive fields tolerated and past timestamps accepted.
-Existing GET contracts are unchanged. Valid cancelled=false means no pending
+That receipt slice leaves GET unchanged; later status admission below validates
+its dates. Valid cancelled=false means no pending
 schedule under the current server protocol, not a successful cancellation claim.
 
 Malformed/empty 2xx replies cannot produce scheduling Continue or clear the
@@ -4479,9 +4480,37 @@ the dirty-message ownership section above. No duplicate production change or
 additional slice was counted; its runtime and wider store-concurrency limits
 remain explicit in the issue register.
 
+## Deletion admission retains a valid status snapshot
+
+Accepted commit `b46d2d0a98b30c6e206636bf21e8878878c4f49f` requires valid
+nullable offset datetimes in shared GET status while preserving null informational
+requestedAt, past dates and server cancellation flags. Mobile's existing refresh
+retirement fails closed on malformed dates. Tauri has no GET-status consumer and
+keeps its separate receipt flow.
+
+Web uses a subscribed canonical QueryState object for both display and admission.
+Original rendered trigger and prompt snapshots must remain the same successful,
+present, idle, non-invalidated state before mutation entry. Equal-data refresh,
+cancel/revert and replacement cannot revive old readiness. Invalidation-only
+states offer Retry; ordinary stale-time is not a new permanent lockout. Changed
+confirmations explain reopening without claiming a pending mutation was cancelled.
+Pinned TanStack, Zod and PostgreSQL/Neon source evidence is linked in
+`WEB-ACCOUNT-DELETION-INTENT-01`.
+
+Independent source review accepted two production files and eight authored
+fixture files; none ran. Paused-state injection is not offline-lifecycle proof,
+and raw retained-trigger admission is source-reviewed rather than directly
+intercepted. Account/session, one-shot/close-reopen and already-started mutation
+authority remain separate. GET progress and legal-policy claims remain open.
+
+Fixture-only commit `a8b93cc658` separately adds the dirty-message edit-after-clean-
+acknowledgement/deferred-pull case, with retry base and release-on-failure
+instrumentation. It was independently source-reviewed, not executed, and does not
+increase the reconstructed production count.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-six accepted production slices traced above are represented as
+Only the one hundred and fifty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
