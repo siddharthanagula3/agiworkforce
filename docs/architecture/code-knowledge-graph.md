@@ -4799,9 +4799,21 @@ access counterguards are not claimed bypassed. Independent source review accepte
 unrun boundary-mocked cases; the provider port still lacks a formal missing-user
 error. See `WEB-ACCOUNT-IDENTITY-ERASURE-CLASSIFICATION-01`.
 
+## Unresolved knowledge references retain their disposal pointers
+
+Accepted `3438ce5ea3ef8441bf9f70d7132ee1414e1fe2aa` counts nonblank knowledge
+references that cannot resolve as failures instead of silently dropping them.
+Existing guards retain projects/profile while recognized keys and backups still
+proceed. Historical upload code stored public URLs whose resolution depends on
+the current public base; current registration stores sealed raw keys. Null/blank
+references remain non-failures, URL-origin checks are unchanged, and no key is
+guessed. Source-reviewed fixtures for explicit repair/retry and the actual parser
+were not run. Operator reconciliation, extant bytes and full erasure remain
+unproven. See `WEB-ACCOUNT-KNOWLEDGE-REFERENCE-ERASURE-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-three accepted production slices traced above are represented as
+Only the one hundred and eighty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

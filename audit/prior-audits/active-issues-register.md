@@ -11123,3 +11123,46 @@ by successful retry, and failure while re-erasing a resurrected profile. They
 mock erasure/storage/identity boundaries; no SDK error, job dispatch, provider
 operation, database transition or fixture was executed. No tests, lint,
 typechecks, builds, installations, live/database actions, push or deployment ran.
+
+
+## WEB-ACCOUNT-KNOWLEDGE-REFERENCE-ERASURE-01
+
+Severity: High. Status: Unresolvable nonblank knowledge references retain retry
+custody, source-corrected in `3438ce5ea3ef8441bf9f70d7132ee1414e1fe2aa`,
+2026-11-05. Legacy reconciliation and runtime acceptance remain open.
+
+Account knowledge erasure previously filtered out every storage_uri whose
+objectKeyFromStorageUri conversion returned null. Such rows contributed no
+failure, permitting the project deletion/cascade and complete=true even though
+this flow had not resolved or disposed of the referenced object. The backup
+stage also had no resolved key to process. This is an unresolved-disposal path,
+not evidence that every unknown value names an extant object.
+
+The historical exposure is concrete source history: at
+`a41112770d7e3aefb50f3d338583fe87b3e195fe`, the presign route issued a public
+URL for knowledge uploads, the project-knowledge-upload service registered that
+publicUrl, and the knowledge POST persisted the supplied URI. At
+`94b95fb8ff0e69f0fdb42d8485f66be8a96649ba`, registration still stored the
+trimmed original URI after extraction. The current converter accepts public URLs
+only under the currently configured base, so changing/removing that base can
+make these historically valid references unresolvable. No affected deployed row
+or surviving object was observed. Current regular uploads and Drive imports
+validate, seal and store raw keys; duplication can carry older references forward.
+
+Each nonblank unresolved reference now contributes a knowledge failure, using
+existing project/profile retention and completion guards. Resolved primary keys
+and their backups are still disposed of as before. Null/blank no-reference values
+remain non-failures. Nonblank input is not normalized into a guessed executable
+key, URL-origin checks are unchanged, and no external URL is fetched. Diagnostics
+log only the subject and unresolved count, not raw reference contents.
+
+Independent source review accepted the three-file diff. Unrun fixtures model
+mixed known/unknown inventory, retained pointers, explicit resolution repair on
+a second attempt, another user's rows, and null/blank inputs. The nullable
+converter mock resets between cases. A separate actual-parser fixture covers a
+legacy public base before and after configuration change/removal, with raw-key
+controls and restoration of changed environment values. Neither fixture ran.
+Retries alone do not repair an obsolete base; operator reconciliation may be
+needed. This is not a legacy-data migration, broad URL acceptance, proof of
+stored-byte absence or complete erasure. No tests, lint, typechecks, builds,
+installations, live/database actions, push or deployment ran.
