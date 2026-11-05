@@ -4,6 +4,12 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { api } from '@/services/api';
+import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+
+interface PreferenceRequestOptions {
+  accountEpoch?: CloudAccountEpoch | null;
+  signal?: AbortSignal;
+}
 
 interface PreferenceReadResponse {
   settings?: unknown;
@@ -23,10 +29,15 @@ export async function fetchToolApprovalNamespace(
   };
 }
 
-export async function fetchPreferenceNamespace(namespace: string): Promise<unknown> {
-  const data = await api.get<PreferenceReadResponse>(
-    managedCloudPreferencesNamespacePath(namespace),
-  );
+export async function fetchPreferenceNamespace(
+  namespace: string,
+  options?: PreferenceRequestOptions,
+): Promise<unknown> {
+  const path = managedCloudPreferencesNamespacePath(namespace);
+  const data =
+    options === undefined
+      ? await api.get<PreferenceReadResponse>(path)
+      : await api.get<PreferenceReadResponse>(path, options);
   const settings = data?.settings;
   return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
 }
@@ -34,8 +45,13 @@ export async function fetchPreferenceNamespace(namespace: string): Promise<unkno
 export async function savePreferenceNamespace<T extends object>(
   namespace: string,
   value: T,
+  options?: PreferenceRequestOptions,
 ): Promise<void> {
-  await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, value });
+  if (options === undefined) {
+    await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, value });
+  } else {
+    await api.put(MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH, { namespace, value }, options);
+  }
 }
 
 export async function patchPreferenceNamespace<T extends object>(

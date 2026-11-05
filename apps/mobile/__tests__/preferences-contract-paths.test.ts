@@ -43,6 +43,26 @@ describe('mobile preference paths come from the cloud contract', () => {
     ]);
   });
 
+  it('forwards caller ownership and cancellation without changing legacy call shapes', async () => {
+    const options = {
+      accountEpoch: { ownerId: 'account-a', epoch: 4 },
+      signal: new AbortController().signal,
+    };
+    await fetchPreferenceNamespace('time focus', options);
+    await savePreferenceNamespace('time focus', { enabled: true }, options);
+    expect(mockGet).toHaveBeenLastCalledWith(`${RELOCATED}?namespace=time%20focus`, options);
+    expect(mockPut).toHaveBeenLastCalledWith(
+      RELOCATED,
+      { namespace: 'time focus', value: { enabled: true } },
+      options,
+    );
+
+    await fetchPreferenceNamespace('legacy');
+    await savePreferenceNamespace('legacy', {});
+    expect(mockGet).toHaveBeenLastCalledWith(`${RELOCATED}?namespace=legacy`);
+    expect(mockPut).toHaveBeenLastCalledWith(RELOCATED, { namespace: 'legacy', value: {} });
+  });
+
   it('writes namespaced and un-namespaced settings through the relocated path', async () => {
     await savePreferenceNamespace('safety', { reduceSensitiveContent: true });
     await saveAccountSettings({ session_timeout: 30 });
