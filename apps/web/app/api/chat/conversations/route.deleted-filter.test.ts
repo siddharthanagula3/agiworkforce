@@ -43,14 +43,16 @@ describe('GET /api/chat/conversations deleted filter', () => {
     const [sql] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('deleted_at is null');
     expect(sql).not.toContain('deleted_at is not null');
+    expect(sql).not.toContain("interval '30 days'");
   });
 
-  it('returns only deleted conversations when asked', async () => {
+  it('lists only deleted conversations inside the recovery window', async () => {
     const response = await GET(new NextRequest(url('?deleted=only')));
 
     expect(response.status).toBe(200);
     const [sql] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('deleted_at is not null');
+    expect(sql).toContain("deleted_at > now() - interval '30 days'");
   });
 
   it('stays owner-scoped in both modes', async () => {
@@ -59,7 +61,9 @@ describe('GET /api/chat/conversations deleted filter', () => {
       await GET(new NextRequest(url(query)));
       const [sql, params] = mocks.query.mock.calls[0]!;
       expect(sql).toContain('user_id = $1');
+      expect(sql).toContain('organization_id is not distinct from $2');
       expect((params as unknown[])[0]).toBe('user-1');
+      expect((params as unknown[])[1]).toBeNull();
     }
   });
 
@@ -82,6 +86,7 @@ describe('GET /api/chat/conversations deleted filter', () => {
 
     const [sql] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('deleted_at is not null');
+    expect(sql).toContain("deleted_at > now() - interval '30 days'");
     expect(sql).toContain('archived = true');
   });
 });

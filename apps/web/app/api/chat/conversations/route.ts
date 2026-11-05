@@ -11,6 +11,7 @@ import {
   type ChatConversationRow,
 } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { restorableScopeSql } from '@/lib/resources/lifecycle-sql';
 import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { assertSessionInvariants } from '@agiworkforce/types';
 import {
@@ -80,7 +81,7 @@ async function handleGetConversations(request: NextRequest) {
       'coalesce(is_temporary, false) = false',
       'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id and web_messages.deleted_at is null)',
     ];
-    where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
+    where.push(deletedFilter === 'only' ? restorableScopeSql('web_conversations') : 'deleted_at is null');
     const params: unknown[] = [userId, organizationId];
     if (projectId) {
       params.push(projectId);
