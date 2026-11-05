@@ -75,10 +75,9 @@ describe('/api/memory pinned contract', () => {
     const body = (await res.json()) as { memories: Array<{ pinned: boolean }> };
     expect(body.memories[0]?.pinned).toBe(true);
     expect(sql()).toMatch(/select[\s\S]*\bpinned\b/i);
-    // Matched on intent, not literal text: the query gained a table alias when
-    // project attribution was added (0135). What must not change is that
-    // pinned facts sort first and ties break on recency.
-    expect(sql()).toMatch(/order by\s+(?:\w+\.)?pinned desc,\s*(?:\w+\.)?updated_at desc/i);
+    expect(sql().replace(/\s+/g, ' ').trim()).toContain(
+      'order by m.pinned desc, m.updated_at desc, m.id desc limit $2 offset $3',
+    );
   });
 
   it('GET /api/memory/[id] returns pinned', async () => {
