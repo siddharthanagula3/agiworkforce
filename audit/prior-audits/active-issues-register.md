@@ -12795,3 +12795,102 @@ provider enumeration, individual session revocation, device cleanup and
 post-action notification/response, plus concurrent token use. Suppressing one
 success string or catching one await alone is not complete recovery. Product
 code is unchanged for this finding; no service or runtime was exercised.
+
+
+## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
+
+Severity: Medium. Bounded source correction `897e894683` independently reviewed
+on 2026-11-05; fixtures unrun. Database/RLS acceptance and durable producer
+capture remain open.
+
+`lib/services/developer-webhook-service.ts::recordDeliveries` previously committed
+each delivery row before independently enqueuing its background job. An enqueue
+failure left a pending row without a retry job and stopped the remaining fan-out;
+ordinary `queueDeveloperWebhookEvent` logged and swallowed that failure before
+registering its post-response attempt. The worker drains jobs, not orphan delivery
+rows. `lib/developer-api/project-spend.ts` treats any matching delivery as the
+month's announcement, so an orphan can suppress later spend-limit announcements.
+The already-revoked branch of settings key DELETE also cannot recreate a missed
+event. This is source-backed failure behavior, not an observed delivery incident.
+
+The bounded change places the complete endpoint fan-out in one caller-scoped
+transaction: both delivery INSERT and canonical `enqueueJob` use its adapter.
+A missing delivery receipt aborts instead of silently continuing. Job enqueue
+already rejects when neither insertion nor an owned conflict lookup returns a
+receipt. A later endpoint failure now rolls back earlier members too. All current
+callers supply an outer adapter, and after-response scheduling remains after the
+transaction resolves; no nested transaction, scope rebinding or provider call is
+introduced. Real restricted-role and database behavior remains unverified.
+
+A pre-existing enqueue scope mismatch remains: this service omits organizationId,
+and `enqueueJob` explicitly inserts null. The background-job INSERT policy in
+0208 requires `app_row_is_writable`, whose 0110 definition requires exact active
+organization equality. Routes with an organization selected, and organization
+schedule jobs, retain a non-null organization scope, so those job inserts are
+rejected under the source policies. Previously a delivery row could remain; the transaction now
+rolls it back. This patch does not enable organization-scoped enqueue or decide
+webhook scope ownership. Do not silently rebind to Personal or weaken RLS.
+
+This does not make originating key mutations or schedule notifications atomic
+with event capture. Ordinary producer errors remain logged/swallowed, and generated
+event IDs are not stable across producer retries. Existing orphan rows need an
+explicit recovery policy. Ambiguous commit acknowledgments, duplicate concurrent
+attempts, endpoint changes and monthly announcement semantics remain separate
+boundaries. Do not describe this as exactly-once delivery or complete durable
+outbox recovery. The existing endpoint owner joins, RLS, public pinned egress and
+redirect refusal are retained.
+
+Authored transaction-model fixtures are unrun and do not establish SQL/RLS,
+provider delivery or uncertain-commit behavior. Later authorized acceptance must
+cover late fan-out failure, no-row insertion, enqueue conflict, commit interruption,
+Personal and organization scopes, and worker recovery. No tests, lint, typechecks,
+builds, database/provider calls, push or deployment ran.
+
+## WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01
+
+Severity: High. Independently source-confirmed 2026-11-05; no product correction
+or runtime reproduction in this slice.
+
+Settings key creation checks `readLiveDeveloperProject` before count, step-up and
+rate-limit work, outside the canonical key insertion. `ApiKeyService.createApiKey`
+only inserts the supplied project ID. Archive can therefore finish between
+preflight and insertion. Support rotation now preserves project metadata atomically,
+but locks the key before inserting a replacement; archive updates the project
+before bulk-revoking keys. An archive bulk-update snapshot can miss a concurrent
+replacement while waiting for its old key. The project FK checks existence, not
+ownership or archive admission. See `SUPPORT-API-KEY-ROTATION-ATOMICITY-01` for the
+accepted earlier transaction/metadata correction and its remaining limits.
+
+There is a separate scope mismatch: migration 0321's developer projects are
+user-global, while API keys default to the active organization under 0110 and
+use the workspace visibility/writability policies from 0073, 0110 and 0272.
+Settings creation and project archive use normal active-workspace resolution;
+support confirmation explicitly uses Personal scope. The same project can thus
+hold keys in several workspaces, but archive's scoped UPDATE reaches only the
+current workspace. Other existing keys can remain unrevoked. Canonical key
+verification checks hash, revocation and expiry, not project archive status;
+other account/endpoint admission gates still apply.
+
+Source owners: `lib/services/developer-project-service.ts`,
+`lib/services/api-key-service.ts`, `app/api/settings/api-keys/route.ts`,
+`app/api/developers/projects/[projectId]/route.ts`, support confirmation/executor,
+and the cited append-only migrations. Project association participates in usage
+aggregation and the project-spend refusal called by chat completions and audio
+transcription; it is not merely display metadata. However, `project-spend.ts`
+binds Personal scope explicitly, so its key/project query cannot see an
+organization-owned key under current RLS and returns no project refusal for that
+row. The same adapter scopes spend aggregation. This is a source visibility
+limitation, not proven global enforcement or a demonstrated end-to-end budget
+bypass.
+
+A complete lifecycle decision must address both concurrency and scope. Admission
+needs project-before-key ordering, an owned live-project lock conflicting with
+archive, and a locked key reread refusing changed project association; null project
+issuance stays supported. A late project lock inside the current key-first rotation
+is unsafe. For global archive semantics, either align project/workspace ownership
+with an existing-data policy or provide a narrowly authorized owner-qualified
+cross-workspace revocation operation. Do not weaken RLS or silently rebind scope.
+A verifier archive check alone would not make all keys revoked or emit their
+revocation events. Future acceptance must cover both archive interleavings,
+concurrent rotations, changed association, rollback and multi-workspace keys.
+No such database or runtime checks ran here.

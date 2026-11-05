@@ -5232,9 +5232,34 @@ after link consumption; returned partial results can still produce universal-suc
 copy. That coordinated outcome/
 reconciliation issue is recorded, not repaired by the key-rotation change.
 
+## Developer webhook delivery and retry-job custody
+
+Accepted `897e894683` places delivery rows and canonical background jobs for
+the complete endpoint fan-out in one caller-scoped transaction. Missing
+delivery receipts abort; late endpoint/job failures roll back earlier members.
+Callers register post-response attempts only after the transaction resolves.
+Production callers were source-traced to outer adapters, and enqueue uses the
+provided transaction without nesting or rebinding its scope.
+
+Production and authored fixtures received independent source review. Fixtures
+exercise the actual public service functions and canonical job enqueue through a
+staged transaction model. They are unrun and do not prove real
+SQL, RLS, concurrency, provider delivery or uncertain commit outcomes. Producer
+mutations still commit separately from best-effort event capture; existing orphan
+rows and stable producer retry identity remain outside this correction. A separate
+source-confirmed organization mismatch still rejects these null-organization jobs
+when the caller has an organization selected. No Personal rebinding was added.
+See `WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01` for pending acceptance.
+
+The same audit records `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01` without changing
+product code: user-global projects and workspace-scoped keys do not share archive
+coverage, and issuance/rotation need coordinated project-first admission. The
+Personal-scoped spend query does not establish organization-wide project limits.
+The earlier support rotation atomicity correction retains its narrower scope.
+
 ## Reconstruction boundary
 
-Only the two hundred ten accepted production slices traced above are represented as
+Only the two hundred eleven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
