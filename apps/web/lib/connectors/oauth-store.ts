@@ -603,13 +603,7 @@ function openRevocable(sealed: string, purpose: 'oauth-access-token' | 'oauth-re
   }
 }
 
-/**
- * Every live credential a disconnect has to hand back to the provider, one per
- * connected account. Reading a single grant would leave the accounts that are
- * not the default live upstream after the local rows are destroyed. A row whose
- * ciphertext no longer opens is skipped rather than failing the disconnect,
- * since a credential nobody can read is also one nobody can present.
- */
+/** Readable credentials only; this list does not establish complete upstream revocation. */
 export async function listRevocableConnectorTokens(
   userId: string,
   connectorId: string,
@@ -634,33 +628,35 @@ function decodeRevocableRows(rows: RevocableGrantRow[], connectorId: string) {
   const tokens: RevocableConnectorToken[] = [];
   let incomplete = false;
   for (const row of rows) {
-    const sealed = row.refresh_token_enc ?? row.access_token_enc;
-    if (!sealed) {
-      incomplete = true;
-      continue;
-    }
-    const purpose = row.refresh_token_enc ? 'oauth-refresh-token' : 'oauth-access-token';
-    const token = openRevocable(sealed, purpose);
-    if (token === null) {
+    const refreshToken = row.refresh_token_enc
+      ? openRevocable(row.refresh_token_enc, 'oauth-refresh-token')
+      : null;
+    const accessToken = row.access_token_enc
+      ? openRevocable(row.access_token_enc, 'oauth-access-token')
+      : null;
+    if (
+      (row.refresh_token_enc != null && refreshToken === null) ||
+      (row.access_token_enc != null && accessToken === null)
+    ) {
       incomplete = true;
       logger.warn(
         { connectorId },
         '[connector-oauth] a stored credential could not be decrypted for revocation',
       );
+    }
+    const token = refreshToken ?? accessToken;
+    if (token === null) {
+      incomplete = true;
       continue;
     }
-    const companionAccessToken =
-      row.refresh_token_enc && row.access_token_enc
-        ? openRevocable(row.access_token_enc, 'oauth-access-token')
-        : null;
-    if (row.refresh_token_enc && companionAccessToken === null) {
+    if (refreshToken !== null && accessToken === null) {
       incomplete = true;
     }
     tokens.push({
       accountKey: normalizeConnectorAccountKey(row.account_key),
       token,
-      tokenTypeHint: row.refresh_token_enc ? 'refresh_token' : 'access_token',
-      companionAccessToken,
+      tokenTypeHint: refreshToken !== null ? 'refresh_token' : 'access_token',
+      companionAccessToken: refreshToken !== null ? accessToken : null,
       issuer: row.issuer ?? null,
       mcpUrl: row.mcp_url ?? null,
     });

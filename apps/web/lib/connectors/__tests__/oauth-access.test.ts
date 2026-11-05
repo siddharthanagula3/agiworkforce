@@ -538,6 +538,50 @@ describe('disconnectConnectorOAuthGrant', () => {
     });
   });
 
+  it('attempts a captured access fallback but keeps unreadable refresh cleanup unconfirmed', async () => {
+    mocks.captureGrant.mockResolvedValue({
+      disconnected: true,
+      tokens: [revocable({ token: 'fallback-access', tokenTypeHint: 'access_token' })],
+      incomplete: true,
+    });
+    mocks.getProvider.mockReturnValue({ ...PROVIDER, revocationUrl: 'https://auth.example.com/revoke' });
+    mocks.revokeAtProvider.mockResolvedValue(true);
+
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
+    expect(mocks.revokeAtProvider).toHaveBeenCalledOnce();
+    expect(mocks.revokeAtProvider).toHaveBeenCalledWith(
+      expect.anything(), 'fallback-access', 'access_token',
+    );
+  });
+
+  it('sends one discovered access fallback without duplicating it as a companion', async () => {
+    mocks.captureGrant.mockResolvedValue({
+      disconnected: true,
+      tokens: [revocable({
+        token: 'fallback-access', tokenTypeHint: 'access_token',
+        issuer: 'https://auth.vendor.test', mcpUrl: 'https://mcp.vendor.test/mcp',
+      })],
+      incomplete: true,
+    });
+    mocks.getProvider.mockReturnValue(null);
+    mocks.revokeDiscovered.mockResolvedValue({ status: 'revoked' });
+
+    await expect(disconnectConnectorOAuthGrant('u1', 'custom:abc')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
+    expect(mocks.revokeDiscovered).toHaveBeenCalledOnce();
+    expect(mocks.revokeDiscovered).toHaveBeenCalledWith({
+      issuer: 'https://auth.vendor.test',
+      client: null,
+      tokens: [{ token: 'fallback-access', tokenTypeHint: 'access_token' }],
+    });
+    expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
+  });
+
   it('waits for the capture transaction result before attempting provider revocation', async () => {
     let finish!: (result: { disconnected: boolean; tokens: ReturnType<typeof revocable>[]; incomplete: boolean }) => void;
     mocks.captureGrant.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
@@ -700,6 +744,23 @@ describe('revokeAllConnectorTokensAtProviders', () => {
     });
     expect(mocks.revokeDiscovered).toHaveBeenCalledWith(
       expect.objectContaining({ issuer: 'https://auth.vendor.test' }),
+    );
+  });
+
+  it('counts a returned access fallback as one attempted account outcome, not complete grant cleanup', async () => {
+    mocks.dbQuery.mockResolvedValue([{ connector_id: 'gmail' }]);
+    mocks.getProvider.mockReturnValue(google);
+    mocks.listRevocable.mockResolvedValue([
+      revocable({ token: 'fallback-access', tokenTypeHint: 'access_token' }),
+    ]);
+    mocks.revokeAtProvider.mockResolvedValue(true);
+
+    await expect(revokeAllConnectorTokensAtProviders('u1')).resolves.toEqual({
+      attempted: 1, revoked: 1,
+    });
+    expect(mocks.revokeAtProvider).toHaveBeenCalledOnce();
+    expect(mocks.revokeAtProvider).toHaveBeenCalledWith(
+      google, 'fallback-access', 'access_token',
     );
   });
 

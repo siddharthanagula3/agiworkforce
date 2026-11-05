@@ -358,6 +358,30 @@ describe('credentials a disconnect has to hand back', () => {
     expect(tokens.map((token) => token.accountKey)).toEqual(['personal']);
   });
 
+  it.each(['broken', 'empty', 'wrong-purpose'] as const)(
+    'uses readable access credentials when refresh ciphertext is %s',
+    async (kind) => {
+      mockQuery.mockResolvedValue([{
+        account_key: ' work ',
+        access_token_enc: encryptConnectorToken('fallback-access', 'oauth-access-token'),
+        refresh_token_enc: kind === 'wrong-purpose'
+          ? encryptConnectorToken('not-a-refresh-token', 'oauth-access-token')
+          : kind === 'empty' ? '' : 'broken',
+        issuer: 'https://auth.vendor.test',
+        mcp_url: 'https://mcp.vendor.test/mcp',
+      }]);
+
+      await expect(listRevocableConnectorTokens('user-1', 'custom:abc')).resolves.toEqual([{
+        accountKey: 'work',
+        token: 'fallback-access',
+        tokenTypeHint: 'access_token',
+        companionAccessToken: null,
+        issuer: 'https://auth.vendor.test',
+        mcpUrl: 'https://mcp.vendor.test/mcp',
+      }]);
+    },
+  );
+
   it('surfaces a missing table instead of reporting nothing to revoke', async () => {
     mockQuery.mockRejectedValue(
       Object.assign(new Error('relation does not exist'), { code: '42P01' }),
@@ -480,7 +504,7 @@ describe('atomic disconnect capture (modeled transaction ordering, not database 
     expect((await captureAndRevokeConnectorOAuthGrants('user-1', 'gmail')).disconnected).toBe(true);
   });
 
-  it('clears unreadable and missing credentials but marks upstream revocation incomplete', async () => {
+  it('captures readable access credentials without concealing incomplete refresh cleanup', async () => {
     mockTxQuery.mockResolvedValueOnce([
       { ...capturedRow(), refresh_token_enc: 'broken' },
       { ...capturedRow(), id: '00000000-0000-0000-0000-000000000002', access_token_enc: null, refresh_token_enc: null },
@@ -488,11 +512,63 @@ describe('atomic disconnect capture (modeled transaction ordering, not database 
       { id: capturedRow().id }, { id: '00000000-0000-0000-0000-000000000002' },
     ]);
     await expect(captureAndRevokeConnectorOAuthGrants('user-1', 'gmail')).resolves.toEqual({
-      disconnected: true, tokens: [], incomplete: true,
+      disconnected: true,
+      tokens: [{
+        accountKey: 'work', token: 'rotated-access', tokenTypeHint: 'access_token',
+        companionAccessToken: null, issuer: null, mcpUrl: null,
+      }],
+      incomplete: true,
     });
     expect(mockTxQuery.mock.calls[1]?.[1]).toEqual(['user-1', 'gmail', [
       '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002',
     ]]);
+  });
+
+  it.each(['broken', null])('preserves readable refresh credentials with %s companion access', async (access) => {
+    const row = { ...capturedRow(), access_token_enc: access };
+    mockTxQuery.mockResolvedValueOnce([row]).mockResolvedValueOnce([{ id: row.id }]);
+
+    await expect(captureAndRevokeConnectorOAuthGrants('user-1', 'gmail')).resolves.toEqual({
+      disconnected: true,
+      tokens: [{
+        accountKey: 'work', token: 'rotated-refresh', tokenTypeHint: 'refresh_token',
+        companionAccessToken: null, issuer: null, mcpUrl: null,
+      }],
+      incomplete: true,
+    });
+  });
+
+  it.each(['broken', 'empty', 'wrong-purpose'] as const)(
+    'keeps a single access fallback incomplete when refresh ciphertext is %s',
+    async (kind) => {
+      const row = {
+        ...capturedRow(),
+        refresh_token_enc: kind === 'wrong-purpose'
+          ? encryptConnectorToken('not-a-refresh-token', 'oauth-access-token')
+          : kind === 'empty' ? '' : 'broken',
+      };
+      mockTxQuery.mockResolvedValueOnce([row]).mockResolvedValueOnce([{ id: row.id }]);
+
+      await expect(captureAndRevokeConnectorOAuthGrants('user-1', 'gmail')).resolves.toEqual({
+        disconnected: true,
+        tokens: [{
+          accountKey: 'work', token: 'rotated-access', tokenTypeHint: 'access_token',
+          companionAccessToken: null, issuer: null, mcpUrl: null,
+        }],
+        incomplete: true,
+      });
+      expect(mockTxQuery.mock.calls[1]?.[1]).toEqual(['user-1', 'gmail', [row.id]]);
+    },
+  );
+
+  it('removes a row with two unreadable credentials without returning either one', async () => {
+    const row = { ...capturedRow(), access_token_enc: 'broken-access', refresh_token_enc: 'broken-refresh' };
+    mockTxQuery.mockResolvedValueOnce([row]).mockResolvedValueOnce([{ id: row.id }]);
+
+    await expect(captureAndRevokeConnectorOAuthGrants('user-1', 'gmail')).resolves.toEqual({
+      disconnected: true, tokens: [], incomplete: true,
+    });
+    expect(mockTxQuery.mock.calls[1]?.[1]).toEqual(['user-1', 'gmail', [row.id]]);
   });
 
   it.each([
