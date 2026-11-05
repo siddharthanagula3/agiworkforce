@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { payloadCeilingBytes } from '@/lib/payload-ceiling';
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -32,6 +33,103 @@ describe('POST /api/auth/device/code', () => {
     vi.clearAllMocks();
     mocks.execute.mockResolvedValue(undefined);
     mocks.query.mockResolvedValue([]);
+  });
+
+  const url = 'https://agiworkforce.com/api/auth/device/code';
+
+  it.each([undefined, '', '{}'])('retains empty-body CLI defaults for %j', async (body) => {
+    const response = await POST(new NextRequest(url, { method: 'POST', body }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.execute).toHaveBeenCalledOnce();
+    expect(mocks.execute.mock.calls[0]?.[1]?.[2]).toBe('cli');
+  });
+
+  it.each(['cli', 'desktop', 'vscode', 'chrome'])('retains the %s surface', async (surface) => {
+    const response = await POST(
+      new NextRequest(url, { method: 'POST', body: JSON.stringify({ surface }) }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.execute.mock.calls[0]?.[1]?.[2]).toBe(surface);
+  });
+
+  it.each(['{', '{"surface":"desktop",', ' \t\r\n ', '{"surface":"unknown"}'])(
+    'refuses invalid input %j before issuing a code',
+    async (body) => {
+      const response = await POST(new NextRequest(url, { method: 'POST', body }));
+
+      expect(response.status).toBe(400);
+      expect(mocks.execute).not.toHaveBeenCalled();
+      expect(mocks.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it('propagates a failed body read before issuing a code', async () => {
+    const request = new NextRequest(url, { method: 'POST' });
+    vi.spyOn(request, 'text').mockRejectedValueOnce(new Error('Body transport failed'));
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(500);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('propagates an undeclared stream failure before issuing a code', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error('Body transport failed'));
+      },
+    });
+    const init: RequestInit & { duplex: 'half' } = { method: 'POST', body, duplex: 'half' };
+
+    const response = await POST(new NextRequest(url, init));
+
+    expect(response.status).toBe(500);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('preserves the streamed ceiling refusal and cancellation without issuing a code', async () => {
+    const ceiling = payloadCeilingBytes('/api/auth/device/code');
+    const chunkBytes = 64 * 1024;
+    let produced = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (produced >= ceiling * 8) {
+          controller.close();
+          return;
+        }
+        produced += chunkBytes;
+        controller.enqueue(new Uint8Array(chunkBytes).fill(0x61));
+      },
+      cancel,
+    });
+    const init: RequestInit & { duplex: 'half' } = { method: 'POST', body, duplex: 'half' };
+
+    const response = await POST(new NextRequest(url, init));
+
+    expect(response.status).toBe(413);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(produced).toBeLessThan(ceiling * 4);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('retains declared oversize refusal before issuing a code', async () => {
+    const response = await POST(
+      new NextRequest(url, {
+        method: 'POST',
+        headers: { 'Content-Length': String(payloadCeilingBytes('/api/auth/device/code') + 1) },
+        body: '{}',
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 
   it('returns a complete verification URL using the approval page user_code parameter', async () => {
