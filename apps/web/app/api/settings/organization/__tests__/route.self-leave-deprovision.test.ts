@@ -111,6 +111,78 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
     expect(body.warnings).toEqual([]);
   });
 
+  it.each([undefined, '', '{}'])('retains empty-body leave compatibility for %j', async (body) => {
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/organization/leave', {
+        method: 'DELETE',
+        body,
+      }) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockLeaveOrganization).toHaveBeenCalledOnce();
+    expect(mockDeprovisionMember).toHaveBeenCalledOnce();
+  });
+
+  function expectNoLeave() {
+    expect(mockResolveActiveOrganizationId).not.toHaveBeenCalled();
+    expect(mockLeaveOrganization).not.toHaveBeenCalled();
+    expect(mockDeprovisionMember).not.toHaveBeenCalled();
+    expect(mockInvalidateActiveOrganizationCache).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    expect(mockGetTeamAdminAccess).not.toHaveBeenCalled();
+  }
+
+  it.each([
+    '{',
+    '{"successorUserId":"successor",',
+    ' \t\r\n ',
+    'null',
+    '[]',
+    '{"successorUserId":1}',
+  ])(
+    'refuses invalid input %j before membership or deprovisioning actions',
+    async (body) => {
+      const response = await DELETE(
+        new Request('http://localhost:3000/api/settings/organization/leave', {
+          method: 'DELETE',
+          body,
+        }) as never,
+      );
+
+      expect(response.status).toBe(400);
+      expectNoLeave();
+    },
+  );
+
+  it('propagates a failed body read before membership or deprovisioning actions', async () => {
+    const unreadable = new Request('http://localhost:3000/api/settings/organization/leave', {
+      method: 'DELETE',
+    });
+    vi.spyOn(unreadable, 'text').mockRejectedValueOnce(new Error('Body transport failed'));
+
+    const response = await DELETE(unreadable as never);
+
+    expect(response.status).toBe(500);
+    expectNoLeave();
+  });
+
+  it('propagates a stream failure before membership or deprovisioning actions', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error('Body transport failed'));
+      },
+    });
+    const init: RequestInit & { duplex: 'half' } = { method: 'DELETE', body, duplex: 'half' };
+
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/organization/leave', init) as never,
+    );
+
+    expect(response.status).toBe(500);
+    expectNoLeave();
+  });
+
   it('deprovisions after the membership row is gone, never before', async () => {
     const order: string[] = [];
     mockLeaveOrganization.mockImplementation(async () => {

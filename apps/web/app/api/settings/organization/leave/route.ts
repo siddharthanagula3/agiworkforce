@@ -31,7 +31,16 @@ async function handleLeave(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const parsed = LeaveSchema.safeParse(await request.json().catch(() => ({})));
+  const bodyText = await request.text();
+  let body: unknown = {};
+  if (bodyText !== '') {
+    try {
+      body = JSON.parse(bodyText) as unknown;
+    } catch {
+      throw createError.validation('Invalid request body');
+    }
+  }
+  const parsed = LeaveSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
