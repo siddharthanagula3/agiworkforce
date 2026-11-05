@@ -720,7 +720,12 @@ async function deleteObjectKeys(
 
 async function eraseUserKnowledgeObjects(
   userId: string,
-): Promise<{ deleted: number; failed: number }> {
+): Promise<{
+  deleted: number;
+  failed: number;
+  backupObjectsDeleted: number;
+  backupObjectsFailed: number;
+}> {
   const rows = await getNeonDb().query<{ storage_uri: string | null }>(
     `select k.storage_uri
        from public.project_knowledge_files k
@@ -733,10 +738,20 @@ async function eraseUserKnowledgeObjects(
   const keys = rows
     .map((row) => (row.storage_uri ? objectKeyFromStorageUri(row.storage_uri) : null))
     .filter((key): key is string => Boolean(key));
-  return deleteObjectKeys(keys, 'knowledge-file', {
+  const erasedKeys: string[] = [];
+  const primary = await deleteObjectKeys(keys, 'knowledge-file', {
     configured: isProjectKnowledgeObjectStorageConfigured,
-    deleteKey: deleteProjectKnowledgeObject,
+    deleteKey: async (key) => {
+      await deleteProjectKnowledgeObject(key);
+      erasedKeys.push(key);
+    },
   });
+  const backup = await eraseBackupCopies(erasedKeys);
+  return {
+    ...primary,
+    backupObjectsDeleted: backup.deleted,
+    backupObjectsFailed: backup.failedKeys.length,
+  };
 }
 
 async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number; failed: number }> {
@@ -938,7 +953,10 @@ export async function eraseUserAccountData(
 
     for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
       if (table === PROFILE_TABLE) continue;
-      if (table === 'user_projects' && knowledge.failed > 0) {
+      if (
+        table === 'user_projects' &&
+        (knowledge.failed > 0 || knowledge.backupObjectsFailed > 0)
+      ) {
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
@@ -972,6 +990,7 @@ export async function eraseUserAccountData(
       media.mediaObjectsFailed === 0 &&
       media.backupObjectsFailed === 0 &&
       knowledge.failed === 0 &&
+      knowledge.backupObjectsFailed === 0 &&
       exportArchives.failed === 0 &&
       avatar.failed === 0 &&
       feedbackScreenshots.failed === 0 &&
@@ -1001,6 +1020,8 @@ export async function eraseUserAccountData(
     return {
       userId,
       ...media,
+      backupObjectsDeleted: media.backupObjectsDeleted + knowledge.backupObjectsDeleted,
+      backupObjectsFailed: media.backupObjectsFailed + knowledge.backupObjectsFailed,
       knowledgeObjectsDeleted: knowledge.deleted,
       knowledgeObjectsFailed: knowledge.failed,
       exportObjectsDeleted: exportArchives.deleted,

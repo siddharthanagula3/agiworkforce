@@ -373,6 +373,12 @@ describe('eraseUserAccountData', () => {
     mocks.privateObjectStorageConfigured.mockReturnValue(true);
     mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failedPathnames: [] });
     mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 0, reachable: true });
+    mocks.resolveObjectBackupTarget.mockReset();
+    mocks.resolveObjectBackupTarget.mockReturnValue(null);
+    mocks.deleteBackupObject.mockReset();
+    mocks.deleteBackupObject.mockResolvedValue('deleted');
+    mocks.forgetBackupReplicas.mockReset();
+    mocks.forgetBackupReplicas.mockResolvedValue(0);
   });
 
   it('keeps failed export pointers for the next erasure while deleting unrelated user jobs', async () => {
@@ -933,6 +939,148 @@ describe('eraseUserAccountData', () => {
     expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
     expect(
       executedStatements().some((sql) => sql.includes('delete from public.user_projects')),
+    ).toBe(false);
+  });
+
+  it('retains knowledge pointers after a backup failure and retries them after primary deletion', async () => {
+    primeDb();
+    let knowledgeRows = [
+      { userId: 'user-1', storage_uri: 'knowledge/a.pdf' },
+      { userId: 'user-1', storage_uri: 'knowledge/b.pdf' },
+      { userId: 'user-2', storage_uri: 'knowledge/c.pdf' },
+    ];
+    const primaryKeys = new Set(knowledgeRows.map((row) => row.storage_uri));
+    const primaryAttempts: Array<{ key: string; present: boolean }> = [];
+    const query = mocks.query.getMockImplementation()!;
+    const execute = mocks.execute.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('select k.storage_uri')) {
+        expect(sql).toContain('where p.user_id = $1');
+        return knowledgeRows.filter((row) => row.userId === params[0]);
+      }
+      return query(sql);
+    });
+    mocks.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      const result = await execute(sql);
+      if (sql.includes('delete from public.user_projects')) {
+        expect(sql).toContain('where user_id = $1');
+        knowledgeRows = knowledgeRows.filter((row) => row.userId !== params[0]);
+      }
+      return result;
+    });
+    mocks.deleteObject.mockImplementation(async (key: string) => {
+      primaryAttempts.push({ key, present: primaryKeys.has(key) });
+      primaryKeys.delete(key);
+    });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteBackupObject
+      .mockRejectedValueOnce(new Error('backup unavailable'))
+      .mockResolvedValueOnce('deleted')
+      .mockResolvedValueOnce('deleted')
+      .mockResolvedValueOnce('absent');
+
+    const first = await eraseUserAccountData('user-1');
+
+    expect(first.knowledgeObjectsDeleted).toBe(2);
+    expect(first.knowledgeObjectsFailed).toBe(0);
+    expect(first.backupObjectsDeleted).toBe(1);
+    expect(first.backupObjectsFailed).toBe(1);
+    expect(first.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(first.complete).toBe(false);
+    expect(first.profileRetained).toBe(true);
+    expect(knowledgeRows).toHaveLength(3);
+    expect([...primaryKeys]).toEqual(['knowledge/c.pdf']);
+    expect(executedStatements().some((sql) => sql.includes('delete from public.profiles'))).toBe(
+      false,
+    );
+    expect(mocks.forgetBackupReplicas).toHaveBeenLastCalledWith(['knowledge/b.pdf']);
+
+    const second = await eraseUserAccountData('user-1');
+
+    expect(second.knowledgeObjectsDeleted).toBe(2);
+    expect(second.knowledgeObjectsFailed).toBe(0);
+    expect(second.backupObjectsDeleted).toBe(2);
+    expect(second.backupObjectsFailed).toBe(0);
+    expect(second.tables['user_projects']).toEqual({ deleted: true });
+    expect(second.complete).toBe(true);
+    expect(second.profileRetained).toBe(false);
+    expect(knowledgeRows).toEqual([{ userId: 'user-2', storage_uri: 'knowledge/c.pdf' }]);
+    expect(primaryAttempts).toEqual([
+      { key: 'knowledge/a.pdf', present: true },
+      { key: 'knowledge/b.pdf', present: true },
+      { key: 'knowledge/a.pdf', present: false },
+      { key: 'knowledge/b.pdf', present: false },
+    ]);
+    expect(mocks.deleteBackupObject.mock.calls.map(([key]) => key)).toEqual([
+      'knowledge/a.pdf',
+      'knowledge/b.pdf',
+      'knowledge/a.pdf',
+      'knowledge/b.pdf',
+    ]);
+  });
+
+  it('includes successful knowledge backups alongside media backup counts', async () => {
+    primeDb({
+      mediaRows: [{ id: 'media-1', storage_pathname: 'private-media/a.png' }],
+      knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }],
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 1, failedPathnames: [] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.backupObjectsDeleted).toBe(2);
+    expect(report.backupObjectsFailed).toBe(0);
+    expect(report.knowledgeObjectsDeleted).toBe(1);
+    expect(report.knowledgeObjectsFailed).toBe(0);
+    expect(report.complete).toBe(true);
+    expect(mocks.deleteBackupObject.mock.calls.map(([key]) => key)).toEqual([
+      'private-media/a.png',
+      'knowledge/doc.pdf',
+    ]);
+  });
+
+  it('does not remove a knowledge backup when its primary deletion failed', async () => {
+    primeDb({ knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }] });
+    mocks.deleteObject.mockRejectedValueOnce(new Error('primary unavailable'));
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
+    expect(report.knowledgeObjectsFailed).toBe(1);
+    expect(report.backupObjectsFailed).toBe(0);
+    expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(report.complete).toBe(false);
+  });
+
+  it('preserves knowledge pointers when backup target resolution throws after primary disposal', async () => {
+    primeDb({ knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }] });
+    mocks.resolveObjectBackupTarget.mockImplementation(() => {
+      throw new Error('invalid backup configuration');
+    });
+
+    await expect(eraseUserAccountData('user-1')).rejects.toThrow('invalid backup configuration');
+
+    expect(mocks.deleteObject).toHaveBeenCalledWith('knowledge/doc.pdf');
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
+    expect(
+      executedStatements().some((sql) => /delete from public\.(user_projects|profiles)\b/u.test(sql)),
     ).toBe(false);
   });
 
