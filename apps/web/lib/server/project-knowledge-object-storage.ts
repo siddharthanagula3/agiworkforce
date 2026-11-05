@@ -5,13 +5,13 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import path from 'node:path';
 import { readSignedUploadClaims, signUploadClaims } from './upload-signing';
 import {
-  copyPrivateObjectIfUnchanged,
   deleteObject,
   deletePrivateObject,
   getBoundedObject,
   getBoundedPrivateObject,
   isObjectStorageConfigured,
   isPrivateObjectStorageConfigured,
+  putPrivateObject,
   StoredObjectTooLargeError,
 } from './object-storage';
 
@@ -278,26 +278,15 @@ export async function getProjectKnowledgeObject(
   }
 }
 
-async function sealLocalProjectKnowledgeObject(
-  key: string,
-  sealedKey: string,
-  etag: string,
-): Promise<boolean> {
-  const source = localPathForKey(key);
-  const destination = localPathForKey(sealedKey);
-  if (!source || !destination) return false;
-  let data: Buffer;
-  let metadata: Buffer;
-  try {
-    [data, metadata] = await Promise.all([
-      readFile(/* turbopackIgnore: true */ source.objectPath),
-      readFile(/* turbopackIgnore: true */ source.metadataPath),
-    ]);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw error;
-  }
-  if (localEtag(data) !== etag) return false;
+async function sealLocalProjectKnowledgeObject(input: {
+  sealedKey: string;
+  etag: string;
+  bytes: Buffer;
+  contentType: string;
+}): Promise<boolean> {
+  const destination = localPathForKey(input.sealedKey);
+  if (!destination) return false;
+  if (localEtag(input.bytes) !== input.etag) return false;
 
   await mkdir(/* turbopackIgnore: true */ path.dirname(destination.objectPath), {
     recursive: true,
@@ -308,7 +297,8 @@ async function sealLocalProjectKnowledgeObject(
   const tempId = randomUUID();
   const objectTemp = `${destination.objectPath}.${tempId}.tmp`;
   const metadataTemp = `${destination.metadataPath}.${tempId}.tmp`;
-  await writeFile(/* turbopackIgnore: true */ objectTemp, data, { flag: 'wx' });
+  const metadata = Buffer.from(JSON.stringify({ contentType: input.contentType }));
+  await writeFile(/* turbopackIgnore: true */ objectTemp, input.bytes, { flag: 'wx' });
   await writeFile(/* turbopackIgnore: true */ metadataTemp, metadata, { flag: 'wx', mode: 0o600 });
   await rename(/* turbopackIgnore: true */ objectTemp, destination.objectPath);
   await rename(/* turbopackIgnore: true */ metadataTemp, destination.metadataPath);
@@ -316,27 +306,36 @@ async function sealLocalProjectKnowledgeObject(
 }
 
 /**
- * Promotes inspected bytes to a key no presign, upload authorization or
- * cleanup request can name. The presigned PUT that wrote `key` stays valid for
- * the rest of its ttl, so a copy that still matches the inspected entity tag is
- * the only evidence that what was read is what will be served. Resolves null
- * when the object changed underneath the inspection.
+ * Promotes the bytes that passed inspection to a key no presign, upload
+ * authorization or cleanup request can name. The presigned PUT that wrote
+ * `key` stays valid for the rest of its ttl, so the sealed object is the
+ * buffer that was scanned, not a later copy of the live key. Resolves null
+ * when that read had no entity tag. A local seal also requires the buffer's
+ * sha256 to be that tag.
  */
 export async function sealProjectKnowledgeObject(input: {
   key: string;
   etag: string | undefined;
+  bytes: Buffer;
+  contentType: string;
 }): Promise<string | null> {
   const sealedKey = sealedProjectKnowledgeKey(input.key);
   if (!sealedKey || !input.etag) return null;
   if (isPrivateObjectStorageConfigured()) {
-    const copied = await copyPrivateObjectIfUnchanged({
-      sourceKey: input.key,
-      destinationKey: sealedKey,
-      etag: input.etag,
+    await putPrivateObject({
+      key: sealedKey,
+      data: input.bytes,
+      contentType: input.contentType,
+      contentLength: input.bytes.byteLength,
     });
-    return copied ? sealedKey : null;
+    return sealedKey;
   }
-  return (await sealLocalProjectKnowledgeObject(input.key, sealedKey, input.etag))
+  return (await sealLocalProjectKnowledgeObject({
+    sealedKey,
+    etag: input.etag,
+    bytes: input.bytes,
+    contentType: input.contentType,
+  }))
     ? sealedKey
     : null;
 }

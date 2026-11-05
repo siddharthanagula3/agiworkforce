@@ -343,6 +343,10 @@ export const proxy: NextMiddleware = async (request, event) => {
   return buildCspResponse(request);
 };
 
+// `/.well-known/workflow/` stays off this matcher. The local workflow world
+// fails when proxy reads the callback body, and the hosted queue callback
+// carries no inbound signature this app can check. Do not move those paths
+// onto the session matcher.
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|\\.well-known/workflow/|api/stripe-webhook|api/media/video/openrouter-webhook|api/mobile/iap/apple-notifications|api/mobile/iap/google-notifications|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',

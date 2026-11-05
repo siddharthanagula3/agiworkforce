@@ -1,14 +1,18 @@
 /**
  * The native messaging host the Chrome extension launches.
  *
- * It runs as a plain Node program (the packaged app re-executes Electron with
- * `ELECTRON_RUN_AS_NODE=1`), owns the session secret and the envelope
- * authentication, and relays every authenticated message to the running shell
- * over the loopback bridge. Nothing privileged happens here: a host process
- * without the shell answers "AGI Desktop is not running".
+ * The packaged app starts this process with `AGI_NATIVE_MESSAGING_HOST=1`.
+ * The bootstrap loads this file instead of the windowed shell. It owns the
+ * session secret and the envelope authentication, and relays every
+ * authenticated message to the running shell over the loopback bridge. Nothing
+ * privileged happens here: a host process without the shell answers that the
+ * desktop is not running. Stdout is the native-messaging stream, so this file
+ * must not log.
  */
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import {
   BROWSER_BRIDGE_LOOPBACK_ADDRESS,
   BROWSER_BRIDGE_ROUTES,
@@ -73,8 +77,22 @@ async function relay(
   }
 }
 
+function extensionOriginFromArgv(argv: readonly string[]): string | undefined {
+  return argv.find((entry) => entry.startsWith('chrome-extension://'));
+}
+
+function launchedAsThisFile(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return path.resolve(entry) === path.resolve(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
 function runNativeHost(): void {
-  const session = new NativeSession(process.argv[2]);
+  const session = new NativeSession(extensionOriginFromArgv(process.argv));
   const token = readToken();
   const reader = createNativeMessageReader();
 
@@ -120,4 +138,6 @@ function runNativeHost(): void {
   });
 }
 
-runNativeHost();
+if (process.env['AGI_NATIVE_MESSAGING_HOST'] === '1' || launchedAsThisFile()) {
+  runNativeHost();
+}

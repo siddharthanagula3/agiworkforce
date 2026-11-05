@@ -7,7 +7,11 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(async () => ({ userId: 'operator_1' })) }));
-vi.mock('@/lib/api-auth', () => ({ assertAccountActive: vi.fn(async () => {}) }));
+const auth = vi.hoisted(() => ({
+  getClerkAuthUser: vi.fn(async () => ({ userId: 'operator_1' })),
+  assertAccountActive: vi.fn(async () => {}),
+}));
+vi.mock('@/lib/api-auth', () => auth);
 vi.mock('@/lib/server/account-security/gate', () => ({
   assertAccountSecurity: vi.fn(async () => undefined),
   isPasskeyRequiredError: vi.fn(() => false),
@@ -66,6 +70,25 @@ beforeEach(() => {
     expiresAt: '2026-12-26T00:00:00.000Z',
   });
   service.resetUserUsage.mockResolvedValue({ reset: true, clearedCredits: 1_000 });
+});
+
+describe('operator session gate', () => {
+  it('answers 404 to a bearer token and does not run the action', async () => {
+    const res = await POST(
+      new NextRequest('http://localhost:3000/api/operator', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer secret-token',
+        },
+        body: JSON.stringify({ action: 'preview-reset-all' }),
+      }),
+    );
+
+    expect(res.status).toBe(404);
+    expect(auth.getClerkAuthUser).not.toHaveBeenCalled();
+    expect(service.previewBulkUsageReset).not.toHaveBeenCalled();
+  });
 });
 
 describe('fleet-wide usage reset', () => {

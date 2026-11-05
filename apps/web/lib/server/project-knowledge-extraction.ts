@@ -279,6 +279,8 @@ export interface ProjectKnowledgeExtraction {
   scannedTextWithheld?: ScanWithheldReason;
   objectKey: string;
   etag: string | undefined;
+  bytes: Buffer;
+  contentType: string;
 }
 
 export async function extractProjectKnowledgeFile(
@@ -366,7 +368,12 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  const inspected = { objectKey, etag: object.etag };
+  const inspected = {
+    objectKey,
+    etag: object.etag,
+    bytes: object.data,
+    contentType: declaredMimeType,
+  };
 
   if (declaredMimeType === 'application/pdf') {
     const pdf = await extractPdfText(object.data, input.fileName, input.transcribeScans);

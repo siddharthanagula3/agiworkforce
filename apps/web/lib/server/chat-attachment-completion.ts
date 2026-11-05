@@ -14,8 +14,8 @@ import type { NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { createError, isAppError } from '@/lib/errors';
 import {
-  copyPrivateObjectIfUnchanged,
   deletePrivateObject,
+  putPrivateObject,
   getBoundedPrivateObject,
   StoredObjectTooLargeError,
   type BoundedStoredObject,
@@ -409,17 +409,17 @@ export async function completeChatAttachmentUpload(
     throw createError.validation(dlp.message);
   }
 
-  const sealed = object.etag
-    ? await copyPrivateObjectIfUnchanged({
-        sourceKey: storageKey,
-        destinationKey: scannedKey,
-        etag: object.etag,
-      })
-    : false;
-  if (!sealed) {
+  if (object.etag) {
+    await putPrivateObject({
+      key: scannedKey,
+      data: object.data,
+      contentType: mimeType,
+      contentLength: object.data.byteLength,
+    });
+  } else {
     logger.warn(
-      { userId, storageKey, hadEtag: Boolean(object.etag) },
-      '[uploads] rejected an attachment whose bytes changed after inspection',
+      { userId, storageKey },
+      '[uploads] rejected an attachment that had no entity tag after inspection',
     );
     await purgeChatAttachmentUpload(userId, storageKey);
     throw createError.validation(

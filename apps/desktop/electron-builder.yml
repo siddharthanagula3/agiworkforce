@@ -54,12 +54,12 @@ protocols:
 # and asar-only loading together bind the binary to the signed app.asar that
 # electron-builder writes the hash of.
 #
-# runAsNode stays on: the Chrome native messaging host is this binary
-# re-executed with ELECTRON_RUN_AS_NODE=1 (electron/browser/hostInstaller.ts),
-# and turning the fuse off makes that launcher start the app instead of the
-# host. It can only go once the host ships as its own executable.
+# runAsNode stays off. ELECTRON_RUN_AS_NODE=1 must not turn this signed binary
+# into a general Node interpreter. The Chrome native host is the same binary
+# started with AGI_NATIVE_MESSAGING_HOST=1; electron/dist/bootstrap.cjs then
+# loads the bundled host and never a script path from the command line.
 electronFuses:
-  runAsNode: true
+  runAsNode: false
   enableCookieEncryption: true
   enableNodeOptionsEnvironmentVariable: false
   enableNodeCliInspectArguments: false

@@ -141,6 +141,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       anchors: [],
       objectKey: UPLOADED_KEY,
       etag: '"etag-1"',
+      bytes: Buffer.from('inspected'),
+      contentType: 'application/pdf',
     });
     mockSealProjectKnowledgeObject.mockResolvedValue(SEALED_KEY);
   });
@@ -405,6 +407,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(mockSealProjectKnowledgeObject).toHaveBeenCalledWith({
       key: UPLOADED_KEY,
       etag: '"etag-1"',
+      bytes: Buffer.from('inspected'),
+      contentType: 'application/pdf',
     });
     const insertCall = mockNeonQuery.mock.calls.find((call) =>
       String(call?.[0] ?? '').includes('insert into project_knowledge_files'),

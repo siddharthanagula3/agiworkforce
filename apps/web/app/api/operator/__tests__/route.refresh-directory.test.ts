@@ -11,7 +11,16 @@ const identity = vi.hoisted(() => ({ userId: 'operator_1' as string | null }));
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(async () => ({ userId: identity.userId })),
 }));
-vi.mock('@/lib/api-auth', () => ({ assertAccountActive: vi.fn(async () => {}) }));
+vi.mock('@/lib/api-auth', async () => {
+  const { createError } = await import('@/lib/errors');
+  return {
+    assertAccountActive: vi.fn(async () => {}),
+    getClerkAuthUser: vi.fn(async () => {
+      if (!identity.userId) throw createError.unauthorized();
+      return { userId: identity.userId };
+    }),
+  };
+});
 vi.mock('@/lib/server/account-security/gate', () => ({
   assertAccountSecurity: vi.fn(async () => undefined),
   isPasskeyRequiredError: vi.fn(() => false),
@@ -113,7 +122,7 @@ describe('refresh-connector-directory', () => {
     });
   });
 
-  it('refuses a signed-in account outside the platform-admin allowlist', async () => {
+  it('refuses a signed-in account off the allowlist with 404', async () => {
     process.env[PLATFORM_ADMIN_ENV_VAR] = 'someone_else';
 
     const res = await POST(post({ action: 'refresh-connector-directory' }));
@@ -123,7 +132,7 @@ describe('refresh-connector-directory', () => {
     expect(securityEvents).toHaveLength(0);
   });
 
-  it('refuses an anonymous request', async () => {
+  it('refuses an anonymous session with 401', async () => {
     identity.userId = null;
 
     const res = await POST(post({ action: 'refresh-connector-directory' }));

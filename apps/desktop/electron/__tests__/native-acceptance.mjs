@@ -224,9 +224,13 @@ async function launch(origin) {
     const log = fs.openSync(path.join(dir, 'packaged.log'), 'a');
     const child = spawn(
       executable,
-      [`--user-data-dir=${profile}`, `--remote-debugging-port=${port}`],
+      [
+        `--user-data-dir=${profile}`,
+        `--remote-debugging-port=${port}`,
+        `--agi-cloud-app-origin=${origin}`,
+      ],
       {
-        env: { ...env, AGI_CLOUD_APP_ORIGIN: origin, AGIWORKFORCE_HOME: home },
+        env: { ...env, AGIWORKFORCE_HOME: home },
         stdio: ['ignore', log, log],
       },
     );

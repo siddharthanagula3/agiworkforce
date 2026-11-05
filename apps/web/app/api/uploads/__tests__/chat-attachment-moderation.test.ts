@@ -7,6 +7,7 @@ const {
   mockGetUserScopedDb,
   mockGetBoundedPrivateObject,
   mockCopyPrivateObjectIfUnchanged,
+  mockPutPrivateObject,
   mockDeletePrivateObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
@@ -28,6 +29,7 @@ const {
     mockGetUserScopedDb: vi.fn(),
     mockGetBoundedPrivateObject: vi.fn(),
     mockCopyPrivateObjectIfUnchanged: vi.fn(),
+    mockPutPrivateObject: vi.fn(async () => ({ key: 'sealed' })),
     mockDeletePrivateObject: vi.fn(),
     mockInsertMediaAsset: vi.fn(),
     mockGetMediaAssetByStoragePathname: vi.fn(),
@@ -55,7 +57,7 @@ vi.mock('@/lib/server/object-storage', () => ({
   getPrivateObject: vi.fn(),
   getPrivateObjectStream: vi.fn(),
   isObjectStorageConfigured: vi.fn(() => true),
-  putPrivateObject: vi.fn(),
+  putPrivateObject: mockPutPrivateObject,
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,
@@ -142,22 +144,24 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
       }),
       SCOPED_DB,
     );
-    expect(mockCopyPrivateObjectIfUnchanged).toHaveBeenCalledWith({
-      sourceKey: STORAGE_KEY,
-      destinationKey: `${STORAGE_KEY}.scanned`,
-      etag: '"etag-1"',
+    expect(mockPutPrivateObject).toHaveBeenCalledWith({
+      key: `${STORAGE_KEY}.scanned`,
+      data: PNG_BYTES,
+      contentType: 'image/png',
+      contentLength: PNG_BYTES.byteLength,
     });
+    expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
   });
 
-  it('rejects an upload whose bytes changed between the scan and the seal', async () => {
-    mockCopyPrivateObjectIfUnchanged.mockResolvedValue(false);
+  it('does not register an attachment when the sealed write fails, and that failure is not a 400', async () => {
+    mockPutPrivateObject.mockRejectedValueOnce(new Error('store unavailable'));
 
     const response = await POST(completeRequest());
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBeGreaterThanOrEqual(500);
     expect(mockInsertMediaAsset).not.toHaveBeenCalled();
-    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
+    expect(mockDeletePrivateObject).not.toHaveBeenCalled();
   });
 
   it('never registers an object it could not pin to an ETag', async () => {
@@ -166,7 +170,7 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
     const response = await POST(completeRequest());
 
     expect(response.status).toBe(400);
-    expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
+    expect(mockPutPrivateObject).not.toHaveBeenCalled();
     expect(mockInsertMediaAsset).not.toHaveBeenCalled();
   });
 
@@ -250,7 +254,7 @@ describe('POST /api/uploads/chat-attachment/complete · content deduplication', 
       },
     });
     expect(mockInsertMediaAsset).not.toHaveBeenCalled();
-    expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
+    expect(mockPutPrivateObject).not.toHaveBeenCalled();
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
   });
 

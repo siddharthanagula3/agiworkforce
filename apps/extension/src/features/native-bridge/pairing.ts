@@ -220,6 +220,11 @@ async function releasePairedCredentials(): Promise<void> {
   }
 }
 
+export async function releaseStoredDesktopPairing(): Promise<void> {
+  await releasePairedCredentials();
+  _state = { ...IDLE_STATE };
+}
+
 export async function loadPairingState(): Promise<PairingState> {
   try {
     const sessionData = await readSession([
@@ -494,9 +499,7 @@ export async function unpair(): Promise<PairingState> {
   } catch {
     // Storage removal failure should not block state reset
   }
-  await releasePairedCredentials();
-
-  _state = { ...IDLE_STATE };
+  await releaseStoredDesktopPairing();
   return getPairingState();
 }
 

@@ -9,6 +9,7 @@ const {
   mockDeletePrivateObject,
   mockDeleteObject,
   mockCopyPrivateObjectIfUnchanged,
+  mockPutPrivateObject,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockDeletePrivateObject: vi.fn(),
   mockDeleteObject: vi.fn(),
   mockCopyPrivateObjectIfUnchanged: vi.fn(),
+  mockPutPrivateObject: vi.fn(async () => ({ key: 'sealed' })),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -38,6 +40,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   copyPrivateObjectIfUnchanged: mockCopyPrivateObjectIfUnchanged,
+  putPrivateObject: mockPutPrivateObject,
   getBoundedObject: vi.fn(),
   getBoundedPrivateObject: mockGetPrivateObject,
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
@@ -85,8 +88,17 @@ function wireDatabase(): void {
   });
 }
 
-function post(bytes: Buffer, mimeType: string, fileName: string): Promise<Response> {
-  mockGetPrivateObject.mockResolvedValue({ data: bytes, contentType: mimeType, etag: '"etag-1"' });
+function post(
+  bytes: Buffer,
+  mimeType: string,
+  fileName: string,
+  etag: string | null = '"etag-1"',
+): Promise<Response> {
+  mockGetPrivateObject.mockResolvedValue({
+    data: bytes,
+    contentType: mimeType,
+    ...(etag === null ? {} : { etag }),
+  });
   const request = new NextRequest(`http://localhost/api/projects/${PROJECT_ID}/knowledge-files`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -121,11 +133,13 @@ describe('POST /api/projects/[id]/knowledge-files, content inspection', () => {
 
     expect(res.status).toBe(201);
     expect(insertWasAttempted()).toBe(true);
-    expect(mockCopyPrivateObjectIfUnchanged).toHaveBeenCalledWith({
-      sourceKey: STORAGE_URI,
-      destinationKey: SEALED_URI,
-      etag: '"etag-1"',
+    expect(mockPutPrivateObject).toHaveBeenCalledWith({
+      key: SEALED_URI,
+      data: Buffer.from('hello', 'utf8'),
+      contentType: 'text/plain',
+      contentLength: 5,
     });
+    expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
     const insertCall = mockNeonQuery.mock.calls.find((call) =>
       String(call[0]).includes(INSERT_SQL_FRAGMENT),
     );
@@ -134,10 +148,8 @@ describe('POST /api/projects/[id]/knowledge-files, content inspection', () => {
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });
 
-  it('refuses to register a source the uploader replaced after inspection', async () => {
-    mockCopyPrivateObjectIfUnchanged.mockResolvedValue(false);
-
-    const res = await post(Buffer.from('hello', 'utf8'), 'text/plain', 'notes.txt');
+  it('refuses a missing entity tag with 400 and does not register it', async () => {
+    const res = await post(Buffer.from('hello', 'utf8'), 'text/plain', 'notes.txt', null);
     const json = (await res.json()) as { error?: { message?: string } };
 
     expect(res.status).toBe(400);

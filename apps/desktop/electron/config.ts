@@ -51,10 +51,52 @@ export function isAllowedApiBaseUrl(rawUrl: string): boolean {
   return isLocalhost(host) || isFirstPartyHost(host);
 }
 
-function resolveCloudAppOrigin(): string {
-  const requested = process.env[CLOUD_APP_ORIGIN_ENV];
-  if (requested && isAllowedApiBaseUrl(requested)) return requested.replace(/\/+$/, '');
+const CLOUD_APP_ORIGIN_ARG = '--agi-cloud-app-origin=';
+
+/**
+ * Where the window loads. A packaged build ignores `AGI_CLOUD_APP_ORIGIN`:
+ * that variable is process environment, and the preload bridge trusts whatever
+ * origin this returns. An explicit `--agi-cloud-app-origin=` argument is still
+ * honored so a packaged acceptance run can point at a local fixture. Anything
+ * outside the allowlist falls through to production.
+ */
+export function cloudAppOriginFrom(input: {
+  packaged: boolean;
+  environmentOrigin: string | undefined;
+  argumentOrigin: string | undefined;
+}): string {
+  const argument = allowedOrigin(input.argumentOrigin);
+  if (argument) return argument;
+  if (!input.packaged) {
+    const requested = allowedOrigin(input.environmentOrigin);
+    if (requested) return requested;
+  }
   return PRODUCTION_CLOUD_APP_ORIGIN;
+}
+
+function allowedOrigin(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed || !isAllowedApiBaseUrl(trimmed)) return null;
+  return trimmed.replace(/\/+$/, '');
+}
+
+function argumentOrigin(argv: readonly string[]): string | undefined {
+  const match = argv.find((arg) => arg.startsWith(CLOUD_APP_ORIGIN_ARG));
+  return match?.slice(CLOUD_APP_ORIGIN_ARG.length);
+}
+
+/** Packaged Electron has no `defaultApp`. Unit tests are not Electron. */
+function electronIsPackaged(): boolean {
+  if (!process.versions.electron) return false;
+  return (process as { defaultApp?: boolean }).defaultApp !== true;
+}
+
+function resolveCloudAppOrigin(): string {
+  return cloudAppOriginFrom({
+    packaged: electronIsPackaged(),
+    environmentOrigin: process.env[CLOUD_APP_ORIGIN_ENV],
+    argumentOrigin: argumentOrigin(process.argv),
+  });
 }
 
 export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin();

@@ -332,6 +332,17 @@ describe('the lethal-trifecta escalation, and the three limits published for it'
     expect(hasUntrustedContext({}, [pasted])).toBe(false);
     expect(hasUntrustedContext({}, [attached])).toBe(true);
     expect(hasUntrustedContext({ untrustedContextPresent: true }, [pasted])).toBe(true);
+    const summarizedUntrusted = {
+      role: 'system',
+      content:
+        '<summarized_untrusted_history>\nEarlier page text was summarized.\n</summarized_untrusted_history>',
+    } as Message;
+    const summarizedOrdinary = {
+      role: 'system',
+      content: '<summarized_history>\nEarlier chat was summarized.\n</summarized_history>',
+    } as Message;
+    expect(hasUntrustedContext({}, [summarizedUntrusted])).toBe(true);
+    expect(hasUntrustedContext({}, [summarizedOrdinary])).toBe(false);
 
     // Pasted text raises only the S leg, and raising it alone never escalates.
     const pastedOnly: Combination = {

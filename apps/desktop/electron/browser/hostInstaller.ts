@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { NATIVE_MESSAGING_HOST_NAME, PRODUCT_NAMES } from '@agiworkforce/types';
@@ -33,17 +33,12 @@ export function tokenFilePath(): string {
   return path.join(hostDirectory(), 'host-token');
 }
 
-function hostBundlePath(): string {
-  return path.join(hostDirectory(), 'native-host.cjs');
-}
-
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export function launcherScript(input: {
   electronPath: string;
-  hostBundle: string;
   tokenFile: string;
   port: number;
 }): string {
@@ -52,9 +47,9 @@ export function launcherScript(input: {
     'set -e',
     `AGI_CLOUD_BRIDGE_PORT=${input.port}`,
     `AGI_CLOUD_HOST_TOKEN_FILE=${shellQuote(input.tokenFile)}`,
-    'ELECTRON_RUN_AS_NODE=1',
-    'export AGI_CLOUD_BRIDGE_PORT AGI_CLOUD_HOST_TOKEN_FILE ELECTRON_RUN_AS_NODE',
-    `exec ${shellQuote(input.electronPath)} ${shellQuote(input.hostBundle)} "$@"`,
+    'AGI_NATIVE_MESSAGING_HOST=1',
+    'export AGI_CLOUD_BRIDGE_PORT AGI_CLOUD_HOST_TOKEN_FILE AGI_NATIVE_MESSAGING_HOST',
+    `exec ${shellQuote(input.electronPath)} "$@"`,
     '',
   ].join('\n');
 }
@@ -85,9 +80,10 @@ export interface HostInstallResult {
 /**
  * Writes the launcher, its token, and one manifest per browser profile.
  *
- * The host is copied out of the application bundle rather than referenced
- * inside it: a manifest pointing into `app.asar` survives neither an update nor
- * a `ELECTRON_NO_ASAR` environment, and the copy is what the browser executes.
+ * The launcher starts this app with `AGI_NATIVE_MESSAGING_HOST=1`. The signed
+ * binary's bootstrap then loads the host that was packed into the app. Chrome's
+ * extra argument is an extension origin, not a script path, and `runAsNode` is
+ * off so that argument is never executed as JavaScript.
  */
 export function installNativeHost(input: {
   extensionId: string;
@@ -98,12 +94,9 @@ export function installNativeHost(input: {
   const directory = hostDirectory();
   mkdirSync(directory, { recursive: true });
 
-  const bundle = hostBundlePath();
-  const source = packagedHostBundle();
-  if (!existsSync(source)) {
+  if (!existsSync(packagedHostBundle())) {
     throw new Error('The browser host was not built into this app.');
   }
-  copyFileSync(source, bundle);
 
   const tokenFile = tokenFilePath();
   writeFileSync(tokenFile, `${hostToken()}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -113,7 +106,6 @@ export function installNativeHost(input: {
     launcher,
     launcherScript({
       electronPath: process.execPath,
-      hostBundle: bundle,
       tokenFile,
       port: input.port,
     }),

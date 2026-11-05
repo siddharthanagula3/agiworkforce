@@ -374,6 +374,8 @@ export async function registerProjectKnowledgeFile(
   const sealedKey = await sealProjectKnowledgeObject({
     key: extraction.objectKey,
     etag: extraction.etag,
+    bytes: extraction.bytes,
+    contentType: extraction.contentType,
   });
   await purgeUploadedKnowledgeObject(db, userId, projectId, extraction.objectKey);
   if (!sealedKey) {

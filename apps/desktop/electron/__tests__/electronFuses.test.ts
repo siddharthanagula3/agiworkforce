@@ -32,7 +32,7 @@ describe('Electron fuses flipped at package time', () => {
     });
   });
 
-  it('keeps run-as-node only while the browser host launcher depends on it', () => {
+  it('sets runAsNode false when the launcher does not contain ELECTRON_RUN_AS_NODE=1', () => {
     const launcher = readFileSync(
       resolve(process.cwd(), 'electron/browser/hostInstaller.ts'),
       'utf8',

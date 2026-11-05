@@ -107,14 +107,19 @@ describe('web proxy', () => {
     }
   });
 
-  it('keeps Workflow SDK callbacks outside the global proxy matcher', async () => {
-    const { config } = await import('../proxy');
-    const matchesProxy = (pathname: string) =>
-      unstable_doesMiddlewareMatch({ config, url: `http://localhost${pathname}` });
+  it.each(['/.well-known/workflow/v1/flow', '/.well-known/workflow/v1/step'])(
+    'keeps %s off the identity proxy matcher',
+    async (pathname) => {
+      const { config } = await import('../proxy');
+      expect(unstable_doesMiddlewareMatch({ config, url: `http://localhost${pathname}` })).toBe(
+        false,
+      );
+    },
+  );
 
-    expect(matchesProxy('/.well-known/workflow/v1/flow')).toBe(false);
-    expect(matchesProxy('/.well-known/workflow/v1/step')).toBe(false);
-    expect(matchesProxy('/chat')).toBe(true);
+  it('still matches /chat on the identity proxy matcher', async () => {
+    const { config } = await import('../proxy');
+    expect(unstable_doesMiddlewareMatch({ config, url: 'http://localhost/chat' })).toBe(true);
   });
 
   it('keeps signed raw-body video webhooks outside every proxy matcher', async () => {

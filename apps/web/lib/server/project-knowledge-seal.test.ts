@@ -54,6 +54,8 @@ describe('sealing an inspected project knowledge object', () => {
     const sealedKey = await sealProjectKnowledgeObject({
       key: UPLOAD_KEY,
       etag: inspected?.etag,
+      bytes: Buffer.from(INSPECTED),
+      contentType: 'text/plain',
     });
 
     expect(sealedKey).toBe(SEALED_KEY);
@@ -73,23 +75,35 @@ describe('sealing an inspected project knowledge object', () => {
     ).rejects.toThrow(/destination is invalid/i);
   });
 
-  it('refuses to seal bytes the presigned url replaced after the inspection', async () => {
+  it('seals the inspected bytes, not a rewritten live object', async () => {
     await putUploaded(INSPECTED);
     const inspected = await getProjectKnowledgeObject(UPLOAD_KEY, INSPECTED.byteLength);
     expect(REWRITTEN.byteLength).toBe(INSPECTED.byteLength);
     await putUploaded(REWRITTEN);
 
     await expect(
-      sealProjectKnowledgeObject({ key: UPLOAD_KEY, etag: inspected?.etag }),
-    ).resolves.toBeNull();
-    await expect(getProjectKnowledgeObject(SEALED_KEY, INSPECTED.byteLength)).resolves.toBeNull();
+      sealProjectKnowledgeObject({
+        key: UPLOAD_KEY,
+        etag: inspected?.etag,
+        bytes: Buffer.from(INSPECTED),
+        contentType: 'text/plain',
+      }),
+    ).resolves.toBe(SEALED_KEY);
+    await expect(
+      getProjectKnowledgeObject(SEALED_KEY, INSPECTED.byteLength),
+    ).resolves.toMatchObject({ data: Buffer.from(INSPECTED), contentType: 'text/plain' });
   });
 
   it('never seals an object it could not pin to an entity tag', async () => {
     await putUploaded(INSPECTED);
 
     await expect(
-      sealProjectKnowledgeObject({ key: UPLOAD_KEY, etag: undefined }),
+      sealProjectKnowledgeObject({
+        key: UPLOAD_KEY,
+        etag: undefined,
+        bytes: Buffer.from(INSPECTED),
+        contentType: 'text/plain',
+      }),
     ).resolves.toBeNull();
     await expect(getProjectKnowledgeObject(SEALED_KEY, INSPECTED.byteLength)).resolves.toBeNull();
   });

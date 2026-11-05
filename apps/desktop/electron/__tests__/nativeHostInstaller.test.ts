@@ -57,16 +57,17 @@ describe('native messaging host installation', () => {
     );
   });
 
-  it('writes a launcher that runs the bundled host through Electron as Node', async () => {
+  it('sets AGI_NATIVE_MESSAGING_HOST=1 and does not execute a script path', async () => {
     const { launcherScript } = await installer();
     const script = launcherScript({
       electronPath: '/Applications/AGI Desktop.app/Contents/MacOS/AGI Desktop',
-      hostBundle: '/tmp/native-host.cjs',
       tokenFile: '/tmp/host-token',
       port: 8787,
     });
     expect(script.startsWith('#!/bin/sh')).toBe(true);
-    expect(script).toContain('ELECTRON_RUN_AS_NODE=1');
+    expect(script).toContain('AGI_NATIVE_MESSAGING_HOST=1');
+    expect(script).not.toContain('ELECTRON_RUN_AS_NODE');
+    expect(script).not.toContain('native-host.cjs');
     expect(script).toContain('AGI_CLOUD_BRIDGE_PORT=8787');
     expect(script).toContain("exec '/Applications/AGI Desktop.app/Contents/MacOS/AGI Desktop'");
     expect(script).toContain('"$@"');

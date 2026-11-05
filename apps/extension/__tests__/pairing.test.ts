@@ -10,6 +10,7 @@ import {
   storeBridgeSecret,
   submitPairingCode,
   unpair,
+  releaseStoredDesktopPairing,
   confirmPairing,
   _resetStateForTesting,
 } from '../src/features/native-bridge/pairing';
@@ -245,6 +246,25 @@ describe('unpair', () => {
   it('is safe to call when already idle', async () => {
     const state = await unpair();
     expect(state.phase).toBe('idle');
+  });
+});
+
+describe('releaseStoredDesktopPairing', () => {
+  it('clears the stored pairing and the connected-to-desktop flag', async () => {
+    sessionStore['agi_pair_token'] = 'tok';
+    sessionStore['agi_pairing_fingerprint'] = 'to12';
+    sessionStore['agi_pair_account'] = 'acct';
+    localStore['connectedToDesktop'] = true;
+    localStore['agi_paired_desktop'] = { fingerprint: 'to12', accountId: 'acct' };
+    await loadPairingState();
+
+    await releaseStoredDesktopPairing();
+
+    expect(getPairingState().phase).toBe('idle');
+    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(sessionStore['agi_pair_account']).toBeUndefined();
+    expect(localStore['connectedToDesktop']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 });
 

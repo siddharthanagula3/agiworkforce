@@ -277,6 +277,7 @@ import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
+import { releaseStoredDesktopPairing } from './features/native-bridge/pairing';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -1050,6 +1051,43 @@ function clearNativeReconnectTimer(): void {
     clearTimeout(_bgCtx.nativeReconnectTimer);
     _bgCtx.nativeReconnectTimer = null;
   }
+}
+
+async function disconnectPairedNativeHost(reason: string): Promise<boolean> {
+  activePairedBrowserCommand?.driver?.cancel(reason);
+  const port = state.nativePort;
+  const sessionSecret = nativeSessionSecret;
+  clearNativeReconnectTimer();
+  setNativeReconnectGaveUp(true);
+  setDesktopPaired(false);
+  const unpaired = (
+    port && sessionSecret && state.isNativeConnected
+      ? await sendNativeRequest(
+          {
+            type: NATIVE_BROWSER_UNPAIR_MESSAGE,
+          },
+          { requireAuthenticatedSession: true, connection: { port, sessionSecret } },
+        ).catch(() => null)
+      : null
+  ) as { success?: boolean } | null;
+  if (state.nativePort === port) {
+    if (port) rejectPendingNativeRequests(port, reason);
+    state.nativePort = null;
+    nativeSessionSecret = null;
+    state.isNativeConnected = false;
+    state.connectionStatus = 'disconnected';
+    _bgCtx.nativeHandshakeInFlight = false;
+    clearNativeReconnectTimer();
+    setNativeReconnectGaveUp(true);
+    setDesktopPaired(false);
+    try {
+      port?.disconnect();
+    } catch (error) {
+      logger.debug('Native disconnect after unpair failed', error);
+    }
+    void notifyConnectionStatusChange();
+  }
+  return unpaired?.success === true;
 }
 
 function resetNativeReconnectState(): void {
@@ -3896,6 +3934,8 @@ async function handleMessageAsync(
         cancelActiveComputerUseRun('account_changed', computerUseLease.runId);
       }
       await invalidateManagedCloudOwner(previousOwner, true);
+      await disconnectPairedNativeHost('The signed-in account changed.');
+      await releaseStoredDesktopPairing();
       return { success: true } as ExtensionResponse;
     }
 
@@ -3941,40 +3981,8 @@ async function handleMessageAsync(
       return triggerManualReconnect();
 
     case 'UNPAIR_NATIVE': {
-      activePairedBrowserCommand?.driver?.cancel('The browser was unpaired from Desktop.');
-      const port = state.nativePort;
-      const sessionSecret = nativeSessionSecret;
-      clearNativeReconnectTimer();
-      setNativeReconnectGaveUp(true);
-      setDesktopPaired(false);
-      const unpaired = (
-        port && sessionSecret && state.isNativeConnected
-          ? await sendNativeRequest(
-              {
-                type: NATIVE_BROWSER_UNPAIR_MESSAGE,
-              },
-              { requireAuthenticatedSession: true, connection: { port, sessionSecret } },
-            ).catch(() => null)
-          : null
-      ) as { success?: boolean } | null;
-      if (state.nativePort === port) {
-        if (port) rejectPendingNativeRequests(port, 'The browser was unpaired from Desktop.');
-        state.nativePort = null;
-        nativeSessionSecret = null;
-        state.isNativeConnected = false;
-        state.connectionStatus = 'disconnected';
-        _bgCtx.nativeHandshakeInFlight = false;
-        clearNativeReconnectTimer();
-        setNativeReconnectGaveUp(true);
-        setDesktopPaired(false);
-        try {
-          port?.disconnect();
-        } catch (error) {
-          logger.debug('Native disconnect after unpair failed', error);
-        }
-        void notifyConnectionStatusChange();
-      }
-      return { success: unpaired?.success === true } as ExtensionResponse;
+      const unpaired = await disconnectPairedNativeHost('The browser was unpaired from Desktop.');
+      return { success: unpaired } as ExtensionResponse;
     }
 
     case 'TAB_READY': {
@@ -5841,8 +5849,8 @@ async function forwardToContentScript(
 /**
  * `connectedToDesktop` records that the native host has answered on this
  * profile, not that it is answering right now. A closed Desktop app is a
- * reconnect, not an unpairing, so only a permanently unavailable host or an
- * explicit unpair clears it.
+ * reconnect, not an unpairing, so only a permanently unavailable host, an
+ * explicit unpair, or a Managed Cloud account change clears it.
  */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {

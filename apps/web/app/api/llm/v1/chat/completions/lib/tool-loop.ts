@@ -112,6 +112,7 @@ import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
 
 import { executionChartsToPersist } from './execution-charts';
+import { messageCarriesSummarizedUntrustedHistory } from './summarized-history';
 import { runToolCallOnce } from './tool-idempotency';
 import {
   recordRouteOutcome,
@@ -3156,7 +3157,10 @@ export function hasUntrustedContext(
 ): boolean {
   return (
     processed.untrustedContextPresent === true ||
-    messages.some((message) => hasNonTextPart(message)) ||
+    messages.some(
+      (message) =>
+        hasNonTextPart(message) || messageCarriesSummarizedUntrustedHistory(message.content),
+    ) ||
     untrustedToolContentInContext(priorToolCallNames(messages))
   );
 }

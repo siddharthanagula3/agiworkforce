@@ -7,13 +7,9 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError, isAppError, type AppError } from '@/lib/errors';
-import { assertAccountActive } from '@/lib/api-auth';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { readJsonBody } from '@/lib/read-json-body';
 import { logSecurityEvent } from '@/lib/security-audit';
-import {
-  isPlatformAdmin,
-  PLATFORM_ADMIN_ENV_VAR,
-} from '@/features/admin/lib/platform-admin-access';
 import { BULK_RESET_CONFIRMATION } from '@/features/admin/lib/operator-actions';
 import {
   readOperatorOverview,
@@ -25,11 +21,6 @@ import {
   grantBonusCredits,
 } from '@/features/admin/services/operator-metrics';
 import { readOperatorCosts } from '@/features/admin/services/operator-cost-metrics';
-import { getRequestIdentity } from '@/lib/server/identity';
-import {
-  PasskeyRequiredError,
-  subjectSessionPassesAccountSecurity,
-} from '@/lib/server/account-security/gate';
 import {
   ingestBudgetForMaxDuration,
   ingestConnectorDirectory,
@@ -58,27 +49,14 @@ function errorResponse(err: AppError): NextResponse {
 const FEEDBACK_SCREENSHOT_PREFIX = 'feedback';
 
 /**
- * Every response from this route is the platform's own books, so the gate is
- * the allowlist rather than the organisation-role check the enterprise console
- * uses. Both the read and the write path go through here, so there is one place
- * to audit rather than two that can drift.
+ * A bearer credential skips CSRF, and GET has no CSRF of its own. It must not
+ * become the operator. The shared platform-admin gate then applies the cookie
+ * session's lifetime, passkey, MFA and IP controls.
  */
-async function requirePlatformAdmin(): Promise<string> {
-  const { subject: userId, sessionId } = await getRequestIdentity();
-  if (!userId) throw createError.unauthorized('Sign in required.');
-
-  if (!isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])) {
-    // Deliberately not-found rather than forbidden: a 403 confirms the route
-    // exists to an account that should not know it does.
-    logger.warn({ userId }, 'Operator dashboard denied: not a platform admin');
+function rejectBearerOperator(request: NextRequest): void {
+  if (request.headers.get('authorization')) {
     throw createError.notFound('Not found.');
   }
-
-  await assertAccountActive(userId);
-  if (!(await subjectSessionPassesAccountSecurity(userId, sessionId))) {
-    throw new PasskeyRequiredError();
-  }
-  return userId;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -86,7 +64,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (limited) return limited;
 
   try {
-    await requirePlatformAdmin();
+    rejectBearerOperator(request);
+    await requirePlatformAdmin(request);
     const view = request.nextUrl.searchParams.get('view') ?? 'overview';
 
     if (view === 'feedback') {
@@ -133,7 +112,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (limited) return limited;
 
   try {
-    const actorId = await requirePlatformAdmin();
+    rejectBearerOperator(request);
+    const { userId: actorId } = await requirePlatformAdmin(request);
     const csrf = await requireCsrfToken(request);
     if (csrf) return NextResponse.json(await csrf.json(), { status: csrf.status });
 

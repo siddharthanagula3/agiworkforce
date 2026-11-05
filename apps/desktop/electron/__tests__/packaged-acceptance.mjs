@@ -208,10 +208,18 @@ try {
     allowed.filter((key) => process.env[key]).map((key) => [key, process.env[key]]),
   );
   const log = fs.openSync(path.join(scratch, 'app.log'), 'a');
-  child = spawn(executable, [`--user-data-dir=${profile}`, `--remote-debugging-port=${port}`], {
-    env: { ...env, AGIWORKFORCE_HOME: home, AGI_CLOUD_APP_ORIGIN: origin },
-    stdio: ['ignore', log, log],
-  });
+  child = spawn(
+    executable,
+    [
+      `--user-data-dir=${profile}`,
+      `--remote-debugging-port=${port}`,
+      `--agi-cloud-app-origin=${origin}`,
+    ],
+    {
+      env: { ...env, AGIWORKFORCE_HOME: home },
+      stdio: ['ignore', log, log],
+    },
+  );
   fs.closeSync(log);
   const deadline = Date.now() + 30_000;
   let endpoint;

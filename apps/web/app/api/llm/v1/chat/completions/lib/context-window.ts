@@ -32,6 +32,8 @@ export interface ContextTrimResult {
   protectedOverflow?: true;
   /** Everything but the latest user message fits, so no trim can send the turn. */
   latestUserMessageOverflow?: true;
+  /** The dropped span included a tool that accepts untrusted content. */
+  droppedUntrustedToolContent?: true;
 }
 
 /**

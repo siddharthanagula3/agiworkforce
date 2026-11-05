@@ -177,12 +177,23 @@ describe('local project knowledge storage', () => {
       data: bytes,
     });
 
+    const inspected = Buffer.from(bytes);
     await expect(
-      sealProjectKnowledgeObject({ key, etag: sha256Hex(new TextEncoder().encode('other bytes')) }),
+      sealProjectKnowledgeObject({
+        key,
+        etag: sha256Hex(new TextEncoder().encode('other bytes')),
+        bytes: inspected,
+        contentType: 'text/plain',
+      }),
     ).resolves.toBeNull();
-    await expect(sealProjectKnowledgeObject({ key, etag: sha256Hex(bytes) })).resolves.toBe(
-      sealedKey,
-    );
+    await expect(
+      sealProjectKnowledgeObject({
+        key,
+        etag: sha256Hex(bytes),
+        bytes: inspected,
+        contentType: 'text/plain',
+      }),
+    ).resolves.toBe(sealedKey);
     await expect(getProjectKnowledgeObject(sealedKey, bytes.byteLength)).resolves.toEqual({
       data: Buffer.from(bytes),
       contentType: 'text/plain',

@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 // Imported rather than used as globals: the repo eslint config does not grant
 // Node globals to plain .mjs files.
 import console from 'node:console';
-import { cpSync, existsSync } from 'node:fs';
+import { cpSync, existsSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
@@ -45,9 +45,8 @@ const mainBuild = await build({
   entryPoints: [path.join(__dirname, 'main.ts'), path.join(__dirname, 'preload.ts')],
 });
 
-// The native messaging host runs as a plain Node program under
-// ELECTRON_RUN_AS_NODE, so it is bundled separately and must not pull in the
-// electron module.
+// The native messaging host is a separate bundle so host mode does not load
+// the windowed shell (and its stdout). It must not pull in the electron module.
 const nativeHostBuild = await build({
   ...shared,
   entryPoints: [path.join(__dirname, 'browser', 'nativeHostMain.ts')],
@@ -55,6 +54,22 @@ const nativeHostBuild = await build({
   outdir: path.join(__dirname, 'dist'),
   entryNames: 'native-host',
 });
+
+// package.json main. Host mode must require the host bundle directly: a dynamic
+// import of the windowed shell would run too late, and loading that shell would
+// write to stdout, which Chrome's native-messaging protocol cannot tolerate.
+writeFileSync(
+  path.join(__dirname, 'dist', 'bootstrap.cjs'),
+  [
+    "'use strict';",
+    "if (process.env.AGI_NATIVE_MESSAGING_HOST === '1') {",
+    "  require('./native-host.cjs');",
+    '} else {',
+    "  require('./main.cjs');",
+    '}',
+    '',
+  ].join('\n'),
+);
 
 const assetsSrc = path.join(__dirname, 'assets');
 if (existsSync(assetsSrc)) {

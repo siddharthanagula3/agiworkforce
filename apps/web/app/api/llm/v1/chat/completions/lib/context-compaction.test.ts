@@ -275,7 +275,7 @@ describe('compactContextWindow', () => {
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
 
-  it('summarizes the whole dropped span when there is no cached boundary, and caches it', async () => {
+  it('fences an ordinary summary as summarized_history and does not raise the untrusted leg', async () => {
     const persistableDropped = droppedPersistableCount();
     const db = makeDb();
     const messages = buildMessages();
@@ -298,6 +298,47 @@ describe('compactContextWindow', () => {
     expect(db.conversation.compaction_summary).toBe('Summary of earlier turns.');
     expect(db.conversation.compaction_summary_through_message_id).toBe(`msg-${persistableDropped}`);
     expect(db.conversation.compaction_summary_digest).toMatch(/^[a-f0-9]{64}$/);
+    const marker = messages.find(
+      (message) =>
+        message.role === 'system' && message.content.includes('Summary of earlier turns.'),
+    );
+    expect(marker?.content).toContain('<summarized_history>');
+    expect(marker?.content).not.toContain('<summarized_untrusted_history>');
+    expect(result?.droppedUntrustedToolContent).toBeUndefined();
+  });
+
+  it('keeps the untrusted-content leg when the dropped span fetched a page', async () => {
+    const messages = buildMessages();
+    const fetched = messages.find((message) => message.role === 'assistant');
+    if (!fetched) throw new Error('fixture has no assistant turn');
+    fetched.tool_calls = [{ function: { name: 'url_fetch' } }];
+    const db = makeDb();
+
+    const result = await compactContextWindow(baseInput({ messages, db: db as never }));
+
+    expect(result?.droppedUntrustedToolContent).toBe(true);
+    const marker = messages.find(
+      (message) =>
+        message.role === 'system' && message.content.includes('Summary of earlier turns.'),
+    );
+    expect(marker?.content).toContain('<summarized_untrusted_history>');
+    expect(marker?.content).not.toContain('<summarized_history>');
+  });
+
+  it('keeps the untrusted-content leg on a mechanical trim of a fetched page', async () => {
+    process.env[CONTEXT_COMPACTION_ENABLED_ENV] = '0';
+    const messages = buildMessages();
+    const fetched = messages.find((message) => message.role === 'assistant');
+    if (!fetched) throw new Error('fixture has no assistant turn');
+    fetched.tool_calls = [{ function: { name: 'url_fetch' } }];
+
+    const result = await compactContextWindow(baseInput({ messages, db: makeDb() as never }));
+
+    expect(result?.droppedUntrustedToolContent).toBe(true);
+    expect(messages.some((message) => message.content === DROPPED_HISTORY_MARKER)).toBe(true);
+    expect(
+      messages.some((message) => message.content.includes('<summarized_untrusted_history>')),
+    ).toBe(false);
   });
 
   it('reuses the cached summary when the boundary and the span are unchanged', async () => {

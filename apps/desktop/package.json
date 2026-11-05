@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "electron/dist/main.cjs",
+  "main": "electron/dist/bootstrap.cjs",
   "scripts": {
     "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "dev:vite": "vite",

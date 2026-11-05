@@ -116,6 +116,14 @@ describe('Managed Cloud account/session authority', () => {
     expect(transitionCase.indexOf('retireManagedCloudOwner(previousOwner)')).toBeLessThan(
       transitionCase.indexOf('await invalidateManagedCloudOwner(previousOwner, true)'),
     );
+    expect(transitionCase).toContain(
+      "await disconnectPairedNativeHost('The signed-in account changed.');",
+    );
+    expect(transitionCase).toContain('await releaseStoredDesktopPairing();');
+    expect(transitionCase.indexOf('await disconnectPairedNativeHost')).toBeLessThan(
+      transitionCase.indexOf('await releaseStoredDesktopPairing()'),
+    );
+    expect(transitionCase).toContain('return { success: true }');
 
     const recovery = sourceBetween(
       backgroundSource,

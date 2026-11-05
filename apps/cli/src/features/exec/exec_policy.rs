@@ -1028,14 +1028,30 @@ fn shell_segments(command: &str) -> Option<Vec<String>> {
     Some(segments)
 }
 
-fn segment_argv(segment: &str) -> Option<Vec<String>> {
+struct SegmentArgv {
+    argv: Vec<String>,
+    drained_leading_assignments: bool,
+}
+
+/// Split one shell segment into the argv the policy matches. Leading
+/// `NAME=value` tokens are removed from that argv, and reported separately:
+/// the shell still runs the original string, so a prefix that names only the
+/// program must not waive confirmation for the assignment.
+fn parse_segment_argv(segment: &str) -> Option<SegmentArgv> {
     let mut tokens = shlex::split(segment)?;
     let assignments = tokens
         .iter()
         .take_while(|token| crate::safety::argv::is_env_assignment(token))
         .count();
     tokens.drain(..assignments);
-    (!tokens.is_empty()).then_some(tokens)
+    (!tokens.is_empty()).then_some(SegmentArgv {
+        argv: tokens,
+        drained_leading_assignments: assignments > 0,
+    })
+}
+
+fn segment_argv(segment: &str) -> Option<Vec<String>> {
+    parse_segment_argv(segment).map(|parsed| parsed.argv)
 }
 
 /// How deep a wrapper chain (`sh -c 'sh -c ...'`) is followed.
@@ -1120,18 +1136,24 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
     let mut every_segment_matched_rule = complete;
 
     for segment in &segments {
-        let Some(argv) = segment_argv(segment) else {
+        let Some(parsed) = parse_segment_argv(segment) else {
             decision = decision.max(Decision::Prompt);
             every_segment_matched_rule = false;
             continue;
         };
-        let evaluation = policy.check(&argv, &fallback);
+        let evaluation = policy.check(&parsed.argv, &fallback);
         // A prefix rule allows whatever follows the prefix, so one naming a
         // safe shape never waives the prompt for an argument that runs code.
         let allowed_past_its_rule = evaluation.is_match()
             && evaluation.decision == Decision::Allow
-            && carries_code_running_argument(&argv);
-        decision = decision.max(if allowed_past_its_rule {
+            && carries_code_running_argument(&parsed.argv);
+        // The prefix was matched against the program after the assignment was
+        // stripped. The shell still executes the original string, so that
+        // match cannot waive confirmation. Forbidden on the stripped program
+        // stays forbidden.
+        let assignment_hides_the_program =
+            parsed.drained_leading_assignments && evaluation.decision != Decision::Forbidden;
+        decision = decision.max(if allowed_past_its_rule || assignment_hides_the_program {
             Decision::Prompt
         } else {
             evaluation.decision
@@ -1139,7 +1161,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
         if evaluation.is_match() {
             matched_rule = true;
         }
-        if !evaluation.is_match() || allowed_past_its_rule {
+        if !evaluation.is_match() || allowed_past_its_rule || assignment_hides_the_program {
             every_segment_matched_rule = false;
         }
     }
@@ -1337,6 +1359,38 @@ mod tests {
         let evaluation = evaluate_command(&policy, "git status --porcelain");
         assert_eq!(evaluation.decision, Decision::Allow);
         assert!(evaluation.every_segment_matched_rule);
+    }
+
+    #[test]
+    fn a_leading_assignment_does_not_waive_a_saved_allow_prefix() {
+        let policy = policy_allowing_git_status();
+        let named = evaluate_command(&policy, "git status");
+        assert_eq!(named.decision, Decision::Allow);
+        assert!(named.every_segment_matched_rule);
+
+        let assigned = evaluate_command(&policy, "FOO=bar git status");
+        assert_eq!(assigned.decision, Decision::Prompt);
+        assert!(assigned.matched_rule);
+        assert!(!assigned.every_segment_matched_rule);
+
+        assert_eq!(evaluate(&policy, "FOO=bar rm -rf /"), Decision::Forbidden);
+    }
+
+    #[test]
+    fn a_forbidden_program_stays_forbidden_after_a_leading_assignment() {
+        let policy = policy_allowing_git_status();
+        assert_eq!(evaluate(&policy, "FOO=bar rm -rf /"), Decision::Forbidden);
+    }
+
+    #[tokio::test]
+    async fn an_assignment_first_command_is_refused_as_a_persisted_allow_rule() {
+        let temp = tempdir().expect("tempdir");
+        let policy_path = temp.path().join("user-approved.rules");
+        let error = persist_allow_command_to(policy_path.clone(), "FOO=bar git status")
+            .await
+            .expect_err("an assignment-first command must not be saved");
+        assert!(error.to_string().contains("approved once"), "{error}");
+        assert!(!policy_path.exists());
     }
 
     #[test]
