@@ -4057,9 +4057,43 @@ both contradictory booleans, preserved acknowledged state, uncertainty, version
 conflict and read retry. Canonical transport and native navigation remain mocked.
 No tests, checks, builds, native UI, settings mutations or network actions were run.
 
+## Web provider location settings retain their rendered session and eligibility
+
+Accepted commit `76c82feb1eac599beea150d41af5563ac31e24ed` changes the Web
+US-only panel and adds its fixture source. The panel reuses canonical preference
+owners, view lifetimes and request authority. It no longer dispatches settings
+work through whichever cookie identity happens to be current. A component-local
+operation retains its original ready object and exact billing status/tier;
+synchronous billing subscriptions retire context round trips before React commits.
+Unrelated billing updates and workspace selection do not redefine this account
+preference's owner.
+
+GET and PUT use the captured bearer authority. Save admission claims one operation
+before CSRF acquisition, then checks authority again before dispatch and after body
+parsing. Ready-object equality rejects retained callbacks after reread. Strict
+receipt parsing requires us_only to match the requested boolean; geo_overlay and
+other supported ready fields remain in the replacement request. Acknowledgment,
+uncertainty and readback failure have distinct copy. Recovery reads never replay
+PUT, and failed readback leaves the control disabled until a fresh read succeeds.
+
+Effect cleanup retires only its own operation; StrictMode setup reacquires a usable
+view. Old read/body/receipt settlement cannot publish into a replacement view or
+release its pending operation. Abort does not imply rollback. Cached eligibility
+freshness, external concurrent replacements and canonical unmounted identity
+observation limitations remain unchanged.
+
+Independent source review accepted this bounded correction. Fixtures use the real
+preference/view/request authority and billing store with mocked SDK/transport,
+covering duplicate and retained callbacks, session replacement, eligibility round
+trips, delayed CSRF/read/body/receipt, StrictMode, malformed data, acknowledgement
+and uncertainty. Fresh response instances and wrapped array cases avoid false
+coverage from consumed bodies or empty parameter rows. No tests, checks, builds,
+browser/auth, settings changes or network actions were run. The coupled Web
+training/telemetry lane remains `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-eight accepted production slices traced above are represented as
+Only the one hundred and thirty-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

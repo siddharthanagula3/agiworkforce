@@ -9359,8 +9359,9 @@ that this endpoint's concurrency and size/error requirements are complete.
 
 ## WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
-Status: OPEN, source-backed on 2026-11-05. No runtime reproduction or demonstrated
-cross-account server authorization bypass.
+Status: Coupled training/telemetry lane remains OPEN. US-only ownership was
+boundedly source-corrected in `76c82feb1e`. Source-backed on 2026-11-05, with no
+runtime reproduction or demonstrated cross-account server authorization bypass.
 
 `PrivacySection.tsx` reads the legacy privacy namespace only on mount/retry and
 saves without original account/view ownership. It already has a synchronous
@@ -9372,15 +9373,24 @@ helper accepts a successful response with unparseable JSON, ignores stored value
 and announces submitted values. Backend stored receipt validation does not make
 these permissive client reads authoritative.
 
-`UsOnlyRoutingPanel.tsx` uses mount-only cookie GET/PUT without original session/view
+Original US-only evidence: `UsOnlyRoutingPanel.tsx` uses mount-only cookie GET/PUT without original session/view
 ownership or synchronous mutation exclusion. Its callback does not recheck current
 eligibility or ready-snapshot identity; disabling the rendered switch alone is not
 admission. It ignores the PUT receipt and treats unconfirmed failure as definitely
 unsaved. The endpoint's failed-read-to-empty bug is already source-corrected by
 `edc93db942`; it must not be reported as still present.
 
+Accepted US-only correction `76c82feb1eac599beea150d41af5563ac31e24ed`
+reuses canonical session/preference/view authority, retains the original ready
+object and claims a synchronous operation before CSRF. Billing status/tier changes
+retire it synchronously, including round trips. Both requests use original bearer
+authority; strict matching receipts and owned reconciliation distinguish saved
+choices from unknown results. Retry only reads. Existing geo fields, account scope
+and server gates remain. Cached billing freshness and concurrent replacement writes
+remain separate limits; no runtime acceptance is established.
+
 The settings modal unmounts on close, and switching sections unmounts Privacy.
-Current save lifetimes do not follow that boundary. These settings are account
+The remaining coupled privacy save lifetime does not follow that boundary. These settings are account
 scoped (`resolveOrganization: false`); workspace selection alone does not establish
 a different stored privacy owner. Reuse existing `usePreferenceOwner`,
 `usePreferenceView` and request authority rather than inventing an identity copy.
