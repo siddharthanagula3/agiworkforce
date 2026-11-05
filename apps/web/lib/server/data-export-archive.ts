@@ -413,7 +413,13 @@ function archiveFromJob(row: DataExportJobRow): DataExportArchive | null {
   if (result['done'] !== true) return { ...base, status: 'preparing' };
   const readyAt = typeof result['readyAt'] === 'string' ? result['readyAt'] : null;
   const expiresAt = typeof result['expiresAt'] === 'string' ? result['expiresAt'] : null;
-  if (!readyAt || !expiresAt || Date.parse(expiresAt) <= Date.now()) {
+  const expiresAtMs = expiresAt ? Date.parse(expiresAt) : NaN;
+  if (
+    !readyAt ||
+    !Number.isFinite(Date.parse(readyAt)) ||
+    !Number.isFinite(expiresAtMs) ||
+    expiresAtMs <= Date.now()
+  ) {
     return { ...base, status: 'expired', readyAt, expiresAt };
   }
   return {
