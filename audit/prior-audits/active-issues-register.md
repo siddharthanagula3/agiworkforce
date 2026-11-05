@@ -12800,9 +12800,10 @@ code is unchanged for this finding; no service or runtime was exercised.
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
 
 Severity: Medium. Bounded source correction `897e894683` independently reviewed
-on 2026-11-05, with terminal-receipt correction `028c557767` independently
-source-reviewed later that day; fixtures unrun. Database/RLS acceptance, durable
-producer capture and delivery cancellation remain open.
+on 2026-11-05, with terminal-receipt correction `028c557767` and worker-signal
+correction `059a14c80b` independently source-reviewed later that day; fixtures
+unrun. Database/RLS acceptance, durable producer capture and whole-delivery
+cancellation remain open.
 
 `lib/services/developer-webhook-service.ts::recordDeliveries` previously committed
 each delivery row before independently enqueuing its background job. An enqueue
@@ -12865,17 +12866,33 @@ missing and other-owner rows. This is an interleaving model, not proof of databa
 locking, RLS or transport behavior. It does not prevent duplicate sends or stop a
 request already started before disabling or deleting an endpoint.
 
-A separate source-confirmed cancellation boundary remains uncorrected:
-`deliverDeveloperWebhookJob` does not pass `context.signal` to the attempt or
-outbound request. `job-drain.ts` can acknowledge a cancellation through its
-Promise race while delayed handler work continues. The outbound request has its
-own timeout but can start after delayed lookup/DNS work even after the worker
-signal aborts. Future correction must propagate cancellation to checkpoints and
-transport while preserving the cancellation reason, not report it as an ordinary
-retryable network failure. The immediate callback is outside queued-job
-cancellation; worker signal plumbing alone would not establish cancellation for
-the entire delivery. Already-sent external effects cannot be undone. No service
-or runtime was exercised for this finding or the terminal-receipt correction.
+The source-confirmed worker-signal gap has a bounded correction in `059a14c80b`.
+`deliverDeveloperWebhookJob` now passes `context.signal` through the attempt to
+outbound delivery. Checkpoints before/after the row lookup and DNS resolution
+prevent a later POST after observed cancellation. The public pinned transport
+receives the caller signal combined with the existing timeout. Transport catch
+preserves the exact caller abort reason instead of converting it to an ordinary
+network failure. An aborted request without an observed response does not write
+an invented failed delivery receipt; the receiver's actual outcome is unknown.
+
+After an HTTP response is observed, cleanup failure does not erase that response,
+and receipt persistence occurs before the final cancellation checkpoint. The
+adapter intentionally remains unsignaled so a late cancellation cannot suppress
+the known outcome. This does not ensure persistence will succeed.
+`job-drain.ts` can acknowledge cancellation through its Promise race before the
+handler finishes cleanup or receipt persistence. Database and DNS work are not
+themselves aborted by these APIs. The immediate callback remains outside queued-job
+cancellation, and already-sent external effects cannot be undone. No whole-delivery
+or exactly-once cancellation guarantee is claimed.
+
+Unrun source-authored fixtures cover pre-abort, deferred row lookup, worker-path
+DNS completion/refusal after cancellation, pending transport abort, observed
+success with resolved/rejected response cleanup after cancellation, and existing
+success, timeout, network and egress-refusal classification. Timeout is covered
+both alone and combined with a live caller signal. Prior terminal-receipt race
+and ownership/refusal controls remain. These are mocked source models, not
+database, Undici, queue-drain or live endpoint acceptance. No tests, lint,
+typechecks, builds, service/runtime calls, push or deployment ran.
 
 ## WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01
 

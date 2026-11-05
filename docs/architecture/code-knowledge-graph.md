@@ -5257,9 +5257,19 @@ success under overlapping immediate/queued attempts. Independently source-review
 unrun fixtures drive both public attempts with deferred network/write boundaries
 and verify that the successful receipt remains unchanged. They do not prove real
 database locking or transport behavior. Duplicate sends, already-started external
-effects and endpoint changes remain separate. The worker signal is currently not
-propagated to delivery, and the immediate callback is outside queue cancellation;
-that source-confirmed gap remains open rather than being hidden by this guard.
+effects and endpoint changes remain separate.
+
+Accepted `059a14c80b` passes the worker cancellation signal through row/DNS
+checkpoints and into the pinned transport alongside its existing timeout. Caller
+abort reasons are preserved; an uncertain aborted transport does not fabricate
+a failed delivery receipt. Once an HTTP response is observed, cleanup failure
+cannot erase it and receipt persistence precedes the final abort checkpoint.
+This intentionally keeps the scoped persistence adapter unsignaled. Source-reviewed,
+unrun deferred fixtures cover worker propagation, caller/timeout abort paths and
+observed-success retention. DB/DNS work itself is not aborted, receipt persistence
+can still fail, and the queue drain may acknowledge cancellation before it ends.
+The immediate callback remains outside queue cancellation. This does not establish
+whole-delivery cancellation, exactly-once effects or runtime acceptance.
 
 The same audit records `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01` without changing
 product code: user-global projects and workspace-scoped keys do not share archive
@@ -5269,7 +5279,7 @@ The earlier support rotation atomicity correction retains its narrower scope.
 
 ## Reconstruction boundary
 
-Only the two hundred twelve accepted production slices traced above are represented as
+Only the two hundred thirteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
