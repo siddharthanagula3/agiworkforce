@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   deletePrivateObject: vi.fn(),
   privateObjectStorageConfigured: vi.fn(() => true),
   objectStorageConfigured: vi.fn(() => true),
+  objectKeyFromStorageUri: vi.fn((value: string): string | null => value),
   deleteE2BSessionsForUser: vi.fn(),
   resolveObjectBackupTarget: vi.fn(
     (): { store: unknown; bucket: string; region: string; endpoint: string } | null => null,
@@ -56,7 +57,7 @@ vi.mock('@/lib/server/object-storage', () => ({
   isObjectStorageConfigured: () => mocks.objectStorageConfigured(),
   objectKeyFromPublicUrl: (value: string) =>
     value.startsWith('https://cdn/') ? value.slice(12) : null,
-  objectKeyFromStorageUri: (value: string) => value,
+  objectKeyFromStorageUri: (value: string) => mocks.objectKeyFromStorageUri(value),
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   deletePrivateObject: (...args: unknown[]) => mocks.deletePrivateObject(...args),
   getBoundedObject: vi.fn(),
@@ -368,6 +369,8 @@ describe('eraseUserAccountData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.objectStorageConfigured.mockReturnValue(true);
+    mocks.objectKeyFromStorageUri.mockReset();
+    mocks.objectKeyFromStorageUri.mockImplementation((value: string) => value);
     mocks.deleteObject.mockResolvedValue(undefined);
     mocks.deletePrivateObject.mockResolvedValue(undefined);
     mocks.privateObjectStorageConfigured.mockReturnValue(true);
@@ -1022,6 +1025,80 @@ describe('eraseUserAccountData', () => {
       'knowledge/a.pdf',
       'knowledge/b.pdf',
     ]);
+  });
+
+  it('retains unresolved knowledge references while disposing known objects and retries after resolution is repaired', async () => {
+    primeDb();
+    const legacyUri = 'https://old-assets.example.test/knowledge/legacy.pdf';
+    let rows = [
+      { userId: 'user-1', storage_uri: legacyUri },
+      { userId: 'user-1', storage_uri: 'knowledge/current.pdf' },
+      { userId: 'user-2', storage_uri: 'knowledge/other.pdf' },
+    ];
+    let legacyResolvable = false;
+    mocks.objectKeyFromStorageUri.mockImplementation((value: string) =>
+      value === legacyUri ? (legacyResolvable ? 'knowledge/legacy.pdf' : null) : value,
+    );
+    const query = mocks.query.getMockImplementation()!;
+    const execute = mocks.execute.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('select k.storage_uri')) {
+        return rows.filter((row) => row.userId === params[0]);
+      }
+      return query(sql);
+    });
+    mocks.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      const result = await execute(sql);
+      if (sql.includes('delete from public.user_projects')) {
+        rows = rows.filter((row) => row.userId !== params[0]);
+      }
+      return result;
+    });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+
+    const first = await eraseUserAccountData('user-1');
+
+    expect(first.knowledgeObjectsDeleted).toBe(1);
+    expect(first.knowledgeObjectsFailed).toBe(1);
+    expect(first.backupObjectsDeleted).toBe(1);
+    expect(first.complete).toBe(false);
+    expect(first.profileRetained).toBe(true);
+    expect(first.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(rows).toHaveLength(3);
+    expect(mocks.deleteObject.mock.calls.map(([key]) => key)).toEqual(['knowledge/current.pdf']);
+    expect(mocks.deleteBackupObject.mock.calls.map(([key]) => key)).toEqual([
+      'knowledge/current.pdf',
+    ]);
+
+    legacyResolvable = true;
+    const second = await eraseUserAccountData('user-1');
+
+    expect(second.knowledgeObjectsDeleted).toBe(2);
+    expect(second.knowledgeObjectsFailed).toBe(0);
+    expect(second.complete).toBe(true);
+    expect(second.profileRetained).toBe(false);
+    expect(rows).toEqual([{ userId: 'user-2', storage_uri: 'knowledge/other.pdf' }]);
+    expect(mocks.deleteObject).toHaveBeenCalledWith('knowledge/legacy.pdf');
+    expect(mocks.deleteObject).not.toHaveBeenCalledWith(legacyUri);
+  });
+
+  it('does not invent object failures for null or blank knowledge references', async () => {
+    primeDb({
+      knowledgeRows: [{ storage_uri: null }, { storage_uri: '' }, { storage_uri: ' \t ' }],
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.knowledgeObjectsDeleted).toBe(0);
+    expect(report.knowledgeObjectsFailed).toBe(0);
+    expect(report.complete).toBe(true);
+    expect(mocks.objectKeyFromStorageUri).not.toHaveBeenCalled();
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
   });
 
   it('includes successful knowledge backups alongside media backup counts', async () => {

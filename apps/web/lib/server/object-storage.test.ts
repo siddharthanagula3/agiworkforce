@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { OBJECT_STORAGE_PUBLIC_BASE_URL_ENV } from '@agiworkforce/object-storage';
 import {
   getPresignedPrivateUploadUrl,
   isPrivateObjectStorageConfigured,
   objectKeyFromPublicUrl,
+  objectKeyFromStorageUri,
 } from './object-storage';
 
 const ENV_KEYS = [
+  OBJECT_STORAGE_PUBLIC_BASE_URL_ENV,
   'CLOUDFLARE_R2_ACCOUNT_ID',
   'CLOUDFLARE_R2_ACCESS_KEY_ID',
   'CLOUDFLARE_R2_SECRET_ACCESS_KEY',
@@ -78,6 +81,22 @@ describe('getPresignedPrivateUploadUrl', () => {
 });
 
 describe('objectKeyFromPublicUrl', () => {
+  it('leaves a historical public URL unresolved after the configured base changes or disappears', () => {
+    const key = 'knowledge-files/projects/project-1/legacy.pdf';
+    const legacyUri = `https://old-files.example.test/assets/${key}`;
+    process.env[OBJECT_STORAGE_PUBLIC_BASE_URL_ENV] = 'https://old-files.example.test/assets';
+    expect(objectKeyFromStorageUri(legacyUri)).toBe(key);
+
+    process.env[OBJECT_STORAGE_PUBLIC_BASE_URL_ENV] = 'https://new-files.example.test/assets';
+    expect(objectKeyFromStorageUri(legacyUri)).toBeNull();
+    expect(objectKeyFromStorageUri(key)).toBe(key);
+
+    delete process.env[OBJECT_STORAGE_PUBLIC_BASE_URL_ENV];
+    delete process.env['CLOUDFLARE_R2_PUBLIC_BASE_URL'];
+    expect(objectKeyFromStorageUri(legacyUri)).toBeNull();
+    expect(objectKeyFromStorageUri(key)).toBe(key);
+  });
+
   it('returns the exact object key under the configured public base', () => {
     process.env['CLOUDFLARE_R2_PUBLIC_BASE_URL'] = 'https://files.example.test/assets';
 

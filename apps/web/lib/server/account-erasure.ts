@@ -735,9 +735,20 @@ async function eraseUserKnowledgeObjects(
     [userId],
   );
 
-  const keys = rows
-    .map((row) => (row.storage_uri ? objectKeyFromStorageUri(row.storage_uri) : null))
-    .filter((key): key is string => Boolean(key));
+  const keys: string[] = [];
+  let unresolvedReferences = 0;
+  for (const row of rows) {
+    if (!row.storage_uri?.trim()) continue;
+    const key = objectKeyFromStorageUri(row.storage_uri);
+    if (key) keys.push(key);
+    else unresolvedReferences++;
+  }
+  if (unresolvedReferences > 0) {
+    logger.warn(
+      { userId, count: unresolvedReferences },
+      'Knowledge object references could not be resolved for erasure',
+    );
+  }
   const erasedKeys: string[] = [];
   const primary = await deleteObjectKeys(keys, 'knowledge-file', {
     configured: isProjectKnowledgeObjectStorageConfigured,
@@ -749,6 +760,7 @@ async function eraseUserKnowledgeObjects(
   const backup = await eraseBackupCopies(erasedKeys);
   return {
     ...primary,
+    failed: primary.failed + unresolvedReferences,
     backupObjectsDeleted: backup.deleted,
     backupObjectsFailed: backup.failedKeys.length,
   };
