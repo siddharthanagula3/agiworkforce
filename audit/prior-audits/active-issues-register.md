@@ -11223,3 +11223,34 @@ account/lifecycle authentication guards. This is an object-retention race, not a
 proven erased-account download bypass. Coordinated writer admission/finalization
 and erasure fencing remain open; the earlier pointer-retention correction does
 not solve that race. No worker, database or storage operation was exercised.
+
+
+## WEB-EXPORT-ARCHIVE-TIMESTAMP-01
+
+Severity: Medium. Status: Unparseable archive readiness/expiry metadata fails
+closed, source-corrected in `0cf9c39c7ec5a10b4b7524977f6260e969469fc7`,
+2026-11-05. Runtime acceptance remains open.
+
+archiveFromJob previously required nonempty timestamp strings but compared
+Date.parse(expiresAt) directly with Date.now(). A nonempty invalid expiry produces
+NaN, whose less-than-or-equal comparison is false, so succeeded/done metadata
+could be classified ready. Invalid nonempty readyAt also passed. The download
+resolver trusts that state and can return a stored volume key for a new short-
+lived signed URL. Owner, job-kind, export-ID and volume checks remain in place;
+this is not cross-account access. The current producer generates ISO timestamps
+and schedules independent object expiry, so no malformed current output,
+user-controlled timestamp path, extant expired object or live incident is claimed.
+Successful object deletion is a separate counterguard.
+
+Both parsed timestamps must now be finite, and expiry must still be strictly
+later than now. Invalid metadata follows the existing expired branch with empty
+volumes; earlier preparing/failed/not-done states are unchanged. This is finite
+parseability checking, not a new ISO-only format, chronological-order rule,
+maximum retention guarantee or a correction of snapshot-revocation provenance.
+
+Independent source review accepted the two-file diff. Unrun actual reader and
+download-resolver fixtures use a restored Date.now spy and mocked database rows.
+They cover invalid/blank/nullish/non-string timestamp values, expiry at/before now,
+valid future expiry and unchanged non-ready job states. No presigned URL, object
+fetch, live database or fixture was executed. No tests, lint, typechecks, builds,
+installations, live/database actions, push or deployment ran.

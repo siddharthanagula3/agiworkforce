@@ -4824,9 +4824,20 @@ traces the unfenced running-writer race; ordinary erased-account download guards
 remain counterguards. No source or runtime acceptance is claimed for either
 unresolved design.
 
+## Archive expiry rejects unparseable stored dates
+
+Accepted `0cf9c39c7ec5a10b4b7524977f6260e969469fc7` requires finite parsed
+readiness and expiry times before completed archive metadata becomes ready.
+Invalid values retain the existing expired state/empty volumes; a valid expiry
+must remain later than now. Reader/resolver fixtures are source-reviewed and
+unrun. Current production writers generate ISO dates, owner checks and object
+expiry remain counterguards, and no malformed deployed record is established.
+This does not solve the snapshot-provenance or erasure-fencing gaps above. See
+`WEB-EXPORT-ARCHIVE-TIMESTAMP-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-four accepted production slices traced above are represented as
+Only the one hundred and eighty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
