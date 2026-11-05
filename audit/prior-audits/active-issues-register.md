@@ -12018,3 +12018,56 @@ exact changed-key payloads for combined channels, Off, unreleased mobile, Usage
 and identical failed/retried intent. They mock transport, not concurrent
 database behavior. No tests, lint, typechecks, builds, app execution, live
 account/database/provider actions, push or deployment ran.
+
+
+## MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01
+
+Severity: Medium. Status: Open client preference/lifetime finding, 2026-11-05.
+
+`useToolApprovalPolicySync` optimistically writes the shared policy, then its
+save failure unconditionally restores captured `previous` and sets error.
+After unmount, a mode/account transition or another mounted view's newer choice,
+that old failure can overwrite the current persistent preference. Unmount only
+cancels the initial GET. Transport generation guards remain meaningful and may
+reject old-account requests, but that rejection still invokes the stale rollback.
+Success also updates hook status without lifetime ownership.
+
+The GET effect depends only on derived `isCloud`; account identity/epoch changes
+or a Cloud-to-Local-to-Cloud transition within one React batch can leave that
+boolean unchanged. `autonomyAllowed` also survives retirement. The policy is in
+device-global persisted `apps/mobile/stores/settingsStore.ts`, not the separate
+Local/Cloud preference facade stores. Cloud teardown does not reset this field.
+Both composer mounts and the standalone approval settings screen instantiate
+the hook over that shared value with separate load/save state. A later GET from
+one instance can overwrite another instance's newer selection. Composer
+`hasSynced` readiness is not scoped to its owner, so an old success can preserve
+visibility after the replacement owner's load error.
+
+Actual choice rows are disabled while loading/saving, so ordinary rapid taps are
+not the strongest source sequence. Unmount/re-entry, cross-instance operations
+and mode/account transitions remain relevant. Sources include
+`apps/mobile/src/features/settings/tool-approvals/useToolApprovalPolicySync.ts`,
+`apps/mobile/src/features/chat/components/ComposerApprovalModeControl.tsx`,
+`apps/mobile/services/preferences.ts`, `apps/mobile/services/api.ts`, and
+`apps/mobile/stores/settingsStore.ts`. This is not the Cloud-memory reset issue
+`MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01`.
+
+No server authorization bypass is established. Mobile policy consumers found
+in this review are UI/cache consumers, not outgoing chat policy configuration.
+Preferences GET returns server-derived autonomy availability.
+`apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts` rereads the
+authenticated account policy on chat entry/resume, enforces governing-organization
+restrictions and requires approval on read failure. Merely storing autonomous
+does not override those checks. Preserve the intentional Local default
+`ask_every_time` and Cloud account default `autonomous`; this finding does not
+authorize changing either default.
+
+A correction needs canonical account/mode lifetime plus shared operation and
+mutation ordering across all hook instances, not only a per-hook counter. All
+read/save/rollback continuations, autonomy knowledge and owner-specific readiness
+need ownership. Normal current-owner failed-save rollback remains useful only
+while that write owns the optimistic value. Transport epoch/signal plumbing
+should preserve server authority; aborting a sent PUT is not proof it never
+committed. No implementation is accepted and no production slice is added.
+Independent source review only; no tests, checks, app/native execution, live
+account/database/provider actions, push or deployment ran.

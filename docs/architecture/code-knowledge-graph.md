@@ -5023,6 +5023,17 @@ before the server read, not concurrent server read/merge/write loss. Authored
 fixtures are unrun. See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01` and the still-
 open `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`.
 
+## Mobile approval display needs shared operation ownership
+
+The approval hook's multiple mounts mutate one device-global persisted policy.
+Old reads and failed-save rollback can replace newer local/view choices after
+unmount, mode or account transitions; composer readiness also outlives its owner.
+API generation rejection does not protect an unguarded failure callback. Server
+chat admission still reloads policy and enforces governing-organization limits,
+so no authorization bypass is claimed. `MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01`
+tracks the open shared-lifetime/revision design, distinct from Cloud-memory
+default reset. No implementation or additional production slice is accepted.
+
 ## Reconstruction boundary
 
 Only the one hundred and ninety-seven accepted production slices traced above are represented as
