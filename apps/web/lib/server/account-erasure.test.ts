@@ -102,6 +102,7 @@ import {
 } from '@/lib/billing/financial-record-retention';
 import { POST as refreshDeviceSession } from '@/app/api/auth/device/refresh/route';
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
+import { DATA_EXPORT_BUILD_ARCHIVE_JOB } from '@/lib/server/data-export-archive';
 
 const SCOPE_COLUMNS = new Set([
   'user_id',
@@ -372,6 +373,68 @@ describe('eraseUserAccountData', () => {
     mocks.privateObjectStorageConfigured.mockReturnValue(true);
     mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failedPathnames: [] });
     mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 0, reachable: true });
+  });
+
+  it('keeps failed export pointers for the next erasure while deleting unrelated user jobs', async () => {
+    primeDb();
+    let jobs = [
+      {
+        userId: 'user-1',
+        kind: DATA_EXPORT_BUILD_ARCHIVE_JOB,
+        payload: { exportId: 'export-1', volume: 1 },
+      },
+      { userId: 'user-1', kind: 'email.data-export-ready', payload: {} },
+      {
+        userId: 'user-2',
+        kind: DATA_EXPORT_BUILD_ARCHIVE_JOB,
+        payload: { exportId: 'export-2', volume: 1 },
+      },
+      { userId: null, kind: 'data-export.expire-archive', payload: { ownerId: 'user-1' } },
+    ];
+    const query = mocks.query.getMockImplementation()!;
+    const execute = mocks.execute.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('select payload') && sql.includes('from public.background_jobs')) {
+        return jobs.filter((job) => job.userId === params[0] && job.kind === params[1]);
+      }
+      return query(sql);
+    });
+    mocks.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+      const result = await execute(sql);
+      if (sql.includes('delete from public.background_jobs')) {
+        jobs = jobs.filter(
+          (job) => job.userId !== params[0] || (sql.includes('kind <> $2') && job.kind === params[1]),
+        );
+      }
+      return result;
+    });
+    mocks.deletePrivateObject.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const first = await eraseUserAccountData('user-1');
+
+    expect(first.exportObjectsFailed).toBe(1);
+    expect(first.complete).toBe(false);
+    expect(first.profileRetained).toBe(true);
+    expect(first.tables['background_jobs']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(jobs.map(({ userId, kind }) => ({ userId, kind }))).toEqual([
+      { userId: 'user-1', kind: DATA_EXPORT_BUILD_ARCHIVE_JOB },
+      { userId: 'user-2', kind: DATA_EXPORT_BUILD_ARCHIVE_JOB },
+      { userId: null, kind: 'data-export.expire-archive' },
+    ]);
+
+    const second = await eraseUserAccountData('user-1');
+
+    expect(second.exportObjectsFailed).toBe(0);
+    expect(second.complete).toBe(true);
+    expect(second.profileRetained).toBe(false);
+    expect(second.tables['background_jobs']).toEqual({ deleted: true });
+    expect(jobs.map(({ userId }) => userId)).toEqual(['user-2', null]);
+    expect(mocks.deletePrivateObject.mock.calls.map(([key]) => key)).toEqual([
+      'exports/user-1/export-1/export.json',
+      'exports/user-1/export-1/agi-export-part-1.zip',
+      'exports/user-1/export-1/export.json',
+      'exports/user-1/export-1/agi-export-part-1.zip',
+    ]);
   });
 
   it('purges the sandbox cache for the subject instead of waiting out its TTL', async () => {

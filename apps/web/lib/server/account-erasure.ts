@@ -23,7 +23,10 @@ import {
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
-import { eraseUserDataExportArchives } from '@/lib/server/data-export-archive';
+import {
+  DATA_EXPORT_BUILD_ARCHIVE_JOB,
+  eraseUserDataExportArchives,
+} from '@/lib/server/data-export-archive';
 import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,
@@ -982,11 +985,19 @@ export async function eraseUserAccountData(
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
+      const retainExportJobs = table === 'background_jobs' && exportArchives.failed > 0;
       const subject =
         alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
       try {
-        await db.execute(`delete from public.${table} where ${subject}`, [userId]);
-        recordTableOutcome(tables, table, { deleted: true });
+        await db.execute(
+          `delete from public.${table} where ${subject}${retainExportJobs ? ' and kind <> $2' : ''}`,
+          retainExportJobs ? [userId, DATA_EXPORT_BUILD_ARCHIVE_JOB] : [userId],
+        );
+        recordTableOutcome(
+          tables,
+          table,
+          retainExportJobs ? { deleted: false, retainedForRetry: true } : { deleted: true },
+        );
       } catch (error) {
         recordTableOutcome(tables, table, {
           deleted: false,

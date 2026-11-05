@@ -42,7 +42,7 @@ import {
   sendDataExportReadyEmail,
 } from '@/lib/services/notification-email-service';
 
-const BUILD_ARCHIVE_JOB = 'data-export.build-archive';
+export const DATA_EXPORT_BUILD_ARCHIVE_JOB = 'data-export.build-archive';
 const ARCHIVE_PART_BYTES = 8 * 1024 * 1024;
 const VOLUME_TARGET_BYTES = 1024 ** 3;
 const VOLUME_WORK_MS = 150_000;
@@ -443,7 +443,7 @@ async function readExportJob(
         and ($3::text is null or payload->>'exportId' = $3::text)
       order by created_at desc
       limit 1`,
-    [userId, BUILD_ARCHIVE_JOB, exportId],
+    [userId, DATA_EXPORT_BUILD_ARCHIVE_JOB, exportId],
   );
   return row ?? null;
 }
@@ -523,7 +523,7 @@ export async function requestDataExportArchive(input: {
     contentLength: json.byteLength,
   });
   await enqueueJob(input.db, {
-    kind: BUILD_ARCHIVE_JOB,
+    kind: DATA_EXPORT_BUILD_ARCHIVE_JOB,
     userId: input.userId,
     idempotencyKey: `data-export:${exportId}:1`,
     payload: {
@@ -637,7 +637,7 @@ export async function buildDataExportArchiveVolume(
   ];
   if (cursor) {
     await enqueueJob(context.db, {
-      kind: BUILD_ARCHIVE_JOB,
+      kind: DATA_EXPORT_BUILD_ARCHIVE_JOB,
       userId,
       idempotencyKey: `data-export:${payload.exportId}:${payload.volume + 1}`,
       payload: { ...payload, volume: payload.volume + 1, cursor, volumes },
@@ -700,7 +700,7 @@ export async function eraseUserDataExportArchives(
        from public.background_jobs
       where user_id = $1
         and kind = $2`,
-    [userId, BUILD_ARCHIVE_JOB],
+    [userId, DATA_EXPORT_BUILD_ARCHIVE_JOB],
   );
   const keys = new Set<string>();
   for (const row of rows) {
