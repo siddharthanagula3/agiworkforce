@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/rate-limit');
 type ScanModule1 = typeof import('@/lib/csrf');
 type ScanModule2 = typeof import('@/lib/api-auth');
@@ -11,10 +15,16 @@ vi.mock('server-only', () => ({}));
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
-const { mockQuery, mockExecute, mockRecordAuditEvent } = vi.hoisted(() => ({
+const {
+  mockQuery, mockExecute, mockRecordAuditEvent, mockResolveActiveOrganizationId,
+  mockGetCachedActiveOrganizationId, mockSetCachedActiveOrganizationId,
+} = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
   mockRecordAuditEvent: vi.fn(async () => undefined),
+  mockResolveActiveOrganizationId: vi.fn(),
+  mockGetCachedActiveOrganizationId: vi.fn(),
+  mockSetCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
 
 const permissionRole = vi.hoisted(() => ({ value: 'owner' as string | null }));
@@ -42,7 +52,12 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
-  resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
+vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
+  setCachedActiveOrganizationId: mockSetCachedActiveOrganizationId,
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
   ...(await importOriginal<ScanModule5>()),
@@ -71,10 +86,13 @@ const membership = {
   joined_at: '2026-07-23T00:00:00.000Z',
 };
 
-function request(body: unknown) {
+function request(body: unknown, selector?: string) {
   return new Request('http://localhost:3000/api/settings/organization', {
     method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(selector === undefined ? {} : { [MANAGED_CLOUD_ORGANIZATION_HEADER]: selector }),
+    },
     body: JSON.stringify(body),
   }) as never;
 }
@@ -82,6 +100,7 @@ function request(body: unknown) {
 describe('PATCH /api/settings/organization leaves an audit record', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResolveActiveOrganizationId.mockResolvedValue(ORGANIZATION_ID);
     permissionRole.value = 'owner';
     mockExecute.mockResolvedValue(1);
     mockQuery.mockImplementation(async (sql: string) => {
@@ -144,5 +163,58 @@ describe('PATCH /api/settings/organization leaves an audit record', () => {
     expect(response.status).toBe(403);
     expect(mockExecute).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  describe('actual workspace resolver', () => {
+    const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
+    const NONMEMBER_ORG = '33333333-3333-4333-8333-333333333333';
+
+    beforeEach(async () => {
+      const actual = await vi.importActual<ScanModule4>('@/lib/services/active-workspace-service');
+      mockResolveActiveOrganizationId.mockImplementation(actual.resolveActiveOrganizationId);
+      mockGetCachedActiveOrganizationId.mockResolvedValue(OTHER_ORG);
+      mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+        if (!sql.includes('from public.organization_members')) return [];
+        const organizationId = params[0];
+        return organizationId === ORGANIZATION_ID || organizationId === OTHER_ORG
+          ? [{ ...membership, organization_id: organizationId }]
+          : [];
+      });
+    });
+
+    it('renames explicit A while the account currently selects B', async () => {
+      const response = await PATCH(request({ name: 'Research' }, ORGANIZATION_ID));
+
+      expect(response.status).toBe(200);
+      expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
+        ORGANIZATION_ID, 'owner-user',
+      ]);
+      expect(mockExecute).toHaveBeenCalledWith(expect.any(String), [ORGANIZATION_ID, 'Research']);
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: ORGANIZATION_ID }),
+      );
+    });
+
+    it.each([
+      ['not-a-workspace', 400],
+      [NONMEMBER_ORG, 403],
+      [MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE, 404],
+    ] as const)('refuses selector %s without renaming B', async (selector, status) => {
+      const response = await PATCH(request({ name: 'Research' }, selector));
+
+      expect(response.status).toBe(status);
+      expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('retains legacy headerless selection of B', async () => {
+      const response = await PATCH(request({ name: 'Research' }));
+
+      expect(response.status).toBe(200);
+      expect(mockGetCachedActiveOrganizationId).toHaveBeenCalledWith('owner-user');
+      expect(mockExecute).toHaveBeenCalledWith(expect.any(String), [OTHER_ORG, 'Research']);
+    });
   });
 });

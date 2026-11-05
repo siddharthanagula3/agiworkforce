@@ -710,7 +710,8 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     Error,
     { organizationId: string; updates: Partial<Pick<OrganizationSettings, 'name' | 'slug'>> }
   >({
-    mutationFn: async ({ updates }): Promise<OrganizationSettings> => {
+    retry: false,
+    mutationFn: async ({ organizationId, updates }): Promise<OrganizationSettings> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
 
@@ -722,6 +723,7 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'x-csrf-token': csrfToken,
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
         },
         body: JSON.stringify(updates),
       });

@@ -387,7 +387,7 @@ async function handlePatch(request: NextRequest) {
 
   const db = getNeonDb();
 
-  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!activeOrganizationId) {
     throw createError.notFound('Select a workspace before updating its settings');
   }
