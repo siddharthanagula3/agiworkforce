@@ -4860,9 +4860,23 @@ incident is claimed. This open design finding extends
 `WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01`; no production slice or indefinite pruning
 exemption is counted. Durable cleanup ownership and writer fencing remain needed.
 
+
+## Account scheduling preserves an existing cancellation deadline
+
+Accepted `290985bba850c3c5fb15637752ca761f0c164ed4` makes account scheduling
+conditional on a null existing deadline. A missed update reads the caller's
+schedule: an unexpired deadline returns its original full receipt, expired or
+invalid values refuse, and a concurrently cleared schedule conflicts without a
+new write. Date-returning drivers retain millisecond precision and consistent ISO
+receipt values. All prior admission gates remain, and only a new schedule adds a
+requested-deletion audit. Stateful SQL-shape, competing-request, boundary and
+step-up fixtures are independently source-reviewed but unrun. Stale receipts,
+original-session authority, cancellation/worker fencing and complete erasure
+remain open under `WEB-ACCOUNT-DELETION-INTENT-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-six accepted production slices traced above are represented as
+Only the one hundred and eighty-seven accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

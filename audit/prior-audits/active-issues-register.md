@@ -10009,7 +10009,7 @@ authorized attempt found no Git credentials; no remote branch was created.
 
 Status: Automatic deletion mutation retry source-corrected in
 `161faef68b792fd26f546dd5738a62bed2a6669b` on 2026-11-05. Original
-session/view, wider step-up lifecycle and server idempotency work remain OPEN.
+session/view, wider step-up lifecycle and full server idempotency work remain OPEN.
 Web scheduling/cancellation receipt validation and cancellation retry were
 source-corrected in `5c4d7e8d2a0dd3f388d378ee12303685adadf0b1` on 2026-11-05.
 Native receipt adoption was source-corrected in
@@ -10032,8 +10032,9 @@ QueryClient mutation retry=1. StepUpCancelledError was suppressed only by onErro
 after retry processing. A cancelled challenge could therefore restart the
 DELETE/step-up flow; a lost successful response could repeat scheduling. Existing AccountSection delete
 fixtures explicitly disable mutation retries, so they do not establish production
-cancellation behavior. The server schedule UPDATE replaces requested/scheduled
-timestamps and is not idempotent admission for repeated requests.
+cancellation behavior. The server schedule UPDATE also previously replaced requested/scheduled
+timestamps on repeated requests. The schedule re-entry addendum below records
+the later null-only admission correction and its limits.
 
 The hook awaits CSRF and sends with ambient cookies without original canonical
 session/view authority. AccountSection retains dialog/input state, not an exact
@@ -10322,6 +10323,42 @@ Wider work must bind confirmation, CSRF, original request, grant/replay/body and
 Continue effects to canonical account/view authority, and reconcile unknown
 outcomes by reads rather than mutation replay. Abort is not rollback. Server scheduling idempotency and grant session/consumption policy remain
 separate decisions. No tests, checks, builds or live account operations ran.
+
+
+Account-schedule re-entry addendum, 2026-11-05: Source-corrected in
+`290985bba850c3c5fb15637752ca761f0c164ed4`. DELETE previously rewrote both
+profile deletion timestamps by user ID alone. The lifecycle gate intentionally
+allows deletion_scheduled accounts, including after the deadline. A repeated
+admitted request could therefore postpone a pending schedule or replace an
+expired deadline with a new cancellable one. The worker checks due status once;
+a reset after that check does not stop an already-admitted erasure. Subsequent
+tombstone gates remain counterguards, not a rollback of in-flight work.
+
+The scheduling UPDATE now requires deletion_scheduled_for IS NULL. On zero rows,
+a caller-scoped read returns an existing future deadline through the complete
+normal receipt without another account_deletion_requested audit. Expired or
+invalid deadlines return 409 without schedule changes or claims of completed
+erasure. An existing profile with a now-null schedule returns state-changed 409
+without retrying the write; missing profile and read failures remain failures.
+Driver Date values use getTime and finite validation before ISO conversion,
+preserving milliseconds and consistent receipt wording. String deadlines retain
+their original representation. Billing, sole-owner, rate, CSRF, identity and
+step-up gates still precede both new scheduling and duplicate receipts; step-up
+continues to generate its own audit events.
+
+Independent source review accepted the two-file change. Unrun stateful mocks pin
+the actual null-state SQL predicate, preserve original timestamps, model two
+competing requests with one successful write, and cover cleared/missing profiles,
+read/update errors, missing step-up and future/expired/invalid Date values around
+a millisecond boundary. The fixtures do not execute SQL or establish database
+concurrency. Application-clock receipt classification leaves cancellation's
+existing database-clock predicate unchanged. A concurrent cancellation can still
+make a receipt stale after its read. This does not provide original-session
+binding, exactly-once requests, cancellation rollback, complete worker fencing
+or full erasure. An audit failure can still occur after a successful write.
+No tests, lint, typechecks, builds, installations, live/database actions, push or
+deployment ran.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
