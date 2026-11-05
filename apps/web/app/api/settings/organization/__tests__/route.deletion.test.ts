@@ -56,12 +56,14 @@ function bind({
   existingScheduledFor = null as string | null,
   activeLegalHolds = 0,
   seatSubscriptionId = null as string | null,
+  scheduleUpdateRows = 1,
 }: {
   role?: 'owner' | 'admin' | 'member' | 'viewer' | null;
   deletionRequestedAtIsMissingColumn?: boolean;
   existingScheduledFor?: string | null;
   activeLegalHolds?: number;
   seatSubscriptionId?: string | null;
+  scheduleUpdateRows?: number;
 } = {}) {
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
@@ -104,7 +106,7 @@ function bind({
         error.code = '42703';
         throw error;
       }
-      return 1;
+      return scheduleUpdateRows;
     }
     return 1;
   });
@@ -175,6 +177,9 @@ describe('DELETE /api/settings/organization', () => {
       expect.stringContaining('deletion_scheduled_for'),
       expect.arrayContaining([ORG, expect.any(String), 'user-1']),
     );
+    expect(String(mockExecute.mock.calls[0]?.[0])).toMatch(
+      /where id = \$1\s+and deletion_scheduled_for is null/,
+    );
     expect(mockRecordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'organization_deletion_requested',
@@ -191,10 +196,38 @@ describe('DELETE /api/settings/organization', () => {
   });
 
   it('is idempotent when deletion is already pending', async () => {
-    bind({ role: 'owner', existingScheduledFor: new Date(Date.now() + 60_000).toISOString() });
+    const scheduledFor = new Date(Date.now() + 60_000).toISOString();
+    bind({ role: 'owner', existingScheduledFor: scheduledFor });
     const res = await DELETE(req({ confirm: 'acme' }) as never);
     expect(res.status).toBe(200);
+    expect((await res.json()).scheduledFor).toBe(scheduledFor);
     expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not restart the cancellation window for an overdue schedule', async () => {
+    bind({ role: 'owner', existingScheduledFor: '2020-01-01T00:00:00.000Z' });
+
+    const response = await DELETE(req({ confirm: 'acme' }) as never);
+
+    expect(response.status).toBe(409);
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    expect((await response.json()).error.message).toMatch(/cancellation window has closed/i);
+  });
+
+  it('reports changed state when the conditional scheduling update changes no row', async () => {
+    bind({ role: 'owner', scheduleUpdateRows: 0 });
+
+    const response = await DELETE(req({ confirm: 'acme' }) as never);
+
+    expect(response.status).toBe(409);
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+    expect(String(mockExecute.mock.calls[0]?.[0])).toMatch(
+      /where id = \$1\s+and deletion_scheduled_for is null/,
+    );
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    expect((await response.json()).error.message).toMatch(/state changed/i);
   });
 
   it('fails and schedules nothing when the deletion columns are missing', async () => {
