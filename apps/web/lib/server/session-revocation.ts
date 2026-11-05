@@ -19,7 +19,7 @@ const REVOKE_MAX_ATTEMPTS = 3;
 const REVOKE_BACKOFF_BASE_MS = 500;
 const REVOKE_BACKOFF_CEILING_MS = 30_000;
 const RATE_LIMITED_STATUS = 429;
-const ALREADY_GONE_STATUSES: ReadonlySet<number> = new Set([400, 404]);
+const ALREADY_GONE_STATUSES: ReadonlySet<number> = new Set([404]);
 
 export interface ActiveIdentitySessions {
   sessions: IdentitySession[];

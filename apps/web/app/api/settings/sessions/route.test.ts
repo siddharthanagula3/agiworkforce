@@ -491,6 +491,49 @@ describe('/api/settings/sessions', () => {
       });
     });
 
+    it('does not treat a generic bad-request refusal as a session already gone', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+      mockRevokeSession.mockRejectedValueOnce(providerError(400));
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(502);
+      expect(mockRevokeSession).toHaveBeenCalledTimes(1);
+      expect(mockRevokeSession).not.toHaveBeenCalledWith('sess_current');
+      expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toMatchObject({
+        revokedCount: 0,
+        failedCount: 1,
+        currentSessionRevoked: false,
+      });
+    });
+
+    it('keeps an expired session visible when its revoke receives a generic bad request', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [
+          session('sess_current'),
+          session('sess_ancient', { createdAt: Date.now() - 400 * DAY_MS }),
+        ],
+        totalCount: 2,
+      });
+      mockRevokeSession.mockRejectedValueOnce(providerError(400));
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession).toHaveBeenCalledWith('sess_ancient');
+      await expect(response.json()).resolves.toMatchObject({
+        sessions: expect.arrayContaining([expect.objectContaining({ id: 'sess_ancient' })]),
+        totalCount: 2,
+        endedByLifetime: 0,
+      });
+    });
+
     it('treats a session the provider has already dropped as ended, not as a failure', async () => {
       mockGetSessionList.mockResolvedValue({
         data: [session('sess_current'), session('sess_gone')],
