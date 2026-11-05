@@ -4562,7 +4562,7 @@ and four-mutation fixtures; none ran. Receipt structure does not prove truthful
 server contents or a coherent cross-page snapshot. The following native correction
 is separate from this Web reader.
 
-## Retained native memory reads prove bounded completion
+## Retained native memory reads reject incomplete paging
 
 Accepted commit `1349d7b31d03b4ac8f93eaa795c5417ef3088e69` honors explicit
 continuation in Tauri's list adapter while preserving historically supported
