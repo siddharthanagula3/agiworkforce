@@ -4776,9 +4776,20 @@ concurrent replication, historical configuration, other object classes and actua
 storage/cascade acceptance are not established. See
 `WEB-WORKSPACE-MEDIA-BACKUP-ERASURE-01`.
 
+## Knowledge backup failures preserve account erasure pointers
+
+Accepted `3442bb358f80f3f7d9e1a0a4b2816d9715ec24e0` connects successful
+primary knowledge deletion to the existing backup-erasure helper. A failed copy
+retains user_projects and blocks completion/profile removal, preserving the
+cascaded knowledge rows for retry. Backup report counts combine media and
+knowledge while primary knowledge failures remain separate. Independent source
+review accepted stateful mocked retry and other-user fixtures; none ran.
+Configuration history, unrecognized references, concurrent replication and
+complete erasure remain unproven. See `WEB-ACCOUNT-KNOWLEDGE-BACKUP-ERASURE-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and eighty-one accepted production slices traced above are represented as
+Only the one hundred and eighty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

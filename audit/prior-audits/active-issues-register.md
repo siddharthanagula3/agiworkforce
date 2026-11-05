@@ -11048,3 +11048,43 @@ operations were exercised. Sequential/unpaginated work, concurrent replication,
 other object classes, historical backup configuration and full erasure remain
 outside this correction. No tests, lint, typechecks, builds, installations,
 live/database actions, push or deployment ran.
+
+
+## WEB-ACCOUNT-KNOWLEDGE-BACKUP-ERASURE-01
+
+Severity: High. Status: Configured knowledge backup cleanup and retry custody
+source-corrected in `3442bb358f80f3f7d9e1a0a4b2816d9715ec24e0`, 2026-11-05.
+Historical configuration, concurrent replication and runtime acceptance remain open.
+
+The backup cron includes project_knowledge_files.storage_uri, using the same
+objectKeyFromStorageUri conversion as account knowledge erasure. Account erasure
+previously deleted only primary knowledge objects. If that succeeded, its
+knowledge failure count was zero, allowing user_projects deletion to cascade the
+knowledge rows (0006_projects.sql) and allowing the completion/profile-deletion
+gates to pass while configured backup copies could remain. Bounded replica
+reconciliation is eventual and does not establish completion of this erasure.
+This is source-backed; no surviving production copy was observed.
+
+Only successfully deleted primary knowledge keys now reach the existing shared
+backup-erasure helper. Knowledge backup failures independently retain the user's
+projects and block completion/profile deletion. Existing backup report counts
+aggregate media and knowledge; knowledgeObjectsFailed remains primary-only so
+deletion-manifest object-failure totals do not count the same failure twice. Primary
+success counts retain their prior meaning and can include already-absent objects
+on retry. Avatars, feedback, generic primary cleanup and the shared helper's
+configuration/tracking policies were not changed.
+
+Independent source review accepted the two-file diff. Unrun fixtures exercise a
+stateful two-pass knowledge inventory with retained project pointers, absent
+primary objects on retry, an already-absent backup, and an unaffected second user.
+Additional fixtures cover combined media/knowledge backup counts, primary failure
+without backup deletion and backup-target failure before project/profile removal.
+Backup mocks now reset their implementations and configured target between cases;
+clearAllMocks alone left those values shared. No actual storage, SQL cascade,
+provider deletion or fixtures were executed.
+
+As with media, no configured backup target produces no backup failure and is not
+proof that historical copies are gone. Unknown stored references, concurrent
+replication, shared-reference races, sequential/unpaginated work and complete
+account erasure remain outside this correction. No tests, lint, typechecks,
+builds, installations, live/database actions, push or deployment ran.
