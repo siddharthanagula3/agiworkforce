@@ -5021,10 +5021,12 @@ collection. See `MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01`.
 ## Notification edits send intent instead of stale sibling snapshots
 
 Accepted mobile `ce249b9ed6` sends only the agent-activity key through the
-canonical patch helper. Accepted Web `85356f1e53` sends only the selected event's
-offered channel keys with the existing merge option, including the same partial
-intent on retry. Loaded unknown/mobile siblings and hidden channels are omitted
-from unrelated writes; local optimistic display and rollback stay separate.
+canonical patch helper. Initial Web correction `85356f1e53` sent only the selected
+event's offered channel keys with the existing merge option, including the same
+partial intent on retry; subsequent `b756b08388` replaces that retry with owned
+GET-only recovery. Loaded unknown/mobile siblings and hidden channels are omitted
+from unrelated writes; the initial local optimistic display/rollback is also
+replaced by confirmed-state rendering in the later Web slice.
 Notification saved-event consumers already tolerate absent keys. These two
 source-reviewed slices prevent stale-client replacement of siblings committed
 before the server read, not concurrent server read/merge/write loss. Authored
@@ -5137,9 +5139,29 @@ not prove an uncertain write cannot finish later. Shared consent protocol change
 remain held under `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`; no runtime acceptance
 is asserted.
 
+## Web notification preferences retain current intent and browser continuity
+
+Accepted `b756b08388` adds a notification-specific strict adapter and relocates
+existing five-key defaults to one settings model. Reads require a valid full
+settings envelope; writes preserve the selected event's offered-key patch and
+require every submitted field to match the stored receipt. Saved events contain
+actual stored values, while unknown siblings remain untouched.
+
+Canonical account/session/view authority, observed surface eligibility and exact
+ready/recovery identities fence retained callbacks and settlements. Per-view
+admission is synchronous. Current-owned save outcomes reconcile through GET before
+another edit, and failed reconciliation exposes GET-only retry. Account-state
+retirement does not remount browser permission/status or the AgentRunRow, preserving
+that independent browser operation's busy state and settlement.
+
+Three production and six authored unrun fixture files were independently reviewed.
+Observed eligibility round trips are fenced; unrendered transitions, cross-view/tab
+ordering, remote cancellation/CAS and late unknown commits remain separate limits.
+See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01`. Runtime acceptance remains open.
+
 ## Reconstruction boundary
 
-Only the two hundred four accepted production slices traced above are represented as
+Only the two hundred five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

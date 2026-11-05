@@ -11841,6 +11841,38 @@ adding another current-account check or claiming cancellation is insufficient.
 No implementation for that wider ownership contract is accepted here.
 
 
+Further read-only consumer review on 2026-11-05 includes `TimeFocusReminder`,
+`notificationGate`, `companionNotifications` and `pushPreferenceSync`. Changing
+only the settings hook would leave persisted quiet hours in foreground decisions
+and registration. Root layout can register push before either UI consumer mounts;
+`postPushRegistration` builds preferences from the persisted store and activates
+preference listeners only after a successful POST. The proposed shared owner is
+retained by registration itself, with readiness listeners established before the
+first POST and retained through initial failure.
+
+Omitting preferences is not safe deferral: `/api/mobile/push-token` preserves old
+same-account row preferences with COALESCE; a new row receives null.
+`push-notification-service.ts::deviceAcceptsNotice` treats missing/invalid
+preferences as allow. The route rejects a device ID already
+owned by another account, so this is not evidence that arbitrary cross-account
+registration succeeds. A coherent proposal defers preference-bearing registration
+until the exact Cloud owner is hydrated, and serializes updates so an older POST
+cannot replace newer preference intent. Existing remote registrations can still
+deliver while JS is absent; client readiness is not universal suppression.
+
+The unavailable-state delivery policy needs explicit acceptance before this wider
+slice: proposed behavior suppresses non-exempt foreground/companion alerts and
+reminders while Cloud state is unknown, retaining existing quiet-hours exemptions
+and category choices; those exemptions do not override disabled categories. This trades missed routine alerts for respecting unknown quiet hours.
+Existing persisted time/focus values should be retained as Local-only with unknown
+historical provenance, not erased or automatically uploaded; earlier Cloud loads
+may already have overwritten deliberate Local choices. Focus activity/dismissal
+history remains separately device-scoped. Shared ephemeral Cloud state, strict
+readiness, one current write and GET-only recovery must migrate all named consumers
+together. This is a design constraint only, not an accepted production slice or
+runtime validation; no tests, checks, builds or application/native/server actions ran.
+
+
 ## MOBILE-LOCAL-WIPE-CLEANUP-ORDER-01
 
 Severity: High. Status: Destructive reset ordering source-corrected on
@@ -12044,7 +12076,8 @@ actions, push or deployment ran.
 
 Severity: Medium. Status: Mobile and Web stale-client notification payloads
 source-corrected on 2026-11-05; runtime acceptance remains open. Accepted
-production commits: mobile `ce249b9ed6`, Web `85356f1e53`.
+production commits: mobile `ce249b9ed6`, Web `85356f1e53`; Web request/view and
+recovery follow-on `b756b08388b619273989011da81826ea9338ff55`.
 
 Both clients previously loaded a complete `notifications` namespace and sent
 that cached namespace as a replacement after changing one setting. An unrelated
@@ -12056,20 +12089,21 @@ other events, defaults, hidden channels and any loaded mobile/unknown keys.
 Mobile now calls the canonical `patchPreferenceNamespace` with exactly
 `mobilePushAgentActivity`; sibling values are no longer transmitted. The later
 `MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01` correction replaces its original
-cached rollback bookkeeping with an explicit request owner. Web now forms
-a partial patch from the selected event's offered channel keys and uses the
-existing `savePreferenceNamespace(..., { merge: true })` contract. Optimistic
-display merges locally, rollback restores the prior display and retry retains
-the same partial intent. A hidden unreleased mobile channel is omitted instead
+cached rollback bookkeeping with an explicit request owner. The initial Web
+correction formed a partial patch from the selected event's offered channel keys
+through `savePreferenceNamespace(..., { merge: true })`. Its optimistic display,
+rollback and retained partial retry were subsequently replaced by `b756b08388`
+as described below. A hidden unreleased mobile channel is omitted instead
 of replaying its cached value. Group selections intentionally patch every
 offered channel in that event, including channels explicitly turned off.
 
 The Web saved-event listener reads `browserReplyReady` only when that key has a
 boolean value; it ignores unrelated partial notification patches. Other event
 consumers filter other namespaces. No event-contract/helper change was needed.
-Loading/error/save-in-flight gates, Mobile opt-out/default/Local behavior,
-authentication, scoped DB, CSRF, rate limits, service-owned restrictions, size
-validation and write-receipt validation remain unchanged.
+For the initial consumer corrections, loading/error/save-in-flight gates, Mobile
+opt-out/default/Local behavior, authentication, scoped DB, CSRF, rate limits,
+service-owned restrictions, size validation and write-receipt validation were
+unchanged. The subsequent Web client receipt validation is described below.
 
 At the time of these consumer changes, the server patch path merged against its
 current read, preserving sibling changes committed before that read. It still
@@ -12079,19 +12113,57 @@ requests could lose changes.
 that merge/size ownership; database/runtime acceptance remains open. These consumer patches do not claim atomic
 writes, repair prior overwrites, or introduce an account-lifetime fence. Mobile
 late reads/completions are subsequently bounded by
-`MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01`; legacy Web helper ownership remains
-a separate limit.
+`MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01`; the Web lifetime gap is subsequently
+bounded by `b756b08388`. Other legacy-helper consumers remain separate.
 
-Independent source review accepted three Mobile files and two Web files.
-Authored, unrun Mobile fixtures wait for rendered synced state, assert exact
+Independent source review accepted three Mobile files and two Web files for the
+initial corrections. Initial authored, unrun Mobile fixtures wait for rendered synced state, assert exact
 one-key patch arguments with loaded siblings, and cover opt-out, absent key,
 failed-save rollback and Local mode. The contract fixture calls the real helper
 with a relocated canonical endpoint and checks `{ namespace, patch }`, not
-`value`. Web grouping fixtures load mobile and unknown siblings and assert
+`value`. Initial Web grouping fixtures loaded mobile and unknown siblings and asserted
 exact changed-key payloads for combined channels, Off, unreleased mobile, Usage
 and identical failed/retried intent. They mock transport, not concurrent
 database behavior. No tests, lint, typechecks, builds, app execution, live
 account/database/provider actions, push or deployment ran.
+
+
+Web lifetime follow-on `b756b08388`, source-reviewed 2026-11-05, retains exact
+one-event channel patches while replacing the component's legacy snapshot/write
+path with a narrow strict adapter. Existing five-key defaults move once to a
+notification-settings model; public NotifKey remains re-exported. A missing
+notifications namespace or known fields within a valid settings envelope retains
+those defaults; GET allows an initial null version. Malformed envelopes/namespaces/known booleans,
+missing/blank versions and unmatched write fields cannot create success. A
+successful write requires every submitted field to match its stored receipt and
+publishes the actual stored namespace. Unknown siblings are preserved, not sent.
+
+Canonical preference/session/view authority and an observed eligibility generation
+bind reads, mutations and callbacks. Exact ready identity rejects a callback after
+a newer read; synchronous operation admission prevents overlapping view writes.
+Observed hide/show of offered channels retires old callbacks without waiting for
+effect cleanup. The view does not claim to observe an intermediate prop state
+React never renders. Owner/eligibility changes reset only account preference state;
+BrowserNotificationStatus and the browser-scoped AgentRunRow stay mounted so an
+in-flight browser enable/disable retains its busy state and completion handling.
+
+While the original owner/view/eligibility remains current, successful and uncertain
+save outcomes reconcile with an authenticated no-store GET before editing resumes.
+Reconciliation failure disables controls and offers a current recovery token for
+GET-only Retry. Failed responses no longer assert the change definitely was not
+saved, restore an old snapshot or retain a PUT payload for replay. Retired operations
+perform no reconciliation and only clear their matching operation identity.
+
+Independent source review accepted three production and six authored unrun fixture
+files. Fixtures retain actual rendered callbacks and cover duplicate admission,
+new ready snapshots, account replacement, eligibility hide/show, late reads and
+writes, CSRF/token/body retirement, malformed/first-use data, matching event fields,
+sibling preservation, uncertain recovery and browser operation continuity. Existing
+permission, density, capability and grouping cases were adapted rather than made
+inert. This is not runtime/browser acceptance. Cross-view/tab ordering, server CAS,
+rollback/cancellation of dispatched requests and unknown late commits remain open.
+No tests, lint, typechecks, builds, formatters, application, browser, account,
+provider or database actions, push or deployment ran.
 
 
 ## MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01
