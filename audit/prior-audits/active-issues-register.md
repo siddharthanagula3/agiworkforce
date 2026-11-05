@@ -8937,7 +8937,8 @@ No tests, checks, DB, native or network actions were performed for this finding.
 ## MOBILE-SHARE-TRANSCRIPT-SNAPSHOT-01
 
 Severity: Medium. Status: OPEN source-backed snapshot design constraint,
-2026-11-04. No observed disclosure, runtime reproduction or production repair.
+2026-11-04, refreshed 2026-11-05. No observed disclosure or runtime reproduction.
+The bounded ordering correction below does not repair coherent share snapshots.
 
 `taskActions.ts::shareCloudRun` reads one default `getConversation` page and maps
 all returned rows, without selected-thread resolution or pagination. The current
@@ -8952,7 +8953,26 @@ Existing owner/workspace/temporary-chat checks, external-sharing policy, secret
 redaction and explicit public-link consent remain counterguards.
 
 Naive pagination does not establish a snapshot: conversation metadata, messages
-and count are read separately; this GET uses offset plus created_at-only ordering.
+and count are read separately; this GET uses offset pagination. Accepted commit
+`542069dca12543d6113123156f2862e16f216fa8` adds `id asc` after `created_at asc`,
+matching existing message keyset/legacy-parent ordering. The UUID primary key
+makes retrieval deterministic for an unchanged eligible row set: previously,
+equal-time rows A/B/C could legally return A/B at offset 0 and B at offset 2
+under different tie orders, omitting C without any intervening writes. This is
+a source-derived SQL possibility, not an observed database reproduction. UUID
+order is not authored chronology or a parent-before-child guarantee; accepted
+`68fa555916` separately assigns distinct timestamps to new sync-batch positions.
+Existing ties and other writers still need deterministic retrieval.
+
+The two-file correction preserves admission, parent/leaf values, response shape,
+ETag, count and page bounds. Independently reviewed equal-time page fixtures
+assert the exact SQL/parameters and mocked response contracts, including null
+and explicit leaf, end-of-list and unavailable-conversation controls. They remain
+unexecuted and do not emulate a database sort or prove query-plan performance;
+the existing index does not include the final ID key. Insertions/deletions before
+an offset can still move pages, and client timestamp normalization can collapse
+database-distinct instants. Neither is repaired by the unique SQL tie order.
+
 Its ETag comes from conversation version, while assistant content-edit SQL updates
 only the message and the client drops the response ETag. Counts, deduplication or
 that version alone cannot establish coherent message content and topology. The

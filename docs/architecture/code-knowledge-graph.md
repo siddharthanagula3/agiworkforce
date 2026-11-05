@@ -20,8 +20,8 @@ handling is separate; this document does not certify backup restoration.
 The repository's architecture owners remain `overview.md`, `trust-boundaries.md`
 and root `ARCHITECTURE.md`. This dated map supplements them; defects and release
 acceptance belong in the existing `audit/` owners, not a duplicate tracker here.
-No tests, checks, builds, formatters, network requests or runtime probes were
-performed for this map. Authored regression sources remain unexecuted.
+No tests, checks, builds, formatters, application network requests or runtime
+probes were performed for this map. Authored regression sources remain unexecuted.
 
 ## Private shared-reader cookie admission
 
@@ -4508,9 +4508,26 @@ acknowledgement/deferred-pull case, with retry base and release-on-failure
 instrumentation. It was independently source-reviewed, not executed, and does not
 increase the reconstructed production count.
 
+## Conversation offset pages have a unique tie order
+
+Accepted commit `542069dca12543d6113123156f2862e16f216fa8` orders the existing
+conversation GET by creation timestamp and UUID ascending. For an unchanged
+eligible row set, equal-time messages cannot change page membership merely
+because SQL leaves their tie order unspecified. The separate message keyset
+route and legacy parent/tail helpers already use this pair. No cursor, schema,
+index, selected-thread or response-contract migration was introduced.
+
+Independent source review accepted the one-line production change and authored
+SQL-contract fixtures for tied page boundaries, unchanged metadata/parents/leaf,
+ETag/count, scope predicates, bounds and missing conversation. None ran. UUID
+order does not recover authored chronology or guarantee parent-before-child;
+concurrent offset shifts, separate metadata/count reads, timestamp normalization
+and query-plan performance remain unverified. The coherent share-snapshot issue
+`MOBILE-SHARE-TRANSCRIPT-SNAPSHOT-01` stays open.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-seven accepted production slices traced above are represented as
+Only the one hundred and fifty-eight accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
