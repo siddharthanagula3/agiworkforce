@@ -10,11 +10,14 @@ import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { secureFetch } from '@/services/secureFetch';
 import {
+  assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useTierStore } from '@/src/features/billing/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import { useModelStore } from '@/src/features/model-picker/store';
 
@@ -31,8 +34,73 @@ const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
-let rotatedThisLaunch = false;
-let rotationAttempt: { account: CloudAccountEpoch | null } | null = null;
+interface OrdinaryOperationOwner {
+  account: CloudAccountEpoch | null;
+  accountGeneration: number;
+  modeGeneration: number;
+  lifecycleGeneration: number;
+}
+
+let modeGeneration = 0;
+let accountGeneration = 0;
+let lifecycleGeneration = 0;
+let ordinaryTail: Promise<void> | null = null;
+let rotationAttempt: OrdinaryOperationOwner | null = null;
+let rotatedOwner: OrdinaryOperationOwner | null = null;
+
+subscribeCloudAccountEpochChange(() => {
+  accountGeneration += 1;
+});
+
+useChatAppModeStore.subscribe((next, previous) => {
+  if (next.appMode !== previous.appMode) modeGeneration += 1;
+});
+
+function captureOrdinaryOwner(): OrdinaryOperationOwner {
+  return {
+    account: captureCloudAccountEpoch(),
+    accountGeneration,
+    modeGeneration,
+    lifecycleGeneration,
+  };
+}
+
+function isOrdinaryOwnerCurrent(owner: OrdinaryOperationOwner): boolean {
+  return (
+    (owner.account === null
+      ? captureCloudAccountEpoch() === null
+      : isCloudAccountEpochCurrent(owner.account)) &&
+    owner.accountGeneration === accountGeneration &&
+    owner.modeGeneration === modeGeneration &&
+    owner.lifecycleGeneration === lifecycleGeneration
+  );
+}
+
+function assertOrdinaryOwnerCurrent(owner: OrdinaryOperationOwner): void {
+  if (!isOrdinaryOwnerCurrent(owner)) {
+    throw new Error('Ask from Siri account or mode changed while this operation was pending');
+  }
+}
+
+function enqueueOrdinaryOperation(
+  owner: OrdinaryOperationOwner,
+  operation: () => Promise<void>,
+): Promise<void> {
+  const run = async () => {
+    assertOrdinaryOwnerCurrent(owner);
+    await operation();
+  };
+  const result = ordinaryTail ? ordinaryTail.then(run) : run();
+  const settled = result.then(
+    () => {},
+    () => {},
+  );
+  ordinaryTail = settled;
+  void settled.then(() => {
+    if (ordinaryTail === settled) ordinaryTail = null;
+  });
+  return result;
+}
 
 export function askFromSiriSupported(): boolean {
   return Platform.OS === 'ios';
@@ -65,15 +133,23 @@ function defaultModelId(): string | undefined {
   });
 }
 
-async function storeFreshToken(): Promise<void> {
+async function storeFreshToken(owner: OrdinaryOperationOwner): Promise<void> {
+  if (useChatAppModeStore.getState().appMode !== 'cloud') {
+    throw new Error('Switch to Cloud mode to turn on Ask from Siri');
+  }
   const model = defaultModelId();
+  const installId = await getDeviceId();
+  assertOrdinaryOwnerCurrent(owner);
   const response = MobileIntentTokenIssueResponseSchema.parse(
-    await api.post<unknown>(MOBILE_INTENT_TOKEN_PATH, {
-      installId: await getDeviceId(),
-      ...(model ? { defaultModelId: model } : {}),
-    }),
+    await api.post<unknown>(
+      MOBILE_INTENT_TOKEN_PATH,
+      { installId, ...(model ? { defaultModelId: model } : {}) },
+      { accountEpoch: owner.account },
+    ),
   );
+  assertOrdinaryOwnerCurrent(owner);
   await SecureStore.setItemAsync(ASK_INTENT_KEYCHAIN_KEY, response.token, KEYCHAIN_OPTIONS);
+  assertOrdinaryOwnerCurrent(owner);
   storage.set(TOKEN_ID_KEY, response.tokenId);
   storage.delete(PENDING_REVOKE_KEY);
 }
@@ -92,41 +168,65 @@ async function revokePath(tokenId: string | undefined): Promise<string> {
 
 export async function enableAskFromSiri(): Promise<void> {
   if (!askFromSiriSupported()) return;
-  await storeFreshToken();
-  storage.set(ENABLED_KEY, true);
+  const owner = captureOrdinaryOwner();
+  await enqueueOrdinaryOperation(owner, async () => {
+    assertCloudAccountEpochCurrent(owner.account);
+    await storeFreshToken(owner);
+    assertOrdinaryOwnerCurrent(owner);
+    storage.set(ENABLED_KEY, true);
+  });
 }
 
 export async function disableAskFromSiri(): Promise<void> {
-  const tokenId = readString(TOKEN_ID_KEY);
-  try {
-    await api.delete<unknown>(await revokePath(tokenId));
-  } catch (error) {
-    storage.set(PENDING_REVOKE_KEY, tokenId ?? REVOKE_WHOLE_INSTALL);
-    throw error;
-  } finally {
-    await forgetLocalToken();
-  }
+  const owner = captureOrdinaryOwner();
+  await enqueueOrdinaryOperation(owner, async () => {
+    const tokenId = readString(TOKEN_ID_KEY);
+    try {
+      const path = await revokePath(tokenId);
+      assertOrdinaryOwnerCurrent(owner);
+      await api.delete<unknown>(path, { accountEpoch: owner.account });
+      assertOrdinaryOwnerCurrent(owner);
+      storage.delete(PENDING_REVOKE_KEY);
+    } catch (error) {
+      if (isOrdinaryOwnerCurrent(owner)) {
+        storage.set(PENDING_REVOKE_KEY, tokenId ?? REVOKE_WHOLE_INSTALL);
+      }
+      throw error;
+    } finally {
+      if (isOrdinaryOwnerCurrent(owner)) await forgetLocalToken();
+    }
+  });
 }
 
 export async function settleAskIntentOnLaunch(): Promise<void> {
   if (!askFromSiriSupported()) return;
-  const pendingTokenId = readString(PENDING_REVOKE_KEY);
-  if (pendingTokenId) {
-    await api.delete<unknown>(await revokePath(pendingTokenId));
-    storage.delete(PENDING_REVOKE_KEY);
-  }
-  if (rotatedThisLaunch || !isAskFromSiriEnabled()) return;
-  const attempt = { account: captureCloudAccountEpoch() };
+  if (rotationAttempt && isOrdinaryOwnerCurrent(rotationAttempt)) return;
+  const attempt = captureOrdinaryOwner();
   rotationAttempt = attempt;
-  rotatedThisLaunch = true;
   try {
-    await storeFreshToken();
+    await enqueueOrdinaryOperation(attempt, async () => {
+      assertCloudAccountEpochCurrent(attempt.account);
+      const pendingTokenId = readString(PENDING_REVOKE_KEY);
+      if (pendingTokenId) {
+        const path = await revokePath(pendingTokenId);
+        assertOrdinaryOwnerCurrent(attempt);
+        await api.delete<unknown>(path, { accountEpoch: attempt.account });
+        assertOrdinaryOwnerCurrent(attempt);
+        storage.delete(PENDING_REVOKE_KEY);
+      }
+      if ((rotatedOwner && isOrdinaryOwnerCurrent(rotatedOwner)) || !isAskFromSiriEnabled()) {
+        return;
+      }
+      rotatedOwner = attempt;
+      await storeFreshToken(attempt);
+    });
   } catch (error) {
-    if (rotationAttempt === attempt && isCloudAccountEpochCurrent(attempt.account)) {
-      rotationAttempt = null;
-      rotatedThisLaunch = false;
+    if (rotationAttempt === attempt && isOrdinaryOwnerCurrent(attempt)) {
+      if (rotatedOwner === attempt) rotatedOwner = null;
     }
     throw error;
+  } finally {
+    if (rotationAttempt === attempt) rotationAttempt = null;
   }
 }
 
@@ -153,8 +253,9 @@ async function revokeWithCapturedSession(token: string): Promise<boolean> {
 }
 
 export async function revokeAskIntentForSignOut(capturedClerkToken: string): Promise<void> {
+  lifecycleGeneration += 1;
   rotationAttempt = null;
-  rotatedThisLaunch = false;
+  rotatedOwner = null;
   const hadToken = isAskFromSiriEnabled() || readString(PENDING_REVOKE_KEY) !== undefined;
   const token = capturedClerkToken.trim();
   try {

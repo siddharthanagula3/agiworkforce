@@ -38,6 +38,12 @@ jest.mock('../lib/mmkv', () => ({
 jest.mock('../services/api', () => ({ api: { post: jest.fn(), delete: jest.fn() } }));
 jest.mock('../src/features/billing/store', () => ({ useTierStore: { getState: jest.fn() } }));
 jest.mock('../src/features/model-picker/store', () => ({ useModelStore: { getState: jest.fn() } }));
+jest.mock('../src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: {
+    getState: () => ({ appMode: 'local' }),
+    subscribe: () => () => {},
+  },
+}));
 jest.mock('../src/features/chat/utils/newConversationModel', () => ({
   resolveNewConversationModel: jest.fn(),
 }));
