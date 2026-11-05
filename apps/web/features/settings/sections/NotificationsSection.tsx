@@ -158,7 +158,7 @@ export function NotificationsSection({
   const [hasChanged, setHasChanged] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [failedChange, setFailedChange] = useState<Record<NotifKey, boolean> | null>(null);
+  const [failedChange, setFailedChange] = useState<Partial<Record<NotifKey, boolean>> | null>(null);
   const saveInFlight = useRef(false);
 
   useEffect(() => {
@@ -187,20 +187,20 @@ export function NotificationsSection({
     };
   }, [loadAttempt]);
 
-  async function saveChange(next: Record<NotifKey, boolean>) {
+  async function saveChange(patch: Partial<Record<NotifKey, boolean>>) {
     if (loading || loadError || saveInFlight.current) return;
     saveInFlight.current = true;
     const previous = state;
-    setState(next);
+    setState({ ...previous, ...patch });
     setSaving(true);
     setSaveError(null);
     setFailedChange(null);
     try {
-      await savePreferenceNamespace(NAMESPACE, next);
+      await savePreferenceNamespace(NAMESPACE, patch, { merge: true });
       setHasChanged(true);
     } catch (error) {
       setState(previous);
-      setFailedChange(next);
+      setFailedChange(patch);
       setSaveError(toUserMessage(error, 'Your notification preferences could not be saved.'));
     } finally {
       saveInFlight.current = false;
@@ -209,11 +209,11 @@ export function NotificationsSection({
   }
 
   function setEventChannels(event: EventSpec, enabledIds: NotifKey[]) {
-    const next = { ...state };
+    const patch: Partial<Record<NotifKey, boolean>> = {};
     for (const channel of event.channels) {
-      next[channel.id] = enabledIds.includes(channel.id);
+      patch[channel.id] = enabledIds.includes(channel.id);
     }
-    void saveChange(next);
+    void saveChange(patch);
   }
 
   return (

@@ -38,6 +38,8 @@ beforeEach(() => {
     browserReplyReady: true,
     emailScheduleDone: false,
     mobilePushScheduleDone: false,
+    mobilePushAgentActivity: true,
+    newerNotificationPreference: 'preserve',
   });
   mocks.savePreferenceNamespace.mockResolvedValue(undefined);
 });
@@ -81,6 +83,11 @@ describe('NotificationsSection grouping', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');
     expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(2);
+    expect(mocks.savePreferenceNamespace.mock.calls).toEqual([
+      ['notifications', { browserReplyReady: false }, { merge: true }],
+      ['notifications', { browserReplyReady: false }, { merge: true }],
+    ]);
+    expect(screen.getByRole('combobox', { name: 'Usage' })).toHaveValue('pushUsageReset');
   });
 
   it('keeps channels locked after a failed read and offers a load retry', async () => {
@@ -131,13 +138,11 @@ describe('NotificationsSection grouping', () => {
     });
 
     await waitFor(() =>
-      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
-        browserReplyReady: true,
-        emailScheduleDone: true,
-        mobilePushScheduleDone: true,
-        emailSecurityAlerts: true,
-        pushUsageReset: true,
-      }),
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        { emailScheduleDone: true, mobilePushScheduleDone: true },
+        { merge: true },
+      ),
     );
   });
 
@@ -146,6 +151,8 @@ describe('NotificationsSection grouping', () => {
       browserReplyReady: true,
       emailScheduleDone: true,
       mobilePushScheduleDone: true,
+      mobilePushAgentActivity: true,
+      newerNotificationPreference: 'preserve',
     });
     render(<NotificationsSection surfaceStatus={MOBILE_RELEASED} />);
     await waitFor(() =>
@@ -159,13 +166,11 @@ describe('NotificationsSection grouping', () => {
     });
 
     await waitFor(() =>
-      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
-        browserReplyReady: true,
-        emailScheduleDone: false,
-        mobilePushScheduleDone: false,
-        emailSecurityAlerts: true,
-        pushUsageReset: true,
-      }),
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        { emailScheduleDone: false, mobilePushScheduleDone: false },
+        { merge: true },
+      ),
     );
   });
 
@@ -175,6 +180,8 @@ describe('NotificationsSection grouping', () => {
       browserReplyReady: true,
       emailScheduleDone: true,
       mobilePushScheduleDone: true,
+      mobilePushAgentActivity: true,
+      newerNotificationPreference: 'preserve',
     });
     render(<NotificationsSection />);
     const scheduleSelect = screen.getByRole('combobox', { name: 'Scheduled task finished' });
@@ -190,13 +197,11 @@ describe('NotificationsSection grouping', () => {
     fireEvent.change(scheduleSelect, { target: { value: 'off' } });
 
     await waitFor(() =>
-      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
-        browserReplyReady: true,
-        emailScheduleDone: false,
-        mobilePushScheduleDone: true,
-        emailSecurityAlerts: true,
-        pushUsageReset: true,
-      }),
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        { emailScheduleDone: false },
+        { merge: true },
+      ),
     );
   });
 
@@ -209,7 +214,8 @@ describe('NotificationsSection grouping', () => {
     await waitFor(() =>
       expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
         'notifications',
-        expect.objectContaining({ pushUsageReset: false }),
+        { pushUsageReset: false },
+        { merge: true },
       ),
     );
   });
