@@ -9546,14 +9546,16 @@ lint, typechecks, builds, browser/auth, telemetry sends, push or deploy ran.
 
 ## WEB-TELEMETRY-POST-INIT-DELIVERY-01
 
-Status: OPEN, source-backed on 2026-11-05; no production delivery correction yet.
+Status: Configured browser transport boundedly source-corrected in
+`bbd8ef10ac2cfdd9d19c3ea5b1a1193a7d61dea4` on 2026-11-05. Runtime and
+deployment acceptance remain open.
 
-Both browser entrypoints gate initial Sentry setup, but initialized clients keep
-`enabled=isSentryConfigured()`. Error/transaction hooks always return redacted
-events and the static-span hook is scrub-only. Consent controls user-ID removal,
-not the final transport. No browser shutdown or send-time gate exists in these
-paths. This supports future scrubbed telemetry after opt-out, not an observed
-production disclosure. Existing redaction and disabled content collection remain
+Before this slice, both browser entrypoints gated initial Sentry setup, but
+initialized clients kept `enabled=isSentryConfigured()`. Error/transaction hooks
+returned redacted events and the static-span hook was scrub-only. Consent
+controlled user-ID removal, not final transport. No browser shutdown or send-time
+gate existed in these paths. This supported future scrubbed telemetry after
+opt-out, not an observed production disclosure. Existing redaction and disabled content collection remain
 real protections.
 
 Read-only upstream inspection of pinned Sentry 11.8.0 release commit
@@ -9569,9 +9571,55 @@ to discard queued telemetry. Relevant upstream source:
 - [Envelope transport and synchronous request task](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/core/src/transports/base.ts)
 - [Client envelope send and close](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/core/src/client.ts)
 
-A correction must gate browser envelopes, including standalone spans, without
-disabling server/edge observability or claiming to retract already-started sends.
-Hook-only error/transaction null returns would not cover every envelope category.
-Account/browser-intent ordering remains separate. Upstream source reads are not
-installed-SDK execution or runtime acceptance. No tests, lint, typechecks, builds,
+The new client-only options module wraps the public fetch transport and is used
+by both browser initialization entrypoints. Every configured transport send checks
+live local consent, including the current-page storage-refusal latch. Denied
+envelopes resolve without forwarding or retention. Allowed sends forward the
+original envelope synchronously, preserving the transport PromiseLike. Flush
+delegates draining already-started work; it does not replay denied envelopes.
+Shared redaction, sampling, server/edge initialization and transport remain intact.
+
+This is a configured transport boundary, not all SDK/browser traffic. Upstream
+Spotlight can send directly from a beforeEnvelope hook, but current app options
+do not enable it. See [the pinned Spotlight source](https://github.com/getsentry/sentry-javascript/blob/c6492ef78c7bfb97931e43075763ce84ee8fda7e/packages/browser/src/integrations/spotlight.ts).
+The patch does not cancel in-flight requests, purge collected SDK buffers, or
+suppress old buffered data if consent is restored before its eventual send.
+Account/browser-intent ordering remains separate. Same-origin client-failure
+reporting is a distinct path under `WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01`.
+
+Independent source review accepted the patch and unexecuted fixtures for live
+revocation, storage failures, every opaque/mixed category, synchronous forwarding,
+promise identity, no replay, flush delegation, both browser callers and unchanged
+server/edge options. The factory and SDK init are mocked; category fixtures do
+not validate SDK payload schemas or browser module resolution. Upstream source
+reads are not installed-SDK execution or runtime acceptance. No tests, lint,
+typechecks, builds, telemetry sends, push or deploy ran.
+
+## WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01
+
+Status: OPEN, source-backed on 2026-11-05; no production correction yet.
+
+`client-failure-transport.ts` detaches a batch and checks consent in flush, then
+post awaits CSRF headers and dispatches without checking again. Local opt-out
+during that await can still produce a request. If the account save is delayed
+or fails, the server can still see consent=true and record a closed-vocabulary
+failure metric. This is a browser dispatch race, not an observed disclosure or
+server authorization bypass. The route independently checks CSRF, rate limit,
+authentication, bounded enum payload and current server consent before recording.
+Server denial returns 202 with accepted=0 and consent=withheld.
+
+The transport's document=true branch also overrides local denial, but RootLayout
+currently renders no consent attribute and no production writer was found. Keep
+that dormant precedence issue distinct from the reachable local-mirror/CSRF race.
+Existing fixtures grant only via document=true, missing the ordinary local path.
+
+A bounded correction should require live local consent (document=false remains a
+denial) and recheck immediately after CSRF before fetch. Preserve local diagnostic
+recording, detached-batch discard, conservative page budget and no retry/requeue.
+Current cookie identity at delayed dispatch can differ from the original batch's
+owner; no canonical account/view authority is captured. Final-state consent alone
+also cannot detect revoke then regrant during the await. Those wider queue/session
+and browser-intent lifetimes remain open with
+`WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`; no rollback of started fetches is claimed.
+No files were changed for this finding; no tests, lint, typechecks, builds,
 telemetry sends, push or deploy ran.

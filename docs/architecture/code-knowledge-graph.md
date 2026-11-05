@@ -4191,9 +4191,31 @@ server/edge observability remain unchanged. See
 and `WEB-TELEMETRY-POST-INIT-DELIVERY-01` for distinct acceptance boundaries.
 No tests, lint, typechecks, builds, telemetry sends, push or deploy ran.
 
+## Browser Sentry envelopes consult live consent at send
+
+Accepted commit `bbd8ef10ac2cfdd9d19c3ea5b1a1193a7d61dea4` adds
+`client/sentry-client-options.ts` and wires both browser initialization paths to it.
+A wrapper around the public Sentry fetch transport checks live local consent for
+every envelope reaching send. It drops denied envelopes without retaining them,
+forwards admitted envelopes synchronously, and delegates flush to drain existing
+requests. Public factory types are used; shared scrubbers, data collection flags,
+sampling and server/edge defaults are unchanged.
+
+Independent source review inspected exact upstream 11.8.0 transport, buffer,
+client and export contracts. Authored fixture sources use mocked transport/init,
+including live refusal and storage failure, opaque/mixed envelope categories,
+no replay, promise identity, flush, both callers and server/edge separation.
+They were not executed and do not establish actual browser resolution or SDK
+payload schema validity. Optional Spotlight bypasses transport but is not enabled
+by this app. The patch does not cancel in-flight traffic, purge SDK collection,
+order stale opt-ins, or suppress old buffers sent after consent is restored.
+See `WEB-TELEMETRY-POST-INIT-DELIVERY-01`; the separate same-origin client-failure
+await gap is recorded in `WEB-CLIENT-FAILURE-CONSENT-DISPATCH-01`.
+No tests, lint, typechecks, builds, telemetry sends, push or deploy ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and forty-three accepted production slices traced above are represented as
+Only the one hundred and forty-four accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
