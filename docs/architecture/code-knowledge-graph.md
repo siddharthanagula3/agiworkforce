@@ -4705,9 +4705,30 @@ actual-component and real-resolver fixtures with mocked external boundaries.
 No runtime, PostgreSQL, browser or deployment acceptance is claimed. See
 `WEB-WORKSPACE-MUTATION-INTENT-01` and `WEB-WORKSPACE-DELETION-LIFECYCLE-01`.
 
+## Workspace erasure establishes and preserves its admission lock
+
+Accepted `1c3c0f52a7df8b401320b4d5e4f0fc4772c7d51f` makes a missing erasure
+lockdown definition reject and stops suppressing lock-establishment failure before
+destructive work. The existing cron catches the exception and can retry the due
+organization later. Billing cancellation remains earlier and may already succeed.
+
+Accepted `a3e1cf91cf263c06657f9bb0d1da20280ba4af12` moves workspace
+feature_flags out of direct scoped deletes and into the deferred-cascade inventory.
+The lock now survives this erasure loop whenever the organization is retained;
+final organization deletion relies on migration 0211's declared cascade. The
+existing retainOrganizationRow and complete-report semantics are unchanged.
+
+Independent source review accepted both slices. Unrun fixtures use real helper/
+flag-store code with mocked boundaries, explicit definition success and failure,
+a deferred override write, cron continuation and partial-purge retry. Inventory
+and SQL-call assertions are not deployed-cascade or durable-persistence evidence.
+Fail-open admission reads/resolution, already-running work, operator lifting and
+concurrent erasure remain outside the correction. No universal isolation or
+runtime acceptance is claimed. See `WEB-WORKSPACE-ERASURE-LOCKDOWN-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and seventy-four accepted production slices traced above are represented as
+Only the one hundred and seventy-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

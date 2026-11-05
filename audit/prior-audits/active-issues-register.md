@@ -10817,3 +10817,56 @@ B after a request concerning A. Receipt schemas, original-session ownership,
 general cron locking, schedule-version fencing, legal-hold races and complete
 erasure recovery remain outside these corrections. No tests, lint, typechecks,
 builds, installations, live/database actions, push or deployment ran.
+
+
+## WEB-WORKSPACE-ERASURE-LOCKDOWN-01
+
+Severity: High. Status: Lock-establishment failure and premature lock removal
+source-corrected in `1c3c0f52a7df8b401320b4d5e4f0fc4772c7d51f` and
+`a3e1cf91cf263c06657f9bb0d1da20280ba4af12`, 2026-11-05. Admission failure
+policy, in-flight work, concurrency and runtime/deployment acceptance remain open.
+
+Before the correction, organization-erasure.ts logged and swallowed a rejected
+lockdownTenantForErasure call, then proceeded to media, connector-cache and table
+deletion. The helper also returned successfully when ensureFlagDefinition could
+not produce a definition. Later, the generic scoped-table loop deleted the same
+feature_flags organization rows that hold the non-expiring tenant.lockdown
+workspace override, before remaining tables, anonymization and final organization
+deletion. A failed later operation could therefore retain a partially erased
+organization without its lock. This is source-backed lifecycle evidence, not an
+observed production incident or proof that all consumers admit a locked tenant.
+
+The helper now rejects a missing definition; erasure awaits it without suppressing
+failure. The existing purge cron counts exceptions as failed and can select the
+still-due retained organization on a later run. Legal-hold and billing gates remain
+in their existing order. Billing can already have been canceled before lockdown
+fails, so this is not an all-or-nothing operation or a no-side-effects guarantee.
+
+Workspace feature_flags now use the existing deferred-cascade inventory, as do
+other rows that must survive until parent deletion. Migration 0211 declares their
+organization_id foreign key ON DELETE CASCADE; no later forward override was
+found. The erasure loop no longer deletes any workspace flag rows directly. A
+retained organization, including retainOrganizationRow, keeps those overrides;
+final parent deletion relies on the declared cascade. The report omits deferred
+flag rows just as other deferred inventory does. Its existing complete=true with
+retainOrganizationRow semantics are unchanged and do not mean all rows are gone.
+
+Independent source review accepted both exact production/fixture diffs. The
+fixtures exercise the real lockdown helper and flag-store functions with mocked
+DB/storage boundaries; happy paths now provide a valid definition instead of
+relying on the former null-success behavior. Unrun cases cover missing/read/insert
+and override-write failures, no destructive work while an override write remains
+unsettled, later retry, and cron continuation without a false completion audit.
+Retention cases cover source classification, successful purge, media/table/
+anonymization/final-row failures, retainOrganizationRow and partial-purge retry.
+SQL-call and migration-string assertions do not establish actual database state,
+constraint deployment, cascading or durable lock persistence across retries.
+
+Global admission remains outside this patch: getSubjectOverrides defaults to an
+empty result on read error, and API-auth workspace resolution also fails open.
+Existing consumers include API auth, SCIM auth and shared-viewer admission, but
+those admission checks do not cancel already-running work. Operator lifting,
+concurrent erasure, schedule/hold fencing and complete recovery remain unresolved.
+No tests, lint, typechecks, builds, installations, live/database actions, push or
+deployment ran. Claim only refusal to proceed after lock-establishment failure
+and removal of erasure's own premature flag deletion, not universal isolation.
