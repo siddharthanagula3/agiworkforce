@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => null,
+}));
+
 /**
  * Account deletion used to exist twice: AccountSection's dialog-based flow
  * (the canonical one, which signs the user out after a successful deletion)
@@ -58,7 +63,8 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
   setTelemetryConsentCache: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));

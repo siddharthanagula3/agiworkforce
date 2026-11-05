@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { Switch } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -11,12 +11,15 @@ import {
   setTelemetryConsentCache,
 } from '@/lib/sentry-shared';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { usePreferenceOwner, usePreferenceView } from '../hooks/use-preference-owner';
 import {
-  fetchPreferenceNamespace,
-  savePreferenceNamespace,
-} from '@/app/settings/_lib/preferences-client';
+  readPrivacyPreferences,
+  savePrivacyPreference,
+  type PrivacySnapshot,
+  type PrivacyKey,
+} from '../services/privacy-preferences-client';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
-import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { DataExportRow } from '../components/DataExportRow';
 import { BulkConversationControls } from '../components/BulkConversationControls';
@@ -26,8 +29,6 @@ import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow
 import { NamedProviderConsentRows } from '../components/NamedProviderConsentRows';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
-
-const NAMESPACE = 'privacy';
 
 // 'locationMetadata' and 'improveModelTraining' are intentionally absent from
 // TOGGLES: both persisted correctly but had zero consumers anywhere (no
@@ -39,7 +40,7 @@ const NAMESPACE = 'privacy';
 // Fixing that means gating the save path itself, not this settings screen.
 // do not re-add the switch until that read is wired, or it goes back to
 // actively lying to privacy-conscious users.
-type ToggleKey = 'shareTelemetry' | 'keepOutOfProviderTraining';
+type ToggleKey = PrivacyKey;
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -179,90 +180,120 @@ function ExpandableSection({ title, children }: { title: string; children: React
 const BROWSER_SYNC_STATEMENT =
   'Artifacts you create here are synced to your account; conversations are stored in your account directly, not synced from this browser.';
 
+type PrivacyLane = {
+  active: boolean;
+  ready: PrivacySnapshot | null;
+  operation: RequestAuthority | null;
+};
+
+type PrivacyView = {
+  lane: PrivacyLane;
+  ready: PrivacySnapshot | null;
+  values: Record<ToggleKey, boolean>;
+  busy: boolean;
+  message: string | null;
+  failed: boolean;
+};
+
 export function PrivacySection() {
   const newChatsTemporary = useSettingsStore((state) => state.newChatsTemporary) ?? false;
   const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
-
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud =
     subscription?.status === 'active' && !isFreeBillingPlanTier(subscription.tier);
-  const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
-  const [savingPreferences, setSavingPreferences] = useState(false);
-  const [preferenceError, setPreferenceError] = useState<string | null>(null);
-  const [loadingPreferences, setLoadingPreferences] = useState(true);
-  const [hasChanged, setHasChanged] = useState(false);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [pendingPreference, setPendingPreference] = useState<Record<ToggleKey, boolean> | null>(
-    null,
-  );
-  const saveInFlight = useRef(false);
+  const owner = usePreferenceOwner();
+  const capture = usePreferenceView(owner);
+  const lane = useMemo<PrivacyLane>(() => ({ active: false, ready: null, operation: null }), [owner]);
+  const [view, setView] = useState<PrivacyView | null>(null);
+  const displayed = view?.lane === lane ? view : null;
+  const ready = displayed?.ready ?? null;
+  const state = displayed?.values ?? defaultPrivacyState();
+  const laneCurrent = useCallback(() => lane.active && owner?.isCurrent() === true, [lane, owner]);
+
+  const read = useCallback(async (
+    operation: RequestAuthority,
+    message: string | null = null,
+    acknowledged: boolean = false,
+  ) => {
+    const current = () => lane.operation === operation && operation.isCurrent();
+    try {
+      const snapshot = await readPrivacyPreferences(operation);
+      if (!current()) return;
+      const values = { ...defaultPrivacyState(), ...snapshot.stored };
+      setTelemetryConsentCache(values.shareTelemetry);
+      if (!current()) return;
+      const pendingDenial = hasPendingTelemetryOptOut();
+      if (pendingDenial) values.shareTelemetry = false;
+      lane.ready = snapshot;
+      setView({ lane, ready: snapshot, values, busy: false,
+        message: pendingDenial
+          ? 'Telemetry is off on this browser. Review your account setting before choosing again.'
+          : message,
+        failed: pendingDenial || (message !== null && !acknowledged) });
+    } catch {
+      if (!current()) return;
+      lane.ready = null;
+      setView((previous) => ({ lane, ready: null,
+        values: previous?.lane === lane ? previous.values : defaultPrivacyState(), busy: false,
+        message: `${message ? `${message} ` : ''}The latest privacy settings could not be loaded. Retry loading them.`,
+        failed: true }));
+    } finally {
+      if (lane.operation === operation) lane.operation = null;
+      operation.retire();
+    }
+  }, [lane]);
+
+  const load = useCallback(() => {
+    const viewCurrent = capture();
+    if (!owner || !laneCurrent() || !viewCurrent() || lane.operation) return;
+    const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
+    lane.operation = operation;
+    lane.ready = null;
+    setView({ lane, ready: null, values: defaultPrivacyState(), busy: true, message: null, failed: false });
+    void read(operation);
+  }, [owner, capture, lane, laneCurrent, read]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoadingPreferences(true);
-    setLoadFailed(false);
-    setPreferenceError(null);
-    fetchPreferenceNamespace<Record<ToggleKey, boolean>>(NAMESPACE, defaultPrivacyState())
-      .then((value) => {
-        if (cancelled) return;
-        const loaded = { ...defaultPrivacyState(), ...value };
-        setTelemetryConsentCache(loaded.shareTelemetry);
-        if (hasPendingTelemetryOptOut()) {
-          const pending = { ...loaded, shareTelemetry: false };
-          setState(pending);
-          setPendingPreference(pending);
-          setPreferenceError(
-            'Telemetry is off on this browser. Retry saving to update your account.',
-          );
-        } else {
-          setState(loaded);
-          setPendingPreference(null);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setLoadFailed(true);
-        setPreferenceError(toUserMessage(error, 'We could not load privacy settings. Try again.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingPreferences(false);
-      });
+    lane.active = true;
+    load();
     return () => {
-      cancelled = true;
+      lane.active = false;
+      lane.ready = null;
+      lane.operation?.retire();
+      lane.operation = null;
     };
-  }, [loadAttempt]);
+  }, [lane, load]);
 
-  async function savePrivacy(next: Record<ToggleKey, boolean>) {
-    if (saveInFlight.current || loadingPreferences || loadFailed) return;
-    saveInFlight.current = true;
-    setSavingPreferences(true);
-    setPreferenceError(null);
-    setHasChanged(true);
-    if (!next.shareTelemetry) {
-      requestTelemetryOptOut();
-      setState(next);
-    }
+  async function savePrivacy(key: ToggleKey, value: boolean) {
+    const viewCurrent = capture();
+    if (!owner || !laneCurrent() || !viewCurrent() || !ready || lane.ready !== ready || lane.operation) return;
+    const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
+    lane.operation = operation;
+    lane.ready = null;
+    if (key === 'shareTelemetry' && !value) requestTelemetryOptOut();
+    setView({ lane, ready: null,
+      values: key === 'shareTelemetry' && !value ? { ...state, shareTelemetry: false } : state,
+      busy: true, message: null, failed: false });
+    let acknowledged = false;
     try {
-      await savePreferenceNamespace(NAMESPACE, next);
-      confirmTelemetryConsent(next.shareTelemetry);
-      setState(next);
-      setPendingPreference(null);
-    } catch (error) {
-      setPendingPreference(next);
-      setPreferenceError(
-        next.shareTelemetry
-          ? toUserMessage(error, 'We could not save privacy settings. Try again.')
-          : 'Telemetry is off on this browser. Retry saving to update your account.',
-      );
+      await savePrivacyPreference(operation, key, value);
+      operation.assertCurrent();
+      if (lane.operation !== operation) return;
+      if (key === 'shareTelemetry') confirmTelemetryConsent(value);
+      acknowledged = true;
+    } catch {
+      if (!operation.isCurrent()) return;
     } finally {
-      saveInFlight.current = false;
-      setSavingPreferences(false);
+      if (!operation.isCurrent()) {
+        if (lane.operation === operation) lane.operation = null;
+        operation.retire();
+      }
     }
-  }
-
-  function toggle(key: ToggleKey) {
-    void savePrivacy({ ...state, [key]: !state[key] });
+    if (lane.operation !== operation || !operation.isCurrent()) return;
+    await read(operation, acknowledged
+      ? 'Your privacy setting was saved.'
+      : 'We could not confirm whether your change was saved. Review the latest settings before choosing again.',
+    acknowledged);
   }
 
   return (
@@ -282,31 +313,23 @@ export function PrivacySection() {
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="privacy-controls" label="How privacy controls work" />
         </div>
-        {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
+        {displayed?.busy || displayed?.message ? (
           <SaveStatusLine
-            failed={preferenceError !== null}
+            failed={displayed?.failed === true}
             style={{ margin: 'var(--space-1) 0 0', fontSize: 14, color: 'var(--text-3)' }}
           >
-            {loadingPreferences
-              ? 'Loading account settings...'
-              : savingPreferences
-                ? 'Saving...'
-                : preferenceError
-                  ? preferenceError
-                  : 'Saved'}
+            {displayed?.busy ? 'Updating account settings...' : displayed?.message}
           </SaveStatusLine>
         ) : null}
-        {preferenceError ? (
-          <button
-            type="button"
-            disabled={savingPreferences || loadingPreferences}
-            onClick={() => {
-              if (loadFailed) setLoadAttempt((attempt) => attempt + 1);
-              else if (pendingPreference) void savePrivacy(pendingPreference);
-            }}
-            className="mt-2 text-sm underline underline-offset-4"
-          >
-            {loadFailed ? 'Retry loading' : 'Retry saving'}
+        {ready && !displayed?.busy && hasPendingTelemetryOptOut() && ready.stored.shareTelemetry === true ? (
+          <button type="button" onClick={() => void savePrivacy('shareTelemetry', false)}
+            className="mt-2 text-sm underline underline-offset-4">
+            Keep telemetry off for my account
+          </button>
+        ) : null}
+        {displayed?.failed && !ready && !displayed.busy ? (
+          <button type="button" onClick={load} className="mt-2 text-sm underline underline-offset-4">
+            Retry loading
           </button>
         ) : null}
       </div>
@@ -459,12 +482,12 @@ export function PrivacySection() {
             <Switch
               checked={state[spec.id]}
               disabled={
-                loadingPreferences ||
-                savingPreferences ||
-                loadFailed ||
+                !ready ||
+                !laneCurrent() ||
+                displayed?.busy === true ||
                 (spec.managedOnly && !hasHostedCloud)
               }
-              onCheckedChange={() => toggle(spec.id)}
+              onCheckedChange={(checked) => void savePrivacy(spec.id, checked)}
               aria-label={spec.label}
             />
           </div>

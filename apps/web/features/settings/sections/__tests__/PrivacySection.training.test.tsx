@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => null,
+}));
+
 /**
  * Web privacy settings must not advertise a model-training opt-in.
  *
@@ -56,7 +61,8 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
   setTelemetryConsentCache: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));

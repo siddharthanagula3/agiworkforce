@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => null,
+}));
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -81,7 +86,8 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   ) => selector({ subscription: { status: 'active', tier: 'pro' } }),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: vi.fn(async () => ({ shareTelemetry: false })),
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
