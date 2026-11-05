@@ -4976,6 +4976,18 @@ and authored unrun fixtures support this ordering only: remote cleanup is best
 effort, lookup/abort-only timing and broader session/backend races remain open.
 See `MOBILE-LOCAL-WIPE-CLEANUP-ORDER-01`.
 
+## Siri rotation and disable need one lifecycle owner
+
+An accepted heartbeat can rotate the enabled installation while Settings
+disables its previous token. A delayed rotation response then publishes the new
+keychain token even though the MMKV enabled flag is false. Native Ask reads the
+keychain directly; server token-ID revocation does not revoke the replacement.
+Existing account/Local/session-registration guards do not order these
+same-account Cloud operations. `MOBILE-SIRI-ROTATION-DISABLE-01` tracks the
+open coordinated-lifecycle requirement, including queued account ownership and
+Local cleanup semantics. This is a source finding, not an implemented slice or
+an observed native incident.
+
 ## Reconstruction boundary
 
 Only the one hundred and ninety-three accepted production slices traced above are represented as

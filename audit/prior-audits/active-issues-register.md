@@ -11823,3 +11823,56 @@ alone does not establish a reachable production defect. Backend late-write,
 account-handoff and concurrent-session issues remain under their existing IDs.
 No product checks, app execution, live
 wipe, provider/database/native action, push or deployment ran.
+
+
+## MOBILE-SIRI-ROTATION-DISABLE-01
+
+Severity: High. Status: Open source ordering finding, 2026-11-05.
+
+A same-account heartbeat rotation can publish a usable Siri token after an
+explicit disable succeeds. The application drawer mounts
+`useDeviceRegistryHeartbeat` while Settings is available. An accepted heartbeat
+starts `settleAskIntentOnLaunch`, which calls `storeFreshToken` to rotate the
+persisted enabled installation's token T0. Before its POST response arrives,
+`disableAskFromSiri` can capture T0, DELETE that token, and clear the keychain
+and markers. The delayed rotation response then writes T1 to SecureStore and
+the token-ID marker while the enabled flag remains false. The Swift
+`apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift` reads the keychain bearer directly;
+it does not read that MMKV enabled flag.
+
+This is a concrete source ordering, not observed native use. The Settings
+saving flag excludes another toggle only within that component, not heartbeat
+work. `rotatedThisLaunch` suppresses later launch rotations, not disable. API
+generation checks after credentials and JSON are meaningful, but same-account
+Cloud operations retain their generation. Local-mode refusal does not apply to
+this sequence. Server issuance requires a registered installation matching the
+current identity session, which the established enabled installation and
+accepted heartbeat can satisfy. Server rotation revokes older same-user/install
+tokens and inserts T1; token-ID DELETE revokes only T0, whether T1 inserts before
+or after that DELETE. The Ask endpoint still enforces token expiry/revocation,
+capability and account policy, but knows nothing of the local disabled flag.
+
+Sources: `apps/mobile/src/features/siri/askIntentToken.ts`,
+`apps/mobile/src/features/siri/AskFromSiriSetting.tsx`,
+`apps/mobile/src/features/device-registry/useDeviceRegistryHeartbeat.ts`,
+`apps/mobile/services/api.ts`,
+`apps/web/app/api/mobile/intent-token/route.ts`, and
+`apps/web/lib/server/mobile-intent-tokens.ts`. The existing Siri fixtures cover
+sequential failed-disable/re-enable recovery, not this overlapping rotation.
+The ordinary Clerk token failure-to-null counterguard is intact; no artificial
+credential rejection or account switch is needed for this finding.
+
+A safe correction must coordinate admission, server mutation, keychain
+publication/removal and markers, so disable selects the token after an admitted
+rotation and a later rotation rechecks enabled state. Queue failures must not
+poison subsequent work. Queued work also needs explicit account-lifetime
+admission; adding delay must not let an old action run under a replacement
+account. Local disable must still discard its local token when Cloud egress is
+refused. An uncoordinated delete after a stale keychain write could erase a
+newer token instead. Integration with sign-out needs separate scrutiny rather
+than blocking security cleanup indefinitely behind stalled work.
+
+This is distinct from `MOBILE-LOGOUT-SESSION-LIFETIME-01` and the accepted
+local-wipe prerequisite correction. No serialization implementation is accepted
+here, no reconstructed production slice is added, and no tests, lint, typechecks,
+builds, app/native execution, real token request, push or deployment ran.
