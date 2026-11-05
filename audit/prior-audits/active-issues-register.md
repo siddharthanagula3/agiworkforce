@@ -11984,8 +11984,9 @@ toggle resubmitted cached Web siblings. Web's event-channel selector resubmitted
 other events, defaults, hidden channels and any loaded mobile/unknown keys.
 
 Mobile now calls the canonical `patchPreferenceNamespace` with exactly
-`mobilePushAgentActivity`. Its cached object remains only for existing rollback
-identity bookkeeping; those siblings are no longer transmitted. Web now forms
+`mobilePushAgentActivity`; sibling values are no longer transmitted. The later
+`MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01` correction replaces its original
+cached rollback bookkeeping with an explicit request owner. Web now forms
 a partial patch from the selected event's offered channel keys and uses the
 existing `savePreferenceNamespace(..., { merge: true })` contract. Optimistic
 display merges locally, rollback restores the prior display and retry retains
@@ -12006,7 +12007,9 @@ namespace update; concurrent same-namespace requests can lose changes.
 `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01` remains open, including its
 size/error-contract dependency. These consumer patches do not claim atomic
 writes, repair prior overwrites, or introduce an account-lifetime fence. Mobile
-late reads/completions and legacy Web helper ownership remain separate limits.
+late reads/completions are subsequently bounded by
+`MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01`; legacy Web helper ownership remains
+a separate limit.
 
 Independent source review accepted three Mobile files and two Web files.
 Authored, unrun Mobile fixtures wait for rendered synced state, assert exact
@@ -12085,3 +12088,54 @@ Cloud rollback separately from unchanged Local state. The real helper contract
 fixture covers epoch/signal forwarding and legacy arity. No tests, lint,
 typechecks, builds, app/native execution, live account/database/provider actions,
 push or deployment ran.
+
+
+## MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01
+
+Severity: Medium. Status: Client request ownership and retry source-corrected on
+2026-11-05; runtime acceptance remains open. Accepted production commit:
+`d4cd97c6fc`.
+
+The previous agent-run notification hook keyed its read lifetime only to a
+signed-in Cloud boolean. A direct account replacement could retain that boolean
+and the old read/display. Save callbacks were not retired on unmount or
+account/mode transition: late success could claim synchronization and late
+failure could roll back a newer display. Transport-level account rejection did
+not fence those callbacks. A retained event callback could also admit work using
+its former view state. This is a client preference-lifetime defect, not evidence
+of a cross-account server mutation.
+
+Each hook mount now owns an explicit lifetime containing the canonical account
+epoch, matching loaded/signed-in Clerk identity, current mode, AbortController
+and operation revision. Synchronous epoch/auth/mode subscriptions retire identity
+across transitions, including leave-and-return inside one React batch. Reads and
+patches pass the captured epoch and signal to the existing service/API boundary;
+retained callbacks, success, failure and rollback must still own that lifetime.
+Unmount aborts and retires work and removes subscriptions. Local and ineligible
+Cloud states cannot read, write or offer an ineffective Retry.
+
+A synchronous per-hook gate admits only one read or save, while the switch is
+visibly disabled until ready and during saving. Initial read failure offers an
+explicit Retry rather than leaving a seemingly usable inert switch. Save failure
+restores the previous display, marks it unavailable, explains that the server
+may have received the change, and requires a GET reload before further editing.
+Retry is single-flight, does not replay PUT, and cannot revive an old owner.
+The default-on/explicit-false opt-out policy and one-key notification patch
+intent remain unchanged. Optional patch options preserve the legacy helper arity.
+
+Independent source review accepted three production and three fixture files.
+Authored, unrun fixtures cover actual epoch and preference-service plumbing,
+matching/missing auth, deferred GET/PUT success and failure across account,
+epoch, mode, sign-in, identity and loaded-state ABA transitions, stale callbacks,
+per-hook admission, retry, uncertain-write reload, unmount, disabled controls and
+screen recovery. API transport is mocked; screen fixtures retain their broader
+component mocks. Compiler, native render, real auth and transport behavior are
+not established by source inspection.
+
+Abort is not remote cancellation. A failed or retired PUT can already have
+committed or finish after a replacement/retry GET. Multiple mounted screens and
+other clients are not globally serialized. Server namespace read/merge/write
+races remain under `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`; this change
+provides neither last-intent nor exactly-once guarantees. No tests, lint,
+typechecks, builds, formatters, app/native execution, live account/provider/
+database actions, push or deployment ran.

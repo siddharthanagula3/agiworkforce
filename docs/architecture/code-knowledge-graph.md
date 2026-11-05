@@ -5037,9 +5037,23 @@ freshness and historical Local mirrors remain limits. Independent source review
 and authored unrun fixtures support this bounded correction, not runtime
 acceptance. See `MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01`.
 
+## Mobile agent-push preferences own request lifetime and recovery
+
+Accepted `d4cd97c6fc` binds each mounted notification view to the canonical
+account epoch, matching Clerk readiness/identity, mode, controller and operation
+revision. Synchronous subscriptions retire stale callbacks and GET/PUT
+settlements through account/mode ABA transitions and unmount. Patch options flow
+through the canonical service while preserving legacy arity and one-key intent.
+The switch exposes loading/saving/unavailable states; failed reads offer Retry,
+and uncertain failed writes require a GET reload before editing rather than
+blind replay. Independent source review accepted three production and three
+fixture files. Authored fixtures remain unrun. Abort cannot retract server
+commits, reload is not a remote ordering barrier, and multiple views/clients are
+not globally serialized. See `MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety-eight accepted production slices traced above are represented as
+Only the one hundred and ninety-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
