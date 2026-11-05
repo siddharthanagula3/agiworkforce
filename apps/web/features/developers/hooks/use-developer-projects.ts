@@ -59,6 +59,7 @@ export function useDeveloperProjects() {
 export function useCreateDeveloperProject() {
   const queryClient = useQueryClient();
   return useMutation<DeveloperProject, Error, DeveloperProjectDraft>({
+    retry: false,
     mutationFn: (draft) =>
       projectRequest(PROJECTS_PATH, 'POST', draft, 'The project could not be created.'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY }),
@@ -72,6 +73,7 @@ export function useUpdateDeveloperProject() {
     Error,
     { projectId: string; patch: Partial<DeveloperProjectDraft> }
   >({
+    retry: false,
     mutationFn: ({ projectId, patch }) =>
       projectRequest(
         `${PROJECTS_PATH}/${encodeURIComponent(projectId)}`,
@@ -86,6 +88,7 @@ export function useUpdateDeveloperProject() {
 export function useArchiveDeveloperProject() {
   const queryClient = useQueryClient();
   return useMutation<DeveloperProject, Error, string>({
+    retry: false,
     mutationFn: (projectId) =>
       projectRequest(
         `${PROJECTS_PATH}/${encodeURIComponent(projectId)}`,

@@ -56,6 +56,7 @@ export function useCreateWebhookEndpoint() {
     Error,
     WebhookEndpointDraft
   >({
+    retry: false,
     mutationFn: (draft) =>
       readJson(WEBHOOKS_PATH, { method: 'POST', body: draft }, 'The endpoint could not be added.'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: WEBHOOKS_QUERY_KEY }),
@@ -69,6 +70,7 @@ export function useUpdateWebhookEndpoint() {
     Error,
     { endpointId: string; patch: Partial<WebhookEndpointDraft> & { enabled?: boolean } }
   >({
+    retry: false,
     mutationFn: async ({ endpointId, patch }) =>
       (
         await readJson<{ endpoint: DeveloperWebhookEndpoint }>(
@@ -84,6 +86,7 @@ export function useUpdateWebhookEndpoint() {
 export function useDeleteWebhookEndpoint() {
   const queryClient = useQueryClient();
   return useMutation<unknown, Error, string>({
+    retry: false,
     mutationFn: (endpointId) =>
       readJson(
         endpointPath(endpointId),
@@ -116,6 +119,7 @@ export function useWebhookDeliveries(endpointId: string, enabled: boolean) {
 export function useSendWebhookTest(endpointId: string) {
   const queryClient = useQueryClient();
   return useMutation<{ delivery: DeveloperWebhookDelivery }, Error, void>({
+    retry: false,
     mutationFn: () =>
       readJson(
         `${endpointPath(endpointId)}/test`,
@@ -129,6 +133,7 @@ export function useSendWebhookTest(endpointId: string) {
 export function useRedeliverWebhook(endpointId: string) {
   const queryClient = useQueryClient();
   return useMutation<{ delivery: DeveloperWebhookDelivery }, Error, string>({
+    retry: false,
     mutationFn: (deliveryId) =>
       readJson(
         `${endpointPath(endpointId)}/deliveries/${encodeURIComponent(deliveryId)}/redeliver`,
