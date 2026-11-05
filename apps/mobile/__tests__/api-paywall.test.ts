@@ -5,8 +5,13 @@ jest.mock('../services/authSession', () => ({
   clearAuthSession: jest.fn(),
 }));
 
+const mockSignedAppTransaction = jest.fn();
 jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
+  Platform: { OS: 'ios' },
+  NativeModules: {
+    AGIAppTransaction: { signedAppTransaction: () => mockSignedAppTransaction() },
+  },
 }));
 
 jest.mock('expo-constants', () => ({
@@ -71,6 +76,7 @@ import {
   recoverStreamSession,
 } from '../services/api';
 import { Alert } from 'react-native';
+import { registerAppTransactionForAccount } from '../src/features/age-assurance/appTransaction';
 import {
   activateCloudAccount,
   captureCloudAccountEpoch,
@@ -270,6 +276,7 @@ describe('explicit caller-owned 401 recovery', () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSignedAppTransaction.mockReset().mockResolvedValue('signed-app-transaction-jws');
   resetApiAccountState();
   mockGetAuthToken.mockResolvedValue('test-token');
   mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer test-token' });
@@ -1055,5 +1062,52 @@ describe('caller-bound Cloud account request epochs', () => {
     expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
     expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
     expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('native app-transaction preparation uses its original Cloud account', () => {
+  beforeEach(() => {
+    jest.mocked(globalThis.fetch).mockReset().mockRejectedValue(
+      new Error('Unexpected fetch during native registration isolation'),
+    );
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('reaches the real API transport for a current account', async () => {
+    activateCloudAccount('native-registration-current');
+    const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(200, { registered: true, consentWithdrawn: false }),
+    );
+
+    await registerAppTransactionForAccount('native-registration-current');
+
+    expect(mockSignedAppTransaction).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.test.local/api/mobile/age-assurance/app-transaction',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ signedAppTransaction: 'signed-app-transaction-jws' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+      }),
+    );
+  });
+
+  it('never requests replacement credentials or dispatches stale native work', async () => {
+    activateCloudAccount('native-registration-original');
+    const native = deferredBody<string>();
+    mockSignedAppTransaction.mockImplementationOnce(native.read);
+    const fetch = jest.spyOn(globalThis, 'fetch');
+    const pending = registerAppTransactionForAccount('native-registration-original');
+    await native.started;
+    activateCloudAccount('native-registration-replacement');
+    resetApiAccountState();
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer replacement-test-token' });
+    native.resolve('signed-app-transaction-jws');
+    await pending;
+
+    expect(mockSignedAppTransaction).toHaveBeenCalledTimes(1);
+    expect(mockGetAuthHeaders).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
