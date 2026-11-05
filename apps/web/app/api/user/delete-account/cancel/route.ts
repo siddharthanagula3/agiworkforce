@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     logger.warn({ userId }, 'Account deletion cancellation refused: grace window has closed');
     return NextResponse.json(
       {
-        error: `The cancellation window has closed and erasure is already underway. Nothing was restored. Contact ${CONTACT_EMAIL} if you believe this is wrong.`,
+        error: `The cancellation window has closed. This does not confirm that erasure is complete. Contact ${CONTACT_EMAIL} if you believe this is wrong.`,
         cancelled: false,
         reason: 'grace_window_expired',
       },

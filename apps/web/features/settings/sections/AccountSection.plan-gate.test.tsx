@@ -118,7 +118,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
       'href',
       expect.stringContaining('billing'),
     );
-    expect(screen.queryByText(/Deletion is scheduled for 24 hours later/)).toBeNull();
+    expect(screen.queryByText(/Schedule permanent account deletion/)).toBeNull();
   });
 
   it('says when a plan already cancelled at period end stops blocking deletion', () => {
@@ -149,7 +149,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
     expect(screen.getByTestId('delete-account-trigger')).toBeEnabled();
     expect(screen.queryByTestId('delete-account-plan-note')).toBeNull();
-    expect(screen.getByText(/Deletion is scheduled for 24 hours later/)).toBeTruthy();
+    expect(screen.getByText(/Schedule permanent account deletion/)).toBeTruthy();
   });
 
   it('keeps Delete open once a paid plan has ended', () => {

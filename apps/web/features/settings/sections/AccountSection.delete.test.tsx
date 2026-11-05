@@ -1,12 +1,6 @@
 /**
- * Account deletion is now a single implementation: useDeleteAccount
- * (features/settings/hooks/use-settings-queries.ts), consumed only by
- * AccountSection. This suite exercises the REAL hook (unlike
- * AccountSection.sessions.test.tsx / AccountSection.api-keys.test.tsx, which
- * stub useDeleteAccount because they test unrelated behavior) to pin the
- * invariant that used to only hold on this surface and not on the
- * now-removed PrivacySection copy: a successful deletion always signs the
- * user out, so a deleted account can never keep a live client session.
+ * Exercises the real useDeleteAccount hook: scheduling remains cancellable
+ * until the returned deadline, and sign-out occurs only after Continue.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -94,7 +88,7 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
       if (url === '/api/user/delete-account' && init?.method === 'DELETE') {
         return jsonResponse({
           message:
-            'Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours.',
+            'Account deletion scheduled. Cancel before the deadline to keep your account. Erasure is processed afterward and may take longer.',
           scheduledFor: '2026-08-16T12:00:00.000Z',
           status: 'pending',
           statusReason: 'Deletion is scheduled and has not started.',
@@ -111,7 +105,18 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     expect(mockAddCsrfHeaders).toHaveBeenCalled();
     // scheduledFor is surfaced as a real formatted date derived from the
     // server's ISO timestamp, not a hardcoded "within 24 hours" string.
-    expect(screen.getByText(/Your data is permanently erased on/)).toBeInTheDocument();
+    const displayedDeadline = new Date('2026-08-16T12:00:00.000Z').toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    expect(screen.getByText(/Cancellation deadline:/)).toHaveTextContent(
+      `Cancellation deadline: ${displayedDeadline}`,
+    );
+    expect(screen.getByText(/Choose Continue to sign out/)).toBeInTheDocument();
+    expect(screen.queryByText(/permanently erased on/)).not.toBeInTheDocument();
 
     // Sign-out must not fire before the user acknowledges the dialog.
     expect(mockLogout).not.toHaveBeenCalled();

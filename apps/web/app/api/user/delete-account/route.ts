@@ -334,7 +334,7 @@ async function handleDelete(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message: `Account deletion scheduled. Erasing your account and all its data starts 24 hours from now, on the first daily erasure run after that. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
+        message: `Account deletion scheduled. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.`,
         scheduledFor,
         status: scheduledOutcome.status,
         statusReason: deletionReceiptReason(scheduledOutcome),

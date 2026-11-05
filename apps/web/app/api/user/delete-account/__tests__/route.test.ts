@@ -241,6 +241,10 @@ describe('DELETE /api/user/delete-account', () => {
 
     expect(response.status).toBe(200);
     expect(body.scheduledFor).toBeTruthy();
+    expect(body.message).toContain(`Cancellation deadline: ${body.scheduledFor}.`);
+    expect(body.message).toContain('before this deadline');
+    expect(body.message).toContain('Erasure is processed after the deadline and may take longer.');
+    expect(body.message).not.toMatch(/first daily|all its data|starts 24 hours/);
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
     expect(auditDetail()).toMatchObject({

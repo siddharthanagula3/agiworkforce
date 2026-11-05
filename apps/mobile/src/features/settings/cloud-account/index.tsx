@@ -769,11 +769,11 @@ export default function CloudAccountScreen() {
           title="Account deletion scheduled"
           body={
             deletionStatus.value.scheduledFor
-              ? `Erasure is scheduled for ${new Date(deletionStatus.value.scheduledFor).toLocaleString()}. ${
+              ? `Cancellation deadline: ${new Date(deletionStatus.value.scheduledFor).toLocaleString()}. ${
                   deletionStatus.value.canCancel
                     ? 'You can cancel before then.'
                     : 'The cancellation window has closed.'
-                }`
+                } Erasure is processed after the deadline and may take longer.`
               : 'Your account is scheduled for deletion.'
           }
           icon={Trash2}

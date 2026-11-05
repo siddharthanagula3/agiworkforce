@@ -99,6 +99,8 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     expect(await screen.findByTestId('pending-deletion-title')).toBeInTheDocument();
     expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();
     expect(screen.getByTestId('cancel-deletion-trigger')).toBeInTheDocument();
+    expect(screen.getByText(/Cancellation deadline:/)).toBeInTheDocument();
+    expect(screen.getByText(/Erasure is processed after the deadline and may take longer/)).toBeInTheDocument();
   });
 
   it('shows the pending state without a cancel control once the grace window has closed', async () => {
@@ -114,7 +116,7 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     expect(await screen.findByTestId('pending-deletion-title')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /cancellation window has closed\. Erasure begins with the next daily run\./i,
+        /cancellation window has closed\. Erasure is processed after the deadline and may take longer\./i,
       ),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('cancel-deletion-trigger')).not.toBeInTheDocument();
@@ -162,7 +164,7 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
         if (url === '/api/user/delete-account/cancel' && init?.method === 'POST') {
           return jsonResponse(
             {
-              error: 'The cancellation window has closed and erasure is already underway.',
+              error: 'The cancellation window has closed. This does not confirm that erasure is complete.',
               cancelled: false,
               reason: 'grace_window_expired',
             },
@@ -179,7 +181,7 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     fireEvent.click(await screen.findByTestId('cancel-deletion-confirm'));
 
     expect(
-      await screen.findByText(/cancellation window has closed and erasure is already underway/i),
+      await screen.findByText(/cancellation window has closed\. This does not confirm that erasure is complete/i),
     ).toBeInTheDocument();
     expect(screen.getByTestId('pending-deletion-title')).toBeInTheDocument();
     expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();

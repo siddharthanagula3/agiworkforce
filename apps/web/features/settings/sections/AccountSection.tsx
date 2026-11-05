@@ -428,15 +428,15 @@ export function AccountSection() {
               <AccountRow
                 label="Account deletion scheduled"
                 labelTestId="pending-deletion-title"
-                hint={`Your account and all data will be permanently erased on ${formatDateTime(
+                hint={`Cancellation deadline: ${formatDateTime(
                   deletionStatus.data?.scheduledFor
                     ? new Date(deletionStatus.data.scheduledFor)
                     : null,
                 )}. ${
                   deletionStatus.data?.canCancel
                     ? 'You can cancel any time before then.'
-                    : 'The cancellation window has closed. Erasure begins with the next daily run.'
-                }`}
+                    : 'The cancellation window has closed.'
+                } Erasure is processed after the deadline and may take longer.`}
               >
                 {deletionStatus.data?.canCancel && (
                   <button
@@ -480,7 +480,7 @@ export function AccountSection() {
                       )}
                     </span>
                   ) : (
-                    'Deletion is scheduled for 24 hours later. You can cancel before erasure begins.'
+                    'Schedule permanent account deletion. You can cancel before the cancellation deadline.'
                   )
                 }
               >
@@ -840,7 +840,7 @@ export function AccountSection() {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {deleteAccountMutation.data?.message ??
-                    'Your account deletion has been scheduled. You will be signed out now.'}
+                    'Your account deletion has been scheduled. Choose Continue to sign out.'}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {deleteAccountMutation.data?.scheduledFor && (
@@ -851,9 +851,11 @@ export function AccountSection() {
                     margin: 'calc(var(--space-2) * -1) 0 0',
                   }}
                 >
-                  Your data is permanently erased on{' '}
+                  Cancellation deadline:{' '}
                   {formatDateTime(new Date(deleteAccountMutation.data.scheduledFor))}. Sign back in
                   and cancel from Settings &gt; Account any time before then to keep your account.
+                  Erasure is processed after the deadline and may take longer. Choose Continue to
+                  sign out.
                 </p>
               )}
               <AlertDialogFooter>
@@ -873,9 +875,11 @@ export function AccountSection() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This permanently deletes your account and all associated data. You are signed out
-                  now, and erasure runs 24 hours after you confirm. If you change your mind, sign
-                  back in and cancel from Settings &gt; Account any time before then.
+                  This schedules your account and Cloud chats, projects, memory and artifacts for
+                  permanent deletion. You can cancel before the deadline
+                  shown after scheduling. Erasure is processed after that deadline and may take
+                  longer. Choose Continue after scheduling to sign out. If you change your mind,
+                  sign back in and cancel from Settings &gt; Account before the cancellation deadline.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">
