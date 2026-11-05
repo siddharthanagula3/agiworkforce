@@ -9867,6 +9867,9 @@ Native receipt adoption was source-corrected in
 `4149254b5944f73964e1e3bb50c79649d6ca5335` the same day.
 Mobile confirmation admission was source-corrected in
 `b3f84d4cc43e0008e13bb3448e4f015138c2eb09` the same day.
+Interactive deadline and API message copy was source-corrected in
+`a2a79bcb43d7d5e0bf43db3d9e4b4b6d39cbec0b` the same day; separate privacy-page
+and GET progress claims remain open below.
 Exact installed-challenge settlement was separately source-corrected in
 `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
 No live scheduling, deletion or runtime identity transition was performed.
@@ -10041,6 +10044,40 @@ cases. Two fixtures use the real useStepUp hook and canonical identity service f
 normal proof replay and admitted proof work across blur; API transport, SDK
 execution, StepUpModal and native navigation/Alert guarantees remain mocked or
 unverified. No fixtures, tests, checks or builds were executed.
+
+The next copy-only correction distinguishes cancellation cutoff from erasure
+progress. DELETE sets scheduledFor one day after scheduling; GET canCancel and
+the cancellation UPDATE require the timestamp to be strictly in the future.
+The daily cron only enqueues a bounded number of due accounts, and background
+work may retry or be held. Neither cutoff expiration nor a schedule timestamp
+establishes when erasure started or finished. Financial retention and legal holds
+also make a blanket promise that every record disappears unsupported.
+
+Web and mobile now label the returned timestamp as the cancellation deadline and
+describe processing afterward without a promised completion time. The scheduling
+receipt explicitly ties cancellation to scheduledFor, not the first daily run.
+The expired cancellation refusal preserves 409/grace_window_expired and no longer
+asserts erasure is underway. Web confirmation names Cloud content loss and
+Continue-triggered sign-out; mobile retains its receipt-triggered sign-out,
+Local Mode exclusion, export reminder and irreversible-erasure warning. Tauri's
+existing grace-period copy needed no change and consumes the corrected receipt.
+No timing, SQL, auth, schema, callback, identity guard or workflow changed.
+
+Independent source review accepted five production copy files and seven authored
+fixtures. The success fixture now checks the actual returned timestamp with the
+existing locale options and preserves before/after-Continue assertions. Native
+and source-text fixtures pin consequences and deadline wording; route fixtures
+retain scheduling/auth/SQL and receipt-shape assertions. None ran. Local date
+display precision and actual cron/queue/erasure behavior remain unverified.
+
+Two distinct follow-ons remain open: apps/web/app/privacy/india/page.tsx still
+promises permanent erasure 24 hours after request and cancellation until erasure
+begins. GET /api/user/delete-account constructs scheduledDeletionProgress from
+only the schedule, giving zero attempted stores and a statusReason saying erasure
+has not started even after the cutoff; with no schedule it can still describe a
+requested deletion. It does not consult actual job/tombstone progress. The current
+client status parser consumes pending/canCancel/dates, not these extra progress
+fields. Neither legal-page copy nor actual-progress reporting was changed here.
 
 Wider work must bind confirmation, CSRF, original request, grant/replay/body and
 Continue effects to canonical account/view authority, and reconcile unknown

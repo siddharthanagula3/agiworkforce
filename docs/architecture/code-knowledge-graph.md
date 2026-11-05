@@ -4435,9 +4435,28 @@ navigation and SDK behavior remain unverified. See
 `WEB-ACCOUNT-DELETION-INTENT-01` and `MOBILE-LOGOUT-SESSION-LIFETIME-01`.
 No tests, checks, builds, live account actions, push or deployment ran.
 
+## Account cancellation deadline does not promise erasure completion
+
+Accepted commit `a2a79bcb43d7d5e0bf43db3d9e4b4b6d39cbec0b` corrects Web,
+mobile and API message strings without changing scheduling behavior. Returned
+scheduledFor is the strict cancellation cutoff; erasure is queued and processed
+afterward and may take longer. UI copy no longer promises completion at that
+timestamp or cancellation until actual erasure begins. The API receipt names
+the returned cutoff, and expired cancellation refusal no longer infers started
+or completed erasure. Web accurately places sign-out after Continue; mobile
+preserves receipt-triggered sign-out, Local Mode data and export/irreversibility
+warnings. Tauri consumes the corrected receipt with its existing grace copy.
+
+Independent source review accepted five production copy files and seven authored
+fixtures, including returned-date formatting and unchanged sign-out ordering.
+None ran. Timing/configuration, SQL, auth, schemas and lifecycle guards are
+unchanged. The privacy/India page's timing promises and GET's schedule-derived
+"has not started" progress remain separate open issues under
+`WEB-ACCOUNT-DELETION-INTENT-01`; no actual erasure timing or runtime claim is made.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-four accepted production slices traced above are represented as
+Only the one hundred and fifty-five accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
