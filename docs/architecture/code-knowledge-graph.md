@@ -4046,9 +4046,9 @@ MMKV consent are untouched.
 
 Null versions remain unconditional and do not assert absence. Existing-row
 version checks are not complete compare-and-swap across row deletion/recreation;
-pre-read namespace merging can still lose concurrent same-namespace updates on
-unconditional writes. This separate server contract remains tracked as
-`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`. Cancellation does not prove rollback.
+the separate server namespace merge/size correction is now traced under
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`, with runtime acceptance open.
+Cancellation does not prove rollback.
 
 Independent source review accepted the bounded change. Fixture sources cover
 ready/operation ownership, account/identity/loading/auth/mode/focus round trips,
@@ -5020,8 +5020,9 @@ from unrelated writes; local optimistic display and rollback stay separate.
 Notification saved-event consumers already tolerate absent keys. These two
 source-reviewed slices prevent stale-client replacement of siblings committed
 before the server read, not concurrent server read/merge/write loss. Authored
-fixtures are unrun. See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01` and the still-
-open `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`.
+fixtures are unrun. See `SETTINGS-NOTIFICATION-STALE-SIBLINGS-01` and the later
+server correction in `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`; its
+database/runtime acceptance remains open.
 
 ## Mobile approval display has one ephemeral Cloud owner
 
@@ -5051,9 +5052,25 @@ fixture files. Authored fixtures remain unrun. Abort cannot retract server
 commits, reload is not a remote ordering barrier, and multiple views/clients are
 not globally serialized. See `MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01`.
 
+## Preferences merge and exact size validation share a transaction
+
+Accepted `d63a729ff6` uses the canonical scoped transaction to lock an existing
+settings row before namespace merge and JavaScript UTF-16 size validation. An
+absent-row insertion writes the validated intent directly; a losing insertion
+rereads the winner under lock and revalidates. A vanished conflict row fails
+without a receipt. Public timestamp checks, unconditional null, genuine insertion
+exception, namespace replacement and SQL root merge remain intact. Validation
+keeps its error classification; cache invalidation and stored-receipt validation
+follow successful transaction completion. One production and three fixture files
+were independently source-reviewed. Fixtures model query ordering/interleavings,
+not database execution. Other writers' size policies, public revision limits and
+unknown commit outcomes remain outside the correction. See
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01` for primary documentation and
+unrun acceptance work.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety-nine accepted production slices traced above are represented as
+Only the two hundred accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -9455,46 +9455,70 @@ authored fixture sources remain unexecuted.
 
 ## WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01
 
-Status: OPEN, source-backed on 2026-11-05. No runtime reproduction or observed loss.
+Severity: Medium. Status: Transaction-owned merge and size validation
+source-corrected on 2026-11-05; database/runtime acceptance remains open.
+Accepted production commit: `d63a729ff6`.
 
-`apps/web/app/api/settings/preferences/route.ts` reads account settings, constructs
-a namespace patch in JavaScript from that snapshot, then merges the complete
-resulting namespace into the root document in SQL. With an unconditional version
-(null or omitted), two callers changing different keys in the same namespace can
-each preserve the old sibling value and the later write can overwrite the earlier
-independent change. Root-level JSON merge protects other namespaces, not siblings
-inside the same namespace. Multiple legacy callers omit expectedVersion; the
-mobile training control also legitimately uses null for an absent account row.
+The previous preferences PUT read account settings outside its write transaction,
+merged a namespace patch in JavaScript, then merged the complete resulting
+namespace into the root JSON document in SQL. Two unconditional requests changing
+different keys could each preserve the old sibling and the later write could
+replace the other change. Root JSON merge protected other namespaces, not those
+siblings. Null or omitted expectedVersion is intentionally unconditional.
 
-Existing non-null version checks protect concurrent updates to an existing row.
-Null is explicitly unconditional, not create-if-absent. The INSERT branch does not
-apply the update precondition if the row disappeared; this is a contract limitation,
-not proof of a new authorization bypass. Authenticated user scoping, RLS, CSRF,
-service-owned namespace restrictions and size bounds remain real controls.
+A naive atomic JSONB namespace merge was held because it would retain concurrent
+sibling growth without repeating the existing exact size check. Two independent
+60,000-character patches could each pass a stale 100,000-code-unit estimate yet
+produce an oversized combined document. PostgreSQL text length/byte size is not
+the existing JavaScript JSON.stringify UTF-16 contract; a size failure must not
+be reported as a version conflict or unconfirmed write.
 
-Resolve namespace patch merging atomically while preserving documented whole-root
-and namespace replacement behavior, or define a stronger compatible revision
-contract. Do not treat a client retry, receipt validation or exact UI owner as a
-complete server concurrency fix. `a51e3c459c` corrects receipt truthfulness only;
-`7f4d7f00fc` correctly sends its ready revision but does not redefine null semantics.
-No tests, checks, builds, database calls or network actions were run.
+The route now uses the canonical authenticated scoped transaction and performs
+SELECT FOR UPDATE before composing the delta. For an absent row it validates the
+intended initial document and attempts INSERT ON CONFLICT DO NOTHING, returning
+the actual insertion receipt if successful. A losing insertion rereads and locks
+the winning row, then recomputes both delta and size. If that row disappears again
+before the second lock, the transaction fails internally with no success receipt.
+There is no placeholder insertion, unbounded loop, new retry budget or migration.
 
-Implementation is held on the size/error boundary. The current limit is a
-preflight `JSON.stringify(estimated).length > 100_000`, measured in JavaScript
-UTF-16 code units. Two unconditional callers can each read an empty namespace and
-add a different approximately 60,000-character value. Both estimates pass; current
-replacement loses one value, while a naive atomic merge retains approximately
-120,000 characters. The existing concurrent root-merge size gap does not make
-that namespace change behavior-preserving. PostgreSQL formatted JSON text length
-or byte size is not the same contract, and a size predicate's no-row result must
-not masquerade as a 412 version conflict or an unknown 500 write.
+For a locked existing row, exact JavaScript size validation still precedes the
+explicit timestamp-version comparison. A mismatch returns the locked current
+namespace/document and revision as the existing 412 response. Null/omitted stays
+unconditional. A genuine absent-row insertion still bypasses expectedVersion,
+preserving the documented insertion exception rather than introducing a new
+compare-and-swap contract. Namespace patch/value precedence, namespace replacement
+and shallow root merge remain unchanged. The final UPDATE preserves SQL root
+merge and returns stored settings/revision, not an estimated receipt.
 
-Before implementation, establish either compatible serialized read/validation/write
-ownership including first insertion, exact atomic size semantics, or an explicitly
-approved replacement size policy. Existing-row locking alone does not establish
-absent-row safety. The repository-native root merge plus `jsonb_build_object` in
-`active-workspace-service.ts` is a useful current-row merge precedent, not proof
-that this endpoint's concurrency and size/error requirements are complete.
+Every database operation uses the callback's transaction adapter. The Neon
+adapter binds JWT or claimed-user RLS scope on the same connection and awaits
+COMMIT before returning. Validation errors propagate through rollback as their
+existing AppError classification. Workspace-cache invalidation and strict receipt
+validation remain after successful transaction completion. Missing/malformed
+post-lock receipts produce internal errors, not fabricated success or 412.
+A rejected commit acknowledgment is still an unknown outcome and is not retried.
+
+Independent source review accepted one production and three fixture files.
+Authored unrun fixtures distinguish outer queries from transaction queries and
+assert SQL/order, modeled sibling and first-insertion interleavings, deletion
+between insertion conflict and reread, 100,000/100,001 UTF-16 boundaries including
+supplementary characters, combined growth, validation precedence, public version
+semantics, replacement behavior, scoped user predicates, service-owned namespace
+rejection, stored receipts, cache order and uncertain commit failure. They model
+transactions and do not prove PostgreSQL lock behavior. Positive scoped PUT cases
+also require HTTP 200, avoiding success assertions satisfied by a handler error.
+
+Primary PostgreSQL 18 documentation was read on 2026-11-05:
+https://www.postgresql.org/docs/current/transaction-iso.html and
+https://www.postgresql.org/docs/current/explicit-locking.html. Its READ COMMITTED
+semantics support the locked-current-row and insertion-conflict reread reasoning.
+The adapter uses default isolation; deployed isolation/migrations, native SQL
+execution, deadlock/timeout behavior and real concurrency remain unverified.
+Other settings writers retain their own size/replacement policies, and this is
+not a database-wide size invariant or a repair of earlier lost updates. Public
+timestamp-version limitations and postcommit/cache failure uncertainty remain.
+No tests, lint, typechecks, builds, formatters, application/database/provider
+actions, push or deployment ran.
 
 ## WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
@@ -12001,11 +12025,12 @@ Loading/error/save-in-flight gates, Mobile opt-out/default/Local behavior,
 authentication, scoped DB, CSRF, rate limits, service-owned restrictions, size
 validation and write-receipt validation remain unchanged.
 
-The server's patch path merges against its current read, preserving sibling
-changes committed before that read. It still reads and merges outside an atomic
-namespace update; concurrent same-namespace requests can lose changes.
-`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01` remains open, including its
-size/error-contract dependency. These consumer patches do not claim atomic
+At the time of these consumer changes, the server patch path merged against its
+current read, preserving sibling changes committed before that read. It still
+read and merged outside an atomic namespace update; concurrent same-namespace
+requests could lose changes.
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01` subsequently source-corrects
+that merge/size ownership; database/runtime acceptance remains open. These consumer patches do not claim atomic
 writes, repair prior overwrites, or introduce an account-lifetime fence. Mobile
 late reads/completions are subsequently bounded by
 `MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01`; legacy Web helper ownership remains
@@ -12135,7 +12160,8 @@ not established by source inspection.
 Abort is not remote cancellation. A failed or retired PUT can already have
 committed or finish after a replacement/retry GET. Multiple mounted screens and
 other clients are not globally serialized. Server namespace read/merge/write
-races remain under `WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`; this change
+ownership is subsequently source-corrected under
+`WEB-PREFERENCES-CONCURRENT-NAMESPACE-PATCH-01`; this client change
 provides neither last-intent nor exactly-once guarantees. No tests, lint,
 typechecks, builds, formatters, app/native execution, live account/provider/
 database actions, push or deployment ran.
