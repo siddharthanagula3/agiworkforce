@@ -15,9 +15,11 @@ const capabilities = readFileSync(
 // first two on a WEB settings screen without saying they are not web invites a
 // user to believe this browser can keep a conversation on-device.
 describe('privacy copy names the surface each trust boundary applies to', () => {
-  it('retires the privacy subtree on close before the shared dialog exit animation', () => {
+  it('retires privacy and chat-manager subtrees on close before the shared dialog exit animation', () => {
     const modal = readFileSync(join(process.cwd(), 'features/settings/components/WebSettingsModal.tsx'), 'utf8');
     expect(modal).toContain('privacy: open ? <PrivacySection /> : <></>');
+    expect(modal).toContain('archived: open ? <ArchivedChatsSection /> : <></>');
+    expect(modal).toContain("'deleted-chats': open ? <DeletedChatsSection /> : <></>");
     expect(privacy).toContain('<BulkConversationControls />');
   });
   it('scopes Local Mode and BYOK to the surfaces that have them', () => {

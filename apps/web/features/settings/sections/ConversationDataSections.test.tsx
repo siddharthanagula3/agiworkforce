@@ -5,6 +5,7 @@ import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
 import { SharedLinksSection } from './SharedLinksSection';
+import { admitWorkspace, observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
 type Original0 = typeof import('@features/sites/services/sites-service');
 type ScanModule0 = typeof import('@/lib/sentry-shared');
 type ScanModule1 = typeof import('@agiworkforce/ui');
@@ -24,16 +25,17 @@ const mocks = vi.hoisted(() => ({
   historyStats: vi.fn(),
 }));
 
-/**
- * Stable stub for the shared `useConfirm` destructive-confirm hook
- * (shell-nav-ia-gap-01 remainder). PrivacySection and ArchivedChatsSection now
- * route their bulk-delete/bulk-archive confirmations through the same
- * AlertDialog wrapper as WebAppShell/WebChatPage instead of `window.confirm`.
- * same stub shape as apps/web/shared/components/layout/WebAppShell.test.tsx.
- */
-const confirmStub = vi.hoisted(() => ({
-  confirm: vi.fn(async (_options: { title: string; description: string }) => true),
-  dialog: null as React.ReactNode,
+const session = { userId: 'manager-a', sessionId: 'manager-session', isCurrent: () => true,
+  getToken: async () => 'manager-token' };
+vi.mock('@/lib/identity/useSessionSnapshot', () => ({ useSessionSnapshot: () => () => session }));
+vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
+  ...await original<typeof import('@/features/workspaces/hooks/use-workspaces')>(),
+  useAccountWorkspaces: () => {
+    const owner = observeWorkspaceOwner(session)!;
+    admitWorkspace(owner, owner.epoch, JSON.stringify(['personal', 'personal', null]));
+    return { data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null },
+      refetch: vi.fn(), requiresReload: false, isSwitching: false };
+  },
 }));
 
 // Bulk intent behavior lives in BulkConversationControls.test.tsx, using the
@@ -92,7 +94,6 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   Switch: ({ checked }: { checked: boolean }) => <span role="switch" aria-checked={checked} />,
-  useConfirm: () => confirmStub,
 }));
 
 const archivedConversation = {
@@ -130,6 +131,7 @@ const storeConversation = {
 describe('Web conversation data settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    observeWorkspaceOwner(null);
     mocks.listArchived.mockResolvedValue({
       conversations: [archivedConversation],
       hasMore: false,
@@ -172,7 +174,7 @@ describe('Web conversation data settings', () => {
     expect(await screen.findByText('Archived planning')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalledWith('conversation-1'));
+    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalledWith('conversation-1', expect.objectContaining({ organizationId: null })));
     expect(screen.getByText('Restored “Archived planning”.')).toBeInTheDocument();
     expect(useChatStore.getState().conversations[0]?.isArchived).toBe(false);
   });
@@ -191,23 +193,18 @@ describe('Web conversation data settings', () => {
     expect(restored?.isArchived).toBe(false);
   });
 
-  it('keeps the next page aligned after a restore removes a row', async () => {
-    mocks.listArchived.mockResolvedValue({
-      conversations: [archivedConversation],
-      hasMore: true,
-      nextOffset: 20,
-    });
-
+  it('rebuilds a readable archived snapshot before admitting another page after restore', async () => {
+    const next = { ...archivedConversation, id: 'conversation-2', title: 'Next chat' };
+    mocks.listArchived.mockReset().mockResolvedValueOnce({ conversations: [archivedConversation], hasMore: true, nextOffset: 1 })
+      .mockResolvedValueOnce({ conversations: [next], hasMore: true, nextOffset: 1 })
+      .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 1 });
     render(<ArchivedChatsSection />);
-
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalled());
-
-    mocks.listArchived.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 19 });
+    await screen.findByText('Next chat');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-
-    await waitFor(() => expect(mocks.listArchived).toHaveBeenLastCalledWith(19));
+    await waitFor(() => expect(mocks.listArchived).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)));
+    expect(mocks.listArchived.mock.calls[1]?.[0]).toBe(0);
   });
 
   it('restores a deleted chat once, without a duplicate sidebar row', async () => {
@@ -216,29 +213,24 @@ describe('Web conversation data settings', () => {
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalledWith('conversation-1'));
+    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalledWith('conversation-1', expect.objectContaining({ organizationId: null })));
     const rows = useChatStore.getState().conversations.filter(({ id }) => id === 'conversation-1');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.isArchived).toBe(false);
   });
 
-  it('keeps the next deleted page aligned after a restore removes a row', async () => {
-    mocks.listDeleted.mockResolvedValue({
-      conversations: [archivedConversation],
-      hasMore: true,
-      nextOffset: 20,
-    });
-
+  it('rebuilds deleted pagination after a confirmed restore', async () => {
+    const next = { ...archivedConversation, id: 'conversation-2', title: 'Next deleted chat' };
+    mocks.listDeleted.mockReset().mockResolvedValueOnce({ conversations: [archivedConversation], hasMore: true, nextOffset: 1 })
+      .mockResolvedValueOnce({ conversations: [next], hasMore: true, nextOffset: 1 })
+      .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 1 });
     render(<DeletedChatsSection />);
-
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalled());
-
-    mocks.listDeleted.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 19 });
+    await screen.findByText('Next deleted chat');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-
-    await waitFor(() => expect(mocks.listDeleted).toHaveBeenLastCalledWith(19));
+    await waitFor(() => expect(mocks.listDeleted).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)));
+    expect(mocks.listDeleted.mock.calls[1]?.[0]).toBe(0);
   });
 
   it('moves every archived chat in the current workspace only after confirmation', async () => {
@@ -247,15 +239,12 @@ describe('Web conversation data settings', () => {
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Delete all archived' }));
 
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_archived'));
-    expect(confirmStub.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Delete all archived chats in this workspace?',
-        description: expect.stringContaining('current workspace'),
-        variant: 'destructive',
-      }),
-    );
-    expect(screen.getByText('No archived chats')).toBeInTheDocument();
+    expect(mocks.bulkAction).not.toHaveBeenCalled();
+    mocks.listArchived.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 0 });
+    const buttons = screen.getAllByRole('button', { name: 'Delete all archived' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_archived', expect.objectContaining({ organizationId: null })));
+    expect(await screen.findByText('No archived chats')).toBeInTheDocument();
   });
 
   it('lists and revokes account-owned shared links', async () => {

@@ -36,6 +36,7 @@ vi.mock('../sections/SecuritySection', () => ({ SecuritySection: () => null }));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
 vi.mock('../sections/PrivacySection', () => ({ PrivacySection: () => null }));
 vi.mock('../sections/ArchivedChatsSection', () => ({ ArchivedChatsSection: () => null }));
+vi.mock('../sections/DeletedChatsSection', () => ({ DeletedChatsSection: () => null }));
 vi.mock('../sections/SharedLinksSection', () => ({ SharedLinksSection: () => null }));
 vi.mock('../sections/BillingSection', () => ({ BillingSection: () => null }));
 vi.mock('../sections/UsageSection', () => ({ UsageSection: () => null }));
