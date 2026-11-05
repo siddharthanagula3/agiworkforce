@@ -9860,7 +9860,9 @@ authorized attempt found no Git credentials; no remote branch was created.
 
 Status: Automatic deletion mutation retry source-corrected in
 `161faef68b792fd26f546dd5738a62bed2a6669b` on 2026-11-05. Original
-session/view, wider step-up lifecycle, receipt and server idempotency work remain OPEN.
+session/view, wider step-up lifecycle and server idempotency work remain OPEN.
+Web scheduling/cancellation receipt validation and cancellation retry were
+source-corrected in `5c4d7e8d2a0dd3f388d378ee12303685adadf0b1` on 2026-11-05.
 Exact installed-challenge settlement was separately source-corrected in
 `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
 No live scheduling, deletion or runtime identity transition was performed.
@@ -9878,8 +9880,10 @@ session/view authority. AccountSection retains dialog/input state, not an exact
 confirmation intent or synchronous mutation claim. Its content is not explicitly
 unmounted at settings-close admission like the adjacent privacy section. Success
 Continue can invoke unowned logout/sign-out/navigation after a later identity
-change. Successful HTTP responses also tolerate unparseable bodies and missing or
-invalid schedule dates, producing unsupported success UI and a Continue action.
+change. Before the receipt correction, successful HTTP responses tolerated
+unparseable bodies and missing or invalid schedule dates, producing unsupported
+success UI and a Continue action. Cancellation likewise synthesized a message and
+cleared the pending cache without a valid boolean receipt.
 
 The shared `useStepUp` cleanup cancels an installed challenge, not a still-pending
 silent grant acquisition. Late grant completion can replay the request after
@@ -9919,12 +9923,12 @@ or consumed once, but this is not an established signature/authentication bypass
 The endpoint schedules a reversible 24-hour grace period; it does not itself purge
 account data or revoke sessions.
 
-The accepted correction explicitly sets retry=false only for useDeleteAccount.
+The earlier accepted retry correction explicitly set retry=false for useDeleteAccount.
 The original single replay after a STEP_UP_REQUIRED challenge and fresh proof is
 unchanged; it is not the same operation as a generic retry of a rejected mutation.
 An explicit later user invocation remains available as a new action. Global
-mutation defaults, cancellation classification, error wording, sign-out and server
-scheduling are untouched. This does not guarantee an ambiguous original write
+mutation defaults, cancellation classification, sign-out and server scheduling
+remain unchanged. This does not guarantee an ambiguous original write
 failed or prevent a user/cross-tab repeated request.
 
 Independent source review accepted the one-line production change and five
@@ -9935,11 +9939,47 @@ proof-bearing replay, explicit later invocation and a positive ordinary-mutation
 control that retains default retry. They inspect request counts/sign-out effects
 beyond the configured interval. No fixture was executed.
 
-Wider work must
-bind confirmation, CSRF, original request, grant/replay/body and Continue effects
-to canonical account/view authority, strictly validate the scheduling receipt,
-and reconcile unknown outcomes by reads rather than mutation replay. Abort is not
-rollback. Server scheduling idempotency and grant session/consumption policy remain
+The additive shared receipt schemas now require scheduling message, valid timestamp,
+pending status and statusReason, or cancellation message and boolean. Known
+error/reason refusal fields are rejected while unrelated added fields are allowed.
+Past timestamps remain valid receipts: client clock or delivery delay does not
+change what the server confirmed. Existing GET status schema is unchanged.
+
+Web uses these parsers before mutation success. Malformed/empty/contradictory 2xx
+responses cannot produce scheduling Continue or cancellation cache clearing.
+Both cancellation true (cleared) and false (no schedule found, including absent
+profile) legitimately clear cache under the current server protocol. Expired
+schedules instead receive 409 and retain the cache. Cancellation also explicitly
+disables generic retry. Transport and malformed-success uncertainty use ordinary
+domain errors directing a page reload and fresh Settings > Account inspection
+before trying again; merely reopening a cached panel is not promised fresh.
+Step-up cancellation stays distinct and meaningful HTTP refusals remain intact.
+No automatic reconciliation, sign-out or mutation replay was added. In particular,
+an audit-write failure after a schedule/cancellation database update can still
+return 500; existing HTTP handling is not proof that the update was rolled back.
+
+Independent source review accepted the six-file patch and authored shared-contract,
+production-default hook and real AccountSection fixtures. Cases cover complete
+past/offset dates, missing/wrong/contradictory fields, valid true/false cancellation,
+malformed JSON/empty responses, cache/dialog preservation, no false success or
+sign-out, no generic retry and actual error-message rendering. The hook suite uses
+production retry defaults plus an ordinary-retry positive control; component suites
+still explicitly disable retry and only cover their rendering/cache contract.
+No fixtures were executed.
+
+Native adoption remains open. Mobile's CloudAccountScreen currently accepts an
+optional schedule timestamp, signs out and labels a missing timestamp as immediate
+erasure; its owner-switch fixture asserts that unsupported path. Its captured
+account epoch and owned step-up transport are real counterguards, not receipt
+validation. Its cancellation already requires a boolean and refreshes unknown
+outcomes but has not adopted the full shared receipt. Internal Tauri's account
+adapter also accepts an optional message and DangerZone synthesizes success; it
+has existing request-boundary checks and explicit web step-up handoff. Public
+Electron uses hosted web. No native behavior changed in this slice.
+
+Wider work must bind confirmation, CSRF, original request, grant/replay/body and
+Continue effects to canonical account/view authority, and reconcile unknown
+outcomes by reads rather than mutation replay. Abort is not rollback. Server scheduling idempotency and grant session/consumption policy remain
 separate decisions. No tests, checks, builds or live account operations ran.
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01

@@ -4353,9 +4353,33 @@ fixture. Silent grants after unmount, original session/caller authority and ongo
 SDK/grant work remain outside this repair. See `WEB-ACCOUNT-DELETION-INTENT-01`.
 No tests, checks, builds, live account action, push or deployment ran.
 
+## Account deletion success requires canonical mutation receipts
+
+Accepted commit `5c4d7e8d2a0dd3f388d378ee12303685adadf0b1` adds shared
+scheduling/cancellation receipt schemas and adopts them in the web hooks. Schedule
+success requires a meaningful message, valid timestamp, pending status and reason;
+cancellation requires a meaningful message and boolean. Known refusal fields are
+rejected, unrelated additive fields tolerated and past timestamps accepted.
+Existing GET contracts are unchanged. Valid cancelled=false means no pending
+schedule under the current server protocol, not a successful cancellation claim.
+
+Malformed/empty 2xx replies cannot produce scheduling Continue or clear the
+cancellation cache. Network and malformed-success outcomes explicitly instruct a
+page reload/check before retry. Cancellation now opts out of generic mutation
+retry alongside deletion; authorized proof replay and explicit later invocation
+remain. HTTP refusals and original sign-out behavior are unchanged. A 500 from
+an audit-write failure is not evidence that an earlier database change rolled back.
+
+Independent source review accepted authored contract, production-default retry and
+AccountSection fixtures; none ran. Native receipt adoption, original owner/view
+continuations, cross-tab races, server idempotency and precise erasure-time copy
+remain open. Mobile's missing-date immediate-erasure path and internal Tauri's
+optional-message success are recorded under `WEB-ACCOUNT-DELETION-INTENT-01`.
+No tests, checks, builds, live account action, push or deployment ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-one accepted production slices traced above are represented as
+Only the one hundred and fifty-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
