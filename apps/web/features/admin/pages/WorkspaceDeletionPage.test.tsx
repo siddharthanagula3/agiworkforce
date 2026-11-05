@@ -212,7 +212,51 @@ describe('the window between the request and the erasure', () => {
     await screen.findByRole('heading', { name: WORKSPACE.name });
 
     expect(screen.queryByRole('button', { name: /Cancel deletion/ })).toBeNull();
-    expect(screen.getByText(/erasure is underway/)).toBeVisible();
+    expect(screen.getByText(/Deletion can no longer be cancelled here/)).toBeVisible();
+    expect(screen.queryByText(/erasure is underway/)).toBeNull();
+  });
+});
+
+describe('uncertain workspace deletion responses', () => {
+  it.each([
+    ['schedule', 'transport'],
+    ['schedule', 'unreadable receipt'],
+    ['cancel', 'transport'],
+    ['cancel', 'unreadable receipt'],
+  ] as const)('does not infer the outcome of %s after %s failure', async (action, failure) => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method && init.method !== 'GET') {
+        if (failure === 'transport') throw new TypeError('Failed to fetch');
+        return new Response('{', { status: 200 });
+      }
+      return jsonResponse({
+        organization: WORKSPACE,
+        deletion: action === 'schedule' ? NO_PENDING_DELETION : {
+          pending: true,
+          requestedAt: '2026-09-17T00:00:00.000Z',
+          scheduledFor: '2099-01-01T00:00:00.000Z',
+          canCancel: true,
+        },
+      });
+    });
+    render(<WorkspaceDeletionPage />);
+    await screen.findByRole('heading', { name: WORKSPACE.name });
+
+    if (action === 'schedule') {
+      typeConfirmation(WORKSPACE.name);
+      fireEvent.click(screen.getByRole('button', { name: 'Schedule deletion' }));
+      fireEvent.click(screen.getAllByRole('button', { name: 'Schedule deletion' }).at(-1) as Element);
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel deletion and keep this workspace' }));
+    }
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      `Could not confirm whether workspace deletion was ${action === 'schedule' ? 'scheduled' : 'cancelled'}.`,
+    );
+    expect(alert).not.toHaveTextContent(/Nothing was scheduled|The deletion is still scheduled/);
+    expect(writeCalls()).toHaveLength(1);
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });
 

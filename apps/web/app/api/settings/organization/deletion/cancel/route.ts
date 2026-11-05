@@ -79,7 +79,7 @@ async function handleCancel(request: NextRequest) {
     'Workspace deletion cancellation refused: grace window has closed',
   );
   throw createError.conflict(
-    'The cancellation window has closed and erasure is already underway. Nothing was restored.',
+    'The cancellation window has closed. Deletion can no longer be cancelled here.',
   );
 }
 

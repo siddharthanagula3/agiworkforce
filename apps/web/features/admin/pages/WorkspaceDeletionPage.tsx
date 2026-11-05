@@ -125,7 +125,9 @@ export default function WorkspaceDeletionPage() {
       setTypedConfirmation('');
       await load();
     } catch {
-      setError('Could not reach the workspace settings API. Nothing was scheduled.');
+      setError(
+        'Could not confirm whether workspace deletion was scheduled. Check its current status before trying again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -154,7 +156,9 @@ export default function WorkspaceDeletionPage() {
       setNotice(body.message ?? 'Workspace deletion cancelled.');
       await load();
     } catch {
-      setError('Could not reach the workspace settings API. The deletion is still scheduled.');
+      setError(
+        'Could not confirm whether workspace deletion was cancelled. Check its current status before trying again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -220,7 +224,7 @@ export default function WorkspaceDeletionPage() {
                   Deletion is scheduled for {formatTimestamp(deletion.scheduledFor)}.{' '}
                   {deletion.canCancel
                     ? 'Cancel before then and nothing is lost.'
-                    : 'The cancellation window has closed and erasure is underway.'}
+                    : 'The cancellation window has closed. Deletion can no longer be cancelled here.'}
                 </p>
                 {deletion.canCancel ? (
                   <button

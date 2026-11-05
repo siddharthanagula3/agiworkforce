@@ -146,6 +146,9 @@ describe('POST /api/settings/organization/deletion/cancel', () => {
     });
     const res = await POST(req() as never);
     expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/cancellation window has closed/i);
+    expect(body.error.message).not.toMatch(/erasure.*underway/i);
   });
 
   describe('explicit workspace selection', () => {
