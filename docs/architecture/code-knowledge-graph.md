@@ -4350,8 +4350,9 @@ replay and unrelated already-dispatched requests remain unchanged.
 Independent source review accepted six authored fixtures, including a real-dialog
 deferred verification across replacement; none ran. Its separately mounted test
 host is manually rerendered, so automatic DOM removal is not established by that
-fixture. Silent grants after unmount, original session/caller authority and ongoing
-SDK/grant work remain outside this repair. See `WEB-ACCOUNT-DELETION-INTENT-01`.
+fixture. The later hook-lifetime section narrows post-cleanup continuations;
+original session/caller authority and ongoing SDK/grant work remain separate.
+See `WEB-ACCOUNT-DELETION-INTENT-01`.
 No tests, checks, builds, live account action, push or deployment ran.
 
 ## Account deletion success requires canonical mutation receipts
@@ -4454,9 +4455,33 @@ unchanged. The privacy/India page's timing promises and GET's schedule-derived
 "has not started" progress remain separate open issues under
 `WEB-ACCOUNT-DELETION-INTENT-01`; no actual erasure timing or runtime claim is made.
 
+## Web step-up continuations retire with their hook lifetime
+
+Accepted commit `2af29ad0fdb74235a0dff489346d516c212c40ae` captures an effect
+lifetime for each invocation. Cleanup retires it before exact challenge
+settlement; re-setup creates a fresh object without reviving earlier calls.
+Checks surround silent-grant admission/result handling and precede every original
+sender invocation, including the satisfaction-to-replay microtask gap. Existing
+challenge identity/keys, independent requests and single proof replay remain.
+
+Already-invoked sender responses and errors are preserved without a post-send
+cancellation race. Independent source review accepted deferred fixtures, real
+StrictMode re-setup and exact error/microtask instruments; none ran. Effect
+reconnection with an already-installed dialog remains a direct fixture gap.
+The stable callback admits new calls after re-setup, not original caller intent.
+Sender invocation is not HTTP dispatch: internal auth/CSRF awaits and old dialog
+verification can still continue. No transport/session migration, abort or rollback
+claim is made. See `WEB-ACCOUNT-DELETION-INTENT-01`.
+
+The same read-only continuation reconciled stale status for
+`SHARED-SYNC-DIRTY-MESSAGE-PULL-OVERWRITE-01` against accepted `c521f9967d` and
+the dirty-message ownership section above. No duplicate production change or
+additional slice was counted; its runtime and wider store-concurrency limits
+remain explicit in the issue register.
+
 ## Reconstruction boundary
 
-Only the one hundred and fifty-five accepted production slices traced above are represented as
+Only the one hundred and fifty-six accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

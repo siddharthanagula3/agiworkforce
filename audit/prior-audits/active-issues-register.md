@@ -4427,15 +4427,42 @@ This is false refusal, not credential disclosure or a Local/BYOK transfer. No mo
 
 ## SHARED-SYNC-DIRTY-MESSAGE-PULL-OVERWRITE-01
 
-Medium. Confirmed October 9, 2026 for an explicitly bounded current-source mobile sync sequence.
+Status: Boundedly source-corrected by reconstructed commit
+`c521f9967d4f346e0cfad214c0f1749802632e50`; independently re-read on 2026-11-05.
+Runtime acceptance remains open. The earlier statement that this reconstructed
+tree still unconditionally overwrites dirty message content was stale.
 
-Rechecked on main (3ccb6f6) on 2026-10-15: still present. Main's 0ce5126800 changed how the merge takes model and provider, but it still assigns incoming content and metadata over a dirty message, and `syncNow` still pulls straight after push. Line numbers are main's.
+Historical October 9 controls and the October 15 main recheck described an edit
+made during POST: acknowledgement preserved its dirty ref, then the older echoed
+row in the immediate pull overwrote its content/metadata. The historical pipeline
+and reducer evidence was recorded in coverage-shared-client-2026-10-09-005.md and
+coverage-shared-policy-mapping-controls-2026-10-09.json under audit/checklist;
+those old control outcomes are not a current runtime acceptance claim.
 
-`apps/mobile/services/cloudSyncEngine.ts:555-565` keeps the dirty ref when a message changes during a push, correctly advancing its CAS revision. Actual `syncNow` then pulls immediately after push at `:962-963`. Pull at `:473-488` applies message rows through `packages/client/sync/src/messages.ts:34-75`, whose merge assigns incoming content and metadata without dirty-message protection.
+The current mobile pull reads live conversation/message dirty refs after the GET
+await and passes them to the shared synchronous delta reducer. A live dirty row
+with a syncable role preserves exactly the push-owned role/content/metadata and
+present model/provider fields while taking the remote CAS base and server-owned
+topology. An edit during POST remains dirty if its push projection differs from
+the sent snapshot. An edit after a clean acknowledgement, during GET, is also
+protected when its writer marks it dirty. Remote tombstones intentionally win.
 
-The specialist actual-source pipeline probe (`audit/checklist/reviews/coverage-shared-client-2026-10-09-005.md`, untracked) uses canonical push/pull schemas, valid UUIDs, fresh stores/cursors/dirty queues and inert API ports. With an in-flight newer local edit and the acknowledged older row in the subsequent nonempty pull, content and metadata revert to the sent snapshot while the dirty ref remains. An empty-pull control preserves the edit; an unchanged-message control clears the dirty ref. The independent root reducer controls (`audit/checklist/evidence/coverage-shared-policy-mapping-controls-2026-10-09.json`, untracked) corroborate unconditional incoming content mapping, without claiming to exercise the full pipeline.
+Canonical managed-cloud message storage is the synchronous Zustand/MMKV
+chatCloudMessageStore, not the separate SQLite Local message store. serverVersion
+is a remote CAS base, not a local edit generation. Current get/merge/set has no
+await between its snapshot and write, but the generic port does not establish
+atomicity for future asynchronous adapters or reentrant subscribers. Unmarked
+edits, other out-of-order writers, incoming-version monotonicity, cross-store
+crash consistency and globally unique message-ID assumptions remain separate
+limits; no local-generation or universal linearizability claim is made.
 
-The finding requires a managed eligible mobile sync and a subsequent pull containing that row. React Native, real stores/auth/server/network/database/stream timing and actual frequency were not exercised. No Local/BYOK transfer or deployed lost-edit event is asserted. Preserve dirty local fields while advancing the remote base, with acknowledged-row, clean, empty-pull and tombstone controls. Source remains unchanged.
+Existing shared messages.test.ts and mobile cloud-sync-engine.test.ts fixtures
+cover dirty acknowledged echoes/retry, clean/conflict/tombstone and ownership
+paths. They were source-read, not executed. A direct deferred-GET case editing
+after a clean acknowledgement remains a useful coverage addition. No duplicate
+production fix was applied during this re-read, and the accepted slice count did
+not increase. Real native stores/auth/server/network/timing remain unverified;
+no deployed lost-edit event or Local/BYOK transfer is asserted.
 
 ## AUDIT-CONFIG-KEY-COMMENT-READER-01
 
@@ -9872,6 +9899,8 @@ Interactive deadline and API message copy was source-corrected in
 and GET progress claims remain open below.
 Exact installed-challenge settlement was separately source-corrected in
 `7d4c5c62e9c62915685e32a0f40fe310e0997ed7` on 2026-11-05.
+Hook-owned continuation retirement was source-corrected in
+`2af29ad0fdb74235a0dff489346d516c212c40ae` the same day.
 No live scheduling, deletion or runtime identity transition was performed.
 
 `useDeleteAccount` in `use-settings-queries.ts` previously inherited production
@@ -9892,9 +9921,9 @@ unparseable bodies and missing or invalid schedule dates, producing unsupported
 success UI and a Continue action. Cancellation likewise synthesized a message and
 cleared the pending cache without a valid boolean receipt.
 
-The shared `useStepUp` cleanup cancels an installed challenge, not a still-pending
-silent grant acquisition. Late grant completion can replay the request after
-unmount, or install a new challenge after cleanup. Before the bounded correction,
+The shared `useStepUp` cleanup previously cancelled an installed challenge, not a
+still-pending silent grant acquisition. Late grant completion could replay after
+unmount or install a new challenge after cleanup. Before the challenge correction,
 its generic close callback settled whatever pendingRef held. Retained A callbacks
 could clear or settle replacement B; reusing the same StepUpDialog instance also
 let A's delayed verification read B through latest.current.
@@ -9915,10 +9944,42 @@ callbacks across identical challenges, repeated settlement, cancel/reopen keys,
 installed-challenge unmount, unrelated dispatched work and real-dialog delayed
 verification across replacement. The real-dialog fixture manually rerenders a
 separate mounted host, so it does not establish automatic DOM removal on close.
-Silent grants and SDK/grant work after unmount, stale acquisition ordering,
-original session authority and caller-send ownership remain open; a retired dialog
-may still perform old verification/grant work but cannot settle its replacement.
-These broader lifetimes need canonical request/view authority, not another store.
+The later hook-lifetime correction below blocks new hook-owned continuations
+after effect cleanup. Ongoing SDK/grant work, stale acquisition ordering within
+an active lifetime, original session authority and caller-send ownership remain
+open; a retired dialog may still perform old verification/grant work but cannot
+settle its replacement. Broader authority needs canonical request/view ownership,
+not another identity store.
+
+Each useStepUp invocation now captures its effect-lifetime object. Cleanup retires
+it before clearing and settling only its installed challenge. Re-setup creates a
+fresh object, clears old rendered pending state and never revives earlier calls.
+The stable callback can admit a new invocation after legitimate re-setup; it is
+not a caller-intent snapshot. Initial pre-effect behavior is preserved. Retirement
+is observed at effect cleanup, not claimed at synchronous DOM removal.
+
+A sender wrapper checks that lifetime immediately before each initial/proof
+sender invocation, including the satisfaction-to-replay microtask gap. Satisfier
+entry and post-silent-grant handling also check it, preventing new grant-helper invocations,
+dialog waiters or replay continuations from a retired invocation. There is no
+latest-invocation-wins policy, overall cancellation race or post-send check:
+already-invoked sender responses and exact errors remain intact. A recognized
+initial step-up refusal permits blocking new proof work without pretending an
+uncertain mutation rolled back. A rejected grant promise still propagates its
+original error rather than reaching the post-await guard.
+
+Independent review accepted authored delayed-grant/refusal/body, retained callback,
+interactive and silent satisfaction/replay gaps, exact initial/proof result/error,
+real StrictMode re-setup and out-of-order independent-grant fixtures. Existing
+exact-challenge and real-dialog late verification cases remain. None ran. The
+StrictMode case retires before a dialog exists; installed-dialog effect
+reconnection reset is source-reviewed, not directly fixture-proven.
+
+Sender invocation is not physical HTTP dispatch. Existing senders and grant
+helpers can await auth/CSRF internally after admission, and old StepUpDialog
+verification may still issue a grant request. Those transport/session boundaries,
+and actual network abort, are outside this hook-only repair. No runtime identity,
+transport cancellation or rollback guarantee is made.
 
 Server counterguards remain substantial: rate limit, CSRF subject binding,
 authenticated account/status/session policy, scoped writes, billing and sole-owner
