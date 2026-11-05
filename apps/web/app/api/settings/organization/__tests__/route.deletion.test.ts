@@ -1,12 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockExecute, mockGetClerkAuthUser, mockRecordAuditEvent } = vi.hoisted(() => ({
+const {
+  mockQuery, mockExecute, mockGetClerkAuthUser, mockRecordAuditEvent,
+  mockGetCachedActiveOrganizationId,
+} = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
   mockRecordAuditEvent: vi.fn(async () => undefined),
+  mockGetCachedActiveOrganizationId: vi.fn(),
+}));
+
+vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
+  setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -96,17 +110,20 @@ function bind({
   });
 }
 
-function req(body?: unknown): Request {
+function req(body?: unknown, selector?: string): Request {
   return new Request('https://app.test/api/settings/organization', {
     method: 'DELETE',
-    ...(body === undefined
-      ? {}
-      : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(selector === undefined ? {} : { [MANAGED_CLOUD_ORGANIZATION_HEADER]: selector }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetCachedActiveOrganizationId.mockResolvedValue(undefined);
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
 });
 
@@ -218,5 +235,64 @@ describe('DELETE /api/settings/organization', () => {
     expect(body.error.message).toBe('Cancel the workspace plan before deleting the workspace.');
     expect(mockExecute).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  describe('explicit workspace selection', () => {
+    const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
+    const NONMEMBER_ORG = '33333333-3333-4333-8333-333333333333';
+
+    beforeEach(() => {
+      mockGetCachedActiveOrganizationId.mockResolvedValue(OTHER_ORG);
+      mockExecute.mockResolvedValue(1);
+      mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+        if (sql.includes('from public.organization_members')) {
+          return params[0] === ORG || params[0] === OTHER_ORG
+            ? [{ organization_id: params[0], user_id: 'user-1', role: 'owner' }]
+            : [];
+        }
+        if (sql.includes('select id, name, slug')) {
+          return [organizationRow({ id: params[0], stripe_subscription_id: null })];
+        }
+        if (sql.includes('from public.legal_holds')) return [{ count: 0 }];
+        if (sql.includes('select deletion_requested_at')) {
+          return [{ deletion_requested_at: null, deletion_scheduled_for: null }];
+        }
+        return [];
+      });
+    });
+
+    it('schedules A rather than selected B even when their confirmation names match', async () => {
+      const response = await DELETE(req({ confirm: 'Acme' }, ORG) as never);
+
+      expect(response.status).toBe(200);
+      expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining('deletion_scheduled_for'), [
+        ORG, expect.any(String), 'user-1',
+      ]);
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORG }));
+    });
+
+    it.each([
+      ['not-a-workspace', 400],
+      [NONMEMBER_ORG, 403],
+      [MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE, 404],
+    ] as const)('refuses selector %s without scheduling B', async (selector, status) => {
+      const response = await DELETE(req({ confirm: 'Acme' }, selector) as never);
+
+      expect(response.status).toBe(status);
+      expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('retains legacy headerless scheduling of selected B', async () => {
+      const response = await DELETE(req({ confirm: 'Acme' }) as never);
+
+      expect(response.status).toBe(200);
+      expect(mockGetCachedActiveOrganizationId).toHaveBeenCalledWith('user-1');
+      expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining('deletion_scheduled_for'), [
+        OTHER_ORG, expect.any(String), 'user-1',
+      ]);
+    });
   });
 });

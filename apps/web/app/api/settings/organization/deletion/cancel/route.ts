@@ -21,7 +21,7 @@ async function handleCancel(request: NextRequest) {
 
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
-  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!activeOrganizationId) {
     throw createError.notFound('Select a workspace before cancelling its deletion');
   }

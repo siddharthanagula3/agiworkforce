@@ -482,7 +482,7 @@ async function handleDelete(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!activeOrganizationId) {
     throw createError.notFound('Select a workspace before deleting it');
   }

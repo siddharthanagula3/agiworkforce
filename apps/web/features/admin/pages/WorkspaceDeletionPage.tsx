@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { responseErrorMessage } from '@/shared/utils/api-error';
 
@@ -99,7 +100,7 @@ export default function WorkspaceDeletionPage() {
     void load();
   }, [load]);
 
-  const scheduleDeletion = useCallback(async () => {
+  const scheduleDeletion = useCallback(async (organizationId: string, confirmation: string) => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -108,8 +109,12 @@ export default function WorkspaceDeletionPage() {
       const response = await fetch('/api/settings/organization', {
         method: 'DELETE',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-        body: JSON.stringify({ confirm: typedConfirmation.trim() }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf,
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
+        },
+        body: JSON.stringify({ confirm: confirmation }),
       });
       if (!response.ok) {
         setError(await responseErrorMessage(response));
@@ -124,9 +129,9 @@ export default function WorkspaceDeletionPage() {
     } finally {
       setBusy(false);
     }
-  }, [load, typedConfirmation]);
+  }, [load]);
 
-  const cancelDeletion = useCallback(async () => {
+  const cancelDeletion = useCallback(async (organizationId: string) => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -135,7 +140,11 @@ export default function WorkspaceDeletionPage() {
       const response = await fetch('/api/settings/organization/deletion/cancel', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf,
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
+        },
       });
       if (!response.ok) {
         setError(await responseErrorMessage(response));
@@ -217,7 +226,7 @@ export default function WorkspaceDeletionPage() {
                   <button
                     type="button"
                     disabled={busy || !isOwner}
-                    onClick={() => void cancelDeletion()}
+                    onClick={() => void cancelDeletion(workspace.id)}
                     className="self-start rounded-compact border border-border px-3 py-2 text-sm text-foreground disabled:opacity-50"
                   >
                     Cancel deletion and keep this workspace
@@ -233,7 +242,7 @@ export default function WorkspaceDeletionPage() {
                     title: `Schedule ${workspace.name} for deletion?`,
                     description: deletionConsequence(workspace),
                     confirmLabel: 'Schedule deletion',
-                    onConfirm: () => scheduleDeletion(),
+                    onConfirm: () => scheduleDeletion(workspace.id, typedConfirmation.trim()),
                   });
                 }}
               >
