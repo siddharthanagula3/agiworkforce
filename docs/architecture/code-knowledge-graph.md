@@ -4091,9 +4091,44 @@ coverage from consumed bodies or empty parameter rows. No tests, checks, builds,
 browser/auth, settings changes or network actions were run. The coupled Web
 training/telemetry lane remains `WEB-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01`.
 
+## Web bulk chat confirmations retain their original workspace intent
+
+Accepted commit `b3cb44fa19` extracts Privacy archive-all/delete-all into
+`BulkConversationControls`, with optional owned stats/bulk service transport.
+It reuses canonical session snapshots, workspace admission and request authority.
+An admitted matching workspace snapshot, captured owner/epoch/scope and live view
+are required before counting. A synchronous ready token and exact intent phase
+own count, confirmation, CSRF/token, dispatch, receipt and local reconciliation.
+Direct shared ConfirmDialog callbacks cannot confirm or dismiss another intent.
+Settings close removes Privacy before the shell dialog's exit animation finishes.
+
+Both stats and mutation send original bearer authority and explicit organization
+or personal selection. An unrelated saved server workspace selection cannot
+retarget these requests. Delete rechecks live streaming at actual POST dispatch.
+Owned count failures retain unnumbered scope; retired counts do not create a new
+prompt. Receipt action must match the request. Only dispatch-time sidebar IDs are
+reconciled under the current owner; archive also clears pins. Late receipts cannot
+update another account's store, navigate its chat, or release its pending intent.
+
+Confirmed mutation and local-view refresh failure remain distinct from unknown
+mutation outcome. There is no automatic retry and no claim of rollback, global
+cross-view single-flight or exactly-once server execution. Counts/IDs are not an
+authoritative refreshed list. Existing server user/org filtering, soft delete,
+share/artifact revocation and sandbox cleanup are unchanged. Legacy archived and
+deleted managers remain separate work. See `WEB-BULK-CHAT-INTENT-01`.
+
+Independent source review accepted the patch and authored fixtures for exact
+confirmation reuse/cancel, workspace epochs, session replacement, delayed token
+streaming, body parsing, old versus replacement account operations, strict
+receipts, explicit org headers, local reconcile failure, and StrictMode. Count and
+soft-delete wording coverage moved with the controls; isolated section fixtures
+mock the new subtree. The close gate has a source assertion, not animation
+verification, and DOM double-click coverage does not prove saved chooser calls.
+No tests, lint, typechecks, builds, browser/auth, database, push or deploy ran.
+
 ## Reconstruction boundary
 
-Only the one hundred and thirty-nine accepted production slices traced above are represented as
+Only the one hundred and forty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

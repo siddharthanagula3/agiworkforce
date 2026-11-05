@@ -9412,3 +9412,39 @@ user-choice retry from browser intent ordering; preserve existing device-local
 opt-out behavior rather than silently binding it to a different account model.
 Namespace concurrency and routing full-object replacement remain separate issues.
 No tests, checks, builds, browser/auth, database, telemetry or network actions ran.
+
+## WEB-BULK-CHAT-INTENT-01
+
+Status: Privacy archive-all/delete-all boundedly source-corrected in `b3cb44fa19`.
+Runtime and deployment acceptance remain open. Source-backed on 2026-11-05.
+
+The original Privacy handlers used ambient-cookie stats and bulk POST requests,
+with busy state only after an asynchronous confirmation. Account/workspace changes
+during count, dialog or CSRF could rebind intent. Delete checked render-captured
+streaming state only before counting. The service accepted any valid action enum
+as a receipt for the requested action. Existing server user/organization filters,
+soft-delete semantics and transactional share/artifact revocation were intact;
+this was not a demonstrated server authorization bypass.
+
+The new owner-keyed bulk subtree uses canonical session and admitted workspace
+authority, a captured epoch/scope/view generation, synchronous ready/intent leases,
+and exact-phase shared ConfirmDialog callbacks. Both requests pin bearer identity
+and explicit organization or personal selection. Live streaming is checked at
+actual mutation dispatch after token acquisition. Matching receipts fence sidebar
+and navigation effects; dispatch-time IDs avoid blanket mutation of later rows.
+Archive reconciliation also clears pinned state, matching the server update.
+The Privacy subtree now unmounts when settings closes, before exit animation.
+
+Unknown dispatched outcomes are not described as failures or rollback, and there
+is no automatic mutation replay. Confirmed writes remain confirmed if local
+reconciliation fails. This is per-view intent ownership, not global cross-view
+serialization, an authoritative refreshed history list, or exactly-once server
+execution. A prior request can still execute after abort/unmount; a fresh explicit
+confirmation does not establish that it stopped. Archived/deleted managers and
+other legacy callers are not migrated by this slice. Their one-argument service
+calls remain compatible; all bulk callers now require a matching action receipt.
+
+Independent source review accepted the bounded implementation. Fixture sources
+were authored but not run. Modal-close coverage is a source assertion, not an
+animation run; DOM double-click coverage is not proof of saved chooser invocation.
+No tests, lint, typechecks, builds, browser/auth, database, push or deploy ran.
