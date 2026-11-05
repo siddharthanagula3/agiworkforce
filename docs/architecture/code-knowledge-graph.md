@@ -5175,10 +5175,15 @@ transaction model proves provider revocation; process loss/unknown commits lack
 a durable upstream cleanup outbox. Uncaptured new authorizations are preserved.
 
 Both slices received independent source review; no product execution ran.
-An in-flight session approval can still insert after a reset's DELETE snapshot
-and override Ask. That requires a separate reviewed permission-generation contract,
-not merely the new transaction boundaries. See the three CONNECTOR IDs in
-`audit/prior-audits/active-issues-register.md` for acceptance and limitations.
+An in-flight remembered approval can still restore a session or Always allowance
+after a newer Ask/reset. The recorded repair requires generations captured with
+the approval card and checked atomically under the reset fence. Old checkpoints
+must not receive fabricated current generations. Disconnect cleanup also omits
+session grants, and custom/plugin deletion ordering can strand retry identity;
+the support executor separately bypasses canonical lifecycle completion and
+claims permission cleanup despite failure. Those paths remain unchanged pending
+the coordinated repair. See the CONNECTOR and SUPPORT-CONNECTOR entries in
+`audit/prior-audits/active-issues-register.md` for evidence and acceptance.
 
 ## Reconstruction boundary
 

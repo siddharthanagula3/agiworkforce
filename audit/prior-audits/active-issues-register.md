@@ -12503,3 +12503,112 @@ if the policy/review state was observed before that lock. Preserve unrelated
 users, tools, workspaces and newer valid approvals. Exercise both orderings,
 category resets, no pre-existing grant row, rollback and uncertain commits under
 real PostgreSQL before claiming race-safe revocation.
+
+
+Source design follow-up, 2026-11-05: the same stale-review problem also affects
+`approved-always`. `keepBlocked` protects an exact blocked row, not an intervening
+Ask. `approve/route.ts` loads current policy before persistence, but the pending
+checkpoint stores only the call and offered scopes. Neither that policy read nor
+an INSERT-only lock proves the generation the person reviewed.
+
+The scoped repair plan is a per-user/connector transaction fence with persistent
+connector-wide and exact-tool generations. Category/connector resets bump the
+wide generation; exact mutations bump the tool generation, even when no grant or
+standing row exists. Every approval binds both values before or atomically with
+the policy reads used to produce its card. Read failure disables remembered
+scopes, rather than inventing zero. Carry the server-owned values through
+`tool-loop.ts` pending calls and `cloud-agent-run-service.ts::PendingToolCallSchema`
+into the claimed checkpoint. The approve route must use the stored values, never
+client values or a fresh replacement for the reviewed generation.
+
+Before any batch write, acquire all connector fences in deterministic order and
+validate every expected generation. Then apply all standing/session mutations in
+the same transaction. Check the entire batch before its own standing writes bump
+generations. Reset and checked grant writes must use the same fence. A checked
+SQL writer with minimum privileges should prevent old application writers from
+bypassing the contract during rollout. Generation rows must survive permission
+row deletion to avoid reset/recreation ABA. Their account-erasure lifecycle must
+not erase revision history while resumable approvals survive.
+
+Append a new migration after 0393; do not revise that accepted migration. Keep
+checkpoint generation fields optional for parsing old records, but refuse old
+session/always submissions without inventing historical evidence. A stale/legacy
+checkpoint needs an actionable fresh review or turn restart; releasing the same
+checkpoint for identical retry will never make it current. Once-only and rejected
+decisions can retain their existing current-policy handling. The existing scoped
+adapter provides one client and waits for COMMIT; its transaction adapter rejects
+nested transactions, so internal writers must accept the caller's transaction.
+
+The two standalone standing-clear owners below must participate in this same
+contract. No lock-only, timestamp-only or fresh Ask read meets this acceptance
+criterion. Disabling all remembered scopes would be containment with a feature
+regression, not the correction proposed here. This plan concerns persisted
+allowance resurrection, not instantaneous cancellation of already authorized
+in-memory execution. No implementation or runtime acceptance is represented.
+
+## CONNECTOR-DISCONNECT-GRANT-CLEANUP-01
+
+Severity: Medium. Status: Open source finding, independently confirmed on
+2026-11-05; no product change or runtime reproduction included.
+
+`mcp-custom-connections.ts::clearConnectorToolPermissions` deletes only standing
+rows, catches every failure and returns no failure indication. Session grants
+reference conversations rather than connector registrations, so disconnect does
+not cascade them away. Standard and directory reconnect retain the connector ID;
+old conversation grants can therefore become usable again. Custom/plugin removal
+also leaves orphan grants, but new custom registrations normally receive a new
+short ID, so automatic reuse in those paths has not been established.
+
+A helper-only change that begins throwing is not a safe correction. The custom
+route and directory custom branch delete the registration before cleanup, losing
+the short ID needed by a retry. Directory OAuth cleanup runs only when the OAuth
+removal reports a live row; after removal succeeds and cleanup fails, retry skips
+cleanup. Plugin removal deletes every registration before processing the list,
+and marketplace uninstall already removed the installation before calling it.
+One propagated failure can skip later OAuth revocations with no normal retry
+identity. Standard and GitHub routes do reach unconditional permission cleanup
+on a repeated disconnect, but that does not repair the other callers.
+
+Acceptance: centralize the narrow revocation/receipt helper in a lightweight
+connector-library owner; support caller-owned scoped transactions. Custom local
+registration removal and both permission deletions must commit atomically after
+provider handling, preserving retry identity on cleanup failure. Stable directory
+IDs need cleanup on repeated disconnect even when no OAuth grant remains. Repair
+plugin uninstall ordering and per-connector completion/recovery before claiming
+universal coverage. Do not clear permissions early while the connector remains
+usable: removing standing Deny rows can weaken enforcement if disconnect fails.
+Preserve directory `target.serverId` for permissions versus `target.connectorId`
+for OAuth. Include failure, partial-loop, retry and reconnect coverage, and the
+permission-generation contract above. No source patch was accepted for this gap.
+
+## SUPPORT-CONNECTOR-REVOCATION-LIFECYCLE-01
+
+Severity: High. Status: Open source finding, independently confirmed on
+2026-11-05; no product change or runtime reproduction included.
+
+The support action executor directly deletes local GitHub installation rows or
+deactivates a legacy `user_connectors` row. It does not call the canonical OAuth
+capture/provider-revocation or cache-cleanup lifecycle. It separately deletes only
+standing permissions, suppresses deletion failure, and unconditionally reports
+that permissions were cleared and reconnecting will ask again. Thus the confirmed
+GitHub path can discard local tracking while the App installation remains live
+upstream. Retained conversation grants and failed standing deletion also
+contradict its completion message.
+
+Scope qualification: the support account resolver currently lists operator-backed
+legacy rows, GitHub installations and custom connectors. It does not inventory
+OAuth-only connectors, and custom connectors are explicitly refused. This source
+finding does not assert that every OAuth-only connector is reachable through the
+support action. Mixed installation/grant state and direct executor callers still
+need inventory during the repair.
+
+Acceptance: reuse one canonical supported disconnect service with authenticated
+scope, exact target identity, provider outcome, permission reset and cache
+completion. Preserve recoverable identity through partial failure, report only
+confirmed effects and route failure through the support proposal/audit outcome.
+The action registry currently promises that nothing in the service changes; any
+provider-side removal must be represented in the confirmation and effect text,
+not silently added under that old contract. Keep custom exclusions and explicit
+user confirmation intact. Integrate with the permission-generation fence and
+exercise upstream failure, absent targets, mixed states, permission failure and
+retry before representing successful disconnect. No live service was contacted.
