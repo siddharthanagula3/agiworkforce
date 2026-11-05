@@ -9,6 +9,11 @@ import { getDeviceId } from '@/lib/deviceId';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { secureFetch } from '@/services/secureFetch';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useTierStore } from '@/src/features/billing/store';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -27,6 +32,7 @@ const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
 };
 
 let rotatedThisLaunch = false;
+let rotationAttempt: { account: CloudAccountEpoch | null } | null = null;
 
 export function askFromSiriSupported(): boolean {
   return Platform.OS === 'ios';
@@ -110,8 +116,18 @@ export async function settleAskIntentOnLaunch(): Promise<void> {
     storage.delete(PENDING_REVOKE_KEY);
   }
   if (rotatedThisLaunch || !isAskFromSiriEnabled()) return;
+  const attempt = { account: captureCloudAccountEpoch() };
+  rotationAttempt = attempt;
   rotatedThisLaunch = true;
-  await storeFreshToken();
+  try {
+    await storeFreshToken();
+  } catch (error) {
+    if (rotationAttempt === attempt && isCloudAccountEpochCurrent(attempt.account)) {
+      rotationAttempt = null;
+      rotatedThisLaunch = false;
+    }
+    throw error;
+  }
 }
 
 async function revokeWithCapturedSession(token: string): Promise<boolean> {
@@ -137,6 +153,7 @@ async function revokeWithCapturedSession(token: string): Promise<boolean> {
 }
 
 export async function revokeAskIntentForSignOut(capturedClerkToken: string): Promise<void> {
+  rotationAttempt = null;
   rotatedThisLaunch = false;
   const hadToken = isAskFromSiriEnabled() || readString(PENDING_REVOKE_KEY) !== undefined;
   const token = capturedClerkToken.trim();
