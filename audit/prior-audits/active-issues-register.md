@@ -10870,3 +10870,108 @@ concurrent erasure, schedule/hold fencing and complete recovery remain unresolve
 No tests, lint, typechecks, builds, installations, live/database actions, push or
 deployment ran. Claim only refusal to proceed after lock-establishment failure
 and removal of erasure's own premature flag deletion, not universal isolation.
+
+
+## WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01
+
+Severity: High. Status: Retry-pointer loss source-corrected in
+`1c827055ee592d5ec37e7e6f1f657185de9fdeba`, 2026-11-05. Export worker fencing,
+concurrent disposal and runtime/deployment acceptance remain open.
+
+Account erasure discovers stored export keys from user-owned background_jobs
+build payloads through eraseUserDataExportArchives. Individual private-object
+delete errors become exportObjectsFailed, preserving the profile and reporting
+incomplete disposal for that attempt. Previously the later generic table loop
+still deleted those build-job rows. A second erasure could then discover no
+archives and report completion even though a failed object remained. This path
+needs only a transient object-store failure and successful job-row deletion,
+not a race; no deployed occurrence or runtime reproduction is established.
+
+When archive deletion fails, the background-job delete now preserves only the
+affected user's export-build kind, reusing the producer's exported canonical
+kind constant. It still deletes that user's other job kinds and records the table
+as retained for retry. Successful or empty archive cleanup keeps the ordinary
+user-job deletion. The retained profile prevents its cascading removal of these
+rows, and this account path does not delete organizations. Completed exports also
+have a null-user expiry job, which already survives the user-scoped delete; that
+counterguard can eventually clean completed archives but does not prove erasure
+completion, and unfinished exports do not yet have it.
+
+Independent source review accepted the exact three-file diff. An unrun stateful
+mock fixture follows failed deletion, retained job payload, second-pass key
+rediscovery and cleanup, preserving other-user and null-user expiry jobs while
+removing unrelated jobs. It exercises real archive-discovery code with mocked
+DB/object storage, not actual row retention, storage deletion or a deployed
+cascade. Existing legal-hold and media-job gates remain. Retained queued/running
+export jobs are not canceled by this correction; worker admission, concurrent
+new writes, malformed archive payloads and complete erasure remain outside scope.
+No tests, lint, typechecks, builds, installations, live/database actions, push or
+deployment ran.
+
+## WEB-SECURITY-SESSION-COMPLETION-01
+
+Severity: High. Status: Password/recovery completion reporting source-corrected
+in `28391ed79be927aaae9022ea69f01a73265d9837`, 2026-11-05. Provider sweep
+semantics, complete credential cleanup and runtime/deployment acceptance remain open.
+
+finishIntentRevocation reports whether mobile-intent cleanup succeeded or its
+retry succeeded. It does not establish that every provider session was ended:
+a sweep may contain failed IDs with incomplete=false, and retrying mobile tokens
+can return true even when provider enumeration hit its cap. Password change and
+support recovery previously treated this helper's true result as enough for
+success. The password fixture even expected success with one failed session.
+Other consumers already inspect failed and incomplete separately; these findings
+do not establish a bypass of the earlier identity or operator admission gates.
+
+Both callers now await mobile cleanup, then refuse full completion if any provider
+failure was reported, the original sweep was incomplete, or mobile cleanup failed.
+The separate await preserves the cleanup attempt even when a provider failure is
+known. Password returns its existing user-safe partial-change 503 after the
+password action and device-refresh revocation; its log no longer claims all other
+sessions ended. Support recovery keeps the event identifying the recovery action
+already taken, explicitly records failure outcome for incomplete revocation, and
+returns its existing partial-recovery error. Actions already performed are not
+rolled back, and neither error means that the password or recovery action failed.
+
+The existing incomplete field conflates provider and mobile-only failure.
+Conservatively, these callers still refuse success after an initially incomplete
+mobile-only result even if its retry succeeds. No outcome-contract refactor,
+provider retry/sweep rewrite or blanket cleanup guarantee is included.
+Independent source review accepted the four-file diff. Unrun route fixtures cover
+provider failed IDs and incomplete sweeps despite helper success, continued
+mobile cleanup, existing mobile-only failure, full success and audit outcomes.
+External boundaries are mocked; no actual sessions, provider calls or runtime
+acceptance were exercised. No tests, lint, typechecks, builds, installations,
+live/database actions, push or deployment ran.
+
+
+## WEB-CREDENTIAL-MUTATION-RETRY-01
+
+Severity: Medium. Status: Automatic password/API-key mutation retries
+source-corrected in `d816b51543d29a345e5037d35603f7ac24253235`, 2026-11-05.
+Idempotency, original-session ownership and runtime/deployment acceptance remain open.
+
+useChangePassword and useCreateAPIKey inherited the query client's mutation
+retry:1. A transport error, post-write server failure or unreadable API-key
+success receipt could therefore restart the entire mutation. API-key creation
+persists a newly generated key before audit/webhook work and the response; the
+hook can request a new silent step-up grant on a restart, so consumed proofs do
+not deduplicate the write. Password change verifies the current password again,
+so retrying after a successful change with incomplete session cleanup can replace
+its useful partial-change message with an incorrect-current-password failure.
+No repeated production request or exposed credential is established.
+
+Both hooks now set retry:false. Their explicit STEP_UP_REQUIRED replay remains:
+that challenge occurs before either endpoint writes. Key-count limits, rate
+limits, password/step-up and earlier identity controls remain; they are not
+idempotency guarantees. No global retry default or server write behavior changed.
+
+Independent source review accepted the two-file diff. Unrun actual-hook fixtures
+use inherited retry:1 and terminal error/success status, real step-up/request
+helpers, and mocked auth/CSRF/fetch boundaries. They cover transport and 503
+failures, challenge plus silent proof success, lost proof-bearing responses,
+unreadable key-creation receipt and preserved password partial-cleanup text.
+Interactive challenge UI, actual provider/server writes, manual double submits,
+server idempotency, response-schema validation, automatic outcome reconciliation
+and session ownership remain outside this correction. No tests, lint, typechecks,
+builds, installations, live/database actions, push or deployment ran.

@@ -4726,9 +4726,40 @@ Fail-open admission reads/resolution, already-running work, operator lifting and
 concurrent erasure remain outside the correction. No universal isolation or
 runtime acceptance is claimed. See `WEB-WORKSPACE-ERASURE-LOCKDOWN-01`.
 
+## Export erasure preserves cleanup custody across failures
+
+Accepted `1c827055ee592d5ec37e7e6f1f657185de9fdeba` keeps the affected user's
+export-build background-job payloads when archive object deletion fails, while
+deleting that user's other job kinds. It reports retained-for-retry custody and
+uses the producer's canonical exported build-kind constant. A later successful
+pass can rediscover the keys before deleting job rows. Completed exports' separate
+null-user expiry jobs are an existing counterguard, not proof of full erasure.
+Independent source review accepted an unrun stateful mocked two-pass fixture;
+worker fencing, concurrent writes and durable storage remain unverified. See
+`WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01`.
+
+## Security completion separates provider and mobile cleanup results
+
+Accepted `28391ed79be927aaae9022ea69f01a73265d9837` makes password change and
+support recovery inspect provider failed IDs and initial sweep incompleteness in
+addition to the mobile-intent helper result. Mobile cleanup is still awaited
+before classification. Support audit explicitly records incomplete cleanup as
+failure; password and recovery actions already performed are not rolled back.
+The conflated incomplete field remains conservative after a successful mobile-only
+retry. Independent source review accepted unrun route fixtures; no provider sweep
+or full cleanup guarantee is added. See `WEB-SECURITY-SESSION-COMPLETION-01`.
+
+Accepted `d816b51543d29a345e5037d35603f7ac24253235` disables automatic query
+mutation retries for password changes and API-key creation. Explicit pre-write
+STEP_UP_REQUIRED replay remains. Actual-hook fixtures under inherited retry:1
+cover failure, silent proof replay, ambiguous key receipts and password partial
+cleanup messages, but none ran. Server idempotency, session ownership, interactive
+verification and reconciliation remain outside the change. See
+`WEB-CREDENTIAL-MUTATION-RETRY-01`.
+
 ## Reconstruction boundary
 
-Only the one hundred and seventy-six accepted production slices traced above are represented as
+Only the one hundred and seventy-nine accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
