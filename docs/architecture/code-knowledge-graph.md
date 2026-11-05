@@ -4949,9 +4949,25 @@ identifier is a safe shortcut. These open source findings are
 `MOBILE-PUSH-REVOCATION-ORDER-01` and `MOBILE-PUSH-ACCOUNT-HANDOFF-01`, not newly
 implemented slices or observed notification incidents.
 
+## Time/focus transport work retains its account lifetime
+
+Accepted `17899b2ee0` gives each time/focus hook owner a canonical Cloud account
+epoch, abort signal and pending timer. Synchronous auth/mode/epoch subscriptions
+retire the owner even across a batched leave-and-return; captured callbacks and
+stale completions must match that live owner. Shared preference helpers forward
+optional request ownership without changing legacy no-options calls. The
+notifications screen is a save producer; the tabs reminder also mounts a reader.
+The server namespace is authenticated-user scoped, unlike device push toggles.
+Independent source review and unrun fixtures support the bounded lifetime
+correction, not runtime acceptance. The installation-wide store still retains
+prior values: replacement-account edits before hydration can save retained fields,
+and same-owner reads can overwrite edits. These remain separately open under
+`MOBILE-TIME-FOCUS-PAYLOAD-OWNERSHIP-01`; see
+`MOBILE-TIME-FOCUS-OWNERSHIP-01` for the accepted correction.
+
 ## Reconstruction boundary
 
-Only the one hundred and ninety-one accepted production slices traced above are represented as
+Only the one hundred and ninety-two accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -11698,3 +11698,77 @@ reset can remove the particular condition; neither is an ordinary account-switch
 solution. No token registration, notification send, device reset, tests, database
 or provider action was performed. See `MOBILE-PUSH-REVOCATION-ORDER-01` for the
 separate stale-write privacy boundary.
+
+
+## MOBILE-TIME-FOCUS-OWNERSHIP-01
+
+Severity: Medium. Status: Queued-operation and stale-completion ownership
+source-corrected on 2026-11-05; runtime acceptance remains open.
+Accepted production commit: `17899b2ee0`.
+
+The notifications settings screen edits the local time/focus store and schedules
+a 600 ms save through `useTimeFocusSync`. Previously that timer retained only
+Cloud eligibility and survived auth/mode changes while the screen remained
+mounted. A later callback could enter the API under replacement credentials.
+The canonical time-focus preference namespace writes the authenticated user's
+`user_settings`, unlike device push/vibration preferences. Local egress refusal,
+normal unmount cancellation and transport checks after request entry are real
+counterguards; the cross-account case requires the screen to remain mounted and
+the replacement account to enable Cloud before dispatch. No live incident is
+claimed.
+
+The hook now captures the canonical account epoch, subscribes synchronously to
+auth, mode and epoch transitions, and retires each operation owner before
+renewal. Retirement clears its timer and aborts its request signal. Timer
+identity, owner-reference equality and current account/auth/mode checks refuse
+captured callbacks and stale read/save completions, including leave-and-return
+within a React batch. The shared preference helper forwards optional ownership
+and cancellation options while preserving legacy no-options call arity. Local
+edits are not erased merely because an owner retires.
+
+Independent source review accepted the four-file patch. Authored, unrun fixtures
+use the real canonical epoch and preference helper with actual Zustand
+subscriptions, while mocking transport and simplifying store/auth hydration.
+They cover current-owner reads/debounce/save, mode/auth/identity/epoch changes,
+round trips, an already-dispatched callback, stale resolve/reject, unmount and
+current-owner failure/retry. Unmount-save cases principally assert cancellation
+and call count, not an observed absence of React publication. They do not prove
+real Clerk ordering or cancellation after server acceptance. No tests, lint,
+typechecks, builds, application/native/provider/database execution, push or
+deployment ran.
+
+This is operation-lifetime isolation, not full account-data isolation. Shared
+retained payload ownership and current-owner read/edit ordering remain open under
+`MOBILE-TIME-FOCUS-PAYLOAD-OWNERSHIP-01`; already accepted server writes are not
+undone and overlapping same-owner writes are not serialized.
+
+
+## MOBILE-TIME-FOCUS-PAYLOAD-OWNERSHIP-01
+
+Severity: Medium. Status: Open source design finding, 2026-11-05.
+
+`apps/mobile/stores/notificationPrefsStore.ts` persists quiet hours and break
+reminders in an installation-wide store. Ordinary account teardown does not
+reset or partition those values. `useTimeFocusSync` establishes an eligible
+replacement account owner before its GET finishes, and permits `push` while
+that GET is pending or failed. If A's values remain, B can edit one field and
+save the full retained payload, including other A fields, into B's authenticated
+namespace. The operation itself legitimately belongs to B, so epoch validation
+does not detect that payload provenance. The accepted lifetime fix above does
+not introduce or close this retained-data path.
+
+There is also a current-owner ordering gap: a delayed GET can overwrite edits
+before the debounce snapshots the store. The tabs reminder and notifications
+settings screen can each mount the read hook against the same shared store.
+Same-owner overlapping saves do not supply the endpoint's optional
+`expectedVersion` and have no client revision order. These are source sequences, not executed contamination or data-loss
+incidents; current transport ownership, Local refusal and cancellation remain
+useful counterguards.
+
+A follow-on correction needs one canonical owner for account-scoped hydration,
+local edits and pending saves, preserving deliberate Local settings without
+silently uploading another account's retained fields. Acceptance should cover
+new-owner read pending/failure, partial edits, multiple hook mounts and out-of-
+order reads/writes, with explicit payload ownership and edit revisions. Merely
+adding another current-account check or claiming cancellation is insufficient.
+No implementation for that wider ownership contract is accepted here.
