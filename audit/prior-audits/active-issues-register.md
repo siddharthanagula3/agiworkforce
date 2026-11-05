@@ -10933,6 +10933,37 @@ External bucket lifecycle configuration is unknown. No storage, database, fixtur
 or other product execution was performed.
 
 
+
+Queue-retention addendum, source-reviewed 2026-11-05: Generic pruneFinishedJobs
+removes succeeded/cancelled data-export rows after seven days and dead rows after
+thirty days, without confirmed object disposal. An unfinished build whose final
+discard deletion fails only logs that error; its dead build row can later be
+pruned before any expiry job exists. A completed export whose four expiry
+attempts fail loses the expiry row after thirty days, while its succeeded build
+rows normally expire after seven. Account erasure's retained build pointers are
+also still eligible for this generic pruning. A later erasure discovers exports
+only through those build payloads, so the immediate retry-pointer correction is
+not durable custody against the independent job-history pruner.
+
+Sources: data-export-archive.ts::discardExport/buildDataExportArchiveVolume/
+expireDataExportArchive/eraseUserDataExportArchives, job-service.ts::failJob/
+reapExpiredJobLeases/pruneFinishedJobs, job-queues.ts and the mounted drain cron.
+Permanent errors, lease exhaustion, pre-try storage refusal and failures after
+multipart completion have distinct cleanup gaps. The cancellation helper also
+settles jobs without export disposal, but no production caller was found, so a
+mounted cancellation trigger is not claimed. Actual purge-deleted-media cron
+code aborts aged pending multipart uploads; that does not delete completed ZIPs
+or staged JSON. Ordinary archive state/expiry checks still block corresponding
+downloads, and external bucket lifecycle is unknown. This is retention/custody
+risk, not a demonstrated access bypass or production incident.
+
+No age-only pruning exemption was added: retaining all export job history
+indefinitely would not complete cleanup or establish writer quiescence. Durable
+cleanup ownership and pruning after confirmed disposal need the same coordinated
+staging/fencing design. Independent read-only review traced these paths; no jobs,
+cron, storage, database or fixture was executed.
+
+
 ## WEB-SECURITY-SESSION-COMPLETION-01
 
 Severity: High. Status: Password/recovery completion reporting source-corrected

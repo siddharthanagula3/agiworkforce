@@ -4848,6 +4848,18 @@ uncertain enqueue error could destroy a committed job's input. Durable staging
 admission/reconciliation and the existing erasure fence remain open under
 `WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01`.
 
+
+## Export cleanup custody outlives ordinary job history
+
+The mounted job drain prunes completed/cancelled data-export jobs after seven
+days and dead jobs after thirty, without disposal confirmation. This can remove
+failed-build, failed-expiry or account-erasure-retained cleanup pointers while
+objects remain. Pending multipart orphan cleanup is a distinct counterguard and
+does not cover completed ZIPs or JSON. No production cancellation caller or live
+incident is claimed. This open design finding extends
+`WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01`; no production slice or indefinite pruning
+exemption is counted. Durable cleanup ownership and writer fencing remain needed.
+
 ## Reconstruction boundary
 
 Only the one hundred and eighty-six accepted production slices traced above are represented as
