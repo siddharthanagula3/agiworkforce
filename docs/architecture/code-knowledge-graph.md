@@ -5876,8 +5876,9 @@ The server's organization resolution and native/product mapping remain unchanged
 Native email/password/passkeys retain independent readiness and current-user
 agreement rather than depending on GET success. Configured provider and linked
 identity rows require current validated read data; configured rows also wait for
-native connected-account readiness. Native mutations/redirects, unlink dialogs,
-ambient DELETE and mutation busy/error/receipt lifetimes remain open. Revoke-all
+native connected-account readiness. The later sign-in application slice below
+owns visible mutation/confirmation/transport lifetimes; SDK/OAuth internals and
+remote outcomes remain open. Revoke-all
 needs a separate completion authority and owned logout/cleanup chain because
 expected self-revocation retires ordinary request ownership before its receipt.
 Source fixtures are unrun; see WEB-SETTINGS-STEP-UP-OWNERSHIP-01.
@@ -5949,9 +5950,31 @@ install-link gating does not bind cookie OAuth continuation. Cross-view mutation
 serialization, durable outcomes, global mapping/RLS and runtime acceptance remain
 open; fixtures are unrun. See WEB-SLACK-SETTINGS-LIFETIME-01.
 
+## Sign-in mutations share one application intent lane
+
+Accepted `38afdd641061103a2ef7d08c768d6a3984862457` captures the panel's native session/user
+and immutable connect, disconnect or product unlink target before confirmation.
+A synchronous shared lane and owner/view/read generations own admission and
+settlement. The connected-account port captures exact native resources and fences
+visible create/redirect and destroy/reload continuations. Product unlink uses
+captured Bearer transport and owned step-up, with an exact removed-ID receipt.
+Modal dismissal retires the application view; native read readiness is independent
+of product identities GET success. Uncertain dispatched work blocks blind repeats,
+not server execution, and refreshing the product list does not prove rollback.
+Explicit review acknowledgement releases only the local block; it is not verified
+native reconciliation. Retained-parent close/reopen preserves uncertainty, while
+full unmount/reload does not. Redirect dispatch does not prove OAuth completion.
+
+Organization resolution remains server-owned request-time context for the account-
+wide unlink operation. Native disconnection and product identity unlink are still
+distinct. SDK internals, OAuth callback completion, already-dispatched effects,
+server unlink/cache/event ordering, cross-client credential admission and durable
+outcome recovery remain open. Source fixtures are unrun; see
+WEB-SIGN-IN-MUTATION-LIFETIME-01.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-three accepted production slices traced above are
+Only the two hundred forty-four accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

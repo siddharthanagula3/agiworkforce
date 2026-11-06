@@ -13514,8 +13514,9 @@ adapts the shared hook through its client library. These callers omitted owned
 options. The subsequent WEB-PASSWORD-INTENT-LIFETIME-01 and WEB-EMAIL-CHANGE-LIFETIME-01
 slices own password and email change respectively. The subsequent
 `2d9f982e0282698d5be95f986594b0d75a54790c` owns leave/standalone transfer with the limits recorded in
-WEB-WORKSPACE-MUTATION-INTENT-01. The other six direct settings call sites and
-Advanced Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
+WEB-WORKSPACE-MUTATION-INTENT-01. WEB-SIGN-IN-MUTATION-LIFETIME-01 later owns the
+sign-in panel's application boundary. Other settings consumers and Advanced
+Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
 ambient credentials, native user operations or caller-owned receipt/effect work.
 
 Coordinated boundaries and source owners:
@@ -13547,9 +13548,10 @@ Coordinated boundaries and source owners:
   EmailAddressChange POST/PATCH, native address reload/send/verify and the parent
   AccountSection email update. Server partial completion and misleading retry
   receipts remain under WEB-EMAIL-CHANGE-COMPLETION-01. The bounded sign-in-method
-  read correction below owns the identities GET and read-derived rows. Native
-  connection/removal/redirect, unlink confirmation/transport/receipt, mutation
-  errors/busy state and primary-email confirmation remain separate open lifetimes.
+  read correction below owns the identities GET and read-derived rows. The later
+  WEB-SIGN-IN-MUTATION-LIFETIME-01 slice owns panel application mutations and visible
+  native continuations, with opaque SDK/OAuth and remote outcomes still open.
+  Primary-email confirmation remains a separate open lifetime.
   Native PasskeysPanel is adjacent and does not use
   step-up; its application-level correction and open SDK boundary are tracked
   separately under WEB-PASSKEY-APPLICATION-LIFETIME-01 below.
@@ -13584,11 +13586,11 @@ provider rows additionally wait for connected-account readiness. The GET now use
 captured Bearer credentials with cookies omitted, no CSRF acquisition and no
 client workspace header; server organization resolution and mapping are unchanged.
 
-This is read isolation/response validation only. Existing mutation dialogs,
-retained callbacks, native effects/redirects, ambient DELETE, error/busy state and
-completion receipts remain open. Hiding a row does not cancel an already retained
-confirmation. Source regression fixtures are unrun; installed SDK, React lifecycle
-and transport compatibility still need runtime acceptance.
+That slice is read isolation/response validation only. The later
+WEB-SIGN-IN-MUTATION-LIFETIME-01 correction below owns mutation dialogs, captured
+DELETE, visible native continuations and panel settlement; it does not turn the
+read slice into server or SDK cancellation proof. Source regression fixtures are
+unrun; installed SDK, React lifecycle and transport compatibility remain open.
 
 Revoke-all scoping additionally traces push disabling through worker readiness,
 subscription lookup and CSRF before browser-wide unsubscribe, then ambient Clerk
@@ -13629,6 +13631,58 @@ Source roots: features/settings/{hooks/use-settings-queries.ts,sections,componen
 features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-SIGN-IN-MUTATION-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded application correction: `38afdd641061103a2ef7d08c768d6a3984862457`.
+
+SignInMethodsPanel previously admitted writes through React busy state, captured
+unlink/disconnect targets only after a retained confirmation and shared unowned
+mutation error/finally state. Product unlink reacquired ambient credentials across
+CSRF and step-up waits and accepted any successful HTTP status. Native connection
+could redirect after account replacement; native disconnection could reload an
+obsolete user after destruction, and a missing target silently succeeded.
+
+The correction covers all three panel actions together. One synchronous intent
+lane captures the native session/user, exact target and submitted return URL
+before confirmation or dispatch. Current owner/view/read generations fence event
+admission, native invocation, each repository-visible awaited continuation,
+redirect, response/body validation and UI settlement. Owned RequestAuthority and
+step-up preserve the submitted identity and captured Bearer across CSRF, proof
+and replay; unlink success requires the matching removed identity receipt.
+Modal active-state admission retires the panel on dismissal. Native rows retain
+independent read readiness when the product identities request fails.
+
+Dispatched work can already have changed the provider or database. Ambiguous
+failures block blind repeats. The notice survives close/reopen while the parent
+remains mounted and same-session native resource replacement, but is not durable
+across full unmount, account incarnation or reload. A product-list refresh cannot
+establish rollback or automatically clear uncertainty; explicit user review
+acknowledgement only releases the local block and does not repeat a mutation.
+That acknowledgement is not verified native-provider reconciliation. Native SDK methods
+remain opaque: internal wire credentials, publication and already-started reload
+cannot be fenced here. Successful location.assign only initiates navigation; it
+does not confirm linking. OAuth callback completion after the admitted redirect
+is outside this application boundary. Exact resource replacement fails closed,
+including potentially legitimate SDK refresh behavior requiring acceptance.
+
+Identity unlink remains account-wide. Server organization resolution and its
+request-time workspace policy/audit context are unchanged; no client workspace
+incarnation or explicit selector binding is claimed. Step-up proofs bind user,
+action and identity target, not organization. DB unlink precedes cache invalidation
+and security-event work, so a late error can follow successful removal. Risk
+assessment can also trigger compromise containment, including current-session and
+device-credential revocation; client retirement does not cancel that branch or
+recover its completion receipt. Native external-account disconnection and product
+identity unlink remain distinct
+operations, not coordinated cross-provider cleanup. No cross-view/client minimum-
+credential serialization, remote rollback, durable outcome journal, global
+native/product mapping repair or expected-self-termination authority is added.
+
+Authored adversarial fixtures and normal-flow fixtures are source-reviewed only.
+No tests, lint, typechecks, builds, application/service execution, push or deploy
+ran. Installed SDK, React and real provider/OAuth acceptance remain unverified.
 
 ## WEB-SLACK-SETTINGS-LIFETIME-01
 
