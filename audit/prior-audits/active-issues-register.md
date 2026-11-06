@@ -13558,7 +13558,9 @@ Coordinated boundaries and source owners:
 - TOTP: TwoFactorEnrollment setup, separate service verification/status paths,
   QR/secret/OTP/backup-code state, copy/download/print and parent status callback
   need a full setup/receipt lifetime. Stage-local QR and frame cleanup exist but
-  do not provide session ownership. Preserve already-exported material limits.
+  do not provide session ownership. WEB-MFA-READ-LIFETIME-01 separately owns only
+  the notice and policy availability readers; it does not repair this panel or
+  its parent/cache invalidation cause. Preserve already-exported material limits.
 - Advanced Account Security: status, options, native WebAuthn, add/remove,
   enrollment, recovery keys, disable and cancel-recovery need owned action and
   secret lifetimes. Not every route requires generic step-up. Routes explicitly
@@ -13631,6 +13633,63 @@ Source roots: features/settings/{hooks/use-settings-queries.ts,sections,componen
 features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-MFA-READ-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded two-reader correction: `c4ce2d4bb66c5e7ccc4ba5c56ebcf780f7ac2fa8`.
+
+WorkspaceMfaNotice previously cached its requirement under one global key and
+obtained ambient credentials. WorkspacePolicySection independently cached the
+legacy status service under another global key; that service converts failed
+reads to disabled/unavailable data. Prior-account data and asynchronous results
+could therefore reach a replacement session, and failed status reads could look
+like confirmed enrollment unavailability.
+
+The correction covers these two readers only. Captured SessionAuthority and
+RequestAuthority own token acquisition, same-origin Bearer transport with cookies
+omitted, response/body parsing and current-owner rendering. Required status fields
+are validated as actual booleans rather than coerced or defaulted. Each reader
+has a private instance/incarnation query suffix and a monotonic effect generation;
+cleanup cannot retire a sibling reader or revive a prior pending attempt. Existing
+public query prefixes remain compatible with invalidation, but retired query
+closures refuse before credential acquisition. SDK observation remains active
+while showing ready or failed state, and silent retirement observed by settlement
+or refetch reconciles only that reader.
+
+These are account/session reads, not selected-workspace reads. Requirement policy
+comes from the account's governing organizations and enrollment from the native
+session subject. Status uses TWO_FACTOR_SCOPE with organization resolution off.
+No workspace admission dependency or organization header is introduced. A status
+read failure leaves availability unknown and blocks turning an unselected MFA
+requirement toggle on, without claiming that setup is known to be disabled.
+
+Private query instances deliberately give up cross-mounted-reader deduplication
+and use zero inactive cache retention. Multiple mounts or a new view may make
+separate reads. Requirement's sixty-second freshness and focus behavior and the
+policy status's five-minute freshness/no-focus behavior remain; automatic retry
+is disabled rather than repeating status migration after a failed read. Normal
+query scheduling and SDK/browser compatibility remain unverified.
+
+This does not own the legacy TOTP caller. Its broad requirement invalidation can
+still prompt a current reader to refresh after an old mutation; the old query
+itself cannot adopt a new session's credentials. The policy status prefix still
+has no enrollment invalidation, so this is not a post-enrollment freshness fix.
+TwoFactorEnrollment, its parent callback/form, mutation transports and all secret,
+QR, clipboard, download and print lifetimes remain open. Legacy get2FAStatus and
+verify2FA services are unchanged. Workspace policy mutation/draft lifetimes are
+also outside this read correction. An already-enabled draft can still be saved
+after availability changes; this is not submit-time availability admission.
+
+Status GET is not side-effect-free: readSecondFactorStatus can register earlier
+native enrollment, update cache and delete the legacy row. Retiring a request
+does not cancel those effects or repair mapping, pending-factor batch/custody,
+concurrent verification, sequential provider/DB/cache/event outcomes or expected
+self-termination. Keep WEB-IDENTITY-POLICY-NAMESPACE-01 and
+WEB-SETTINGS-STEP-UP-OWNERSHIP-01 open. Reader fixtures retain real request authority
+but supply a modeled SessionAuthority; they do not certify the native SDK binder.
+Fixtures are authored/source-reviewed only; no tests, lint, typechecks, builds,
+app/service execution, push or deployment ran.
 
 ## WEB-SIGN-IN-MUTATION-LIFETIME-01
 

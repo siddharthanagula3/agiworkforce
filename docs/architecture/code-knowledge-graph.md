@@ -5972,9 +5972,28 @@ server unlink/cache/event ordering, cross-client credential admission and durabl
 outcome recovery remain open. Source fixtures are unrun; see
 WEB-SIGN-IN-MUTATION-LIFETIME-01.
 
+## MFA notice and policy availability use captured session readers
+
+Accepted `c4ce2d4bb66c5e7ccc4ba5c56ebcf780f7ac2fa8` gives WorkspaceMfaNotice and the policy
+availability read separate instance/incarnation query keys under their existing
+prefixes. Captured canonical session/request authority fences credentials,
+response/body parsing, effect generation and visible data. Cleanup owns only its
+reader; retired cached query closures cannot acquire a later identity's token.
+Wire booleans are validated, and unreadable status leaves availability unknown
+rather than fabricating a disabled result. Private instances intentionally do not deduplicate
+across mounts, and inactive caches are not retained.
+
+Both reads are account/session scoped. Requirement consults governing organization
+policy, not the active workspace; status disables organization resolution. The
+legacy TOTP requirement invalidation can still refresh current readers, and no
+new enrollment invalidation is added for policy status. TOTP mutation/secret and
+parent form ownership remain open. Status GET can migrate legacy factors, so
+client cancellation and disabled retries are not provider/DB rollback. Source
+fixtures are unrun; see WEB-MFA-READ-LIFETIME-01 and the coordinated identity gaps.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-four accepted production slices traced above are
+Only the two hundred forty-five accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
