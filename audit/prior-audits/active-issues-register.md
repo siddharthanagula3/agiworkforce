@@ -13551,7 +13551,8 @@ Coordinated boundaries and source owners:
   connection/removal/redirect, unlink confirmation/transport/receipt, mutation
   errors/busy state and primary-email confirmation remain separate open lifetimes.
   Native PasskeysPanel is adjacent and does not use
-  step-up; do not imply it is covered by a step-up-only change.
+  step-up; its application-level correction and open SDK boundary are tracked
+  separately under WEB-PASSKEY-APPLICATION-LIFETIME-01 below.
 - TOTP: TwoFactorEnrollment setup, separate service verification/status paths,
   QR/secret/OTP/backup-code state, copy/download/print and parent status callback
   need a full setup/receipt lifetime. Stage-local QR and frame cleanup exist but
@@ -13627,6 +13628,55 @@ Cross-tab ordering, durable outcomes and runtime/native SDK acceptance remain op
 Source roots: features/settings/{hooks/use-settings-queries.ts,sections,components},
 features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
+No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-PASSKEY-APPLICATION-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded application-level correction: `7fa263128d5278f178b6d44b43adcbfd2f829163`.
+
+The prior PasskeysPanel used React busy state rather than synchronous admission;
+confirmation captured only a passkey and rename could be abandoned while its
+operation was pending. Old completions could overwrite a replacement editor or
+account's errors/busy state. The identity port separately awaited native mutation
+and user.reload without ownership between them; missing removal targets silently
+succeeded. These are application-lifetime defects, not a demonstrated provider
+authorization bypass.
+
+The correction captures canonical session/native-user authority and the exact
+native target before confirmation or editing, admits one application lane and one
+native dispatch, and checks each repository-visible native mutation/reload wait.
+Read rendering, retained callbacks, editor updates and settlement are bound to the
+current owner/generation. Target absence/replacement refuses before mutation;
+successful delete does not require the removed target to remain in the list.
+Observed changes, layout admission, user events and resolved/rejected continuations
+also reconcile the exact retired panel without replacing a newer owner. Silent
+target removal cannot strand an editor after its row and Cancel control vanish.
+SignInMethodsPanel retains read-only usePasskeys consumption. No unrelated email
+ownership refactor or native provider migration is included.
+
+Post-dispatch failure or unconfirmed refresh conservatively reports that the
+change may already have completed and blocks blind retries pending deliberate
+review acknowledgment. A cancellation-shaped rejection after entering opaque
+createPasskey is not evidence of rollback, so this path no longer silently treats
+any error containing “cancel” as harmless. The shared cancellation helper's other
+consumers are unchanged. This intentional compatibility change and native refresh
+behavior need runtime acceptance; acknowledgment is a user assertion, not verified
+reconciliation or proof that a prior operation did not commit.
+
+Hard boundary: user.createPasskey hides challenge acquisition, browser WebAuthn and
+provider verification stages. Capturing a resource receiver does not establish
+session-bound wire credentials or stop SDK cache writes after retirement; no
+cancellation signal is passed through the native methods. Exact installed SDK
+implementation and Next framework docs are absent here. The correction fences
+only repository-visible invocation/continuation boundaries. Pinning native user
+object identity fails closed on replacement, including potentially legitimate
+reload replacement; it must not rebind an old intent merely because IDs match.
+Successful-reload compatibility remains unverified. Uncertainty is not durable
+across full component unmount, reload or account-incarnation replacement; no
+all-provider containment, native rollback or complete credential safety is claimed.
+
+Source fixtures cover the native adapter and panel boundaries but remain unrun.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
 ## WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01

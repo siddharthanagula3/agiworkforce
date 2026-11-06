@@ -5882,9 +5882,35 @@ needs a separate completion authority and owned logout/cleanup chain because
 expected self-revocation retires ordinary request ownership before its receipt.
 Source fixtures are unrun; see WEB-SETTINGS-STEP-UP-OWNERSHIP-01.
 
+## Passkey application ownership ends at the opaque SDK boundary
+
+Accepted `7fa263128d5278f178b6d44b43adcbfd2f829163` captures a native session/user and
+exact passkey resource before removal confirmation or rename editing. One
+synchronous lane spans editing/confirmation, native mutation and refresh; the
+operation cannot dispatch twice. Current owner/generation checks fence visible
+SDK invocations, each mutation/reload continuation, rendered state and retained
+handlers. Missing/replaced targets refuse before dispatch; successful deletion
+does not require the target to survive the subsequent read. Layout/event and
+settlement reconciliation also retire the exact obsolete panel when SDK notices
+are absent, without replacing a newer owner or leaving an inaccessible editor.
+
+A post-dispatch error or unconfirmed refresh carries uncertainty rather than
+rollback or automatic retry. The user must deliberately review/acknowledge before
+another mutation. Cancellation-shaped create failures are conservatively included;
+the unrelated shared cancellation helper remains unchanged. Native read consumers
+remain supported, with readiness requiring coherent current native user resources.
+
+The SDK's hidden challenge/WebAuthn/verification stages, wire credential binding,
+cache writes and receipt semantics are not owned by these outer fences. Native
+user-resource replacement retires the operation rather than rebinding by IDs;
+normal reload compatibility remains unverified. Full-unmount/account-incarnation
+outcome durability, provider cancellation and minimum-credential concurrency remain
+separate. Fixtures are source-reviewed only and unrun; see
+WEB-PASSKEY-APPLICATION-LIFETIME-01.
+
 ## Reconstruction boundary
 
-Only the two hundred forty accepted production slices traced above are
+Only the two hundred forty-one accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
