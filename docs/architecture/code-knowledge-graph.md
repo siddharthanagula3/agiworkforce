@@ -5507,9 +5507,33 @@ batch identity and atomic credential admission remain separate open boundaries.
 See `WEB-PASSWORD-INTENT-LIFETIME-01` and `WEB-SETTINGS-STEP-UP-OWNERSHIP-01` for
 evidence and runtime/type/native SDK acceptance limits.
 
+
+## Email change owns its editor and native address operations
+
+Accepted `7b61a2061e` captures account/session/editor/operation ownership before
+submission or final-use confirmation. Frozen POST/PATCH payloads use captured
+bearer transport and owned step-up through body parsing; exact native user/address
+reads and code operations check both ownership and returned verification state.
+Explicit account-section admission and current-only callbacks retire stale work.
+
+A validated matching primary receipt updates only the latest matching store user,
+without overwriting other current fields or waiting for optional native refresh.
+Refresh failure is separate feedback. Unconfirmed HTTP outcomes block another
+write, including potentially partial 4xx. Same-session close/reopen retains the
+notice only while the editor stays mounted; full unmount/reload durability and
+server reconciliation remain open. Native code-step retries do not re-add or
+promote the address automatically. No cancellation promises server/SDK rollback.
+
+Independent source review covers production and unrun UI/native fixtures. The
+server still performs sequential provider/profile/removal work and can return an
+already-primary shortcut receipt without reconciling prior partial effects.
+Connected sign-in/primary-email confirmation, TOTP/passkeys, destructive cleanup
+and Advanced Security remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01 and
+WEB-EMAIL-CHANGE-COMPLETION-01 for exact scope and acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-three accepted production slices traced above are
+Only the two hundred twenty-four accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

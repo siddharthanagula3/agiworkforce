@@ -13410,8 +13410,9 @@ account deletion, revoke-all sessions, leave workspace, transfer ownership, emai
 add/make-primary, TOTP setup/disable/backup-code regeneration and sign-in identity
 unlink. AdvancedAccountSecurityPanel is also rendered inside SecuritySection and
 adapts the shared hook through its client library. These callers omitted owned
-options. The subsequent WEB-PASSWORD-INTENT-LIFETIME-01 slice owns password only;
-the other ten direct settings call sites and Advanced Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
+options. The subsequent WEB-PASSWORD-INTENT-LIFETIME-01 and WEB-EMAIL-CHANGE-LIFETIME-01
+slices own password and email change respectively. The other eight direct
+settings call sites and Advanced Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
 ambient credentials, native user operations or caller-owned receipt/effect work.
 
 Coordinated boundaries and source owners:
@@ -13438,12 +13439,13 @@ Coordinated boundaries and source owners:
   cache-clearing/reload effects need one admitted workspace/session intent. Retry
   and fixed leave-header corrections are not confirmation ownership. See
   WEB-WORKSPACE-MUTATION-INTENT-01.
-- Email and sign-in methods: EmailAddressChange POST/PATCH, native address
-  reload/send/verify, parent AccountSection email update and SignInMethodsPanel
-  status/native connection/removal/redirect must retain the original session and
-  editor. Current useEmailAddressVerification chooses the latest user; merely
-  owning the final HTTP request is insufficient. Native PasskeysPanel is adjacent
-  and does not use step-up; do not imply it is covered by a step-up-only change.
+- Email and sign-in methods: the bounded WEB-EMAIL-CHANGE-LIFETIME-01 slice owns
+  EmailAddressChange POST/PATCH, native address reload/send/verify and the parent
+  AccountSection email update. Server partial completion and misleading retry
+  receipts remain under WEB-EMAIL-CHANGE-COMPLETION-01. SignInMethodsPanel status,
+  native connection/removal/redirect and primary-email confirmation are still
+  separate open lifetimes. Native PasskeysPanel is adjacent and does not use
+  step-up; do not imply it is covered by a step-up-only change.
 - TOTP: TwoFactorEnrollment setup, separate service verification/status paths,
   QR/secret/OTP/backup-code state, copy/download/print and parent status callback
   need a full setup/receipt lifetime. Stage-local QR and frame cleanup exist but
@@ -13611,3 +13613,94 @@ All remain unrun. Runtime/types/timers/native SDK behavior, cross-tab ordering,
 idempotency, durable unknown-outcome recovery and policy reconciliation after a
 partial response remain open. No tests, lint, typechecks, builds, app/service
 execution, push or deployment ran.
+
+
+## WEB-EMAIL-CHANGE-COMPLETION-01
+
+Severity: High. Independently source-confirmed on 2026-11-06; unpatched and
+not runtime-reproduced. Source: apps/web/app/api/settings/email/route.ts.
+
+POST removes prior unverified, nonprimary addresses sequentially before adding
+the requested address. A later provider rejection can be mapped to a 4xx after
+one or more removals already succeeded. Neither a rejected request nor a client
+abort establishes that the address collection stayed unchanged. Concurrent
+clients can also invalidate each other's pending address; this slice does not
+serialize them or provide a recoverable operation identity.
+
+PATCH changes the provider primary address, writes the profile email, then tries
+to remove the old address. A profile failure or unknown removal failure can
+therefore leave a partial result. A recognized provider rejection during removal
+is instead caught and returns success with previousAddressRemoved:false.
+The already-primary branch returns previousAddressRemoved:true before these
+steps, without repairing a stale profile or checking whether the previous
+address was removed. Repeating PATCH after a partial failure is not proof that
+all side effects completed, even when the repeated request returns 200.
+
+A correction needs coordinated provider/profile reconciliation, accurate cleanup
+receipts and operation identity; a client lifetime fence or response schema alone
+cannot supply them. Preserve CSRF, authenticated user, owned verified address and
+resource-targeted step-up checks. The existing already-primary branch is an
+idempotent shortcut, not evidence of an authentication bypass. Organization
+resolution and policy/audit context remain as implemented; requireStepUp verifies
+user/action/resource, not an organization or session field in its grant subject.
+No server behavior was changed by this inventory, and no tests, lint, typechecks,
+builds, app/service execution, push or deployment ran.
+
+
+## WEB-EMAIL-CHANGE-LIFETIME-01
+
+Severity: Medium. Bounded correction `7b61a2061e` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+EmailAddressChange now admits a keyed editor only when the captured canonical
+session matches AccountSection's current user. Each submission, resend and final
+confirmation has synchronous duplicate admission and copied values. The final
+primary-address switch uses the canonical consequence confirmation. Its stale
+confirm/cancel callbacks cannot advance or dismiss another intent. Account-only
+ownership does not impose an arbitrary workspace gate or change server policy.
+Explicit account-section/modal admission retires the editor before retained
+content can continue after close. Loading-state callbacks are fenced too.
+
+POST and PATCH freeze their JSON before waits and use captured bearer-only
+RequestAuthority transport, with ownership across CSRF/token, response and body
+boundaries. Both initial sends and the full existing owned step-up/native/fresh
+proof replay are covered. POST grants use no resource; PATCH uses the admitted
+address ID. Only the recognized initial pre-write challenge resets the current
+request's dispatch flag. There is no automatic retry after an unconfirmed
+mutation outcome.
+
+The native verification adapter obtains the user from the exact bound native
+session, not a latest-user ref or unbound fallback. It copies the expected email,
+authority and dispatch callback before reload, checks the reloaded user and exact
+address ID/email, fences native waits, and requires matching verified status
+before primary promotion. Read-only reloads do not count as code dispatch.
+Session/native-user observation releases subscriptions on retirement; stale work
+cannot request a code or promote an address for a replacement account. Already
+started SDK calls may still change the provider or SDK cache independently.
+
+HTTP success requires the declared receipt fields, and the primary receipt must
+match the submitted address. A validated primary receipt updates the latest
+matching account-store user immediately, preserving its other current fields.
+Optional native refresh has separate pending/failure feedback and does not erase
+that receipt or delay the account update. It cannot prove provider/profile/old
+address cleanup was atomic; WEB-EMAIL-CHANGE-COMPLETION-01 remains open.
+
+Any unconfirmed HTTP result after dispatch is conservative uncertainty, including
+4xx because POST can already have removed another unverified address. Unknown
+results block another write until a separate acknowledgment. The notice survives
+close/reopen only while EmailAddressChange remains mounted and the original
+session stays current. Full section/Settings unmount, navigation or reload loses
+it; acknowledgment is not server reconciliation. No notice carries into another
+session. Native send/verify failures retain a retryable code step without
+re-adding the address or automatically promoting it; delivery or verification
+may still have occurred. An unverified promotion preflight requires a restart.
+
+Independent source review covers production and authored UI/native fixtures.
+All product execution, types, timers, installed SDK and browser acceptance remain
+unrun. Current official Clerk [email flow documentation](https://clerk.com/docs/guides/development/custom-flows/account-updates/add-email)
+and [EmailAddress reference](https://clerk.com/docs/js-frontend/reference/types/email-address)
+were read on 2026-11-06 and support checking returned verification status rather
+than treating a resolved promise as proof. Pending/external references and
+already delivered codes are not claimed erased. Other sign-in/primary-email
+confirmation, passkeys, TOTP, account destruction/global logout and Advanced
+Security/server coordination gaps remain separate.
