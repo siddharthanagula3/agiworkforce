@@ -307,6 +307,7 @@ describe('PATCH /api/settings/email', () => {
     expect(mocks.removeEmailAddress).toHaveBeenCalledExactlyOnceWith(OLD.id);
     expect(mocks.announceChange).toHaveBeenCalledExactlyOnceWith({
       userId: ACCOUNT,
+      identitySubject: SUBJECT,
       event: 'email_changed',
       noticeRef: NEXT.id,
       request: incoming,

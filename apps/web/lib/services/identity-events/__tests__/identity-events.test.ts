@@ -106,7 +106,7 @@ describe('respondToAccountCompromise', () => {
       trigger: 'reported',
     });
 
-    expect(mocks.revoke).toHaveBeenCalledWith(identity, 'user-1', null);
+    expect(mocks.revoke).toHaveBeenCalledWith(identity, 'user-1', null, undefined);
     expect(response).toMatchObject({
       responseId: 'resp-1',
       sessionsRevoked: 2,
@@ -179,6 +179,42 @@ describe('respondToAccountCompromise', () => {
 });
 
 describe('handleIdentitySecurityEvent', () => {
+  it('carries the native subject only to the provider sweep during conditional containment', async () => {
+    mocks.observe.mockResolvedValueOnce({ level: 'compromise', signals: ['impossible_travel'] });
+
+    await handleIdentitySecurityEvent(db, identity, {
+      userId: 'product-account',
+      identitySubject: 'native-subject',
+      event: 'email_changed',
+    });
+
+    expect(mocks.revoke).toHaveBeenCalledExactlyOnceWith(
+      identity, 'product-account', null, 'native-subject',
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.account_compromise_responses'),
+      ['product-account', 'impossible_travel'],
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('update device_refresh_tokens'),
+      ['product-account'],
+    );
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringContaining('update public.account_compromise_responses'),
+      ['resp-1', 'product-account', 2, 0],
+    );
+    expect(mocks.observe).toHaveBeenCalledWith(
+      db, expect.objectContaining({ userId: 'product-account' }),
+    );
+    expect(mocks.notify).toHaveBeenCalledWith(
+      db, expect.objectContaining({ userId: 'product-account' }),
+    );
+    expect(mocks.compromiseNotice).toHaveBeenCalledWith(
+      db, expect.objectContaining({ userId: 'product-account' }),
+    );
+    for (const [event] of mocks.audit.mock.calls) expect(event.userId).toBe('product-account');
+  });
+
   it('runs the guided response itself on a compromise signal', async () => {
     mocks.observe.mockResolvedValueOnce({ level: 'compromise', signals: ['impossible_travel'] });
 
@@ -187,7 +223,7 @@ describe('handleIdentitySecurityEvent', () => {
       event: 'new_sign_in',
     });
 
-    expect(mocks.revoke).toHaveBeenCalledWith(identity, 'user-1', null);
+    expect(mocks.revoke).toHaveBeenCalledWith(identity, 'user-1', null, undefined);
     expect(result.response).toMatchObject({ passwordResetRequired: true });
     expect(auditTypes()).toContain('account_compromise_contained');
   });

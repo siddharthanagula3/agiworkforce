@@ -134,6 +134,7 @@ async function handleMakePrimary(request: NextRequest) {
 
   await announceTwoFactorChange({
     userId,
+    identitySubject: sessionIdentity.subject,
     event: 'email_changed',
     noticeRef: emailAddressId,
     request,

@@ -161,10 +161,11 @@ export async function revokeEveryOtherSession(
   identity: IdentitySessionOperations,
   userId: string,
   currentSessionId: string | null,
+  identitySubject: string = userId,
 ): Promise<RevokeSweep> {
   let sweep: RevokeSweep;
   try {
-    sweep = await sweepOtherSessions(identity, userId, currentSessionId);
+    sweep = await sweepOtherSessions(identity, identitySubject, currentSessionId);
   } catch (error) {
     await revokeIntentTokensAfterSweep(userId);
     throw error;
@@ -174,7 +175,7 @@ export async function revokeEveryOtherSession(
 
 async function sweepOtherSessions(
   identity: IdentitySessionOperations,
-  userId: string,
+  identitySubject: string,
   currentSessionId: string | null,
 ): Promise<RevokeSweep> {
   const ended: string[] = [];
@@ -189,7 +190,7 @@ async function sweepOtherSessions(
   // The attempted set stops a session the provider refuses to revoke from being
   // retried for ever.
   for (let pass = 0; pass < MAX_REVOKE_PASSES; pass++) {
-    const page = await identity.listUserSessions(userId, {
+    const page = await identity.listUserSessions(identitySubject, {
       status: SESSION_STATUS_ACTIVE,
       limit: PAGE_SIZE,
       offset: 0,

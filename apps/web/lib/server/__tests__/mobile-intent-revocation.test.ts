@@ -157,10 +157,42 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
     expect(sweep.incomplete).toBe(false);
   });
 
+  it.each([
+    ['product-account', 'native-subject'],
+    ['same-id', 'same-id'],
+    ['legacy-account', undefined],
+  ] as const)('separates provider and product scope for %s / %s', async (userId, subject) => {
+    const { operations } = identity([{ id: 'session-to-end' }]);
+    const sweep = await revokeEveryOtherSession(operations as never, userId, null, subject);
+
+    expect(operations.listUserSessions).toHaveBeenCalledTimes(2);
+    for (const call of operations.listUserSessions.mock.calls) {
+      expect(call).toEqual([subject ?? userId, { status: 'active', limit: 100, offset: 0 }]);
+    }
+    expect(operations.revokeSession).toHaveBeenCalledExactlyOnceWith('session-to-end');
+    expect(mockRevokeEvery).toHaveBeenCalledExactlyOnceWith(userId);
+    expect(sweep.incomplete).toBe(false);
+  });
+
+  it('keeps product intent cleanup when native subject enumeration throws', async () => {
+    const { operations } = identity();
+    operations.listUserSessions.mockRejectedValue(new Error('native provider down'));
+
+    await expect(revokeEveryOtherSession(
+      operations as never, 'product-account', null, 'native-subject',
+    )).rejects.toThrow('native provider down');
+
+    expect(operations.listUserSessions).toHaveBeenCalledExactlyOnceWith(
+      'native-subject', { status: 'active', limit: 100, offset: 0 },
+    );
+    expect(mockRevokeEvery).toHaveBeenCalledExactlyOnceWith('product-account');
+    expect(operations.revokeSession).not.toHaveBeenCalled();
+  });
+
   it('an intent revoke failure never skips session revocation and marks the sweep incomplete', async () => {
     const { operations } = identity([{ id: 'sess_a' }]);
     mockRevokeEvery.mockRejectedValue(new Error('db down'));
-    const sweep = await revokeEveryOtherSession(operations as never, 'user-1', null);
+    const sweep = await revokeEveryOtherSession(operations as never, 'user-1', null, 'native-subject');
     expect(operations.revokeSession).toHaveBeenCalledWith('sess_a');
     expect(sweep.incomplete).toBe(true);
     expect(mockAudit).toHaveBeenCalledWith(
