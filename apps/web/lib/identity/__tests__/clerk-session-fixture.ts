@@ -16,7 +16,12 @@ export function createClerkSessionFixture(
   readAuth: () => ClerkAuthFixture,
   methods: { signOut?: () => unknown } = {},
 ) {
+  const listeners = new Set<() => void>();
   const clerk = {
+    addListener: (listener: () => void) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
     ...methods,
     loaded: false,
     user: null as { id: string } | null,
@@ -25,6 +30,8 @@ export function createClerkSessionFixture(
 
   function synchronize() {
     const auth = readAuth();
+    const previousSession = clerk.session;
+    const previousLoaded = clerk.loaded;
     clerk.loaded = auth.isLoaded;
     if (!auth.isLoaded || !auth.isSignedIn || !auth.userId || !auth.sessionId) {
       clerk.user = null;
@@ -33,6 +40,9 @@ export function createClerkSessionFixture(
       const user = { id: auth.userId };
       clerk.user = user;
       clerk.session = { id: auth.sessionId, user, getToken: auth.getToken };
+    }
+    if (previousSession !== clerk.session || previousLoaded !== clerk.loaded) {
+      for (const listener of listeners) listener();
     }
     return auth;
   }

@@ -2,7 +2,8 @@ export interface SessionAuthority {
   readonly userId: string;
   readonly sessionId: string;
   isCurrent: () => boolean;
-  getToken: () => Promise<string | null>;
+  getToken: (options?: { skipCache?: boolean }) => Promise<string | null>;
+  subscribe?: (listener: () => void) => () => void;
 }
 
 export interface RequestAuthority {

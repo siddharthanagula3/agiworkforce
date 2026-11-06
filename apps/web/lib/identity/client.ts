@@ -13,6 +13,8 @@ import type { AuthProviderId } from '@agiworkforce/client-runtime';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
 import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
+import type { RequestAuthority } from './request-authority';
+import { nativeSessionFor } from './native-session-authority';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
 /**
@@ -397,16 +399,24 @@ export function usePrimaryEmailConfirmation(): IdentityEmailConfirmation {
   };
 }
 
-export function useSessionReverification(): IdentityReverification {
+export function useSessionReverification(authority?: RequestAuthority): IdentityReverification {
   const { session } = useProviderSession();
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
   const activeSession = useCallback(() => {
-    const current = sessionRef.current;
+    authority?.assertCurrent();
+    const current = authority ? nativeSessionFor(authority.session) : sessionRef.current;
     if (!current) throw new Error('You are signed out. Sign in again to continue.');
     return current;
-  }, []);
+  }, [authority]);
+
+  const checked = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
+    authority?.assertCurrent();
+    const result = await operation();
+    authority?.assertCurrent();
+    return result;
+  }, [authority]);
 
   const start = useCallback(
     async (level: IdentityVerificationLevel) =>
@@ -463,15 +473,17 @@ export function useSessionReverification(): IdentityReverification {
 
   return useMemo(
     () => ({
-      start,
-      sendEmailCode,
-      verifyPassword,
-      verifyEmailCode,
-      verifyPasskey,
-      verifySecondFactor,
-      freshToken,
+      start: (level: IdentityVerificationLevel) => checked(() => start(level)),
+      sendEmailCode: (factor: IdentityEmailCodeFactor) => checked(() => sendEmailCode(factor)),
+      verifyPassword: (password: string) => checked(() => verifyPassword(password)),
+      verifyEmailCode: (code: string) => checked(() => verifyEmailCode(code)),
+      verifyPasskey: () => checked(verifyPasskey),
+      verifySecondFactor: (method: IdentitySecondFactorMethod, code: string) =>
+        checked(() => verifySecondFactor(method, code)),
+      freshToken: () => checked(freshToken),
     }),
     [
+      checked,
       start,
       sendEmailCode,
       verifyPassword,

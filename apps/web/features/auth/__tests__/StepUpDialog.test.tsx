@@ -1,6 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const signOut = vi.hoisted(() => vi.fn());
 
 const reverification = vi.hoisted(() => ({
   start: vi.fn(),
@@ -16,7 +19,7 @@ vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => '
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
 vi.mock('@/lib/identity/client', () => ({
   useSessionReverification: () => reverification,
-  useSignOut: () => vi.fn(),
+  useSignOut: () => signOut,
 }));
 
 import { StepUpDialog } from '../StepUpDialog';
@@ -36,6 +39,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   fetchMock.mockReset();
+  signOut.mockReset();
   for (const fn of Object.values(reverification)) fn.mockReset();
   reverification.freshToken.mockResolvedValue('fresh-session-token');
   vi.stubGlobal('fetch', fetchMock);
@@ -168,5 +172,50 @@ describe('StepUpDialog', () => {
     await waitFor(() => expect(onSatisfied).toHaveBeenCalledWith('grant.signature'));
     expect(reverification.verifySecondFactor).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('owned dialog actions', () => {
+  function authority() {
+    return createRequestAuthority({ userId: 'a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'fake-token' });
+  }
+
+  it('does not acquire a token or grant after late verification on a retired intent', async () => {
+    const user = userEvent.setup();
+    const owner = authority();
+    let finish!: (value: { kind: 'complete' }) => void;
+    reverification.start.mockResolvedValue(AUTHENTICATOR_ONLY);
+    reverification.verifySecondFactor.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const onSatisfied = vi.fn();
+    render(<StepUpDialog open authority={owner} action="organization.transfer_ownership" consequence={CONSEQUENCE} level="second_factor" onCancel={vi.fn()} onSatisfied={onSatisfied} />);
+    await user.type(await screen.findByLabelText('Code from your authenticator app'), '123456');
+    await user.click(screen.getByRole('button', { name: /^confirm$/i }));
+    owner.retire();
+    await act(async () => { finish({ kind: 'complete' }); });
+    expect(reverification.verifySecondFactor).toHaveBeenCalledOnce();
+    expect(reverification.freshToken).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onSatisfied).not.toHaveBeenCalled();
+  });
+
+  it('does not sign out from a retired intent', async () => {
+    const user = userEvent.setup();
+    const owner = authority();
+    reverification.start.mockResolvedValue({ kind: 'unavailable' });
+    render(<StepUpDialog open authority={owner} action="organization.transfer_ownership" consequence={CONSEQUENCE} level="first_factor" onCancel={vi.fn()} onSatisfied={vi.fn()} />);
+    const button = await screen.findByRole('button', { name: 'Sign in again' });
+    owner.retire();
+    await user.click(button);
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it('pins sign-in-again to the original session', async () => {
+    const user = userEvent.setup();
+    const owner = authority();
+    reverification.start.mockResolvedValue({ kind: 'unavailable' });
+    render(<StepUpDialog open authority={owner} action="organization.transfer_ownership" consequence={CONSEQUENCE} level="first_factor" onCancel={vi.fn()} onSatisfied={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Sign in again' }));
+    expect(signOut).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'session-a' }));
   });
 });

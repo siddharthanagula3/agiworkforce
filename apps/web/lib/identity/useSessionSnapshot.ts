@@ -3,6 +3,7 @@
 import { useAuth, useClerk } from '@clerk/nextjs';
 import { useCallback, useRef } from 'react';
 import type { SessionAuthority } from './request-authority';
+import { bindNativeSession } from './native-session-authority';
 
 export type IdentitySessionSnapshot = SessionAuthority;
 
@@ -67,17 +68,19 @@ export function useSessionSnapshot(): () => IdentitySessionSnapshot | null {
       if (!matches) retired = true;
       return !retired;
     };
-    return isCurrent() && ownerId && incarnation
-      ? {
-          userId: ownerId,
-          sessionId: incarnation,
-          isCurrent,
-          getToken: async () => {
-            if (!isCurrent()) return null;
-            const token = await session!.getToken();
-            return isCurrent() ? token : null;
-          },
-        }
-      : null;
+    if (!isCurrent() || !ownerId || !incarnation || !session) return null;
+    const snapshot: SessionAuthority = {
+      userId: ownerId,
+      sessionId: incarnation,
+      isCurrent,
+      subscribe: (listener) => sdk.addListener(() => listener()),
+      getToken: async (options) => {
+        if (!isCurrent()) return null;
+        const token = await (options === undefined ? session.getToken() : session.getToken(options));
+        return isCurrent() ? token : null;
+      },
+    };
+    bindNativeSession(snapshot, session);
+    return snapshot;
   }, [current, generation, observe]);
 }

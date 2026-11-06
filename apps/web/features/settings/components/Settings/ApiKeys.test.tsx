@@ -2,8 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiKeysManager } from './ApiKeys';
+import { admitWorkspace, observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
 
-const { createMutate, deleteMutate, mockApiKeysQuery, mockProjectsQuery, mockUsageQuery } = vi.hoisted(() => ({
+const { createMutate, deleteMutate, mockApiKeysQuery, mockProjectsQuery, mockUsageQuery, resetCreate, session } = vi.hoisted(() => ({
+  resetCreate: vi.fn(),
+  session: { userId: 'read-state-user', sessionId: 'read-state-session', isCurrent: () => true, getToken: async () => 'token' },
   createMutate: vi.fn(),
   deleteMutate: vi.fn(),
   mockApiKeysQuery: vi.fn(),
@@ -12,9 +15,18 @@ const { createMutate, deleteMutate, mockApiKeysQuery, mockProjectsQuery, mockUsa
 }));
 
 vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+  APIKeyMutationRejectedError: class extends Error {},
   useAPIKeys: () => mockApiKeysQuery(),
-  useCreateAPIKey: () => ({ mutate: createMutate, isPending: false }),
-  useDeleteAPIKey: () => ({ mutate: deleteMutate, isPending: false }),
+  useCreateAPIKey: () => ({ mutateAsync: createMutate, reset: resetCreate, isPending: false, stepUpDialog: null }),
+  useDeleteAPIKey: () => ({ mutateAsync: deleteMutate, isPending: false }),
+}));
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
+  ...await original<typeof import('@/lib/identity/useSessionSnapshot')>(), useSessionSnapshot: () => () => session,
+}));
+vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
+  ...await original<typeof import('@/features/workspaces/hooks/use-workspaces')>(),
+  useAccountWorkspaces: () => ({ data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null } }),
 }));
 
 vi.mock('@/features/developers/hooks/use-developer-projects', () => ({
@@ -29,6 +41,10 @@ vi.mock('@/features/developers/hooks/use-developer-usage', () => ({
 describe('ApiKeysManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    observeWorkspaceOwner(null);
+    const owner = observeWorkspaceOwner(session)!;
+    admitWorkspace(owner, owner.epoch, JSON.stringify(['personal', 'personal', null]));
+    createMutate.mockResolvedValue({ apiKey: { id: 'created' }, fullKey: 'once-only-secret' });
     mockProjectsQuery.mockReturnValue({
       data: [], isLoading: false, isError: false, isSuccess: true, error: null, refetch: vi.fn(),
     });
@@ -76,8 +92,8 @@ describe('ApiKeysManager', () => {
 
     await waitFor(() =>
       expect(createMutate).toHaveBeenCalledWith(
-        { name: 'VS Code', scopes: ['inference:write'], expiresInDays: 'never', projectId: null },
-        expect.objectContaining({ onSuccess: expect.any(Function) }),
+        { draft: { name: 'VS Code', scopes: ['inference:write'], expiresInDays: 'never', projectId: null },
+          scope: expect.objectContaining({ organizationId: null, request: expect.any(Object) }) },
       ),
     );
   });

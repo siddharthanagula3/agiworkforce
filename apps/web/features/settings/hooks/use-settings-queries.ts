@@ -22,6 +22,7 @@ import { z } from 'zod';
 import {
   MANAGED_CLOUD_APPROVAL_HISTORY_PATH,
   MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
   type ManagedCloudWorkspaceOwnershipTransfer,
 } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
@@ -48,6 +49,7 @@ import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-f
 import { useStepUp } from './useStepUp';
 import { useSelectWorkspace, useWorkspaceSelectionMutation } from '@/features/workspaces/hooks/use-workspaces';
 import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspaces/hooks/use-workspace-query';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
@@ -70,6 +72,56 @@ import {
 export interface CreateAPIKeyResult {
   apiKey: APIKey;
   fullKey: string;
+}
+
+export interface APIKeyMutationScope {
+  readonly request: RequestAuthority;
+  readonly organizationId: string | null;
+  /** The first write was refused for step-up, so it did not create a key. */
+  readonly onStepUpRequired: () => void;
+}
+
+export class APIKeyMutationRejectedError extends Error {}
+
+async function sendOwnedAPIKeyRequest(
+  scope: APIKeyMutationScope,
+  path: string,
+  method: 'POST' | 'DELETE',
+  body?: string,
+  stepUpHeaders: Record<string, string> = {},
+): Promise<Response> {
+  scope.request.assertCurrent();
+  const csrfToken = await getCsrfToken();
+  scope.request.assertCurrent();
+  return scope.request.fetch(path, {
+    method,
+    headers: {
+      ...stepUpHeaders,
+      'Content-Type': 'application/json',
+      'x-csrf-token': csrfToken,
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]:
+        scope.organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    },
+    ...(body === undefined ? {} : { body }),
+  });
+}
+
+async function readOwnedAPIKeyReceipt(scope: APIKeyMutationScope, response: Response): Promise<unknown> {
+  scope.request.assertCurrent();
+  if (!response.ok) {
+    const message = await readApiError(response);
+    scope.request.assertCurrent();
+    if (response.status >= 400 && response.status < 500) throw new APIKeyMutationRejectedError(message);
+    throw new Error(message);
+  }
+  const body: unknown = await response.json();
+  scope.request.assertCurrent();
+  return body;
+}
+
+function apiKeyReceiptRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
 }
 
 /**
@@ -250,7 +302,7 @@ export function useChangePassword(): ChangePasswordMutation {
 export type CreateAPIKeyMutation = UseMutationResult<
   CreateAPIKeyResult,
   Error,
-  CreateApiKeyFormData
+  { scope: APIKeyMutationScope; draft: CreateApiKeyFormData }
 > & {
   stepUpDialog: ReactElement | null;
 };
@@ -259,14 +311,13 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
   const queryClient: QueryClient = useQueryClient();
   const { withStepUp, dialog } = useStepUp();
 
-  const mutation = useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
+  const mutation = useMutation<CreateAPIKeyResult, Error,
+    { scope: APIKeyMutationScope; draft: CreateApiKeyFormData }>({
     retry: false,
-    mutationFn: async ({
-      name,
-      scopes,
-      expiresInDays,
-      projectId,
-    }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
+    gcTime: 0,
+    mutationFn: async ({ scope, draft }): Promise<CreateAPIKeyResult> => {
+      scope.request.assertCurrent();
+      const { name, scopes, expiresInDays, projectId } = draft;
       if (!name.trim()) {
         throw new Error('Please enter a name for the API key');
       }
@@ -274,27 +325,30 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
         !expiresInDays || expiresInDays === 'never'
           ? null
           : new Date(Date.now() + Number(expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson(
-          '/api/settings/api-keys',
-          { method: 'POST', body: { name, scopes, expiresAt, projectId: projectId ?? null } },
-          headers,
-        ),
+      // Freeze both form values and expiry before auth waits or a proof replay.
+      const body = JSON.stringify({ name, scopes: [...scopes], expiresAt, projectId: projectId ?? null });
+      const response = await withStepUp(
+        (headers) => sendOwnedAPIKeyRequest(scope, '/api/settings/api-keys', 'POST', body, headers),
+        null,
+        { authority: scope.request, onStepUpRequired: scope.onStepUpRequired },
       );
-      if (!response.ok) throw new Error(await readApiError(response));
-      const created = (await response.json()) as { api_key: APIKey; full_key: string };
-      return { apiKey: created.api_key, fullKey: created.full_key };
+      const created = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
+      scope.request.assertCurrent();
+      const key = apiKeyReceiptRecord(created?.api_key);
+      if (typeof key?.id !== 'string' || !key.id ||
+        typeof created?.full_key !== 'string' || !created.full_key) {
+        throw new Error('The API key creation receipt could not be confirmed.');
+      }
+      return { apiKey: key as unknown as APIKey, fullKey: created.full_key };
     },
-    onSuccess: (): void => {
+    onSuccess: (_receipt, { scope }): void => {
       // Do not delay the once-only key receipt behind a background list reload.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
-      toast.success('API key generated successfully');
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
+      }
     },
-    onError: (error: Error): void => {
-      if (isStepUpCancelled(error)) return;
-      logger.error('Error generating API key:', error);
-      toast.error(toUserMessage(error, 'Failed to generate API key'));
-    },
+    // The intent-owning UI presents errors; the shared MutationCache still logs.
+    onError: () => undefined,
   });
 
   return { ...mutation, stepUpDialog: dialog };
@@ -305,25 +359,28 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
  *
  * @returns UseMutationResult for deleting API key
  */
-export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
+export function useDeleteAPIKey(): UseMutationResult<string, Error,
+  { scope: APIKeyMutationScope; keyId: string }> {
   const queryClient: QueryClient = useQueryClient();
 
-  return useMutation<string, Error, string>({
-    mutationFn: async (keyId: string): Promise<string> => {
-      const { error } = await settingsService.deleteAPIKey(keyId);
-      if (error) {
-        throw new Error(error);
+  return useMutation<string, Error, { scope: APIKeyMutationScope; keyId: string }>({
+    retry: false,
+    mutationFn: async ({ scope, keyId }): Promise<string> => {
+      const response = await sendOwnedAPIKeyRequest(scope,
+        `/api/settings/api-keys/${encodeURIComponent(keyId)}`, 'DELETE');
+      const receipt = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
+      scope.request.assertCurrent();
+      if (typeof receipt?.message !== 'string' || !receipt.message) {
+        throw new Error('The API key revocation receipt could not be confirmed.');
       }
       return keyId;
     },
-    onSuccess: async (): Promise<void> => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
-      toast.success('API key deleted successfully');
+    onSuccess: (_keyId, { scope }): void => {
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
+      }
     },
-    onError: (error: Error): void => {
-      logger.error('Error deleting API key:', error);
-      toast.error(toUserMessage(error, 'Failed to delete API key'));
-    },
+    onError: () => undefined,
   });
 }
 

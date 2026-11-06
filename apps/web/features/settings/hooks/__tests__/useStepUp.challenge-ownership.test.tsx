@@ -1,3 +1,4 @@
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode, useEffect, type ReactElement } from 'react';
@@ -425,4 +426,48 @@ describe('useStepUp exact pending challenge ownership', () => {
     act(() => { replacement.props.onCancel(); });
     expect(isStepUpCancelled(await second)).toBe(true);
   });
+});
+
+
+describe('owned challenge retirement', () => {
+  it('settles a pending challenge on abort without replay', async () => {
+    const authority = createRequestAuthority({ userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'fake-token' });
+    const { result } = renderHook(useStepUp);
+    const send = sender();
+    const operation = result.current.withStepUp(send, null, { authority }).catch((error: unknown) => error);
+    await waitFor(() => expect(result.current.dialog).not.toBeNull());
+    act(() => authority.retire());
+    expect(result.current.dialog).toBeNull();
+    expect(isStepUpCancelled(await operation)).toBe(true);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('never presents a delayed silent grant after intent retirement', async () => {
+    const grant = deferred<StepUpGrantOutcome>();
+    requestGrant.mockReturnValueOnce(grant.promise);
+    const authority = createRequestAuthority({ userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'fake-token' });
+    const { result } = renderHook(useStepUp);
+    const send = sender();
+    const operation = result.current.withStepUp(send, null, { authority }).catch((error: unknown) => error);
+    await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(1));
+    act(() => authority.retire());
+    grant.resolve({ kind: 'granted', token: 'fake-proof' });
+    expect(await operation).toMatchObject({ name: 'AbortError' });
+    expect(result.current.dialog).toBeNull();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+it('keeps explicit owned challenge cancellation quiet while the editor remains current', async () => {
+  const authority = createRequestAuthority({ userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'fake-token' });
+  const { result } = renderHook(useStepUp);
+  const send = sender();
+  const operation = result.current.withStepUp(send, null, { authority }).catch((error: unknown) => error);
+  await waitFor(() => expect(result.current.dialog).not.toBeNull());
+  act(() => dialog(result.current.dialog).props.onCancel());
+  expect(isStepUpCancelled(await operation)).toBe(true);
+  expect(authority.isCurrent()).toBe(true);
+  expect(result.current.dialog).toBeNull();
+  expect(send).toHaveBeenCalledTimes(1);
 });

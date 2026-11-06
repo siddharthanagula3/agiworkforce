@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useForm, useFormState, type Control, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -20,6 +19,7 @@ import {
   Input,
   Spinner,
   translateUiPlural,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   Form,
@@ -42,7 +42,8 @@ import {
   useAPIKeys,
   useCreateAPIKey,
   useDeleteAPIKey,
-  type CreateAPIKeyResult,
+  type APIKeyMutationScope,
+  APIKeyMutationRejectedError,
 } from '@features/settings/hooks/use-settings-queries';
 import { formatCredits } from '@agiworkforce/types';
 import { useDeveloperProjects } from '@/features/developers/hooks/use-developer-projects';
@@ -50,6 +51,12 @@ import { useDeveloperUsage } from '@/features/developers/hooks/use-developer-usa
 import type { DeveloperUsageFigures } from '@/features/developers/types';
 import { API_KEY_SCOPE_OPTIONS, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { toUserMessage } from '@/lib/user-error-message';
+
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import { observeWorkspaceOwner, subscribeWorkspaceAdmission, workspaceOwnerIsCurrent, type WorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
+import { StepUpCancelledError } from '@/features/auth/step-up-fetch';
 
 const DEFAULT_PROJECT_LABEL = 'Default project';
 
@@ -98,7 +105,8 @@ interface ApiKeysPanelProps {
   apiKeyForm: UseFormReturn<CreateApiKeyFormData>;
   showAPIKeyDialog: boolean;
   generatedAPIKey: string;
-  keyToDelete: string | null;
+  busy?: boolean;
+  formError?: string | null;
   isCreatePending: boolean;
   isLoading?: boolean;
   loadError?: string | null;
@@ -106,7 +114,6 @@ interface ApiKeysPanelProps {
   onSetShowAPIKeyDialog: (open: boolean) => void;
   onSetKeyToDelete: (id: string | null) => void;
   onGenerateAPIKey: (data: CreateApiKeyFormData) => void;
-  onDeleteAPIKey: () => void;
   onCopyAPIKey: (key: string) => void;
   onDismissGeneratedKey: () => void;
 }
@@ -142,7 +149,8 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   apiKeyForm,
   showAPIKeyDialog,
   generatedAPIKey,
-  keyToDelete,
+  busy = false,
+  formError = null,
   isCreatePending,
   isLoading = false,
   loadError = null,
@@ -150,7 +158,6 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   onSetShowAPIKeyDialog,
   onSetKeyToDelete,
   onGenerateAPIKey,
-  onDeleteAPIKey,
   onCopyAPIKey,
   onDismissGeneratedKey,
 }) => (
@@ -166,7 +173,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             onClick={() => onSetShowAPIKeyDialog(true)}
             className="bg-success-fill text-success-on-fill hover:brightness-95"
             size="sm"
-            disabled={Boolean(loadError)}
+            disabled={Boolean(loadError) || isLoading || busy}
           >
             <Plus className="me-2 h-4 w-4" />
             New Key
@@ -236,6 +243,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => onSetKeyToDelete(apiKey.id)}
+                    disabled={busy}
                     aria-label={`Delete ${apiKey.name}`}
                     className="text-danger hover:text-danger"
                   >
@@ -393,13 +401,13 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                         </FormItem>
                       )}
                     />
+                    {formError ? <p role="alert" className="text-sm text-danger">{formError}</p> : null}
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => {
                           onSetShowAPIKeyDialog(false);
-                          apiKeyForm.reset();
                         }}
                         className="border-border bg-secondary text-foreground hover:bg-secondary/80"
                       >
@@ -423,30 +431,6 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
         )}
       </AlertDialogContent>
     </AlertDialog>
-
-    {/* Delete API Key Confirmation */}
-    <AlertDialog open={!!keyToDelete} onOpenChange={() => onSetKeyToDelete(null)}>
-      <AlertDialogContent className="border-border bg-popover">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-foreground">Delete API Key</AlertDialogTitle>
-          <AlertDialogDescription className="text-muted-foreground">
-            Requests made with this key are refused from now on, so any application using it stops
-            working. A deleted key cannot be restored.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80">
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onDeleteAPIKey}
-            className="bg-danger-fill hover:brightness-95"
-          >
-            Delete Key
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   </>
 );
 
@@ -457,7 +441,32 @@ const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
   projectId: null,
 };
 
-export function ApiKeysManager() {
+type KeyIntent = {
+  id: number;
+  generation: object;
+  scope: APIKeyMutationScope;
+  keyId: string | null;
+  phase: 'editing' | 'confirming' | 'writing' | 'receipt' | 'done';
+  dispatched: boolean;
+  copying: boolean;
+  release: () => void;
+};
+type KeyView = { intent: KeyIntent | null; secret: string; error: string | null; notice: string | null };
+const EMPTY_VIEW: KeyView = { intent: null, secret: '', error: null, notice: null };
+const UNCERTAIN = 'We could not confirm whether this API key action completed. Refresh API keys before repeating it. A generated secret cannot be recovered.';
+
+function IntentFormPanel(props: Omit<ApiKeysPanelProps, 'apiKeyForm'>) {
+  const apiKeyForm = useForm<CreateApiKeyFormData>({
+    resolver: zodResolver(createApiKeySchema),
+    mode: 'onChange',
+    defaultValues: { ...DEFAULT_API_KEY_FORM, scopes: [...DEFAULT_API_KEY_FORM.scopes] },
+  });
+  return <ApiKeysPanel {...props} apiKeyForm={apiKeyForm} />;
+}
+
+function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
+  owner: WorkspaceOwner; epoch: number; scopeKey: string; organizationId: string | null;
+}) {
   const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
   const projectQuery = useDeveloperProjects();
   const usageQuery = useDeveloperUsage();
@@ -465,45 +474,141 @@ export function ApiKeysManager() {
   const usage = usageQuery.isSuccess ? usageQuery.data : undefined;
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
-  const apiKeyForm = useForm<CreateApiKeyFormData>({
-    resolver: zodResolver(createApiKeySchema),
-    mode: 'onChange',
-    defaultValues: DEFAULT_API_KEY_FORM,
-  });
-  const [showAPIKeyDialog, setShowAPIKeyDialog] = useState(false);
-  const [generatedAPIKey, setGeneratedAPIKey] = useState('');
-  const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
-
-  const setDialogOpen = (open: boolean) => {
-    setShowAPIKeyDialog(open);
-    if (!open) {
-      setGeneratedAPIKey('');
-      apiKeyForm.reset(DEFAULT_API_KEY_FORM);
+  const { confirm, dialog } = useConfirmAction();
+  const lane = useMemo(() => ({ active: false, generation: {} as object, nextId: 0,
+    intent: null as KeyIntent | null, lastCreate: null as KeyIntent | null,
+    snapshot: null as object | null, secret: '' }), []);
+  const [view, setView] = useState<KeyView>(EMPTY_VIEW);
+  const ownerCurrent = useCallback(() => owner.phase === 'admitted' && owner.scopeKey === scopeKey &&
+    workspaceOwnerIsCurrent(owner, epoch), [owner, epoch, scopeKey]);
+  const current = (intent: KeyIntent) => lane.active && lane.generation === intent.generation &&
+    lane.intent === intent && ownerCurrent();
+  const snapshot = useMemo(() => ({}), [apiKeys, isLoading, isError]);
+  useLayoutEffect(() => { lane.snapshot = snapshot; }, [lane, snapshot]);
+  const resetCreate = createMutation.reset;
+  useLayoutEffect(() => {
+    lane.active = true;
+    lane.generation = {};
+    setView(EMPTY_VIEW);
+    const retire = () => {
+      lane.active = false;
+      lane.intent?.release();
+      lane.intent?.scope.request.retire();
+      lane.intent = null;
+      lane.secret = '';
+      lane.lastCreate = null;
+      resetCreate();
+    };
+    const stop = subscribeWorkspaceAdmission(() => {
+      if (!ownerCurrent()) { retire(); setView(EMPTY_VIEW); }
+    });
+    return () => { stop(); retire(); };
+  }, [lane, ownerCurrent, resetCreate]);
+  const finish = (intent: KeyIntent, error: string | null = null, notice: string | null = null) => {
+    if (!current(intent)) return;
+    intent.phase = 'done';
+    intent.release();
+    intent.scope.request.retire();
+    lane.intent = null;
+    lane.secret = '';
+    if (lane.lastCreate === intent) resetCreate();
+    setView({ ...EMPTY_VIEW, error, notice });
+  };
+  const close = (intent: KeyIntent) => finish(intent, null,
+    intent.phase === 'writing' && intent.dispatched ? UNCERTAIN : null);
+  const open = (keyId: string | null) => {
+    if (!lane.active || !ownerCurrent() || lane.intent || lane.snapshot !== snapshot || isLoading || isError) return null;
+    let captured: KeyIntent | null = null;
+    const request = createRequestAuthority(owner.session, () => captured === null ?
+      lane.active && ownerCurrent() && lane.intent === null : current(captured), () => {
+      if (!captured || captured.phase !== 'writing') throw new Error('The API key action is no longer ready.');
+      captured.dispatched = true;
+    });
+    const intent: KeyIntent = { id: ++lane.nextId, generation: lane.generation, keyId,
+      phase: keyId ? 'confirming' : 'editing', dispatched: false, copying: false, release: () => undefined,
+      scope: { request, organizationId, onStepUpRequired: () => {
+        if (current(intent) && intent.phase === 'writing') intent.dispatched = false;
+      } } };
+    captured = intent;
+    lane.intent = intent;
+    setView({ ...EMPTY_VIEW, intent });
+    intent.release = owner.session.subscribe?.(() => {
+      if (lane.intent !== intent || ownerCurrent()) return;
+      intent.release();
+      intent.scope.request.retire();
+      lane.intent = null;
+      lane.secret = '';
+      if (lane.lastCreate === intent) { lane.lastCreate = null; resetCreate(); }
+      setView(EMPTY_VIEW);
+    }) ?? (() => undefined);
+    if (lane.intent !== intent) { intent.release(); return null; }
+    return intent;
+  };
+  const generate = async (intent: KeyIntent, data: CreateApiKeyFormData) => {
+    if (!current(intent) || intent.phase !== 'editing' || intent.keyId !== null) return;
+    const draft = { ...data, scopes: [...data.scopes] };
+    intent.phase = 'writing';
+    intent.dispatched = false;
+    lane.lastCreate = intent;
+    setView({ ...EMPTY_VIEW, intent });
+    try {
+      const result = await createMutation.mutateAsync({ scope: intent.scope, draft });
+      if (!current(intent) || !intent.scope.request.isCurrent()) return;
+      intent.phase = 'receipt';
+      lane.secret = result.fullKey;
+      setView({ ...EMPTY_VIEW, intent, secret: result.fullKey });
+    } catch (error) {
+      if (!current(intent)) return;
+      if (intent.dispatched && !(error instanceof APIKeyMutationRejectedError)) {
+        finish(intent, null, UNCERTAIN);
+      } else {
+        intent.phase = 'editing';
+        intent.dispatched = false;
+        setView({ ...EMPTY_VIEW, intent, error: error instanceof StepUpCancelledError ? null :
+          toUserMessage(error, 'The API key could not be created. Check the details and try again.') });
+      }
+    } finally {
+      if (lane.lastCreate === intent) resetCreate();
     }
   };
-
-  const generateAPIKey = (data: CreateApiKeyFormData) => {
-    createMutation.mutate(data, {
-      onSuccess: (result: CreateAPIKeyResult) => {
-        setGeneratedAPIKey(result.fullKey);
-        apiKeyForm.reset(DEFAULT_API_KEY_FORM);
+  const requestDelete = (keyId: string) => {
+    const intent = open(keyId);
+    if (!intent) return;
+    confirm({
+      title: 'Delete API Key',
+      description: 'Requests made with this key are refused from now on, so any application using it stops working. A deleted key cannot be restored.',
+      confirmLabel: 'Delete Key',
+      onCancel: () => { if (intent.phase === 'confirming') finish(intent); },
+      onConfirm: async () => {
+        if (!current(intent) || intent.phase !== 'confirming') return;
+        intent.phase = 'writing';
+        setView({ ...EMPTY_VIEW, intent });
+        try {
+          await deleteMutation.mutateAsync({ scope: intent.scope, keyId });
+          if (!current(intent) || !intent.scope.request.isCurrent()) return;
+          toast.success('API key deleted');
+          finish(intent);
+        } catch (error) {
+          if (!current(intent)) return;
+          if (intent.dispatched && !(error instanceof APIKeyMutationRejectedError)) finish(intent, null, UNCERTAIN);
+          else finish(intent, toUserMessage(error, 'The API key could not be deleted. Try again.'));
+        }
       },
     });
   };
-
-  const deleteAPIKey = () => {
-    if (!keyToDelete) return;
-    deleteMutation.mutate(keyToDelete, {
-      onSettled: () => setKeyToDelete(null),
-    });
+  const copy = async (intent: KeyIntent, secret: string) => {
+    const canCopy = () => current(intent) && intent.phase === 'receipt' && lane.secret === secret;
+    if (!canCopy() || intent.copying) return;
+    intent.copying = true;
+    try {
+      await navigator.clipboard.writeText(secret);
+      if (canCopy()) toast.success('API key copied to clipboard');
+    } catch {
+      if (canCopy()) toast.error('Could not copy the API key');
+    } finally { intent.copying = false; }
   };
-
-  const copyAPIKey = (key: string) => {
-    void navigator.clipboard
-      .writeText(key)
-      .then(() => toast.success('API key copied to clipboard'))
-      .catch(() => toast.error('Could not copy the API key'));
-  };
+  const intent = view.intent;
+  const readCurrent = () => lane.active && ownerCurrent() && lane.snapshot === snapshot;
 
   return (
     <>
@@ -514,7 +619,7 @@ export function ApiKeysManager() {
           <p role="alert" className="text-sm text-danger">
             {toUserMessage(projectQuery.error, 'Project choices could not be loaded.')}
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void projectQuery.refetch()}>
+          <Button type="button" variant="outline" size="sm" onClick={() => { if (readCurrent()) void projectQuery.refetch(); }}>
             Retry project choices
           </Button>
         </div>
@@ -526,33 +631,60 @@ export function ApiKeysManager() {
           <p role="alert" className="text-sm text-danger">
             {toUserMessage(usageQuery.error, 'Key usage could not be loaded.')}
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void usageQuery.refetch()}>
+          <Button type="button" variant="outline" size="sm" onClick={() => { if (readCurrent()) void usageQuery.refetch(); }}>
             Retry key usage
           </Button>
         </div>
       ) : null}
-      <ApiKeysPanel
+      {(!intent || intent.keyId !== null) && (view.error || view.notice) ? <p role={view.error ? 'alert' : 'status'}>{view.error ?? view.notice}</p> : null}
+      {view.notice ? <Button onClick={() => { if (readCurrent() && !lane.intent) void refetch(); }}>Refresh API keys</Button> : null}
+      <IntentFormPanel
+        key={intent?.id ?? 'idle'}
         apiKeys={apiKeys}
         projects={projects.filter((project) => project.archivedAt === null)}
         usageByKey={
           usage ? new Map(usage.keys.map((entry) => [entry.apiKeyId, entry] as const)) : null
         }
-        apiKeyForm={apiKeyForm}
-        showAPIKeyDialog={showAPIKeyDialog}
-        generatedAPIKey={generatedAPIKey}
-        keyToDelete={keyToDelete}
-        isCreatePending={createMutation.isPending}
+        showAPIKeyDialog={!!intent && intent.keyId === null}
+        generatedAPIKey={view.secret}
+        busy={!!intent}
+        formError={view.error}
+        isCreatePending={intent?.phase === 'writing'}
         isLoading={isLoading}
         loadError={isError ? toUserMessage(error, 'Unable to load API keys. Try again.') : null}
-        onRetry={() => void refetch()}
-        onSetShowAPIKeyDialog={setDialogOpen}
-        onSetKeyToDelete={setKeyToDelete}
-        onGenerateAPIKey={generateAPIKey}
-        onDeleteAPIKey={deleteAPIKey}
-        onCopyAPIKey={copyAPIKey}
-        onDismissGeneratedKey={() => setDialogOpen(false)}
+        onRetry={() => { if (readCurrent()) void refetch(); }}
+        onSetShowAPIKeyDialog={(isOpen) => { if (isOpen) open(null); else if (intent) close(intent); }}
+        onSetKeyToDelete={(id) => { if (id) requestDelete(id); }}
+        onGenerateAPIKey={(draft) => { if (intent) void generate(intent, draft); }}
+        onCopyAPIKey={(secret) => { if (intent) void copy(intent, secret); }}
+        onDismissGeneratedKey={() => { if (intent) close(intent); }}
       />
+      {intent?.keyId && intent.phase === 'confirming' ? dialog : null}
+      {intent?.keyId && intent.phase === 'writing' ? <div>
+        <p role="status">Deleting API key…</p>
+        <Button type="button" variant="outline" onClick={() => close(intent)}>Cancel waiting</Button>
+      </div> : null}
       {createMutation.stepUpDialog}
     </>
   );
+}
+
+export function ApiKeysManager() {
+  const workspace = useAccountWorkspaces();
+  const capture = useSessionSnapshot();
+  const owner = observeWorkspaceOwner(capture());
+  const data = workspace.data;
+  const scopeKey = data ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) : null;
+  if (!owner || owner.phase !== 'admitted' || !data || scopeKey === null ||
+    owner.scopeKey !== scopeKey || !workspaceOwnerIsCurrent(owner, owner.epoch)) {
+    return <Card><CardHeader><CardTitle>API Keys</CardTitle></CardHeader><CardContent>
+      <p>{workspace.requiresReload
+        ? 'Reload this page to confirm the current workspace before managing API keys.'
+        : 'Your current workspace must finish loading before you can manage API keys.'}</p>
+      {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching
+        ? <Button onClick={() => { void workspace.refetch(); }}>Retry loading workspace</Button> : null}
+    </CardContent></Card>;
+  }
+  return <OwnedApiKeysManager key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
+    owner={owner} epoch={owner.epoch} scopeKey={scopeKey} organizationId={data.activeOrganizationId} />;
 }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'session-token') }));
@@ -22,6 +23,8 @@ type MutationKind = 'password' | 'apiKey';
 const fetchMock = vi.fn();
 const endpoints = { password: '/api/settings/password', apiKey: '/api/settings/api-keys' };
 const actions = { password: 'password.change', apiKey: 'api_credential.reveal' };
+const requests: Array<ReturnType<typeof createRequestAuthority>> = [];
+const clients: QueryClient[] = [];
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -41,6 +44,11 @@ function success(kind: MutationKind) {
 
 function harness(kind: MutationKind) {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: 1, retryDelay: 0 } } });
+  clients.push(client);
+  const request = createRequestAuthority({ userId: 'owner', sessionId: 'session',
+    isCurrent: () => true, getToken: async () => 'captured-token' });
+  requests.push(request);
+  const scope = { request, organizationId: null, onStepUpRequired: vi.fn() };
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -58,7 +66,7 @@ function harness(kind: MutationKind) {
             confirmPassword: 'new-password',
           });
         } else {
-          view.result.current.apiKey.mutate({ name: 'Integration', scopes: ['models:read'] });
+          view.result.current.apiKey.mutate({ scope, draft: { name: 'Integration', scopes: ['models:read'] } });
         }
       }),
   };
@@ -69,7 +77,11 @@ beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  requests.splice(0).forEach((request) => request.retire());
+  clients.splice(0).forEach((client) => client.clear());
+  vi.unstubAllGlobals();
+});
 
 describe.each(['password', 'apiKey'] as const)('%s mutation retry', (kind) => {
   it.each(['transport', 'server response'] as const)('does not restart after %s failure', async (failure) => {
@@ -117,7 +129,8 @@ describe.each(['password', 'apiKey'] as const)('%s mutation retry', (kind) => {
     expect(new Headers((writes[1]?.[1] as RequestInit).headers).get(STEP_UP_TOKEN_HEADER)).toBe(
       'fresh-proof',
     );
-    expect(toastMock.success).toHaveBeenCalledTimes(outcome === 'success' ? 1 : 0);
+    // API-key success belongs to its current intent UI, not the global hook.
+    expect(toastMock.success).toHaveBeenCalledTimes(outcome === 'success' && kind === 'password' ? 1 : 0);
   });
 });
 

@@ -8,7 +8,9 @@ import {
   StepUpCancelledError,
   type StepUpChallenge,
   type StepUpSend,
+  type OwnedStepUpOptions,
 } from '@/features/auth/step-up-fetch';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import type { StepUpLevel } from '@/lib/server/step-up/actions';
 
 interface StepUpLifetime {
@@ -20,12 +22,13 @@ interface PendingChallenge {
   lifetime: StepUpLifetime;
   challenge: StepUpChallenge;
   level: StepUpLevel | null;
+  authority?: RequestAuthority;
   settle: (token: string | null) => void;
 }
 
 export interface UseStepUp {
   /** Runs `send`, and on a STEP_UP_REQUIRED refusal replays it once with a fresh proof. */
-  withStepUp: (send: StepUpSend, resourceId?: string | null) => Promise<Response>;
+  withStepUp: (send: StepUpSend, resourceId?: string | null, owned?: OwnedStepUpOptions) => Promise<Response>;
   /** Render this next to the control; the challenge has no other way to reach the page. */
   dialog: ReactElement | null;
 }
@@ -34,6 +37,7 @@ export function useStepUp(): UseStepUp {
   const [pending, setPending] = useState<PendingChallenge | null>(null);
   const pendingRef = useRef<PendingChallenge | null>(null);
   const nextChallengeId = useRef(0);
+  const ownedRequests = useRef(new Set<RequestAuthority>());
   const lifetimeRef = useRef<StepUpLifetime>({ active: true });
 
   const close = useCallback((expected: PendingChallenge, token: string | null) => {
@@ -41,6 +45,7 @@ export function useStepUp(): UseStepUp {
     pendingRef.current = null;
     setPending(null);
     expected.settle(token);
+    if (!token) expected.authority?.retire();
   }, []);
 
   useEffect(() => {
@@ -51,20 +56,50 @@ export function useStepUp(): UseStepUp {
     const lifetime = lifetimeRef.current;
     return () => {
       lifetime.active = false;
+      for (const request of ownedRequests.current) request.retire();
+      ownedRequests.current.clear();
       const current = pendingRef.current;
       if (current?.lifetime === lifetime) {
         pendingRef.current = null;
+        current.authority?.retire();
         current.settle(null);
       }
     };
   }, []);
 
   const withStepUp = useCallback(
-    (send: StepUpSend, resourceId: string | null = null): Promise<Response> => {
+    (send: StepUpSend, resourceId: string | null = null, owned?: OwnedStepUpOptions): Promise<Response> => {
+      const authority = owned
+        ? createRequestAuthority(owned.authority.session, owned.authority.isCurrent)
+        : undefined;
+      if (authority) {
+        for (const previous of ownedRequests.current) previous.retire();
+        ownedRequests.current.add(authority);
+      }
+      const retire = () => authority?.retire();
+      owned?.authority.signal.addEventListener('abort', retire, { once: true });
+      let unsubscribe: (() => void) | undefined;
+      const releaseObservation = () => {
+        unsubscribe?.();
+        unsubscribe = undefined;
+      };
+      const cancelPending = () => {
+        releaseObservation();
+        const current = pendingRef.current;
+        if (current?.authority === authority && authority) {
+          pendingRef.current = null;
+          current.settle(null);
+          if (lifetimeRef.current.active) setPending(null);
+        }
+      };
+      authority?.signal.addEventListener('abort', cancelPending, { once: true });
+      unsubscribe = authority?.session.subscribe?.(() => { authority.isCurrent(); });
+      if (authority?.signal.aborted) releaseObservation();
       // Re-setup admits new calls, but never revives an earlier invocation.
       const lifetime = lifetimeRef.current;
       const assertActive = () => {
         if (!lifetime.active) throw new StepUpCancelledError();
+        authority?.assertCurrent();
       };
       return fetchWithStepUp(
         (headers) => {
@@ -74,14 +109,18 @@ export function useStepUp(): UseStepUp {
         },
         async (challenge) => {
           assertActive();
-          const silent = await requestStepUpGrant(challenge.action, challenge.resourceId);
+          const silent = await (authority
+            ? requestStepUpGrant(challenge.action, challenge.resourceId, undefined, authority)
+            : requestStepUpGrant(challenge.action, challenge.resourceId));
           assertActive();
           if (silent.kind === 'granted') return silent.token;
           return new Promise<string | null>((resolve) => {
+            pendingRef.current?.authority?.retire();
             pendingRef.current?.settle(null);
             const next: PendingChallenge = {
               id: ++nextChallengeId.current,
               lifetime,
+              authority,
               challenge,
               level: silent.kind === 'verify' ? silent.level : null,
               settle: resolve,
@@ -91,7 +130,14 @@ export function useStepUp(): UseStepUp {
           });
         },
         resourceId,
-      );
+        authority ? { authority, onStepUpRequired: owned?.onStepUpRequired } : undefined,
+      ).finally(() => {
+        releaseObservation();
+        owned?.authority.signal.removeEventListener('abort', retire);
+        authority?.signal.removeEventListener('abort', cancelPending);
+        authority?.retire();
+        if (authority) ownedRequests.current.delete(authority);
+      });
     },
     [],
   );
@@ -104,6 +150,7 @@ export function useStepUp(): UseStepUp {
       consequence={pending.challenge.consequence}
       resourceId={pending.challenge.resourceId}
       level={pending.level}
+      authority={pending.authority}
       onCancel={() => close(pending, null)}
       onSatisfied={(token) => close(pending, token)}
     />
