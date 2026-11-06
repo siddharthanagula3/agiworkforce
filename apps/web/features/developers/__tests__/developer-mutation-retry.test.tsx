@@ -4,10 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequestAuthority } from '@/lib/identity/request-authority';
 
-vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf') }));
 
-import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
 import {
   useArchiveDeveloperProject,
   useCreateDeveloperProject,
@@ -37,16 +35,16 @@ const endpoint = {
   enabled: true,
   createdAt: '2026-11-05T00:00:00.000Z',
 };
-const delivery = { id: 'delivery-id' };
+const delivery = { id: 'delivery-id', redeliveryOf: 'delivery-id' };
 
 const fetchMock = vi.fn<typeof fetch>();
-async function withProjectScope<T>(run: (scope: { request: ReturnType<typeof createRequestAuthority>; organizationId: null }) => Promise<T>) {
+async function withMutationScope<T>(run: (scope: { request: ReturnType<typeof createRequestAuthority>; organizationId: null }) => Promise<T>) {
   const request = createRequestAuthority({ userId: 'owner', sessionId: 'session',
     isCurrent: () => true, getToken: async () => 'captured-token' });
   try { return await run({ request, organizationId: null }); }
   finally { request.retire(); }
 }
-const transportCalls = () => fetchMock.mock.calls.length + vi.mocked(sendAuthorizedJson).mock.calls.length;
+const transportCalls = () => fetchMock.mock.calls.length;
 
 const operations = [
   {
@@ -55,7 +53,7 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useCreateDeveloperProject();
-      return () => withProjectScope((scope) => mutation.mutateAsync({ scope, draft: { name: 'Project', monthlyCreditLimit: null } }));
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, draft: { name: 'Project', monthlyCreditLimit: null } }));
     },
   },
   {
@@ -64,7 +62,7 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useUpdateDeveloperProject();
-      return () => withProjectScope((scope) => mutation.mutateAsync({ scope, projectId: project.id, patch: { name: 'Renamed' } }));
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, projectId: project.id, patch: { name: 'Renamed' } }));
     },
   },
   {
@@ -73,7 +71,7 @@ const operations = [
     invalidations: 2,
     useAttempt() {
       const mutation = useArchiveDeveloperProject();
-      return () => withProjectScope((scope) => mutation.mutateAsync({ scope, projectId: project.id }));
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, projectId: project.id }));
     },
   },
   {
@@ -82,11 +80,11 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useCreateWebhookEndpoint();
-      return () => mutation.mutateAsync({
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, draft: {
         url: endpoint.url,
         description: null,
         eventTypes: endpoint.eventTypes,
-      });
+      } }));
     },
   },
   {
@@ -95,7 +93,7 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useUpdateWebhookEndpoint();
-      return () => mutation.mutateAsync({ endpointId: endpoint.id, patch: { enabled: false } });
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id, patch: { enabled: false } }));
     },
   },
   {
@@ -104,7 +102,7 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useDeleteWebhookEndpoint();
-      return () => mutation.mutateAsync(endpoint.id);
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id }));
     },
   },
   {
@@ -112,8 +110,8 @@ const operations = [
     response: { delivery },
     invalidations: 1,
     useAttempt() {
-      const mutation = useSendWebhookTest(endpoint.id);
-      return () => mutation.mutateAsync();
+      const mutation = useSendWebhookTest();
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id }));
     },
   },
   {
@@ -121,14 +119,13 @@ const operations = [
     response: { delivery },
     invalidations: 1,
     useAttempt() {
-      const mutation = useRedeliverWebhook(endpoint.id);
-      return () => mutation.mutateAsync(delivery.id);
+      const mutation = useRedeliverWebhook();
+      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id, deliveryId: delivery.id }));
     },
   },
 ];
 
 beforeEach(() => {
-  vi.mocked(sendAuthorizedJson).mockReset();
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -153,7 +150,6 @@ describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => 
     async (failure) => {
       const lostResponse = new Error('The server outcome is unknown');
       if (failure === 'transport') {
-        vi.mocked(sendAuthorizedJson).mockRejectedValue(lostResponse);
         fetchMock.mockRejectedValue(lostResponse);
       } else {
         const unreadable = async () => {
@@ -161,7 +157,6 @@ describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => 
           vi.spyOn(result, 'json').mockRejectedValue(lostResponse);
           return result;
         };
-        vi.mocked(sendAuthorizedJson).mockImplementation(unreadable);
         fetchMock.mockImplementation(unreadable);
       }
       const { result, unmount, client, invalidate } = mount();
@@ -179,7 +174,6 @@ describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => 
   );
 
   it('keeps successful cache invalidation and deliberate subsequent actions', async () => {
-    vi.mocked(sendAuthorizedJson).mockImplementation(async () => Response.json(response));
     fetchMock.mockImplementation(async () => Response.json(response));
     const { result, unmount, client, invalidate } = mount();
     try {
