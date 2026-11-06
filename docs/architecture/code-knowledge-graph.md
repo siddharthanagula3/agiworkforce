@@ -5829,9 +5829,21 @@ No complete failure receipt, rollback, native/product mapping repair, stored
 registration validation, revoke-response validation or ownership lease is added.
 Fixtures are source-reviewed only and unrun; see WEB-IDENTITY-POLICY-NAMESPACE-01.
 
+## Session duration configuration validates converted milliseconds
+
+Accepted `442bffc55fc39ce2e1161388e12f10e7765a19b1` checks the positive finite millisecond
+result after converting configured hours, so finite-hour overflow falls back to
+the existing 720-hour default. The canonical helper serves auth age checks,
+sighting TTLs, account-security verification lifetime and settings listing/pruning.
+Parsing, trimming and finite fractional or ordinary longer durations are retained.
+
+No arbitrary maximum or integer restriction is added. Huge finite values, numeric
+precision, Date/TTL range policy, provider timestamp normalization and unknown-age
+admission remain separate. Fixtures are unrun; see WEB-SESSION-LIFETIME-CONVERSION-01.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty-seven accepted production slices traced above are
+Only the two hundred thirty-eight accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

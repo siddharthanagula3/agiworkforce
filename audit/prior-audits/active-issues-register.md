@@ -14188,3 +14188,34 @@ coverage. Current-session evidence checks do not establish password reset, fresh
 factor proof bound to that session, atomic cleanup/update or all-provider
 containment. Source fixtures mock DB operations and were not executed; they do
 not verify deployed privileges, RLS behavior or recovery usability.
+
+## WEB-SESSION-LIFETIME-CONVERSION-01
+
+Severity: Medium. Source-confirmed on 2026-11-06. Bounded correction
+`442bffc55fc39ce2e1161388e12f10e7765a19b1` is independently source-reviewed only; no
+runtime configuration, provider or key-value acceptance was executed.
+
+The configured hours were checked for finiteness before conversion to milliseconds.
+A finite positive value such as 1e308 passed, then overflowed during multiplication.
+Normal finite current times cannot exceed an infinite deadline, so that setting
+removed the practical absolute-age comparison. Session sightings also passed an
+infinite TTL to the key-value layer, and session-list serialization displayed no
+absolute expiry. The account-security verification duration takes a minimum with
+its separate finite policy, which masks this positive overflow on that consumer.
+No deployed configuration or incident is claimed.
+
+The canonical conversion now validates the computed milliseconds as finite and
+positive before returning them, otherwise retaining the existing 720-hour fallback.
+All four production consumers receive that corrected result without private
+limits: authentication age enforcement, first-sighting TTL, account-security
+verification duration and settings listing/pruning. Numeric parsing, trimming,
+fractional hours and ordinary finite longer configurations remain supported.
+
+This is an overflow correction, not a new maximum-duration policy. Huge but
+finite durations, precision, Date-representable deadlines and storage-specific
+TTL ceilings remain unbounded here. Provider timestamps and current-time inputs
+are unchanged; settings enumeration can still reach coercive lifetime helpers,
+while session-age reads separately reject nonfinite starts and permit unknown
+age. No mandatory logout, native/product mapping, snapshot consistency or
+mutation atomicity change is included. Source fixtures cover overflowing values,
+retained positive configurations and exact expiry behavior; they are unrun.
