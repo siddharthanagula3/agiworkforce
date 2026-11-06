@@ -43,6 +43,7 @@ import { apiErrorMessage } from '@/shared/utils/api-error';
 
 export type StepUpRunner = (
   send: (headers: Record<string, string>) => Promise<Response>,
+  resourceId?: string | null,
 ) => Promise<Response>;
 
 const withoutStepUp: StepUpRunner = (send) => send({});
@@ -127,8 +128,9 @@ export async function removeCredential(
   runStepUp: StepUpRunner = withoutStepUp,
 ): Promise<void> {
   await expectEmpty(
-    await runStepUp((headers) =>
-      send(accountSecurityCredentialPath(credentialId), 'DELETE', undefined, headers),
+    await runStepUp(
+      (headers) => send(accountSecurityCredentialPath(credentialId), 'DELETE', undefined, headers),
+      credentialId,
     ),
     'This passkey or security key could not be removed.',
   );
