@@ -691,8 +691,23 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   describe('organization mfa enforcement at the auth boundary', () => {
     const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
-    function bindOrgPolicy(organizationId: string | null, requireMfa: boolean) {
+    beforeEach(() => {
+      vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    function bindOrgPolicy(
+      organizationId: string | null,
+      requireMfa: boolean,
+      mappedAccountId?: string,
+    ) {
       mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        if (mappedAccountId && sql.toLowerCase().includes('left join public.identities')) {
+          return [{ identity_id: 'identity-mfa', account_id: mappedAccountId, erased: false }];
+        }
         const identityRows = identityResolutionRows(sql, params);
         if (identityRows) return identityRows;
         const s = sql.toLowerCase();
@@ -755,7 +770,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     it('lets an enrolled caller through when the organization requires mfa', async () => {
       bindOrgPolicy(ORGANIZATION_ID, true);
       mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
-      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: true });
+      mockClerkGetUser.mockResolvedValueOnce({ id: 'clerk-session-user', twoFactorEnabled: true });
 
       await expect(
         getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
@@ -764,6 +779,41 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
       });
     });
+
+    it.each(['cookie', 'bearer'] as const)(
+      'uses the mapped account policy and native enrollment for %s auth',
+      async (transport) => {
+        bindOrgPolicy(ORGANIZATION_ID, true, 'product-mfa-account');
+        mockAuth.mockResolvedValue(authSession('native-mfa-subject'));
+        mockVerifyToken.mockResolvedValue({ sub: 'native-mfa-subject' });
+        mockClerkGetUser.mockImplementation(async (subject: string) => ({
+          id: subject,
+          twoFactorEnabled: subject === 'native-mfa-subject',
+        }));
+        const request = () =>
+          new NextRequest('http://localhost/api/some-route', {
+            headers: transport === 'bearer' ? { authorization: 'Bearer native-mfa-token' } : {},
+          });
+
+        await expect(getClerkAuthUser(request())).resolves.toMatchObject({
+          userId: 'product-mfa-account',
+          sessionIdentity: { subject: 'native-mfa-subject', sessionId: null },
+        });
+        expect(mockClerkGetUser).toHaveBeenCalledExactlyOnceWith('native-mfa-subject');
+        expect(mockNeonQuery).toHaveBeenCalledWith(
+          expect.stringContaining(') governing'),
+          ['product-mfa-account'],
+        );
+
+        mockClerkGetUser.mockClear();
+        mockClerkGetUser.mockImplementation(async (subject: string) => ({
+          id: subject,
+          twoFactorEnabled: subject === 'product-mfa-account',
+        }));
+        await expect(getClerkAuthUser(request())).rejects.toSatisfy(isMfaRequiredError);
+        expect(mockClerkGetUser).toHaveBeenCalledExactlyOnceWith('native-mfa-subject');
+      },
+    );
   });
 
   describe('organization ip allow list enforcement at the auth boundary', () => {

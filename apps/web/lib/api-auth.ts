@@ -88,10 +88,11 @@ async function assertMfaPolicyUnlessExemptOwner(
   userId: string,
   exempt: boolean,
   enrollment = false,
+  sessionIdentity?: AuthResult['sessionIdentity'],
 ): Promise<void> {
   if (enrollment) return;
   if (exempt && (await isExemptOrganizationOwner(userId))) return;
-  await assertMfaPolicy(userId);
+  await assertMfaPolicy(userId, sessionIdentity);
 }
 
 const ACCOUNT_STATUS_ATTEMPTS = 2;
@@ -408,6 +409,7 @@ export async function getClerkAuthUser(
         auth.userId,
         options.mfaGateExemptForOwner ?? false,
         options.mfaEnrollment,
+        auth.sessionIdentity,
       );
       await assertIpAllowList(auth.userId, request);
       if (auth.sessionIdentity) {
@@ -450,6 +452,7 @@ export async function getCookieSessionAuthUser(
       userId,
       options.mfaGateExemptForOwner ?? false,
       options.mfaEnrollment,
+      auth.sessionIdentity,
     );
     await assertIpAllowList(userId, request);
     noteSessionSighting(userId, account.subject, sessionId, request);
