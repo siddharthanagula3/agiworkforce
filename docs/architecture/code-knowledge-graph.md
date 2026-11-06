@@ -5460,9 +5460,56 @@ locked-package declarations. Persistent reconciliation, manual duplicates, full
 receipt schemas, secret recovery and server project archive scope/concurrency stay
 open. See `WEB-API-KEY-INTENT-LIFETIME-01` for the precise evidence and limits.
 
+## Advanced Security removal preserves the proof target
+
+Accepted `1d04fe11eb` forwards the credential ID through the existing step-up
+adapter. The enrolled DELETE route requires this exact resource; the prior
+null-target grant failed closed on replay. Optional target support leaves other
+calls and omitted-runner cookie/CSRF behavior unchanged. An unrun fixture uses real
+challenge/grant helpers with mocked HTTP and does not establish server integration.
+
+The comprehensive settings inventory separates account credential editors,
+destructive account/session cleanup, workspace ownership, TOTP and Advanced
+Security/WebAuthn/recovery lifetimes. No broad legacy ownership correction follows
+from this target fix. Separate high-priority server gaps remain: pending recovery
+keys lack an acknowledged batch ID, and minimum-method/enrollment/proof decisions
+lack atomic account admission. Properly targeted grants were already obtainable;
+the client mismatch was not a security control. See
+`WEB-ACCOUNT-SECURITY-PROOF-TARGET-01`, `WEB-SETTINGS-STEP-UP-OWNERSHIP-01`,
+`WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01` and
+`WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01` for evidence and limits.
+
+## Password editors own ordinary and verified mutations
+
+Accepted `f3dc156093` isolates a password editor admitted by the captured
+session and matching native user-policy snapshot. Keyed forms, synchronous intent
+admission and copied resolver/submission values fence deferred validation and
+stale callbacks. Password-only modal close admission and native notifications
+retire requests promptly without asserting ownership of other Security panels.
+
+The ordinary first send and owned step-up/native/fresh-token/proof path use one
+captured outer request authority through strict response receipt checks. Only a
+current validated success resets the form and establishes local password-present
+mode for the same session and original policy snapshot. A refreshed snapshot
+supersedes that override; adjacent labels and global identity data are unchanged.
+
+Known refusals remain editable and current verification cancellation is quiet.
+Dispatched unknown results preserve uncertainty through cosmetic Clear and retained
+close/reopen; a separate acknowledgment permits a fresh attempt, not automatic
+replay or server reconciliation. Partial-change 503 copy is preserved but does not
+promote policy. Full unmount/navigation durability remains open. Guarded observer
+reset and gcTime:0 reduce settled sensitive-variable retention, not pending or
+arbitrary-reference erasure.
+
+Independent source review accepted production and unrun transport, editor, retry
+and modal fixtures. Other settings step-up paths, global sign-out cleanup, recovery
+batch identity and atomic credential admission remain separate open boundaries.
+See `WEB-PASSWORD-INTENT-LIFETIME-01` and `WEB-SETTINGS-STEP-UP-OWNERSHIP-01` for
+evidence and runtime/type/native SDK acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-one accepted production slices traced above are
+Only the two hundred twenty-three accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

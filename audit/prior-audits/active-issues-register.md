@@ -13398,3 +13398,216 @@ and [useClerk](https://github.com/clerk/clerk-docs/blob/main/clerk-typedoc/share
 was inspected on 2026-11-06: listeners return unsubscribe and initially emit by
 default. Exact locked-package type compatibility remains unverified. No tests,
 lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-SETTINGS-STEP-UP-OWNERSHIP-01
+
+Severity: High. Source inventory on 2026-11-06, not runtime-reproduced. The
+API-key correction `8c09f7b705` is opt-in and does not certify legacy consumers.
+
+At checkpoint `53c90a2340`, the settings directory had eleven other direct
+withStepUp call sites: password,
+account deletion, revoke-all sessions, leave workspace, transfer ownership, email
+add/make-primary, TOTP setup/disable/backup-code regeneration and sign-in identity
+unlink. AdvancedAccountSecurityPanel is also rendered inside SecuritySection and
+adapts the shared hook through its client library. These callers omitted owned
+options. The subsequent WEB-PASSWORD-INTENT-LIFETIME-01 slice owns password only;
+the other ten direct settings call sites and Advanced Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
+ambient credentials, native user operations or caller-owned receipt/effect work.
+
+Coordinated boundaries and source owners:
+
+- Password: SecuritySection form and useChangePassword had unowned drafts,
+  deferred validation, transport and completion effects. The bounded correction
+  is recorded under WEB-PASSWORD-INTENT-LIFETIME-01 below. The route does not always
+  require step-up and can change the password before later revocation/audit fails.
+  A correction must cover the ordinary initial send as well as the proof replay,
+  validate the real receipt, preserve partial-change information and retire secret
+  mutation variables. See WEB-CREDENTIAL-MUTATION-RETRY-01.
+- Account/session destruction: deletion schedule/status/cancel/Continue and
+  SessionsPanel revoke-all must share original account/session and confirmation
+  ownership. Existing receipt/readiness/retry corrections remain. The auth-store
+  logout routine awaits push disabling and ambient native logout, then clears all
+  stores and user state unconditionally. Guards around the call do not fence its
+  internal continuations against replacement B. Revoke-all intentionally ends the
+  current session before receipt, so expected self-revocation must be distinguished
+  from a new identity. Include single-session revocation's receipt and cleanup,
+  although it is not itself a step-up consumer. See WEB-ACCOUNT-DELETION-INTENT-01
+  and WEB-SECURITY-SESSION-COMPLETION-01.
+- Workspace ownership: TeamSection leave/transfer confirmation, copied target and
+  successor, useLeaveOrganization/useTransferOrganizationOwnership, response and
+  cache-clearing/reload effects need one admitted workspace/session intent. Retry
+  and fixed leave-header corrections are not confirmation ownership. See
+  WEB-WORKSPACE-MUTATION-INTENT-01.
+- Email and sign-in methods: EmailAddressChange POST/PATCH, native address
+  reload/send/verify, parent AccountSection email update and SignInMethodsPanel
+  status/native connection/removal/redirect must retain the original session and
+  editor. Current useEmailAddressVerification chooses the latest user; merely
+  owning the final HTTP request is insufficient. Native PasskeysPanel is adjacent
+  and does not use step-up; do not imply it is covered by a step-up-only change.
+- TOTP: TwoFactorEnrollment setup, separate service verification/status paths,
+  QR/secret/OTP/backup-code state, copy/download/print and parent status callback
+  need a full setup/receipt lifetime. Stage-local QR and frame cleanup exist but
+  do not provide session ownership. Preserve already-exported material limits.
+- Advanced Account Security: status, options, native WebAuthn, add/remove,
+  enrollment, recovery keys, disable and cancel-recovery need owned action and
+  secret lifetimes. Not every route requires generic step-up. Routes explicitly
+  disable organization resolution; do not impose workspace ownership on these
+  account-scoped operations. RecoveryKeysSheet has copy/download, not a print
+  handler. Its client is also used by verification/handoff/undo pages, which must
+  remain explicit compatibility boundaries.
+
+Other shared-hook consumers are separate follow-ons: workspace-console admin API
+keys and encryption-key changes inherit automatic mutation retries, use ambient
+transport and retain unowned forms/secret or cache effects. Admin key creation
+uses organizationId as proof target but its route resolves membership without
+request scope, so client-only targeting is insufficient. Support confirmation
+uses a narrower runner and mount-only completion guard; cancellation does not
+retire its request and a failed response does not establish that nothing ran.
+DataExportRow does not use step-up and already has a bounded ownership correction.
+
+Reuse canonical useSessionSnapshot, RequestAuthority and the owned step-up/native
+reverification flow. There is no generic mounted account-editor owner: preference
+ownership is coupled to its cache and should not be imported only for convenience.
+Capture authority before deferred validation/confirmation; pass it through actual
+transport, body/native waits and completion. Keep synchronous intent admission,
+immutable payloads, one recognized pre-write proof replay, prompt subscription
+retirement and current-only effects. Existing settings-close admission is explicit
+for Privacy and chat managers; other mounted editors need their own close boundary.
+
+Server authentication, CSRF, grant user/action/resource/expiry, membership and
+native credential checks remain counterguards. This establishes client lifecycle
+gaps, not a demonstrated authentication bypass. Abort does not prove rollback.
+Cross-tab ordering, durable outcomes and runtime/native SDK acceptance remain open.
+Source roots: features/settings/{hooks/use-settings-queries.ts,sections,components},
+features/account-security, features/workspace-console/hooks, features/support,
+lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
+No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01
+
+Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime-reproduced.
+
+Recovery preparation returns keys and expiry without a batch identifier. The
+store overwrites one account-wide pending slot; promotion checks user, session,
+expiry and enrollment mode, then promotes whichever pending hashes are current.
+Two views in the same session can generate A then B, while view A saves A and
+confirms the pending B batch. A local request/session fence cannot prove that the
+promoted batch is the one acknowledged by the user. Different-session promotion
+is correctly refused and does not close this same-session case.
+
+A correction needs an opaque batch identity in the canonical response and
+confirmation/enrollment request, owner/session/expiry-bound compare-and-swap at
+promotion, and matching UI receipt/export lifetime. Preserve old-contract handling
+explicitly and use a new migration if storage changes; no applied migration edits.
+Sources: packages/contracts/cloud-contracts/src/account-security.ts recovery-key
+and enrollment contracts; apps/web/lib/server/account-security/store.ts
+storePendingRecoveryKeys/promotePendingRecoveryKeys; service.ts preparation,
+replacement and enrollment; AdvancedAccountSecurityPanel and RecoveryKeysSheet.
+No contract, database or production behavior was changed by this inventory.
+
+## WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01
+
+Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime-reproduced.
+
+Advanced Account Security credential removal reads enrollment and credentials,
+checks the remaining minimum-method policy, then performs a separate DELETE.
+Concurrent removals can both pass against the same pre-delete set, leaving fewer
+methods than policy requires. Enrollment also checks methods before separately
+promoting its pending keys. The route's enrolled/proof decision is also read before
+the service mutation; a removal can observe unenrolled state and finish after
+enrollment promotion. Fixing client proof-target forwarding does not make
+these server transitions atomic or repair this invariant.
+
+Coordinate per-account admission across removal, enrollment and other lifecycle
+transitions; lock/check/delete or conditional writes must share a transaction and
+consistent lock order, including the enrolled state and its required proof. A
+DELETE-only transaction or credential-row lock is insufficient. Preserve the
+across-device-method requirement, user/session
+checks and audit failure semantics. A component duplicate-click guard cannot
+serialize another tab or authorized client. Sources:
+apps/web/lib/server/account-security/service.ts removeCredential and
+requireEnrollmentMethods/enrollAccountSecurity; store.ts listCredentials,
+deleteCredential and promotePendingRecoveryKeys. No server change was made here.
+
+## WEB-ACCOUNT-SECURITY-PROOF-TARGET-01
+
+Severity: Medium. Bounded correction `1d04fe11eb` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+Enrolled credential removal requires a proof whose resourceId is the credential
+ID. The client adapter previously accepted only its sender and invoked removal
+without a target, so the existing hook requested a null-scoped grant. Its single
+replay remained refused by the server's exact resource comparison. The adapter now
+accepts an optional resource ID and removal forwards the exact ID to that hook.
+Other calls, the omitted-runner sender and cookie/CSRF behavior are unchanged.
+
+The fixture uses real challenge parsing and grant transport with mocked HTTP to
+cover exact target propagation, one proof replay, second-refusal termination,
+already-accepted removal and the direct sender. Synthetic IDs test transport
+serialization, not database validity or server integration. No fixture ran.
+
+This is a fail-closed functional defect, not an authorization bypass. Properly
+scoped grants were already available to authorized direct clients; the accidental
+UI mismatch is not a security control. This fix does not provide client ownership,
+atomic minimum-method/enrollment admission or recovery-batch identity. Keep
+WEB-SETTINGS-STEP-UP-OWNERSHIP-01, WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01 and
+WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01 open as separate closure blockers. No tests,
+lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-PASSWORD-INTENT-LIFETIME-01
+
+Severity: Medium. Bounded correction `f3dc156093` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+SecuritySection now isolates PasswordEditor from the session-timeout form. A
+canonical session and matching nonnull mapped user-policy snapshot admit a keyed
+editor. Synchronous intent admission, copied form values and a resolver input copy
+precede asynchronous validation. Pending fields are disabled. Retired validation,
+clear/focus callbacks and completions cannot operate on a replacement editor.
+Native identity observation retires the request and form, including A/B/A and
+same-user session replacement. WebSettingsModal passes explicit password-only
+close admission rather than relying on the dialog's exit animation.
+
+useChangePassword requires captured scope and draft, freezes its JSON body before
+waits, and uses captured bearer-only RequestAuthority transport across CSRF/token,
+response and body boundaries. The existing owned step-up path covers silent grant,
+interactive native verification, fresh token and exactly one identical proof replay.
+The ordinary initial send is owned too; the server does not require step-up for
+every password change. Grant dispatch is distinct from password writes, and only
+the recognized initial pre-write refusal resets dispatch uncertainty.
+
+Success requires success:true, zero otherSessionsRemaining and safe nonnegative
+integer otherSessionsEnded/deviceCredentialsRevoked counts. Only the current editor
+then reports success and replaces its form. A validated receipt establishes the
+editor's password-present mode for that exact session and original policy object,
+so a passwordless user can make a subsequent current-password change before the
+native user snapshot refreshes. A newer policy snapshot or session retires this
+local override. It does not refresh the adjacent SignInMethods label or globally
+reconcile canonical identity policy.
+
+Current 4xx refusal stays editable; current verification cancellation is quiet.
+Network failure, unreadable/invalid success receipt and 5xx after dispatch are
+uncertain, with no automatic retry or rollback claim. The route's user-safe partial
+change message is preserved when cleanup fails after changing the password. Neither
+partial text nor an unknown receipt establishes the local password-policy override.
+Clear and close/reopen of the same retained editor keep the session-tagged notice
+and block a new write. A separate acknowledgment opens a fresh blank attempt; it
+is the user's acknowledgment, not a server reconciliation result or automatic
+replay. The notice and block are not durable across full component unmount,
+navigation or reload, and do not carry into a replacement session.
+
+Guarded observer reset and gcTime:0 reduce settled password-variable retention.
+Pending operations, arbitrary JavaScript references and other copies are not
+claimed erased. Local onError suppresses the shared toast, not MutationCache
+logging. No other settings mutation, session-timeout form or global logout cleanup
+receives an ownership guarantee from this extraction.
+
+Independent source review accepted production, new transport/editor fixture
+matrices, credential-retry adaptations, existing section mocks and a retained-modal
+admission fixture. Source cases cover ordinary sends, proof/fresh-token/native
+waits, strict receipts, preserved partial 503, deferred validation, policy refresh,
+StrictMode, same-session close/acknowledgment and replacement-owner callbacks.
+All remain unrun. Runtime/types/timers/native SDK behavior, cross-tab ordering,
+idempotency, durable unknown-outcome recovery and policy reconciliation after a
+partial response remain open. No tests, lint, typechecks, builds, app/service
+execution, push or deployment ran.
