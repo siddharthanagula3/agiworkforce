@@ -170,7 +170,7 @@ function SessionsPanel() {
   );
 }
 
-export function SecuritySection({ passwordEditorActive = true }: { passwordEditorActive?: boolean }) {
+export function SecuritySection({ passwordEditorActive = true, signInMethodsActive = true }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean }) {
   const { data: serverSettings, isLoading, isError: settingsFailed } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
   const identity = useCurrentUser();
@@ -243,7 +243,7 @@ export function SecuritySection({ passwordEditorActive = true }: { passwordEdito
         </div>
       </div>
 
-      <SignInMethodsPanel onOpenPassword={isLoading ? undefined : openPasswordForm} />
+      <SignInMethodsPanel active={signInMethodsActive} onOpenPassword={isLoading ? undefined : openPasswordForm} />
 
       <PasskeysPanel />
 

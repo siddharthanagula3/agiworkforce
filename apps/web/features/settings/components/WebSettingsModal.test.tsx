@@ -25,7 +25,9 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 }));
 
 const getTokenMock = vi.fn(async () => 'session-token');
-vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: getTokenMock }) }));
+vi.mock('@clerk/nextjs', async (original) => ({
+  ...await original<typeof import('@clerk/nextjs')>(), useAuth: () => ({ getToken: getTokenMock }),
+}));
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 const emailAdmission = vi.hoisted(() => vi.fn());
@@ -42,6 +44,7 @@ vi.mock('../sections/TeamSection', () => ({ TeamSection: ({ active }: { active?:
   return <div>Team settings content<span data-testid="membership-editor-admission">{String(active)}</span></div>;
 } }));
 const passwordAdmission = vi.hoisted(() => vi.fn());
+const signInAdmission = vi.hoisted(() => vi.fn());
 const retainedSettings = vi.hoisted(() => ({ enabled: false }));
 vi.mock('@agiworkforce/ui', async (original) => {
   const actual = await original<typeof import('@agiworkforce/ui')>();
@@ -49,10 +52,13 @@ vi.mock('@agiworkforce/ui', async (original) => {
     retainedSettings.enabled ? <>{props.sectionContent[props.activeSection]}</> : <actual.SettingsModal {...props} /> };
 });
 
-vi.mock('../sections/SecuritySection', () => ({
-  SecuritySection: ({ passwordEditorActive }: { passwordEditorActive?: boolean }) => {
+vi.mock('../sections/SecuritySection', async (original) => ({
+  ...await original<typeof import('../sections/SecuritySection')>(),
+  SecuritySection: ({ passwordEditorActive, signInMethodsActive }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean }) => {
     passwordAdmission(passwordEditorActive);
-    return <div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>;
+    signInAdmission(signInMethodsActive);
+    return <><div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>
+      <div data-testid="sign-in-methods-admission">{String(signInMethodsActive)}</div></>;
   },
 }));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
@@ -903,6 +909,18 @@ it('withdraws password editor admission when Settings closes and restores it on 
 });
 
 afterEach(() => { retainedSettings.enabled = false; });
+
+it('withdraws sign-in method admission before retained Settings content unmounts', async () => {
+  stubFetch({}); signInAdmission.mockClear(); retainedSettings.enabled = true;
+  const props = { onClose: vi.fn(), initialSection: 'security' as const };
+  const mounted = render(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(signInAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal {...props} open={false} />);
+  expect(signInAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(signInAdmission).toHaveBeenLastCalledWith(true));
+});
 
 it('withdraws workspace membership admission on Settings close before retained Team content unmounts', async () => {
   stubFetch();

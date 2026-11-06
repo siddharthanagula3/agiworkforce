@@ -12,10 +12,23 @@ const identity = vi.hoisted(() => ({
   readError: null as string | null,
   readLoading: false,
   populated: false,
+  nativeUser: { id: 'person' },
   passkeys: [] as Array<{ id: string; name: string | null; createdAt: Date; lastUsedAt: null }>,
 }));
 
-vi.mock('@/lib/identity/client', () => ({
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>(),
+  useSessionSnapshot: () => () => identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId ? ({
+    userId: identity.userId, sessionId: 'session', getToken: async () => 'token',
+    isCurrent: () => identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId,
+  }) : null,
+}));
+vi.mock('@/lib/identity/native-session-authority', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/identity/native-session-authority')>(),
+  nativeSessionFor: () => ({ user: identity.nativeUser }),
+}));
+vi.mock('@/lib/identity/client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/identity/client')>(),
   useCurrentUser: () => ({
     isLoaded: identity.userLoaded,
     isSignedIn: identity.signedIn,
@@ -25,16 +38,18 @@ vi.mock('@/lib/identity/client', () => ({
   useConnectedAccounts: () => ({
     isLoaded: identity.accountsLoaded,
     accounts: [],
-    connect: vi.fn(),
-    disconnect: vi.fn(),
+    isCurrent: () => identity.accountsLoaded,
+    capture: vi.fn(),
   }),
 }));
 
-vi.mock('@features/settings/hooks/useStepUp', () => ({
+vi.mock('@features/settings/hooks/useStepUp', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@features/settings/hooks/useStepUp')>(),
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
 
-vi.mock('@/features/auth/step-up-fetch', () => ({
+vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/features/auth/step-up-fetch')>(),
   isStepUpCancelled: () => false,
   fetchWithStepUp: vi.fn(),
   requestStepUpGrant: vi.fn(),
@@ -58,6 +73,7 @@ vi.mock('./use-sign-in-identities', async (importOriginal) => ({
     error: identity.readError,
     isLoading: identity.readLoading,
     reload: vi.fn(),
+    isCurrent: () => !identity.readError && !identity.readLoading,
   }),
 }));
 

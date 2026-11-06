@@ -38,6 +38,20 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('sign-in identities read ownership', () => {
+  it('retires reads and retained reloads when the panel is inactive', async () => {
+    const { result, rerender } = renderHook(({ active }) => useSignInIdentities(active), { initialProps: { active: true } });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    const reload = result.current.reload;
+    const isCurrent = result.current.isCurrent;
+    rerender({ active: false });
+    expect(result.current.data).toBeNull(); expect(isCurrent()).toBe(false);
+    act(() => reload()); expect(fetch).toHaveBeenCalledTimes(1);
+    expect(identity.listeners.size).toBe(0);
+    rerender({ active: true });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.isCurrent()).toBe(true));
+    expect(isCurrent()).toBe(false);
+  });
   it('survives strict effect cleanup and replay without admitting retired work', async () => {
     const { result } = renderHook(() => useSignInIdentities(), {
       wrapper: ({ children }: { children: ReactNode }) => <StrictMode>{children}</StrictMode>,

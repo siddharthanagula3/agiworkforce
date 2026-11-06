@@ -318,8 +318,9 @@ export interface IdentityConnectedAccount {
 export interface IdentityConnectedAccountsState {
   isLoaded: boolean;
   accounts: readonly IdentityConnectedAccount[];
-  connect: (provider: AuthProviderId, returnUrl: string) => Promise<void>;
-  disconnect: (accountId: string) => Promise<void>;
+  isCurrent: () => boolean;
+  capture: (selection: { kind: 'connect'; provider: AuthProviderId; returnUrl: string } |
+    { kind: 'disconnect'; accountId: string }, scope: IdentityPasskeyScope) => IdentityPasskeyOperation;
 }
 
 const VERIFIED_EMAIL_STATUS = 'verified';
@@ -335,45 +336,76 @@ const CONNECT_STRATEGIES = {
 } as const satisfies Readonly<Record<AuthProviderId, string>>;
 
 export function useConnectedAccounts(): IdentityConnectedAccountsState {
-  const { isLoaded, user } = useUser();
-  const accounts = useMemo<IdentityConnectedAccount[]>(
-    () =>
-      (user?.externalAccounts ?? []).map((account) => ({
+  const { isLoaded: userLoaded, user } = useUser();
+  const clerk = useClerk();
+  const isCurrent = () => Boolean(userLoaded && clerk.loaded && user && clerk.user === user && clerk.session?.user === user);
+  const isLoaded = isCurrent();
+  const accounts: IdentityConnectedAccount[] =
+      (isLoaded ? user?.externalAccounts ?? [] : []).map((account) => ({
         id: account.id,
         provider: account.provider,
         email: optional(account.emailAddress),
-      })),
-    [user],
-  );
-
-  const connect = useCallback(
-    async (provider: AuthProviderId, returnUrl: string) => {
-      if (!user) throw new Error('Sign in again to connect an account.');
-      if (user.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS) {
+      }));
+  const capture = useCallback<IdentityConnectedAccountsState['capture']>((selection, { authority, onDispatch }) => {
+    authority.assertCurrent();
+    const native = nativeSessionFor(authority.session);
+    const capturedUser = native.user;
+    if (!isLoaded || !capturedUser || capturedUser !== user || clerk.user !== user || capturedUser.id !== authority.session.userId) {
+      throw new Error('The account changed. Open sign-in settings again.');
+    }
+    const submitted = { ...selection };
+    const targets = submitted.kind === 'disconnect'
+      ? capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId) : [];
+    const target = targets[0] ?? null;
+    if (submitted.kind === 'disconnect' && targets.length !== 1) throw new Error('That account is no longer uniquely connected.');
+    let dispatched = false;
+    const observe = () => {
+      if (native.user !== capturedUser || clerk.user !== capturedUser || capturedUser.id !== authority.session.userId ||
+          (!dispatched && target && submitted.kind === 'disconnect' &&
+            (target.id !== submitted.accountId || !capturedUser.externalAccounts.includes(target) ||
+              capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId).length !== 1))) authority.retire();
+      return authority.isCurrent();
+    };
+    const assertCurrent = () => { observe(); authority.assertCurrent(); };
+    let stop: (() => void) | undefined;
+    const release = () => { stop?.(); stop = undefined; };
+    authority.signal.addEventListener('abort', release, { once: true });
+    stop = authority.session.subscribe?.(observe);
+    if (authority.signal.aborted) release();
+    return { isCurrent: observe, execute: async () => {
+      assertCurrent();
+      if (dispatched) throw new Error('This sign-in change has already started.');
+      if (submitted.kind === 'connect' && capturedUser.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS) {
         throw new Error(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
       }
-      const account = await user.createExternalAccount({
-        strategy: CONNECT_STRATEGIES[provider],
-        redirectUrl: returnUrl,
-      });
-      const next = account.verification?.externalVerificationRedirectURL;
-      if (!next) throw new Error('The sign-in provider did not start. Try again.');
-      window.location.assign(next.toString());
-    },
-    [user],
-  );
-
-  const disconnect = useCallback(
-    async (accountId: string) => {
-      const account = user?.externalAccounts.find((candidate) => candidate.id === accountId);
-      if (!user || !account) return;
-      await account.destroy();
-      await user.reload();
-    },
-    [user],
-  );
-
-  return { isLoaded, accounts, connect, disconnect };
+      dispatched = true;
+      onDispatch();
+      assertCurrent();
+      try {
+        if (submitted.kind === 'connect') {
+          const account = await capturedUser.createExternalAccount({
+            strategy: CONNECT_STRATEGIES[submitted.provider], redirectUrl: submitted.returnUrl,
+          });
+          assertCurrent();
+          const next = account.verification?.externalVerificationRedirectURL;
+          if (!next) throw new Error('The sign-in provider did not start.');
+          const destination = next.toString();
+          assertCurrent();
+          window.location.assign(destination);
+        } else if (target) {
+          await target.destroy();
+          assertCurrent();
+          const refreshed = await capturedUser.reload();
+          assertCurrent();
+          if (refreshed.id !== capturedUser.id) throw new Error('The refreshed account could not be confirmed.');
+        }
+      } catch (cause) {
+        assertCurrent();
+        throw cause;
+      }
+    } };
+  }, [clerk, isLoaded, user]);
+  return { isLoaded, accounts, isCurrent, capture };
 }
 
 const EMAIL_CODE_STRATEGY = 'email_code';

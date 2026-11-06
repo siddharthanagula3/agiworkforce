@@ -35,16 +35,17 @@ type State =
   | { owner: Owner; request: RequestAuthority; kind: 'ready'; data: Identities }
   | { owner: Owner; request: RequestAuthority; kind: 'failed' };
 
-export function useSignInIdentities() {
+export function useSignInIdentities(active = true) {
   const capture = useSessionSnapshot();
   const slot = useRef<Owner | null>(null);
   const [, refresh] = useState(0);
   const [state, setState] = useState<State | null>(null);
-  if (slot.current && (slot.current.retired || !slot.current.session.isCurrent())) {
+  if (slot.current && (!active || slot.current.retired || !slot.current.session.isCurrent())) {
     slot.current.retired = true;
+    slot.current.request?.retire();
     slot.current = null;
   }
-  if (!slot.current) {
+  if (active && !slot.current) {
     const session = capture();
     if (session) slot.current = { session, active: false, retired: false, request: null };
   }
@@ -91,6 +92,7 @@ export function useSignInIdentities() {
   const visible = current() && state?.owner === owner && state.request === owner?.request && state.request.isCurrent()
     ? state : null;
   return {
+    isCurrent: () => current() && visible?.kind === 'ready' && visible.request.isCurrent(),
     ownerId: current() ? owner!.session.userId : null,
     data: visible?.kind === 'ready' ? visible.data : null,
     error: visible?.kind === 'failed' ? UNREADABLE : null,
