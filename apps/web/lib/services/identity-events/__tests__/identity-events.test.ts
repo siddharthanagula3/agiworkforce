@@ -283,7 +283,7 @@ describe('resolveCompromiseResponse', () => {
 
   function provider(session: Record<string, unknown> | null) {
     return {
-      getSession: vi.fn(async () => session),
+      getSession: vi.fn(async () => (session === null ? null : { status: 'active', ...session })),
       listUserSessions: vi.fn(),
       revokeSession: vi.fn(),
     } as never;
@@ -426,6 +426,61 @@ describe('resolveCompromiseResponse', () => {
     const result = await resolve(provider(null), { currentSessionId: null });
 
     expect(result.outstanding).toEqual(['fresh_authentication']);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+  });
+
+  it.each([OPENED_AT, new Date(OPENED_MS)])('accepts matching active session at hold opening %s', async (openedAt) => {
+    query
+      .mockResolvedValueOnce([openRow({ opened_at: openedAt })])
+      .mockResolvedValueOnce([{ id: 'resp-1' }]);
+    const identityStub = provider({
+      id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS,
+    });
+
+    const result = await resolve(identityStub);
+
+    expect(result.status).toBe('resolved');
+    expect(mocks.revoke).toHaveBeenCalledWith(identityStub, 'user-1', 'sess-new');
+    expect(query.mock.calls[1]?.[1]).toEqual(['resp-1', 'user-1']);
+  });
+
+  it.each([
+    { id: 'different-session' },
+    { id: undefined },
+    { status: 'revoked' },
+    { status: 'ended' },
+    { status: undefined },
+    { createdAt: null },
+    { createdAt: undefined },
+    { createdAt: Number.NaN },
+    { createdAt: Number.POSITIVE_INFINITY },
+    { createdAt: Number.NEGATIVE_INFINITY },
+    { createdAt: String(OPENED_MS + 1000) },
+  ])('refuses mismatched, inactive or malformed provider session %j', async (overrides) => {
+    query.mockResolvedValueOnce([openRow()]);
+
+    const result = await resolve(provider({
+      id: 'sess-new', userId: 'user-1', status: 'active', createdAt: OPENED_MS + 1000,
+      ...overrides,
+    }));
+
+    expect(result.outstanding).toEqual(['fresh_authentication']);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-1', outcome: 'denied',
+    }));
+  });
+
+  it.each(['invalid-date', new Date(Number.NaN), null, undefined, 0])('refuses an invalid hold timestamp %s', async (openedAt) => {
+    query.mockResolvedValueOnce([openRow({ opened_at: openedAt })]);
+
+    const result = await resolve(provider({
+      id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000,
+    }));
+
+    expect(result.outstanding).toEqual(['fresh_authentication']);
+    expect(query).toHaveBeenCalledTimes(1);
     expect(mocks.revoke).not.toHaveBeenCalled();
   });
 });

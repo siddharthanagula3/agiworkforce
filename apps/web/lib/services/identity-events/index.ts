@@ -5,6 +5,7 @@ import type { IdentityProvider } from '@agiworkforce/identity';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent, type AuditEventDetail } from '@/lib/security-audit';
+import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import {
   finishIntentRevocation,
@@ -302,7 +303,8 @@ type CompromiseIdentityOperations = IdentitySessionOperations &
   Pick<IdentityProvider, 'getSession'>;
 
 function epochMs(value: string | Date): number {
-  return value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (value instanceof Date) return value.getTime();
+  return typeof value === 'string' ? new Date(value).getTime() : Number.NaN;
 }
 
 /**
@@ -371,8 +373,12 @@ export async function resolveCompromiseResponse(
   const current = input.currentSessionId ? await identity.getSession(input.currentSessionId) : null;
   const reauthenticated =
     current !== null &&
+    current.id === input.currentSessionId &&
     current.userId === input.userId &&
-    current.createdAt !== null &&
+    current.status === SESSION_STATUS_ACTIVE &&
+    Number.isFinite(openedAt) &&
+    typeof current.createdAt === 'number' &&
+    Number.isFinite(current.createdAt) &&
     current.createdAt >= openedAt;
 
   if (!reauthenticated) return refuse('fresh_authentication', 0);
