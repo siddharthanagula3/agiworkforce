@@ -36,7 +36,11 @@ vi.mock('../sections/AccountSection', () => ({
   },
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));
-vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
+const membershipAdmission = vi.hoisted(() => vi.fn());
+vi.mock('../sections/TeamSection', () => ({ TeamSection: ({ active }: { active?: boolean }) => {
+  membershipAdmission(active);
+  return <div>Team settings content<span data-testid="membership-editor-admission">{String(active)}</span></div>;
+} }));
 const passwordAdmission = vi.hoisted(() => vi.fn());
 const retainedSettings = vi.hoisted(() => ({ enabled: false }));
 vi.mock('@agiworkforce/ui', async (original) => {
@@ -899,6 +903,20 @@ it('withdraws password editor admission when Settings closes and restores it on 
 });
 
 afterEach(() => { retainedSettings.enabled = false; });
+
+it('withdraws workspace membership admission on Settings close before retained Team content unmounts', async () => {
+  stubFetch();
+  membershipAdmission.mockClear();
+  retainedSettings.enabled = true;
+  const props = { onClose: vi.fn(), initialSection: 'team' as const };
+  const mounted = render(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(membershipAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal {...props} open={false} />);
+  expect(membershipAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('membership-editor-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(membershipAdmission).toHaveBeenLastCalledWith(true));
+});
 
 
 it('withdraws email editor admission on Settings close before retained content unmounts', async () => {

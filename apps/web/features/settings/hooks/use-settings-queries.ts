@@ -23,7 +23,6 @@ import {
   MANAGED_CLOUD_APPROVAL_HISTORY_PATH,
   MANAGED_CLOUD_ORGANIZATION_HEADER,
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
-  type ManagedCloudWorkspaceOwnershipTransfer,
 } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -45,7 +44,7 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
-import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './useStepUp';
 import { useSelectWorkspace, useWorkspaceSelectionMutation } from '@/features/workspaces/hooks/use-workspaces';
 import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspaces/hooks/use-workspace-query';
@@ -1210,107 +1209,16 @@ export function useRevokeTeamInvitation(): UseMutationResult<
   });
 }
 
-export type LeaveOrganizationVariables = { organizationId: string; successorUserId?: string };
-
-export type LeaveOrganizationMutation = UseMutationResult<
-  void,
-  Error,
-  LeaveOrganizationVariables
-> & {
-  /** Handing ownership to a successor answers 403 until a fresh second factor is proven. */
-  stepUpDialog: ReactElement | null;
-};
-
-export function useLeaveOrganization(): LeaveOrganizationMutation {
-  const queryClient = useQueryClient();
-  const { withStepUp, dialog } = useStepUp();
-
-  const mutation = useMutation<void, Error, LeaveOrganizationVariables>({
-    retry: false,
-    mutationFn: async ({ organizationId, successorUserId }) => {
-      const response = await withStepUp(
-        (headers) =>
-          sendAuthorizedJson(
-            '/api/settings/organization/leave',
-            { method: 'DELETE', body: successorUserId ? { successorUserId } : {} },
-            { ...headers, [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId },
-          ),
-        organizationId,
-      );
-      if (!response.ok) throw new Error(await readApiError(response));
-    },
-    onSuccess: async () => {
-      await queryClient.cancelQueries();
-      queryClient.clear();
-      toast.success(
-        'You left the workspace. The device tokens and API keys issued in it were revoked. If you are asked to sign in, do so to continue in your personal account.',
-      );
-      window.location.reload();
-    },
-    onError: (error: Error) => {
-      if (isStepUpCancelled(error)) return;
-      toast.error(toUserMessage(error, 'Failed to leave workspace'));
-    },
-  });
-
-  return { ...mutation, stepUpDialog: dialog };
-}
-
-/**
- * Remove team member mutation
- *
- * @returns UseMutationResult for removing a team member
- */
-export type OrganizationOwnerRoleAfterTransfer = NonNullable<
-  ManagedCloudWorkspaceOwnershipTransfer['outgoingOwnerRole']
->;
-
-export type TransferOwnershipVariables = {
-  organizationId: string;
-  toUserId: string;
-  outgoingOwnerRole: OrganizationOwnerRoleAfterTransfer;
-};
-
-export type TransferOwnershipMutation = UseMutationResult<
-  void,
-  Error,
-  TransferOwnershipVariables
-> & {
-  /** The route answers 403 until a fresh second factor is proven; render this. */
-  stepUpDialog: ReactElement | null;
-};
-
-export function useTransferOrganizationOwnership(): TransferOwnershipMutation {
-  const queryClient = useQueryClient();
-  const { withStepUp, dialog } = useStepUp();
-
-  const mutation = useMutation<void, Error, TransferOwnershipVariables>({
-    retry: false,
-    mutationFn: async ({ organizationId, toUserId, outgoingOwnerRole }) => {
-      const response = await withStepUp(
-        (headers) =>
-          sendAuthorizedJson(
-            '/api/settings/organization/transfer-ownership',
-            { method: 'POST', body: { organizationId, toUserId, outgoingOwnerRole } },
-            headers,
-          ),
-        organizationId,
-      );
-      if (!response.ok) throw new Error(await readApiError(response));
-    },
-    onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['settings', 'team', organizationId] });
-      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
-      toast.success('Ownership transferred.');
-    },
-    onError: (error: Error) => {
-      if (isStepUpCancelled(error)) return;
-      toast.error(toUserMessage(error, 'Failed to transfer ownership'));
-    },
-  });
-
-  return { ...mutation, stepUpDialog: dialog };
-}
+export {
+  useLeaveOrganization,
+  useTransferOrganizationOwnership,
+  type LeaveOrganizationVariables,
+  type LeaveOrganizationMutation,
+  type OrganizationOwnerRoleAfterTransfer,
+  type TransferOwnershipVariables,
+  type TransferOwnershipMutation,
+  type PreparedWorkspaceMembershipAction,
+} from './use-organization-membership-mutation';
 
 export function useRemoveTeamMember(): UseMutationResult<
   void,

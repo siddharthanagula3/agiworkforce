@@ -59,6 +59,8 @@ vi.mock('@/lib/services/deprovision-service', () => ({
 }));
 
 import { DELETE } from '../leave/route';
+import { deprovisionMember } from '@/lib/services/deprovision-service';
+import { ManagedCloudWorkspaceLeaveReceiptSchema } from '@agiworkforce/cloud-contracts';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step-up/grant-token';
 
@@ -88,6 +90,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetStepUpSigningKeyCache();
   mockGetTeamAdminAccess.mockResolvedValue(ACCESS);
+  vi.mocked(deprovisionMember).mockResolvedValue({
+    userId: LEAVING_OWNER,
+    organizationId: ORGANIZATION_ID,
+    sessionsRevoked: 0,
+    sessionsFailed: 0,
+    deviceTokensRevoked: 0,
+    apiKeysRevoked: 0,
+    sharedConnectorsUnshared: 0,
+    errors: [],
+  });
   mockLeaveOrganization.mockResolvedValue({
     organizationId: ORGANIZATION_ID,
     previousRole: 'owner',
@@ -125,6 +137,15 @@ describe('DELETE /api/settings/organization/leave with a successor', () => {
     );
 
     expect(response.status).toBe(200);
+    const receipt = ManagedCloudWorkspaceLeaveReceiptSchema.parse(await response.json());
+    expect(receipt).toEqual({
+      organizationId: ORGANIZATION_ID,
+      userId: LEAVING_OWNER,
+      successorUserId: 'successor-user',
+      revoked: { sessions: 0, deviceTokens: 0, apiKeys: 0 },
+      sharedConnectorsUnshared: 0,
+      warnings: [],
+    });
     expect(mockGetTeamAdminAccess).toHaveBeenCalledWith(
       expect.anything(),
       LEAVING_OWNER,
@@ -151,6 +172,45 @@ describe('DELETE /api/settings/organization/leave with a successor', () => {
     const response = await DELETE(leaveRequest({}));
 
     expect(response.status).toBe(200);
+    expect(ManagedCloudWorkspaceLeaveReceiptSchema.parse(await response.json())).toMatchObject({
+      organizationId: ORGANIZATION_ID,
+      userId: LEAVING_OWNER,
+      successorUserId: null,
+    });
     expect(mockLeaveOrganization).toHaveBeenCalledOnce();
+  });
+
+  it('reports the deprovision result counts and warnings without inventing complete cleanup', async () => {
+    vi.mocked(deprovisionMember).mockResolvedValue({
+      userId: LEAVING_OWNER,
+      organizationId: ORGANIZATION_ID,
+      sessionsRevoked: 2,
+      sessionsFailed: 0,
+      deviceTokensRevoked: 0,
+      apiKeysRevoked: 1,
+      sharedConnectorsUnshared: 0,
+      errors: ['Device token cleanup did not finish.'],
+    });
+
+    const response = await DELETE(
+      leaveRequest({ successorUserId: 'successor-user' }, grantFor(ORGANIZATION_ID)),
+    );
+
+    expect(response.status).toBe(200);
+    expect(ManagedCloudWorkspaceLeaveReceiptSchema.parse(await response.json())).toEqual({
+      organizationId: ORGANIZATION_ID,
+      userId: LEAVING_OWNER,
+      successorUserId: 'successor-user',
+      revoked: { sessions: 2, deviceTokens: 0, apiKeys: 1 },
+      sharedConnectorsUnshared: 0,
+      warnings: ['Device token cleanup did not finish.'],
+    });
+    expect(deprovisionMember).toHaveBeenCalledOnce();
+    expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'member_removed',
+      outcome: 'failure',
+      severity: 'critical',
+      detail: expect.objectContaining({ count: 2, reason: 'Device token cleanup did not finish.' }),
+    }));
   });
 });

@@ -7,6 +7,7 @@ vi.mock('@shared/lib/logger', () => ({
 
 const {
   stopStreaming,
+  cancelActiveOperations,
   cancelListening,
   chatReset,
   chatWorkspaceReset,
@@ -19,6 +20,7 @@ const {
   resetConnectorCapabilities,
 } = vi.hoisted(() => ({
   stopStreaming: vi.fn(),
+  cancelActiveOperations: vi.fn(),
   cancelListening: vi.fn(),
   chatReset: vi.fn(),
   chatWorkspaceReset: vi.fn(),
@@ -39,6 +41,7 @@ vi.mock('../layout-store', () => ({}));
 vi.mock('../web-chat-store', () =>
   storeModule({
     stopStreaming,
+    cancelActiveOperations,
     resetOnWorkspaceSwitch: chatWorkspaceReset,
     reset: chatReset,
   }),
@@ -131,6 +134,30 @@ describe('applyCacheScope', () => {
       .rejects.toThrow('Account cache scope is still resolving');
     expect(chatReset).not.toHaveBeenCalled();
     expect(localStorage.getItem(SCOPE_KEY)).toBe('user_2/personal');
+  });
+
+  it('does not invoke later cancellation methods or clear replacement state after a cancellation changes ownership', async () => {
+    await applyCacheScope({ accountId: 'old-account', workspaceId: 'old-workspace' });
+    let current = true;
+    const replacementJob = {
+      id: 'replacement-job', type: 'image' as const, prompt: 'replacement workspace prompt',
+      status: 'generating' as const, createdAt: '2026-11-06T00:00:00.000Z',
+    };
+    stopStreaming.mockImplementationOnce(() => {
+      current = false;
+      localStorage.setItem(SCOPE_KEY, 'replacement-account/replacement-workspace');
+      localStorage.setItem('agi-composer-draft:v2:replacement', 'replacement draft');
+      useMediaStore.getState().addJob(replacementJob, mediaOwner);
+    });
+
+    expect(await applyCacheScope({ accountId: 'old-account', workspaceId: 'next-workspace' }, () => current)).toBe(false);
+    expect(stopStreaming).toHaveBeenCalledOnce();
+    expect(cancelActiveOperations).not.toHaveBeenCalled();
+    expect(chatWorkspaceReset).not.toHaveBeenCalled();
+    expect(chatReset).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SCOPE_KEY)).toBe('replacement-account/replacement-workspace');
+    expect(localStorage.getItem('agi-composer-draft:v2:replacement')).toBe('replacement draft');
+    expect(useMediaStore.getState().jobs).toEqual([{ ...replacementJob, owner: mediaOwner }]);
   });
   it('adopts the first scope it sees without dropping the signed-in account state', async () => {
     localStorage.setItem('agi.chat-drafts', 'draft');

@@ -44,13 +44,14 @@ export async function finalizeWorkspaceSwitch(
   activeOrganizationId: string | null,
   authority: RequestAuthority,
   navigate: (destination: string | null) => void = navigateAfterWorkspaceSwitch,
+  accountId: string = authority.session.userId,
 ): Promise<void> {
   // Cancel first so a response issued under the previous workspace cannot repopulate the cache.
   authority.assertCurrent();
   await queryClient.cancelQueries();
   authority.assertCurrent();
   await applyCacheScope({
-    accountId: authority.session.userId,
+    accountId,
     workspaceId: activeOrganizationId,
   }, authority.isCurrent);
   authority.assertCurrent();

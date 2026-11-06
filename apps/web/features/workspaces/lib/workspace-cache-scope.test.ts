@@ -49,6 +49,17 @@ function everyCachedKey(): readonly unknown[][] {
 }
 
 describe('finalizeWorkspaceSwitch', () => {
+  it('uses the resolved product account ID instead of the captured provider subject when supplied', async () => {
+    const queryClient = new QueryClient();
+    const navigate = vi.fn();
+    const captured = authority();
+    await finalizeWorkspaceSwitch(queryClient, 'org_b', captured, navigate, 'mapped-product-account');
+    expect(captured.session.userId).toBe('user_1');
+    expect(mocks.applyCacheScope).toHaveBeenCalledWith({
+      accountId: 'mapped-product-account', workspaceId: 'org_b',
+    }, expect.any(Function));
+    expect(navigate).toHaveBeenCalledOnce();
+  });
   it.each([
     ['organization', 'org_a'],
     ['personal', null],

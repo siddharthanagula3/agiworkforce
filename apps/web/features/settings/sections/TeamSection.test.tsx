@@ -75,6 +75,7 @@ const state = vi.hoisted(() => ({
   updateRole: vi.fn(),
   removeMember: vi.fn(),
   transferOwnership: vi.fn(),
+  transferPhase: null as 'writing' | null,
   inviteError: null as Error | null,
   invitations: [] as Array<{
     id: string;
@@ -183,6 +184,18 @@ vi.mock('../hooks/use-settings-queries', () => ({
     error: null,
   }),
   useLeaveOrganization: () => ({
+    ownerKey: state.ownerKey,
+    organizationId: state.organization?.id ?? null,
+    workspaceName: state.organization?.name ?? null,
+    currentUserRole: state.organization?.currentUserRole ?? null,
+    actorUserId: 'owner',
+    canMutate: state.canonicalAvailable,
+    phase: null,
+    prepare: (input: unknown) => {
+      let current = true;
+      return { isCurrent: () => current, cancel: () => { current = false; },
+        submit: () => { if (current) { current = false; state.leaveOrganization(input); } } };
+    },
     mutate: state.leaveOrganization,
     isPending: false,
     error: null,
@@ -198,6 +211,18 @@ vi.mock('../hooks/use-settings-queries', () => ({
     error: null,
   }),
   useTransferOrganizationOwnership: () => ({
+    ownerKey: state.ownerKey,
+    organizationId: state.organization?.id ?? null,
+    workspaceName: state.organization?.name ?? null,
+    currentUserRole: state.organization?.currentUserRole ?? null,
+    actorUserId: 'owner',
+    canMutate: state.canonicalAvailable,
+    phase: state.transferPhase,
+    prepare: (input: unknown) => {
+      let current = true;
+      return { isCurrent: () => current, cancel: () => { current = false; },
+        submit: () => { if (current) { current = false; state.transferOwnership(input); } } };
+    },
     mutate: state.transferOwnership,
     mutateAsync: state.transferOwnership,
     isPending: false,
@@ -233,6 +258,7 @@ describe('TeamSection', () => {
     state.seatError = null;
     state.invitations = [];
     state.inviteError = null;
+    state.transferPhase = null;
     vi.clearAllMocks();
   });
 
@@ -783,6 +809,7 @@ describe('TeamSection', () => {
   });
 
   it('mounts the step-up challenge, which the 403 has no other way to reach', () => {
+    state.transferPhase = 'writing';
     renderAsOwnerWithMember();
 
     expect(screen.getByTestId('transfer-step-up-dialog')).toBeInTheDocument();

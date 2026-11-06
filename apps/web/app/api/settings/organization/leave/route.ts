@@ -127,6 +127,9 @@ async function handleLeave(request: NextRequest) {
 
   return NextResponse.json({
     message: 'You left the workspace',
+    organizationId: result.organizationId,
+    userId,
+    successorUserId: result.successorUserId,
     revoked: {
       sessions: deprovision.sessionsRevoked,
       deviceTokens: deprovision.deviceTokensRevoked,

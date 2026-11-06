@@ -251,7 +251,7 @@ export function WebSettingsModal({
     team: (
       <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
         <WorkspaceConsolePointer />
-        <TeamSection />
+        <TeamSection active={open && activeSection === 'team'} />
       </div>
     ),
     security: <SecuritySection passwordEditorActive={open} />,
