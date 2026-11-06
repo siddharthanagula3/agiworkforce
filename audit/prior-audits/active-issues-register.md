@@ -14059,10 +14059,10 @@ Raced status changes can conservatively refuse a page; provider behavior and
 availability have not been exercised.
 
 The requested owner remains the caller's responsibility. This does not repair
-legacy product/native mapping or establish a backend ownership lease. Counts,
-pagination completeness, duplicate IDs, other metadata and timestamps retain
-their existing behavior. The later deprovision and single-session follow-ons
-below extend bounded evidence validation to those separate paths.
+legacy product/native mapping or establish a backend ownership lease. Other
+metadata and timestamps retain their existing behavior. Later follow-ons below
+extend evidence validation to deprovision and single-session paths and bound
+count/duplicate-page completion evidence; pagination completeness is not proven.
 The exported batch revoker is not a standalone ownership boundary, although its
 current production callers in this flow receive validated pages. Fixtures cover
 the helper and route pruning/refusal boundary; they are source-reviewed, not run.
@@ -14094,11 +14094,38 @@ credential and connector cleanup continues under its existing scopes.
 
 Active-workspace selection and caller-selected user ID are unchanged. This does
 not repair product/native mapping or the known leave-path selection-clear race.
-Page bounds, offset behavior, total-count handling, duplicate IDs and provider
-status races remain unchanged; refusal is not proof of complete containment or
-complete credential cleanup. The shared sweep still may have earlier-page effects,
+Page bounds, offset behavior, ignored total counts and provider status races
+remain unchanged; the later shared duplicate guard also applies here. Refusal
+is not proof of complete containment or complete credential cleanup. The shared sweep still may have earlier-page effects,
 unlike deprovision's collect-first flow. Source fixtures cover rejected pages,
 including a bad later page, and retained empty/valid behavior; none were run.
+
+The session-completion follow-on `f65594a040559421d34ebcb7a3b82e60f97fc7bb` makes the shared
+sweep reuse the active-list boundary, which now rejects total counts that are
+not nonnegative safe integers before arithmetic. Valid underreported counts
+still clamp to the visible row count. The shared row validator also rejects
+within-page duplicate IDs before any row is used, including in deprovision;
+direct deprovision still does not consume provider total counts.
+
+No new pending targets is no longer treated as sufficient proof of completion.
+The sweep reports incomplete if its latest page still contains any noncurrent
+session, including one whose prior revoke fulfilled or reported already gone,
+or its count indicates unseen rows. It does not compare the final count with
+historical targetCount: concurrent deletions can legitimately reduce it. Empty
+zero-count and exact current-only terminal pages retain completion semantics.
+The sessions DELETE caller already uses incomplete to withhold current-session
+revocation and success events; other existing callers retain their own incomplete
+handling rather than receiving a new completion contract.
+
+Provider snapshots can race or be stale, so this conservative refusal does not
+prove provider consistency or a future absence of sessions. Earlier revocations,
+credential changes or cleanup can already have occurred before a later invalid
+count/duplicate page is rejected; existing intent cleanup still runs and no new
+complete partial-effect receipt is added. First-page retry/pass bounds, mutation
+ordering, targetCount reporting, caller mapping and broader compromise/cleanup
+limits remain. Source fixtures cover malformed counts, duplicates, inconsistent
+terminal pages, lingering attempted targets, shrinking valid pages and the route
+refusal boundary. They were not run.
 
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to

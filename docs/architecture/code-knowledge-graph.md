@@ -5756,9 +5756,9 @@ Earlier sweep pages may already have been revoked when a later page is rejected;
 the existing failure path still attempts product-owned intent cleanup. This is
 conservative refusal, not transactional rollback, cancellation or a full receipt.
 The caller still owns subject selection. Legacy namespace/RLS issues,
-metadata/count integrity, duplicate IDs, pagination completeness and cross-request
-races remain unchanged. Later sections record the separate deprovision and
-single-session evidence guards.
+other metadata, pagination completeness and cross-request races remain unresolved.
+Later sections record deprovision, single-session and count/duplicate completion
+evidence guards.
 The exported batch primitive is not independently guarded. Source fixtures are
 unrun; see WEB-IDENTITY-POLICY-NAMESPACE-01 for scope and acceptance limits.
 
@@ -5787,14 +5787,36 @@ provider target set, reports the listing error and still lets independent scoped
 credential and connector cleanup proceed.
 
 Caller identity mapping, active-workspace selection and its known leave-path
-clear-before-read issue remain unchanged. Pagination/count/duplicate semantics,
-status races and incomplete credential cleanup remain open. The guard is not
+clear-before-read issue remain unchanged. Deprovision pagination and ignored-count
+semantics remain; the later shared duplicate guard also applies here. Status
+races and incomplete credential cleanup remain open. The guard is not
 complete containment or runtime acceptance. Source fixtures are unrun; see
+WEB-IDENTITY-POLICY-NAMESPACE-01.
+
+## Session sweeps require consistent terminal evidence
+
+Accepted `f65594a040559421d34ebcb7a3b82e60f97fc7bb` reuses the active-list boundary on each sweep
+pass. Common list/sweep counts must be nonnegative safe integers; valid
+underreported counts still clamp to visible rows. Shared page validation rejects
+within-page duplicate IDs before effects, also protecting deprovision collection
+without changing its ignored-count pagination.
+
+When no unattempted targets remain, the latest page must contain no noncurrent
+sessions and advertise no unseen rows for the sweep to report complete. Lingering
+fulfilled/already-gone/failed targets or count-indicated unseen sessions yield
+incomplete. The existing sessions DELETE branch then withholds current-session
+revocation and success events. Normal shrinking pages and exact empty/current-only
+terminal evidence remain admitted; historical counts do not define completion.
+
+This is conservative snapshot interpretation, not a provider consistency or
+ownership lease. Later malformed evidence can follow earlier effects and still
+uses existing intent cleanup; complete partial-effect receipts, atomicity, caller
+mapping and coordinated compromise repair remain open. Fixtures are unrun; see
 WEB-IDENTITY-POLICY-NAMESPACE-01.
 
 ## Reconstruction boundary
 
-Only the two hundred thirty-five accepted production slices traced above are
+Only the two hundred thirty-six accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
