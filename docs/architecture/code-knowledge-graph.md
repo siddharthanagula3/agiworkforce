@@ -5530,10 +5530,9 @@ already-primary shortcut receipt without reconciling prior partial effects.
 Connected sign-in/primary-email confirmation, TOTP/passkeys, destructive cleanup
 and Advanced Security remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01 and
 WEB-EMAIL-CHANGE-COMPLETION-01 for exact scope and acceptance limits.
-Subsequent source review found that editor admission and completion still compare
-the native provider subject to the product profile ID. Different-ID mapped
-accounts cannot admit the editor; existing equal-ID fixtures do not establish
-that case. This remains an explicit follow-up, not a complete email ownership claim.
+Subsequent source review found the original native-subject/product-ID equality
+blocked mapped accounts. The bounded correction is recorded below; broader
+identity policy and durable completion remain open.
 
 ## Workspace membership owns confirmation and continuation
 
@@ -5575,9 +5574,38 @@ Existing workspace selection/create finalization still defaults to provider
 subject without that override; mapped-account limitations are separately recorded
 in WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01.
 
+## Email admission separates product and native identity
+
+Accepted `880ad276e7cb8247caa998e6e5c73bd126d64e14` extends the email lifetime correction with an
+owned Bearer GET receipt containing the product account, native subject and
+session ID. Real product-store observation captures a monotonic incarnation, so
+synchronous A-to-B-to-A retires prior work without waiting for React. Native
+SessionAuthority and exact SDK bindings remain in their original namespace.
+Loading/retry, proof/confirmation and completion remain owner-bound. The latest
+matching product account receives the validated email receipt without replacing
+other current fields. No client workspace-readiness prerequisite or separate
+workspace data request is added; canonical authentication policy reads remain.
+
+Canonical AuthResult carries verified native session identity separately from its
+resolved product ID. The new session-account helper authenticates once under
+existing policies and builds claimed product DB scope. Email mutations and
+step-up readiness/grant use native subject for provider operations and product
+ID for profile, proof, enrollment cache, rate-limit and audit state. Missing or
+foreign provider users fail closed. GET admission is Bearer-only; mutation/proof
+cookie-session compatibility is retained, while non-session principals refuse.
+
+Source review covers production and authored unrun client, canonical auth,
+session helper, route and factor fixtures with different-ID positive cases.
+The tuple is not a backend mapping lease, and sequential email completion still
+needs reconciliation. Canonical MFA gating can still refuse a mapped account;
+absolute-session-age and conditional compromise revocation also retain product
+versus native namespace gaps. Other factor callers/global RLS and workspace
+selection remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01,
+WEB-IDENTITY-POLICY-NAMESPACE-01 and the existing completion/workspace findings.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-five accepted production slices traced above are
+Only the two hundred twenty-six accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

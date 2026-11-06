@@ -13753,12 +13753,13 @@ builds, app/service execution, push or deployment ran.
 
 ## WEB-EMAIL-CHANGE-LIFETIME-01
 
-Severity: Medium. Bounded correction `7b61a2061e` independently source-reviewed
-on 2026-11-06; authored fixtures unrun. Mapped-account admission and runtime
-acceptance remain open as qualified below.
+Severity: Medium. Bounded correction `7b61a2061e`, extended by
+`880ad276e7cb8247caa998e6e5c73bd126d64e14` on 2026-11-06; authored fixtures unrun. Runtime acceptance,
+durable reconciliation and broader identity-policy gaps remain open.
 
-EmailAddressChange now admits a keyed editor only when the captured native
-session user ID literally equals AccountSection's current user ID. Each submission, resend and final
+EmailAddressChange admits a keyed editor after an owned Bearer GET validates the
+exact product-account/native-subject/session tuple. The product store and native
+session are separate captured authorities. Each submission, resend and final
 confirmation has synchronous duplicate admission and copied values. The final
 primary-address switch uses the canonical consequence confirmation. Its stale
 confirm/cancel callbacks cannot advance or dismiss another intent. Account-only
@@ -13766,17 +13767,33 @@ ownership does not impose an arbitrary workspace gate or change server policy.
 Explicit account-section/modal admission retires the editor before retained
 content can continue after close. Loading-state callbacks are fenced too.
 
-Subsequent workspace review found that this equality is not a general account
-identity contract. AccountSection passes AuthUser.id from the product profile,
-while useSessionSnapshot carries the native provider subject. The server identity
-bridge permits different values. Such mapped accounts remain in the editor's
-"account must finish loading" fallback even after both identities load, and its
-completion callback also compares the native subject to the product store ID.
-This source-backed availability defect remains unpatched; it is not evidence of
-cross-account mutation. Existing fixtures used equal IDs and do not establish
-mapped-account acceptance. A correction must resolve product-account ownership
-without changing native SDK identity checks or imposing a workspace prerequisite
-on this account-global action.
+The earlier literal equality blocked different-ID mapped accounts. The extension
+keeps SessionAuthority and exact native SDK checks in their provider namespace,
+while useProductAccountSnapshot observes synchronous product-store changes with
+a monotonic generation. Product A-to-B-to-A retires old work even before React
+renders. Admission token/response/body waits, draft/proof/confirmation and final
+completion share that ownership. Completion names accountId and updates only the
+latest matching product store user. Retry/Close in the loading/error dialog are
+also fenced. No client workspace-readiness prerequisite or separate workspace
+data request is added; canonical authentication policy reads remain. The receipt
+returns no profile data, with private/no-store caching. Authentication can still perform
+identity-link/session-sighting bookkeeping; it is not claimed side-effect free.
+
+Canonical AuthResult retains the verified native session identity separately from
+the resolved product ID. getSessionAccountDb applies existing authentication and
+policy before creating claimed product-account database scope. Email POST/PATCH
+and step-up readiness/grant use it; provider get/add/promote and legacy factor
+registration use the native subject, while profile, grant, cache, rate-limit and
+audit keys stay product scoped. A null/foreign provider user refuses rather than
+selecting first-factor proof. Email GET is Bearer-only; mutations and proof routes
+retain authenticated cookie-session compatibility and refuse non-session
+principals. Other callers and global RLS helpers are not silently rewritten.
+Existing canonical MFA policy, absolute-age and conditional compromise-response
+namespace defects remain in WEB-IDENTITY-POLICY-NAMESPACE-01. In particular,
+required-MFA policy can still deny a mapped account before email admission.
+The GET tuple proves that read's mapping, not a server mapping lease. An unseen
+backend remap between requests is not fenced by expected-account fields in
+POST/PATCH; each request resolves its own authenticated account.
 
 POST and PATCH freeze their JSON before waits and use captured bearer-only
 RequestAuthority transport, with ownership across CSRF/token, response and body
@@ -13806,13 +13823,17 @@ Any unconfirmed HTTP result after dispatch is conservative uncertainty, includin
 4xx because POST can already have removed another unverified address. Unknown
 results block another write until a separate acknowledgment. The notice survives
 close/reopen only while EmailAddressChange remains mounted and the original
-session stays current. Full section/Settings unmount, navigation or reload loses
+session and product-account incarnation stay current. Full section/Settings unmount, navigation or reload loses
 it; acknowledgment is not server reconciliation. No notice carries into another
 session. Native send/verify failures retain a retryable code step without
 re-adding the address or automatically promoting it; delivery or verification
 may still have occurred. An unverified promotion preflight requires a restart.
 
 Independent source review covers production and authored UI/native fixtures.
+New default positives use distinct product/native IDs; real ownership/store,
+route/session helper and factor logic are exercised at controlled SDK, network,
+authentication and database boundaries in source fixtures. No fixture execution
+or integration acceptance is implied.
 All product execution, types, timers, installed SDK and browser acceptance remain
 unrun. Current official Clerk [email flow documentation](https://clerk.com/docs/guides/development/custom-flows/account-updates/add-email)
 and [EmailAddress reference](https://clerk.com/docs/js-frontend/reference/types/email-address)
@@ -13821,3 +13842,40 @@ than treating a resolved promise as proof. Pending/external references and
 already delivered codes are not claimed erased. Other sign-in/primary-email
 confirmation, passkeys, TOTP, account destruction/global logout and Advanced
 Security/server coordination gaps remain separate.
+
+## WEB-IDENTITY-POLICY-NAMESPACE-01
+
+Severity: High. Source-confirmed on 2026-11-06 while correcting mapped-account
+email admission; unpatched, with no runtime reproduction or deployed incident claim.
+
+The identity bridge allows a product account ID to differ from the provider's
+subject. Several policy and response consumers still send the resolved product ID
+to provider operations or compare it with provider-returned native IDs:
+
+- api-auth.ts calls assertSessionWithinAbsoluteLifetime with the resolved product
+  account. lib/auth/session-age.ts compares that value with getSession(sessionId)
+  userId. A mismatch becomes an unknown start; unlike a thrown lookup, that null
+  is cached by sessionId until bounded cache eviction/reset. session-policy.ts
+  permits unknown age, so this path can leave the absolute-lifetime limit
+  unenforced for mapped accounts. Other authentication gates still apply.
+- mfa-policy-gate.ts resolveMfaEnrolled uses product-scoped policy/cache keys but
+  also passes that product ID to getIdentityUser, a direct provider lookup. With
+  no enrolled cache hit, a missing/error result is unenrolled and a required-MFA
+  policy denies the request. The bounded email correction preserves this gate,
+  so it does not establish universal mapped-account email availability.
+- two-factor-security-events.ts passes the product account into identity-events.
+  Normal risk/audit/notification storage is product scoped. If risk reaches
+  compromise, respondToAccountCompromise forwards the same ID through
+  revokeEveryOtherSession to provider listUserSessions. A differing provider
+  namespace can fail or return no native sessions. Existing intent cleanup may
+  still run; this finding does not claim the entire response is absent.
+
+Correct the canonical contracts end-to-end, retaining product IDs for DB, grants,
+policy, cache, audit and notifications while passing verified native subjects to
+provider operations. Revisit negative cache semantics and all affected callers,
+including second-factor routes that still default subject to userId. Add
+distinct-ID and equal-ID policy/revocation cases, and preserve failure/partial
+response semantics. The narrow email/step-up helpers in 880ad276e7cb8247caa998e6e5c73bd126d64e14 do
+not resolve this broader issue, cookie global DB scoping, workspace finalization
+or non-atomic email completion. See WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and
+WEB-EMAIL-CHANGE-COMPLETION-01 for those separate owners.
