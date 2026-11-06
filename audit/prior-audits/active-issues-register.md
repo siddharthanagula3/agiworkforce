@@ -13684,23 +13684,44 @@ push or deployment ran.
 
 ## WEB-DEVICE-SIGNIN-POLICY-FAILOPEN-01
 
-Severity: Medium. Source-confirmed on 2026-11-06; unresolved server behavior.
+Severity: Medium. Source-confirmed on 2026-11-06; runtime and identity acceptance remain open.
+Bounded read-error and malformed-policy correction: `5a9db769cce7d3277b04101539255d398fe8baf6`.
 
-lib/server/device-signin-policy.ts returns enabled when its database lookup
-throws, when the security namespace is missing/malformed, or when the stored
-value is anything other than literal false. The authenticated approve route uses
-that result before creating a device approval. Thus a stored off preference is
-not reliably enforced during lookup failure; generic preference writes also do
-not validate this particular boolean server-side. Human authentication and code
-approval are still required, so this is not an unauthenticated grant claim.
+The policy reader previously returned enabled after database failure or any
+stored value other than literal false. It now distinguishes enabled, disabled
+and unavailable. Only a successful empty scoped result, a valid object with an
+absent security namespace/key, or literal true enables approval. Literal false
+retains the existing disabled response. An existing row with malformed root,
+namespace or key, including null/arrays/scalars, is unavailable, as is an
+operational query/transaction/role-binding failure. SQL declares settings
+non-null JSONB with an empty-object default; it does not enforce object/boolean
+content. The reader validates what it receives without changing generic writes.
 
-WEB-DEVICE-SIGNIN-SETTING-LIFETIME-01 fixes browser ownership and truthfulness, not
-this enforcement policy. A browser API/auth/network failure does not demonstrate
-that the policy database lookup itself failed, so the UI must not fabricate the
-server fallback. Resolve availability/fail-closed behavior and malformed legacy
-value handling with the canonical approval owner and explicit regression sources.
-Changing this setting does not revoke existing grants or sessions. Source-only
-inspection; no runtime failure injection or production policy change was made.
+For a pending, unexpired approval, unavailable policy produces a no-store 503
+with retry-oriented wording rather than claiming the user turned sign-in off.
+Disabled policy remains 403. Both stop before terms evaluation, approved-row
+mutation, success notification and approval audit. Denial does not consult the
+policy. Existing code lookup and expiry cleanup precede this gate; this is not
+a universal no-write guarantee. Authentication and explicit code approval remain
+required, and existing devices, grants and sessions are not revoked.
+
+Successful empty results remain compatibility defaults, not proof that the
+account never saved a preference. Approval binds the resolved product account
+ID, while cookie preference paths can use the native identity subject; RLS can
+make a differently keyed row invisible. This correction does not reconcile
+those identities or guarantee enforcement of an off value under another key.
+There is also no transaction joining the policy read to the later grant update,
+so a concurrent off write can race an already-admitted approval.
+
+The generic preferences writer still permits arbitrary security values, and its
+GET can normalize a null namespace to an empty object. The browser can therefore
+show the successful default-on interpretation while this server policy refuses
+malformed stored data. Browser API/auth/network failure is not evidence that the
+policy database read itself failed. Malformed legacy repair, end-to-end identity
+continuity, same-key ordering, browser/server shape parity and runtime acceptance
+remain open. Authored regression sources cover policy shapes and route behavior
+with modeled dependencies; they are unrun and do not prove production RLS or SDK
+behavior. No tests, lint, typechecks, builds, product execution, push or deployment.
 
 ## WEB-TOTP-CLIENT-LIFETIME-01
 

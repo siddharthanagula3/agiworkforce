@@ -6028,12 +6028,29 @@ Unknown outcomes retain a warning and local write block. Refresh observes state;
 explicit acknowledgment only releases the local block. True unmount/new session/
 reload, same-key cross-client writes and pending shared-cache coherence remain
 outside this correction. Turning off the preference prevents future approvals,
-not existing-device access. Server DB failure/non-false fallback is unchanged and
-tracked separately as WEB-DEVICE-SIGNIN-POLICY-FAILOPEN-01. Fixtures are unrun.
+not existing-device access. The bounded server policy follow-on below addresses
+read errors and malformed values separately. Fixtures are unrun.
+
+## Device approval distinguishes disabled policy from unavailable policy
+
+Accepted `5a9db769cce7d3277b04101539255d398fe8baf6` gives the canonical approval policy three
+outcomes. Successful absent settings/defaults and literal true permit approval;
+literal false retains disabled 403. Present malformed settings or database
+failure return unavailable and stop pending, unexpired approval with no-store
+503 before terms, grant mutation, notification and success audit. Denial remains
+independent; existing lookup and expiry cleanup still precede this gate.
+
+This does not revoke connected devices. Successful empty scoped reads cannot
+distinguish genuine absence from identity/RLS-filtered absence: cookie preference
+and resolved-product approval identities remain a coordinated gap. Generic
+writes remain permissive, generic GET null normalization can disagree with the
+strict policy reader, and policy read/grant mutation are not one transaction.
+Modeled regression sources are unrun, not production RLS or runtime evidence.
+See WEB-DEVICE-SIGNIN-POLICY-FAILOPEN-01 for those remaining limitations.
 
 ## Reconstruction boundary
 
-Only the two hundred forty-seven accepted production slices traced above are
+Only the two hundred forty-eight accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
