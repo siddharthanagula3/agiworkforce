@@ -5597,9 +5597,9 @@ cookie-session compatibility is retained, while non-session principals refuse.
 Source review covers production and authored unrun client, canonical auth,
 session helper, route and factor fixtures with different-ID positive cases.
 The tuple is not a backend mapping lease, and sequential email completion still
-needs reconciliation. Canonical MFA gating can still refuse a mapped account,
-and conditional compromise revocation retains a product/native namespace gap.
-The subsequent absolute-age correction is recorded below. Other factor callers/global RLS and workspace
+needs reconciliation. Canonical product-only MFA gating and conditional compromise revocation retain
+product/native namespace gaps. The subsequent absolute-age and native-session
+MFA corrections are recorded below. Other factor callers/global RLS and workspace
 selection remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01,
 WEB-IDENTITY-POLICY-NAMESPACE-01 and the existing completion/workspace findings.
 
@@ -5620,13 +5620,34 @@ not atomic with event delivery and does not prove durable notification.
 
 Independent source review covers production and authored unrun cache, auth,
 sighting and passkey-gate fixtures. Existing permit-unknown age degradation is
-explicitly unchanged. MFA/compromise mapping, other factor consumers, global RLS,
+explicitly unchanged. The subsequent native-session MFA correction is recorded
+below; product-only MFA/compromise mapping, other factor consumers, global RLS,
 backend mapping leases and sequential email completion remain separate open
 boundaries. See WEB-IDENTITY-POLICY-NAMESPACE-01 for exact scope and limits.
 
+## Native-session MFA checks the authenticated identity
+
+Accepted `45c83e3eb60fc723f69c16bbaacea31587592c35` carries canonical Bearer/cookie native identity into
+MFA policy enforcement and the 2FA requirement read. Product identity still owns
+workspace policy, explicit exemptions and refusal logging. Required-session MFA
+reads the exact provider subject, validates the returned ID and accepts only
+strictly enabled enrollment; unknown, foreign, malformed and failed reads refuse.
+The session path neither trusts nor writes the product-keyed enrollment cache.
+This checks the authenticated identity's enrollment, not a fresh MFA challenge or
+aggregate enrollment across every linked provider.
+
+The uncached path adds a provider read per governed native request and loses
+legacy cache outage tolerance; latency, rate limits and provider acceptance are
+unrun. Product-only principals, organization-policy enablement preflight,
+second-factor routes/cache writers, global cookie/Bearer DB scope and conditional
+compromise revocation remain separate gaps. No reverse mapping or provider
+identity is invented, and the source migration's cardinality is not evidence of
+deployed schema. See WEB-IDENTITY-POLICY-NAMESPACE-01 for the bounded correction,
+source-reviewed unrun fixtures and unresolved identity contract.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-seven accepted production slices traced above are
+Only the two hundred twenty-eight accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

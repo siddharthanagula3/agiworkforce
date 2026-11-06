@@ -13848,8 +13848,10 @@ Security/server coordination gaps remain separate.
 
 Severity: High. Source-confirmed on 2026-11-06 while correcting mapped-account
 email admission. Bounded age/sighting correction `248000bd5b6bf3427617ad55252d192ed27eac5d` is source
-reviewed; fixtures remain unrun. MFA/compromise namespace defects remain
-unpatched, with no runtime reproduction or deployed incident claim.
+reviewed; fixtures remain unrun. Subsequent native-session MFA correction
+`45c83e3eb60fc723f69c16bbaacea31587592c35` is also source reviewed only. Product-only MFA and compromise
+namespace defects remain unpatched, with no runtime reproduction or deployed
+incident claim.
 
 The identity bridge allows a product account ID to differ from the provider's
 subject. The earlier absolute-age path compared a provider-returned native user
@@ -13876,13 +13878,39 @@ distributed only-if-absent claim remain. Event delivery is not atomic with that
 claim; failure after it can still prevent a later event. This does not establish
 durable notice delivery or a backend identity-mapping lease.
 
+The bounded native-session MFA correction passes canonical Bearer/cookie native
+identity into the policy gate and the 2FA requirement read. Product ID still owns
+workspace policy lookup, exemptions and refusal logging. Where policy requires
+MFA, the session path reads that exact native subject and accepts only an exact
+returned ID with twoFactorEnabled === true. Missing, foreign, malformed or thrown
+reads fail closed. It does not consult or update the existing product enrollment
+cache, so a cached enrolled verdict cannot approve an unenrolled native identity,
+and cached unenrolled cannot reject an enrolled native identity. No-required-MFA
+and explicit owner/enrollment exemptions retain their existing semantics.
+
+This checks enrollment of the identity that authenticated the request, not a
+fresh second-factor challenge or aggregate enrollment across linked providers.
+The source identity model in migration 0174 permits one subject per provider and
+account, with multiple providers per account; that migration is marked draft/not
+applied, so source cardinality is not deployed-schema evidence. No reverse mapping
+or guessed native identity is introduced. Bypassing the ambiguous product cache
+adds a provider read to each MFA-governed native request and removes cached outage
+tolerance on this path, including equal-ID accounts. This slice adds no timeout
+or request deduplication. Provider availability, rate limits and latency remain
+open live-validation work, not runtime-verified acceptance. Subject resolution
+is not a backend mapping lease.
+
 The remaining policy and response consumers still use the wrong namespace:
 
-- mfa-policy-gate.ts resolveMfaEnrolled uses product-scoped policy/cache keys but
-  also passes that product ID to getIdentityUser, a direct provider lookup. With
-  no enrolled cache hit, a missing/error result is unenrolled and a required-MFA
-  policy denies the request. The bounded email correction preserves this gate,
-  so it does not establish universal mapped-account email availability.
+- Product-only mfa-policy-gate.ts resolveMfaEnrolled still uses product cache keys
+  and passes product ID to getIdentityUser. API keys, developer/device tokens and
+  mobile-intent checks are not given invented native identity. Existing positive
+  cache admission and missing/error denial remain unchanged for these consumers.
+  Organization-policy enablement/self-lockout preflight and second-factor
+  enrollment/cache writers also remain open. Global cookie DB scoping still
+  discards the resolved product ID; bearer scope retains native token claims.
+  The bounded session path does not certify these related flows or universal
+  mapped-account email availability.
 - two-factor-security-events.ts passes the product account into identity-events.
   Normal risk/audit/notification storage is product scoped. If risk reaches
   compromise, respondToAccountCompromise forwards the same ID through
@@ -13894,12 +13922,12 @@ Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include second-factor routes that still default subject to
 userId, distinct-ID/equal-ID policy and revocation cases, and existing failure or
-partial-response semantics. The email/step-up and age/sighting slices do not
-resolve MFA/compromise mapping, global cookie/Bearer DB scoping, workspace
+partial-response semantics. The email/step-up, age/sighting and native-session MFA slices do not
+resolve product-only MFA/compromise mapping, global cookie/Bearer DB scoping, workspace
 finalization or non-atomic email completion. See
 WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
 
 Independent source review covers production and unrun cache, canonical-auth,
-sighting and passkey-gate fixtures at controlled provider, database, scheduling,
-event and key-value boundaries. No product tests, lint, typechecks, builds,
+sighting, passkey-gate and native-session MFA/requirement fixtures at controlled
+provider, database, scheduling, event and key-value boundaries. No product tests, lint, typechecks, builds,
 runtime/timer or installed provider acceptance were run.
