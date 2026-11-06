@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
-import type { AuthProvider, AuthProviderId } from '@agiworkforce/client-runtime';
+import type { AuthProviderId } from '@agiworkforce/client-runtime';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
@@ -14,30 +14,9 @@ import {
   type IdentityPasskey,
 } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useSignInIdentities } from './use-sign-in-identities';
 
 const IDENTITIES_PATH = '/api/settings/identities';
-const IDENTITIES_UNREADABLE = 'Your sign-in methods could not be loaded.';
-
-interface LinkedIdentity {
-  id: string;
-  provider: string;
-  creationSource: 'backfill' | 'sign_in' | 'sso' | 'link' | string;
-  createdAt: string;
-  lastAuthenticatedAt: string | null;
-  removable: boolean;
-}
-
-interface IdentitiesResponse {
-  identities: LinkedIdentity[];
-  providers: AuthProvider[];
-  consequence: string;
-}
-
-type IdentitiesState =
-  | { kind: 'loading' }
-  | { kind: 'failed'; message: string }
-  | { kind: 'ready'; data: IdentitiesResponse };
-
 const CREATION_SOURCE_LABEL: Readonly<Record<string, string>> = {
   sso: 'Single sign-on',
   link: 'Linked account',
@@ -81,12 +60,6 @@ function describePasskeys(passkeys: readonly IdentityPasskey[]): string {
   const count = `${passkeys.length} saved. Manage them under Passkeys.`;
   const newest = newestPasskeyDate(passkeys);
   return newest ? `${count} Last added on ${newest}.` : count;
-}
-
-async function readIdentities(): Promise<IdentitiesResponse> {
-  const response = await sendAuthorizedJson(IDENTITIES_PATH, { method: 'GET' });
-  if (!response.ok) throw new Error(IDENTITIES_UNREADABLE);
-  return (await response.json()) as IdentitiesResponse;
 }
 
 function newestPasskeyDate(passkeys: readonly IdentityPasskey[]): string | null {
@@ -169,37 +142,21 @@ function MethodRow({
 }
 
 export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => void } = {}) {
-  const { user } = useCurrentUser();
-  const { passkeys } = usePasskeys();
+  const { user, isLoaded: userLoaded, isSignedIn } = useCurrentUser();
+  const { passkeys, isLoaded: passkeysLoaded } = usePasskeys();
   const { isLoaded, accounts, connect, disconnect } = useConnectedAccounts();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [identities, setIdentities] = useState<IdentitiesState>({ kind: 'loading' });
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    readIdentities()
-      .then((data) => {
-        if (!cancelled) setIdentities({ kind: 'ready', data });
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setIdentities({ kind: 'failed', message: toUserMessage(cause, IDENTITIES_UNREADABLE) });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
-
-  const loaded = identities.kind === 'ready' ? identities.data : null;
+  const identities = useSignInIdentities();
+  const loaded = identities.data;
   const providers = loaded?.providers ?? [];
   const linked = loaded?.identities ?? [];
-  const loadError = identities.kind === 'failed' ? identities.message : null;
+  const loadError = identities.error;
+  const nativeReady = userLoaded && isSignedIn && !!user && user.id === identities.ownerId;
+  const reloadIdentities = identities.reload;
 
   async function run(key: string, action: () => Promise<void>, fallback: string) {
     setError(null);
@@ -248,7 +205,7 @@ export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => 
           } | null;
           throw new Error(body?.error?.message ?? 'That sign-in method could not be removed.');
         }
-        setReloadKey((key) => key + 1);
+        reloadIdentities();
       },
       'That sign-in method could not be removed.',
     );
@@ -281,11 +238,12 @@ export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => 
         Every way you can sign in to this account. Keep at least one you can still reach.
       </p>
 
-      {!isLoaded || identities.kind === 'loading' ? (
+      {(!nativeReady || !passkeysLoaded || !isLoaded || identities.isLoading) ? (
         <div style={{ paddingTop: 'var(--space-3)' }}>
           <Spinner size="sm" aria-label="Loading sign-in methods" />
         </div>
-      ) : (
+      ) : null}
+      {nativeReady ? (
         <ul style={{ listStyle: 'none', margin: 'var(--space-3) 0 0', padding: 0 }}>
           <MethodRow
             label="Email address"
@@ -297,8 +255,8 @@ export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => 
             value={user?.hasPassword ? 'Change' : 'Add'}
             onOpen={onOpenPassword}
           />
-          <MethodRow label="Passkeys" detail={describePasskeys(passkeys)} />
-          {providers.map((provider) => {
+          {passkeysLoaded ? <MethodRow label="Passkeys" detail={describePasskeys(passkeys)} /> : null}
+          {isLoaded ? providers.map((provider) => {
             const account = accounts.find((candidate) => candidate.provider === provider.id);
             const key = account ? `disconnect:${account.id}` : `connect:${provider.id}`;
             return (
@@ -336,7 +294,7 @@ export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => 
                 </button>
               </MethodRow>
             );
-          })}
+          }) : null}
           {linked.length > 1
             ? linked.map((identity) => {
                 const label = CREATION_SOURCE_LABEL[identity.creationSource] ?? 'Sign-in account';
@@ -382,7 +340,7 @@ export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => 
               })
             : null}
         </ul>
-      )}
+      ) : null}
 
       {loadError || error ? (
         <p

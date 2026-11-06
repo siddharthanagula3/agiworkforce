@@ -3,16 +3,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const identity = vi.hoisted(() => ({
   hasPassword: false,
+  userLoaded: true,
+  passkeysLoaded: true,
+  accountsLoaded: true,
+  signedIn: true,
+  userId: 'person',
+  ownerId: 'person' as string | null,
+  readError: null as string | null,
+  readLoading: false,
+  populated: false,
   passkeys: [] as Array<{ id: string; name: string | null; createdAt: Date; lastUsedAt: null }>,
 }));
 
 vi.mock('@/lib/identity/client', () => ({
   useCurrentUser: () => ({
-    user: { email: 'person@example.com', hasPassword: identity.hasPassword },
+    isLoaded: identity.userLoaded,
+    isSignedIn: identity.signedIn,
+    user: { id: identity.userId, email: 'person@example.com', hasPassword: identity.hasPassword },
   }),
-  usePasskeys: () => ({ passkeys: identity.passkeys }),
+  usePasskeys: () => ({ isLoaded: identity.passkeysLoaded, passkeys: identity.passkeys }),
   useConnectedAccounts: () => ({
-    isLoaded: true,
+    isLoaded: identity.accountsLoaded,
     accounts: [],
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -32,6 +43,24 @@ vi.mock('@/features/auth/step-up-fetch', () => ({
   ),
 }));
 
+vi.mock('./use-sign-in-identities', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./use-sign-in-identities')>(),
+  useSignInIdentities: () => ({
+    ownerId: identity.ownerId,
+    data: identity.readError || identity.readLoading ? null : {
+      identities: identity.populated ? [1, 2].map((id) => ({
+        id: `00000000-0000-4000-8000-00000000000${id}`, provider: 'backend', creationSource: 'link',
+        createdAt: '2026-01-01T00:00:00.000Z', lastAuthenticatedAt: null, removable: id === 2,
+      })) : [],
+      providers: identity.populated ? [{ id: 'google', label: 'Google' }] : [],
+      consequence: 'You cannot sign in with it.',
+    },
+    error: identity.readError,
+    isLoading: identity.readLoading,
+    reload: vi.fn(),
+  }),
+}));
+
 import { SignInMethodsPanel } from './SignInMethodsPanel';
 
 function formatted(date: Date): string {
@@ -42,6 +71,15 @@ describe('SignInMethodsPanel', () => {
   beforeEach(() => {
     identity.hasPassword = false;
     identity.passkeys = [];
+    identity.userLoaded = true;
+    identity.passkeysLoaded = true;
+    identity.accountsLoaded = true;
+    identity.signedIn = true;
+    identity.userId = 'person';
+    identity.ownerId = 'person';
+    identity.readError = null;
+    identity.readLoading = false;
+    identity.populated = false;
   });
 
   it('offers Add on the password row and opens the password form', async () => {
@@ -82,5 +120,52 @@ describe('SignInMethodsPanel', () => {
         `2 saved. Manage them under Passkeys. Last added on ${formatted(newest)}.`,
       ),
     ).toBeInTheDocument();
+  });
+  it.each(['loading', 'failed'])('preserves current native rows while identities GET is %s', async (state) => {
+    identity.populated = true;
+    identity.readLoading = state === 'loading';
+    identity.readError = state === 'failed' ? 'Your sign-in methods could not be loaded.' : null;
+    render(<SignInMethodsPanel onOpenPassword={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Add password' })).toBeInTheDocument();
+    expect(screen.getByText('person@example.com')).toBeInTheDocument();
+    expect(screen.getByText('None yet. Add one under Passkeys.')).toBeInTheDocument();
+    expect(screen.queryByText('Google')).toBeNull();
+    expect(screen.queryByText('Linked account')).toBeNull();
+    if (state === 'failed') expect(screen.getByRole('alert')).toHaveTextContent(identity.readError!);
+  });
+
+  it('waits for connected-account readiness before offering provider actions', () => {
+    identity.populated = true;
+    identity.accountsLoaded = false;
+    const { rerender } = render(<SignInMethodsPanel />);
+    expect(screen.queryByText('Google')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
+    expect(screen.getAllByText('Linked account')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    identity.accountsLoaded = true;
+    rerender(<SignInMethodsPanel />);
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
+  it('does not report empty passkeys before native readiness', () => {
+    identity.passkeysLoaded = false;
+    render(<SignInMethodsPanel />);
+    expect(screen.queryByText('None yet. Add one under Passkeys.')).toBeNull();
+    expect(screen.getByText('person@example.com')).toBeInTheDocument();
+  });
+
+  it.each(['loading', 'signed-out', 'mismatch', 'no-owner'])('hides native statuses for %s', (state) => {
+    identity.populated = true;
+    identity.userLoaded = state !== 'loading';
+    identity.signedIn = state !== 'signed-out';
+    identity.userId = state === 'mismatch' ? 'other' : 'person';
+    identity.ownerId = state === 'no-owner' ? null : 'person';
+    render(<SignInMethodsPanel onOpenPassword={vi.fn()} />);
+    expect(screen.queryByText('person@example.com')).toBeNull();
+    expect(screen.queryByText('Not set')).toBeNull();
+    expect(screen.queryByText('Google')).toBeNull();
+    expect(screen.queryByText('Linked account')).toBeNull();
+    expect(screen.queryByText('None yet. Add one under Passkeys.')).toBeNull();
   });
 });
