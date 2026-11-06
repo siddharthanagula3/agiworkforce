@@ -13555,12 +13555,12 @@ Coordinated boundaries and source owners:
   Native PasskeysPanel is adjacent and does not use
   step-up; its application-level correction and open SDK boundary are tracked
   separately under WEB-PASSKEY-APPLICATION-LIFETIME-01 below.
-- TOTP: TwoFactorEnrollment setup, separate service verification/status paths,
-  QR/secret/OTP/backup-code state, copy/download/print and parent status callback
-  need a full setup/receipt lifetime. Stage-local QR and frame cleanup exist but
-  do not provide session ownership. WEB-MFA-READ-LIFETIME-01 separately owns only
-  the notice and policy availability readers; it does not repair this panel or
-  its parent/cache invalidation cause. Preserve already-exported material limits.
+- TOTP: WEB-TOTP-CLIENT-LIFETIME-01 separately contains the panel transport,
+  confirmation, secret/export and retained active lifetime, removes the parent
+  factor mirror and fences MFA reader invalidation. WEB-MFA-READ-LIFETIME-01 owns
+  the notice/policy readers. Server pending-enrollment identity, batch custody,
+  provider/DB/cache/event reconciliation and expected self-termination completion
+  remain open. Preserve already-exported material and true-unmount limitations.
 - Advanced Account Security: status, options, native WebAuthn, add/remove,
   enrollment, recovery keys, disable and cancel-recovery need owned action and
   secret lifetimes. Not every route requires generic step-up. Routes explicitly
@@ -13634,6 +13634,76 @@ features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
+## WEB-TOTP-CLIENT-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded application correction: `4abf26b7f721362e2d3c51e52329db078284cf51`.
+
+TwoFactorEnrollment previously reacquired ambient authentication through direct
+senders and legacy service methods, admitted overlapping actions through React
+busy state, and retained setup secrets/codes/export callbacks across session and
+retained Settings-view changes. Delayed status reads could call a replacement
+parent callback, fabricate disabled state on failure and globally invalidate MFA
+queries. The SecuritySection parent also persisted that factor result in a
+preference-backed timeout form, permitting stale factor mirrors in later saves.
+
+The correction replaces the full panel application flow with canonical captured
+SessionAuthority/RequestAuthority and a private active incarnation. Settings
+close or departure from Security withdraws admission before retained content is
+removed. A synchronous intent owns confirmation, immutable OTP/stage inputs,
+CSRF/token waits, owned step-up, dispatch, response/body parsing and settlement.
+Retained cancellation cannot release an already-started mutation. Observed silent
+session loss is reconciled without publishing old data into a replacement view.
+No active-workspace admission or organization header is introduced.
+
+Enable, disable and replacement-code confirmations describe their consequences,
+including possible session sign-out and linked-device credential revocation.
+Wire status fields are actual booleans. Setup secret/code shape is checked against
+the canonical TOTP generator configuration; the setup URI must match the canonical
+generator, including its secret and parameters. Verify requires success:true and
+codes, disable success:true, and regeneration codes. Duplicate codes are not
+rejected because the generator does not guarantee uniqueness. A valid code receipt
+is published before follow-up status refresh; a failed refresh cannot discard
+those once-only codes or relabel the accepted mutation as a failure.
+
+Secret-bearing stages, QR completion, clipboard completion and export admission
+are owned by their current stage and view. Print cleanup removes its captured
+frame, so an old afterprint cannot remove a later frame. Object URLs are revoked
+in finally. Retirement masks/removes local secret UI and rejects retained export
+handlers; it cannot recall an already-started clipboard write, download or print,
+erase arbitrary references or promise server cancellation.
+
+The old ambient get2FAStatus/verify2FA methods are removed; shared server crypto
+exports remain. SecuritySection has no durable factor callback/ref and reads
+owned availability separately, distinguishing unknown from confirmed unavailable.
+The timeout form/schema/save carries only session_timeout. This does not repair
+all timeout draft/submission lifetimes. The parent and panel deliberately perform
+separate status reads while active. Those GETs can migrate earlier native
+enrollment, so extra reads are not asserted to be side-effect-free. Successful
+owned TOTP actions invalidate only matching native user/session MFA query prefixes,
+with full panel ownership checked immediately beforehand. Retired reader closures
+still refuse credentials. No cross-mounted read deduplication is introduced.
+
+Post-dispatch failure, malformed receipt or cancellation is conservatively
+uncertain, including unproven 4xx outcomes. Only a recognized step-up refusal clears
+the requested-action dispatch marker before a permitted proof replay; earlier
+status/migration effects may already exist. No ambiguous mutation is automatically
+retried. A local uncertainty block survives retained-wrapper close/reopen, but not
+genuine component unmount, a new session incarnation or reload. Returning to a new
+view or using another client can still submit another mutation. Explicit warning
+acknowledgment releases only that local block, not evidence of reconciliation;
+missing new backup codes cannot be recovered through the status GET.
+
+Server pending secrets are still product-keyed rather than transaction/batch-bound
+across linked native identities. Concurrent verification, custody, provider/SQL/
+cache/event partial outcomes and durable result recovery remain open. Security
+handling can terminate the initiating session before a receipt; strict client
+retirement intentionally suppresses that result rather than accepting arbitrary
+signed-out or replacement-session completion. Keep WEB-IDENTITY-POLICY-NAMESPACE-01
+and the coordinated WEB-SETTINGS-STEP-UP-OWNERSHIP-01 limitations open. Source
+fixtures model native SDK/session behavior and are unrun; no tests, lint,
+typechecks, builds, app/service execution, push or deployment ran.
+
 ## WEB-MFA-READ-LIFETIME-01
 
 Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
@@ -13671,15 +13741,13 @@ policy status's five-minute freshness/no-focus behavior remain; automatic retry
 is disabled rather than repeating status migration after a failed read. Normal
 query scheduling and SDK/browser compatibility remain unverified.
 
-This does not own the legacy TOTP caller. Its broad requirement invalidation can
-still prompt a current reader to refresh after an old mutation; the old query
-itself cannot adopt a new session's credentials. The policy status prefix still
-has no enrollment invalidation, so this is not a post-enrollment freshness fix.
-TwoFactorEnrollment, its parent callback/form, mutation transports and all secret,
-QR, clipboard, download and print lifetimes remain open. Legacy get2FAStatus and
-verify2FA services are unchanged. Workspace policy mutation/draft lifetimes are
-also outside this read correction. An already-enabled draft can still be saved
-after availability changes; this is not submit-time availability admission.
+This reader-only correction did not own the TOTP caller. The follow-on
+WEB-TOTP-CLIENT-LIFETIME-01 now fences that caller's mutation/export/parent
+application lifetime and its invalidation cause, including the status prefix.
+The ambient get2FAStatus/verify2FA methods have been removed by that follow-on.
+Workspace policy mutation/draft lifetimes are still outside these corrections.
+An already-enabled policy draft can still be saved after availability changes;
+this is not submit-time availability admission.
 
 Status GET is not side-effect-free: readSecondFactorStatus can register earlier
 native enrollment, update cache and delete the legacy row. Retiring a request

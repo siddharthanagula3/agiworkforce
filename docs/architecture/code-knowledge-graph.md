@@ -5985,15 +5985,38 @@ across mounts, and inactive caches are not retained.
 
 Both reads are account/session scoped. Requirement consults governing organization
 policy, not the active workspace; status disables organization resolution. The
-legacy TOTP requirement invalidation can still refresh current readers, and no
-new enrollment invalidation is added for policy status. TOTP mutation/secret and
-parent form ownership remain open. Status GET can migrate legacy factors, so
-client cancellation and disabled retries are not provider/DB rollback. Source
-fixtures are unrun; see WEB-MFA-READ-LIFETIME-01 and the coordinated identity gaps.
+TOTP client follow-on below now owns its invalidation cause and refreshes matching
+status/requirement prefixes. Status GET can migrate legacy factors, so client
+cancellation and disabled retries are not provider/DB rollback. Source fixtures
+are unrun; see WEB-MFA-READ-LIFETIME-01 and the coordinated identity gaps.
+
+## TOTP client flow owns confirmations, receipts and secret exports
+
+Accepted `4abf26b7f721362e2d3c51e52329db078284cf51` connects Settings activity to a captured
+account/session TOTP view and synchronous intent. Owned transport covers CSRF,
+tokens, step-up and strict generator-matched receipts. Enable/disable/replacement
+confirmations name credential and possible session/device-revocation effects.
+Secret stages, QR, clipboard continuations, downloads and exact print frames
+retire with their owning view. Valid once-only code receipts survive status-refresh
+failure; started exports and server effects cannot be recalled.
+
+SecuritySection no longer mirrors factor status into timeout preferences. Its
+separate owned availability reader distinguishes unknown, and only session_timeout
+is saved. Duplicate private status reads and their possible legacy migration
+side effects remain explicit. Current TOTP intents refresh only matching native
+user/session MFA reader keys. Legacy ambient status/verify service methods are
+removed, with shared server crypto exports preserved.
+
+Unconfirmed dispatched actions block this retained view until explicit local
+acknowledgment. True unmount/new session/reload and cross-client duplication are
+not durably reconciled. Pending enrollment identity, batch/custody, sequential
+provider/SQL/cache/events and expected sign-out-before-receipt remain coordinated
+server/client work; strict retirement does not accept signed-out secret delivery.
+Source fixtures remain unrun; see WEB-TOTP-CLIENT-LIFETIME-01.
 
 ## Reconstruction boundary
 
-Only the two hundred forty-five accepted production slices traced above are
+Only the two hundred forty-six accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
