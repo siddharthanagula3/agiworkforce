@@ -257,7 +257,7 @@ function AccountRow({
   );
 }
 
-export function AccountSection() {
+export function AccountSection({ emailEditorActive = true }: { emailEditorActive?: boolean }) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -266,9 +266,8 @@ export function AccountSection() {
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
-  const updateUser = useAuthStore((s) => s.updateUser);
   const currentEmail = user?.email ?? null;
-  const [showEmailChange, setShowEmailChange] = useState(false);
+  const [showEmailChange, setShowEmailChange] = useState<boolean | null>(null);
 
   const [showApiKeys, setShowApiKeys] = useState(false);
 
@@ -976,11 +975,16 @@ export function AccountSection() {
       </AlertDialog>
 
       {deleteAccountMutation.stepUpDialog}
-      {showEmailChange ? (
+      {showEmailChange !== null ? (
         <EmailAddressChange
+          active={emailEditorActive && showEmailChange}
+          accountId={userId}
           currentEmail={currentEmail}
-          onChanged={(email) => {
-            if (user) updateUser({ ...user, email });
+          onChanged={(email, completion) => {
+            if (!completion.isCurrent()) return;
+            const latest = useAuthStore.getState();
+            if (latest.user?.id !== completion.userId || !completion.isCurrent()) return;
+            latest.updateUser({ ...latest.user, email });
           }}
           onClose={() => setShowEmailChange(false)}
         />

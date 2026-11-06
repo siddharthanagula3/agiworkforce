@@ -28,8 +28,12 @@ const getTokenMock = vi.fn(async () => 'session-token');
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: getTokenMock }) }));
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
+const emailAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
-  AccountSection: () => null,
+  AccountSection: ({ emailEditorActive }: { emailEditorActive?: boolean }) => {
+    emailAdmission(emailEditorActive);
+    return <div data-testid="email-editor-admission">{String(emailEditorActive)}</div>;
+  },
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));
 vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
@@ -895,3 +899,17 @@ it('withdraws password editor admission when Settings closes and restores it on 
 });
 
 afterEach(() => { retainedSettings.enabled = false; });
+
+
+it('withdraws email editor admission on Settings close before retained content unmounts', async () => {
+  emailAdmission.mockClear();
+  retainedSettings.enabled = true;
+  stubFetch();
+  const mounted = render(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
+  await waitFor(() => expect(emailAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal open={false} onClose={vi.fn()} initialSection="account" />);
+  expect(emailAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('email-editor-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
+  await waitFor(() => expect(emailAdmission).toHaveBeenLastCalledWith(true));
+});

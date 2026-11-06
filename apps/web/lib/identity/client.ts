@@ -495,43 +495,108 @@ export function useSessionReverification(authority?: RequestAuthority): Identity
   );
 }
 
+export interface EmailAddressVerificationScope {
+  readonly authority: RequestAuthority;
+  readonly emailAddress: string;
+  readonly onDispatch?: () => void;
+}
+
 export interface IdentityEmailAddressVerification {
-  sendCode: (emailAddressId: string) => Promise<void>;
-  verifyCode: (emailAddressId: string, code: string) => Promise<void>;
-  refresh: () => Promise<void>;
+  sendCode: (emailAddressId: string, scope: EmailAddressVerificationScope) => Promise<void>;
+  verifyCode: (emailAddressId: string, code: string, scope: EmailAddressVerificationScope) => Promise<void>;
+  requireVerified: (emailAddressId: string, scope: EmailAddressVerificationScope) => Promise<void>;
+  refresh: (authority: RequestAuthority) => Promise<void>;
 }
 
 export function useEmailAddressVerification(): IdentityEmailAddressVerification {
-  const { user } = useUser();
-  const userRef = useRef(user);
-  userRef.current = user;
-
-  const pendingAddress = useCallback(async (emailAddressId: string) => {
-    const current = userRef.current;
-    if (!current) throw new Error('You are signed out. Sign in again to continue.');
-    const reloaded = await current.reload();
-    const address = reloaded.emailAddresses.find((candidate) => candidate.id === emailAddressId);
-    if (!address) throw new Error('That address is no longer on your account. Start again.');
-    return address;
+  return useMemo<IdentityEmailAddressVerification>(() => {
+    type NativeUser = NonNullable<ReturnType<typeof nativeSessionFor>['user']>;
+    const owned = async <T,>(authority: RequestAuthority,
+      work: (user: NativeUser, assertCurrent: () => void) => Promise<T>): Promise<T> => {
+      authority.assertCurrent();
+      const session = nativeSessionFor(authority.session);
+      const user = session.user;
+      if (!user || user.id !== authority.session.userId) {
+        authority.retire();
+        authority.assertCurrent();
+        throw new Error('You are signed out. Sign in again to continue.');
+      }
+      const observe = () => {
+        if (!authority.isCurrent() || session.user !== user || user.id !== authority.session.userId) {
+          authority.retire();
+        }
+      };
+      const assertCurrent = () => { observe(); authority.assertCurrent(); };
+      let stop: (() => void) | undefined;
+      const release = () => { stop?.(); stop = undefined; };
+      authority.signal.addEventListener('abort', release, { once: true });
+      stop = authority.session.subscribe?.(observe);
+      if (authority.signal.aborted) release();
+      try {
+        assertCurrent();
+        const result = await work(user, assertCurrent);
+        assertCurrent();
+        return result;
+      } finally {
+        release();
+        authority.signal.removeEventListener('abort', release);
+      }
+    };
+    const matches = (address: { id: string; emailAddress: string } | null | undefined,
+      emailAddressId: string, scope: EmailAddressVerificationScope) =>
+      address?.id === emailAddressId &&
+      address.emailAddress.trim().toLowerCase() === scope.emailAddress.trim().toLowerCase();
+    const pendingAddress = async (user: NativeUser, assertCurrent: () => void,
+      emailAddressId: string, scope: EmailAddressVerificationScope) => {
+      assertCurrent();
+      const reloaded = await user.reload();
+      assertCurrent();
+      if (reloaded.id !== scope.authority.session.userId) throw new Error('The account changed. Start again.');
+      const address = reloaded.emailAddresses.find((candidate) => candidate.id === emailAddressId);
+      if (!address || !matches(address, emailAddressId, scope)) {
+        throw new Error('That address is no longer on your account. Start again.');
+      }
+      return address;
+    };
+    return {
+      sendCode: (emailAddressId, submitted) => {
+        const scope = { ...submitted };
+        return owned(scope.authority, async (user, assertCurrent) => {
+          const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
+          assertCurrent();
+          scope.onDispatch?.();
+          assertCurrent();
+          const prepared = await address.prepareVerification({ strategy: 'email_code' });
+          assertCurrent();
+          if (!matches(prepared, emailAddressId, scope)) throw new Error('The code delivery could not be confirmed.');
+        });
+      },
+      verifyCode: (emailAddressId, code, submitted) => {
+        const scope = { ...submitted };
+        return owned(scope.authority, async (user, assertCurrent) => {
+          const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
+          assertCurrent();
+          scope.onDispatch?.();
+          assertCurrent();
+          const verified = await address.attemptVerification({ code });
+          assertCurrent();
+          if (!matches(verified, emailAddressId, scope) || verified.verification?.status !== 'verified') {
+            throw new Error('The email address verification could not be confirmed.');
+          }
+        });
+      },
+      requireVerified: (emailAddressId, submitted) => {
+        const scope = { ...submitted };
+        return owned(scope.authority, async (user, assertCurrent) => {
+          const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
+          if (address.verification?.status !== 'verified') throw new Error('That email address is not currently verified. Close this dialog and start again.');
+        });
+      },
+      refresh: (authority) => owned(authority, async (user, assertCurrent) => {
+        const reloaded = await user.reload();
+        assertCurrent();
+        if (reloaded.id !== authority.session.userId) throw new Error('The account changed. Start again.');
+      }),
+    };
   }, []);
-
-  const sendCode = useCallback(
-    async (emailAddressId: string) => {
-      await (await pendingAddress(emailAddressId)).prepareVerification({ strategy: 'email_code' });
-    },
-    [pendingAddress],
-  );
-
-  const verifyCode = useCallback(
-    async (emailAddressId: string, code: string) => {
-      await (await pendingAddress(emailAddressId)).attemptVerification({ code });
-    },
-    [pendingAddress],
-  );
-
-  const refresh = useCallback(async () => {
-    await userRef.current?.reload();
-  }, []);
-
-  return useMemo(() => ({ sendCode, verifyCode, refresh }), [sendCode, verifyCode, refresh]);
 }
