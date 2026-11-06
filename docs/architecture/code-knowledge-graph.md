@@ -5381,9 +5381,32 @@ presentation, unknown outcomes and receipt recovery remain separate. Cached prio
 owner rows are not claimed erased from memory. See
 `WEB-API-KEY-READ-OWNERSHIP-01` for evidence and limits.
 
+## Project editor intents own mutation authority
+
+Accepted `75eaf1326b` gates ProjectsPanel on canonical workspace admission and
+keys the inner view by owner incarnation, epoch and scope. Opening an editor or
+archive confirmation captures RequestAuthority, component generation and copied
+target values. A separate intent ID resets form state on batched close/reopen.
+Retirement fences stale callbacks, copied fields, duplicate submissions and late
+completion effects without reviving an earlier account or workspace.
+
+Project create/update/archive hooks require the captured scope through CSRF,
+token acquisition and receipt parsing. Requests omit cookies and explicitly select
+Personal or an organization. Receipt IDs are checked, not the entire schema.
+Only current success starts background prefix invalidation; local errors suppress
+the global mutation toast but not its logging. Confirmed receipts do not wait for
+list refresh, and dispatched unknown outcomes never claim rollback. The explicit
+Refresh projects control reads without replay and keeps the uncertainty notice.
+
+Independent source review accepted production and unrun transport/UI/retry/read
+fixtures, including StrictMode and batched reopen source cases. Key/webhook
+mutation/editor/secret lifetimes, manual duplicates, persistent reconciliation and
+server archive scope/concurrency remain open. See
+`WEB-DEVELOPER-PROJECT-INTENT-OWNERSHIP-01` for evidence and acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred eighteen accepted production slices traced above are represented as
+Only the two hundred nineteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

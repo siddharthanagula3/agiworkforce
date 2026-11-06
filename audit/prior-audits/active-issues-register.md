@@ -13233,3 +13233,54 @@ outcomes, once-only receipt recovery, manual duplicate submissions and broader
 settings reads remain open. This slice does not certify the entire developer or
 settings UI as isolated. No tests, lint, typechecks, builds, app/service execution,
 push or deployment ran.
+
+## WEB-DEVELOPER-PROJECT-INTENT-OWNERSHIP-01
+
+Severity: Medium. Bounded correction `75eaf1326b` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+ProjectsPanel previously retained copied editor data and confirmation callbacks
+outside the lifetime of the admitted account/workspace. Project mutation hooks
+then acquired ambient credentials after those intents were opened. A retired
+editor or confirmation could therefore dispatch under later authority or deliver
+completion effects to a replacement view. No live incident is asserted.
+
+The panel now admits a keyed owner/epoch/scope child using the canonical session
+and workspace authorities. Opening an editor or archive confirmation captures a
+RequestAuthority, target values and component generation. Per-lane intent IDs
+force a fresh form even if close/reopen is batched without an intervening unmount.
+Retirement, stale callbacks and duplicate submissions are checked synchronously;
+owner changes remove copied editor data and cancel the old transport. Archive
+uses copied ID/name primitives and retains the existing unknown-key-count gate.
+
+Create/update/archive variables now require an explicit ProjectMutationScope.
+The transport checks it before and after CSRF acquisition, uses its captured
+token and explicit Personal/organization selector, omits cookies and checks it
+after response parsing. A successful response must contain a nonempty project ID;
+update/archive require the requested ID. This is not complete schema validation.
+Current 4xx refusals remain actionable, while dispatched transport, 5xx or receipt
+failures are described as uncertain. Client cancellation never claims rollback.
+There is no automatic mutation retry. An owner-guarded Refresh projects control
+only reads and retains the uncertainty notice; a refresh cannot prove an earlier
+server operation has ended.
+
+Current success starts compatible prefix invalidation in the background rather
+than delaying the receipt behind another list request. Retired success does not
+invalidate or toast. Mutation errors are presented by the owning panel; a local
+onError handler suppresses the shared toast but not MutationCache logging.
+
+Independent source review accepted production and both new ownership fixtures,
+plus adaptations to retry and read-state fixtures. Authored cases cover explicit
+transport selection, deferred CSRF/token/response/body retirement, receipt IDs,
+StrictMode repeated submit, account/epoch round trips, stale confirmations and
+closes, batched reopen, refusal retry and uncertainty refresh without write replay.
+The transport-only matrix controls session currentness; the UI matrix uses real
+session/workspace/RequestAuthority paths with controlled Clerk/network boundaries.
+None ran, including runtime/type compatibility.
+
+API-key/webhook mutation, editor and generated-secret lifetimes remain separate.
+Stable operation identity, persistent ambiguous-outcome reconciliation, manual
+duplicate submissions, server archive cross-workspace coverage and concurrent
+key issuance remain open. The notice is not persisted across owner unmounts.
+This is not certification of the entire developer UI or server lifecycle. No tests,
+lint, typechecks, builds, app/service execution, push or deployment ran.
