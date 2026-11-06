@@ -14040,6 +14040,33 @@ historical hold reconciliation and product-only emergency-report compatibility
 must be designed together. No such mapping rewrite or data backfill is included.
 Compromise write authority and false completion are separately tracked below.
 
+The bounded session-page follow-on `d94f64cd0e7646de42af9e88f11ab288556ab9c3` checks both shared
+active-session enumeration paths before returning rows or selecting revocation
+targets. Each page's sessions must be an array whose every row has nonempty,
+unpadded string IDs for the session and owner, the exact requested provider owner
+and active status. Sparse/null or
+otherwise invalid rows reject the whole page; they are not filtered into a
+success-shaped list or sweep. Both local provider calls explicitly request active
+sessions. No provider-specific ID syntax or inferred native subject is added.
+
+The settings session-list route already obtains its rows through this shared
+helper before lifetime pruning, so that path cannot prune or expose an invalid
+page. Sweep validation also precedes current-session selection and batch targets.
+A later invalid page can follow successful revocations on earlier pages, and the
+existing failure path still attempts product-owned mobile-intent cleanup. A
+rejected page does not roll those effects back or provide a complete receipt.
+Raced status changes can conservatively refuse a page; provider behavior and
+availability have not been exercised.
+
+The requested owner remains the caller's responsibility. This does not repair
+legacy product/native mapping or establish a backend ownership lease. Counts,
+pagination completeness, duplicate IDs, other metadata and timestamps retain
+their existing behavior. Direct deprovision enumeration separately requests
+active sessions and bypasses this helper; single-session lookups remain separate.
+The exported batch revoker is not a standalone ownership boundary, although its
+current production callers in this flow receive validated pages. Fixtures cover
+the helper and route pruning/refusal boundary; they are source-reviewed, not run.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include remaining account-security/factor consumers,

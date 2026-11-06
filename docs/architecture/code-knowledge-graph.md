@@ -5743,9 +5743,27 @@ No deployed policy inspection or backfill occurred. Native mapping, write author
 truthful receipts, proof custody and atomic/all-provider containment remain open;
 see WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-COMPROMISE-WRITE-AUTHORITY-01.
 
+## Shared session pages validate provider ownership before use
+
+Accepted `d94f64cd0e7646de42af9e88f11ab288556ab9c3` validates each complete active-session page before
+shared listing or sweep target selection. Rows need nonempty unpadded session and
+owner string IDs, the exact requested provider owner and active status; malformed/sparse rows reject
+the page instead of being silently filtered. Both scoped requests explicitly ask
+for active sessions. The settings list route consumes this helper before lifetime
+pruning, so no route production rewrite is required.
+
+Earlier sweep pages may already have been revoked when a later page is rejected;
+the existing failure path still attempts product-owned intent cleanup. This is
+conservative refusal, not transactional rollback, cancellation or a full receipt.
+The caller still owns subject selection. Legacy namespace/RLS issues, separate
+direct deprovision enumeration, single-session reads, metadata/count integrity,
+duplicate IDs, pagination completeness and cross-request races remain unchanged.
+The exported batch primitive is not independently guarded. Source fixtures are
+unrun; see WEB-IDENTITY-POLICY-NAMESPACE-01 for scope and acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty-two accepted production slices traced above are
+Only the two hundred thirty-three accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
