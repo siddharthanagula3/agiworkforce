@@ -2,44 +2,17 @@
 
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
 import { ShieldAlert } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import { getAuthToken } from '@shared/lib/get-auth-token';
 import { ProductNoticeCard } from '@shared/components/ProductNotice';
 
-export const WORKSPACE_MFA_REQUIREMENT_QUERY_KEY = [
-  'settings',
-  'two-factor',
-  'workspace-requirement',
-] as const;
+import { useMfaRequirement } from '../hooks/use-mfa-readers';
+export { WORKSPACE_MFA_REQUIREMENT_QUERY_KEY } from '../hooks/use-mfa-readers';
 
-const REQUIREMENT_STALE_MS = 60_000;
 const ENROLLMENT_PATH = settingsSectionPath('security');
 
-async function readWorkspaceMfaRequirement(): Promise<boolean> {
-  const token = await getAuthToken();
-  if (!token) return false;
-  const response = await fetch('/api/settings/2fa/requirement', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    throw Object.assign(new Error('The two-factor requirement could not be read.'), {
-      status: response.status,
-    });
-  }
-  const body = (await response.json()) as { required?: unknown };
-  return body.required === true;
-}
-
 export function WorkspaceMfaNotice() {
-  const { data: required } = useQuery({
-    queryKey: WORKSPACE_MFA_REQUIREMENT_QUERY_KEY,
-    queryFn: readWorkspaceMfaRequirement,
-    staleTime: REQUIREMENT_STALE_MS,
-    refetchOnWindowFocus: true,
-    meta: { silent: true },
-  });
+  const { data: required } = useMfaRequirement();
 
   if (!required) return null;
 
