@@ -5404,9 +5404,34 @@ mutation/editor/secret lifetimes, manual duplicates, persistent reconciliation a
 server archive scope/concurrency remain open. See
 `WEB-DEVELOPER-PROJECT-INTENT-OWNERSHIP-01` for evidence and acceptance limits.
 
+## Webhook mutation and secret lifetimes follow admitted intent
+
+Accepted `761e74dbed` binds all five webhook writes to captured RequestAuthority
+through CSRF/token waits and response parsing. JSON payloads are snapshotted before
+awaits; explicit workspace headers and minimal operation-specific receipts replace
+ambient dispatch and unchecked receipts. Only current success starts background
+prefix invalidation. Current refusals remain actionable; dispatched unknown
+outcomes remain uncertain without automatic replay or rollback claims.
+
+The owner/epoch/scope-keyed panel owns one intent lane. Editor IDs, copied event
+types, confirmation targets and per-opening delivery-log lifetimes prevent old
+callbacks from acting on replacement views. Secret display/copy is bound to the
+current receipt, and create observer reset plus gcTime:0 reduces unobserved cache
+retention without claiming arbitrary-reference erasure. Secret delivery does not
+wait for list refresh. Explicit uncertainty refresh reads endpoints and active
+delivery queries and retains the notice; current test success still opens its log.
+
+Independent source review accepted production and unrun transport/UI/retry
+fixtures. Runtime/type/timer acceptance, full receipt schemas, persistent outcome
+recovery and manual duplicates remain open. API-key creation requires coordinated
+canonical step-up ownership, not only an owned final sender; silent grant,
+interactive verification, fresh-token acquisition and copied secrets are separate
+unpatched paths. See `WEB-DEVELOPER-WEBHOOK-INTENT-OWNERSHIP-01` and
+`WEB-API-KEY-INTENT-LIFETIME-01` for evidence and limits.
+
 ## Reconstruction boundary
 
-Only the two hundred nineteen accepted production slices traced above are represented as
+Only the two hundred twenty accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

@@ -13284,3 +13284,87 @@ duplicate submissions, server archive cross-workspace coverage and concurrent
 key issuance remain open. The notice is not persisted across owner unmounts.
 This is not certification of the entire developer UI or server lifecycle. No tests,
 lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-DEVELOPER-WEBHOOK-INTENT-OWNERSHIP-01
+
+Severity: Medium. Bounded correction `761e74dbed` independently source-reviewed
+on 2026-11-06; all authored fixtures remain unrun.
+
+Webhook mutation hooks previously acquired ambient authority after controls were
+opened. Copied editor fields, removal confirmations and signing-secret state were
+not keyed to admitted account/workspace ownership. Row and delivery callbacks
+could outlive the control that initiated them. No live incident is asserted.
+
+All five mutations now require a captured WebhookMutationScope. Payloads are
+serialized before CSRF/token waits, requests use captured bearer authority with
+explicit Personal/organization selection and omitted cookies, and response/body
+completion is checked before receipt publication. Create requires an endpoint ID
+and nonempty secret; update requires the requested endpoint ID; delete requires
+deleted:true; delivery receipts require an ID and redelivery requires the requested
+source delivery relation. These are minimal receipt checks, not full schemas.
+Current 4xx refusals are distinguished from dispatched transport/5xx/receipt
+uncertainty, and every mutation retains retry:false.
+
+WebhooksPanel now gates a keyed owner/epoch/scope child through canonical
+admission. One intent lane captures editors, confirmation targets and row/log
+actions synchronously. Editors copy nested event types and use unique intent IDs.
+Rows and per-opening delivery logs retire their callbacks and pending authority;
+batched hide/reopen cannot revive a prior log. Current test success still opens
+the current row's log. Secret close/copy callbacks and clipboard completion are
+bound to their own receipt view. A dispatched clipboard write cannot be undone.
+
+Current success invalidates matching prefixes in the background, so the once-only
+secret is not delayed by a list refetch. Create uses gcTime:0 and guarded observer
+reset on settlement/retirement, reducing unobserved mutation-cache retention as
+well as clearing displayed secrets. This does not claim erasure of arbitrary
+JavaScript references or clipboard contents. Local mutation handlers suppress the
+global error toast, not MutationCache logging. Unknown results offer an owned
+read-only Refresh webhook state action for endpoints and active delivery queries;
+the uncertainty notice stays visible and no write is replayed.
+
+Independent source review accepted production, adapted eight-operation retry
+fixtures, and new transport/UI fixture matrices. Authored cases include deferred
+CSRF/token/response/body retirement, minimal receipts, prefix invalidation, payload
+snapshots, secret receipt/cache lifecycle, StrictMode duplicate submit, account and
+epoch round trips, stale rows/confirmations/copy, batched editor/log reopen and
+uncertainty refresh. The UI matrix uses real canonical ownership with controlled
+Clerk/network boundaries. None ran; timer, React lifecycle and type acceptance
+remain unknown. Stable operation identity, persistent uncertain-outcome recovery,
+manual duplicate prevention, full receipt schemas and API-key/step-up lifetimes
+remain open. Existing account-owned webhook RLS is unchanged and unverified live.
+No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
+
+## WEB-API-KEY-INTENT-LIFETIME-01
+
+Severity: Medium. Independently source-confirmed on 2026-11-06; not patched or
+runtime-reproduced in the webhook slice.
+
+Owned API-key reads do not own mutation or copied UI state. ApiKeysManager in
+`features/settings/components/Settings/ApiKeys.tsx` retains its form, selected
+deletion ID and generated key without an admitted-owner key. Closing the create
+dialog clears current state but a late creation callback can reinstate a secret
+that later reopening exposes. The secret also remains in mutation result data;
+clipboard completion emits unowned toasts. No live disclosure is asserted.
+
+`useCreateAPIKey` uses `useStepUp` and ambient `sendAuthorizedJson`. An owned final
+write sender alone would leave silent `requestStepUpGrant`, interactive
+`StepUpDialog` and `useSessionReverification` operating outside the originating
+intent. The verification adapter selects its latest session for operations; grant
+requests still await CSRF without request ownership. A null explicit fresh token
+currently falls back to ambient authentication. A coordinated canonical fix must
+preserve skipCache freshness and fail closed rather than silently substituting an
+ordinary captured token. Count actual mutation dispatch separately from grant
+dispatch and known STEP_UP_REQUIRED refusals when classifying uncertainty.
+
+Deletion goes through the ambient-token settings service, lacks captured
+workspace/lifetime and uses unconditional completion effects. Its server route
+does not require step-up, so that requirement must not be invented. Create commits
+the key before later audit/webhook awaits, making a later 5xx a potentially
+completed creation. Preserve immediate once-only receipt delivery and account for
+uncertain outcomes without assuming cancellation rolled back the server action.
+
+Sources: `features/settings/hooks/use-settings-queries.ts` create/delete hooks;
+`features/settings/services/user-preferences.ts` deleteAPIKey;
+`features/settings/hooks/useStepUp.tsx`; `features/auth/step-up-fetch.ts`;
+`features/auth/StepUpDialog.tsx`; `lib/identity/client.ts` reverification adapter;
+`app/api/settings/api-keys/route.ts` and key DELETE route, all under `apps/web`.
