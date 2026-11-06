@@ -5908,9 +5908,29 @@ outcome durability, provider cancellation and minimum-credential concurrency rem
 separate. Fixtures are source-reviewed only and unrun; see
 WEB-PASSKEY-APPLICATION-LIFETIME-01.
 
+## Reflect recaps have a noncached account/workspace/view owner
+
+Accepted `045f768e03dc1b69a4e7a00b89650a8b5b0c693e` gives the settings recap a focused reader
+using the canonical session snapshot and workspace admission owner/epoch. The
+route is organization-scoped, so each request carries an explicit personal or
+organization header as well as captured Bearer credentials with cookies omitted.
+View/request generations fence token, fetch and JSON continuations and mask stale
+recap, memory-required and error state. Range, refresh, close, unmount and owner
+replacement retire prior authority. The modal passes its actual active state.
+Stale events/settlements reconcile only their exact obsolete view. Canonical
+uncertain workspace admission remains fail-closed pending reload.
+
+This reader intentionally avoids shared query-cache retention and automatic
+retry/reconnect polling. The existing recap schema remains authoritative; success
+must match the requested range. Memory-required is an owned typed 409 result.
+Server identity/RLS mapping, organization authorization, recap semantics and Memory
+settings remain unchanged. Request retirement cannot prove cancellation of work
+already dispatched to the server. Source fixtures are unrun; see
+WEB-REFLECT-READ-LIFETIME-01 for the runtime acceptance boundary.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-one accepted production slices traced above are
+Only the two hundred forty-two accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

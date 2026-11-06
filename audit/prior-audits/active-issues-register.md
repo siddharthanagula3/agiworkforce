@@ -13630,6 +13630,41 @@ features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
+## WEB-REFLECT-READ-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded correction: `045f768e03dc1b69a4e7a00b89650a8b5b0c693e`.
+
+Reflect previously fetched with ambient cookies and held untagged conversation
+recaps, memory-required state and errors across account/session changes. Effect
+cleanup aborted fetch but did not fence success or error-body continuations after
+JSON parsing. Range, refresh and modal-dismissal lifetimes were not bound to a
+captured account/workspace request. The service filters conversations by resolved
+organization, so an account-only correction would not cover this read's scope.
+
+The focused noncached reader uses canonical session and workspace admission,
+explicit personal/organization scope and captured Bearer transport. A view and
+request generation own token acquisition, fetch, success/error JSON, publication
+and rendering. Replacing account, session, workspace, range or view retires the old
+request; refresh admits a new request and hides prior state. Modal active-state
+wiring retires on dismissal rather than waiting for the exit animation. No global
+query retry, reconnect refetch or recap cache is introduced. Valid success still
+uses the shared recap schema and must match the requested range; memory-required
+is a typed result only for its expected 409 response. Silent owner replacement
+observed by a retained refresh or settled request reconciles only its exact old
+view, so an obsolete completion cannot leave a stranded spinner or replace a new
+view. Unavailable workspace admission can be retried through its existing owner;
+uncertain scope requires reload rather than offering an inert retry.
+
+This is client read containment, not a server authorization or mapping repair.
+The server's canonical/native identity mapping, RLS, organization resolution,
+recap calculation and Memory preference semantics remain unchanged. An already
+dispatched read may still run on the server; retiring the view does not prove
+server cancellation. No new polling or automatic recap generation is intended.
+Authored success and adversarial lifetime fixtures remain unrun. Installed
+React/Next/SDK integration and live workspace/account transitions still require
+acceptance; no tests, lint, typechecks, builds, app execution, push or deploy ran.
+
 ## WEB-PASSKEY-APPLICATION-LIFETIME-01
 
 Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
