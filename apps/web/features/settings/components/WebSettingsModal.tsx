@@ -254,7 +254,7 @@ export function WebSettingsModal({
         <TeamSection />
       </div>
     ),
-    security: <SecuritySection />,
+    security: <SecuritySection passwordEditorActive={open} />,
     safety: <SafetySection />,
     // Retire privacy intents on close, before the dialog's exit animation ends.
     privacy: open ? <PrivacySection /> : <></>,

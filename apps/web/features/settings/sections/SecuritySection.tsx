@@ -9,15 +9,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   useUserSettings,
   useUpdateSettings,
-  useChangePassword,
 } from '@features/settings/hooks/use-settings-queries';
 import {
-  changePasswordSchema,
   securitySettingsSchema,
-  type ChangePasswordFormData,
   type SecuritySettingsFormData,
 } from '@features/settings/schemas/settings-validation';
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
+import { PasswordEditor } from '@features/settings/components/Settings/PasswordEditor';
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { PasskeysPanel } from '@features/settings/components/Settings/PasskeysPanel';
 import { AdvancedAccountSecurityPanel } from '@/features/account-security/components/AdvancedAccountSecurityPanel';
@@ -172,13 +170,12 @@ function SessionsPanel() {
   );
 }
 
-export function SecuritySection() {
+export function SecuritySection({ passwordEditorActive = true }: { passwordEditorActive?: boolean }) {
   const { data: serverSettings, isLoading, isError: settingsFailed } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
-  const changePasswordMutation = useChangePassword();
-  const hasPassword = useCurrentUser().user?.hasPassword === true;
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const identity = useCurrentUser();
+  const currentUser = identity.isLoaded && identity.isSignedIn ? identity.user : null;
+  const passwordFocus = useRef<(() => void) | null>(null);
 
   const securityForm = useForm<SecuritySettingsFormData>({
     resolver: zodResolver(securitySettingsSchema) as Resolver<SecuritySettingsFormData>,
@@ -188,22 +185,12 @@ export function SecuritySection() {
     },
   });
 
-  const passwordForm = useForm<ChangePasswordFormData>({
-    resolver: zodResolver(changePasswordSchema),
-    defaultValues: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
-    },
-    mode: 'onBlur',
-  });
-
   const authoritativeTwoFactor = useRef<boolean | null>(null);
   const [authenticatorAvailable, setAuthenticatorAvailable] = useState(false);
 
   const openPasswordForm = useCallback(() => {
-    passwordForm.setFocus(hasPassword ? 'currentPassword' : 'newPassword');
-  }, [hasPassword, passwordForm]);
+    passwordFocus.current?.();
+  }, []);
 
   useEffect(() => {
     if (serverSettings) {
@@ -231,28 +218,6 @@ export function SecuritySection() {
       securityForm.setValue('two_factor_enabled', status.enabled, { shouldDirty: false });
     },
     [securityForm],
-  );
-
-  const handlePasswordChange = useCallback(
-    (data: ChangePasswordFormData) => {
-      if (hasPassword && !data.currentPassword) {
-        passwordForm.setError('currentPassword', { message: 'Enter your current password' });
-        return;
-      }
-      changePasswordMutation.mutate(
-        {
-          currentPassword: hasPassword ? (data.currentPassword ?? null) : null,
-          newPassword: data.newPassword,
-          confirmPassword: data.confirmPassword,
-        },
-        {
-          onSuccess: () => {
-            passwordForm.reset();
-          },
-        },
-      );
-    },
-    [changePasswordMutation, hasPassword, passwordForm],
   );
 
   return (
@@ -300,21 +265,12 @@ export function SecuritySection() {
       ) : (
         <TwoFactorPanel
           securityForm={securityForm}
-          passwordForm={passwordForm}
-          isSaving={updateSettingsMutation.isPending || changePasswordMutation.isPending}
+          isSaving={updateSettingsMutation.isPending}
           isUpdateSettingsPending={updateSettingsMutation.isPending}
-          isChangePasswordPending={changePasswordMutation.isPending}
-          hasPassword={hasPassword}
-          showNewPassword={showNewPassword}
-          showConfirmPassword={showConfirmPassword}
           onSaveSecurity={handleSaveSecurity}
-          onPasswordChange={handlePasswordChange}
-          onToggleShowNewPassword={() => setShowNewPassword((p) => !p)}
-          onToggleShowConfirmPassword={() => setShowConfirmPassword((p) => !p)}
+          passwordPanel={<PasswordEditor active={passwordEditorActive} policy={currentUser} focus={passwordFocus} />}
         />
       )}
-
-      {changePasswordMutation.stepUpDialog}
 
       <SessionsPanel />
 

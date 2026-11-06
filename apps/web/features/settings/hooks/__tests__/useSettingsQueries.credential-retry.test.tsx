@@ -36,7 +36,7 @@ function json(body: unknown, status = 200) {
 function success(kind: MutationKind) {
   return json(
     kind === 'password'
-      ? { success: true, otherSessionsRemaining: 0 }
+      ? { success: true, otherSessionsEnded: 1, otherSessionsRemaining: 0, deviceCredentialsRevoked: 2 }
       : { api_key: { id: 'key-1', name: 'Integration' }, full_key: 'fixture-key' },
     kind === 'apiKey' ? 201 : 200,
   );
@@ -60,11 +60,11 @@ function harness(kind: MutationKind) {
     start: () =>
       act(() => {
         if (kind === 'password') {
-          view.result.current.password.mutate({
+          view.result.current.password.mutate({ scope, draft: {
             currentPassword: 'old-password',
             newPassword: 'new-password',
             confirmPassword: 'new-password',
-          });
+          } });
         } else {
           view.result.current.apiKey.mutate({ scope, draft: { name: 'Integration', scopes: ['models:read'] } });
         }
@@ -129,8 +129,8 @@ describe.each(['password', 'apiKey'] as const)('%s mutation retry', (kind) => {
     expect(new Headers((writes[1]?.[1] as RequestInit).headers).get(STEP_UP_TOKEN_HEADER)).toBe(
       'fresh-proof',
     );
-    // API-key success belongs to its current intent UI, not the global hook.
-    expect(toastMock.success).toHaveBeenCalledTimes(outcome === 'success' && kind === 'password' ? 1 : 0);
+    // Credential success is presented only by the current editor.
+    expect(toastMock.success).not.toHaveBeenCalled();
   });
 });
 

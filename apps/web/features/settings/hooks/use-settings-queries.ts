@@ -261,39 +261,69 @@ export function useUpdateSettings(): UseMutationResult<
   });
 }
 
-export type ChangePasswordMutation = UseMutationResult<void, Error, ChangePasswordParams> & {
-  stepUpDialog: ReactElement | null;
-};
+export interface PasswordMutationScope {
+  readonly request: RequestAuthority;
+  readonly onStepUpRequired: () => void;
+}
+
+export interface ChangePasswordReceipt {
+  success: true;
+  otherSessionsEnded: number;
+  otherSessionsRemaining: 0;
+  deviceCredentialsRevoked: number;
+}
+
+export class PasswordMutationRejectedError extends Error {}
+
+export type ChangePasswordMutation = UseMutationResult<
+  ChangePasswordReceipt,
+  Error,
+  { scope: PasswordMutationScope; draft: ChangePasswordParams }
+> & { stepUpDialog: ReactElement | null };
 
 export function useChangePassword(): ChangePasswordMutation {
   const { withStepUp, dialog } = useStepUp();
 
-  const mutation = useMutation<void, Error, ChangePasswordParams>({
+  const mutation = useMutation<ChangePasswordReceipt, Error,
+    { scope: PasswordMutationScope; draft: ChangePasswordParams }>({
     retry: false,
-    mutationFn: async ({ currentPassword, newPassword, confirmPassword }) => {
+    gcTime: 0,
+    mutationFn: async ({ scope, draft }) => {
+      scope.request.assertCurrent();
+      const { currentPassword, newPassword, confirmPassword } = draft;
       if (newPassword !== confirmPassword) {
-        throw new Error('Passwords do not match');
+        throw new PasswordMutationRejectedError('Passwords do not match');
       }
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson(
-          '/api/settings/password',
-          {
-            method: 'POST',
-            body: { newPassword, ...(currentPassword === null ? {} : { currentPassword }) },
-          },
-          headers,
-        ),
-      );
-      if (!response.ok) throw new Error(await readApiError(response));
+      const body = JSON.stringify({ newPassword, ...(currentPassword === null ? {} : { currentPassword }) });
+      const response = await withStepUp(async (headers) => {
+        scope.request.assertCurrent();
+        const csrfToken = await getCsrfToken();
+        scope.request.assertCurrent();
+        return scope.request.fetch('/api/settings/password', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body,
+        });
+      }, null, { authority: scope.request, onStepUpRequired: scope.onStepUpRequired });
+      scope.request.assertCurrent();
+      if (!response.ok) {
+        const message = await readApiError(response);
+        scope.request.assertCurrent();
+        if (response.status >= 400 && response.status < 500) throw new PasswordMutationRejectedError(message);
+        throw new Error(message);
+      }
+      const receipt: unknown = await response.json();
+      scope.request.assertCurrent();
+      const parsed = z.object({
+        success: z.literal(true),
+        otherSessionsEnded: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        otherSessionsRemaining: z.literal(0),
+        deviceCredentialsRevoked: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      }).safeParse(receipt);
+      if (!parsed.success) throw new Error('The password change receipt could not be confirmed.');
+      return parsed.data;
     },
-    onSuccess: (): void => {
-      toast.success('Password changed. Your other devices were signed out.');
-    },
-    onError: (error: Error): void => {
-      if (isStepUpCancelled(error)) return;
-      logger.error('Error changing password:', error);
-      toast.error(toUserMessage(error, 'Failed to change password'));
-    },
+    onError: () => undefined,
   });
 
   return { ...mutation, stepUpDialog: dialog };

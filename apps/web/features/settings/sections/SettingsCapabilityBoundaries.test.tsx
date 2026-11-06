@@ -36,7 +36,8 @@ vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) 
   useChangePassword: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-vi.mock('@features/settings/components/Settings/TwoFactor', () => ({
+vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
+  ...await original<typeof import('@features/settings/components/Settings/TwoFactor')>(),
   TwoFactorPanel: () => <div>Account controls</div>,
 }));
 

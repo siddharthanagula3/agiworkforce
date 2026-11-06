@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WebSettingsModal } from './WebSettingsModal';
@@ -32,7 +33,20 @@ vi.mock('../sections/AccountSection', () => ({
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));
 vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
-vi.mock('../sections/SecuritySection', () => ({ SecuritySection: () => null }));
+const passwordAdmission = vi.hoisted(() => vi.fn());
+const retainedSettings = vi.hoisted(() => ({ enabled: false }));
+vi.mock('@agiworkforce/ui', async (original) => {
+  const actual = await original<typeof import('@agiworkforce/ui')>();
+  return { ...actual, SettingsModal: (props: ComponentProps<typeof actual.SettingsModal>) =>
+    retainedSettings.enabled ? <>{props.sectionContent[props.activeSection]}</> : <actual.SettingsModal {...props} /> };
+});
+
+vi.mock('../sections/SecuritySection', () => ({
+  SecuritySection: ({ passwordEditorActive }: { passwordEditorActive?: boolean }) => {
+    passwordAdmission(passwordEditorActive);
+    return <div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>;
+  },
+}));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
 vi.mock('../sections/PrivacySection', () => ({ PrivacySection: () => null }));
 vi.mock('../sections/ArchivedChatsSection', () => ({ ArchivedChatsSection: () => null }));
@@ -864,3 +878,20 @@ describe('WebSettingsModal connectors while connectors are coming soon', () => {
     expect(screen.queryByRole('menuitem', { name: 'Add custom connector' })).toBeNull();
   }, 15_000);
 });
+
+it('withdraws password editor admission when Settings closes and restores it on reopening', async () => {
+  stubFetch({});
+  passwordAdmission.mockClear();
+  retainedSettings.enabled = true;
+  const props = { onClose: vi.fn(), initialSection: 'security' as const };
+  const mounted = render(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(passwordAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal {...props} open={false} />);
+  expect(passwordAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(passwordAdmission).toHaveBeenLastCalledWith(true));
+  retainedSettings.enabled = false;
+});
+
+afterEach(() => { retainedSettings.enabled = false; });
