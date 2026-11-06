@@ -15,35 +15,17 @@ const TOTP_CONFIG = {
   PERIOD: 30,
   BACKUP_CODE_COUNT: 8,
   BACKUP_CODE_LENGTH: 8,
+  BACKUP_CODE_ALPHABET: 'abcdefghjkmnpqrstuvwxyz23456789',
   SECRET_LENGTH: 20,
+  SECRET_ALPHABET: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
 } as const;
 
-const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const BASE32_ALPHABET = TOTP_CONFIG.SECRET_ALPHABET;
 
 export interface TwoFactorStatus {
   enabled: boolean;
   backupCodesReady: boolean;
   enrollmentAvailable: boolean;
-}
-
-async function readTwoFactorError(res: Response): Promise<string> {
-  const body = (await res.json().catch(() => null)) as {
-    error?: string | { message?: string };
-  } | null;
-  const raw = body?.error;
-  // The server's own words reach the screen here, so they go through the same
-  // filter the rest of the product uses: a sentence a person wrote survives, a
-  // trace id or a stack frame does not. Measured with a 500 carrying
-  // "upstream exploded: trace 0xdeadbeef", this rendered it verbatim.
-  const fallback = `Could not reach the server (HTTP ${res.status}).`;
-  const message =
-    typeof raw === 'string' && raw.trim()
-      ? raw
-      : raw && typeof raw === 'object' && typeof raw.message === 'string' && raw.message.trim()
-        ? raw.message
-        : '';
-  if (!message) return fallback;
-  return toUserMessage(Object.assign(new Error(message), { status: res.status }), fallback);
 }
 
 export interface UserProfile {
@@ -231,7 +213,7 @@ function constantTimeCompare(a: string, b: string): boolean {
 
 function generateBackupCodes(): string[] {
   const codes: string[] = [];
-  const charset = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const charset = TOTP_CONFIG.BACKUP_CODE_ALPHABET;
 
   for (let i = 0; i < TOTP_CONFIG.BACKUP_CODE_COUNT; i++) {
     const buffer = new Uint8Array(TOTP_CONFIG.BACKUP_CODE_LENGTH);
@@ -490,65 +472,7 @@ class SettingsService {
     }
   }
 
-  async get2FAStatus(): Promise<{ data: TwoFactorStatus; error?: string }> {
-    try {
-      const token = await getAuthToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch('/api/settings/2fa', { headers });
-      if (!res.ok) {
-        return {
-          data: { enabled: false, backupCodesReady: false, enrollmentAvailable: false },
-          error: await readTwoFactorError(res),
-        };
-      }
-      const json = (await res.json()) as {
-        enabled: boolean;
-        backup_codes_ready?: boolean;
-        enrollment_available?: boolean;
-      };
-      return {
-        data: {
-          enabled: json.enabled,
-          backupCodesReady: json.backup_codes_ready === true,
-          enrollmentAvailable: json.enrollment_available === true,
-        },
-      };
-    } catch (error) {
-      return {
-        data: { enabled: false, backupCodesReady: false, enrollmentAvailable: false },
-        error: toUserMessage(error, 'Something went wrong. Try again.'),
-      };
-    }
-  }
-
-  async verify2FA(
-    code: string,
-  ): Promise<{ backupCodes?: string[]; error?: string; status?: number }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) return { error: 'User not authenticated' };
-
-      const res = await fetch('/api/settings/2fa/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': await getCsrfToken(),
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      if (!res.ok) {
-        return { error: await readTwoFactorError(res), status: res.status };
-      }
-      const json = (await res.json()) as { backup_codes: string[] };
-      return { backupCodes: json.backup_codes };
-    } catch (error) {
-      return { error: toUserMessage(error, 'Something went wrong. Try again.') };
-    }
-  }
 }
 
 const settingsService = new SettingsService();

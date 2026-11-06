@@ -254,7 +254,7 @@ export function WebSettingsModal({
         <TeamSection active={open && activeSection === 'team'} />
       </div>
     ),
-    security: <SecuritySection passwordEditorActive={open} signInMethodsActive={open && activeSection === 'security'} />,
+    security: <SecuritySection twoFactorActive={open && activeSection === 'security'} passwordEditorActive={open} signInMethodsActive={open && activeSection === 'security'} />,
     safety: <SafetySection />,
     // Retire privacy intents on close, before the dialog's exit animation ends.
     privacy: open ? <PrivacySection /> : <></>,

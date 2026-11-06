@@ -49,14 +49,6 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
     <CardContent className="space-y-6">
       <Form {...securityForm}>
         <form onSubmit={securityForm.handleSubmit(onSaveSecurity)} className="space-y-6">
-          {/*
-            2FA is owned by TwoFactorEnrollmentPanel, which drives the real
-            /api/settings/2fa routes. This form still carries
-            `two_factor_enabled` so a session-timeout save writes the mirror
-            column back truthfully, but it must never present a control that
-            claims to flip 2FA, the server only flips it after POST
-            /api/settings/2fa/verify succeeds.
-          */}
           <FormField
             control={securityForm.control}
             name="session_timeout"

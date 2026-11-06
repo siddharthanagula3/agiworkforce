@@ -22,7 +22,7 @@ import { AdvancedAccountSecurityPanel } from '@/features/account-security/compon
 import { SignInMethodsPanel } from '@features/settings/components/Settings/SignInMethodsPanel';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
-import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
+import { useMfaStatus } from '@features/settings/hooks/use-mfa-readers';
 import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -170,7 +170,7 @@ function SessionsPanel() {
   );
 }
 
-export function SecuritySection({ passwordEditorActive = true, signInMethodsActive = true }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean }) {
+export function SecuritySection({ passwordEditorActive = true, signInMethodsActive = true, twoFactorActive = true }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean }) {
   const { data: serverSettings, isLoading, isError: settingsFailed } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
   const identity = useCurrentUser();
@@ -180,13 +180,11 @@ export function SecuritySection({ passwordEditorActive = true, signInMethodsActi
   const securityForm = useForm<SecuritySettingsFormData>({
     resolver: zodResolver(securitySettingsSchema) as Resolver<SecuritySettingsFormData>,
     defaultValues: {
-      two_factor_enabled: false,
       session_timeout: 60,
     },
   });
 
-  const authoritativeTwoFactor = useRef<boolean | null>(null);
-  const [authenticatorAvailable, setAuthenticatorAvailable] = useState(false);
+  const { data: authenticatorStatus } = useMfaStatus(twoFactorActive);
 
   const openPasswordForm = useCallback(() => {
     passwordFocus.current?.();
@@ -195,8 +193,6 @@ export function SecuritySection({ passwordEditorActive = true, signInMethodsActi
   useEffect(() => {
     if (serverSettings) {
       securityForm.reset({
-        two_factor_enabled:
-          authoritativeTwoFactor.current ?? serverSettings.two_factor_enabled ?? false,
         session_timeout: serverSettings.session_timeout ?? 60,
       });
     }
@@ -206,18 +202,9 @@ export function SecuritySection({ passwordEditorActive = true, signInMethodsActi
 
   const handleSaveSecurity = useCallback(
     (data: SecuritySettingsFormData) => {
-      updateSettingsMutation.mutate(data);
+      updateSettingsMutation.mutate({ session_timeout: data.session_timeout });
     },
     [updateSettingsMutation],
-  );
-
-  const handleTwoFactorStatus = useCallback(
-    (status: TwoFactorStatus) => {
-      authoritativeTwoFactor.current = status.enabled;
-      setAuthenticatorAvailable(status.enrollmentAvailable);
-      securityForm.setValue('two_factor_enabled', status.enabled, { shouldDirty: false });
-    },
-    [securityForm],
   );
 
   return (
@@ -249,7 +236,7 @@ export function SecuritySection({ passwordEditorActive = true, signInMethodsActi
 
       <AdvancedAccountSecurityPanel />
 
-      <TwoFactorEnrollmentPanel onStatusChange={handleTwoFactorStatus} />
+      <TwoFactorEnrollmentPanel active={twoFactorActive} />
 
       {settingsFailed ? (
         <p
@@ -302,7 +289,9 @@ export function SecuritySection({ passwordEditorActive = true, signInMethodsActi
           work with Advanced Account Security. Devices you linked, such as the CLI, VS Code, the
           Chrome extension or the desktop app, are listed in Account settings under Linked devices,
           where you can unlink each one. Passkeys sign you in.{' '}
-          {authenticatorAvailable
+          {!authenticatorStatus
+            ? 'Authenticator app and backup code availability has not been confirmed.'
+            : authenticatorStatus.enrollmentAvailable
             ? 'Authenticator app codes (TOTP) with recovery backup codes are the supported second factor.'
             : 'Authenticator app codes (TOTP) and backup codes are temporarily unavailable.'}{' '}
           To review or revoke a single session, use Account settings.

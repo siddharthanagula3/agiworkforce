@@ -2,8 +2,9 @@ import { StrictMode, type ReactNode } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, focusManager, onlineManager, type Query } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { queryClient } from '@shared/stores/query-client';
 import type { SessionAuthority } from '@/lib/identity/request-authority';
-import { useMfaRequirement, useMfaStatus, WORKSPACE_MFA_REQUIREMENT_QUERY_KEY } from '../use-mfa-readers';
+import { invalidateMfaReaders, useMfaRequirement, useMfaStatus, WORKSPACE_MFA_REQUIREMENT_QUERY_KEY } from '../use-mfa-readers';
 
 const fixture = vi.hoisted(() => ({
   session: null as SessionAuthority | null,
@@ -53,6 +54,7 @@ afterEach(() => {
   clients.splice(0).forEach((client) => client.clear());
   focusManager.setFocused(undefined);
   onlineManager.setOnline(true);
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -260,4 +262,109 @@ describe('account/session owned MFA readers (source-authored fixtures)', () => {
     stop();
   });
 
+});
+
+describe('TOTP status admission and scoped invalidation (source-authored fixtures)', () => {
+  it('does not acquire a token or dispatch while inactive, including retained manual queries', async () => {
+    const original = fixture.session!;
+    const { client, wrapper } = provider();
+    const view = renderHook(() => useMfaStatus(false), { wrapper });
+    expect(view.result.current).toEqual({ data: undefined, error: null, isLoading: false });
+    const inactive = client.getQueryCache().getAll().find((query) => query.queryKey[1] === 'two-factor-status');
+    expect(inactive).toBeDefined();
+    await act(async () => { await expect(inactive!.fetch()).rejects.toMatchObject({ name: 'AbortError' }); });
+    expect(original.getToken).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('retires a pending token on deactivation and starts a fresh same-session read on reopening', async () => {
+    const pending = deferred<string | null>();
+    const original = fixture.session!;
+    vi.mocked(original.getToken).mockReturnValueOnce(pending.promise);
+    fetchMock.mockImplementation(async () => json(statusBody));
+    const { wrapper } = provider();
+    const view = renderHook(({ active }) => useMfaStatus(active), { initialProps: { active: true }, wrapper });
+    await waitFor(() => expect(original.getToken).toHaveBeenCalledTimes(1));
+    view.rerender({ active: false });
+    expect(view.result.current.data).toBeUndefined();
+    await act(async () => { pending.resolve('retired-token'); });
+    expect(fetchMock).not.toHaveBeenCalled();
+    view.rerender({ active: true });
+    await waitFor(() => expect(view.result.current.data?.enabled).toBe(true));
+    expect(original.getToken).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(new Headers(fetchMock.mock.calls[0]![1]?.headers).get('Authorization')).toBe('Bearer token-a');
+  });
+
+  it('retires a pending body on deactivation without publishing it into the reopened reader', async () => {
+    const body = deferred<unknown>();
+    const readBody = vi.fn(() => body.promise);
+    fetchMock.mockResolvedValueOnce({ ok: true, json: readBody } as unknown as Response)
+      .mockImplementation(async () => json({ ...statusBody, enabled: false }));
+    const { wrapper } = provider();
+    const view = renderHook(({ active }) => useMfaStatus(active), { initialProps: { active: true }, wrapper });
+    await waitFor(() => expect(readBody).toHaveBeenCalled());
+    const signal = fetchMock.mock.calls[0]![1]?.signal;
+    view.rerender({ active: false });
+    expect(signal?.aborted).toBe(true);
+    expect(view.result.current).toEqual({ data: undefined, error: null, isLoading: false });
+    view.rerender({ active: true });
+    await waitFor(() => expect(view.result.current.data?.enabled).toBe(false));
+    await act(async () => { body.resolve(statusBody); });
+    expect(view.result.current.data?.enabled).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses old queries after deactivation, same-session reopening and remount', async () => {
+    fetchMock.mockImplementation(async () => json(statusBody));
+    const original = fixture.session!;
+    const { client, wrapper } = provider();
+    const view = renderHook(({ active }) => useMfaStatus(active), { initialProps: { active: true }, wrapper });
+    await waitFor(() => expect(view.result.current.data?.enabled).toBe(true));
+    const oldQuery = client.getQueryCache().getAll().find((query) => query.state.data !== undefined);
+    expect(oldQuery).toBeDefined();
+    view.rerender({ active: false });
+    await act(async () => { await expect(oldQuery!.fetch()).rejects.toMatchObject({ name: 'AbortError' }); });
+    expect(original.getToken).toHaveBeenCalledTimes(1);
+    view.rerender({ active: true });
+    await waitFor(() => expect(view.result.current.data?.enabled).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => { await expect(oldQuery!.fetch()).rejects.toMatchObject({ name: 'AbortError' }); });
+    const reopened = client.getQueryCache().getAll().find((query) => query.state.data !== undefined);
+    expect(reopened).toBeDefined();
+    expect(reopened).not.toBe(oldQuery);
+    view.unmount();
+    const remounted = renderHook(() => useMfaStatus(), { wrapper });
+    await waitFor(() => expect(remounted.result.current.data?.enabled).toBe(true));
+    await act(async () => { await expect(reopened!.fetch()).rejects.toMatchObject({ name: 'AbortError' }); });
+    expect(original.getToken).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('invalidates only existing status and requirement prefixes for the captured native user and session', () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const original = fixture.session!;
+    invalidateMfaReaders(original);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    const predicate = invalidate.mock.calls[0]![0]?.predicate;
+    expect(predicate).toBeTypeOf('function');
+    const matches = (queryKey: readonly unknown[]) => predicate!({ queryKey } as Query);
+    expect(matches(['settings', 'two-factor-status', 'a', 'session-a', 'reader-1', 1, 1])).toBe(true);
+    expect(matches([...WORKSPACE_MFA_REQUIREMENT_QUERY_KEY, 'a', 'session-a', 'reader-2', 2, 4])).toBe(true);
+    for (const key of [
+      ['settings', 'two-factor-status', 'b', 'session-a'],
+      ['settings', 'two-factor-status', 'a', 'session-b'],
+      ['settings', 'two-factor-status'],
+      ['settings', 'two-factor-status-extra', 'a', 'session-a'],
+      ['settings', 'unrelated', 'a', 'session-a'],
+      ['settings', 'two-factor', 'workspace-requirement', 'b', 'session-a'],
+      ['settings', 'two-factor', 'workspace-requirement', 'a', 'session-b'],
+      ['settings', 'two-factor', 'other', 'a', 'session-a'],
+    ]) expect(matches(key)).toBe(false);
+    session('b', 'session-b');
+    expect(matches(['settings', 'two-factor-status', 'a', 'session-a'])).toBe(false);
+    invalidate.mockClear();
+    invalidateMfaReaders(original);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
 });

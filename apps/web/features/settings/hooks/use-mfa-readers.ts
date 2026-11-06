@@ -4,20 +4,13 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
+import { parseTwoFactorStatus } from '../services/two-factor-client';
+import { queryClient } from '@shared/stores/query-client';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 
 export const WORKSPACE_MFA_REQUIREMENT_QUERY_KEY = ['settings', 'two-factor', 'workspace-requirement'] as const;
 const STATUS_QUERY_KEY = ['settings', 'two-factor-status'] as const;
 const requirementSchema = z.object({ required: z.boolean() });
-const statusSchema = z.object({
-  enabled: z.boolean(),
-  backup_codes_ready: z.boolean(),
-  enrollment_available: z.boolean(),
-}).transform((value) => ({
-  enabled: value.enabled,
-  backupCodesReady: value.backup_codes_ready,
-  enrollmentAvailable: value.enrollment_available,
-}));
 
 type ReaderOwner = {
   session: SessionAuthority;
@@ -34,18 +27,20 @@ function retire(owner: ReaderOwner) {
 }
 
 function useMfaReader<T>(prefix: readonly string[], path: string, parse: (body: unknown) => T,
-  staleTime: number, refetchOnWindowFocus: boolean) {
+  staleTime: number, refetchOnWindowFocus: boolean, active = true) {
   const capture = useSessionSnapshot();
   const instance = useId();
   const slot = useRef<ReaderOwner | null>(null);
+  const admission = useRef(active);
+  admission.current = active;
   const sequence = useRef(0);
   const setups = useRef(0);
   const [, redraw] = useState(0);
-  if (slot.current && (slot.current.retired || !slot.current.session.isCurrent())) {
+  if (slot.current && (!active || slot.current.retired || !slot.current.session.isCurrent())) {
     retire(slot.current);
     slot.current = null;
   }
-  if (!slot.current) {
+  if (active && !slot.current) {
     const session = capture();
     if (session) slot.current = {
       session, incarnation: ++sequence.current, generation: null, retired: false, requests: new Set(),
@@ -53,7 +48,7 @@ function useMfaReader<T>(prefix: readonly string[], path: string, parse: (body: 
   }
   const owner = slot.current;
   const generation = owner?.generation;
-  const current = () => !!owner && slot.current === owner && !owner.retired &&
+  const current = () => admission.current && !!owner && slot.current === owner && !owner.retired &&
     generation != null && owner.generation === generation && owner.session.isCurrent();
 
   useLayoutEffect(() => {
@@ -127,7 +122,18 @@ export function useMfaRequirement() {
     (body) => requirementSchema.parse(body).required, 60_000, true);
 }
 
-export function useMfaStatus() {
+export function useMfaStatus(active = true) {
   return useMfaReader(STATUS_QUERY_KEY, '/api/settings/2fa',
-    (body) => statusSchema.parse(body), 5 * 60_000, false);
+    parseTwoFactorStatus, 5 * 60_000, false, active);
+}
+
+export function invalidateMfaReaders(session: SessionAuthority) {
+  if (!session.isCurrent()) return;
+  void queryClient.invalidateQueries({ predicate: (query) => {
+    if (!session.isCurrent()) return false;
+    return [STATUS_QUERY_KEY, WORKSPACE_MFA_REQUIREMENT_QUERY_KEY].some((prefix) =>
+      prefix.every((part, index) => query.queryKey[index] === part) &&
+      query.queryKey[prefix.length] === session.userId &&
+      query.queryKey[prefix.length + 1] === session.sessionId);
+  } });
 }

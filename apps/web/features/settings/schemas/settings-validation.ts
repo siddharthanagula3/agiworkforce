@@ -31,7 +31,6 @@ export const changePasswordSchema = z
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 
 export const securitySettingsSchema = z.object({
-  two_factor_enabled: z.boolean(),
   session_timeout: z
     .number()
     .int('Session timeout must be a whole number')
