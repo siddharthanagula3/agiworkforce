@@ -17,7 +17,7 @@ import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
 import { finishIntentRevocation, revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
-import { resolveSessionsPrincipal } from '@/app/api/settings/sessions/session-principal';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 
 const ENDPOINT = '/api/settings/password';
 
@@ -32,7 +32,7 @@ async function handleChangePassword(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId, organizationId, currentSessionId } = await resolveSessionsPrincipal(request);
+  const { db, userId, organizationId, sessionIdentity } = await getSessionAccountDb(request);
 
   const parsed = PasswordChangeSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
@@ -41,13 +41,13 @@ async function handleChangePassword(request: NextRequest) {
   const { currentPassword, newPassword } = parsed.data;
 
   const identity = getIdentityProvider();
-  const user = await identity.getUser(userId);
-  if (!user) throw createError.unauthorized();
+  const user = await identity.getUser(sessionIdentity.subject);
+  if (!user || user.id !== sessionIdentity.subject) throw createError.unauthorized();
   if (user.passwordEnabled && !currentPassword) {
     throw createError.validation('Enter your current password.').asUserSafe();
   }
 
-  const factors = await readSecondFactorStatus(db, userId);
+  const factors = await readSecondFactorStatus(db, userId, sessionIdentity.subject);
   const needsReverification =
     !user.passwordEnabled || factors.anySecondFactor || factors.earlierEnrollmentPending;
   const grant = needsReverification
@@ -64,7 +64,7 @@ async function handleChangePassword(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   if (currentPassword && user.passwordEnabled) {
-    if (!(await identity.verifyPassword(userId, currentPassword))) {
+    if (!(await identity.verifyPassword(sessionIdentity.subject, currentPassword))) {
       await logAuthFailure(request, 'invalid_current_password', userId);
       throw createError.validation('Your current password is not correct.').asUserSafe();
     }
@@ -72,13 +72,18 @@ async function handleChangePassword(request: NextRequest) {
   const source = grant?.method ?? 'current_password';
 
   try {
-    await identity.setPassword(userId, newPassword);
+    await identity.setPassword(sessionIdentity.subject, newPassword);
   } catch (error) {
     if (!isIdentityRequestRejected(error)) throw error;
     throw createError.validation(error.message).asUserSafe();
   }
 
-  const signOut = await revokeEveryOtherSession(identity, userId, currentSessionId);
+  const signOut = await revokeEveryOtherSession(
+    identity,
+    userId,
+    sessionIdentity.sessionId,
+    sessionIdentity.subject,
+  );
   const revokedDeviceSessionCount = await revokeEveryDeviceRefreshCredential(db, userId);
   logger.info(
     {
@@ -92,6 +97,7 @@ async function handleChangePassword(request: NextRequest) {
 
   await announceTwoFactorChange({
     userId,
+    identitySubject: sessionIdentity.subject,
     event: 'password_changed',
     request,
     organizationId,

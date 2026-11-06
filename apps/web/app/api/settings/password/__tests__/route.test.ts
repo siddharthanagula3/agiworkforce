@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import type { AuthResult } from '@/lib/api-auth';
 import { IdentityRequestRejectedError } from '@agiworkforce/identity';
 type ScanModule0 = typeof import('@/lib/server/session-revocation');
 
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
-  principal: vi.fn(),
+  authenticate: vi.fn(),
+  getNeonDb: vi.fn(),
+  resolveOrganization: vi.fn(),
+  claimScope: vi.fn(),
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
   getUser: vi.fn(),
@@ -60,8 +64,25 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/app/api/settings/sessions/session-principal', () => ({
-  resolveSessionsPrincipal: mocks.principal,
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: mocks.authenticate,
+  getClerkAuthorizedParties: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getCookieSessionAuthUser: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: mocks.getNeonDb,
+  getStripeWebhookDb: vi.fn(),
+}));
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  resolveActiveOrganizationId: mocks.resolveOrganization,
+}));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: mocks.claimScope,
 }));
 vi.mock('@/lib/server/identity', () => ({
   getIdentityAuthorizedParties: vi.fn(),
@@ -114,26 +135,28 @@ import { createError } from '@/lib/errors';
 import { POST } from '../route';
 
 const DB = { query: vi.fn() };
+const SERVICE_DB = { query: vi.fn(), withUser: vi.fn() };
 
-function request(body: unknown): never {
-  return new Request('http://localhost/api/settings/password', {
+function request(body: unknown, headers: Record<string, string> = {}): NextRequest {
+  return new NextRequest('http://localhost/api/settings/password', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
-  }) as never;
+  });
 }
 
 describe('POST /api/settings/password', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.principal.mockResolvedValue({
-      db: DB,
+    mocks.authenticate.mockResolvedValue({
       userId: 'user-1',
-      organizationId: 'org-1',
-      currentSessionId: 'sess-1',
+      sessionIdentity: { subject: 'user-1', sessionId: 'sess-1' },
     });
+    mocks.getNeonDb.mockReturnValue(SERVICE_DB);
+    mocks.resolveOrganization.mockResolvedValue('org-1');
+    mocks.claimScope.mockReturnValue(DB);
     mocks.getUser.mockResolvedValue({ id: 'user-1', passwordEnabled: true });
     mocks.factors.mockResolvedValue({ anySecondFactor: false, earlierEnrollmentPending: false });
     mocks.verifyPassword.mockResolvedValue(true);
@@ -154,14 +177,111 @@ describe('POST /api/settings/password', () => {
     mocks.requireCsrfToken.mockResolvedValue(NextResponse.json({}, { status: 403 }));
     const response = await POST(request({ newPassword: 'longenough' }));
     expect(response.status).toBe(403);
-    expect(mocks.principal).not.toHaveBeenCalled();
+    expect(mocks.authenticate).not.toHaveBeenCalled();
   });
 
   it('returns 401 when the caller has no session', async () => {
-    mocks.principal.mockRejectedValue(createError.unauthorized());
+    mocks.authenticate.mockRejectedValue(createError.unauthorized());
     const response = await POST(request({ newPassword: 'longenough' }));
     expect(response.status).toBe(401);
     expect(mocks.setPassword).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['bearer', { authorization: 'Bearer native-session-token' }],
+    ['cookie', { cookie: '__session=native-session-cookie' }],
+  ] satisfies Array<[string, Record<string, string>]>)
+  ('keeps mapped account and native identity separate for %s', async (_kind, headers) => {
+    mocks.authenticate.mockResolvedValue({
+      userId: 'product-account-7',
+      sessionIdentity: { subject: 'native-subject-9', sessionId: 'sess-native-9' },
+    });
+    mocks.getUser.mockResolvedValue({ id: 'native-subject-9', passwordEnabled: true });
+    mocks.factors.mockResolvedValue({ anySecondFactor: true, earlierEnrollmentPending: false });
+    mocks.requireStepUp.mockResolvedValue({ method: 'totp' });
+    const incoming = request({ currentPassword: 'old', newPassword: 'longenough' }, {
+      ...headers,
+      'x-user-id': 'forged-account',
+      'x-session-id': 'forged-session',
+    });
+
+    const response = await POST(incoming);
+
+    expect(response.status).toBe(200);
+    expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {});
+    expect(mocks.resolveOrganization).toHaveBeenCalledExactlyOnceWith(
+      SERVICE_DB, 'product-account-7', incoming,
+    );
+    expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
+      userId: 'product-account-7', organizationId: 'org-1',
+    });
+    expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
+    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject-9');
+    expect(mocks.factors).toHaveBeenCalledExactlyOnceWith(DB, 'product-account-7', 'native-subject-9');
+    expect(mocks.requireStepUp).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'product-account-7', organizationId: 'org-1', action: 'password.change',
+    }));
+    expect(mocks.withRateLimit).toHaveBeenCalledWith(incoming, 'auth-password-reset', 'user:product-account-7');
+    expect(mocks.verifyPassword).toHaveBeenCalledExactlyOnceWith('native-subject-9', 'old');
+    expect(mocks.setPassword).toHaveBeenCalledExactlyOnceWith('native-subject-9', 'longenough');
+    expect(mocks.revoke).toHaveBeenCalledWith(
+      expect.anything(), 'product-account-7', 'sess-native-9', 'native-subject-9',
+    );
+    expect(mocks.revokeDevices).toHaveBeenCalledExactlyOnceWith(DB, 'product-account-7');
+    expect(mocks.finishIntent).toHaveBeenCalledWith(expect.anything(), 'product-account-7');
+    expect(mocks.announce).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'product-account-7', identitySubject: 'native-subject-9',
+      event: 'password_changed', detail: { source: 'totp', count: 2 },
+    }));
+  });
+
+  it.each([
+    ['developer/device bearer', { userId: 'product-account-7', surfaceClass: 'developer' }],
+    ['API key without native identity', { userId: 'product-account-7', apiKeyId: 'key-1' }],
+    ['missing native identity', { userId: 'product-account-7' }],
+    ['missing native session', {
+      userId: 'product-account-7', sessionIdentity: { subject: 'native-subject-9', sessionId: null },
+    }],
+    ['empty native session', {
+      userId: 'product-account-7', sessionIdentity: { subject: 'native-subject-9', sessionId: '' },
+    }],
+    ['empty native subject', {
+      userId: 'product-account-7', sessionIdentity: { subject: '', sessionId: 'sess-native-9' },
+    }],
+  ] satisfies Array<[string, AuthResult]>)
+  ('refuses %s before password, factor and revocation work', async (_kind, auth) => {
+    mocks.authenticate.mockResolvedValue(auth);
+
+    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }, {
+      authorization: 'Bearer credential-without-native-session',
+    }));
+
+    expect(response.status).toBe(401);
+    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
+    expect(mocks.getNeonDb).not.toHaveBeenCalled();
+    expect(mocks.claimScope).not.toHaveBeenCalled();
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.factors).not.toHaveBeenCalled();
+    expect(mocks.verifyPassword).not.toHaveBeenCalled();
+    expect(mocks.setPassword).not.toHaveBeenCalled();
+    expect(mocks.requireStepUp).not.toHaveBeenCalled();
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.revokeDevices).not.toHaveBeenCalled();
+    expect(mocks.finishIntent).not.toHaveBeenCalled();
+    expect(mocks.announce).not.toHaveBeenCalled();
+  });
+
+  it('refuses a foreign provider user before factors or password mutation', async () => {
+    mocks.getUser.mockResolvedValue({ id: 'foreign-native-subject', passwordEnabled: true });
+
+    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }));
+
+    expect(response.status).toBe(401);
+    expect(mocks.factors).not.toHaveBeenCalled();
+    expect(mocks.verifyPassword).not.toHaveBeenCalled();
+    expect(mocks.setPassword).not.toHaveBeenCalled();
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.announce).not.toHaveBeenCalled();
   });
 
   it('rejects a short password and unknown fields', async () => {
@@ -243,7 +363,7 @@ describe('POST /api/settings/password', () => {
     expect(mocks.revokeDevices).toHaveBeenCalledWith(DB, 'user-1');
     expect(mocks.verifyPassword).toHaveBeenCalledWith('user-1', 'old');
     expect(mocks.setPassword).toHaveBeenCalledWith('user-1', 'longenough');
-    expect(mocks.revoke).toHaveBeenCalledWith(expect.anything(), 'user-1', 'sess-1');
+    expect(mocks.revoke).toHaveBeenCalledWith(expect.anything(), 'user-1', 'sess-1', 'user-1');
     expect(mocks.requireStepUp).not.toHaveBeenCalled();
     expect(mocks.announce).toHaveBeenCalledWith(
       expect.objectContaining({
