@@ -13630,6 +13630,53 @@ features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
+## WEB-SLACK-SETTINGS-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded client correction: `fab88fe0c8cbbda47a25e65deb9a6b1a41c59c3a`.
+
+Slack settings previously used ambient token acquisition through an unfenced CSRF
+wait, unowned overview/channel reads and React busy state instead of synchronous
+admission. Retained destructive confirmations could obtain credentials after the
+initiating owner changed. Competing channel PUT replies replaced whole lists;
+failed add-channel saves resolved and cleared the editor, including newer text.
+Old data, notices, errors and completion cleanup could cross account, workspace,
+installation and modal-close lifetimes.
+
+The correction owns the parent and policy children together. Canonical session
+and workspace admission plus view/request generations fence captured Bearer
+transport, the CSRF wait, JSON parsing and UI publication. One synchronous
+view-wide mutation lane includes waiting confirmations and policy saves. Targets
+are captured before confirmation/dispatch, removal receipts must identify the
+submitted resource and approval receipts must match run and decision. Policy
+responses are tied to the request and expected Slack team; they do not echo an
+installation ID. Editor revisions prevent failed or obsolete submissions from
+clearing the current draft. Modal close retires before exit animation completes.
+Local duplicate identifiers fail closed before rendering or receipt matching.
+Unconfirmed dispatched mutations block further writes in that view, including
+when the affected child disappears. This uncertainty is not durable across a new
+view, account incarnation or page reload; checking Slack is not proof of rollback.
+
+Preserve the server's actual scope: overview installations, links and approvals
+are account-wide, while the selected organization affects plan/RLS context.
+Policies and uninstall require the installer; unlink requires the user/link and
+approval requires the user/run/tool calls. Explicit workspace headers do not
+turn these resources into workspace-filtered lists or alter authorization.
+
+Retirement cannot undo dispatched work. Overview GET itself can expire runs and
+stop/cancel parked tasks. Uninstall revokes Slack credentials before separate DB
+and task cleanup; unlink and approval likewise have multiple server stages, and
+approval acknowledgment precedes scheduled resume. No rollback, atomic remote
+completion, cross-view/client serialization or durable outcome receipt is added.
+The install anchor is only current-view gated: cookie OAuth navigation, callback
+binding and URL status notices remain outside captured-Bearer ownership. Existing
+canonical/native identity mapping, RLS and CSRF acquisition internals are unchanged.
+
+Source fixtures are authored and independently reviewed, not executed. All tests,
+lint, typechecks, builds, app/service runs, push and deployment remain unrun. Keep
+provider acceptance, normal React/SDK behavior and end-to-end mutation outcomes
+open; this is not complete Slack revocation or authorization containment.
+
 ## WEB-REFLECT-READ-LIFETIME-01
 
 Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.

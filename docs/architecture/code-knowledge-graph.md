@@ -5928,9 +5928,30 @@ settings remain unchanged. Request retirement cannot prove cancellation of work
 already dispatched to the server. Source fixtures are unrun; see
 WEB-REFLECT-READ-LIFETIME-01 for the runtime acceptance boundary.
 
+## Slack settings share one client view and mutation authority
+
+Accepted `fab88fe0c8cbbda47a25e65deb9a6b1a41c59c3a` gives the overview and channel-policy
+children a canonical session/workspace view owner. Captured request authority
+fences token acquisition, CSRF waits, fetch/JSON and current-only publication.
+A synchronous lane spans confirmation and mutation completion across the view;
+policy read/editor generations reject obsolete lists and preserve newer drafts.
+Removal and approval receipts must match the submitted IDs/decision, while
+channel lists are request-bound and checked against the expected Slack team.
+The modal passes active-state admission and retires on close. Unconfirmed
+dispatched work blocks further writes in that view even if its child disappears;
+this is not a durable outcome journal. Duplicate identifiers fail closed locally.
+
+Selected organization affects entitlement/RLS context but overview resource lists
+remain account-wide. Server installer, link-user and approval-run authorization
+are unchanged. Overview reads can perform expiry/task cleanup, and mutations have
+remote/database/audit/resume stages outside client cancellation. Current-view
+install-link gating does not bind cookie OAuth continuation. Cross-view mutation
+serialization, durable outcomes, global mapping/RLS and runtime acceptance remain
+open; fixtures are unrun. See WEB-SLACK-SETTINGS-LIFETIME-01.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-two accepted production slices traced above are
+Only the two hundred forty-three accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
