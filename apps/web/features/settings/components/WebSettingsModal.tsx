@@ -269,7 +269,7 @@ export function WebSettingsModal({
     notifications: <NotificationsSection />,
     voice: <VoiceSection />,
     keyboard: <KeyboardShortcutsPane shortcuts={KEYBOARD_SHORTCUT_DOCS} />,
-    reflect: <ReflectSection />,
+    reflect: <ReflectSection active={open && activeSection === 'reflect'} />,
     'time-focus': <TimeFocusSection />,
     slack: <SlackSection />,
     help: <HelpSection />,
