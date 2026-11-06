@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Button,
   Card,
@@ -10,16 +10,11 @@ import {
   CardTitle,
   Spinner,
 } from '@agiworkforce/ui';
-import {
-  DEVELOPER_REQUEST_LOGS_PATH,
-  DeveloperRequestLogPageSchema,
-  type DeveloperRequestLog,
-  type DeveloperRequestLogStep,
-} from '@agiworkforce/cloud-contracts';
+import type { DeveloperRequestLog, DeveloperRequestLogStep } from '@agiworkforce/cloud-contracts';
 
-import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
-import { toUserMessage } from '@/lib/user-error-message';
-import { readDeveloperApiError } from '../hooks/use-developer-projects';
+import { useDeveloperRequestLogs, type RequestLogFetcher } from '../hooks/use-developer-request-logs';
+
+export type { RequestLogFetcher } from '../hooks/use-developer-request-logs';
 
 const STEP_LABELS: Record<DeveloperRequestLogStep['name'], string> = {
   received: 'Received',
@@ -38,22 +33,6 @@ const STATUS_LABELS: Record<string, string> = {
   reserved: 'In progress',
   provider_started: 'In progress',
 };
-
-export type RequestLogFetcher = (before: string | null) => Promise<{
-  logs: DeveloperRequestLog[];
-  nextBefore: string | null;
-}>;
-
-async function fetchRequestLogs(before: string | null) {
-  const path = before
-    ? `${DEVELOPER_REQUEST_LOGS_PATH}?before=${encodeURIComponent(before)}`
-    : DEVELOPER_REQUEST_LOGS_PATH;
-  const response = await sendAuthorizedJson(path, { method: 'GET' });
-  if (!response.ok) {
-    throw new Error(await readDeveloperApiError(response, 'Request logs could not be loaded.'));
-  }
-  return DeveloperRequestLogPageSchema.parse(await response.json());
-}
 
 function formatTime(value: string): string {
   const date = new Date(value);
@@ -125,36 +104,14 @@ function LogDetail({ log }: { log: DeveloperRequestLog }) {
 }
 
 export function RequestLogsPanel({
-  fetchLogs = fetchRequestLogs,
+  fetchLogs,
 }: {
   fetchLogs?: RequestLogFetcher;
 }) {
-  const [logs, setLogs] = useState<DeveloperRequestLog[] | null>(null);
-  const [nextBefore, setNextBefore] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (before: string | null) => {
-      setError(null);
-      if (before) setLoadingMore(true);
-      try {
-        const page = await fetchLogs(before);
-        setLogs((current) => (before ? [...(current ?? []), ...page.logs] : page.logs));
-        setNextBefore(page.nextBefore);
-      } catch (reason) {
-        setError(toUserMessage(reason, 'Request logs could not be loaded.'));
-      } finally {
-        setLoadingMore(false);
-      }
-    },
-    [fetchLogs],
-  );
-
-  useEffect(() => {
-    void load(null);
-  }, [load]);
+  const history = useDeveloperRequestLogs(fetchLogs);
+  const { logs, nextBefore, error, loadingMore } = history;
+  const [expanded, setExpanded] = useState<{ viewKey: object; id: string | null } | null>(null);
+  const openId = expanded?.viewKey === history.viewKey ? expanded.id : null;
 
   return (
     <Card className="border-border bg-card">
@@ -166,12 +123,23 @@ export function RequestLogsPanel({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {error ? (
+        {history.isUnavailable ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <p role="alert" className="text-sm text-danger">
+              {history.requiresReload
+                ? 'Reload this page to confirm your workspace before loading request logs.'
+                : 'Request logs are unavailable until your account and workspace are ready.'}
+            </p>
+            {!history.requiresReload ? (
+              <Button variant="outline" size="sm" onClick={history.retry}>Try again</Button>
+            ) : null}
+          </div>
+        ) : error ? (
           <div className="flex flex-wrap items-center gap-2">
             <p role="alert" className="text-sm text-danger">
               {error}
             </p>
-            <Button variant="outline" size="sm" onClick={() => void load(null)}>
+            <Button variant="outline" size="sm" onClick={history.retry}>
               Try again
             </Button>
           </div>
@@ -194,7 +162,7 @@ export function RequestLogsPanel({
                   <button
                     type="button"
                     aria-expanded={open}
-                    onClick={() => setOpenId(open ? null : log.id)}
+                    onClick={() => setExpanded({ viewKey: history.viewKey, id: open ? null : log.id })}
                     className="grid w-full grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 px-3 py-2 text-start hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
                   >
                     <span className="truncate font-mono text-xs text-foreground">
@@ -224,7 +192,7 @@ export function RequestLogsPanel({
               size="sm"
               disabled={loadingMore}
               aria-busy={loadingMore}
-              onClick={() => void load(nextBefore)}
+              onClick={history.loadMore}
             >
               {loadingMore ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
               Show older

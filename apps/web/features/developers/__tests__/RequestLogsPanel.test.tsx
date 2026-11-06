@@ -1,11 +1,35 @@
-import { render, screen } from '@testing-library/react';
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
-import type { DeveloperRequestLog } from '@agiworkforce/cloud-contracts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MANAGED_CLOUD_WORKSPACES_PATH, type DeveloperRequestLog } from '@agiworkforce/cloud-contracts';
 
+const fixture = vi.hoisted(() => ({
+  auth: { isLoaded: true, isSignedIn: true, userId: 'panel-user', sessionId: 'panel-session' },
+  sdk: { loaded: true, user: { id: 'panel-user' }, session: { id: 'panel-session',
+    user: { id: 'panel-user' }, getToken: async () => 'panel-token' } },
+}));
+vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
 
 import { RequestLogsPanel } from '../components/RequestLogsPanel';
+
+let client: QueryClient;
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={client}>{children}</QueryClientProvider>
+);
+beforeEach(() => {
+  observeWorkspaceOwner(null);
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  vi.stubGlobal('fetch', vi.fn(async (path: RequestInfo | URL) => {
+    if (String(path) !== MANAGED_CLOUD_WORKSPACES_PATH) throw new Error('Unexpected network request');
+    return new Response(JSON.stringify({ scope: 'personal', activeWorkspaceId: 'personal',
+      activeOrganizationId: null, workspaces: [] }));
+  }));
+});
+afterEach(() => { cleanup(); client.clear(); observeWorkspaceOwner(null); vi.unstubAllGlobals(); });
 
 function log(patch: Partial<DeveloperRequestLog> = {}): DeveloperRequestLog {
   return {
@@ -38,7 +62,7 @@ function log(patch: Partial<DeveloperRequestLog> = {}): DeveloperRequestLog {
 describe('RequestLogsPanel', () => {
   it('lists requests and opens one into its timeline and usage', async () => {
     const fetchLogs = vi.fn(async () => ({ logs: [log()], nextBefore: null }));
-    render(<RequestLogsPanel fetchLogs={fetchLogs} />);
+    render(<RequestLogsPanel fetchLogs={fetchLogs} />, { wrapper });
     const row = await screen.findByRole('button', { expanded: false });
     expect(row).toHaveTextContent('served-model');
     expect(row).toHaveTextContent('1,300 ms');
@@ -58,11 +82,34 @@ describe('RequestLogsPanel', () => {
         logs: [log({ id: '0190a000-0000-7000-8000-0000000000d2', servedModel: 'older-model' })],
         nextBefore: null,
       });
-    render(<RequestLogsPanel fetchLogs={fetchLogs} />);
+    render(<RequestLogsPanel fetchLogs={fetchLogs} />, { wrapper });
     await userEvent.click(await screen.findByRole('button', { name: 'Show older' }));
     expect(await screen.findByText('older-model')).toBeInTheDocument();
-    expect(fetchLogs).toHaveBeenLastCalledWith('2026-10-19T10:00:00.000Z');
+    expect(fetchLogs).toHaveBeenLastCalledWith('2026-10-19T10:00:00.000Z', {
+      organizationId: null,
+      request: expect.objectContaining({ session: expect.objectContaining({
+        userId: 'panel-user', sessionId: 'panel-session',
+      }), assertCurrent: expect.any(Function), fetch: expect.any(Function) }),
+    });
     expect(screen.queryByRole('button', { name: 'Show older' })).toBeNull();
+  });
+
+  it('clears expanded details and the old cursor when the source changes, even for the same log ID', async () => {
+    const firstSource = vi.fn(async () => ({ logs: [log()], nextBefore: 'old-cursor' }));
+    let resolve!: (value: { logs: DeveloperRequestLog[]; nextBefore: null }) => void;
+    const pending = new Promise<{ logs: DeveloperRequestLog[]; nextBefore: null }>((yes) => { resolve = yes; });
+    const nextSource = vi.fn(() => pending);
+    const { rerender } = render(<RequestLogsPanel fetchLogs={firstSource} />, { wrapper });
+    await userEvent.click(await screen.findByRole('button', { expanded: false }));
+    expect(screen.getByText('Model answered')).toBeInTheDocument();
+    rerender(<RequestLogsPanel fetchLogs={nextSource} />);
+    await waitFor(() => expect(nextSource).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Model answered')).toBeNull();
+    expect(screen.queryByText('served-model')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show older' })).toBeNull();
+    await act(async () => resolve({ logs: [log({ servedModel: 'replacement-model' })], nextBefore: null }));
+    expect(await screen.findByRole('button', { expanded: false })).toHaveTextContent('replacement-model');
+    expect(screen.queryByText('Model answered')).toBeNull();
   });
 
   it('says so when there are no requests, and offers a retry on failure', async () => {
@@ -70,7 +117,7 @@ describe('RequestLogsPanel', () => {
       .fn()
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValue({ logs: [], nextBefore: null });
-    render(<RequestLogsPanel fetchLogs={fetchLogs} />);
+    render(<RequestLogsPanel fetchLogs={fetchLogs} />, { wrapper });
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await screen.findByText(/No API requests yet/)).toBeInTheDocument();
   });
