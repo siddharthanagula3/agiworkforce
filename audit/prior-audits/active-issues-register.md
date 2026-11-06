@@ -10697,7 +10697,9 @@ conditional recorded-selection cleanup
 boundedly source-corrected in `d31e49f4e0ea77113f003d12a940a0cb83310c0d` and
 `9432cc600f32a2fd5c566177d9a4cf952dae940a`, plus
 `1a08b79d8ac0d8eea40eb4679e29b1eca2956274`, 2026-11-05. Original intent/session
-ownership, reconciliation and runtime/deployment acceptance remain open.
+ownership was subsequently boundedly corrected in `2d9f982e0282698d5be95f986594b0d75a54790c` on
+2026-11-06 as described below. Reconciliation and runtime/deployment acceptance
+remain open.
 
 Web leave and standalone ownership-transfer hooks inherited the production
 QueryClient's mutation retry:1. A lost response or dismissed step-up could
@@ -10733,7 +10735,7 @@ transaction or selected-workspace preservation. No installed dependency/runtime
 execution was performed; the successful leave fixture's dispatch count is not a
 terminal-success assertion.
 
-Remaining boundaries: the target is captured at mutation invocation, not
+Boundaries at those earlier checkpoints: the target was captured at mutation invocation, not
 necessarily when the person first confirms it. TeamSection stores leave kind
 but reads live organization/successor state on confirmation. A normal same-tab
 switch preserving that dialog was not established because switching reloads;
@@ -10807,33 +10809,131 @@ the page as a whole is not pinned by these mutation headers. Deletion schedule
 overwrite and outcome-copy corrections are tracked separately below. No tests,
 checks, builds, installations, live/database actions, push or deployment ran.
 
+Further lifetime correction `2d9f982e0282698d5be95f986594b0d75a54790c`, 2026-11-06, owns the two
+TeamSection leave/standalone-transfer flows from confirmation preparation through
+the ordinary first send, owned step-up, response parsing and explicit continuation.
+It uses the canonical admitted workspace and captured native session, copies the
+initial organization/successor/outgoing-role values and synchronously excludes
+duplicate submissions. Active-section close, session changes and workspace
+retirement invalidate retained callbacks; reopening does not revive an old trigger.
+The operation owns its own admission epoch transition without mistaking that
+publication for an unrelated switch. Critical workspace name/role and self identity
+come from owned workspace/session data, not viewer-specific global Team cache.
+The canonical workspace response adds optional accountId from the authenticated
+Bearer branch's product-account resolution. Cookie-path responses omit it because
+their existing DB-scope helper returns an unresolved provider subject. These
+critical actions use bearer-only requests, require accountId and capture it
+separately from the native provider subject. Member self filtering and the leave
+receipt compare product IDs; Continue requires the same resolved product account
+and passes it to the guarded finalizer. Old-server absence disables these actions
+rather than assuming the provider subject is the product account ID. Existing
+selection callers retain the separate limitation below.
+
+Both mutations use the existing workspace-switch barrier, ownership checks around
+shared CSRF acquisition, captured bearer-only mutation transport with cookies
+omitted and owned step-up. The shared CSRF fetch/cache itself remains unowned.
+A validated exact
+receipt is displayed before Continue. Continue rereads canonical workspaces and
+passes the returned active organization to the existing internally guarded cache
+cleanup and navigation helper; it does not assume leave selected Personal or
+repeat the mutation. Ordinary refresh failure or missing identity preserves the
+receipt for another refresh; a different resolved account retires and hides it.
+All non-success results after actual critical dispatch are treated conservatively
+as unconfirmed, including ordinary 4xx without an explicit noncommit contract.
+The recognized STEP_UP_REQUIRED refusal permits only its existing proof replay;
+pre-dispatch cancellation does not manufacture an unknown mutation outcome.
+
+Unknown dispatch closes account admission until reload. A retained receipt or
+warning panel is not durable across section unmount/reload or ownership retirement;
+the barrier is not a persistent server operation record. Browser reload can show
+current membership but cannot prove cleanup completed or that an earlier server
+operation stopped. No client retirement rolls back a dispatched request.
+After closing a pending/confirmed operation, an overview loading/error branch can
+hide Team's existing reload button even while the barrier remains; manual browser
+reload is still needed. A dedicated recovery affordance for those branches is open.
+Global Team overview/member reads, cached successor names/list freshness, other
+member/invitation/rename/deletion actions, cross-tab selection serialization and
+server cleanup recovery remain outside this correction. Server eligibility and
+authorization remain required even for an owned confirmation.
+
+Independent source review covers the production and authored hook/UI/route
+regression sources. Fixtures use controlled native/network/database boundaries;
+they do not establish provider behavior, database transactions or real browser
+ordering. No tests, lint, typechecks, builds, installs, app/service execution,
+push or deployment ran.
+
 ## WEB-WORKSPACE-LEAVE-RECEIPT-01
 
-Severity: Medium. Status: OPEN, source-backed design finding, 2026-11-05.
+Severity: Medium. Status: Bounded receipt/UI correction `2d9f982e0282698d5be95f986594b0d75a54790c`,
+2026-11-06; full cleanup recovery and runtime acceptance remain open.
 
 The deprovision service can record failed device-token/API-key revocation and
-continue. The leave route returns 200 with revoked counts and warnings, but the
-Web leave hook ignores the body, claims device tokens and API keys were revoked,
-clears query state and reloads. This is an explicit server partial-success path,
+continue. The leave route returns 200 with revoked counts and warnings, but the prior
+Web leave hook ignored the body, claimed device tokens and API keys were revoked,
+cleared query state and reloaded. This is an explicit server partial-success path,
 not evidence that removed membership remains usable. Backend scope, audit and
 owner enforcement remain; no live incident was observed.
 
-The inline receipt has no affected organization ID or operation ID, and no
-canonical shared leave receipt schema exists. A bounded correction should consume
-a validated receipt, distinguish confirmed membership exit from incomplete
-credential cleanup, and display safe warning language rather than raw backend
-errors. An owner-bound result panel before explicit Continue/reload is preferable
-to a warning toast immediately erased by navigation. No existing navigation-
-surviving mutation-warning mechanism was found; do not repurpose unrelated
-sign-out-exempt notice storage.
+The route now adds organizationId, userId and nullable successorUserId to the
+existing counts/warnings. Canonical shared schemas validate leave and transfer
+receipts; leave requires exact original target/principal/successor and nonnegative
+safe-integer counts, while transfer requires exact organization/new-owner/outgoing
+role. This is acknowledgment identity, not a durable operation ID or idempotency.
+An older server's leave response without the new identity fields is unconfirmed
+to this client, not accepted through a legacy fallback; coordinated rollout is
+not runtime-verified.
+TeamSection shows membership removal separately from reported cleanup counts,
+summarizes warnings without displaying raw backend errors and never asserts that
+zero warnings establish universal credential revocation. The owner-bound panel
+remains visible until explicit Continue while the original session/editor stays
+active; no unrelated sign-out notice storage or
+toast erased by immediate navigation is used.
 
 Unreadable/lost responses mean unconfirmed outcome, not failed leave. Current
 membership reconciliation cannot establish completed credential cleanup or stop
 an in-flight server operation. Original session/workspace authority, warning
-retention, lifecycle-safe navigation and any cleanup resumption need explicit
-design and acceptance. No receipt/UI patch is represented by the intent/selection
-slices above. All review remained source-only; no tests, checks, builds,
+retention and lifecycle-safe navigation retain the limits described in
+WEB-WORKSPACE-MUTATION-INTENT-01. The self-leave provider-session selection gate
+is unchanged: normal selection cleanup often causes provider session revocation
+to be skipped. Empty warnings therefore do not prove every session ended.
+Deprovision retries/resumption, durable receipt recovery and server completion
+semantics remain open. All review remained source-only; no tests, checks, builds,
 installations, live/database actions, push or deployment ran.
+
+## WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01
+
+Severity: Medium. Status: OPEN source finding, 2026-11-06; no live reproduction.
+
+The native session authority uses Clerk's provider subject, while getClerkAuthUser
+resolves public.identities to the product account ID. The identity bridge allows
+these values to differ. AuthService.getCurrentUser maps /api/me.id to AuthUser.id, and
+the auth store records that product ID in its cache scope. Existing workspace
+selection/create flows call finalizeWorkspaceSwitch without a resolved account
+override, so the helper defaults to authority.session.userId. When an existing
+cache scope contains the different product account ID, applyCacheScope refuses
+before cleanup with "Account cache scope is still resolving. Reload the page."
+A server selection may already be committed even though finalization cannot
+complete. If no scope has been recorded, the helper instead adopts the supplied
+subject; neither case establishes correct product-account scope.
+
+The new leave/transfer flow in `2d9f982e0282698d5be95f986594b0d75a54790c` supplies a validated owned
+product-account override and does not weaken the account-mismatch guard. The
+preexisting useWorkspaceSelectionMutation caller remains unchanged. Separately,
+getUserScopedDb's cookie branch checks getClerkAuthUser but discards its resolved
+account ID and returns the native subject for its selectors. The new optional
+workspace accountId field is omitted on that branch, not mislabeled as resolved.
+This does not repair existing cookie-path workspace selectors or establish RLS
+behavior for mapped subjects. Canonical identity propagation through other
+workspace/account consumers and mapped-account selection/create acceptance remain
+open. This finding does not establish a
+cross-account disclosure or a deployed incident. No product checks ran.
+
+Sources: lib/api-auth.ts AuthResult/authResultFor; lib/server/identity-account.ts
+RESOLVE; lib/server/rls-db.ts getUserScopedDb;
+shared/services/authentication-manager.ts AuthService.getCurrentUser;
+shared/stores/authentication-store.ts applyCacheScope; features/workspaces/hooks/
+use-workspaces.ts useWorkspaceSelectionMutation; features/workspaces/lib/
+workspace-cache-scope.ts, all under apps/web.
 
 ## WEB-DEPROVISION-SESSION-COVERAGE-01
 
@@ -10869,7 +10969,8 @@ that none were revoked, while independent local credential cleanup continues.
 Offset pagination is not a snapshot: concurrent session changes, duplicate IDs,
 provider page-shape violations, retries and full cleanup recovery remain outside
 this correction. It does not change the self-leave selection gate or repair
-the Web client's ignored cleanup warnings. No tests, checks, builds,
+the Web client's cleanup recovery. Its subsequent bounded receipt display is
+recorded in WEB-WORKSPACE-LEAVE-RECEIPT-01. No tests, checks, builds,
 installations, live/database actions, push or deployment ran for this slice.
 
 ## WEB-WORKSPACE-DELETION-LIFECYCLE-01
@@ -13411,8 +13512,10 @@ add/make-primary, TOTP setup/disable/backup-code regeneration and sign-in identi
 unlink. AdvancedAccountSecurityPanel is also rendered inside SecuritySection and
 adapts the shared hook through its client library. These callers omitted owned
 options. The subsequent WEB-PASSWORD-INTENT-LIFETIME-01 and WEB-EMAIL-CHANGE-LIFETIME-01
-slices own password and email change respectively. The other eight direct
-settings call sites and Advanced Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
+slices own password and email change respectively. The subsequent
+`2d9f982e0282698d5be95f986594b0d75a54790c` owns leave/standalone transfer with the limits recorded in
+WEB-WORKSPACE-MUTATION-INTENT-01. The other six direct settings call sites and
+Advanced Security remain open. A hook-lifetime fence cannot protect a sender already waiting for CSRF,
 ambient credentials, native user operations or caller-owned receipt/effect work.
 
 Coordinated boundaries and source owners:
@@ -13434,11 +13537,12 @@ Coordinated boundaries and source owners:
   from a new identity. Include single-session revocation's receipt and cleanup,
   although it is not itself a step-up consumer. See WEB-ACCOUNT-DELETION-INTENT-01
   and WEB-SECURITY-SESSION-COMPLETION-01.
-- Workspace ownership: TeamSection leave/transfer confirmation, copied target and
-  successor, useLeaveOrganization/useTransferOrganizationOwnership, response and
-  cache-clearing/reload effects need one admitted workspace/session intent. Retry
-  and fixed leave-header corrections are not confirmation ownership. See
-  WEB-WORKSPACE-MUTATION-INTENT-01.
+- Workspace ownership: TeamSection leave/transfer now uses one admitted
+  workspace/session intent across confirmation, copied target/successor, owned
+  transport, validated receipt and guarded explicit continuation. Global Team
+  reads/other actions, durable outcome/cleanup recovery and cross-tab selection
+  concurrency remain open. See WEB-WORKSPACE-MUTATION-INTENT-01 and
+  WEB-WORKSPACE-LEAVE-RECEIPT-01.
 - Email and sign-in methods: the bounded WEB-EMAIL-CHANGE-LIFETIME-01 slice owns
   EmailAddressChange POST/PATCH, native address reload/send/verify and the parent
   AccountSection email update. Server partial completion and misleading retry
@@ -13650,16 +13754,29 @@ builds, app/service execution, push or deployment ran.
 ## WEB-EMAIL-CHANGE-LIFETIME-01
 
 Severity: Medium. Bounded correction `7b61a2061e` independently source-reviewed
-on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+on 2026-11-06; authored fixtures unrun. Mapped-account admission and runtime
+acceptance remain open as qualified below.
 
-EmailAddressChange now admits a keyed editor only when the captured canonical
-session matches AccountSection's current user. Each submission, resend and final
+EmailAddressChange now admits a keyed editor only when the captured native
+session user ID literally equals AccountSection's current user ID. Each submission, resend and final
 confirmation has synchronous duplicate admission and copied values. The final
 primary-address switch uses the canonical consequence confirmation. Its stale
 confirm/cancel callbacks cannot advance or dismiss another intent. Account-only
 ownership does not impose an arbitrary workspace gate or change server policy.
 Explicit account-section/modal admission retires the editor before retained
 content can continue after close. Loading-state callbacks are fenced too.
+
+Subsequent workspace review found that this equality is not a general account
+identity contract. AccountSection passes AuthUser.id from the product profile,
+while useSessionSnapshot carries the native provider subject. The server identity
+bridge permits different values. Such mapped accounts remain in the editor's
+"account must finish loading" fallback even after both identities load, and its
+completion callback also compares the native subject to the product store ID.
+This source-backed availability defect remains unpatched; it is not evidence of
+cross-account mutation. Existing fixtures used equal IDs and do not establish
+mapped-account acceptance. A correction must resolve product-account ownership
+without changing native SDK identity checks or imposing a workspace prerequisite
+on this account-global action.
 
 POST and PATCH freeze their JSON before waits and use captured bearer-only
 RequestAuthority transport, with ownership across CSRF/token, response and body

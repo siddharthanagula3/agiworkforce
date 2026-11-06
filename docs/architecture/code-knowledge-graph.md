@@ -5530,10 +5530,54 @@ already-primary shortcut receipt without reconciling prior partial effects.
 Connected sign-in/primary-email confirmation, TOTP/passkeys, destructive cleanup
 and Advanced Security remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01 and
 WEB-EMAIL-CHANGE-COMPLETION-01 for exact scope and acceptance limits.
+Subsequent source review found that editor admission and completion still compare
+the native provider subject to the product profile ID. Different-ID mapped
+accounts cannot admit the editor; existing equal-ID fixtures do not establish
+that case. This remains an explicit follow-up, not a complete email ownership claim.
+
+## Workspace membership owns confirmation and continuation
+
+Accepted `2d9f982e0282698d5be95f986594b0d75a54790c` binds TeamSection leave/standalone ownership
+transfer to canonical workspace/session/editor authority before confirmation.
+Copied inputs, render-generation guards and synchronous submission exclusion
+survive the operation's own workspace-barrier epoch transition while rejecting
+retired callbacks. Critical name/role/self identity use owned workspace/session
+data; global Team reads and other actions are not represented as corrected.
+The canonical Bearer workspace read carries optional resolved product accountId; these
+actions require it and keep it distinct from the native identity-provider subject.
+Receipt/self checks and guarded continuation use the captured product identity.
+Cookie-path responses omit that field rather than mislabeling their existing
+unresolved-subject scope; broader DB-scope identity propagation remains open.
+
+Ownership checks around shared CSRF acquisition, captured bearer-only mutation
+transport and owned step-up lead to exact shared receipt validation. The shared
+CSRF fetch/cache itself remains unowned.
+Leave adds principal/workspace/successor identity to reported cleanup counts and
+warnings. Its result panel distinguishes removed membership from cleanup status
+without rendering raw backend warnings or promising every credential was revoked.
+Transfer likewise waits for explicit Continue after its exact receipt.
+
+Continue rereads canonical workspaces and uses the existing internally guarded
+cache cleanup/navigation with the actual active organization, not assumed Personal.
+Ordinary refresh failure preserves the receipt without replaying the mutation;
+a different resolved account retires the old receipt instead.
+Unknown dispatched results remain behind the reload barrier. Receipt warnings are
+not durable across ownership retirement/unmount/reload; native self-revocation
+cannot safely be presumed rather than replacement, and no stale cleanup targets
+replacement state. Server operation identity, cleanup resumption, cross-tab
+serialization and normal self-leave provider-session coverage remain open.
+
+Independent source review covers production and authored unrun hook/UI/route
+fixtures, not installed typing, provider/database behavior, real browser ordering
+or runtime acceptance. See WEB-WORKSPACE-MUTATION-INTENT-01 and
+WEB-WORKSPACE-LEAVE-RECEIPT-01 for the bounded correction and remaining work.
+Existing workspace selection/create finalization still defaults to provider
+subject without that override; mapped-account limitations are separately recorded
+in WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01.
 
 ## Reconstruction boundary
 
-Only the two hundred twenty-four accepted production slices traced above are
+Only the two hundred twenty-five accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
