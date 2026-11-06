@@ -1,12 +1,13 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
 import { queryKeys } from '@shared/stores/query-client';
 import { toUserMessage } from '@/lib/user-error-message';
 
 import type { DeveloperProject } from '../types';
+import { useDeveloperQuery, type DeveloperQueryScope } from './use-developer-query';
 
 export const DEVELOPER_PROJECTS_QUERY_KEY = ['developers', 'projects'] as const;
 
@@ -42,18 +43,20 @@ async function projectRequest(
   return payload.project;
 }
 
+async function readDeveloperProjects({
+  request,
+  headers,
+}: DeveloperQueryScope): Promise<DeveloperProject[]> {
+  const response = await request.fetch(PROJECTS_PATH, { method: 'GET', cache: 'no-store', headers });
+  if (!response.ok) {
+    throw new Error(await readDeveloperApiError(response, 'Projects could not be loaded.'));
+  }
+  const payload = (await response.json()) as { projects: DeveloperProject[] };
+  return payload.projects;
+}
+
 export function useDeveloperProjects() {
-  return useQuery<DeveloperProject[], Error>({
-    queryKey: DEVELOPER_PROJECTS_QUERY_KEY,
-    queryFn: async () => {
-      const response = await sendAuthorizedJson(PROJECTS_PATH, { method: 'GET' });
-      if (!response.ok) {
-        throw new Error(await readDeveloperApiError(response, 'Projects could not be loaded.'));
-      }
-      const payload = (await response.json()) as { projects: DeveloperProject[] };
-      return payload.projects;
-    },
-  });
+  return useDeveloperQuery(DEVELOPER_PROJECTS_QUERY_KEY, readDeveloperProjects);
 }
 
 export function useCreateDeveloperProject() {

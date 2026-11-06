@@ -62,7 +62,10 @@ function keyCountLabel(count: number): string {
 function projectUsageLabel(
   usage: DeveloperUsageFigures | undefined,
   monthlyCreditLimit: number | null,
+  status: 'loading' | 'unavailable' | 'ready',
 ): string {
+  if (status === 'loading') return 'Loading usage';
+  if (status === 'unavailable') return 'Usage unavailable';
   const credits = usage?.credits ?? 0;
   const spent = formatCredits(credits, { maximumFractionDigits: 2 });
   if (monthlyCreditLimit === null) return `${spent} this month, no monthly limit`;
@@ -158,6 +161,9 @@ export function ProjectsPanel() {
   const projects = useDeveloperProjects();
   const apiKeys = useAPIKeys();
   const usage = useDeveloperUsage();
+  const usageStatus = usage.isLoading
+    ? 'loading'
+    : usage.isError || !usage.data ? 'unavailable' : 'ready';
   const usageByProject = new Map(
     (usage.data?.projects ?? []).map((entry) => [entry.projectId, entry] as const),
   );
@@ -241,6 +247,16 @@ export function ProjectsPanel() {
         </div>
       </CardHeader>
       <CardContent>
+        {usage.isError ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <p role="alert" className="text-xs text-danger">
+              {toUserMessage(usage.error, 'Usage could not be loaded.')}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void usage.refetch()}>
+              Retry usage
+            </Button>
+          </div>
+        ) : null}
         {projects.isLoading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Spinner size="sm" aria-hidden="true" />
@@ -266,7 +282,7 @@ export function ProjectsPanel() {
               <span className="text-sm font-medium text-foreground">Default project</span>
               <span className="text-xs text-muted-foreground">
                 {keyCountLabel(keyCounts.get(null) ?? 0)},{' '}
-                {projectUsageLabel(usageByProject.get(null), null)}
+                {projectUsageLabel(usageByProject.get(null), null, usageStatus)}
               </span>
             </li>
             {live.map((project) => (
@@ -280,7 +296,7 @@ export function ProjectsPanel() {
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {keyCountLabel(keyCounts.get(project.id) ?? 0)},{' '}
-                    {projectUsageLabel(usageByProject.get(project.id), project.monthlyCreditLimit)}
+                    {projectUsageLabel(usageByProject.get(project.id), project.monthlyCreditLimit, usageStatus)}
                   </span>
                 </div>
                 <div className="flex shrink-0 gap-2">

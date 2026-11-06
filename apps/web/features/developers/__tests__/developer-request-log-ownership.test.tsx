@@ -125,7 +125,7 @@ describe('developer request log ownership', () => {
     expect(result.current.nextBefore).toBeNull();
   });
 
-  it.each([personal, organization])('sends explicit $scope policy headers without organization filtering', async (scope) => {
+  it.each([personal, organization])('sends explicit $scope selectors with captured authorization', async (scope) => {
     workspaceData = scope;
     const { result } = renderHook(() => useLogHarness(), { wrapper });
     await waitFor(() => expect(result.current.logs).not.toBeNull());

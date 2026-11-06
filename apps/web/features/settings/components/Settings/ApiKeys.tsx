@@ -459,8 +459,10 @@ const DEFAULT_API_KEY_FORM: CreateApiKeyFormData = {
 
 export function ApiKeysManager() {
   const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
-  const { data: projects = [] } = useDeveloperProjects();
-  const { data: usage } = useDeveloperUsage();
+  const projectQuery = useDeveloperProjects();
+  const usageQuery = useDeveloperUsage();
+  const projects = projectQuery.isSuccess ? projectQuery.data ?? [] : [];
+  const usage = usageQuery.isSuccess ? usageQuery.data : undefined;
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
   const apiKeyForm = useForm<CreateApiKeyFormData>({
@@ -505,6 +507,30 @@ export function ApiKeysManager() {
 
   return (
     <>
+      {projectQuery.isLoading ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading project choices</p>
+      ) : projectQuery.isError ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-sm text-danger">
+            {toUserMessage(projectQuery.error, 'Project choices could not be loaded.')}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void projectQuery.refetch()}>
+            Retry project choices
+          </Button>
+        </div>
+      ) : null}
+      {usageQuery.isLoading ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading key usage</p>
+      ) : usageQuery.isError ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-sm text-danger">
+            {toUserMessage(usageQuery.error, 'Key usage could not be loaded.')}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={() => void usageQuery.refetch()}>
+            Retry key usage
+          </Button>
+        </div>
+      ) : null}
       <ApiKeysPanel
         apiKeys={apiKeys}
         projects={projects.filter((project) => project.archivedAt === null)}
