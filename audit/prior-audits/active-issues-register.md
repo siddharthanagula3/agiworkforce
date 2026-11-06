@@ -13097,3 +13097,66 @@ copied editor/form selections, generated secrets, uncertain server outcomes,
 manual duplicate submissions and cache reconciliation remain separate gaps.
 The new read surface does not certify the whole developer console as isolated.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
+
+
+## WEB-DEVELOPER-WEBHOOK-READ-OWNERSHIP-01
+
+Severity: Medium. Bounded correction `15178ad6ff` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+Webhook endpoint and delivery reads previously used account-global query keys
+and ambient `sendAuthorizedJson`. Token and CSRF acquisition could outlive the
+initiating view; neither query captured account/session/workspace authority,
+consumed cancellation, sent an explicit selector or fenced successful body
+publication. Delivery keys included the endpoint ID but not the owner. Raw
+refetch callbacks could bypass the observer's disabled state. Workspace-switch
+cache clearing and reload remain counterguards, not proof of these boundaries.
+No live disclosure is asserted.
+
+Both reads now use the existing feature-owned `useDeveloperQuery` authority and
+cache scope. GET transport uses captured bearer authority with omitted cookies,
+no-store and explicit workspace selectors. The common helper's narrow options
+add an enabled gate and interval selection without exposing arbitrary query
+configuration. Disabled or blank-endpoint delivery observers return masked data,
+errors and status rather than perpetual loading, and cannot manually refetch.
+Observer callback lifetime now includes value-based resource key and enabled
+state, so A/B/A endpoint selection and true/false/true transitions do not revive
+retained callbacks. Existing prefix invalidations remain compatible; mutation
+transports and handlers are unchanged.
+
+Polling still selects 3000ms only while at least one delivery is pending with
+zero attempts. It is off for disabled or retired owners. Disabling one observer
+does not abort an already-running request shared with another observer. Closing
+the actual DeliveryLog unmounts it; final-observer query cancellation retires
+transport. A single disabled observer may leave an already-running shared query
+to finish into its owner-scoped cache, but that observer cannot display it while
+disabled. This is not a claim of cancelling server-side delivery work.
+
+Server semantics remain account-owned for webhooks: migration
+`0323_developer_webhooks.sql` uses user-owner policies, and the service filters
+by user plus endpoint ID for delivery reads. Current source search found no
+later policy replacement. These tables differ from workspace-scoped API keys
+and usage (0073/0272). Explicit selectors preserve authentication/workspace policy
+context, not a new organization data model. Delivery listing still returns an
+empty list for a valid nonexistent/foreign endpoint ID; route ID validation and
+server authorization are unchanged. Deployed RLS is unverified.
+
+The existing ownership fixture matrix now covers endpoints and deliveries with
+real session/admission/RequestAuthority/QueryClient paths and controlled Clerk/
+network boundaries. New `developer-webhook-read-ownership.test.tsx` sources cover
+disabled/blank IDs, enable/resource callback retirement, cached-error masking,
+shared in-flight disable and captured interval selection. Its transparent query
+wrapper records interval callbacks for direct evaluation: it does not establish
+elapsed timer dispatch or actual interval cancellation. An explicit close/reopen
+fixture remains additional coverage; final-observer unmount is covered by the
+matrix. All fixtures remain unrun, including runtime/type compatibility.
+
+API-key reads remain separate because create/delete currently write the exact
+unscoped key. A later scoped migration must preserve timeout behavior and replace
+those writes with compatible invalidation or owner-bound writes. In particular,
+`queryKeys.settings.apiKeys()` includes a third undefined element, so substituting
+`apiKeys(userId)` would not preserve the existing invalidation prefix. Never inject
+one mutation's returned key into every scoped cache. Webhook/project/key mutation
+authority, copied editor state, one-time secrets, ambiguous outcomes and manual
+duplicate submissions remain open. No tests, lint, typechecks, builds, app/service
+execution, push or deployment ran.

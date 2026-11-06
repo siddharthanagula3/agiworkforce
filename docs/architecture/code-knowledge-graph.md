@@ -5336,9 +5336,30 @@ secrets are not repaired. StrictMode and permitted re-admission fixture coverage
 plus all runtime/type acceptance, remain open. See
 `WEB-DEVELOPER-PROJECT-USAGE-READ-OWNERSHIP-01` for scope and acceptance limits.
 
+## Webhook reads share captured authority and bounded controls
+
+Accepted `15178ad6ff` moves endpoint and delivery GETs to the existing captured
+query authority. Owner-scoped keys retain mutation invalidation prefixes. The
+shared helper adds narrow enabled/interval options and observer callback lifetime
+includes the resource key and enabled state. Disabled/blank-endpoint reads mask
+public results and reject manual refetch; returning to a prior endpoint or enabled
+state does not revive an old callback.
+
+The first-attempt interval remains 3000ms for pending deliveries with attempts 0.
+Disabled/retired owners do not poll. Shared request authority is not bound to one
+observer, so disabling one does not abort another; final unmount still retires
+transport. Server webhook records remain account-owned under `0323` user policies,
+not the selected-workspace data model used by API keys and usage.
+
+Independent source review accepted production and unrun ownership/control
+fixtures. Captured interval policy is source-covered, not elapsed timer behavior.
+Key-query migration requires coupled mutation-cache invalidation and timeout
+preservation; mutation/editor/secret lifetimes and unknown outcomes remain open.
+See `WEB-DEVELOPER-WEBHOOK-READ-OWNERSHIP-01` for evidence and acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred sixteen accepted production slices traced above are represented as
+Only the two hundred seventeen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
