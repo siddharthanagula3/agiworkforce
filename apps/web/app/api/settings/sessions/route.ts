@@ -20,6 +20,7 @@ import {
 } from '@/lib/server/session-revocation';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import {
+  isFiniteSessionTimestamp,
   sessionAbsoluteDeadline,
   sessionLifetimeExceeded,
   SESSION_LIFETIME_AUDIT_SOURCE,
@@ -109,6 +110,15 @@ async function endSessionsPastLifetime(
   sessions: IdentitySession[],
   now: number,
 ): Promise<{ live: IdentitySession[]; endedCount: number; bounds: SessionLifetimeBound[] }> {
+  for (const session of sessions) {
+    if (
+      (session.createdAt !== null && !isFiniteSessionTimestamp(session.createdAt)) ||
+      (session.expireAt !== null && !isFiniteSessionTimestamp(session.expireAt))
+    ) {
+      throw new Error('Identity provider returned nonnumeric or nonfinite session lifetime evidence');
+    }
+  }
+
   const expired: IdentitySession[] = [];
   const bounds = new Set<SessionLifetimeBound>();
   for (const session of sessions) {

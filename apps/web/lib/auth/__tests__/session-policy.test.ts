@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   hasOutlivedAbsoluteLifetime,
   hasOutlivedIdleLifetime,
+  isFiniteSessionTimestamp,
   sessionAbsoluteDeadline,
   sessionAbsoluteLifetimeMs,
   sessionLifetimeExceeded,
@@ -14,11 +15,55 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const NOW = Date.parse('2026-09-20T12:00:00.000Z');
 
+const INVALID_TIMESTAMPS: unknown[] = [
+  undefined,
+  false,
+  true,
+  '',
+  '0',
+  String(NOW),
+  NaN,
+  Infinity,
+  -Infinity,
+  {},
+  [],
+];
+
 afterEach(() => {
   delete process.env[SESSION_ABSOLUTE_LIFETIME_HOURS_ENV];
 });
 
 describe('how long a sign-in may last', () => {
+  it.each(INVALID_TIMESTAMPS.map((value) => ({ value })))(
+    'does not coerce timestamp evidence $value',
+    ({ value }) => {
+      const timestamp = value as number;
+      expect(isFiniteSessionTimestamp(value)).toBe(false);
+      expect(sessionAbsoluteDeadline(timestamp)).toBeNull();
+      expect(hasOutlivedAbsoluteLifetime(timestamp, NOW)).toBe(false);
+      expect(hasOutlivedIdleLifetime(timestamp, NOW)).toBe(false);
+      expect(sessionLifetimeExceeded({ createdAt: timestamp, expireAt: timestamp }, NOW)).toBeNull();
+      expect(sessionLifetimeExceeded({ createdAt: timestamp, expireAt: NOW }, NOW)).toBe('idle');
+      expect(sessionLifetimeExceeded({ createdAt: 0, expireAt: timestamp }, NOW)).toBe('absolute');
+    },
+  );
+
+  it.each([0, -1, 0.5, Number.MAX_VALUE, -Number.MAX_VALUE])(
+    'preserves finite numeric timestamp evidence %j without imposing a Date range',
+    (timestamp) => {
+      expect(isFiniteSessionTimestamp(timestamp)).toBe(true);
+      expect(sessionAbsoluteDeadline(timestamp)).toBe(timestamp + sessionAbsoluteLifetimeMs());
+      expect(hasOutlivedIdleLifetime(timestamp, NOW)).toBe(timestamp <= NOW);
+    },
+  );
+
+  it('keeps explicit null unknown while enforcing the other known bound', () => {
+    expect(isFiniteSessionTimestamp(null)).toBe(false);
+    expect(sessionLifetimeExceeded({ createdAt: null, expireAt: null }, NOW)).toBeNull();
+    expect(sessionLifetimeExceeded({ createdAt: null, expireAt: NOW }, NOW)).toBe('idle');
+    expect(sessionLifetimeExceeded({ createdAt: 0, expireAt: null }, NOW)).toBe('absolute');
+  });
+
   it('caps a session at thirty days when nothing is configured', () => {
     expect(sessionAbsoluteLifetimeMs()).toBe(30 * DAY_MS);
   });

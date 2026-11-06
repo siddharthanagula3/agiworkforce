@@ -150,6 +150,93 @@ describe('/api/settings/sessions', () => {
   });
 
   describe('browser (Clerk cookie) caller', () => {
+    describe.each(['createdAt', 'expireAt'] as const)('%s lifetime evidence', (field) => {
+      it('rejects malformed evidence even when the other bound has expired', async () => {
+        mockGetSessionList.mockResolvedValue({
+          data: [{ ...session('sess_malformed'), createdAt: 0, expireAt: 0, [field]: false }],
+          totalCount: 1,
+        });
+
+        const response = await GET(
+          new Request('http://localhost:3000/api/settings/sessions') as never,
+        );
+
+        expect(response.status).toBe(500);
+        expect(await response.json()).not.toHaveProperty('sessions');
+        expect(mockRevokeSession).not.toHaveBeenCalled();
+        expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
+      });
+
+      it.each(
+        [undefined, false, true, '', '0', NaN, Infinity, -Infinity, {}, []].map((value) => ({ value })),
+      )(
+        'rejects $value on a later row before pruning an earlier ancient row',
+        async ({ value }) => {
+          mockGetSessionList.mockResolvedValue({
+            data: [
+              session('sess_ancient', { createdAt: 0 }),
+              { ...session('sess_malformed'), [field]: value },
+            ],
+            totalCount: 2,
+          });
+
+          const response = await GET(
+            new Request('http://localhost:3000/api/settings/sessions') as never,
+          );
+
+          expect(response.status).toBe(500);
+          expect(await response.json()).not.toHaveProperty('sessions');
+          expect(mockRevokeSession).not.toHaveBeenCalled();
+          expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
+        },
+      );
+    });
+
+    it('preserves unknown lifetimes and prunes only a known expired bound', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [
+          { ...session('sess_unknown'), createdAt: null, expireAt: null },
+          { ...session('sess_absolute'), createdAt: 0, expireAt: null },
+          { ...session('sess_idle'), createdAt: null, expireAt: 0 },
+        ],
+        totalCount: 3,
+      });
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession.mock.calls.map(([id]) => id)).toEqual([
+        'sess_absolute',
+        'sess_idle',
+      ]);
+      expect(await response.json()).toMatchObject({
+        sessions: [{ id: 'sess_unknown', createdAt: null, expiresAt: null, absoluteExpiresAt: null }],
+        totalCount: 1,
+        endedByLifetime: 2,
+        endedByLifetimeBounds: ['absolute', 'idle'],
+      });
+    });
+
+    it('retains explicit revoke-all when age metadata is malformed', async () => {
+      const current = { ...session('sess_current'), createdAt: false, expireAt: -Infinity };
+      const other = { ...session('sess_other'), createdAt: '0', expireAt: undefined };
+      mockGetSessionList
+        .mockResolvedValueOnce({ data: [current, other], totalCount: 2 })
+        .mockResolvedValue({ data: [current], totalCount: 1 });
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession.mock.calls.map(([id]) => id)).toEqual([
+        'sess_other',
+        'sess_current',
+      ]);
+      expect(await response.json()).toMatchObject({ revokedCount: 2, currentSessionRevoked: true });
+      expect(mockEmitIdentitySecurityEvent).toHaveBeenCalledTimes(1);
+    });
+
     it('lists every active account session with a safe activity projection', async () => {
       mockGetSessionList.mockResolvedValue({
         data: [

@@ -18,8 +18,12 @@ export function sessionAbsoluteLifetimeMs(): number {
   return lifetimeMs;
 }
 
+export function isFiniteSessionTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function sessionAbsoluteDeadline(createdAt: number | null): number | null {
-  return createdAt === null ? null : createdAt + sessionAbsoluteLifetimeMs();
+  return isFiniteSessionTimestamp(createdAt) ? createdAt + sessionAbsoluteLifetimeMs() : null;
 }
 
 export function hasOutlivedAbsoluteLifetime(createdAt: number | null, now: number): boolean {
@@ -39,7 +43,7 @@ export interface SessionLifetime {
 }
 
 export function hasOutlivedIdleLifetime(expireAt: number | null, now: number): boolean {
-  return expireAt !== null && expireAt <= now;
+  return isFiniteSessionTimestamp(expireAt) && expireAt <= now;
 }
 
 /**
