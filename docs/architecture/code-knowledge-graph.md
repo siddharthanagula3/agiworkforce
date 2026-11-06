@@ -2,7 +2,7 @@
 
 Status: Source snapshot, not runtime acceptance
 Owner: Platform + application maintainers
-Last updated: 2026-11-05
+Last updated: 2026-11-06
 
 ## Provenance and coverage
 
@@ -5305,14 +5305,40 @@ expanded details are masked when their owning view changes.
 Production and authored ownership/panel fixtures received independent source
 review. The fixtures control Clerk state and transport while exercising real
 snapshot, workspace-admission and request-authority paths; they remain unrun.
-Server logs are still user-scoped rather than organization-filtered. Workspace
-uncertainty still requires reload, timestamp cursor ties remain, and the other
-developer hooks are not repaired by this bounded change. See
+The earlier account-wide log-scope statement was incorrect: migration `0073`
+replaces user-only usage RLS with tenancy policies, and `0272` requires selected
+workspace and active membership or governing permission. Service user predicates
+further restrict logs to the current user within that workspace. The explicit
+selector already matches this scope; deployed policies remain unverified.
+Workspace uncertainty still requires reload, timestamp cursor ties remain, and
+the other developer hooks are not repaired by this bounded change. See
 `WEB-DEVELOPER-LOG-REQUEST-OWNERSHIP-01` for acceptance limits.
+
+## Developer project and usage reads retain admitted authority
+
+Accepted `ad31b0b09c` adds a feature-owned shared query hook for project/usage
+reads. Existing query prefixes gain account/session/incarnation/epoch/scope keys;
+canonical workspace admission gates dispatch and public state. Captured bearer
+requests omit cookies, send explicit selectors and recheck successful body
+completion. Query cancellation and owner retirement abort transport, while shared
+observers do not prematurely cancel one another. Retained callbacks cannot
+refetch after unmount or owner replacement; inherited retries keep captured
+identity. Uncertain scope still requires reload.
+
+ProjectsPanel now distinguishes loading/unavailable usage from real zero, and
+ApiKeysManager withholds failed cached supplementary data with separate retry
+controls. Server project ownership stays account-global; usage is the current
+user's rows within selected-workspace RLS, as clarified for logs above.
+
+Independent source review accepted production and unrun hook/consumer fixtures.
+Underlying key reads, mutation authority, copied editor/form data and once-only
+secrets are not repaired. StrictMode and permitted re-admission fixture coverage,
+plus all runtime/type acceptance, remain open. See
+`WEB-DEVELOPER-PROJECT-USAGE-READ-OWNERSHIP-01` for scope and acceptance limits.
 
 ## Reconstruction boundary
 
-Only the two hundred fifteen accepted production slices traced above are represented as
+Only the two hundred sixteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

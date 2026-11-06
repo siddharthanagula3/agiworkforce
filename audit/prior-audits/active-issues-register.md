@@ -13027,10 +13027,73 @@ after failure, source/unmount retirement, StrictMode replay and expanded-detail
 reset for a repeated log ID. All fixtures remain unrun.
 
 The server route already validates its cursor, uses `getUserScopedDb`, and returns
-private/no-store data. `developer-request-log-service.ts` filters usage rows by
-user, not organization; its usage-table RLS is user-scoped. The selector binds
-authentication/workspace-policy context but does not make these logs organization-
-filtered. Server scope is unchanged. Timestamp-only cursor ties remain a separate
-pagination limitation, and project/webhook/usage hooks retain their separately
-tracked request-ownership gaps. No tests, lint, typechecks, builds, app/service
+private/no-store data. Correction recorded 2026-11-06: the earlier account-wide
+scope description missed migration `0073_tenancy_foundation.sql`, which replaces
+`managed_usage_requests` and `api_keys` user-only policies with tenant policies.
+The predicate in `0272_active_membership_authorization.sql` requires the selected
+Personal/organization scope and active membership or governing permission. The
+service also filters by current user. Logs therefore represent that user's rows
+within the selected workspace, not account-wide or organization-wide totals.
+The production fix already sends the correct explicit selector; server code is
+unchanged and deployed RLS remains unverified. Timestamp-only cursor ties remain
+a separate pagination limitation. Project/usage reads receive the subsequent
+bounded correction below; webhook reads and mutation lifetimes remain open. No tests, lint, typechecks, builds, app/service
 execution, push or deployment ran.
+
+
+## WEB-DEVELOPER-PROJECT-USAGE-READ-OWNERSHIP-01
+
+Severity: Medium. Bounded correction `ad31b0b09c` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+`useDeveloperProjects` and `useDeveloperUsage` previously read through ambient
+`sendAuthorizedJson` and globally shared query keys. Neither query captured the
+initiating account/session/workspace, consumed query cancellation or fenced
+publication after deferred token/body work. Workspace switching cancels queries,
+clears caches and reloads, but that counterguard did not supply query-owned
+identity or retirement at these transport boundaries. No live disclosure is
+asserted.
+
+The feature-owned `use-developer-query.ts` composes canonical session snapshots,
+workspace admission and RequestAuthority. Keys retain their existing invalidation
+prefixes and add account, session, owner incarnation, epoch and complete scope.
+Reads begin only for admitted scope, use captured bearer authority with cookies
+omitted, no-store and explicit Personal/organization selectors, and recheck
+currentness after successful body parsing. Query cancellation immediately retires
+the transport; an admission subscription retires changed owners. Shared requests
+remain alive if another observer still owns them. Query retry policy is unchanged,
+but a captured retry cannot acquire a replacement identity. Silent query metadata
+avoids global failure toasts from obsolete reads.
+
+The public result masks old-scope data and status and exposes only a curated
+surface. Retained refetch callbacks fail after owner replacement or unmount;
+current unavailable admission can retry its canonical workspace read. Uncertain
+workspace switches retain the reload barrier, without silently admitting another
+scope. TanStack may retain current cached data after a failed background refetch:
+ProjectsPanel now labels usage unavailable instead of zero, and ApiKeysManager
+passes project choices and key usage only on success. Both expose explicit
+supplementary loading/error/retry states. Successful empty usage remains zero.
+
+Server semantics are unchanged. Developer projects remain account-owned and
+user-global under migration `0321_developer_projects.sql`. Usage, like request
+logs, combines service `user_id` predicates with the selected-workspace RLS
+introduced in `0073` and refined by `0272`; it is not an organization-wide total.
+This read correction does not repair project-limit/archive cross-workspace
+coverage documented in `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01`.
+
+`developer-query-ownership.test.tsx` authors both-hook fixtures using real session
+snapshots, admission, RequestAuthority and QueryClient, with controlled Clerk,
+network and unrelated mutation transport. Sources cover cache isolation across
+A/B/A and session replacement, deferred tokens/responses/success and error bodies,
+explicit selectors, admission refusal, retained refetch, final/shared-observer
+unmount, background errors, prefix invalidation and captured retries. Consumer
+fixtures in `ProjectsPanel.read-state.test.tsx` and `Settings/ApiKeys.test.tsx`
+cover honest loading/failure/zero states, stale supplementary masking and retries.
+All are unrun; StrictMode and permitted workspace re-admission remain additional
+coverage targets. Runtime and type compatibility are not verified.
+
+The underlying `useAPIKeys` query, project/key/webhook mutation authority,
+copied editor/form selections, generated secrets, uncertain server outcomes,
+manual duplicate submissions and cache reconciliation remain separate gaps.
+The new read surface does not certify the whole developer console as isolated.
+No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
