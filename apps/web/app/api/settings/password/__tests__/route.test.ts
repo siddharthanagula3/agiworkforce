@@ -236,7 +236,6 @@ describe('POST /api/settings/password', () => {
   });
 
   it.each([
-    ['developer/device bearer', { userId: 'product-account-7', surfaceClass: 'developer' }],
     ['API key without native identity', { userId: 'product-account-7', apiKeyId: 'key-1' }],
     ['missing native identity', { userId: 'product-account-7' }],
     ['missing native session', {
@@ -257,6 +256,28 @@ describe('POST /api/settings/password', () => {
     }));
 
     expect(response.status).toBe(401);
+    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
+    expect(mocks.getNeonDb).not.toHaveBeenCalled();
+    expect(mocks.claimScope).not.toHaveBeenCalled();
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.factors).not.toHaveBeenCalled();
+    expect(mocks.verifyPassword).not.toHaveBeenCalled();
+    expect(mocks.setPassword).not.toHaveBeenCalled();
+    expect(mocks.requireStepUp).not.toHaveBeenCalled();
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.revokeDevices).not.toHaveBeenCalled();
+    expect(mocks.finishIntent).not.toHaveBeenCalled();
+    expect(mocks.announce).not.toHaveBeenCalled();
+  });
+
+  it('refuses an authenticated developer credential with 403 before password work', async () => {
+    mocks.authenticate.mockResolvedValue({ userId: 'product-account-7', surfaceClass: 'developer' });
+
+    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }, {
+      authorization: 'Bearer verified-device-credential',
+    }));
+
+    expect(response.status).toBe(403);
     expect(mocks.authenticate).toHaveBeenCalledTimes(1);
     expect(mocks.getNeonDb).not.toHaveBeenCalled();
     expect(mocks.claimScope).not.toHaveBeenCalled();

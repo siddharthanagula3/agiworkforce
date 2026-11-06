@@ -3,21 +3,23 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  getUser: vi.fn(),
   readSecondFactorStatus: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1', email: 'user@example.com' })),
-}));
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({
+vi.mock('@/lib/server/session-account', () => ({
+  getSessionAccountDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'user-1',
     organizationId: null,
+    sessionIdentity: { subject: 'native-user-1', sessionId: 'session-1' },
   })),
+}));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityProvider: () => ({ getUser: mocks.getUser }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -42,7 +44,9 @@ vi.mock('@/lib/security-audit', () => ({
 
 process.env['CSRF_SECRET'] = 'two-factor-setup-step-up-secret-long-enough';
 
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { createError } from '@/lib/errors';
+import { getSessionAccountDb } from '@/lib/server/session-account';
+import { generateOTPAuthURL } from '@/features/settings/services/user-preferences';
 import { sealTotpSecret } from '@/lib/crypto/totp-envelope';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
@@ -71,6 +75,9 @@ function enrolled(authenticator: boolean) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.query.mockReset();
+  mocks.readSecondFactorStatus.mockReset();
+  mocks.getUser.mockResolvedValue({ id: 'native-user-1', primaryEmail: 'user@example.com' });
   vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
   vi.mocked(sealTotpSecret).mockReturnValue('encrypted-secret');
 });
@@ -115,6 +122,9 @@ describe('POST /api/settings/2fa/setup', () => {
     expect(body['secret']).toBe('SECRET');
     expect(String(body['otpauth_url'])).toContain('otpauth://');
     expect(body).not.toHaveProperty('backup_codes');
+    expect(getSessionAccountDb).toHaveBeenCalledTimes(1);
+    expect(mocks.getUser).toHaveBeenCalledWith('native-user-1');
+    expect(generateOTPAuthURL).toHaveBeenCalledWith('SECRET', 'user@example.com');
   });
 
   it('stores the pending secret sealed and switched off until a code confirms it', async () => {
@@ -137,7 +147,10 @@ describe('POST /api/settings/2fa/setup', () => {
 
     await POST(request());
 
-    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.readSecondFactorStatus).toHaveBeenCalledWith(
+      expect.anything(), 'user-1', 'native-user-1',
+    );
+    expect(getSessionAccountDb).toHaveBeenCalledWith(expect.anything(), {
       mfaEnrollment: true,
       resolveOrganization: false,
     });
@@ -159,4 +172,40 @@ describe('POST /api/settings/2fa/setup', () => {
     expect(body.error.message).not.toContain('TOTP_ENCRYPTION_KEY');
     expect(mocks.query).not.toHaveBeenCalled();
   });
+});
+
+it('stops setup when the session-account boundary rejects the credential', async () => {
+  vi.mocked(getSessionAccountDb).mockRejectedValueOnce(createError.unauthorized());
+
+  const response = await POST(request());
+
+  expect(response.status).toBe(401);
+  expect(mocks.query).not.toHaveBeenCalled();
+  expect(mocks.readSecondFactorStatus).not.toHaveBeenCalled();
+  expect(mocks.getUser).not.toHaveBeenCalled();
+});
+
+it.each([null, { id: 'another-native-user', primaryEmail: 'other@example.com' }])(
+  'rejects an absent or mismatched native user before preparing a secret: %j',
+  async (user) => {
+    mocks.getUser.mockResolvedValueOnce(user);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(401);
+    expect(mocks.readSecondFactorStatus).not.toHaveBeenCalled();
+    expect(sealTotpSecret).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  },
+);
+
+it('uses the product account label when the native user has no primary email', async () => {
+  mocks.getUser.mockResolvedValueOnce({ id: 'native-user-1', primaryEmail: null });
+  enrolled(false);
+  mocks.query.mockResolvedValueOnce([]);
+
+  const response = await POST(request());
+
+  expect(response.status).toBe(200);
+  expect(generateOTPAuthURL).toHaveBeenCalledWith('SECRET', 'user-1');
 });

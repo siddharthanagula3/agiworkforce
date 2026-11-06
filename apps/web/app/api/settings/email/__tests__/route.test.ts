@@ -429,7 +429,6 @@ describe.each(['GET', 'POST', 'PATCH'] as const)('%s email native-session admiss
     { userId: ACCOUNT },
     { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: null } },
     { userId: ACCOUNT, apiKeyId: 'key-1' },
-    { userId: ACCOUNT, surfaceClass: 'developer' },
   ])('rejects a canonical principal without a verified native session: %j', async (principal) => {
     mocks.authenticate.mockResolvedValue(principal);
 
@@ -437,6 +436,17 @@ describe.each(['GET', 'POST', 'PATCH'] as const)('%s email native-session admiss
 
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.claimScope).not.toHaveBeenCalled();
+    assertNoMutations();
+  });
+
+  it('refuses an authenticated developer credential with 403 before provider work', async () => {
+    mocks.authenticate.mockResolvedValue({ userId: ACCOUNT, surfaceClass: 'developer' });
+
+    expect((await call()).status).toBe(403);
+
+    expect(mocks.getNeonDb).not.toHaveBeenCalled();
+    expect(mocks.claimScope).not.toHaveBeenCalled();
+    expect(mocks.getUser).not.toHaveBeenCalled();
     assertNoMutations();
   });
 

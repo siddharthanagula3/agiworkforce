@@ -88,7 +88,6 @@ describe('canonical native session account admission', () => {
     ['empty native session', { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: '' } }],
     ['empty native subject', { userId: ACCOUNT, sessionIdentity: { subject: '', sessionId: SESSION } }],
     ['API key', { userId: ACCOUNT, apiKeyId: 'key-1' }],
-    ['developer token', { userId: ACCOUNT, surfaceClass: 'developer' }],
   ] satisfies Array<[string, AuthResult]>)(
     'rejects %s before creating a database scope',
     async (_label, auth) => {
@@ -102,6 +101,32 @@ describe('canonical native session account admission', () => {
       expect(mocks.claimScope).not.toHaveBeenCalled();
     },
   );
+
+  it('refuses an authenticated developer credential with 403 before database access', async () => {
+    mocks.authenticate.mockResolvedValue({ userId: ACCOUNT, surfaceClass: 'developer' });
+
+    await expect(getSessionAccountDb(request())).rejects.toMatchObject({
+      statusCode: 403,
+      userSafe: true,
+      message: 'Use your web account settings to manage sign-in security.',
+    });
+
+    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
+    expect(mocks.getNeonDb).not.toHaveBeenCalled();
+    expect(mocks.resolveOrganization).not.toHaveBeenCalled();
+    expect(mocks.claimScope).not.toHaveBeenCalled();
+  });
+
+  it('preserves an authentication rejection instead of converting it to unsupported-credential 403', async () => {
+    const refusal = createError.unauthorized();
+    mocks.authenticate.mockRejectedValue(refusal);
+
+    await expect(getSessionAccountDb(request())).rejects.toBe(refusal);
+
+    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
+    expect(mocks.getNeonDb).not.toHaveBeenCalled();
+    expect(mocks.claimScope).not.toHaveBeenCalled();
+  });
 
   it('preserves the canonical policy refusal rather than returning an identity-only session', async () => {
     const refusal = createError.forbidden('Account policy denied this request');

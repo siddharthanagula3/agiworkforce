@@ -281,12 +281,22 @@ describe.each(['GET', 'POST'] as const)('%s /api/auth/step-up admission failures
     { userId: ACCOUNT },
     { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: null } },
     { userId: ACCOUNT, apiKeyId: 'key-1' },
-    { userId: ACCOUNT, surfaceClass: 'developer' },
   ])('refuses a canonical principal without a native session: %j', async (principal) => {
     mocks.authenticate.mockResolvedValue(principal);
 
     expect((await call()).status).toBe(401);
 
+    expect(mocks.claimScope).not.toHaveBeenCalled();
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses an authenticated developer credential with 403 before provider work', async () => {
+    mocks.authenticate.mockResolvedValue({ userId: ACCOUNT, surfaceClass: 'developer' });
+
+    expect((await call()).status).toBe(403);
+
+    expect(mocks.getNeonDb).not.toHaveBeenCalled();
     expect(mocks.claimScope).not.toHaveBeenCalled();
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();

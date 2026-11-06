@@ -18,6 +18,11 @@ export async function getSessionAccount(
   options: AuthOptions = {},
 ): Promise<SessionAccount> {
   const account = await getClerkAuthUser(request, options);
+  if (account.surfaceClass === 'developer') {
+    throw createError
+      .forbidden('Use your web account settings to manage sign-in security.')
+      .asUserSafe();
+  }
   const identity = account.sessionIdentity;
   if (!identity?.subject || !identity.sessionId) throw createError.unauthorized();
   return { ...account, sessionIdentity: { subject: identity.subject, sessionId: identity.sessionId } };
