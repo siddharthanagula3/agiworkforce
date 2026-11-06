@@ -295,6 +295,43 @@ describe('/api/settings/sessions', () => {
       expect(JSON.stringify(row)).not.toContain('198.51.100.7');
     });
 
+    it.each([
+      ['foreign owner', { userId: 'foreign-user' }],
+      ['inactive status', { status: 'revoked' }],
+    ] as const)('rejects a page with %s before exposing or age-pruning any session', async (_name, overrides) => {
+      const ancient = Date.now() - 400 * DAY_MS;
+      mockGetSessionList.mockResolvedValue({
+        data: [
+          session('sess_owned_ancient', { createdAt: ancient }),
+          session('sess_untrusted', { ...overrides, createdAt: ancient }),
+        ],
+        totalCount: 2,
+      });
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+
+      expect(response.status).toBe(500);
+      const body = await response.json();
+      expect(body).not.toHaveProperty('sessions');
+      expect(JSON.stringify(body)).not.toContain('sess_untrusted');
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+    });
+
+    it('rejects a foreign current row before revoking owned rows or announcing success', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_other'), session('sess_current', { userId: 'foreign-user' })],
+        totalCount: 2,
+      });
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(500);
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+      expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
+    });
+
     it('ends a session that has outlived the absolute lifetime and never returns it', async () => {
       const ancient = Date.now() - 400 * DAY_MS;
       mockGetSessionList.mockResolvedValue({

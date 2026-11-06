@@ -124,7 +124,7 @@ function withGuardSource(source: string, verify: (root: string, path: string) =>
   }
 }
 
-function identity(sessions: { id: string }[] = []) {
+function identity(sessions: { id: string; userId: string; status: string }[] = []) {
   const order: string[] = [];
   mockRevokeEvery.mockImplementation(async () => {
     order.push('intent');
@@ -134,7 +134,8 @@ function identity(sessions: { id: string }[] = []) {
     operations: {
       listUserSessions: vi.fn(async () => {
         order.push('list');
-        return { sessions: sessions.splice(0), totalCount: sessions.length };
+        const page = sessions.splice(0);
+        return { sessions: page, totalCount: page.length };
       }),
       revokeSession: vi.fn(async () => {
         order.push('revoke');
@@ -150,7 +151,7 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
   });
 
   it('the session sweep revokes intent tokens after the provider sessions', async () => {
-    const { order, operations } = identity([{ id: 'sess_a' }]);
+    const { order, operations } = identity([{ id: 'sess_a', userId: 'user-1', status: 'active' }]);
     const sweep = await revokeEveryOtherSession(operations as never, 'user-1', null);
     expect(order).toEqual(['list', 'revoke', 'list', 'intent']);
     expect(mockRevokeEvery).toHaveBeenCalledWith('user-1');
@@ -162,7 +163,9 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
     ['same-id', 'same-id'],
     ['legacy-account', undefined],
   ] as const)('separates provider and product scope for %s / %s', async (userId, subject) => {
-    const { operations } = identity([{ id: 'session-to-end' }]);
+    const { operations } = identity([
+      { id: 'session-to-end', userId: subject ?? userId, status: 'active' },
+    ]);
     const sweep = await revokeEveryOtherSession(operations as never, userId, null, subject);
 
     expect(operations.listUserSessions).toHaveBeenCalledTimes(2);
@@ -190,7 +193,7 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
   });
 
   it('an intent revoke failure never skips session revocation and marks the sweep incomplete', async () => {
-    const { operations } = identity([{ id: 'sess_a' }]);
+    const { operations } = identity([{ id: 'sess_a', userId: 'native-subject', status: 'active' }]);
     mockRevokeEvery.mockRejectedValue(new Error('db down'));
     const sweep = await revokeEveryOtherSession(operations as never, 'user-1', null, 'native-subject');
     expect(operations.revokeSession).toHaveBeenCalledWith('sess_a');

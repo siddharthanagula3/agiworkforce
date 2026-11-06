@@ -39,6 +39,31 @@ export interface RevokeSweep extends RevokeOutcome {
   targetCount: number;
 }
 
+function assertActiveSessionPage(
+  sessions: readonly IdentitySession[],
+  identitySubject: string,
+): void {
+  if (!Array.isArray(sessions)) {
+    throw new Error('Identity provider returned an invalid active session page');
+  }
+  for (const session of sessions) {
+    if (
+      !session ||
+      typeof session !== 'object' ||
+      typeof session.id !== 'string' ||
+      session.id.length === 0 ||
+      session.id.trim() !== session.id ||
+      typeof session.userId !== 'string' ||
+      session.userId.length === 0 ||
+      session.userId.trim() !== session.userId ||
+      session.userId !== identitySubject ||
+      session.status !== SESSION_STATUS_ACTIVE
+    ) {
+      throw new Error('Identity provider returned an invalid active session page');
+    }
+  }
+}
+
 /**
  * One page, plus what the provider says the account holds. Walking every page
  * used to end in a 503 with a Retry that could never succeed, and reading the
@@ -55,6 +80,7 @@ export async function listActiveIdentitySessions(
     limit: PAGE_SIZE,
     offset: 0,
   });
+  assertActiveSessionPage(response.sessions, userId);
   const sessions = [...response.sessions];
   const totalCount = Math.max(response.totalCount, sessions.length);
 
@@ -196,6 +222,7 @@ async function sweepOtherSessions(
       offset: 0,
     });
 
+    assertActiveSessionPage(page.sessions, identitySubject);
     const foundCurrent = page.sessions.find((session) => session.id === currentSessionId);
     currentSession = foundCurrent ?? currentSession;
     if (pass === 0) {
