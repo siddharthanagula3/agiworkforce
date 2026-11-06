@@ -64,6 +64,7 @@ vi.mock('@/lib/services/identity-events', () => ({
 }));
 
 import { DELETE } from './route';
+import { logger } from '@/lib/logger';
 
 function request(sessionId: string, bearer?: string) {
   return DELETE(
@@ -111,6 +112,79 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
     expect(response.status).toBe(404);
     expect(mockRevokeSession).not.toHaveBeenCalled();
     expect(mockRevokeSessionIntent).not.toHaveBeenCalled();
+  });
+
+  describe.each(['active', 'revoked'])('returned %s session', (status) => {
+    it.each([
+      { label: 'another valid ID', id: 'sess_other' },
+      { label: 'a missing ID', id: undefined },
+      { label: 'a null ID', id: null },
+      { label: 'an empty ID', id: '' },
+      { label: 'an invalid namespace', id: 'user_current' },
+      { label: 'an overlong ID', id: `sess_${'a'.repeat(124)}` },
+      { label: 'a numeric ID', id: 123 },
+      { label: 'an array ID', id: ['sess_current'] },
+      { label: 'an object ID', id: { toString: () => 'sess_current' } },
+    ])('rejects $label without downstream effects', async ({ id }) => {
+      mockGetSession.mockResolvedValue({ id, userId: 'user-1', status });
+
+      const response = await request('sess_current');
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual(
+        expect.objectContaining({
+          error: expect.objectContaining({ code: 'NOT_FOUND', message: 'Not found' }),
+        }),
+      );
+      expect(mockGetSession).toHaveBeenCalledWith('sess_current');
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+      expect(mockRevokeSessionIntent).not.toHaveBeenCalled();
+      expect(mockIdentityEvent).not.toHaveBeenCalled();
+      expect(logger.info).not.toHaveBeenCalledWith(expect.anything(), 'Account session revoked');
+    });
+
+    it('rejects substitution of the current session for another requested session', async () => {
+      mockGetSession.mockResolvedValue({ id: 'sess_current', userId: 'user-1', status });
+
+      const response = await request('sess_other');
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual(
+        expect.objectContaining({
+          error: expect.objectContaining({ code: 'NOT_FOUND', message: 'Not found' }),
+        }),
+      );
+      expect(mockGetSession).toHaveBeenCalledWith('sess_other');
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+      expect(mockRevokeSessionIntent).not.toHaveBeenCalled();
+      expect(mockIdentityEvent).not.toHaveBeenCalled();
+      expect(logger.info).not.toHaveBeenCalledWith(expect.anything(), 'Account session revoked');
+    });
+  });
+
+  it('cleans up an owned inactive session without revoking it again', async () => {
+    mockGetSession.mockResolvedValue({
+      id: 'sess_current',
+      userId: 'user-1',
+      status: 'revoked',
+    });
+
+    const response = await request('sess_current');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ message: 'Session was already inactive', isCurrent: true });
+    expect(mockRevokeSession).not.toHaveBeenCalled();
+    expect(mockRevokeSessionIntent).toHaveBeenCalledWith({}, 'user-1', 'sess_current');
+    expect(mockIdentityEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        userId: 'user-1',
+        event: 'session_revoked',
+        subjectRef: 'sess_current',
+        detail: { isCurrent: true, status: 'already_inactive' },
+      }),
+    );
   });
 
   it('rejects malformed session identifiers before calling Clerk', async () => {
