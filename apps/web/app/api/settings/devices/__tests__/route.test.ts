@@ -87,6 +87,10 @@ function legacyOnly(rows: unknown[]) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetSession.mockReset();
+  mockRevokeSession.mockReset();
+  mockRevokeSession.mockResolvedValue(undefined);
+  mockTransaction.mockReset();
   mockQuery.mockReset();
   mockQuery.mockResolvedValue([]);
   mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
@@ -455,6 +459,122 @@ describe('the device registry', () => {
 
     expect(response.status).toBe(200);
     expect(mockRevokeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('device unlink identity session target binding', () => {
+  const txQuery = vi.fn();
+
+  beforeEach(() => {
+    txQuery.mockReset();
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from device_registrations')
+        ? [
+            {
+              kind: 'desktop',
+              name: 'Laptop',
+              install_id: 'install-abcdef',
+              credential_family_id: 'family-9',
+              identity_session_id: 'sess_linked',
+            },
+          ]
+        : [],
+    );
+    txQuery.mockImplementation(async (sql: string) =>
+      sql.includes('update device_refresh_tokens') ? [{ id: 'tok-1' }] : [],
+    );
+    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({ query: txQuery, execute: mockExecute }),
+    );
+  });
+
+  async function expectUnlinked(identityRevoked: boolean) {
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/devices/x', { method: 'DELETE' }) as never,
+      params(REGISTERED_ID),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      message: 'Device unlinked',
+      revokedCredentials: identityRevoked ? 2 : 1,
+      credentialFamilyCompromised: false,
+    });
+    expect(mockGetSession).toHaveBeenCalledExactlyOnceWith('sess_linked');
+    expect(txQuery).toHaveBeenCalledWith(
+      expect.stringContaining('update device_refresh_tokens'),
+      [REGISTERED_ID, 'user-1', 'family-9'],
+    );
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from device_registrations'),
+      [REGISTERED_ID, 'user-1'],
+    );
+    expect(mockNotifyDisconnected).toHaveBeenCalledTimes(1);
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'session_revoked',
+        detail: {
+          resourceType: 'device:desktop',
+          source: 'unlink_device',
+          count: identityRevoked ? 2 : 1,
+        },
+      }),
+    );
+  }
+
+  describe.each(['active', 'revoked'])('returned %s session', (status) => {
+    it('preserves revocation of the exact owned session regardless of status', async () => {
+      mockGetSession.mockResolvedValue({ id: 'sess_linked', userId: 'user-1', status });
+
+      await expectUnlinked(true);
+
+      expect(mockRevokeSession).toHaveBeenCalledExactlyOnceWith('sess_linked');
+    });
+
+    it.each([
+      { label: 'another session', id: 'sess_other' },
+      { label: 'the caller session', id: 'sess_current' },
+      { label: 'a missing ID', id: undefined },
+      { label: 'a null ID', id: null },
+      { label: 'an empty ID', id: '' },
+      { label: 'a numeric ID', id: 123 },
+      { label: 'an array ID', id: ['sess_linked'] },
+      { label: 'an object ID', id: { toString: () => 'sess_linked' } },
+    ])('skips identity revocation for $label after device unlink', async ({ id }) => {
+      mockGetSession.mockResolvedValue({ id, userId: 'user-1', status });
+
+      await expectUnlinked(false);
+
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+    });
+  });
+
+  it.each([null, { id: 'sess_linked', userId: 'user-2', status: 'active' }])(
+    'preserves rejection of an absent or foreign session: %j',
+    async (session) => {
+      mockGetSession.mockResolvedValue(session);
+
+      await expectUnlinked(false);
+
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it('preserves best-effort behavior when the provider read fails', async () => {
+    mockGetSession.mockRejectedValue(new Error('provider unavailable'));
+
+    await expectUnlinked(false);
+
+    expect(mockRevokeSession).not.toHaveBeenCalled();
+  });
+
+  it('preserves best-effort behavior when revocation fails', async () => {
+    mockGetSession.mockResolvedValue({ id: 'sess_linked', userId: 'user-1', status: 'active' });
+    mockRevokeSession.mockRejectedValue(new Error('revocation unavailable'));
+
+    await expectUnlinked(false);
+
+    expect(mockRevokeSession).toHaveBeenCalledExactlyOnceWith('sess_linked');
   });
 });
 
