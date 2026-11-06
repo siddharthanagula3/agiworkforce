@@ -5755,9 +5755,10 @@ pruning, so no route production rewrite is required.
 Earlier sweep pages may already have been revoked when a later page is rejected;
 the existing failure path still attempts product-owned intent cleanup. This is
 conservative refusal, not transactional rollback, cancellation or a full receipt.
-The caller still owns subject selection. Legacy namespace/RLS issues, separate
-direct deprovision enumeration, single-session reads, metadata/count integrity,
-duplicate IDs, pagination completeness and cross-request races remain unchanged.
+The caller still owns subject selection. Legacy namespace/RLS issues,
+metadata/count integrity, duplicate IDs, pagination completeness and cross-request
+races remain unchanged. Later sections record the separate deprovision and
+single-session evidence guards.
 The exported batch primitive is not independently guarded. Source fixtures are
 unrun; see WEB-IDENTITY-POLICY-NAMESPACE-01 for scope and acceptance limits.
 
@@ -5772,12 +5773,28 @@ still skip provider revocation while cleaning up that session's intent tokens.
 
 No principal mapping, provider-specific input syntax, status policy or mutation
 ordering changes. Provider response validation after revocation, transactional
-cleanup/events, direct deprovision enumeration and ownership races remain open.
+cleanup/events and ownership races remain open.
 Fixtures are source-reviewed only; see WEB-IDENTITY-POLICY-NAMESPACE-01.
+
+## Deprovision validates session pages before collecting targets
+
+Accepted `87db0ba1a21d08f88a74fd8816e8a1e378cdddb4` reuses the canonical active-session page
+validator for deprovision's direct enumeration before collecting returned IDs.
+Shared listing/sweeps and deprovision now use one owner/ID/status policy. Unlike
+the shared sweep, deprovision already collects all bounded pages before its first
+provider revoke. An invalid later page therefore stops the whole collected
+provider target set, reports the listing error and still lets independent scoped
+credential and connector cleanup proceed.
+
+Caller identity mapping, active-workspace selection and its known leave-path
+clear-before-read issue remain unchanged. Pagination/count/duplicate semantics,
+status races and incomplete credential cleanup remain open. The guard is not
+complete containment or runtime acceptance. Source fixtures are unrun; see
+WEB-IDENTITY-POLICY-NAMESPACE-01.
 
 ## Reconstruction boundary
 
-Only the two hundred thirty-four accepted production slices traced above are
+Only the two hundred thirty-five accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

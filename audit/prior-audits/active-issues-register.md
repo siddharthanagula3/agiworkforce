@@ -14061,8 +14061,8 @@ availability have not been exercised.
 The requested owner remains the caller's responsibility. This does not repair
 legacy product/native mapping or establish a backend ownership lease. Counts,
 pagination completeness, duplicate IDs, other metadata and timestamps retain
-their existing behavior. Direct deprovision enumeration separately requests
-active sessions and bypasses this helper; single-session lookups remain separate.
+their existing behavior. The later deprovision and single-session follow-ons
+below extend bounded evidence validation to those separate paths.
 The exported batch revoker is not a standalone ownership boundary, although its
 current production callers in this flow receive validated pages. Fixtures cover
 the helper and route pruning/refusal boundary; they are source-reviewed, not run.
@@ -14079,9 +14079,26 @@ This narrow evidence binding does not change the session-principal contract,
 product/native mapping, provider-specific path syntax, target-status validation
 or mutation ordering. It does not make provider revocation, token cleanup and
 security-event delivery atomic, validate the revoke response or establish a
-cross-request ownership lease. Direct deprovision enumeration remains separate.
+cross-request ownership lease. Deprovision keeps its separate collection flow.
 Source fixtures cover substituted current/other IDs, malformed IDs, inactive
 substitutes and exact inactive cleanup; none were run.
+
+The deprovision follow-on `87db0ba1a21d08f88a74fd8816e8a1e378cdddb4` reuses the same active-session
+page ownership validator before collecting any IDs from each returned page.
+The common list/sweep and deprovision paths retain one validation policy rather
+than private copies. Deprovision still collects its bounded pages before starting
+any provider revocations; an invalid later page therefore discards the pending
+collection without revoking even earlier valid rows. The existing listing-error
+result reports zero provider attempts with an explicit error while independent
+credential and connector cleanup continues under its existing scopes.
+
+Active-workspace selection and caller-selected user ID are unchanged. This does
+not repair product/native mapping or the known leave-path selection-clear race.
+Page bounds, offset behavior, total-count handling, duplicate IDs and provider
+status races remain unchanged; refusal is not proof of complete containment or
+complete credential cleanup. The shared sweep still may have earlier-page effects,
+unlike deprovision's collect-first flow. Source fixtures cover rejected pages,
+including a bad later page, and retained empty/valid behavior; none were run.
 
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
