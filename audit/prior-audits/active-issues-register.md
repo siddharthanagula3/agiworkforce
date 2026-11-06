@@ -13788,10 +13788,10 @@ audit keys stay product scoped. A null/foreign provider user refuses rather than
 selecting first-factor proof. Email GET is Bearer-only; mutations and proof routes
 retain authenticated cookie-session compatibility and refuse non-session
 principals. Other callers and global RLS helpers are not silently rewritten.
-Existing canonical MFA policy and conditional compromise-response namespace
-defects remain in WEB-IDENTITY-POLICY-NAMESPACE-01. That finding also records the
-subsequent bounded absolute-age correction and its unrun acceptance. Required-MFA
-policy can still deny a mapped account before email admission.
+Subsequent bounded native-session MFA, age/sighting and email-triggered
+compromise identity corrections are recorded in WEB-IDENTITY-POLICY-NAMESPACE-01.
+All remain source reviewed with runtime acceptance unrun; product-only policy,
+other factor consumers and broader containment/completion gaps remain open.
 The GET tuple proves that read's mapping, not a server mapping lease. An unseen
 backend remap between requests is not fenced by expected-account fields in
 POST/PATCH; each request resolves its own authenticated account.
@@ -13849,9 +13849,10 @@ Security/server coordination gaps remain separate.
 Severity: High. Source-confirmed on 2026-11-06 while correcting mapped-account
 email admission. Bounded age/sighting correction `248000bd5b6bf3427617ad55252d192ed27eac5d` is source
 reviewed; fixtures remain unrun. Subsequent native-session MFA correction
-`45c83e3eb60fc723f69c16bbaacea31587592c35` is also source reviewed only. Product-only MFA and compromise
-namespace defects remain unpatched, with no runtime reproduction or deployed
-incident claim.
+`45c83e3eb60fc723f69c16bbaacea31587592c35` is also source reviewed only. The later email-triggered
+compromise identity slice `0893063c8f11eefd85068f48b1ba9a07cf084403` is bounded to that producer.
+Product-only MFA and legacy compromise namespace defects remain unpatched, with
+no runtime reproduction or deployed incident claim.
 
 The identity bridge allows a product account ID to differ from the provider's
 subject. The earlier absolute-age path compared a provider-returned native user
@@ -13911,23 +13912,47 @@ The remaining policy and response consumers still use the wrong namespace:
   discards the resolved product ID; bearer scope retains native token claims.
   The bounded session path does not certify these related flows or universal
   mapped-account email availability.
-- two-factor-security-events.ts passes the product account into identity-events.
-  Normal risk/audit/notification storage is product scoped. If risk reaches
-  compromise, respondToAccountCompromise forwards the same ID through
-  revokeEveryOtherSession to provider listUserSessions. A differing provider
-  namespace can fail or return no native sessions. Existing intent cleanup may
-  still run; this finding does not claim the entire response is absent.
+- Legacy compromise producers still omit a native subject: password, TOTP,
+  backup-code and other identity events, explicit compromise reporting and undo.
+  Their provider sweep still defaults to product ID, which can fail or enumerate
+  no native sessions. Compromise resolution also compares provider session userId
+  with product ID and performs a product-ID sweep. Session/device settings,
+  account-security enrollment and support recovery callers remain unchanged.
+  Existing product intent cleanup can still run; the entire response is not absent.
+
+The bounded email-triggered correction carries the already-authenticated native
+subject from email PATCH through announceTwoFactorChange and identity-events into
+compromise response. Shared session revocation accepts an optional explicit
+identitySubject used only for provider enumeration. Product userId still owns
+mobile-intent revocation, including after thrown enumeration, and response DB,
+device refresh credentials, audit and notifications. Existing callers that omit
+that subject retain legacy behavior; this is not reverse identity resolution or
+all-provider containment. Neither the current singleton provider nor the draft
+mapping schema establishes coverage of every linked provider.
+
+Existing partial/completion semantics are deliberately not changed. A provider
+sweep throw attempts product intent cleanup and then exits before device refresh
+cleanup and later response completion. Incomplete/failed sweeps can still produce
+a contained notice; public counters omit enumeration and intent-cleanup outcomes.
+Email announces risk before changing the provider/profile and continues that
+mutation after a successful compromise response, even if native sessions were
+ended. Native session revocation is not cancellation of already-running work.
+Durable cleanup reconciliation, accurate partial receipts and owner-bound
+continuation remain open; see WEB-EMAIL-CHANGE-COMPLETION-01 and
+WEB-SECURITY-SESSION-COMPLETION-01 (emailed undo and recovery custody).
 
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include second-factor routes that still default subject to
 userId, distinct-ID/equal-ID policy and revocation cases, and existing failure or
-partial-response semantics. The email/step-up, age/sighting and native-session MFA slices do not
-resolve product-only MFA/compromise mapping, global cookie/Bearer DB scoping, workspace
+partial-response semantics. The email/step-up, age/sighting, native-session MFA
+and email-triggered revocation slices do not resolve product-only MFA or legacy
+compromise mapping, global cookie/Bearer DB scoping, workspace
 finalization or non-atomic email completion. See
 WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
 
 Independent source review covers production and unrun cache, canonical-auth,
-sighting, passkey-gate and native-session MFA/requirement fixtures at controlled
-provider, database, scheduling, event and key-value boundaries. No product tests, lint, typechecks, builds,
+sighting, passkey-gate, native-session MFA/requirement and email-triggered
+revocation fixtures at controlled provider, database, scheduling, event, intent
+cleanup and key-value boundaries. No product tests, lint, typechecks, builds,
 runtime/timer or installed provider acceptance were run.

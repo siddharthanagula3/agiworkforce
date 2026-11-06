@@ -5597,9 +5597,9 @@ cookie-session compatibility is retained, while non-session principals refuse.
 Source review covers production and authored unrun client, canonical auth,
 session helper, route and factor fixtures with different-ID positive cases.
 The tuple is not a backend mapping lease, and sequential email completion still
-needs reconciliation. Canonical product-only MFA gating and conditional compromise revocation retain
-product/native namespace gaps. The subsequent absolute-age and native-session
-MFA corrections are recorded below. Other factor callers/global RLS and workspace
+needs reconciliation. Canonical product-only MFA gating and legacy compromise consumers retain
+product/native namespace gaps. Subsequent absolute-age, native-session MFA and
+email-triggered compromise corrections are recorded below. Other factor callers/global RLS and workspace
 selection remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01,
 WEB-IDENTITY-POLICY-NAMESPACE-01 and the existing completion/workspace findings.
 
@@ -5639,15 +5639,35 @@ aggregate enrollment across every linked provider.
 The uncached path adds a provider read per governed native request and loses
 legacy cache outage tolerance; latency, rate limits and provider acceptance are
 unrun. Product-only principals, organization-policy enablement preflight,
-second-factor routes/cache writers, global cookie/Bearer DB scope and conditional
-compromise revocation remain separate gaps. No reverse mapping or provider
+second-factor routes/cache writers, global cookie/Bearer DB scope and legacy
+compromise revocation remain separate gaps. The bounded email-triggered
+revocation correction follows below. No reverse mapping or provider
 identity is invented, and the source migration's cardinality is not evidence of
 deployed schema. See WEB-IDENTITY-POLICY-NAMESPACE-01 for the bounded correction,
 source-reviewed unrun fixtures and unresolved identity contract.
 
+## Email-triggered compromise distinguishes provider and product identity
+
+Accepted `0893063c8f11eefd85068f48b1ba9a07cf084403` carries email PATCH's authenticated native
+subject through the factor-event bridge and compromise response to provider
+session enumeration. Shared revocation keeps product identity for mobile-intent
+cleanup on success and thrown enumeration; response DB, device refresh cleanup,
+audit and notices remain product scoped. Callers omitting the explicit subject
+retain their legacy behavior. No reverse identity lookup or all-provider sweep is
+introduced; other factor, reporting, undo and resolution paths remain open.
+
+Native session revocation is not cancellation of already-running email work.
+The event still precedes the email mutation, and successful compromise response
+still returns to it. Provider enumeration can throw before device cleanup;
+incomplete containment notices and response counters do not fully describe every
+cleanup outcome. Those completion, durability and mapping boundaries remain
+open. Independent source review covers authored unrun helper, event/service and
+email route fixtures, not provider/database execution or runtime acceptance.
+See WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-eight accepted production slices traced above are
+Only the two hundred twenty-nine accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
