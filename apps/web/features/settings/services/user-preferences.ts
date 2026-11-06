@@ -4,6 +4,7 @@ import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { invalidatePreferencesSnapshot } from '@/app/settings/_lib/preferences-client';
 import { SITE_NAME } from '@/lib/seo/site';
 
@@ -419,25 +420,32 @@ class SettingsService {
     }
   }
 
-  async getAPIKeys(signal?: AbortSignal): Promise<{ data: APIKey[]; error?: string }> {
+  async getAPIKeys(
+    signal?: AbortSignal,
+    owned?: { request: RequestAuthority; headers: Record<string, string> },
+  ): Promise<{ data: APIKey[]; error?: string }> {
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        return { data: [], error: 'User not authenticated' };
+      let token: string | null = null;
+      if (!owned) {
+        token = await getAuthToken();
+        if (!token) return { data: [], error: 'User not authenticated' };
       }
-
       signal?.throwIfAborted();
 
-      const res = await fetch('/api/settings/api-keys', {
-        headers: { Authorization: `Bearer ${token}` },
-        signal,
-      });
+      const res = owned
+        ? await owned.request.fetch('/api/settings/api-keys', {
+            method: 'GET', cache: 'no-store', headers: owned.headers, signal,
+          })
+        : await fetch('/api/settings/api-keys', {
+            headers: { Authorization: `Bearer ${token}` }, signal,
+          });
 
       if (!res.ok) {
         return { data: [], error: `HTTP ${res.status}` };
       }
 
       const json = (await res.json()) as { api_keys: APIKey[] };
+      owned?.request.assertCurrent();
       return { data: json.api_keys ?? [] };
     } catch (error) {
       return {

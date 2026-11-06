@@ -47,6 +47,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './useStepUp';
 import { useSelectWorkspace, useWorkspaceSelectionMutation } from '@/features/workspaces/hooks/use-workspaces';
+import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspaces/hooks/use-workspace-query';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
@@ -115,55 +116,38 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
   });
 }
 
-/**
- * Fetch API keys
- *
- * @returns UseQueryResult with array of APIKey
- */
-export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
-  return useQuery<APIKey[], Error>({
-    queryKey: queryKeys.settings.apiKeys(),
-    queryFn: async ({ signal }): Promise<APIKey[]> => {
-      const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
-      const requestSignal = AbortSignal.any([signal, timeoutSignal]);
+async function readAPIKeys({ request, headers }: WorkspaceQueryScope): Promise<APIKey[]> {
+  const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
+  const requestSignal = AbortSignal.any([request.signal, timeoutSignal]);
+  try {
+    const { data, error } = await withTimeout(
+      settingsService.getAPIKeys(requestSignal, { request, headers }),
+      TimeoutPresets.FAST,
+      'API keys took too long to load.',
+    );
+    request.assertCurrent();
+    requestSignal.throwIfAborted();
+    if (error) throw new Error(error);
+    return data;
+  } catch (error) {
+    // Ownership/caller cancellation is not a failed key load, including errors
+    // flattened by the service while a token or response body was pending.
+    if (!request.isCurrent()) throw error;
+    const message = timeoutSignal.aborted
+      ? 'API keys took too long to load. Please try again.'
+      : error instanceof Error ? error.message : 'Unable to load API keys.';
+    logger.error('[SettingsQuery] API keys error:', message);
+    throw new Error(message);
+  }
+}
 
-      try {
-        const { data, error } = await withTimeout(
-          settingsService.getAPIKeys(requestSignal),
-          TimeoutPresets.FAST,
-          'API keys took too long to load.',
-        );
-        if (error) throw new Error(error);
-        return data;
-      } catch (error) {
-        // A caller abort (unmount, navigation, a new query superseding this
-        // one) is normal cancellation, not a failure, the same reasoning as
-        // the signed-out suppression above. Only a genuine timeout is an error.
-        //
-        // Read from the SIGNAL, not from the error's name. The service catches
-        // its own rejection and returns `{ error: string }`, so the branch
-        // above rebuilds it as `new Error(error)` and the DOMException's
-        // `AbortError` name is gone by the time it lands here. The name check
-        // therefore never matched, and every settings section a user clicked
-        // away from logged `[SettingsQuery] API keys error: "signal is aborted
-        // without reason"` at error level. The signal cannot be reshaped by a
-        // layer in between.
-        const aborted = signal.aborted && !timeoutSignal.aborted;
-        if (aborted) throw error;
-        const message = timeoutSignal.aborted
-          ? 'API keys took too long to load. Please try again.'
-          : error instanceof Error
-            ? error.message
-            : 'Unable to load API keys.';
-        logger.error('[SettingsQuery] API keys error:', message);
-        throw new Error(message);
-      }
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    meta: {
-      errorMessage: 'Failed to load API keys',
-    },
+/** Fetch API keys only for the currently admitted account and workspace. */
+export function useAPIKeys() {
+  return useWorkspaceQuery(queryKeys.settings.apiKeys(), readAPIKeys, {
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    unavailableMessage: 'API keys are unavailable until your account and workspace are ready.',
+    reloadMessage: 'Reload this page to confirm your workspace before loading API keys.',
   });
 }
 
@@ -301,10 +285,9 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
       const created = (await response.json()) as { api_key: APIKey; full_key: string };
       return { apiKey: created.api_key, fullKey: created.full_key };
     },
-    onSuccess: ({ apiKey }: CreateAPIKeyResult): void => {
-      queryClient.setQueryData<APIKey[]>(queryKeys.settings.apiKeys(), (old) =>
-        old ? [apiKey, ...old] : [apiKey],
-      );
+    onSuccess: (): void => {
+      // Do not delay the once-only key receipt behind a background list reload.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
       toast.success('API key generated successfully');
     },
     onError: (error: Error): void => {
@@ -333,11 +316,8 @@ export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
       }
       return keyId;
     },
-    onSuccess: (keyId: string): void => {
-      // Remove from cache
-      queryClient.setQueryData<APIKey[]>(queryKeys.settings.apiKeys(), (old) =>
-        old?.filter((k) => k.id !== keyId),
-      );
+    onSuccess: async (): Promise<void> => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
       toast.success('API key deleted successfully');
     },
     onError: (error: Error): void => {

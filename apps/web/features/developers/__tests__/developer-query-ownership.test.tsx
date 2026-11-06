@@ -8,6 +8,9 @@ import {
   MANAGED_CLOUD_WORKSPACES_PATH,
   type ManagedCloudAccountWorkspaces,
 } from '@agiworkforce/cloud-contracts';
+import { useAPIKeys } from '@/features/settings/hooks/use-settings-queries';
+import type { APIKey } from '@/features/settings/services/user-preferences';
+import { queryKeys } from '@shared/stores/query-client';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import {
@@ -27,7 +30,10 @@ const fixture = vi.hoisted(() => ({
   } },
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
-vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
+vi.mock('@features/auth/step-up-fetch', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@features/auth/step-up-fetch')>(),
+  sendAuthorizedJson: vi.fn(),
+}));
 
 const personal: ManagedCloudAccountWorkspaces = {
   scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null, workspaces: [],
@@ -56,7 +62,13 @@ function deliveries(label: string): DeveloperWebhookDelivery[] {
     lastAttemptAt: '2026-10-20T00:00:00.000Z', deliveredAt: '2026-10-20T00:00:00.000Z',
     createdAt: '2026-10-20T00:00:00.000Z' }];
 }
+function apiKeys(label: string): APIKey[] {
+  return [{ id: label, name: label, key_prefix: 'agi_', scopes: [],
+    created_at: '2026-10-20T00:00:00.000Z' }];
+}
 const subjects = [
+  { name: 'API keys', path: '/api/settings/api-keys', key: queryKeys.settings.apiKeys(),
+    useHook: useAPIKeys, data: apiKeys, body: (label: string) => ({ api_keys: apiKeys(label) }) },
   { name: 'webhook endpoints', path: '/api/developers/webhooks', key: ['developers', 'webhooks'],
     useHook: useWebhookEndpoints, data: endpoints, body: (label: string) => ({ endpoints: endpoints(label) }) },
   { name: 'webhook deliveries', path: '/api/developers/webhooks/endpoint-a/deliveries',
@@ -205,7 +217,8 @@ describe.each(subjects)('developer $name query ownership', (subject) => {
     );
   });
 
-  it.each(['response', 'success-body', 'error-body'] as const)('ignores a retired deferred %s', async (stage) => {
+  it.each((['response', 'success-body', 'error-body'] as const)
+    .filter((stage) => subject.name !== 'API keys' || stage !== 'error-body'))('ignores a retired deferred %s', async (stage) => {
     const response = deferred<Response>();
     const body = deferred<unknown>();
     const parsing = deferred<void>();

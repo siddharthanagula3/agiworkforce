@@ -49,7 +49,9 @@ function parseLimit(value: string): LimitField {
   return Number.isInteger(limit) && limit > 0 ? { valid: true, limit } : { valid: false };
 }
 
-function keyCountLabel(count: number): string {
+function keyCountLabel(count: number, status: 'loading' | 'unavailable' | 'ready'): string {
+  if (status === 'loading') return 'Loading key count';
+  if (status === 'unavailable') return 'Key count unavailable';
   return translateUiPlural(
     'settings',
     'counts.apiKeys',
@@ -161,6 +163,9 @@ export function ProjectsPanel() {
   const projects = useDeveloperProjects();
   const apiKeys = useAPIKeys();
   const usage = useDeveloperUsage();
+  const keyStatus = apiKeys.isLoading
+    ? 'loading'
+    : apiKeys.isError || !apiKeys.data ? 'unavailable' : 'ready';
   const usageStatus = usage.isLoading
     ? 'loading'
     : usage.isError || !usage.data ? 'unavailable' : 'ready';
@@ -197,6 +202,7 @@ export function ProjectsPanel() {
   };
 
   const requestArchive = (project: DeveloperProject) => {
+    if (keyStatus !== 'ready') return;
     const keys = keyCounts.get(project.id) ?? 0;
     confirm({
       title: `Archive ${project.name}?`,
@@ -247,6 +253,16 @@ export function ProjectsPanel() {
         </div>
       </CardHeader>
       <CardContent>
+        {apiKeys.isError ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <p role="alert" className="text-xs text-danger">
+              {toUserMessage(apiKeys.error, 'Key counts could not be loaded.')}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void apiKeys.refetch()}>
+              Retry key counts
+            </Button>
+          </div>
+        ) : null}
         {usage.isError ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <p role="alert" className="text-xs text-danger">
@@ -281,7 +297,7 @@ export function ProjectsPanel() {
             <li className="flex flex-col gap-0.5 py-2.5">
               <span className="text-sm font-medium text-foreground">Default project</span>
               <span className="text-xs text-muted-foreground">
-                {keyCountLabel(keyCounts.get(null) ?? 0)},{' '}
+                {keyCountLabel(keyCounts.get(null) ?? 0, keyStatus)},{' '}
                 {projectUsageLabel(usageByProject.get(null), null, usageStatus)}
               </span>
             </li>
@@ -295,7 +311,7 @@ export function ProjectsPanel() {
                     {project.name}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {keyCountLabel(keyCounts.get(project.id) ?? 0)},{' '}
+                    {keyCountLabel(keyCounts.get(project.id) ?? 0, keyStatus)},{' '}
                     {projectUsageLabel(usageByProject.get(project.id), project.monthlyCreditLimit, usageStatus)}
                   </span>
                 </div>
@@ -312,6 +328,7 @@ export function ProjectsPanel() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={keyStatus !== 'ready'}
                     onClick={() => requestArchive(project)}
                   >
                     Archive
