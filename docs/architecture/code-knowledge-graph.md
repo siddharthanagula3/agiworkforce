@@ -5838,12 +5838,27 @@ sighting TTLs, account-security verification lifetime and settings listing/pruni
 Parsing, trimming and finite fractional or ordinary longer durations are retained.
 
 No arbitrary maximum or integer restriction is added. Huge finite values, numeric
-precision, Date/TTL range policy, provider timestamp normalization and unknown-age
-admission remain separate. Fixtures are unrun; see WEB-SESSION-LIFETIME-CONVERSION-01.
+precision, Date/TTL range policy and unknown-age admission remain separate.
+The follow-on below guards timestamp evidence without adding a range policy. Fixtures are unrun; see WEB-SESSION-LIFETIME-CONVERSION-01.
+
+## Automatic session pruning requires native finite age evidence
+
+Accepted `d2350d05ed1519ad51d8970de74f1d850fb5486c` preflights every settings GET row's createdAt
+and expireAt as explicit null or finite native numbers before any automatic
+revocation. An invalid later row prevents earlier expired rows from being pruned;
+malformed values are not silently normalized to unknown. The canonical policy
+predicate also prevents bound coercion in standalone deadline/idle helpers.
+
+Null remains unknown. Standalone policy can still use a valid expired bound when
+the other is malformed; GET is stricter. Shared listing, explicit revoke-all and
+deprovision keep their existing identity/status admission without age restrictions.
+Finite negative/fractional/huge inputs, lastActiveAt, current-time handling,
+addition overflow, Date/TTL ranges and unknown-age auth policy remain unchanged.
+Source fixtures are unrun; see WEB-SESSION-LIFETIME-CONVERSION-01.
 
 ## Reconstruction boundary
 
-Only the two hundred thirty-eight accepted production slices traced above are
+Only the two hundred thirty-nine accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

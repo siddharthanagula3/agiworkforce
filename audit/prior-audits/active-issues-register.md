@@ -14213,9 +14213,32 @@ fractional hours and ordinary finite longer configurations remain supported.
 
 This is an overflow correction, not a new maximum-duration policy. Huge but
 finite durations, precision, Date-representable deadlines and storage-specific
-TTL ceilings remain unbounded here. Provider timestamps and current-time inputs
-are unchanged; settings enumeration can still reach coercive lifetime helpers,
-while session-age reads separately reject nonfinite starts and permit unknown
-age. No mandatory logout, native/product mapping, snapshot consistency or
-mutation atomicity change is included. Source fixtures cover overflowing values,
-retained positive configurations and exact expiry behavior; they are unrun.
+TTL ceilings remain unbounded here. The timestamp-evidence follow-on below guards
+coercive/nonfinite inputs without adding a range policy. Current-time inputs and
+finite-operand addition overflow remain unchanged. Source fixtures cover overflowing
+configuration, retained positive values and exact expiry behavior; they are unrun.
+
+The follow-on `d2350d05ed1519ad51d8970de74f1d850fb5486c` rejects a settings GET page when any
+createdAt or expireAt field is neither explicit null nor a finite native number.
+The whole page is checked before automatic lifetime pruning, so a later invalid
+row prevents revocation of even an earlier legitimately expired row. This boundary
+refuses malformed evidence instead of silently reporting it as unknown or using
+coercive comparisons to authorize a destructive effect.
+
+The canonical numeric predicate lives in session-policy. Its deadline and idle
+helpers also reject nonnumeric/nonfinite bound inputs as defense in depth; the
+existing authentication-age caller already checked provider starts. Standalone
+policy evaluation still allows a valid expired bound when the other is malformed,
+whereas GET admission rejects either malformed field. Explicit null remains a
+supported unknown value, and a valid expired bound with a null other bound still
+prunes normally. Absolute-before-idle precedence remains unchanged.
+
+Shared active listing, explicit revoke-all sweeps and deprovision do not acquire
+new timestamp admission requirements: they use identity/status rather than age
+to authorize revocation. lastActiveAt, activity/device metadata and provider
+mapping are unchanged. Finite zero, negative, fractional and huge values remain
+admitted, without proving sensible dates, units, chronology or precision. No
+current-time validation, finite-deadline guarantee, mandatory unknown-age logout,
+ownership lease or mutation atomicity is added. Fixtures cover coerced/nonfinite
+fields, later invalid rows, mixed bounds, null behavior and retained explicit
+revocation; they are source-reviewed only and unrun.
