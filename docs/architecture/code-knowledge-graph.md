@@ -5761,9 +5761,23 @@ duplicate IDs, pagination completeness and cross-request races remain unchanged.
 The exported batch primitive is not independently guarded. Source fixtures are
 unrun; see WEB-IDENTITY-POLICY-NAMESPACE-01 for scope and acceptance limits.
 
+## Single-session revocation binds the returned target to the request
+
+Accepted `56c506a95055257220fe1d4c1a590538f129b4b5` requires the provider lookup's session ID to
+match the validated path ID as well as the existing owner comparison. Mismatched
+or malformed returned IDs fail through the existing opaque not-found branch
+before provider revocation, intent-token cleanup or success logging and security
+events. The guard precedes the active/inactive branch; exact inactive targets
+still skip provider revocation while cleaning up that session's intent tokens.
+
+No principal mapping, provider-specific input syntax, status policy or mutation
+ordering changes. Provider response validation after revocation, transactional
+cleanup/events, direct deprovision enumeration and ownership races remain open.
+Fixtures are source-reviewed only; see WEB-IDENTITY-POLICY-NAMESPACE-01.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty-three accepted production slices traced above are
+Only the two hundred thirty-four accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

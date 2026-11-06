@@ -14067,6 +14067,22 @@ The exported batch revoker is not a standalone ownership boundary, although its
 current production callers in this flow receive validated pages. Fixtures cover
 the helper and route pruning/refusal boundary; they are source-reviewed, not run.
 
+The single-session route follow-on `56c506a95055257220fe1d4c1a590538f129b4b5` requires the provider's
+returned session ID to equal the already validated path ID, in addition to the
+existing owner check. Missing, malformed or mismatched IDs use the same opaque
+not-found refusal before provider revocation, mobile-intent cleanup or success
+logging/event emission. This applies to active and inactive rows, so an inactive
+substitute cannot clear another session's intent tokens or report success. Exact
+owned active and inactive targets retain existing semantics.
+
+This narrow evidence binding does not change the session-principal contract,
+product/native mapping, provider-specific path syntax, target-status validation
+or mutation ordering. It does not make provider revocation, token cleanup and
+security-event delivery atomic, validate the revoke response or establish a
+cross-request ownership lease. Direct deprovision enumeration remains separate.
+Source fixtures cover substituted current/other IDs, malformed IDs, inactive
+substitutes and exact inactive cleanup; none were run.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include remaining account-security/factor consumers,
