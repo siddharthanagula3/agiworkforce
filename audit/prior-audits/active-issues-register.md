@@ -13634,6 +13634,74 @@ features/account-security, features/workspace-console/hooks, features/support,
 lib/identity/client.ts and shared/stores/authentication-store.ts, all under apps/web.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
+## WEB-DEVICE-SIGNIN-SETTING-LIFETIME-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.
+Bounded client correction: `454e351dd2c2049d7fc0e05e009c4527d754f1a8`.
+
+DeviceSignInToggle previously used the legacy account-agnostic preference
+snapshot and ambient-cookie save path. A failed browser read was treated as
+confirmed default-on, optimistic inversion could overlap before React's saving
+state rendered, and a failed/lost write response restored the previous value as
+though persistence had not happened. Replacing the entire security namespace
+could also erase unrelated preferences.
+
+The correction reuses the canonical preference owner/view and captured request
+authority, with a private view/operation generation and synchronous admission.
+The selected boolean and exact displayed snapshot precede asynchronous work.
+Settings activity is passed through SecuritySection from open-and-security
+selection. Deactivation, owner replacement and cleanup retire old work; persistent
+session observation and reconciliation of observed silent owner loss prevent
+old ready/error state from lingering after an identity transition.
+
+A namespace-specific no-store GET avoids unrelated workspace capability gates.
+Its envelope, version and device field are validated; only a successful read with
+an absent field receives the server-compatible enabled default. Browser failures
+and malformed stored values remain visibly unknown with mutation unavailable.
+PUT atomically patches only deviceCodeSignInEnabled. CSRF, token, response and
+body waits remain owned. A full stored-settings receipt with a nonempty version
+and the exact requested boolean is required before success and preference-event
+publication. Shared namespace/key constants have one pure owner, re-exported by
+the server policy; no competing preference cache or session owner is added.
+
+The switch keeps confirmed state while saving, not optimistic rollback. A
+post-dispatch uncertain result retains a local warning/block. Fresh reads observe
+state but do not establish that an earlier unconfirmed server write cannot later
+finish. Only a successful observation followed by explicit acknowledgment permits
+another local change; no write is automatically replayed. The marker survives
+retained-component active close/reopen, not genuine unmount/new session/reload.
+Cross-view/client duplication and durable outcome reconciliation remain open.
+Canonical snapshot invalidation does not replace already-pending reads in other
+consumers, and this is not a global preference cache coherence correction.
+
+The patch preserves other security keys under the server row lock, but does not
+serialize concurrent edits to this same key or stop legacy namespace replacement
+elsewhere. It does not change API identity/RLS mapping or the server's fail-open
+policy described below. Disabling only prevents future code approvals; existing
+grants, connected devices and sessions are not revoked. Read-only source fixtures
+are authored and unrun; no tests, lint, typechecks, builds, app/service execution,
+push or deployment ran.
+
+## WEB-DEVICE-SIGNIN-POLICY-FAILOPEN-01
+
+Severity: Medium. Source-confirmed on 2026-11-06; unresolved server behavior.
+
+lib/server/device-signin-policy.ts returns enabled when its database lookup
+throws, when the security namespace is missing/malformed, or when the stored
+value is anything other than literal false. The authenticated approve route uses
+that result before creating a device approval. Thus a stored off preference is
+not reliably enforced during lookup failure; generic preference writes also do
+not validate this particular boolean server-side. Human authentication and code
+approval are still required, so this is not an unauthenticated grant claim.
+
+WEB-DEVICE-SIGNIN-SETTING-LIFETIME-01 fixes browser ownership and truthfulness, not
+this enforcement policy. A browser API/auth/network failure does not demonstrate
+that the policy database lookup itself failed, so the UI must not fabricate the
+server fallback. Resolve availability/fail-closed behavior and malformed legacy
+value handling with the canonical approval owner and explicit regression sources.
+Changing this setting does not revoke existing grants or sessions. Source-only
+inspection; no runtime failure injection or production policy change was made.
+
 ## WEB-TOTP-CLIENT-LIFETIME-01
 
 Severity: Medium. Source-confirmed on 2026-11-06; runtime acceptance remains open.

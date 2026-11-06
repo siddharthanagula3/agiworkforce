@@ -6014,9 +6014,26 @@ provider/SQL/cache/events and expected sign-out-before-receipt remain coordinate
 server/client work; strict retirement does not accept signed-out secret delivery.
 Source fixtures remain unrun; see WEB-TOTP-CLIENT-LIFETIME-01.
 
+## Device sign-in preference uses canonical owner and confirmed receipts
+
+Accepted `454e351dd2c2049d7fc0e05e009c4527d754f1a8` binds DeviceSignInToggle to canonical
+preference owner/view authority and explicit Security-section activity. Private
+operation generations own CSRF/token/body waits and synchronous action admission.
+Namespace-only reads avoid unrelated workspace gates; missing values default on
+only after a valid read. Writes patch one security key and require its exact
+boolean plus a persisted version before publication. Shared namespace/key
+constants remain the server/client contract, without another cache owner.
+
+Unknown outcomes retain a warning and local write block. Refresh observes state;
+explicit acknowledgment only releases the local block. True unmount/new session/
+reload, same-key cross-client writes and pending shared-cache coherence remain
+outside this correction. Turning off the preference prevents future approvals,
+not existing-device access. Server DB failure/non-false fallback is unchanged and
+tracked separately as WEB-DEVICE-SIGNIN-POLICY-FAILOPEN-01. Fixtures are unrun.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-six accepted production slices traced above are
+Only the two hundred forty-seven accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
