@@ -61,14 +61,8 @@ const CONNECTORS: ConnectorFixture[] = [
 
 const ALL_SHARES: ShareFixture[] = [LEAVER_SHARE, LEAVER_OTHER_ORG_SHARE, COLLEAGUE_SHARE];
 
-function identityStub({
-  sessions = ['sess_1', 'sess_2'],
-  totalCount = sessions.length,
-  listThrows = false,
-  failIds = [] as string[],
-} = {}) {
-  const revoked: string[] = [];
-  const listed = (id: string) => ({
+function listed(id: string) {
+  return {
     id,
     userId: USER,
     status: 'active',
@@ -76,7 +70,16 @@ function identityStub({
     lastActiveAt: null,
     expireAt: null,
     latestActivity: null,
-  });
+  };
+}
+
+function identityStub({
+  sessions = ['sess_1', 'sess_2'],
+  totalCount = sessions.length,
+  listThrows = false,
+  failIds = [] as string[],
+} = {}) {
+  const revoked: string[] = [];
   return {
     revoked,
     identity: {
@@ -238,6 +241,109 @@ describe('deprovisionMember', () => {
     expect(result.apiKeysRevoked).toBe(1);
     expect(result.errors).toEqual([]);
     expect(identity.revoked).toEqual(['sess_1', 'sess_2']);
+  });
+
+  describe('provider session page validation', () => {
+    const invalidPages: [string, unknown][] = [
+      ['missing page', undefined],
+      ['null page', null],
+      ['non-array page', { 0: listed('sess_invalid'), length: 1 }],
+      ['sparse page', new Array(1)],
+      ['null row', [null]],
+      ['undefined row', [undefined]],
+      ['primitive row', ['sess_invalid']],
+      ['missing owner', [{ ...listed('sess_invalid'), userId: undefined }]],
+      ['empty owner', [{ ...listed('sess_invalid'), userId: '' }]],
+      ['non-string owner', [{ ...listed('sess_invalid'), userId: 123 }]],
+      ['foreign owner', [{ ...listed('sess_invalid'), userId: OTHER_USER }]],
+      ['padded owner', [{ ...listed('sess_invalid'), userId: ` ${USER} ` }]],
+      ['inactive row', [{ ...listed('sess_invalid'), status: 'revoked' }]],
+      ['missing status', [{ ...listed('sess_invalid'), status: undefined }]],
+      ['wrong-case status', [{ ...listed('sess_invalid'), status: 'Active' }]],
+      ['missing ID', [{ ...listed('sess_invalid'), id: undefined }]],
+      ['non-string ID', [{ ...listed('sess_invalid'), id: 123 }]],
+      ['empty ID', [listed('')]],
+      ['blank ID', [listed('   ')]],
+      ['padded ID', [listed(' sess_invalid ')]],
+      [
+        'valid row before foreign row',
+        [listed('sess_valid'), { ...listed('sess_foreign'), userId: OTHER_USER }],
+      ],
+    ];
+
+    describe.each([0, 50])('invalid page at offset %i', (invalidOffset) => {
+      it.each(invalidPages)('refuses %s without abandoning scoped cleanup', async (_name, rows) => {
+        const identity = identityStub({
+          sessions: Array.from({ length: 51 }, (_, index) => `sess_${index}`),
+        });
+        const list = identity.identity.listUserSessions.getMockImplementation()!;
+        identity.identity.listUserSessions.mockImplementation(async (userId, options = {}) => {
+          if (options.offset === invalidOffset) {
+            return { sessions: rows as ReturnType<typeof listed>[], totalCount: 51 };
+          }
+          return list(userId, options);
+        });
+        const db = dbStub({
+          otherMembership: true,
+          connectors: CONNECTORS,
+          shares: ALL_SHARES,
+        });
+
+        const result = await deprovisionMember(db.db, identity.identity, {
+          userId: USER,
+          organizationId: ORG,
+        });
+
+        expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(invalidOffset === 0 ? 1 : 2);
+        expect(identity.identity.revokeSession).not.toHaveBeenCalled();
+        expect(identity.revoked).toEqual([]);
+        expect(result).toEqual({
+          userId: USER,
+          organizationId: ORG,
+          sessionsRevoked: 0,
+          sessionsFailed: 0,
+          deviceTokensRevoked: 1,
+          apiKeysRevoked: 1,
+          sharedConnectorsUnshared: 1,
+          errors: [
+            'Could not list sessions, so none were revoked: Identity provider returned an invalid active session page',
+          ],
+        });
+        expect(db.intentCalls()).toHaveLength(1);
+        expect(db.intentCalls()[0]![1]).toEqual([USER, ORG]);
+        expect(db.live).toEqual([LEAVER_OTHER_ORG_SHARE, COLLEAGUE_SHARE]);
+      });
+    });
+
+    it.each([{ sessions: [] }, { sessions: ['opaque-provider-session'] }])(
+      'preserves exact valid IDs and empty results $sessions',
+      async ({ sessions }) => {
+        const identity = identityStub({ sessions });
+        const db = dbStub();
+
+        const result = await deprovisionMember(db.db, identity.identity, {
+          userId: USER,
+          organizationId: ORG,
+        });
+
+        expect(identity.identity.listUserSessions).toHaveBeenCalledExactlyOnceWith(USER, {
+          status: 'active',
+          limit: 50,
+          offset: 0,
+        });
+        expect(identity.identity.revokeSession.mock.calls).toEqual(sessions.map((id) => [id]));
+        expect(result).toEqual({
+          userId: USER,
+          organizationId: ORG,
+          sessionsRevoked: sessions.length,
+          sessionsFailed: 0,
+          deviceTokensRevoked: 1,
+          apiKeysRevoked: 1,
+          sharedConnectorsUnshared: 0,
+          errors: [],
+        });
+      },
+    );
   });
 
   it('revokes only the Ask from Siri tokens issued in the workspace being left', async () => {

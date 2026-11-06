@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { IdentityProvider, IdentitySession } from '@agiworkforce/identity';
 
+import { assertActiveSessionPage } from '@/lib/server/active-session-page';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { revokeEveryMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
@@ -37,31 +38,6 @@ export interface RevokeSweep extends RevokeOutcome {
   currentSession: IdentitySession | undefined;
   incomplete: boolean;
   targetCount: number;
-}
-
-function assertActiveSessionPage(
-  sessions: readonly IdentitySession[],
-  identitySubject: string,
-): void {
-  if (!Array.isArray(sessions)) {
-    throw new Error('Identity provider returned an invalid active session page');
-  }
-  for (const session of sessions) {
-    if (
-      !session ||
-      typeof session !== 'object' ||
-      typeof session.id !== 'string' ||
-      session.id.length === 0 ||
-      session.id.trim() !== session.id ||
-      typeof session.userId !== 'string' ||
-      session.userId.length === 0 ||
-      session.userId.trim() !== session.userId ||
-      session.userId !== identitySubject ||
-      session.status !== SESSION_STATUS_ACTIVE
-    ) {
-      throw new Error('Identity provider returned an invalid active session page');
-    }
-  }
 }
 
 /**
