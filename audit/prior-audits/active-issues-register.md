@@ -13546,9 +13546,11 @@ Coordinated boundaries and source owners:
 - Email and sign-in methods: the bounded WEB-EMAIL-CHANGE-LIFETIME-01 slice owns
   EmailAddressChange POST/PATCH, native address reload/send/verify and the parent
   AccountSection email update. Server partial completion and misleading retry
-  receipts remain under WEB-EMAIL-CHANGE-COMPLETION-01. SignInMethodsPanel status,
-  native connection/removal/redirect and primary-email confirmation are still
-  separate open lifetimes. Native PasskeysPanel is adjacent and does not use
+  receipts remain under WEB-EMAIL-CHANGE-COMPLETION-01. The bounded sign-in-method
+  read correction below owns the identities GET and read-derived rows. Native
+  connection/removal/redirect, unlink confirmation/transport/receipt, mutation
+  errors/busy state and primary-email confirmation remain separate open lifetimes.
+  Native PasskeysPanel is adjacent and does not use
   step-up; do not imply it is covered by a step-up-only change.
 - TOTP: TwoFactorEnrollment setup, separate service verification/status paths,
   QR/secret/OTP/backup-code state, copy/download/print and parent status callback
@@ -13561,6 +13563,44 @@ Coordinated boundaries and source owners:
   account-scoped operations. RecoveryKeysSheet has copy/download, not a print
   handler. Its client is also used by verification/handoff/undo pages, which must
   remain explicit compatibility boundaries.
+
+Bounded sign-in-method read correction `5732a2cf759cdfb61e5101db94924b4d18e60d1c` captures one
+stable native session incarnation and uses RequestAuthority for the identities
+GET. It retires the previous read on reload, replacement identity or unmount;
+token, response, JSON, publication and render admission require the same current
+owner and operation. A retained ready/error view remains subscribed to identity
+changes. An obsolete unlink completion cannot use its captured reload callback
+to start a read for replacement B. This does not own the unlink itself.
+
+The response boundary validates both arrays, UUID identity IDs, configured OAuth
+provider IDs from AUTH_PROVIDER_IDS, serialized date/null fields, actual booleans,
+nonempty consumed labels/provenance/consequence and duplicate IDs. Identity backend
+provider strings remain distinct from OAuth choices. Valid empty lists remain
+successful. Native email/password and passkey rows use their own loaded state and
+current user/owner agreement, so a failed GET does not suppress independently
+valid native rows or turn unloaded passkeys into an empty status. Configured
+provider rows additionally wait for connected-account readiness. The GET now uses
+captured Bearer credentials with cookies omitted, no CSRF acquisition and no
+client workspace header; server organization resolution and mapping are unchanged.
+
+This is read isolation/response validation only. Existing mutation dialogs,
+retained callbacks, native effects/redirects, ambient DELETE, error/busy state and
+completion receipts remain open. Hiding a row does not cancel an already retained
+confirmation. Source regression fixtures are unrun; installed SDK, React lifecycle
+and transport compatibility still need runtime acceptance.
+
+Revoke-all scoping additionally traces push disabling through worker readiness,
+subscription lookup and CSRF before browser-wide unsubscribe, then ambient Clerk
+signOut, asynchronous imported store cleanup and unconditional auth reset. A
+second signOut or login redirect follows in SecuritySection. Pre/post call fences
+cannot guard those internal waits. The server intentionally revokes the current
+session before receipt, while ordinary SessionSnapshot/RequestAuthority retires
+on that disappearance. Repair therefore requires a monotonic completion authority
+that permits expected A termination but permanently rejects observed replacement,
+owned cleanup continuations and demonstrably targeted native termination/redirect.
+Allowing any signed-out state would admit A to B to signed-out. Include single-
+session self-revocation and account deletion; mocks of logout/signOut do not prove
+this coordinated boundary. No such migration is claimed by the read slice.
 
 Other shared-hook consumers are separate follow-ons: workspace-console admin API
 keys and encryption-key changes inherit automatic mutation retries, use ambient

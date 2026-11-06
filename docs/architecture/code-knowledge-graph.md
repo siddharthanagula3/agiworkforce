@@ -5856,9 +5856,35 @@ Finite negative/fractional/huge inputs, lastActiveAt, current-time handling,
 addition overflow, Date/TTL ranges and unknown-age auth policy remain unchanged.
 Source fixtures are unrun; see WEB-SESSION-LIFETIME-CONVERSION-01.
 
+## Sign-in-method reads follow one native session incarnation
+
+Accepted `5732a2cf759cdfb61e5101db94924b4d18e60d1c` separates the identities GET from legacy
+mutation transport. A stable captured SessionSnapshot and RequestAuthority own
+Bearer acquisition, response/JSON completion and ready/error publication. Reload
+synchronously retires the previous operation; replacement identity and unmount
+retire the owner. Ready/error state retains its subscription and is fenced again
+at render. A captured obsolete reload callback cannot start a replacement
+account's read after an old mutation completes.
+
+A local response schema validates UUID identity IDs, serialized dates/null,
+booleans, nonempty consumed strings, duplicate IDs and the canonical configured
+OAuth provider enum. Backend identity provider/provenance strings retain their
+broader domain; valid empty arrays remain successful. The request omits cookies,
+requires the captured Bearer token, and adds neither CSRF work nor workspace scope.
+The server's organization resolution and native/product mapping remain unchanged.
+
+Native email/password/passkeys retain independent readiness and current-user
+agreement rather than depending on GET success. Configured provider and linked
+identity rows require current validated read data; configured rows also wait for
+native connected-account readiness. Native mutations/redirects, unlink dialogs,
+ambient DELETE and mutation busy/error/receipt lifetimes remain open. Revoke-all
+needs a separate completion authority and owned logout/cleanup chain because
+expected self-revocation retires ordinary request ownership before its receipt.
+Source fixtures are unrun; see WEB-SETTINGS-STEP-UP-OWNERSHIP-01.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty-nine accepted production slices traced above are
+Only the two hundred forty accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
