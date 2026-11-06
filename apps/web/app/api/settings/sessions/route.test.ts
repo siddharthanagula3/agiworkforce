@@ -332,6 +332,46 @@ describe('/api/settings/sessions', () => {
       expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['empty unseen page', [], 1],
+      ['current-only unseen page', [session('sess_current')], 2],
+      ['still active after fulfilled revoke', [session('sess_current'), session('sess_other')], 2],
+    ] as const)('withholds current revocation and success on %s', async (_name, data, totalCount) => {
+      mockGetSessionList.mockResolvedValue({ data, totalCount });
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(502);
+      expect(mockRevokeSession).not.toHaveBeenCalledWith('sess_current');
+      expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toMatchObject({ currentSessionRevoked: false });
+    });
+
+    it.each([NaN, '2', -1])('refuses malformed count %j without revoking or announcing success', async (totalCount) => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')], totalCount,
+      });
+      const response = await DELETE(revokeAllRequest());
+      expect(response.status).toBe(500);
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+      expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
+    });
+
+    it.each([NaN, '2', -1])('rejects malformed count %j before lifetime-pruning an owned session', async (totalCount) => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_owned_ancient', { createdAt: Date.now() - 400 * DAY_MS })],
+        totalCount,
+      });
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).not.toHaveProperty('sessions');
+      expect(mockRevokeSession).not.toHaveBeenCalled();
+    });
+
     it('ends a session that has outlived the absolute lifetime and never returns it', async () => {
       const ancient = Date.now() - 400 * DAY_MS;
       mockGetSessionList.mockResolvedValue({
@@ -406,10 +446,10 @@ describe('/api/settings/sessions', () => {
     });
 
     it('ends every other session once the account holder has re-verified', async () => {
-      mockGetSessionList.mockResolvedValue({
+      mockGetSessionList.mockResolvedValueOnce({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,
-      });
+      }).mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
 
       const response = await DELETE(revokeAllRequest());
 
@@ -418,10 +458,10 @@ describe('/api/settings/sessions', () => {
     });
 
     it('tells the account holder every session was ended, and counts what ended', async () => {
-      mockGetSessionList.mockResolvedValue({
+      mockGetSessionList.mockResolvedValueOnce({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,
-      });
+      }).mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
       mockNeonQuery.mockResolvedValue([{ id: 'credential-1' }, { id: 'credential-2' }]);
 
       const response = await DELETE(revokeAllRequest());
@@ -453,10 +493,10 @@ describe('/api/settings/sessions', () => {
     });
 
     it('revokes other devices before ending the current session', async () => {
-      mockGetSessionList.mockResolvedValue({
+      mockGetSessionList.mockResolvedValueOnce({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,
-      });
+      }).mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
 
       const response = await DELETE(revokeAllRequest());
 
@@ -491,10 +531,10 @@ describe('/api/settings/sessions', () => {
     });
 
     it('waits out a rate limit and finishes the revoke the provider refused', async () => {
-      mockGetSessionList.mockResolvedValue({
+      mockGetSessionList.mockResolvedValueOnce({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,
-      });
+      }).mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
       mockRevokeSession
         .mockRejectedValueOnce(providerError(429, 0))
         .mockResolvedValue({ status: 'revoked' });
@@ -572,10 +612,10 @@ describe('/api/settings/sessions', () => {
     });
 
     it('treats a session the provider has already dropped as ended, not as a failure', async () => {
-      mockGetSessionList.mockResolvedValue({
+      mockGetSessionList.mockResolvedValueOnce({
         data: [session('sess_current'), session('sess_gone')],
         totalCount: 2,
-      });
+      }).mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
       mockRevokeSession.mockImplementation(async (id: string) => {
         if (id === 'sess_gone') throw providerError(404);
         return { status: 'revoked' };
@@ -693,10 +733,10 @@ describe('/api/settings/sessions', () => {
     });
 
     it('revokes every browser session and reports that its own credential survived', async () => {
-      mockGetSessionList.mockResolvedValue({
+      mockGetSessionList.mockResolvedValueOnce({
         data: [session('sess_a'), session('sess_b')],
         totalCount: 2,
-      });
+      }).mockResolvedValue({ data: [], totalCount: 0 });
 
       const response = await DELETE(bearerRequest('DELETE', 'desktop-device-token'));
 
@@ -740,6 +780,9 @@ describe('/api/settings/sessions', () => {
       expect(listBody.currentSessionKnown).toBe(true);
       expect(listBody.sessions[0]).toMatchObject({ id: 'sess_mobile', isCurrent: true });
 
+      mockGetSessionList
+        .mockResolvedValueOnce({ data: [session('sess_mobile'), session('sess_desktop_browser')], totalCount: 2 })
+        .mockResolvedValue({ data: [session('sess_mobile')], totalCount: 1 });
       await DELETE(bearerRequest('DELETE', 'clerk.session.jwt'));
 
       expect(mockRevokeSession.mock.calls.map(([id]) => id)).toEqual([

@@ -57,6 +57,9 @@ export async function listActiveIdentitySessions(
     offset: 0,
   });
   assertActiveSessionPage(response.sessions, userId);
+  if (!Number.isSafeInteger(response.totalCount) || response.totalCount < 0) {
+    throw new Error('Identity provider returned an invalid active session count');
+  }
   const sessions = [...response.sessions];
   const totalCount = Math.max(response.totalCount, sessions.length);
 
@@ -192,25 +195,20 @@ async function sweepOtherSessions(
   // The attempted set stops a session the provider refuses to revoke from being
   // retried for ever.
   for (let pass = 0; pass < MAX_REVOKE_PASSES; pass++) {
-    const page = await identity.listUserSessions(identitySubject, {
-      status: SESSION_STATUS_ACTIVE,
-      limit: PAGE_SIZE,
-      offset: 0,
-    });
-
-    assertActiveSessionPage(page.sessions, identitySubject);
+    const page = await listActiveIdentitySessions(identity, identitySubject);
     const foundCurrent = page.sessions.find((session) => session.id === currentSessionId);
     currentSession = foundCurrent ?? currentSession;
     if (pass === 0) {
-      const total = Math.max(page.totalCount, page.sessions.length);
-      targetCount = Math.max(0, total - (foundCurrent ? 1 : 0));
+      targetCount = Math.max(0, page.totalCount - (foundCurrent ? 1 : 0));
     }
 
     const pending = page.sessions.filter(
       (session) => session.id !== currentSessionId && !attempted.has(session.id),
     );
     if (pending.length === 0) {
-      return { ended, alreadyGone, failed, currentSession, incomplete: false, targetCount };
+      const incomplete =
+        page.truncated || page.sessions.some((session) => session.id !== currentSessionId);
+      return { ended, alreadyGone, failed, currentSession, incomplete, targetCount };
     }
 
     for (const session of pending) attempted.add(session.id);

@@ -11,6 +11,7 @@ export function assertActiveSessionPage(
   if (!Array.isArray(sessions)) {
     throw new Error('Identity provider returned an invalid active session page');
   }
+  const ids = new Set<string>();
   for (const session of sessions) {
     if (
       !session ||
@@ -22,10 +23,12 @@ export function assertActiveSessionPage(
       session.userId.length === 0 ||
       session.userId.trim() !== session.userId ||
       session.userId !== identitySubject ||
-      session.status !== SESSION_STATUS_ACTIVE
+      session.status !== SESSION_STATUS_ACTIVE ||
+      ids.has(session.id)
     ) {
       throw new Error('Identity provider returned an invalid active session page');
     }
+    ids.add(session.id);
   }
 }
 

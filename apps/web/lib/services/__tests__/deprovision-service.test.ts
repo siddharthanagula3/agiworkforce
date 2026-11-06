@@ -265,6 +265,7 @@ describe('deprovisionMember', () => {
       ['empty ID', [listed('')]],
       ['blank ID', [listed('   ')]],
       ['padded ID', [listed(' sess_invalid ')]],
+      ['duplicate ID', [listed('sess_duplicate'), listed('sess_duplicate')]],
       [
         'valid row before foreign row',
         [listed('sess_valid'), { ...listed('sess_foreign'), userId: OTHER_USER }],
@@ -534,6 +535,17 @@ describe('deprovisionMember', () => {
       expect(sql).not.toMatch(/delete from/i);
       expect(sql).not.toMatch(/profiles/i);
     }
+  });
+
+  it.each([0, NaN, Infinity, -1])('keeps direct deprovision enumeration independent of count %j', async (totalCount) => {
+    const identity = identityStub({ sessions: ['sess_1'], totalCount });
+    const db = dbStub();
+    const result = await deprovisionMember(db.db, identity.identity, {
+      userId: USER, organizationId: ORG,
+    });
+    expect(result.sessionsRevoked).toBe(1);
+    expect(result.errors).toEqual([]);
+    expect(identity.revoked).toEqual(['sess_1']);
   });
 
   it('pages through more sessions than one request returns', async () => {

@@ -63,6 +63,8 @@ const invalidPages: [string, unknown][] = [
   ['empty ID', [session('')]],
   ['blank ID', [session('   ')]],
   ['padded ID', [session(' sess_other ')]],
+  ['duplicate other ID', [session('sess_other'), session('sess_other')]],
+  ['duplicate current ID', [session('sess_current'), session('sess_current')]],
   ['valid row before foreign row', [session('sess_valid'), session('sess_foreign', { userId: 'foreign-subject' })]],
   ['foreign current session', [session('sess_current', { userId: 'foreign-subject' })]],
 ];
@@ -140,6 +142,115 @@ describe('provider session enumeration ownership', () => {
 
     expect(identity.listUserSessions).toHaveBeenCalledTimes(2);
     expect(identity.revokeSession).toHaveBeenCalledExactlyOnceWith('sess_first');
+    expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
+  });
+});
+
+const invalidCounts: unknown[] = [undefined, null, '2', '', true, NaN, Infinity, -Infinity, -1, 0.5, Number.MAX_SAFE_INTEGER + 1];
+
+describe('provider session completion evidence', () => {
+  it.each(invalidCounts)('rejects invalid count %j before listing or revoking', async (count) => {
+    const identity = operations([session('sess_other')]);
+    identity.listUserSessions.mockResolvedValue({
+      sessions: [session('sess_other')], totalCount: count as number,
+    });
+    await expect(listActiveIdentitySessions(identity, 'native-subject')).rejects.toThrow(
+      'Identity provider returned an invalid active session count',
+    );
+    await expect(revokeEveryOtherSession(
+      identity, 'product-account', null, 'native-subject',
+    )).rejects.toThrow('Identity provider returned an invalid active session count');
+    expect(identity.revokeSession).not.toHaveBeenCalled();
+    expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
+  });
+
+  it.each(invalidCounts)('validates later-page count %j before another revocation', async (count) => {
+    const identity = operations([]);
+    identity.listUserSessions
+      .mockResolvedValueOnce({ sessions: [session('sess_first')], totalCount: 2 })
+      .mockResolvedValueOnce({ sessions: [session('sess_second')], totalCount: count as number });
+    await expect(revokeEveryOtherSession(
+      identity, 'product-account', null, 'native-subject',
+    )).rejects.toThrow('Identity provider returned an invalid active session count');
+    expect(identity.revokeSession).toHaveBeenCalledExactlyOnceWith('sess_first');
+    expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
+  });
+
+  it.each([
+    [[], 1, null],
+    [[], 1, 'sess_current'],
+    [[session('sess_current')], 2, 'sess_current'],
+  ] as const)('does not declare an exhausted page complete with unseen sessions %j', async (rows, totalCount, currentId) => {
+    const identity = operations(rows);
+    identity.listUserSessions.mockResolvedValue({ sessions: rows, totalCount });
+    const sweep = await revokeEveryOtherSession(identity, 'product-account', currentId, 'native-subject');
+    expect(sweep.incomplete).toBe(true);
+    expect(identity.listUserSessions).toHaveBeenCalledTimes(1);
+    expect(identity.revokeSession).not.toHaveBeenCalled();
+    expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
+  });
+
+  it.each(['fulfilled', 'alreadyGone', 'failed'] as const)('reports a still-active %s target without retrying it forever', async (outcome) => {
+    const rows = [session('sess_current'), session('sess_other')];
+    const identity = operations(rows);
+    identity.listUserSessions.mockResolvedValue({ sessions: rows, totalCount: 2 });
+    if (outcome !== 'fulfilled') {
+      identity.revokeSession.mockRejectedValue({ status: outcome === 'alreadyGone' ? 404 : 500 });
+    }
+    const sweep = await revokeEveryOtherSession(identity, 'product-account', 'sess_current', 'native-subject');
+    expect(sweep.incomplete).toBe(true);
+    expect(sweep[outcome === 'fulfilled' ? 'ended' : outcome]).toEqual(['sess_other']);
+    expect(identity.revokeSession).toHaveBeenCalledExactlyOnceWith('sess_other');
+    expect(identity.listUserSessions).toHaveBeenCalledTimes(2);
+    expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
+  });
+
+  it('retains honest progress when the terminal page advertises unseen sessions', async () => {
+    const identity = operations([]);
+    identity.listUserSessions
+      .mockResolvedValueOnce({ sessions: [session('sess_other')], totalCount: 2 })
+      .mockResolvedValueOnce({ sessions: [], totalCount: 1 });
+    await expect(revokeEveryOtherSession(identity, 'product-account', null, 'native-subject'))
+      .resolves.toMatchObject({ ended: ['sess_other'], targetCount: 2, incomplete: true });
+    expect(identity.listUserSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([null, 'sess_current'])('completes shrinking pages with current session %j and preserves undercount clamping', async (currentId) => {
+    const current = currentId ? [session(currentId)] : [];
+    const identity = operations([]);
+    identity.listUserSessions
+      .mockResolvedValueOnce({ sessions: [...current, session('sess_first')], totalCount: 0 })
+      .mockResolvedValueOnce({ sessions: [...current, session('sess_second')], totalCount: 0 })
+      .mockResolvedValueOnce({ sessions: current, totalCount: 0 });
+    const sweep = await revokeEveryOtherSession(identity, 'product-account', currentId, 'native-subject');
+    expect(sweep).toMatchObject({ ended: ['sess_first', 'sess_second'], failed: [], incomplete: false, targetCount: 1 });
+    expect(identity.revokeSession.mock.calls).toEqual([['sess_first'], ['sess_second']]);
+    for (const call of identity.listUserSessions.mock.calls) {
+      expect(call).toEqual(['native-subject', { status: 'active', limit: 100, offset: 0 }]);
+    }
+  });
+});
+
+describe('later session page integrity', () => {
+  it('rejects duplicate IDs after prior effects without revoking the duplicate page', async () => {
+    const identity = operations([]);
+    identity.listUserSessions
+      .mockResolvedValueOnce({ sessions: [session('sess_first')], totalCount: 3 })
+      .mockResolvedValueOnce({ sessions: [session('sess_second'), session('sess_second')], totalCount: 2 });
+    await expect(revokeEveryOtherSession(identity, 'product-account', null, 'native-subject'))
+      .rejects.toThrow('Identity provider returned an invalid active session page');
+    expect(identity.revokeSession).toHaveBeenCalledExactlyOnceWith('sess_first');
+    expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
+  });
+
+  it('uses final empty count-zero evidence rather than a stale initial total', async () => {
+    const identity = operations([]);
+    identity.listUserSessions
+      .mockResolvedValueOnce({ sessions: [session('sess_first')], totalCount: 250 })
+      .mockResolvedValueOnce({ sessions: [], totalCount: 0 });
+    await expect(revokeEveryOtherSession(identity, 'product-account', null, 'native-subject'))
+      .resolves.toMatchObject({ ended: ['sess_first'], targetCount: 250, incomplete: false });
+    expect(identity.listUserSessions).toHaveBeenCalledTimes(2);
     expect(revokeIntents).toHaveBeenCalledExactlyOnceWith('product-account');
   });
 });
