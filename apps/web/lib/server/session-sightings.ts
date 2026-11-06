@@ -15,25 +15,27 @@ const NEW_SESSION_WINDOW_MS = 15 * 60 * 1000;
 
 const rememberedSessions = new Set<string>();
 
-function remember(sessionId: string): void {
+function remember(key: string): void {
   if (rememberedSessions.size >= MAX_REMEMBERED_SESSIONS) rememberedSessions.clear();
-  rememberedSessions.add(sessionId);
+  rememberedSessions.add(key);
 }
 
 async function announceIfFirstSighting(
   userId: string,
+  subject: string,
   sessionId: string,
   request: Request | undefined,
-): Promise<void> {
-  const startedAt = await sessionStartedAt(getIdentityProvider(), sessionId, userId);
-  if (startedAt === null || Date.now() - startedAt > NEW_SESSION_WINDOW_MS) return;
+): Promise<boolean> {
+  const startedAt = await sessionStartedAt(getIdentityProvider(), sessionId, subject);
+  if (startedAt === null) return false;
+  if (Date.now() - startedAt > NEW_SESSION_WINDOW_MS) return true;
   const store = getKeyValueStore();
-  if (!store) return;
+  if (!store) return false;
   const first = await store.set(`${SEEN_KEY_PREFIX}:${sessionId}`, userId, {
     ttlSeconds: Math.ceil(sessionAbsoluteLifetimeMs() / 1000),
     onlyIfAbsent: true,
   });
-  if (!first) return;
+  if (!first) return true;
   const { emitIdentitySecurityEvent } = await import('@/lib/services/identity-events');
   await emitIdentitySecurityEvent(getNeonDb(), {
     userId,
@@ -41,19 +43,27 @@ async function announceIfFirstSighting(
     subjectRef: sessionId,
     request,
   });
+  return true;
 }
 
 export function noteSessionSighting(
   userId: string,
+  subject: string,
   sessionId: string | null,
   request: Request | undefined,
 ): void {
-  if (!sessionId || rememberedSessions.has(sessionId)) return;
-  remember(sessionId);
-  const task = announceIfFirstSighting(userId, sessionId, request).catch((error: unknown) => {
-    rememberedSessions.delete(sessionId);
-    logger.warn({ error, userId }, '[session-sightings] new sign-in notice failed');
-  });
+  if (!sessionId) return;
+  const key = JSON.stringify([userId, subject, sessionId]);
+  if (rememberedSessions.has(key)) return;
+  remember(key);
+  const task = announceIfFirstSighting(userId, subject, sessionId, request)
+    .then((completed) => {
+      if (!completed) rememberedSessions.delete(key);
+    })
+    .catch((error: unknown) => {
+      rememberedSessions.delete(key);
+      logger.warn({ error, userId }, '[session-sightings] new sign-in notice failed');
+    });
   try {
     after(task);
   } catch {

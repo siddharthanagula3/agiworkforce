@@ -1,5 +1,5 @@
 import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
@@ -14,6 +14,10 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/server/session-sightings', () => ({
+  noteSessionSighting: vi.fn(),
 }));
 
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
@@ -241,7 +245,14 @@ import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
-import { assertAccountActive, getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
+import {
+  assertAccountActive,
+  getClerkAuthUser,
+  getOptionalAuthUser,
+  getSuspendedAccountUser,
+} from '@/lib/api-auth';
+import { noteSessionSighting } from '@/lib/server/session-sightings';
+import { logger } from '@/lib/logger';
 import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
 import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 import {
@@ -951,6 +962,7 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
   beforeEach(() => {
     vi.clearAllMocks();
     clearIpAllowListCacheForTests();
+    resetSessionStartCache();
   });
 
   function cookieRequest(): NextRequest {
@@ -1027,6 +1039,12 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
         ...(transport === 'bearer' ? { email: 'verified@example.com' } : {}),
       });
       expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(sessionId);
+      expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(
+        'product-mapped-account',
+        'native-mapped-subject',
+        sessionId,
+        request,
+      );
       if (transport === 'bearer') expect(mockAuth).not.toHaveBeenCalled();
     },
   );
@@ -1784,5 +1802,217 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
       sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'mobile',
     });
+  });
+});
+
+describe('mapped account absolute session lifetime at canonical auth boundaries', () => {
+  const NOW = 1_800_000_000_000;
+  const HOUR_MS = 3_600_000;
+  const NATIVE = 'native-session-owner';
+  const ACCOUNT = 'product-session-account';
+  const SESSION = 'sess-mapped-lifetime';
+  type Transport = 'cookie' | 'bearer' | 'appeal';
+  let db: ReturnType<typeof makeFakeDb>;
+
+  function providerSession(overrides: Record<string, unknown> = {}) {
+    return {
+      id: SESSION,
+      userId: NATIVE,
+      status: 'active',
+      createdAt: NOW - 60_000,
+      lastActiveAt: NOW,
+      ...overrides,
+    };
+  }
+
+  function requestFor(transport: Transport): NextRequest {
+    return transport === 'bearer'
+      ? makeBearerRequest('verified-native-session-token')
+      : new NextRequest('http://localhost/api/account/suspension/appeal');
+  }
+
+  function authenticate(transport: Transport, request = requestFor(transport)) {
+    return transport === 'appeal' ? getSuspendedAccountUser(request) : getClerkAuthUser(request);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSessionStartCache();
+    clearIpAllowListCacheForTests();
+    vi.stubEnv('SESSION_ABSOLUTE_LIFETIME_HOURS', '1');
+    vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+    vi.spyOn(Date, 'now').mockReturnValue(NOW);
+    vi.mocked(getKeyValueStore).mockReturnValue(null);
+    db = makeFakeDb();
+    db.identities.set(`clerk:${NATIVE}`, {
+      identityId: 'identity-session-owner',
+      accountId: ACCOUNT,
+    });
+    mockAuth.mockResolvedValue(authSession(NATIVE, SESSION));
+    mockVerifyToken.mockResolvedValue({ sub: NATIVE, sid: SESSION });
+    mockClerkGetSession.mockResolvedValue(providerSession());
+    mockClerkRevokeSession.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  describe.each(['cookie', 'bearer', 'appeal'] as const)('%s authentication', (transport) => {
+    beforeEach(() => {
+      if (transport === 'appeal') db.accountStatuses.set(ACCOUNT, 'suspended');
+    });
+
+    it('accepts a fresh native session and keeps database and sighting identity product-scoped', async () => {
+      const request = requestFor(transport);
+      const result = await authenticate(transport, request);
+
+      expect(result).toMatchObject({ userId: ACCOUNT });
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('account_status'), [
+        ACCOUNT,
+      ]);
+      expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+      if (transport === 'appeal') {
+        expect(noteSessionSighting).not.toHaveBeenCalled();
+      } else {
+        expect(result).toMatchObject({ sessionIdentity: { subject: NATIVE, sessionId: SESSION } });
+        expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(
+          ACCOUNT,
+          NATIVE,
+          SESSION,
+          request,
+        );
+      }
+    });
+
+    it('refuses a known over-age session even when provider revocation fails', async () => {
+      const failure = new Error('revocation unavailable');
+      mockClerkGetSession.mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+      mockClerkRevokeSession.mockRejectedValueOnce(failure);
+
+      await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockClerkRevokeSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(logger.warn).toHaveBeenCalledWith(
+        { error: failure, userId: ACCOUNT },
+        '[session-age] session past its lifetime could not be revoked',
+      );
+      expect(noteSessionSighting).not.toHaveBeenCalled();
+    });
+
+    it('refuses a known over-age session when revocation succeeds', async () => {
+      mockClerkGetSession.mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+
+      await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockClerkRevokeSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(noteSessionSighting).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['missing session', null],
+      ['unknown start', providerSession({ createdAt: null })],
+      ['foreign subject', providerSession({ userId: ACCOUNT })],
+      ['foreign session', providerSession({ id: 'sess-different' })],
+      ['NaN start', providerSession({ createdAt: Number.NaN })],
+      ['infinite start', providerSession({ createdAt: Number.POSITIVE_INFINITY })],
+    ] as const)(
+      'permits an initially %s under existing policy, then denies a valid over-age retry',
+      async (_label, first) => {
+        mockClerkGetSession
+          .mockResolvedValueOnce(first)
+          .mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+
+        await expect(authenticate(transport)).resolves.toMatchObject({ userId: ACCOUNT });
+        expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+        expect(unreadableSessionStartCount()).toBe(1);
+        await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+        expect(mockClerkGetSession).toHaveBeenCalledTimes(2);
+        expect(mockClerkRevokeSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      },
+    );
+
+    it('permits a provider outage but measures a later readable session', async () => {
+      mockClerkGetSession
+        .mockRejectedValueOnce(new Error('provider unavailable'))
+        .mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+
+      await expect(authenticate(transport)).resolves.toMatchObject({ userId: ACCOUNT });
+      await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockClerkGetSession).toHaveBeenCalledTimes(2);
+      expect(unreadableSessionStartCount()).toBe(1);
+    });
+
+    it('preserves accounts whose product id already equals their native subject', async () => {
+      db.identities.delete(`clerk:${NATIVE}`);
+      if (transport === 'appeal') db.accountStatuses.set(NATIVE, 'suspended');
+
+      await expect(authenticate(transport)).resolves.toMatchObject({ userId: NATIVE });
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(unreadableSessionStartCount()).toBe(0);
+    });
+  });
+
+  it.each(['cookie', 'bearer'] as const)(
+    'propagates both identities into the passkey-required sighting for %s auth',
+    async (transport) => {
+      const query = mockNeonQuery.getMockImplementation() as (
+        sql: string,
+        params?: unknown[],
+      ) => Promise<FakeRow[]>;
+      mockNeonQuery.mockImplementation((sql: string, params: unknown[] = []) => {
+        if (sql.toLowerCase().includes('from public.account_security_enrollments')) {
+          return Promise.resolve([{ enrolled_at: new Date(NOW - HOUR_MS) }]);
+        }
+        return query(sql, params);
+      });
+      const request = requestFor(transport);
+
+      await expect(authenticate(transport, request)).rejects.toSatisfy(isPasskeyRequiredError);
+      expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(
+        ACCOUNT,
+        NATIVE,
+        SESSION,
+        request,
+      );
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not invent a native session for an API credential', async () => {
+    const { ApiKeyService } = await import('@/lib/services/api-key-service');
+    const { getNeonDb } = await import('@/lib/server/neon-db');
+    const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), ACCOUNT, 'scoped', [
+      'models:read',
+    ]);
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }),
+    ).resolves.toEqual({ userId: ACCOUNT, apiKeyId: 'key-1' });
+    expect(mockClerkGetSession).not.toHaveBeenCalled();
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it('does not invent a native session for a developer credential', async () => {
+    const token = jwt.sign(
+      { userId: ACCOUNT, sub: ACCOUNT, surface: 'developer' },
+      TEST_DEVELOPER_JWT_SECRET,
+      {
+        expiresIn: 3600,
+        issuer: 'agiworkforce-api-gateway',
+        audience: 'agiworkforce',
+        jwtid: 'mapped-device-credential',
+      },
+    );
+
+    await expect(getClerkAuthUser(makeBearerRequest(token))).resolves.toEqual({
+      userId: ACCOUNT,
+      surfaceClass: 'developer',
+    });
+    expect(mockClerkGetSession).not.toHaveBeenCalled();
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
   });
 });
