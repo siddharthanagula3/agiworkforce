@@ -13666,7 +13666,7 @@ Severity: Medium. Bounded correction `f3dc156093` independently source-reviewed
 on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
 
 SecuritySection now isolates PasswordEditor from the session-timeout form. A
-canonical session and matching nonnull mapped user-policy snapshot admit a keyed
+canonical session and matching nonnull native user-policy snapshot admit a keyed
 editor. Synchronous intent admission, copied form values and a resolver input copy
 precede asynchronous validation. Pending fields are disabled. Retired validation,
 clear/focus callbacks and completions cannot operate on a replacement editor.
@@ -13707,6 +13707,13 @@ Pending operations, arbitrary JavaScript references and other copies are not
 claimed erased. Local onError suppresses the shared toast, not MutationCache
 logging. No other settings mutation, session-timeout form or global logout cleanup
 receives an ownership guarantee from this extraction.
+
+A subsequent password-route identity correction is recorded in
+WEB-IDENTITY-POLICY-NAMESPACE-01. It changes server admission/provider ownership,
+not this editor: SecuritySection supplies native identity.user, so the editor
+comparison is native-to-native. It deliberately tightens password POST to a
+native subject and session ID; older developer/device and no-session-ID bearer
+acceptance is not preserved. Unknown external callers remain unverified.
 
 Independent source review accepted production, new transport/editor fixture
 matrices, credential-retry adaptations, existing section mocks and a retained-modal
@@ -13851,8 +13858,10 @@ email admission. Bounded age/sighting correction `248000bd5b6bf3427617ad55252d19
 reviewed; fixtures remain unrun. Subsequent native-session MFA correction
 `45c83e3eb60fc723f69c16bbaacea31587592c35` is also source reviewed only. The later email-triggered
 compromise identity slice `0893063c8f11eefd85068f48b1ba9a07cf084403` is bounded to that producer.
-Product-only MFA and legacy compromise namespace defects remain unpatched, with
-no runtime reproduction or deployed incident claim.
+The password-route follow-on `a8ff85b0627de8f5706a62bf2d670b96aa8d5cf6` extends native/product
+separation to that credential mutation. Product-only MFA and legacy compromise
+namespace defects remain unpatched, with no runtime reproduction or deployed
+incident claim.
 
 The identity bridge allows a product account ID to differ from the provider's
 subject. The earlier absolute-age path compared a provider-returned native user
@@ -13912,8 +13921,8 @@ The remaining policy and response consumers still use the wrong namespace:
   discards the resolved product ID; bearer scope retains native token claims.
   The bounded session path does not certify these related flows or universal
   mapped-account email availability.
-- Legacy compromise producers still omit a native subject: password, TOTP,
-  backup-code and other identity events, explicit compromise reporting and undo.
+- Legacy compromise producers still omit a native subject: TOTP, backup-code
+  and other identity events, explicit compromise reporting and undo.
   Their provider sweep still defaults to product ID, which can fail or enumerate
   no native sessions. Compromise resolution also compares provider session userId
   with product ID and performs a product-ID sweep. Session/device settings,
@@ -13941,18 +13950,45 @@ Durable cleanup reconciliation, accurate partial receipts and owner-bound
 continuation remain open; see WEB-EMAIL-CHANGE-COMPLETION-01 and
 WEB-SECURITY-SESSION-COMPLETION-01 (emailed undo and recovery custody).
 
+The bounded password follow-on uses getSessionAccountDb once, keeping the
+canonical product/native/session tuple instead of calling the shared session
+principal that re-verifies bearer identity and loses a mapped current session.
+Password POST now requires a native subject and nonempty session ID. It validates
+the exact returned provider user, then uses native subject for password verify/set,
+second-factor status/earlier enrollment, provider session sweep and its conditional
+compromise event. Product identity owns claimed DB, proof, rate limits, logs,
+device credentials and mobile-intent cleanup. Current-session exclusion uses the
+same authenticated native session ID. No shared principal or global RLS rewrite
+is implied.
+
+This is deliberate admission tightening. Developer/device bearers with only
+product identity and native bearer tokens without a session ID were previously
+accepted; they now refuse before password/factor/revocation work. API keys were
+already refused and cookies already required a session ID. Canonical auth may
+still perform its own policy/identity-link/sighting work. Source search found web
+captured-session transport and mobile SDK-session transport as known producers;
+external callers, installed SDK behavior and cross-surface runtime compatibility
+remain unverified. No provider subject is inferred from a developer credential.
+
+The password/provider write, ordinary session sweep, device cleanup, conditional
+risk response and final intent check remain sequential. Failure after password
+write may still leave changed credentials and incomplete cleanup, and conditional
+compromise handling may revoke the current session before the route returns.
+The identity correction does not make these operations atomic, repair receipts,
+stop already-running work, or guarantee all linked providers were revoked.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include second-factor routes that still default subject to
 userId, distinct-ID/equal-ID policy and revocation cases, and existing failure or
-partial-response semantics. The email/step-up, age/sighting, native-session MFA
-and email-triggered revocation slices do not resolve product-only MFA or legacy
-compromise mapping, global cookie/Bearer DB scoping, workspace
+partial-response semantics. The email/step-up, age/sighting, native-session MFA,
+email-triggered revocation and password slices do not resolve product-only MFA
+or legacy compromise mapping, global cookie/Bearer DB scoping, workspace
 finalization or non-atomic email completion. See
 WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
 
 Independent source review covers production and unrun cache, canonical-auth,
-sighting, passkey-gate, native-session MFA/requirement and email-triggered
-revocation fixtures at controlled provider, database, scheduling, event, intent
+sighting, passkey-gate, native-session MFA/requirement, email-triggered
+revocation and password-route identity fixtures at controlled provider, database, scheduling, event, intent
 cleanup and key-value boundaries. No product tests, lint, typechecks, builds,
 runtime/timer or installed provider acceptance were run.

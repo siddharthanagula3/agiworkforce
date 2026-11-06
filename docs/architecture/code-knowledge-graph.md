@@ -5504,6 +5504,7 @@ arbitrary-reference erasure.
 Independent source review accepted production and unrun transport, editor, retry
 and modal fixtures. Other settings step-up paths, global sign-out cleanup, recovery
 batch identity and atomic credential admission remain separate open boundaries.
+The later password-route native identity correction is recorded below.
 See `WEB-PASSWORD-INTENT-LIFETIME-01` and `WEB-SETTINGS-STEP-UP-OWNERSHIP-01` for
 evidence and runtime/type/native SDK acceptance limits.
 
@@ -5665,9 +5666,32 @@ open. Independent source review covers authored unrun helper, event/service and
 email route fixtures, not provider/database execution or runtime acceptance.
 See WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
 
+## Password changes require a canonical native session
+
+Accepted `a8ff85b0627de8f5706a62bf2d670b96aa8d5cf6` admits password POST through getSessionAccountDb
+once, with product claimed DB and a native subject/session ID. Exact provider-user
+ownership precedes password verification/change. Native subject also reaches
+factor status/earlier enrollment, session sweep and conditional risk response;
+product identity remains responsible for proof, rate limits, logging, device and
+mobile-intent cleanup. The original authenticated session ID identifies the
+current session. Shared session-principal and global RLS paths remain unchanged.
+
+This intentionally rejects former developer/device product-only bearers and
+native bearer tokens without session IDs. Known web/mobile callers use native
+sessions; external callers and installed/runtime compatibility remain unverified.
+PasswordEditor already receives native identity.user and is not remapped to
+product equality. Auth policy/link/sighting effects can precede refusal, while
+password/factor/revocation work requires admission.
+
+Sequential password mutation and cleanup retain partial-result risk; conditional
+compromise response may end the current session before completion. No atomicity,
+durable reconciliation, cancellation or all-provider revocation is established.
+Independent source review covers authored unrun route/helper-boundary fixtures.
+See WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-PASSWORD-INTENT-LIFETIME-01.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-nine accepted production slices traced above are
+Only the two hundred thirty accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
