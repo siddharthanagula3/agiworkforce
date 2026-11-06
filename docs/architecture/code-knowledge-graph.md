@@ -5370,15 +5370,17 @@ QueryCache error log.
 
 Create/delete invalidate the existing prefix instead of injecting mutation data
 into global or other-owner caches. Active reads use their own authority. Create's
-once-only receipt is not delayed by list refresh; delete awaits invalidation.
+once-only receipt is not delayed by list refresh. The later API-key intent slice
+also makes delete invalidation nonblocking.
 ProjectsPanel now distinguishes unknown counts from zero and blocks archive while
 counts are unavailable. Server API keys remain current-user rows within selected-
 workspace RLS. This does not solve project archive cross-workspace coverage.
 
 Independent source review accepted production and unrun ownership, deadline,
-cache, service and UI fixtures. Mutations, copied editor data, generated-secret
-presentation, unknown outcomes and receipt recovery remain separate. Cached prior-
-owner rows are not claimed erased from memory. See
+cache, service and UI fixtures. The later intent slice owns mutations, copied
+editor data and generated-secret presentation; unknown outcomes and receipt
+recovery remain separate. Cached prior-owner rows are not claimed erased from
+memory. See
 `WEB-API-KEY-READ-OWNERSHIP-01` for evidence and limits.
 
 ## Project editor intents own mutation authority
@@ -5423,15 +5425,44 @@ delivery queries and retains the notice; current test success still opens its lo
 
 Independent source review accepted production and unrun transport/UI/retry
 fixtures. Runtime/type/timer acceptance, full receipt schemas, persistent outcome
-recovery and manual duplicates remain open. API-key creation requires coordinated
-canonical step-up ownership, not only an owned final sender; silent grant,
-interactive verification, fresh-token acquisition and copied secrets are separate
-unpatched paths. See `WEB-DEVELOPER-WEBHOOK-INTENT-OWNERSHIP-01` and
+recovery and manual duplicates remain open. The later API-key slice coordinates
+canonical step-up ownership with its final sender and copied-secret lifetime. See
+`WEB-DEVELOPER-WEBHOOK-INTENT-OWNERSHIP-01` and
 `WEB-API-KEY-INTENT-LIFETIME-01` for evidence and limits.
+
+## API-key intents own verification, mutations and secret receipts
+
+Accepted `8c09f7b705` captures API-key editor/confirmation intent at opening, keyed
+by canonical account/session/workspace admission. Per-opening forms fence deferred
+validation, and current-only create/delete transports snapshot payloads, select
+workspace explicitly, omit cookies and check minimal receipts across all waits.
+Background invalidation does not delay once-only secrets or delete completion.
+
+Owned canonical step-up carries the intent through silent grants, challenge
+parsing, native-session password/code/passkey verification, skipCache fresh tokens
+and one proof replay. Missing native bindings and explicit null fresh tokens fail
+closed. Grant dispatch is separate from writes and a recognized initial refusal
+resets write uncertainty. Native session observation retires challenges and secret
+receipts promptly; generic RequestAuthority and legacy omitted-options step-up
+callers do not acquire broader guarantees.
+
+Current create refusal stays editable inside its dialog; current verification
+cancellation is quiet.
+Canonical deletion confirmation, per-intent copy pending, guarded mutation reset
+and gcTime:0 fence stale effects and reduce secret retention. No clipboard-content
+or arbitrary-reference erasure is claimed. Dispatched unknown outcomes do not
+claim rollback; owned read-only refresh retains the notice without replaying.
+
+Independent source review accepted production and fixture sources. Tests, lint,
+typechecks, builds and SDK/browser execution remain unrun. Official Clerk listener
+signature and initial emission were checked against current docs, not installed
+locked-package declarations. Persistent reconciliation, manual duplicates, full
+receipt schemas, secret recovery and server project archive scope/concurrency stay
+open. See `WEB-API-KEY-INTENT-LIFETIME-01` for the precise evidence and limits.
 
 ## Reconstruction boundary
 
-Only the two hundred twenty accepted production slices traced above are represented as
-reconstructed here. Other remembered changes from the unavailable branch require
+Only the two hundred twenty-one accepted production slices traced above are
+represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

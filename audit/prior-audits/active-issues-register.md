@@ -13205,9 +13205,9 @@ or removing a mutation result in every owner's cache. Active queries reread with
 their own captured authority; inactive prior-owner data can remain cached until
 normal removal, without publication to a replacement owner. Create does not await
 the background list reload before returning the once-only full-key receipt.
-Delete awaits invalidation before its success callback settles. Neither change
-binds mutation dispatch, success toasts or secret presentation to the initiating
-owner; those remain separate work.
+The subsequent `WEB-API-KEY-INTENT-LIFETIME-01` correction also makes delete
+invalidation nonblocking and owns mutation dispatch, completion and presentation;
+this read slice alone did not provide those guarantees.
 
 ProjectsPanel distinguishes pending/unavailable key counts from successful zero,
 hides failed cached counts, provides retry and disables Archive until counts are
@@ -13228,7 +13228,8 @@ zero counts and archive availability. All received independent source review and
 remain unrun; controlled deadline assertions do not establish runtime timing or
 universal logging behavior. StrictMode/re-admission acceptance remains open.
 
-Mutation/editor/secret lifetimes, stable operation identity, ambiguous server
+API-key mutation/editor/secret lifetimes receive the subsequent bounded correction
+in `WEB-API-KEY-INTENT-LIFETIME-01`. Stable operation identity, ambiguous server
 outcomes, once-only receipt recovery, manual duplicate submissions and broader
 settings reads remain open. This slice does not certify the entire developer or
 settings UI as isolated. No tests, lint, typechecks, builds, app/service execution,
@@ -13278,7 +13279,8 @@ The transport-only matrix controls session currentness; the UI matrix uses real
 session/workspace/RequestAuthority paths with controlled Clerk/network boundaries.
 None ran, including runtime/type compatibility.
 
-API-key/webhook mutation, editor and generated-secret lifetimes remain separate.
+API-key/webhook mutation, editor and generated-secret lifetimes receive subsequent
+bounded corrections under their existing intent-lifetime entries.
 Stable operation identity, persistent ambiguous-outcome reconciliation, manual
 duplicate submissions, server archive cross-workspace coverage and concurrent
 key issuance remain open. The notice is not persisted across owner unmounts.
@@ -13330,41 +13332,69 @@ epoch round trips, stale rows/confirmations/copy, batched editor/log reopen and
 uncertainty refresh. The UI matrix uses real canonical ownership with controlled
 Clerk/network boundaries. None ran; timer, React lifecycle and type acceptance
 remain unknown. Stable operation identity, persistent uncertain-outcome recovery,
-manual duplicate prevention, full receipt schemas and API-key/step-up lifetimes
-remain open. Existing account-owned webhook RLS is unchanged and unverified live.
+manual duplicate prevention and full receipt schemas remain open. API-key/step-up
+lifetimes receive the subsequent bounded correction below. Existing account-owned webhook RLS is unchanged and unverified live.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
 ## WEB-API-KEY-INTENT-LIFETIME-01
 
-Severity: Medium. Independently source-confirmed on 2026-11-06; not patched or
-runtime-reproduced in the webhook slice.
+Severity: Medium. Bounded correction `8c09f7b705` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
 
-Owned API-key reads do not own mutation or copied UI state. ApiKeysManager in
-`features/settings/components/Settings/ApiKeys.tsx` retains its form, selected
-deletion ID and generated key without an admitted-owner key. Closing the create
-dialog clears current state but a late creation callback can reinstate a secret
-that later reopening exposes. The secret also remains in mutation result data;
-clipboard completion emits unowned toasts. No live disclosure is asserted.
+API-key create/delete now require an intent captured at editor/confirmation open,
+with canonical account/session/workspace admission and a keyed form lifetime.
+RequestAuthority fences CSRF, captured bearer acquisition, response and body waits;
+requests omit cookies and explicitly select Personal or the admitted organization.
+Create freezes its submitted fields and calculated expiry before waits or replay.
+Current success begins compatible background invalidation without delaying the
+once-only receipt. Minimal create ID/secret and delete message checks are not full
+receipt schemas. Delete still does not require step-up because its route does not.
 
-`useCreateAPIKey` uses `useStepUp` and ambient `sendAuthorizedJson`. An owned final
-write sender alone would leave silent `requestStepUpGrant`, interactive
-`StepUpDialog` and `useSessionReverification` operating outside the originating
-intent. The verification adapter selects its latest session for operations; grant
-requests still await CSRF without request ownership. A null explicit fresh token
-currently falls back to ambient authentication. A coordinated canonical fix must
-preserve skipCache freshness and fail closed rather than silently substituting an
-ordinary captured token. Count actual mutation dispatch separately from grant
-dispatch and known STEP_UP_REQUIRED refusals when classifying uncertainty.
+The owned create flow extends through canonical useStepUp, StepUpDialog and native
+reverification, rather than guarding only the final sender. A WeakMap binds each
+canonical session snapshot to its exact native session; an unbound owned adapter
+fails closed. Password, email code, second factor, passkey and fresh-token actions
+check that authority before and after awaits. Fresh token acquisition preserves
+skipCache:true; explicit null does not fall back to ambient or ordinary tokens.
+Silent grants, fresh-token grants and challenge parsing are fenced. Grant requests
+use their own signal and captured bearer without counting as mutation dispatch.
+Only the recognized initial STEP_UP_REQUIRED refusal resets dispatch uncertainty;
+a current proof authorizes exactly one replay of the same payload.
 
-Deletion goes through the ambient-token settings service, lacks captured
-workspace/lifetime and uses unconditional completion effects. Its server route
-does not require step-up, so that requirement must not be invented. Create commits
-the key before later audit/webhook awaits, making a later 5xx a potentially
-completed creation. Preserve immediate once-only receipt delivery and account for
-uncertain outcomes without assuming cancellation rolled back the server action.
+Owned useStepUp and the API-key receipt lane observe native identity notifications,
+including synchronous initial subscription delivery, and remove listeners on
+retirement. Parent abort, hook cleanup, replacement and explicit cancellation settle
+matching challenges without allowing late verification effects. The canonical
+RequestAuthority itself does not automatically subscribe, and omitted-options
+legacy step-up consumers keep their existing behavior; they are not newly certified
+against every session/lifetime race.
 
-Sources: `features/settings/hooks/use-settings-queries.ts` create/delete hooks;
-`features/settings/services/user-preferences.ts` deleteAPIKey;
-`features/settings/hooks/useStepUp.tsx`; `features/auth/step-up-fetch.ts`;
-`features/auth/StepUpDialog.tsx`; `lib/identity/client.ts` reverification adapter;
-`app/api/settings/api-keys/route.ts` and key DELETE route, all under `apps/web`.
+Per-opening form instances fence deferred validation and batched close/reopen.
+Deletion uses the canonical consequence confirmation; duplicate or stale callbacks
+cannot dispatch or cancel a replacement intent. Known create refusals stay editable
+with errors inside the active modal. Current verification cancellation is quiet.
+Displayed secrets and copy feedback belong to the current receipt; per-intent copy
+pending cannot lock or unlock a later receipt. Retirement/dismissal clears owned
+secret state, and guarded observer reset plus gcTime:0 reduces mutation-cache
+retention. Existing clipboard contents and arbitrary JavaScript references are not
+claimed erased. Local onError suppresses shared toasts, not MutationCache logging.
+
+A dispatched request with cancellation, network failure, unreadable receipt or 5xx
+has an uncertain outcome. Create/revoke routes may mutate before later audit and
+webhook awaits, so cancellation does not prove rollback. An owned Refresh API keys
+control reads without replay and retains the notice. The notice is not persisted
+across owner unmounts. Stable operation identity, persistent reconciliation, manual
+duplicates, once-only receipt recovery and server project archive scope/concurrency
+remain open.
+
+Independent source review accepted all 19 production/fixture files. Unrun cases
+cover ownership and deferred transport/body boundaries, immutable proof replay,
+native SDK selection/retirement, fresh-token/null behavior, cancel and stale proof,
+StrictMode, form reopen/validation, actual delete confirmation click, secret/cache
+retirement, clipboard replacement and nonblocking refresh. Controlled Clerk/network
+fixtures are not SDK or browser acceptance. Official Clerk documentation for
+[addListener](https://github.com/clerk/clerk-docs/blob/main/clerk-typedoc/shared/clerk/methods/add-listener.mdx)
+and [useClerk](https://github.com/clerk/clerk-docs/blob/main/clerk-typedoc/shared/use-clerk.mdx)
+was inspected on 2026-11-06: listeners return unsubscribe and initially emit by
+default. Exact locked-package type compatibility remains unverified. No tests,
+lint, typechecks, builds, app/service execution, push or deployment ran.
