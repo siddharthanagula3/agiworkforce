@@ -14127,6 +14127,24 @@ limits remain. Source fixtures cover malformed counts, duplicates, inconsistent
 terminal pages, lingering attempted targets, shrinking valid pages and the route
 refusal boundary. They were not run.
 
+The device-unlink follow-on `b645f79ccdbc6227af00a5211832d03c1cf9ddab` binds the provider lookup's
+returned session ID to the device registration's requested session ID, in addition
+to the existing owner check. A missing or unequal returned ID cannot reach that
+helper's provider revoke or add an identity-session success to
+its credential/audit count. The provider mutation uses the requested ID after
+binding. Missing, foreign or thrown reads retain the existing false result.
+
+This helper runs after device revocation propagation and the credential/unlink
+transaction. Refusal does not roll back those effects, change the route's 200
+unlink response, suppress its device notices/events, or introduce a separate
+identity-session failure receipt. Explicit logoutAll still runs its independent
+sweep afterward. Exact owned targets retain the existing status-independent
+revocation attempt; inactive statuses and provider errors are not reclassified.
+Legacy principal/product-native mapping, stored registration validity, provider
+revoke response integrity and cross-request ownership races remain unchanged.
+Fixtures cover target substitutions, malformed evidence and retained exact-target
+and partial-effect behavior; they are source-reviewed only and unrun.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include remaining account-security/factor consumers,

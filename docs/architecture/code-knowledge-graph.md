@@ -5814,9 +5814,24 @@ uses existing intent cleanup; complete partial-effect receipts, atomicity, calle
 mapping and coordinated compromise repair remain open. Fixtures are unrun; see
 WEB-IDENTITY-POLICY-NAMESPACE-01.
 
+## Device unlink binds its provider session target
+
+Accepted `b645f79ccdbc6227af00a5211832d03c1cf9ddab` requires the provider lookup's returned ID to
+match the device registration's requested session ID and existing owner before
+revoking that requested ID. Missing or unequal returned IDs add no identity
+session to credential or audit success counts. Exact owned targets still attempt
+revocation regardless of status, retaining existing provider-error handling.
+
+The guard runs after device revocation propagation and the credential/unlink
+transaction. Refusal leaves those effects and the 200 unlink response, notices
+and device events intact; an explicit logoutAll still runs its separate sweep.
+No complete failure receipt, rollback, native/product mapping repair, stored
+registration validation, revoke-response validation or ownership lease is added.
+Fixtures are source-reviewed only and unrun; see WEB-IDENTITY-POLICY-NAMESPACE-01.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty-six accepted production slices traced above are
+Only the two hundred thirty-seven accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
