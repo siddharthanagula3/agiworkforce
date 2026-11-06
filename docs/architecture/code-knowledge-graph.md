@@ -5357,9 +5357,33 @@ Key-query migration requires coupled mutation-cache invalidation and timeout
 preservation; mutation/editor/secret lifetimes and unknown outcomes remain open.
 See `WEB-DEVELOPER-WEBHOOK-READ-OWNERSHIP-01` for evidence and acceptance limits.
 
+## API-key reads use canonical workspace query authority
+
+Accepted `2db4bc4887` moves the shared ownership implementation into the workspace
+feature, retaining the developer wrapper's behavior. `useAPIKeys` now captures
+account/session/workspace authority and preserves its complete undefined-bearing
+cache prefix, stale/GC timings and FAST deadline. The settings service's single
+parser supports captured transport without ambient auth; legacy optional fallback
+is unchanged. Successful parsing, timeout and retirement are checked before
+publication. Local key-load cancellation logging is suppressed, not every global
+QueryCache error log.
+
+Create/delete invalidate the existing prefix instead of injecting mutation data
+into global or other-owner caches. Active reads use their own authority. Create's
+once-only receipt is not delayed by list refresh; delete awaits invalidation.
+ProjectsPanel now distinguishes unknown counts from zero and blocks archive while
+counts are unavailable. Server API keys remain current-user rows within selected-
+workspace RLS. This does not solve project archive cross-workspace coverage.
+
+Independent source review accepted production and unrun ownership, deadline,
+cache, service and UI fixtures. Mutations, copied editor data, generated-secret
+presentation, unknown outcomes and receipt recovery remain separate. Cached prior-
+owner rows are not claimed erased from memory. See
+`WEB-API-KEY-READ-OWNERSHIP-01` for evidence and limits.
+
 ## Reconstruction boundary
 
-Only the two hundred seventeen accepted production slices traced above are represented as
+Only the two hundred eighteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

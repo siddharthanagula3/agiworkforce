@@ -13092,9 +13092,10 @@ cover honest loading/failure/zero states, stale supplementary masking and retrie
 All are unrun; StrictMode and permitted workspace re-admission remain additional
 coverage targets. Runtime and type compatibility are not verified.
 
-The underlying `useAPIKeys` query, project/key/webhook mutation authority,
-copied editor/form selections, generated secrets, uncertain server outcomes,
-manual duplicate submissions and cache reconciliation remain separate gaps.
+The underlying `useAPIKeys` query receives the later bounded correction below.
+Project/key/webhook mutation authority, copied editor/form selections, generated
+secrets, uncertain server outcomes, manual duplicate submissions and broader
+cache reconciliation remain separate gaps.
 The new read surface does not certify the whole developer console as isolated.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
 
@@ -13151,12 +13152,84 @@ elapsed timer dispatch or actual interval cancellation. An explicit close/reopen
 fixture remains additional coverage; final-observer unmount is covered by the
 matrix. All fixtures remain unrun, including runtime/type compatibility.
 
-API-key reads remain separate because create/delete currently write the exact
-unscoped key. A later scoped migration must preserve timeout behavior and replace
-those writes with compatible invalidation or owner-bound writes. In particular,
+At this checkpoint API-key reads remained separate because create/delete wrote
+the exact unscoped key. The subsequent correction below preserves timeout
+behavior and replaces those writes with compatible invalidation. In particular,
 `queryKeys.settings.apiKeys()` includes a third undefined element, so substituting
 `apiKeys(userId)` would not preserve the existing invalidation prefix. Never inject
 one mutation's returned key into every scoped cache. Webhook/project/key mutation
 authority, copied editor state, one-time secrets, ambiguous outcomes and manual
 duplicate submissions remain open. No tests, lint, typechecks, builds, app/service
 execution, push or deployment ran.
+
+
+## WEB-API-KEY-READ-OWNERSHIP-01
+
+Severity: Medium. Bounded correction `2db4bc4887` independently source-reviewed
+on 2026-11-06; authored fixtures unrun. Runtime acceptance remains open.
+
+`useAPIKeys` previously keyed reads only by the global settings prefix, then
+asked `settingsService.getAPIKeys` for an ambient token. Its FAST signal and
+promise deadline handled cancellation/time limits but did not bind deferred token,
+response or JSON completion to an account/session/workspace. Create/delete then
+wrote results directly to that same global key. Merely adding a scoped read key
+would have broken mutation refresh behavior. No live disclosure is asserted.
+
+The existing shared ownership implementation now lives in the web workspace
+feature's `use-workspace-query.ts`. The developer wrapper preserves its messages
+and narrow enabled/interval options. The neutral hook also accepts explicit
+stale/GC timings and resource messages, omitting absent timing overrides so
+inherited defaults remain intact. `useAPIKeys` appends owner scope to the complete
+original `queryKeys.settings.apiKeys()` prefix, including its third undefined
+value, and preserves two-minute stale/ten-minute GC policy. Existing project
+archive and mutation prefix invalidations still match the scoped queries.
+
+The settings service retains one array parser and an optional owned transport.
+The production hook always supplies captured RequestAuthority and explicit
+workspace headers, skips ambient token acquisition, uses no-store/cookies omitted,
+and checks authority after JSON. The legacy no-transport service path remains
+for compatibility; no other production caller was found in this source trace.
+The shared hook checks completion again and owns cancellation/publication.
+
+The key read preserves both FAST timeout signal and `withTimeout`, combines
+caller/timeout signals and checks both authority and signal after the service.
+The timed wrapper's completion retires authority, preventing a later deferred
+token from dispatching. Captured ownership is checked before local SettingsQuery
+error logging, including service-flattened cancellation. This is not universal
+logging suppression: the production global QueryCache logs errors before its
+silent-metadata toast check. The fixture QueryClient does not contain that global
+logger. Current HTTP errors and genuine timeouts remain errors.
+
+Create/delete success now invalidates the unchanged prefix rather than inserting
+or removing a mutation result in every owner's cache. Active queries reread with
+their own captured authority; inactive prior-owner data can remain cached until
+normal removal, without publication to a replacement owner. Create does not await
+the background list reload before returning the once-only full-key receipt.
+Delete awaits invalidation before its success callback settles. Neither change
+binds mutation dispatch, success toasts or secret presentation to the initiating
+owner; those remain separate work.
+
+ProjectsPanel distinguishes pending/unavailable key counts from successful zero,
+hides failed cached counts, provides retry and disables Archive until counts are
+available. This avoids an unknown-count confirmation presenting itself as zero.
+It does not fix the account-global project versus workspace-key archive/limit
+mismatch in `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01`. Server API-key GET still
+filters the authenticated user; selected-workspace RLS comes from migrations `0073`
+and `0272`. No route, schema or migration changed, and deployed RLS is unverified.
+
+The existing real-ownership matrix now includes API keys. The service does not
+read non-OK bodies, so its unsupported deferred error-body case is excluded rather
+than fabricated. Reworked abort fixtures use real session/admission/service/
+authority with controlled network/timers/signals. New cache fixtures preserve the
+undefined-bearing prefix, stale/GC policy, no cross-owner result injection, active
+refresh ownership and create/delete receipt timing. Service fixtures retain legacy
+cases and exercise captured transport. ProjectsPanel fixtures cover unknown versus
+zero counts and archive availability. All received independent source review and
+remain unrun; controlled deadline assertions do not establish runtime timing or
+universal logging behavior. StrictMode/re-admission acceptance remains open.
+
+Mutation/editor/secret lifetimes, stable operation identity, ambiguous server
+outcomes, once-only receipt recovery, manual duplicate submissions and broader
+settings reads remain open. This slice does not certify the entire developer or
+settings UI as isolated. No tests, lint, typechecks, builds, app/service execution,
+push or deployment ran.
