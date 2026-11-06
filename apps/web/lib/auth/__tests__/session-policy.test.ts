@@ -29,10 +29,38 @@ describe('how long a sign-in may last', () => {
   });
 
   it('refuses a cap that is not a positive number rather than removing the cap', () => {
-    for (const value of ['0', '-4', 'soon', '']) {
+    for (const value of ['0', '-4', 'soon', '', '   ', 'NaN', 'Infinity', '-Infinity', '1e-400']) {
       process.env[SESSION_ABSOLUTE_LIFETIME_HOURS_ENV] = value;
       expect(sessionAbsoluteLifetimeMs(), `${value} removed the cap`).toBe(30 * DAY_MS);
     }
+  });
+
+  it.each(['5e301', '1e308', String(Number.MAX_VALUE)])(
+    'falls back when finite hours %s overflow in milliseconds',
+    (value) => {
+      process.env[SESSION_ABSOLUTE_LIFETIME_HOURS_ENV] = value;
+      expect(sessionAbsoluteLifetimeMs()).toBe(30 * DAY_MS);
+      expect(sessionAbsoluteDeadline(NOW)).toBe(NOW + 30 * DAY_MS);
+      expect(hasOutlivedAbsoluteLifetime(NOW, NOW + 30 * DAY_MS - 1)).toBe(false);
+      expect(hasOutlivedAbsoluteLifetime(NOW, NOW + 30 * DAY_MS)).toBe(true);
+      expect(sessionAbsoluteDeadline(null)).toBeNull();
+      expect(hasOutlivedAbsoluteLifetime(null, NOW)).toBe(false);
+    },
+  );
+
+  it.each([
+    ['  12  ', 12],
+    ['0.5', 0.5],
+    ['1e-7', 1e-7],
+    ['0x10', 16],
+    ['1.44e3', 1440],
+    ['4e301', 4e301],
+  ] as const)('preserves a positive finite converted lifetime for %s', (value, hours) => {
+    process.env[SESSION_ABSOLUTE_LIFETIME_HOURS_ENV] = value;
+    const lifetimeMs = sessionAbsoluteLifetimeMs();
+    expect(lifetimeMs).toBe(hours * HOUR_MS);
+    expect(Number.isFinite(lifetimeMs)).toBe(true);
+    expect(lifetimeMs).toBeGreaterThan(0);
   });
 
   it('has no deadline for a session whose start the provider did not report', () => {

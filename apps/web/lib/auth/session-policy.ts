@@ -11,11 +11,11 @@ export function sessionAbsoluteLifetimeMs(): number {
   const configured = process.env[SESSION_ABSOLUTE_LIFETIME_HOURS_ENV]?.trim();
   if (!configured) return DEFAULT_ABSOLUTE_LIFETIME_HOURS * HOUR_MS;
 
-  const hours = Number(configured);
-  if (!Number.isFinite(hours) || hours <= 0) {
+  const lifetimeMs = Number(configured) * HOUR_MS;
+  if (!Number.isFinite(lifetimeMs) || lifetimeMs <= 0) {
     return DEFAULT_ABSOLUTE_LIFETIME_HOURS * HOUR_MS;
   }
-  return hours * HOUR_MS;
+  return lifetimeMs;
 }
 
 export function sessionAbsoluteDeadline(createdAt: number | null): number | null {
