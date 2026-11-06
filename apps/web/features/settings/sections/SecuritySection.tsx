@@ -170,7 +170,7 @@ function SessionsPanel() {
   );
 }
 
-export function SecuritySection({ passwordEditorActive = true, signInMethodsActive = true, twoFactorActive = true }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean }) {
+export function SecuritySection({ passwordEditorActive = true, signInMethodsActive = true, twoFactorActive = true, deviceSignInActive = true }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean; deviceSignInActive?: boolean }) {
   const { data: serverSettings, isLoading, isError: settingsFailed } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
   const identity = useCurrentUser();
@@ -263,7 +263,7 @@ export function SecuritySection({ passwordEditorActive = true, signInMethodsActi
 
       <AuditLogPanel />
 
-      <DeviceSignInToggle />
+      <DeviceSignInToggle active={deviceSignInActive} />
 
       <section
         aria-label="Account security availability"

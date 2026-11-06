@@ -55,13 +55,14 @@ vi.mock('@agiworkforce/ui', async (original) => {
 
 vi.mock('../sections/SecuritySection', async (original) => ({
   ...await original<typeof import('../sections/SecuritySection')>(),
-  SecuritySection: ({ passwordEditorActive, signInMethodsActive, twoFactorActive }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean }) => {
+  SecuritySection: ({ passwordEditorActive, signInMethodsActive, twoFactorActive, deviceSignInActive }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean; deviceSignInActive?: boolean }) => {
     passwordAdmission(passwordEditorActive);
     signInAdmission(signInMethodsActive);
     twoFactorAdmission(twoFactorActive);
     return <><div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>
       <div data-testid="sign-in-methods-admission">{String(signInMethodsActive)}</div>
-      <div data-testid="two-factor-admission">{String(twoFactorActive)}</div></>;
+      <div data-testid="two-factor-admission">{String(twoFactorActive)}</div>
+      <div data-testid="device-sign-in-admission">{String(deviceSignInActive)}</div></>;
   },
 }));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
@@ -961,16 +962,21 @@ it('composes TOTP admission from open and the selected section without changing 
   const onClose = vi.fn();
   const mounted = render(<WebSettingsModal open onClose={onClose} initialSection="security" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
   mounted.rerender(<WebSettingsModal open={false} onClose={onClose} initialSection="security" />);
   expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false');
+  expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false');
   expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('false');
   expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
   mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="security" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
   mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="general" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false'));
   expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('true');
   expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
   mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="security" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
 });

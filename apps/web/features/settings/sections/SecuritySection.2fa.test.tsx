@@ -39,7 +39,7 @@ vi.mock('@features/settings/components/Settings/SignInMethodsPanel', () => ({ Si
 vi.mock('@features/settings/components/Settings/PasskeysPanel', () => ({ PasskeysPanel: () => null }));
 vi.mock('@/features/account-security/components/AdvancedAccountSecurityPanel', () => ({ AdvancedAccountSecurityPanel: () => null }));
 vi.mock('@features/settings/components/AuditLogPanel', () => ({ AuditLogPanel: () => null }));
-vi.mock('@features/settings/components/DeviceSignInToggle', () => ({ DeviceSignInToggle: () => null }));
+vi.mock('@features/settings/components/DeviceSignInToggle', () => ({ DeviceSignInToggle: ({ active }: { active: boolean }) => <div data-testid="device-sign-in-active">{String(active)}</div> }));
 vi.mock('@/features/support/components/HelpArticleLink', () => ({ HelpArticleLink: () => null }));
 vi.mock('@features/settings/components/SettingsSectionLink', () => ({ SettingsSectionLink: () => null }));
 vi.mock('./AccountSection', () => ({ readApiError: (_body: unknown, fallback: string) => fallback }));
@@ -63,6 +63,16 @@ beforeEach(() => {
 });
 
 describe('SecuritySection mocked child composition (not enrollment integration)', () => {
+  it('independently withdraws and restores device sign-in admission', () => {
+    const view = render(<SecuritySection />);
+    expect(screen.getByTestId('device-sign-in-active')).toHaveTextContent('true');
+    view.rerender(<SecuritySection deviceSignInActive={false} />);
+    expect(screen.getByTestId('device-sign-in-active')).toHaveTextContent('false');
+    expect(screen.getByTestId('enrollment-active')).toHaveTextContent('true');
+    view.rerender(<SecuritySection deviceSignInActive />);
+    expect(screen.getByTestId('device-sign-in-active')).toHaveTextContent('true');
+  });
+
   it('withdraws and restores enrollment and reader admission together', () => {
     const view = render(<SecuritySection />);
     expect(screen.getByTestId('enrollment-active')).toHaveTextContent('true');

@@ -3,14 +3,14 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
-export const DEVICE_SIGNIN_SETTINGS_NAMESPACE = 'security';
-export const DEVICE_SIGNIN_SETTING_KEY = 'deviceCodeSignInEnabled';
+import { DEVICE_SIGNIN_SETTINGS_NAMESPACE, DEVICE_SIGNIN_SETTING_KEY } from '@/features/settings/lib/device-signin-preferences';
+export { DEVICE_SIGNIN_SETTINGS_NAMESPACE, DEVICE_SIGNIN_SETTING_KEY } from '@/features/settings/lib/device-signin-preferences';
 
 /**
  * Whether this account allows headless device-code sign-in.
  *
- * Default TRUE: the flow predates the switch, and defaulting to off would sign
- * every existing CLI and desktop install out at deploy. A read failure also
+ * Default TRUE preserves approval availability for accounts without a saved
+ * preference. This check does not revoke existing device sessions. A read failure also
  * returns true, refusing approvals because a settings query blipped would lock
  * users out of their own devices, and the flow still requires an authenticated
  * human to approve a code they were shown.
