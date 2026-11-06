@@ -5597,15 +5597,36 @@ cookie-session compatibility is retained, while non-session principals refuse.
 Source review covers production and authored unrun client, canonical auth,
 session helper, route and factor fixtures with different-ID positive cases.
 The tuple is not a backend mapping lease, and sequential email completion still
-needs reconciliation. Canonical MFA gating can still refuse a mapped account;
-absolute-session-age and conditional compromise revocation also retain product
-versus native namespace gaps. Other factor callers/global RLS and workspace
+needs reconciliation. Canonical MFA gating can still refuse a mapped account,
+and conditional compromise revocation retains a product/native namespace gap.
+The subsequent absolute-age correction is recorded below. Other factor callers/global RLS and workspace
 selection remain separate. See WEB-EMAIL-CHANGE-LIFETIME-01,
 WEB-IDENTITY-POLICY-NAMESPACE-01 and the existing completion/workspace findings.
 
+## Session age uses native ownership and product policy identity
+
+Accepted `248000bd5b6bf3427617ad55252d192ed27eac5d` separates native subject/session ownership from
+product account identity in Bearer, cookie and suspended-appeal age enforcement.
+The shared start cache stores only finite, non-null timestamps for the exact
+native subject/session after both returned provider IDs match. Unknown, invalid,
+foreign or thrown reads do not persist in that cache. Known over-age requests
+still refuse if provider revocation fails; revocation-failure logs retain the product ID.
+
+Sign-in sightings receive the same native lookup identity while keeping product
+event/key-value ownership, including the passkey-required branch. Local admission
+is released after unknown age or unavailable storage so a later attempt can
+retry. The recent-session window and distributed NX claim remain; that claim is
+not atomic with event delivery and does not prove durable notification.
+
+Independent source review covers production and authored unrun cache, auth,
+sighting and passkey-gate fixtures. Existing permit-unknown age degradation is
+explicitly unchanged. MFA/compromise mapping, other factor consumers, global RLS,
+backend mapping leases and sequential email completion remain separate open
+boundaries. See WEB-IDENTITY-POLICY-NAMESPACE-01 for exact scope and limits.
+
 ## Reconstruction boundary
 
-Only the two hundred twenty-six accepted production slices traced above are
+Only the two hundred twenty-seven accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

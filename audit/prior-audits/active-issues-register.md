@@ -13788,9 +13788,10 @@ audit keys stay product scoped. A null/foreign provider user refuses rather than
 selecting first-factor proof. Email GET is Bearer-only; mutations and proof routes
 retain authenticated cookie-session compatibility and refuse non-session
 principals. Other callers and global RLS helpers are not silently rewritten.
-Existing canonical MFA policy, absolute-age and conditional compromise-response
-namespace defects remain in WEB-IDENTITY-POLICY-NAMESPACE-01. In particular,
-required-MFA policy can still deny a mapped account before email admission.
+Existing canonical MFA policy and conditional compromise-response namespace
+defects remain in WEB-IDENTITY-POLICY-NAMESPACE-01. That finding also records the
+subsequent bounded absolute-age correction and its unrun acceptance. Required-MFA
+policy can still deny a mapped account before email admission.
 The GET tuple proves that read's mapping, not a server mapping lease. An unseen
 backend remap between requests is not fenced by expected-account fields in
 POST/PATCH; each request resolves its own authenticated account.
@@ -13846,18 +13847,37 @@ Security/server coordination gaps remain separate.
 ## WEB-IDENTITY-POLICY-NAMESPACE-01
 
 Severity: High. Source-confirmed on 2026-11-06 while correcting mapped-account
-email admission; unpatched, with no runtime reproduction or deployed incident claim.
+email admission. Bounded age/sighting correction `248000bd5b6bf3427617ad55252d192ed27eac5d` is source
+reviewed; fixtures remain unrun. MFA/compromise namespace defects remain
+unpatched, with no runtime reproduction or deployed incident claim.
 
 The identity bridge allows a product account ID to differ from the provider's
-subject. Several policy and response consumers still send the resolved product ID
-to provider operations or compare it with provider-returned native IDs:
+subject. The earlier absolute-age path compared a provider-returned native user
+ID with the product ID, then cached the resulting unknown start by session ID.
+The bounded correction passes verified native identity through Bearer, cookie
+and suspended-appeal age checks, preserving product IDs for policy and revocation
+failure logging. The start cache is bound to native subject/session and stores
+only finite, non-null timestamps after both returned provider identifiers match.
+Missing, foreign, invalid and thrown reads are not cached; a later read can
+measure the session rather than inherit an unknown result indefinitely. Known
+over-age authentication still refuses even if provider revocation fails.
 
-- api-auth.ts calls assertSessionWithinAbsoluteLifetime with the resolved product
-  account. lib/auth/session-age.ts compares that value with getSession(sessionId)
-  userId. A mismatch becomes an unknown start; unlike a thrown lookup, that null
-  is cached by sessionId until bounded cache eviction/reset. session-policy.ts
-  permits unknown age, so this path can leave the absolute-lifetime limit
-  unenforced for mapped accounts. Other authentication gates still apply.
+Existing permit-unknown degradation is unchanged. An unreadable start does not
+prove a young session, and the request may still proceed through other gates
+without an absolute-age measurement. This correction is not universal fail-closed
+age enforcement, an outage-policy change or runtime acceptance. Device/API
+credentials are not given invented native sessions.
+
+Session sightings also use the native pair for start lookup while retaining the
+product account for event and key-value identity, including the passkey-required
+auth branch. Unknown age or unavailable key-value storage releases the local
+dedupe admission for a later attempt. The existing recent-session window and
+distributed only-if-absent claim remain. Event delivery is not atomic with that
+claim; failure after it can still prevent a later event. This does not establish
+durable notice delivery or a backend identity-mapping lease.
+
+The remaining policy and response consumers still use the wrong namespace:
+
 - mfa-policy-gate.ts resolveMfaEnrolled uses product-scoped policy/cache keys but
   also passes that product ID to getIdentityUser, a direct provider lookup. With
   no enrolled cache hit, a missing/error result is unenrolled and a required-MFA
@@ -13870,12 +13890,16 @@ to provider operations or compare it with provider-returned native IDs:
   namespace can fail or return no native sessions. Existing intent cleanup may
   still run; this finding does not claim the entire response is absent.
 
-Correct the canonical contracts end-to-end, retaining product IDs for DB, grants,
+Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
-provider operations. Revisit negative cache semantics and all affected callers,
-including second-factor routes that still default subject to userId. Add
-distinct-ID and equal-ID policy/revocation cases, and preserve failure/partial
-response semantics. The narrow email/step-up helpers in 880ad276e7cb8247caa998e6e5c73bd126d64e14 do
-not resolve this broader issue, cookie global DB scoping, workspace finalization
-or non-atomic email completion. See WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and
-WEB-EMAIL-CHANGE-COMPLETION-01 for those separate owners.
+provider operations. Include second-factor routes that still default subject to
+userId, distinct-ID/equal-ID policy and revocation cases, and existing failure or
+partial-response semantics. The email/step-up and age/sighting slices do not
+resolve MFA/compromise mapping, global cookie/Bearer DB scoping, workspace
+finalization or non-atomic email completion. See
+WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
+
+Independent source review covers production and unrun cache, canonical-auth,
+sighting and passkey-gate fixtures at controlled provider, database, scheduling,
+event and key-value boundaries. No product tests, lint, typechecks, builds,
+runtime/timer or installed provider acceptance were run.
