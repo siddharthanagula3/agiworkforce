@@ -5293,9 +5293,26 @@ subsequent actions. They are unrun. Uncertain server outcomes, stale-cache
 reconciliation, lost once-only signing secrets, manual duplicates and session/
 workspace request ownership remain open under `WEB-DEVELOPER-MUTATION-RETRY-01`.
 
+## Developer request logs retain their view owner
+
+Accepted `a2800f638d` binds request-log reads and local state to the admitted
+account/session/workspace lifetime. The feature hook uses captured request
+authority, explicit selectors and post-body checks. Synchronous operation
+reservation plus per-view tokens prevent overlapping or stale pagination/retry
+callbacks; cleanup retires pending work. Rows, cursor, errors, loading and
+expanded details are masked when their owning view changes.
+
+Production and authored ownership/panel fixtures received independent source
+review. The fixtures control Clerk state and transport while exercising real
+snapshot, workspace-admission and request-authority paths; they remain unrun.
+Server logs are still user-scoped rather than organization-filtered. Workspace
+uncertainty still requires reload, timestamp cursor ties remain, and the other
+developer hooks are not repaired by this bounded change. See
+`WEB-DEVELOPER-LOG-REQUEST-OWNERSHIP-01` for acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred fourteen accepted production slices traced above are represented as
+Only the two hundred fifteen accepted production slices traced above are represented as
 reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

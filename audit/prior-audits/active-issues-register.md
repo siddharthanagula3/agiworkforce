@@ -12985,3 +12985,52 @@ this correction does not claim account/workspace isolation. Workspace switching
 currently cancels queries, clears caches and reloads, which is a counterguard,
 not proof that all deferred mutation lifetimes are owned. No tests, lint,
 typechecks, builds, app execution, push or deployment ran.
+
+
+## WEB-DEVELOPER-LOG-REQUEST-OWNERSHIP-01
+
+Severity: Medium. Bounded correction `a2800f638d` independently source-reviewed
+on 2026-11-06; regression fixtures unrun. Runtime acceptance remains open.
+
+`features/developers/components/RequestLogsPanel.tsx` previously read through
+ambient `sendAuthorizedJson`, then committed rows, cursor, errors and loading
+completion without a session/workspace or operation-lifetime guard. Its local
+state and independent promises are outside the React Query cancellation and
+cache clearing performed before workspace-switch reload. The shell does not
+remount this panel by account/session. A delayed token, response body or
+pagination result could therefore outlive the view that started it. No live
+cross-account disclosure is asserted.
+
+The canonical feature hook `use-developer-request-logs.ts` now captures the
+admitted workspace owner, epoch, complete scope key and session authority.
+Its real read uses `RequestAuthority.fetch` with omitted cookies, no-store and
+an explicit captured organization selector, including the canonical Personal
+value. Deferred response parsing and injected fetcher completion are checked
+again before publication. Errors and cleanup also retain operation ownership.
+One operation is reserved synchronously; published-view tokens reject callbacks
+from a prior page or error state, even when the page object was retained.
+
+Rows, cursor, errors and loading state are exposed only for the current lane.
+Expanded details are keyed to that lane. Source replacement, unmount, account/
+session replacement, workspace epoch changes and admission closure retire the
+request and mask old state. StrictMode cleanup cannot make an aborted prior
+request current again. Workspace uncertainty retains the existing reload barrier;
+this patch does not silently re-admit a changed scope.
+
+The new ownership fixtures and updated panel fixtures use real session snapshots,
+workspace admission, request authority and QueryClient. Clerk state and network/
+injected-fetch boundaries are controlled fixtures. Source coverage includes
+pre-admission refusal, explicit Personal/organization headers, delayed-token
+replacement before rerender, deferred success/error bodies, same-scope refused-
+switch recovery, changed-scope refusal, overlapping pagination, stale callbacks
+after failure, source/unmount retirement, StrictMode replay and expanded-detail
+reset for a repeated log ID. All fixtures remain unrun.
+
+The server route already validates its cursor, uses `getUserScopedDb`, and returns
+private/no-store data. `developer-request-log-service.ts` filters usage rows by
+user, not organization; its usage-table RLS is user-scoped. The selector binds
+authentication/workspace-policy context but does not make these logs organization-
+filtered. Server scope is unchanged. Timestamp-only cursor ties remain a separate
+pagination limitation, and project/webhook/usage hooks retain their separately
+tracked request-ownership gaps. No tests, lint, typechecks, builds, app/service
+execution, push or deployment ran.
