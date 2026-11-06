@@ -18,7 +18,11 @@ const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async (_userId: strin
 // Mocked here so this file keeps testing the approval flow rather than also
 // simulating a settings read.
 vi.mock('@/lib/server/device-signin-policy', () => ({
-  isDeviceCodeSignInEnabled: vi.fn(async () => true),
+  readDeviceCodeSignInPolicy: vi.fn(async () => 'enabled'),
+}));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/services/account-activity-notifications', () => ({
+  notifyDeviceSignInApproved: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: mockHasAcceptedCurrentTerms,
@@ -60,6 +64,10 @@ import { POST } from '@/app/api/auth/device/approve/route';
 describe('Device code approve compatibility API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockQuery.mockReset();
+    mockExecute.mockReset();
+    mockGetClerkAuthUser.mockReset();
+    mockHasAcceptedCurrentTerms.mockReset().mockResolvedValue(true);
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_clerk_123' });
     mockExecute.mockResolvedValue(1);
   });
