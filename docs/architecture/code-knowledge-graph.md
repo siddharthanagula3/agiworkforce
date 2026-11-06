@@ -5640,7 +5640,7 @@ aggregate enrollment across every linked provider.
 The uncached path adds a provider read per governed native request and loses
 legacy cache outage tolerance; latency, rate limits and provider acceptance are
 unrun. Product-only principals, organization-policy enablement preflight,
-second-factor routes/cache writers, global cookie/Bearer DB scope and legacy
+product-only enrollment/cache writers, global cookie/Bearer DB scope and legacy
 compromise revocation remain separate gaps. The bounded email-triggered
 revocation correction follows below. No reverse mapping or provider
 identity is invented, and the source migration's cardinality is not evidence of
@@ -5655,7 +5655,8 @@ session enumeration. Shared revocation keeps product identity for mobile-intent
 cleanup on success and thrown enumeration; response DB, device refresh cleanup,
 audit and notices remain product scoped. Callers omitting the explicit subject
 retain their legacy behavior. No reverse identity lookup or all-provider sweep is
-introduced; other factor, reporting, undo and resolution paths remain open.
+introduced; the later factor-route correction is below, while other identity,
+reporting, undo and resolution paths remain open.
 
 Native session revocation is not cancellation of already-running email work.
 The event still precedes the email mutation, and successful compromise response
@@ -5689,9 +5690,42 @@ durable reconciliation, cancellation or all-provider revocation is established.
 Independent source review covers authored unrun route/helper-boundary fixtures.
 See WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-PASSWORD-INTENT-LIFETIME-01.
 
+## Factor settings distinguish native sessions from product accounts
+
+Accepted `c81778825d2d43a32fafdb883db30f400328193f` sends status, setup, verify, disable and backup-code
+regeneration through the canonical native-session account helper. Native subject
+owns provider status/migration and factor operations; product ID owns claimed DB,
+pending secret, proofs, account-keyed limits, cache, audit and notification
+addressing. Status/setup retain request-level rate scopes. Events
+carry the native subject for conditional compromise enumeration. Setup removes a
+second authentication read and checks provider user ID before using primaryEmail
+for the authenticator label, falling back to product ID when absent.
+
+Retained Tauri uses device/developer tokens for its factor-status read, and its
+transport invalidates the current matching session on any 401. The shared helper
+therefore refuses canonically authenticated developer principals with user-safe
+403 before scope/factor work; email/password/step-up share that response change.
+Canonical failures still propagate, and malformed/missing native subject or SID
+still refuse with 401. Device factor status is unavailable and directs the user
+to web settings without this specific refusal triggering transport invalidation.
+Known web/mobile native-session callers remain supported by the source contract;
+Tauri execution, external compatibility and installed SDK acceptance are unrun.
+
+Pending setup and proofs remain product keyed, not bound to the native tuple.
+Concurrent setup/verify can overwrite factors or delete newer pending material;
+status reads can migrate legacy enrollment before explicit action proof. Provider
+writes precede SQL/cache/events, and failures can leave changed MFA or undelivered
+backup codes. Product-only enrollment cache, other identity consumers, global RLS,
+client lifetime and incomplete containment remain separate gaps. Earlier
+native-keyed pending/enabled rows may be invisible to product scope; the
+text primary key does not exclude them, no backfill runs and deployed data is
+uninspected. Enrollment continuity remains a migration acceptance question.
+Independent review covers source and unrun fixtures, not runtime correctness. See
+WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-SETTINGS-STEP-UP-OWNERSHIP-01.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty accepted production slices traced above are
+Only the two hundred thirty-one accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

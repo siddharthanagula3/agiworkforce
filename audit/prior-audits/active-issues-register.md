@@ -13859,7 +13859,9 @@ reviewed; fixtures remain unrun. Subsequent native-session MFA correction
 `45c83e3eb60fc723f69c16bbaacea31587592c35` is also source reviewed only. The later email-triggered
 compromise identity slice `0893063c8f11eefd85068f48b1ba9a07cf084403` is bounded to that producer.
 The password-route follow-on `a8ff85b0627de8f5706a62bf2d670b96aa8d5cf6` extends native/product
-separation to that credential mutation. Product-only MFA and legacy compromise
+separation to that credential mutation. The factor-route follow-on
+`c81778825d2d43a32fafdb883db30f400328193f` extends it to status, setup, verification, disable and
+backup-code regeneration. Product-only MFA and legacy compromise
 namespace defects remain unpatched, with no runtime reproduction or deployed
 incident claim.
 
@@ -13921,8 +13923,8 @@ The remaining policy and response consumers still use the wrong namespace:
   discards the resolved product ID; bearer scope retains native token claims.
   The bounded session path does not certify these related flows or universal
   mapped-account email availability.
-- Legacy compromise producers still omit a native subject: TOTP, backup-code
-  and other identity events, explicit compromise reporting and undo.
+- Legacy compromise producers still omit a native subject: other identity
+  events, explicit compromise reporting and undo.
   Their provider sweep still defaults to product ID, which can fail or enumerate
   no native sessions. Compromise resolution also compares provider session userId
   with product ID and performs a product-ID sweep. Session/device settings,
@@ -13977,18 +13979,60 @@ compromise handling may revoke the current session before the route returns.
 The identity correction does not make these operations atomic, repair receipts,
 stop already-running work, or guarantee all linked providers were revoked.
 
+The bounded factor follow-on uses the same canonical session-account helper in
+all four route files (five handlers). Status/earlier enrollment, registration,
+removal and backup-code rotation use the native subject. Product identity owns
+claimed SQL scope, pending enrollment, proofs, account-keyed rate limits, enrollment
+cache, audit and notification addressing. Status and setup retain request-level
+rate scopes. Native subject also reaches conditional
+compromise enumeration through the existing event bridge. Setup authenticates
+once instead of repeating canonical auth for its label; an exact-ID checked
+provider user supplies primaryEmail, with product ID fallback when absent.
+Provider reads and installed provider behavior remain unverified.
+
+The retained Tauri Cloud Security caller uses product-only device/developer
+credentials, and its transport invalidates the matching session on any 401.
+Independent review rejected an initial generic-401 design. The shared helper now
+returns a user-safe 403 for a canonically authenticated developer principal,
+before database scope or factor work. This also changes unsupported-principal
+responses for email, password and step-up consumers. Canonical authentication
+and policy failures propagate unchanged; native identities missing subject/SID
+still receive 401. No native provider identity is guessed. Tauri factor status
+is consequently unavailable through that device credential, but this specific
+refusal no longer requests transport invalidation; the user must use web account
+settings. Source inspection is not an executed Tauri acceptance check. Known web
+and mobile native-session producers remain within the new admission contract;
+external callers and installed SDK compatibility remain unverified. API keys
+remain unsupported, and auth policy/link/sighting effects may precede refusal.
+
+The factor correction does not bind pending setup or action proof to a native
+subject/session. A product-keyed pending secret can be consumed by another linked
+identity, concurrent verifiers can overwrite provider factors/codes, and
+unconditional deletion can remove a newer setup. Status GET and status checks
+before proof can register an enabled legacy enrollment and delete its row.
+Provider mutation, SQL deletion, cache writes and events remain sequential;
+failure can report an error after MFA changed, and replacement backup codes can
+be lost before delivery. Product-only enrollment cache remains shared across
+linked identities. No atomic consumption, durable cleanup, universal provider
+containment or client editor/session lifetime correction is claimed.
+The user_two_factor key is unconstrained text in the source schema. Earlier
+cookie paths could have stored pending/enabled rows under the native subject;
+canonical product scope will not read such a differently keyed row. No backfill
+is performed, deployed row contents were not inspected, and continuity of that
+legacy enrollment is not established by this correction.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
-provider operations. Include second-factor routes that still default subject to
-userId, distinct-ID/equal-ID policy and revocation cases, and existing failure or
+provider operations. Include remaining account-security/factor consumers,
+distinct-ID/equal-ID policy and revocation cases, and existing failure or
 partial-response semantics. The email/step-up, age/sighting, native-session MFA,
-email-triggered revocation and password slices do not resolve product-only MFA
+email-triggered revocation, password and factor slices do not resolve product-only MFA
 or legacy compromise mapping, global cookie/Bearer DB scoping, workspace
 finalization or non-atomic email completion. See
 WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01 and WEB-EMAIL-CHANGE-COMPLETION-01.
 
 Independent source review covers production and unrun cache, canonical-auth,
 sighting, passkey-gate, native-session MFA/requirement, email-triggered
-revocation and password-route identity fixtures at controlled provider, database, scheduling, event, intent
+revocation, password and factor-route identity fixtures at controlled provider, database, scheduling, event, intent
 cleanup and key-value boundaries. No product tests, lint, typechecks, builds,
 runtime/timer or installed provider acceptance were run.
