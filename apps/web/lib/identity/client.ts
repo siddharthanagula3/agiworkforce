@@ -148,55 +148,93 @@ export interface IdentityPasskey {
   lastUsedAt: Date | null;
 }
 
+export const MAX_PASSKEY_NAME_CHARS = 50;
+
+export interface IdentityPasskeyOperation {
+  isCurrent: () => boolean;
+  execute: (name?: string) => Promise<void>;
+}
+
+export interface IdentityPasskeyScope {
+  authority: RequestAuthority;
+  onDispatch: () => void;
+}
+
 export interface IdentityPasskeysState {
+  isCurrent: () => boolean;
   isLoaded: boolean;
   isSupported: boolean;
   passkeys: readonly IdentityPasskey[];
-  create: () => Promise<void>;
-  rename: (passkeyId: string, name: string) => Promise<void>;
-  remove: (passkeyId: string) => Promise<void>;
+  capture: (kind: 'create' | 'rename' | 'remove', scope: IdentityPasskeyScope,
+    passkeyId?: string) => IdentityPasskeyOperation;
 }
 
 export function usePasskeys(): IdentityPasskeysState {
-  const { isLoaded, user } = useUser();
-  const passkeys = useMemo<IdentityPasskey[]>(
-    () =>
-      (user?.passkeys ?? []).map((passkey) => ({
-        id: passkey.id,
-        name: optional(passkey.name),
-        createdAt: passkey.createdAt,
-        lastUsedAt: passkey.lastUsedAt,
-      })),
-    [user],
-  );
-
-  const create = useCallback(async () => {
-    if (!user) throw new Error('Sign in again to add a passkey.');
-    await user.createPasskey();
-    await user.reload();
-  }, [user]);
-
-  const rename = useCallback(
-    async (passkeyId: string, name: string) => {
-      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
-      if (!user || !passkey) throw new Error('That passkey is no longer on this account.');
-      await passkey.update({ name });
-      await user.reload();
-    },
-    [user],
-  );
-
-  const remove = useCallback(
-    async (passkeyId: string) => {
-      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
-      if (!user || !passkey) return;
-      await passkey.delete();
-      await user.reload();
-    },
-    [user],
-  );
-
-  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, rename, remove };
+  const { isLoaded: userLoaded, user } = useUser();
+  const clerk = useClerk();
+  const isLoaded = Boolean(userLoaded && clerk.loaded && user &&
+    clerk.user === user && clerk.session?.user === user);
+  const passkeys: IdentityPasskey[] = isLoaded ? (user?.passkeys ?? []).map((passkey) => ({
+    id: passkey.id, name: optional(passkey.name), createdAt: passkey.createdAt,
+    lastUsedAt: passkey.lastUsedAt,
+  })) : [];
+  const capture = useCallback<IdentityPasskeysState['capture']>((kind, submitted, passkeyId) => {
+    const { authority, onDispatch } = submitted;
+    authority.assertCurrent();
+    const session = nativeSessionFor(authority.session);
+    const capturedUser = session.user;
+    if (!isLoaded || !capturedUser || capturedUser !== user || capturedUser.id !== authority.session.userId) {
+      throw new Error('The account changed. Open passkey settings again.');
+    }
+    const target = kind === 'create' ? null : capturedUser.passkeys.find((key) => key.id === passkeyId);
+    if (kind !== 'create' && !target) throw new Error('That passkey is no longer on this account.');
+    const assertCurrent = () => {
+      if (session.user !== capturedUser || clerk.user !== capturedUser || capturedUser.id !== authority.session.userId) authority.retire();
+      authority.assertCurrent();
+    };
+    let dispatched = false;
+    let stop: (() => void) | undefined;
+    const release = () => { stop?.(); stop = undefined; };
+    const observe = () => {
+      if (!authority.isCurrent() || session.user !== capturedUser || clerk.user !== capturedUser ||
+          (!dispatched && target && !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId))) authority.retire();
+    };
+    authority.signal.addEventListener('abort', release, { once: true });
+    stop = authority.session.subscribe?.(observe);
+    if (authority.signal.aborted) release();
+    return { isCurrent: () => { observe(); return authority.isCurrent(); }, execute: async (name) => {
+      assertCurrent();
+      if (dispatched) throw new Error('This passkey operation has already started.');
+      if (target && !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId)) {
+        throw new Error('That passkey is no longer on this account.');
+      }
+      const submittedName = name?.trim();
+      if (kind === 'rename' && (!submittedName || submittedName.length > MAX_PASSKEY_NAME_CHARS)) {
+        throw new Error(`Enter a passkey name of 1 to ${MAX_PASSKEY_NAME_CHARS} characters.`);
+      }
+      assertCurrent();
+      dispatched = true;
+      onDispatch();
+      assertCurrent();
+      try {
+        if (kind === 'create') await capturedUser.createPasskey();
+        else if (kind === 'rename' && target) await target.update({ name: submittedName! });
+        else if (target) await target.delete();
+        assertCurrent();
+        const refreshed = await capturedUser.reload();
+        assertCurrent();
+        if (refreshed.id !== authority.session.userId) {
+          authority.retire();
+          throw new Error('The refreshed account could not be confirmed.');
+        }
+      } catch (cause) {
+        assertCurrent();
+        throw cause;
+      }
+    } };
+  }, [clerk, isLoaded, user]);
+  return { isCurrent: () => Boolean(isLoaded && clerk.loaded && clerk.user === user && clerk.session?.user === user),
+    isLoaded, isSupported: browserSupportsPasskeys(), passkeys, capture };
 }
 
 export type IdentityVerificationLevel = 'first_factor' | 'second_factor';
