@@ -271,7 +271,7 @@ export function WebSettingsModal({
     keyboard: <KeyboardShortcutsPane shortcuts={KEYBOARD_SHORTCUT_DOCS} />,
     reflect: <ReflectSection active={open && activeSection === 'reflect'} />,
     'time-focus': <TimeFocusSection />,
-    slack: <SlackSection />,
+    slack: <SlackSection active={open && activeSection === 'slack'} />,
     help: <HelpSection />,
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };
