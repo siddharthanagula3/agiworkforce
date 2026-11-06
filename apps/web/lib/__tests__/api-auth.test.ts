@@ -460,7 +460,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       expect(req.headers.get('authorization')?.startsWith('Bearer ')).toBe(false);
 
       const result = await getClerkAuthUser(req);
-      expect(result).toEqual({ userId: 'clerk-session-user' });
+      expect(result).toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
     });
 
     it('a verified bearer resolves a DIFFERENT user than the cookie would have, bearer wins, cookie principal is never returned', async () => {
@@ -508,7 +511,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       const req = new NextRequest('http://localhost/api/some-route');
       const result = await getClerkAuthUser(req);
 
-      expect(result).toEqual({ userId: 'clerk-session-user' });
+      expect(result).toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
       expect(queriedApiKeysTable()).toBe(false);
     });
 
@@ -522,7 +528,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         makeBearerRequest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGVyay1qd3QtdXNlciJ9.sig'),
       );
 
-      expect(result).toEqual({ userId: 'clerk-jwt-user', email: 'user@example.com' });
+      expect(result).toEqual({
+        userId: 'clerk-jwt-user',
+        email: 'user@example.com',
+        sessionIdentity: { subject: 'clerk-jwt-user', sessionId: null },
+      });
       expect(queriedApiKeysTable()).toBe(false);
     });
 
@@ -539,7 +549,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         makeBearerRequest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGVyay1qd3QtdXNlciJ9.sig'),
       );
 
-      expect(result).toEqual({ userId: 'clerk-jwt-user', boundSurface: bound });
+      expect(result).toEqual({
+        userId: 'clerk-jwt-user',
+        boundSurface: bound,
+        sessionIdentity: { subject: 'clerk-jwt-user', sessionId: null },
+      });
     });
 
     it('authenticates a first-party developer device token and enforces its subject', async () => {
@@ -710,7 +724,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(
         getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-      ).resolves.toEqual({ userId: 'clerk-session-user' });
+      ).resolves.toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
       expect(mockClerkGetUser).not.toHaveBeenCalled();
     });
 
@@ -731,7 +748,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(
         getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-      ).resolves.toEqual({ userId: 'clerk-session-user' });
+      ).resolves.toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
     });
   });
 
@@ -788,6 +808,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(getClerkAuthUser(requestFromIp('198.51.100.9'))).resolves.toEqual({
         userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
       });
     });
 
@@ -797,6 +818,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(getClerkAuthUser(requestFromIp('203.0.113.5'))).resolves.toEqual({
         userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
       });
     });
 
@@ -883,7 +905,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         getClerkAuthUser(new NextRequest('http://localhost/api/settings/organization/policy'), {
           mfaGateExemptForOwner: true,
         }),
-      ).resolves.toEqual({ userId: 'owner-user' });
+      ).resolves.toEqual({
+        userId: 'owner-user',
+        sessionIdentity: { subject: 'owner-user', sessionId: null },
+      });
     });
 
     it('still blocks an unenrolled owner when the caller did not opt into the exemption', async () => {
@@ -951,8 +976,60 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
     await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
       userId: 'account-7',
       identityId: 'identity-9',
+      sessionIdentity: { subject: 'provider-subject-9', sessionId: null },
     });
   });
+
+  it.each(['cookie', 'bearer'] as const)(
+    'keeps the verified native subject and session separate from the mapped account for %s auth',
+    async (transport) => {
+      const db = makeFakeDb();
+      db.identities.set('clerk:native-mapped-subject', {
+        identityId: 'identity-mapped-session',
+        accountId: 'product-mapped-account',
+      });
+      const sessionId = `sess_mapped_identity_${transport}`;
+      mockClerkGetSession.mockResolvedValueOnce({
+        id: sessionId,
+        userId: 'native-mapped-subject',
+        status: 'active',
+        createdAt: Date.now(),
+      });
+      const headers = {
+        'x-account-id': 'forged-product-account',
+        'x-user-id': 'forged-native-subject',
+        'x-session-id': 'forged-session',
+      };
+      if (transport === 'bearer') {
+        process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+        mockVerifyToken.mockResolvedValueOnce({
+          sub: 'native-mapped-subject',
+          sid: sessionId,
+          email: 'verified@example.com',
+        });
+      } else {
+        mockAuth.mockResolvedValueOnce(authSession('native-mapped-subject', sessionId));
+      }
+      const request = new NextRequest(
+        'http://localhost/api/settings/email?accountId=forged-product-account&subject=forged-native-subject',
+        {
+          headers: {
+            ...headers,
+            ...(transport === 'bearer' ? { authorization: 'Bearer native-session-token' } : {}),
+          },
+        },
+      );
+
+      await expect(getClerkAuthUser(request)).resolves.toEqual({
+        userId: 'product-mapped-account',
+        identityId: 'identity-mapped-session',
+        sessionIdentity: { subject: 'native-mapped-subject', sessionId },
+        ...(transport === 'bearer' ? { email: 'verified@example.com' } : {}),
+      });
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(sessionId);
+      if (transport === 'bearer') expect(mockAuth).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not admit a suspended cookie to the shared reader', async () => {
     const db = makeFakeDb();
@@ -984,7 +1061,10 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
     const db = makeFakeDb();
     mockAuth.mockResolvedValueOnce(authSession('unmapped-user'));
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'unmapped-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'unmapped-user',
+      sessionIdentity: { subject: 'unmapped-user', sessionId: null },
+    });
     expect(db.linkAttempts).toEqual(['clerk:unmapped-user:unmapped-user']);
   });
 
@@ -1026,7 +1106,10 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
     db.accountStatuses.set('leaving-user', 'deletion_scheduled');
     mockAuth.mockResolvedValueOnce(authSession('leaving-user'));
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'leaving-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'leaving-user',
+      sessionIdentity: { subject: 'leaving-user', sessionId: null },
+    });
   });
 
   it('derives a scheduled deletion from the date 0071 records, and still lets it sign in', async () => {
@@ -1037,6 +1120,7 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
 
     await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
       userId: 'leaving-by-date',
+      sessionIdentity: { subject: 'leaving-by-date', sessionId: null },
     });
   });
 
@@ -1252,7 +1336,10 @@ describe('tenant lockdown at the auth boundary', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'unlocked-cookie-user' });
+    ).resolves.toEqual({
+      userId: 'unlocked-cookie-user',
+      sessionIdentity: { subject: 'unlocked-cookie-user', sessionId: null },
+    });
   });
 
   it('lets a personal workspace through, having no workspace to lock', async () => {
@@ -1262,7 +1349,10 @@ describe('tenant lockdown at the auth boundary', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'personal-user' });
+    ).resolves.toEqual({
+      userId: 'personal-user',
+      sessionIdentity: { subject: 'personal-user', sessionId: null },
+    });
   });
 
   it('does not lock anyone out when the workspace lookup itself fails', async () => {
@@ -1279,7 +1369,10 @@ describe('tenant lockdown at the auth boundary', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'degraded-user' });
+    ).resolves.toEqual({
+      userId: 'degraded-user',
+      sessionIdentity: { subject: 'degraded-user', sessionId: null },
+    });
   });
 });
 
@@ -1380,6 +1473,7 @@ describe('getOptionalAuthUser · the gate a signed-out caller does not need', ()
     await expect(getOptionalAuthUser(request())).resolves.toEqual({
       userId: 'account-optional',
       identityId: 'identity-optional',
+      sessionIdentity: { subject: 'optional-subject', sessionId: null },
     });
   });
 
@@ -1459,7 +1553,10 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
     const insideTheLimit = Date.now() - (30 * DAY_MS - 1000);
     mockClerkGetSession.mockResolvedValue(providerSession(insideTheLimit));
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'aged-user',
+      sessionIdentity: { subject: 'aged-user', sessionId: SESSION_ID },
+    });
     expect(mockClerkRevokeSession).not.toHaveBeenCalled();
   });
 
@@ -1468,7 +1565,10 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
     mockClerkGetSession.mockRejectedValue(new Error('provider unavailable'));
     const before = unreadableSessionStartCount();
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'aged-user',
+      sessionIdentity: { subject: 'aged-user', sessionId: SESSION_ID },
+    });
     expect(unreadableSessionStartCount()).toBe(before + 1);
     expect(mockClerkRevokeSession).not.toHaveBeenCalled();
   });
@@ -1490,7 +1590,10 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
       providerSession(Date.now() - (30 * DAY_MS + 1000), 'another-user'),
     );
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'aged-user',
+      sessionIdentity: { subject: 'aged-user', sessionId: SESSION_ID },
+    });
     expect(mockClerkRevokeSession).not.toHaveBeenCalled();
   });
 
@@ -1565,6 +1668,7 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
 
     await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).resolves.toEqual({
       userId: 'phone-user',
+      sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'mobile',
     });
     expect(mockVerifyToken).toHaveBeenCalledTimes(2);
@@ -1640,6 +1744,7 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
 
     await expect(getClerkAuthUser(nativeRequest())).resolves.toEqual({
       userId: 'phone-user',
+      sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'web',
     });
     expect(mockVerifyToken).toHaveBeenCalledTimes(1);
@@ -1676,6 +1781,7 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
     verifiedSessions.add(SESSION_ID);
     await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).resolves.toEqual({
       userId: 'phone-user',
+      sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'mobile',
     });
   });

@@ -54,6 +54,7 @@ export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 export interface AuthResult {
   userId: string;
   identityId?: string;
+  sessionIdentity?: { readonly subject: string; readonly sessionId: string | null };
   email?: string;
   surfaceClass?: 'developer';
   boundSurface?: BoundSurface;
@@ -253,9 +254,14 @@ async function accountForSubject(
   return null;
 }
 
-function authResultFor(account: AuthenticatedAccount, email?: string | null): AuthResult {
+function authResultFor(
+  account: AuthenticatedAccount,
+  sessionId: string | null,
+  email?: string | null,
+): AuthResult {
   return {
     userId: account.accountId,
+    sessionIdentity: { subject: account.subject, sessionId },
     ...(account.identityId ? { identityId: account.identityId } : {}),
     ...(email ? { email } : {}),
   };
@@ -337,7 +343,7 @@ async function verifyBearerToken(
     if (!account) return null;
     return {
       auth: {
-        ...authResultFor(account, claims.email),
+        ...authResultFor(account, claims.sessionId, claims.email),
         ...(boundSurface ? { boundSurface } : {}),
       },
       sessionId: claims.sessionId,
@@ -441,7 +447,7 @@ export async function getCookieSessionAuthUser(
     );
     await assertIpAllowList(userId, request);
     noteSessionSighting(userId, sessionId, request);
-    return authResultFor(account);
+    return authResultFor(account, sessionId);
   }
 
   throw createError.unauthorized();

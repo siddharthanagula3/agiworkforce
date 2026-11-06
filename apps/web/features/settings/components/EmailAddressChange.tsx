@@ -16,6 +16,7 @@ import {
 } from '@agiworkforce/ui';
 import { useEmailAddressVerification } from '@/lib/identity/client';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { useProductAccountSnapshot, type ProductAccountAuthority } from '@/lib/identity/useProductAccountSnapshot';
 import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { classifyAuthError } from '@/lib/auth/error-taxonomy';
@@ -28,6 +29,11 @@ const ENDPOINT = '/api/settings/email';
 const addressSchema = z.string().trim().email().max(254);
 const addedSchema = z.object({ emailAddressId: z.string().trim().min(1).max(255), verified: z.boolean() });
 const primarySchema = z.object({ emailAddress: addressSchema, previousAddressRemoved: z.boolean() });
+const accountSchema = z.object({
+  accountId: z.string().trim().min(1).max(255),
+  subject: z.string().trim().min(1).max(255),
+  sessionId: z.string().trim().min(1).max(255),
+});
 const UNCERTAIN = 'We could not confirm the complete email change outcome. An address may have been added, removed, or made primary. Check your account email and sign-in methods before starting another change.';
 
 type Address = { emailAddressId: string; emailAddress: string };
@@ -36,7 +42,16 @@ type Stage =
   | ({ name: 'code'; sent: boolean } & Address)
   | ({ name: 'confirmed' } & Address)
   | { name: 'done'; emailAddress: string; previousAddressRemoved: boolean; refreshing: boolean; refreshFailed: boolean };
-type EditorOwner = { id: number; session: SessionAuthority; request: RequestAuthority | null; pendingWrite: boolean; isCurrent: () => boolean };
+type EditorOwner = {
+  id: number;
+  session: SessionAuthority;
+  account: ProductAccountAuthority;
+  admitted: boolean;
+  admissionError: string | null;
+  request: RequestAuthority | null;
+  pendingWrite: boolean;
+  isCurrent: () => boolean;
+};
 type EmailIntent = {
   generation: object;
   request: RequestAuthority;
@@ -46,7 +61,7 @@ type EmailIntent = {
 };
 
 export interface EmailAddressChangeCompletion {
-  readonly userId: string;
+  readonly accountId: string;
   readonly isCurrent: () => boolean;
 }
 
@@ -198,7 +213,7 @@ function OwnedEmailAddressChange({ owner, currentEmail, onChanged, onClose, bloc
     intent.phase = 'refreshing';
     const done: Stage = { name: 'done', ...result, refreshing: true, refreshFailed: false };
     setStage(done);
-    onChanged(result.emailAddress, { userId: owner.session.userId, isCurrent: intent.request.isCurrent });
+    onChanged(result.emailAddress, { accountId: owner.account.accountId, isCurrent: intent.request.isCurrent });
     intent.request.assertCurrent();
     try {
       await verification.refresh(intent.request);
@@ -330,6 +345,7 @@ function OwnedEmailAddressChange({ owner, currentEmail, onChanged, onClose, bloc
 
 export function EmailAddressChange({ active, accountId, currentEmail, onChanged, onClose }: EmailAddressChangeProps) {
   const capture = useSessionSnapshot();
+  const captureAccount = useProductAccountSnapshot();
   const editor = useRef<EditorOwner | null>(null);
   const fallback = useRef<object | null>(null);
   const mounted = useRef(false);
@@ -341,20 +357,28 @@ export function EmailAddressChange({ active, accountId, currentEmail, onChanged,
   const [, redraw] = useState(0);
   const admission = useRef({ active, accountId });
   admission.current = { active, accountId };
-  const view = useRef({ notice: null as string | null, blocked: false, session: null as SessionAuthority | null });
+  const view = useRef({ notice: null as string | null, blocked: false,
+    session: null as SessionAuthority | null, account: null as ProductAccountAuthority | null });
   if (editor.current && (!active || !editor.current.isCurrent())) {
     const previous = editor.current;
-    if (previous.pendingWrite && previous.session.isCurrent()) {
-      view.current = { notice: UNCERTAIN, blocked: true, session: previous.session };
+    if (previous.pendingWrite && previous.session.isCurrent() && previous.account.isCurrent()) {
+      view.current = { notice: UNCERTAIN, blocked: true, session: previous.session, account: previous.account };
     }
+    previous.request?.retire();
     editor.current = null;
   }
   if (active && !editor.current) {
     const session = capture();
-    if (session && accountId === session.userId) {
-      const owner: EditorOwner = { id: ++nextId.current, session, request: null, pendingWrite: false,
-        isCurrent: () => admission.current.active && admission.current.accountId === session.userId &&
-          editor.current === owner && session.isCurrent() };
+    const account = captureAccount(accountId);
+    if (session && account) {
+      let retired = false;
+      const owner: EditorOwner = { id: ++nextId.current, session, account,
+        admitted: false, admissionError: null, request: null, pendingWrite: false,
+        isCurrent: () => {
+          if (!admission.current.active || admission.current.accountId !== account.accountId ||
+              editor.current !== owner || !session.isCurrent() || !account.isCurrent()) retired = true;
+          return !retired;
+        } };
       editor.current = owner;
     }
   }
@@ -364,26 +388,95 @@ export function EmailAddressChange({ active, accountId, currentEmail, onChanged,
     owner.request?.retire();
     owner.pendingWrite = false;
     editor.current = null;
-    view.current = { notice, blocked, session: owner.session };
+    view.current = { notice, blocked, session: owner.session, account: owner.account };
     redraw((revision) => revision + 1);
   }, [owner]);
-  if (!active || owner) fallback.current = null;
+  useLayoutEffect(() => {
+    if (!owner) return;
+    let observing = true;
+    const stops: Array<() => void> = [];
+    const releaseObservation = () => { for (const stop of stops.splice(0)) stop(); };
+    const observe = () => {
+      if (observing && !owner.isCurrent()) {
+        observing = false;
+        releaseObservation();
+        owner.request?.retire();
+        redraw((revision) => revision + 1);
+      }
+    };
+    stops.push(owner.account.subscribe(observe));
+    if (owner.session.subscribe) stops.push(owner.session.subscribe(observe));
+    observe();
+    if (!observing) releaseObservation();
+
+    const request = !owner.admitted && observing
+      ? createRequestAuthority(owner.session, () => observing && owner.isCurrent())
+      : null;
+    if (request) {
+      owner.request = request;
+      void (async () => {
+        try {
+          const response = await request.fetch(ENDPOINT, { method: 'GET', cache: 'no-store' });
+          request.assertCurrent();
+          if (!response.ok) {
+            const message = await readFailure(response, 'Your account could not be confirmed. Try again.');
+            request.assertCurrent();
+            throw new Error(message);
+          }
+          const body: unknown = await response.json();
+          request.assertCurrent();
+          const receipt = accountSchema.parse(body);
+          if (receipt.accountId !== owner.account.accountId || receipt.subject !== owner.session.userId ||
+              receipt.sessionId !== owner.session.sessionId) {
+            throw new Error('Your signed-in account changed. Wait for your account to finish loading and try again.');
+          }
+          owner.admitted = true;
+          redraw((revision) => revision + 1);
+        } catch (cause) {
+          if (request.isCurrent()) {
+            owner.admissionError = toUserMessage(cause, 'Your account could not be confirmed. Try again.');
+            redraw((revision) => revision + 1);
+          }
+        } finally {
+          request.retire();
+          if (owner.request === request) owner.request = null;
+        }
+      })();
+    }
+    return () => {
+      observing = false;
+      releaseObservation();
+      request?.retire();
+      owner.request?.retire();
+    };
+  }, [owner]);
+  if (!active || owner?.admitted) fallback.current = null;
   if (!active) return null;
-  if (!owner) {
+  const noticeCurrent = view.current.session?.isCurrent() && view.current.account?.isCurrent();
+  if (!owner?.admitted) {
     const admissionId = {};
     fallback.current = admissionId;
+    const acceptsEvent = () => mounted.current && admission.current.active &&
+      editor.current === owner && fallback.current === admissionId && (!owner || owner.isCurrent());
     const close = () => {
-      if (!mounted.current || !admission.current.active || editor.current || fallback.current !== admissionId) return;
+      if (!acceptsEvent()) return;
       fallback.current = null;
+      if (owner) replace(noticeCurrent ? view.current.notice : null, noticeCurrent ? view.current.blocked : false);
       onClose();
     };
     return <Dialog open onOpenChange={(next) => { if (!next) close(); }}>
     <DialogContent><DialogHeader><DialogTitle>Change email address</DialogTitle>
-      <DialogDescription>Your account must finish loading before you can change your email address.</DialogDescription>
-    </DialogHeader><DialogFooter><Button onClick={close}>Close</Button></DialogFooter></DialogContent>
+      <DialogDescription>{owner?.admissionError ?? (owner
+        ? 'Confirming your signed-in account…'
+        : 'Your account must finish loading before you can change your email address.')}</DialogDescription>
+    </DialogHeader><DialogFooter><Button onClick={close}>Close</Button>
+      {owner?.admissionError ? <Button onClick={() => {
+        if (acceptsEvent()) replace(noticeCurrent ? view.current.notice : null, noticeCurrent ? view.current.blocked : false);
+      }}>Try again</Button> : null}
+    </DialogFooter></DialogContent>
     </Dialog>;
   }
   return <OwnedEmailAddressChange key={owner.id} owner={owner} currentEmail={currentEmail} onChanged={onChanged}
-    onClose={onClose} replace={replace} notice={view.current.session?.isCurrent() ? view.current.notice : null}
-    blocked={view.current.session?.isCurrent() ? view.current.blocked : false} />;
+    onClose={onClose} replace={replace} notice={noticeCurrent ? view.current.notice : null}
+    blocked={noticeCurrent ? view.current.blocked : false} />;
 }

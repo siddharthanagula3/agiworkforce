@@ -983,7 +983,7 @@ export function AccountSection({ emailEditorActive = true }: { emailEditorActive
           onChanged={(email, completion) => {
             if (!completion.isCurrent()) return;
             const latest = useAuthStore.getState();
-            if (latest.user?.id !== completion.userId || !completion.isCurrent()) return;
+            if (latest.user?.id !== completion.accountId || !completion.isCurrent()) return;
             latest.updateUser({ ...latest.user, email });
           }}
           onClose={() => setShowEmailChange(false)}

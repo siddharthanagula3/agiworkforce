@@ -16,16 +16,17 @@ export interface SecondFactorStatus {
   earlierEnrollmentPending: boolean;
 }
 
-async function authenticatorRegistered(userId: string): Promise<boolean> {
+async function authenticatorRegistered(subject: string): Promise<boolean> {
   const user = await getIdentityProvider()
-    .getUser(userId)
+    .getUser(subject)
     .catch(() => null);
-  return user?.totpEnabled === true;
+  return user?.id === subject && user.totpEnabled === true;
 }
 
 async function registerEarlierEnrollment(
   db: DatabaseAdapter,
   userId: string,
+  subject: string,
   status: SecondFactorStatus,
 ): Promise<SecondFactorStatus> {
   const [earlier] = await db.query<{ totp_secret_enc: string }>(
@@ -37,11 +38,11 @@ async function registerEarlierEnrollment(
   let registered = status;
   if (!status.authenticator) {
     try {
-      await getIdentityProvider().registerSecondFactor(userId, {
+      await getIdentityProvider().registerSecondFactor(subject, {
         totpSecret: openTotpSecret(earlier.totp_secret_enc),
       });
     } catch (error) {
-      if (!(await authenticatorRegistered(userId))) {
+      if (!(await authenticatorRegistered(subject))) {
         logger.error(
           isIdentityRequestRejected(error)
             ? { userId, code: error.code, message: error.message }
@@ -63,18 +64,24 @@ async function registerEarlierEnrollment(
 export async function readSecondFactorStatus(
   db: DatabaseAdapter,
   userId: string,
+  subject: string = userId,
 ): Promise<SecondFactorStatus> {
-  const user = await getIdentityProvider().getUser(userId);
-  return registerEarlierEnrollment(db, userId, {
-    authenticator: user?.totpEnabled === true,
-    backupCodes: user?.backupCodesEnabled === true,
-    anySecondFactor: user?.twoFactorEnabled === true,
+  const user = await getIdentityProvider().getUser(subject);
+  if (!user || user.id !== subject) throw createError.unauthorized();
+  return registerEarlierEnrollment(db, userId, subject, {
+    authenticator: user.totpEnabled === true,
+    backupCodes: user.backupCodesEnabled === true,
+    anySecondFactor: user.twoFactorEnabled === true,
     earlierEnrollmentPending: false,
   });
 }
 
-export async function stepUpLevelFor(db: DatabaseAdapter, userId: string): Promise<StepUpLevel> {
-  const status = await readSecondFactorStatus(db, userId);
+export async function stepUpLevelFor(
+  db: DatabaseAdapter,
+  userId: string,
+  subject: string = userId,
+): Promise<StepUpLevel> {
+  const status = await readSecondFactorStatus(db, userId, subject);
   if (status.earlierEnrollmentPending) {
     throw createError
       .serviceUnavailable(
