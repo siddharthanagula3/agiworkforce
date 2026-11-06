@@ -5723,9 +5723,29 @@ uninspected. Enrollment continuity remains a migration acceptance question.
 Independent review covers source and unrun fixtures, not runtime correctness. See
 WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-SETTINGS-STEP-UP-OWNERSHIP-01.
 
+## Compromise resolution rejects invalid provider-session evidence
+
+Accepted `4ad0104b0bed5bece3c3f0ed5761e783d329e727` requires the returned session ID to match the
+requested one, an active status and finite hold/session creation timestamps
+before an unresolved hold reaches its sweep. Creation at or after hold opening
+remains required. Existing provider-user comparison, service inputs, route
+admission and sweep ownership remain unchanged; this is not a native/product
+mapping correction. Source fixtures cover valid and rejected evidence but are
+unrun, and already-resolved no-op behavior remains.
+
+The PATCH-only mapping design was withheld: cookie GET/report retain native
+ownership, so product-only PATCH would stop finding those holds. All handlers,
+provider identity, device-report eligibility and historical rows need coordinated
+repair. A separate checked-schema defect also remains: compromise rows have
+SELECT-only app_rls policy, while scoped report/resolve attempt INSERT/UPDATE.
+An empty update is treated as already_resolved without proving the hold cleared.
+No deployed policy inspection or backfill occurred. Native mapping, write authority,
+truthful receipts, proof custody and atomic/all-provider containment remain open;
+see WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-COMPROMISE-WRITE-AUTHORITY-01.
+
 ## Reconstruction boundary
 
-Only the two hundred thirty-one accepted production slices traced above are
+Only the two hundred thirty-two accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

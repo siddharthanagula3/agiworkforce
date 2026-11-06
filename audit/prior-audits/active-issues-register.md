@@ -14021,6 +14021,25 @@ canonical product scope will not read such a differently keyed row. No backfill
 is performed, deployed row contents were not inspected, and continuity of that
 legacy enrollment is not established by this correction.
 
+The bounded resolution-evidence follow-on `4ad0104b0bed5bece3c3f0ed5761e783d329e727` validates
+the exact provider session ID, active status and finite hold/session timestamps
+before an unresolved hold reaches its sweep. Session creation must still be at
+or after hold opening. This is an evidence check, not a mapped-account repair:
+the existing provider userId comparison, route admission, ambient cookie session
+read, service input and product/default sweep behavior remain unchanged.
+Malformed, inactive or mismatched evidence now refuses without reaching the
+sweep or hold update; existing already-resolved no-op behavior is retained.
+
+A proposed PATCH-only native mapping change was withheld after coordinated
+review. Legacy cookie GET/report operate with the native subject, so changing
+only PATCH to canonical product scope would make a native-keyed hold visible to
+GET but not resolvable by PATCH when the IDs differ. The profiles foreign key
+does not establish canonical mapping and can admit a native-keyed hold when that
+profile exists. Product admission for all three handlers, native provider scope,
+historical hold reconciliation and product-only emergency-report compatibility
+must be designed together. No such mapping rewrite or data backfill is included.
+Compromise write authority and false completion are separately tracked below.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include remaining account-security/factor consumers,
@@ -14036,3 +14055,31 @@ sighting, passkey-gate, native-session MFA/requirement, email-triggered
 revocation, password and factor-route identity fixtures at controlled provider, database, scheduling, event, intent
 cleanup and key-value boundaries. No product tests, lint, typechecks, builds,
 runtime/timer or installed provider acceptance were run.
+
+## WEB-COMPROMISE-WRITE-AUTHORITY-01
+
+Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime reproduced.
+Migration 0255_identity_risk_signals.sql grants app_rls SELECT on
+account_compromise_responses and defines only its FOR SELECT policy. Both the
+legacy scoped adapter and claimed product scope use app_rls. No later write
+policy for this table was found. Protective POST inserts a hold through that
+scoped database, and resolution PATCH updates it after sweeping sessions; those
+writes are excluded by the checked RLS contract. Deployed schema state is unknown.
+
+If UPDATE privilege is present through inherited grants, SELECT-only RLS can
+produce no updated row rather than proving the hold is already resolved. The
+service currently treats every empty UPDATE RETURNING result as already_resolved.
+Provider revocation may therefore precede a failed or excluded hold update, and
+a success-shaped response is not proof that password_reset_required was cleared.
+The report/resolve API is registered as an emergency endpoint without a routine
+first-party settings caller; external-client and operational behavior are unverified.
+
+Repair the canonical product/native contract across GET/report/resolve together
+with narrowly authorized service writes and truthful completion. Do not grant
+general clients unrestricted hold-clearing privileges, infer provider subjects
+from device credentials, or add an unverified cross-owner row fallback. Preserve
+product-only protective-report eligibility while explicitly defining its provider
+coverage. Current-session evidence checks do not establish password reset, fresh
+factor proof bound to that session, atomic cleanup/update or all-provider
+containment. Source fixtures mock DB operations and were not executed; they do
+not verify deployed privileges, RLS behavior or recovery usability.
