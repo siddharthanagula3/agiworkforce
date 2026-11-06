@@ -1,11 +1,12 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
 
 import type { DeveloperWebhookDelivery, DeveloperWebhookEndpoint } from '../types';
 import { readDeveloperApiError } from './use-developer-projects';
+import { useDeveloperQuery, type DeveloperQueryScope } from './use-developer-query';
 
 const WEBHOOKS_PATH = '/api/developers/webhooks';
 const WEBHOOKS_QUERY_KEY = ['developers', 'webhooks'] as const;
@@ -35,18 +36,22 @@ async function readJson<T>(
   return (await response.json()) as T;
 }
 
+async function readOwnedJson<T>(
+  { request, headers }: DeveloperQueryScope,
+  url: string,
+  fallback: string,
+): Promise<T> {
+  const response = await request.fetch(url, { method: 'GET', cache: 'no-store', headers });
+  if (!response.ok) throw new Error(await readDeveloperApiError(response, fallback));
+  return (await response.json()) as T;
+}
+
 export function useWebhookEndpoints() {
-  return useQuery<DeveloperWebhookEndpoint[], Error>({
-    queryKey: WEBHOOKS_QUERY_KEY,
-    queryFn: async () =>
-      (
-        await readJson<{ endpoints: DeveloperWebhookEndpoint[] }>(
-          WEBHOOKS_PATH,
-          { method: 'GET' },
-          'Webhook endpoints could not be loaded.',
-        )
-      ).endpoints,
-  });
+  return useDeveloperQuery(WEBHOOKS_QUERY_KEY, async (scope) =>
+    (await readOwnedJson<{ endpoints: DeveloperWebhookEndpoint[] }>(
+      scope, WEBHOOKS_PATH, 'Webhook endpoints could not be loaded.',
+    )).endpoints,
+  );
 }
 
 export function useCreateWebhookEndpoint() {
@@ -98,22 +103,20 @@ export function useDeleteWebhookEndpoint() {
 }
 
 export function useWebhookDeliveries(endpointId: string, enabled: boolean) {
-  return useQuery<DeveloperWebhookDelivery[], Error>({
-    queryKey: deliveriesQueryKey(endpointId),
-    enabled,
-    refetchInterval: (query) =>
-      query.state.data?.some((delivery) => delivery.status === 'pending' && delivery.attempts === 0)
-        ? FIRST_ATTEMPT_POLL_MS
-        : false,
-    queryFn: async () =>
-      (
-        await readJson<{ deliveries: DeveloperWebhookDelivery[] }>(
-          `${endpointPath(endpointId)}/deliveries`,
-          { method: 'GET' },
-          'Deliveries could not be loaded.',
-        )
-      ).deliveries,
-  });
+  return useDeveloperQuery(
+    deliveriesQueryKey(endpointId),
+    async (scope) =>
+      (await readOwnedJson<{ deliveries: DeveloperWebhookDelivery[] }>(
+        scope, `${endpointPath(endpointId)}/deliveries`, 'Deliveries could not be loaded.',
+      )).deliveries,
+    {
+      enabled: enabled && endpointId.trim().length > 0,
+      refetchInterval: (data) =>
+        data?.some((delivery) => delivery.status === 'pending' && delivery.attempts === 0)
+          ? FIRST_ATTEMPT_POLL_MS
+          : false,
+    },
+  );
 }
 
 export function useSendWebhookTest(endpointId: string) {

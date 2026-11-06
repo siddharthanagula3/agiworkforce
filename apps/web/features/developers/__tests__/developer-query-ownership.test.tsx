@@ -17,7 +17,8 @@ import {
 } from '@/features/workspaces/lib/workspace-admission';
 import { DEVELOPER_PROJECTS_QUERY_KEY, useDeveloperProjects } from '../hooks/use-developer-projects';
 import { DEVELOPER_USAGE_QUERY_KEY, useDeveloperUsage } from '../hooks/use-developer-usage';
-import type { DeveloperProject, DeveloperUsage } from '../types';
+import { useWebhookDeliveries, useWebhookEndpoints } from '../hooks/use-developer-webhooks';
+import type { DeveloperProject, DeveloperUsage, DeveloperWebhookDelivery, DeveloperWebhookEndpoint } from '../types';
 
 const fixture = vi.hoisted(() => ({
   auth: { isLoaded: true, isSignedIn: true, userId: 'a', sessionId: 'session-a' },
@@ -45,7 +46,23 @@ function usage(label: string): DeveloperUsage {
   return { from: '2026-10-01T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z',
     keys: [{ apiKeyId: label, requests: 1, credits: 1, unsettledRequests: 0 }], projects: [] };
 }
+function endpoints(label: string): DeveloperWebhookEndpoint[] {
+  return [{ id: label, url: 'https://example.test/webhook', description: null,
+    eventTypes: [], secretPrefix: 'prefix', enabled: true, createdAt: '2026-10-20T00:00:00.000Z' }];
+}
+function deliveries(label: string): DeveloperWebhookDelivery[] {
+  return [{ id: label, eventId: label, eventType: 'test', status: 'delivered', attempts: 1,
+    responseStatus: 200, error: null, redeliveryOf: null,
+    lastAttemptAt: '2026-10-20T00:00:00.000Z', deliveredAt: '2026-10-20T00:00:00.000Z',
+    createdAt: '2026-10-20T00:00:00.000Z' }];
+}
 const subjects = [
+  { name: 'webhook endpoints', path: '/api/developers/webhooks', key: ['developers', 'webhooks'],
+    useHook: useWebhookEndpoints, data: endpoints, body: (label: string) => ({ endpoints: endpoints(label) }) },
+  { name: 'webhook deliveries', path: '/api/developers/webhooks/endpoint-a/deliveries',
+    key: ['developers', 'webhooks', 'endpoint-a', 'deliveries'],
+    useHook: () => useWebhookDeliveries('endpoint-a', true), data: deliveries,
+    body: (label: string) => ({ deliveries: deliveries(label) }) },
   { name: 'projects', path: '/api/developers/projects', key: DEVELOPER_PROJECTS_QUERY_KEY,
     useHook: useDeveloperProjects, data: projects, body: (label: string) => ({ projects: projects(label) }) },
   { name: 'usage', path: '/api/developers/usage', key: DEVELOPER_USAGE_QUERY_KEY,

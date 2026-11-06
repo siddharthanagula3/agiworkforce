@@ -20,10 +20,18 @@ export interface DeveloperQueryScope {
   headers: Record<string, string>;
 }
 
+interface DeveloperQueryOptions<T> {
+  enabled?: boolean;
+  refetchInterval?: (data: T | undefined) => number | false;
+}
+
 export function useDeveloperQuery<T>(
   key: readonly string[],
   read: (scope: DeveloperQueryScope) => Promise<T>,
+  options: DeveloperQueryOptions<T> = {},
 ) {
+  const enabled = options.enabled ?? true;
+  const resourceKey = JSON.stringify(key);
   const workspace = useAccountWorkspaces();
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
@@ -33,7 +41,7 @@ export function useDeveloperQuery<T>(
     ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
     : null;
   const organizationId = data?.activeOrganizationId ?? null;
-  const lifetime = useMemo(() => ({ active: false }), [owner, epoch, scopeKey]);
+  const lifetime = useMemo(() => ({ active: false }), [owner, epoch, scopeKey, resourceKey, enabled]);
   useLayoutEffect(() => {
     lifetime.active = true;
     return () => {
@@ -51,7 +59,9 @@ export function useDeveloperQuery<T>(
     queryKey: owner
       ? [...key, owner.session.userId, owner.session.sessionId, owner.incarnation, epoch, scopeKey]
       : [...key, 'unavailable'],
-    enabled: current(),
+    enabled: enabled && current(),
+    refetchInterval: (query) =>
+      enabled && current() ? options.refetchInterval?.(query.state.data) ?? false : false,
     meta: { silent: true },
     queryFn: async ({ signal }) => {
       if (!owner || !current()) throw new DOMException('Request owner changed', 'AbortError');
@@ -77,9 +87,9 @@ export function useDeveloperQuery<T>(
       }
     },
   });
-  const admitted = current();
-  const isLoading = workspace.isLoading || (admitted && query.isPending);
-  const error = admitted ? query.error : workspace.isLoading ? null : new Error(
+  const admitted = enabled && current();
+  const isLoading = enabled && (workspace.isLoading || (admitted && query.isPending));
+  const error = !enabled ? null : admitted ? query.error : workspace.isLoading ? null : new Error(
     workspace.requiresReload
       ? 'Reload this page to confirm your workspace before loading developer data.'
       : 'Developer data is unavailable until your account and workspace are ready.',
@@ -92,7 +102,7 @@ export function useDeveloperQuery<T>(
     isFetching: admitted && query.isFetching,
     isSuccess: admitted && query.isSuccess,
     refetch: async (): Promise<void> => {
-      if (!lifetime.active || !owner || epoch === undefined || !workspaceOwnerIsCurrent(owner, epoch)) {
+      if (!enabled || !lifetime.active || !owner || epoch === undefined || !workspaceOwnerIsCurrent(owner, epoch)) {
         return;
       }
       if (!current()) {
