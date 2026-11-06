@@ -6,14 +6,32 @@ const { mockProjects, mockUsage, mockKeys } = vi.hoisted(() => ({
   mockProjects: vi.fn(), mockUsage: vi.fn(), mockKeys: vi.fn(),
 }));
 vi.mock('../hooks/use-developer-projects', () => ({
+  ProjectMutationRejectedError: class ProjectMutationRejectedError extends Error {},
   useDeveloperProjects: () => mockProjects(),
-  useCreateDeveloperProject: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateDeveloperProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArchiveDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('../hooks/use-developer-usage', () => ({ useDeveloperUsage: () => mockUsage() }));
 vi.mock('@features/settings/hooks/use-settings-queries', () => ({
   useAPIKeys: () => mockKeys(),
+}));
+
+const admission = vi.hoisted(() => {
+  const data = { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null };
+  const session = { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token' };
+  const owner = { session, incarnation: 1, epoch: 0, phase: 'admitted',
+    scopeKey: JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) };
+  return { data, session, owner };
+});
+vi.mock('@/lib/identity/useSessionSnapshot', () => ({ useSessionSnapshot: () => () => admission.session }));
+vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
+  useAccountWorkspaces: () => ({ data: admission.data }),
+}));
+vi.mock('@/features/workspaces/lib/workspace-admission', () => ({
+  observeWorkspaceOwner: () => admission.owner,
+  workspaceOwnerIsCurrent: () => true,
+  subscribeWorkspaceAdmission: () => () => undefined,
 }));
 
 const project = { id: 'p', name: 'Production', archivedAt: null, monthlyCreditLimit: null,

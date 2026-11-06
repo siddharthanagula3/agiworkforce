@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 
 vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
+vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf') }));
 
 import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
 import {
@@ -37,6 +39,15 @@ const endpoint = {
 };
 const delivery = { id: 'delivery-id' };
 
+const fetchMock = vi.fn<typeof fetch>();
+async function withProjectScope<T>(run: (scope: { request: ReturnType<typeof createRequestAuthority>; organizationId: null }) => Promise<T>) {
+  const request = createRequestAuthority({ userId: 'owner', sessionId: 'session',
+    isCurrent: () => true, getToken: async () => 'captured-token' });
+  try { return await run({ request, organizationId: null }); }
+  finally { request.retire(); }
+}
+const transportCalls = () => fetchMock.mock.calls.length + vi.mocked(sendAuthorizedJson).mock.calls.length;
+
 const operations = [
   {
     name: 'create project',
@@ -44,7 +55,7 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useCreateDeveloperProject();
-      return () => mutation.mutateAsync({ name: 'Project', monthlyCreditLimit: null });
+      return () => withProjectScope((scope) => mutation.mutateAsync({ scope, draft: { name: 'Project', monthlyCreditLimit: null } }));
     },
   },
   {
@@ -53,7 +64,7 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useUpdateDeveloperProject();
-      return () => mutation.mutateAsync({ projectId: project.id, patch: { name: 'Renamed' } });
+      return () => withProjectScope((scope) => mutation.mutateAsync({ scope, projectId: project.id, patch: { name: 'Renamed' } }));
     },
   },
   {
@@ -62,7 +73,7 @@ const operations = [
     invalidations: 2,
     useAttempt() {
       const mutation = useArchiveDeveloperProject();
-      return () => mutation.mutateAsync(project.id);
+      return () => withProjectScope((scope) => mutation.mutateAsync({ scope, projectId: project.id }));
     },
   },
   {
@@ -118,7 +129,10 @@ const operations = [
 
 beforeEach(() => {
   vi.mocked(sendAuthorizedJson).mockReset();
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => {
   function mount() {
@@ -140,19 +154,22 @@ describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => 
       const lostResponse = new Error('The server outcome is unknown');
       if (failure === 'transport') {
         vi.mocked(sendAuthorizedJson).mockRejectedValue(lostResponse);
+        fetchMock.mockRejectedValue(lostResponse);
       } else {
-        vi.mocked(sendAuthorizedJson).mockImplementation(async () => {
+        const unreadable = async () => {
           const result = new Response('{}', { status: 200 });
           vi.spyOn(result, 'json').mockRejectedValue(lostResponse);
           return result;
-        });
+        };
+        vi.mocked(sendAuthorizedJson).mockImplementation(unreadable);
+        fetchMock.mockImplementation(unreadable);
       }
       const { result, unmount, client, invalidate } = mount();
       try {
         await act(async () => {
           await expect(result.current()).rejects.toBe(lostResponse);
         });
-        expect(sendAuthorizedJson).toHaveBeenCalledTimes(1);
+        expect(transportCalls()).toBe(1);
         expect(invalidate).not.toHaveBeenCalled();
       } finally {
         unmount();
@@ -162,16 +179,15 @@ describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => 
   );
 
   it('keeps successful cache invalidation and deliberate subsequent actions', async () => {
-    vi.mocked(sendAuthorizedJson).mockImplementation(async () =>
-      Response.json(response),
-    );
+    vi.mocked(sendAuthorizedJson).mockImplementation(async () => Response.json(response));
+    fetchMock.mockImplementation(async () => Response.json(response));
     const { result, unmount, client, invalidate } = mount();
     try {
       await act(async () => { await result.current(); });
-      expect(sendAuthorizedJson).toHaveBeenCalledTimes(1);
+      expect(transportCalls()).toBe(1);
       expect(invalidate).toHaveBeenCalledTimes(invalidations);
       await act(async () => { await result.current(); });
-      expect(sendAuthorizedJson).toHaveBeenCalledTimes(2);
+      expect(transportCalls()).toBe(2);
       expect(invalidate).toHaveBeenCalledTimes(invalidations * 2);
     } finally {
       unmount();
