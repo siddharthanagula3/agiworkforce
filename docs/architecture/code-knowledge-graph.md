@@ -7212,10 +7212,11 @@ Results, errors and finalizers require exact ownership. Unpublish success alone
 does not claim privacy; exact readback is required. Its confirmation now discloses
 existing visitor-data deletion.
 
-Explicit local-to-cloud publish confirmation stays intact. Existing URL-only
-publish receipt/audience fallback, web background badges, mobile Sites management
-and VS Code decoration remain separate limits. The following continuation bounds
-mobile bulk refresh without discovering publications beyond its first page. This is read-time
+Explicit local-to-cloud publish confirmation stays intact. The later outcome
+continuation replaces mobile URL-only receipts/audience fallback. Web background
+badges, mobile Sites management and VS Code decoration remain separate limits.
+The following continuation bounds mobile bulk refresh without discovering
+publications beyond its first page. This is read-time
 knowledge and per-view ownership, not global reconciliation or rollback proof.
 Fixtures are UNRUN; no product checks, live services/migrations, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01 for scope and acceptance boundaries.
@@ -7236,9 +7237,39 @@ fetch-all or per-card fan-out. Null-prototype writes and own-key reads preserve
 arbitrary valid text IDs without inheriting constructor/toString values.
 
 Missing badges do not assert Private. Retained off-page positives may become
-stale, and exact interactive lookup does not reconcile the badge map. Initial
-publish still does not record a badge, URL-only receipt/audience fallback stays,
-and the Local confirmation flow is preserved without claiming egress success.
+stale, and ordinary exact lookup does not reconcile the badge map. The later
+outcome continuation adds validated initial badges and positive reconciliation,
+replacing mobile URL-only receipts. Local confirmation is preserved without
+claiming egress success.
 Latest-request ownership is not global freshness or proof of cancellation.
 Fixtures remain UNRUN; no product checks, live services/migrations, push or
 deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01 for the remaining boundaries.
+
+## Mobile publication separates acknowledgement and recovery reads
+
+Continuation `58ab25804df4d7d49a7c1cf284908768d7153638` adds a shared identity/token/link/audience
+publish receipt with a safe integer version. The backend adds artifactId and
+moves descriptive workspace enrichment before its unchanged publication
+transaction. This removes that particular postcommit failure path, not uncertain
+commit acknowledgement or transport loss.
+
+Mobile captures accountEpoch and uses the existing caller-owned 401 response
+mode to avoid replay and premature ambient sign-out, while credentials remain
+ambient. A validated matching receipt supplies audience/workspace and the initial
+badge; clipboard/haptic failure is reported separately. Link labels are neutral.
+Legacy/malformed receipts are unknown; backend/client rollout coordination and
+all runtime acceptance are still required.
+
+A view-local uncertainty marker survives positive, absent and failed GETs and
+later audience/unpublish operations. Automatic/manual recovery reads observe
+current metadata only; they never prove attempted content/version or rollback.
+Null does not become Private while the marker remains. Manual read admission
+uses synchronous request/mutation refs, with existing view/account/sequence
+guards and owned finalizers. No automatic POST retry or durable uncertainty
+record is added. Exact reconciliation can record a current positive badge;
+ordinary lookup still leaves the map untouched.
+
+Close/remount, other controllers, future writers, PATCH/DELETE receipts/replay and
+web publisher adoption remain separate limits. Local confirmation stays intact
+without a new egress allowance. All fixtures UNRUN; no product checks, live
+services/migrations, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.

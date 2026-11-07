@@ -16839,10 +16839,10 @@ The unpublish prompt now names existing visitor-data deletion as well as loss of
 link access. No deletion SQL or cascade changes.
 
 Existing explicit local-to-cloud publishing confirmation is preserved, not
-silently disabled by the lookup correction. The mobile publish helper still
-returns only a URL; its existing UI audience fallback can display public until
-an exact reread replaces it. Mutation receipt validation and that fallback are
-not certified by this slice. Already-dispatched effects cannot be recalled;
+silently disabled by the lookup correction. At that slice, the mobile publish
+helper returned only a URL and its UI could guess public until an exact reread.
+The later outcome continuation below replaces that mobile receipt/fallback;
+the lookup correction itself did not certify mutation receipts. Already-dispatched effects cannot be recalled;
 error/abort is not proof of rollback. The per-view token does not serialize
 other components, tabs, devices or server writers, and no deadline is added.
 
@@ -16902,10 +16902,11 @@ inherited positives or disappear through the prototype setter. This is a
 dictionary boundary correction, not a change to artifact-ID normalization.
 
 Incomplete merging deliberately may retain a remotely deleted or changed
-off-page badge. Exact interactive lookup does not update this map; it informs
-the current panel only. Explicit record/forget, a complete first-page refresh
-or account invalidation changes that retained knowledge. Initial publish still
-does not record a badge, and URL-only publish receipts/audience fallback remain.
+off-page badge. Ordinary exact lookup leaves this map untouched. Explicit
+record/forget, a complete first-page refresh or account invalidation changes
+retained knowledge. The later outcome continuation adds a validated initial
+publish badge and current positive reconciliation, replacing the mobile URL-only
+receipt/fallback without establishing global cache freshness.
 The existing Local publish confirmation source flow is untouched; actual Local
 publishing through the generic egress guard is not established by this slice.
 The overlay grows with distinct writes during its current request, and retained
@@ -16921,3 +16922,70 @@ the singleton account listeners through the test-only reset helper. Native
 subscription/AbortSignal/auth transport timing and all product behavior remain
 unverified. No product tests, lint, typechecks, builds, installs, app/module
 execution, live services/databases, migration application, fetch, push or deploy.
+
+### Mobile publication distinguishes acknowledgement from uncertainty
+
+Continuation `58ab25804df4d7d49a7c1cf284908768d7153638`, 2026-11-07, narrows mobile Publish outcome reporting.
+The POST route could commit publication/history and then fail its awaited
+workspace summary. Transport loss or malformed JSON could also hide the reply.
+Mobile accepted only a nonempty URL, discarded returned visibility and guessed
+public when no previous local audience existed. New live artifacts actually
+default to invited, other new artifacts to public, and republish preserves the
+existing audience. A clipboard/haptic exception could additionally enter the
+publication failure catch after a successful receipt. These are qualified source
+paths, not observed incidents, disclosure or live rollback evidence.
+
+A shared publish-response schema now requires artifact identity, token, an
+absolute HTTP(S) URL whose path matches that token without credentials/query/hash,
+strict audience, positive safe integer version and existing response metadata.
+The URL origin is not pinned, timestamp/kind are nonempty text, and this is not
+content-hash or every-field semantic verification. The backend adds artifactId
+and computes descriptive workspace metadata after preparation but before the
+publication transaction. Summary failure now refuses before that write; it can
+reduce availability when descriptive lookup fails. Audience policy, transaction
+body, quota admission and permissions are unchanged. Later commit acknowledgement,
+serialization or transport failure can still leave an unknown outcome.
+
+Mobile validates its normalized intended ID, captures the full account epoch,
+passes that epoch to POST, and validates the matching receipt before adoption.
+The existing per-request caller-owned 401-recovery option returns a refusal
+without replay or first-401 ambient sign-out. Credentials still come from ambient
+getAuthHeaders; they are not pinned. No global API or Local egress exception is
+introduced. New mobile code requires the additive backend receipt field; a
+legacy/malformed response is unknown, not silently accepted as a public link.
+
+A current owned receipt sets the actual audience/workspace, records the initial
+badge, and remains confirmed independently of clipboard/haptic failure. Copy has
+separate feedback; no success-path GET is needed to guess the audience. Link
+copy/share labels are neutral rather than calling invited/organization links
+public. The existing explicit Local publication confirmation flow remains;
+generic managed-cloud Local egress still blocks it, and this slice does not
+enable or verify that flow.
+
+Ambiguous outcomes use uncertainty wording instead of Nothing was shared.
+Only HTTP 400/401/403/409/429 refusals are classified separately; timeouts,
+other errors, malformed receipts and unknown outcomes remain conservative.
+The current view retains a warning that a displayed publication may be an older
+version. One automatic GET and an explicit Check publication status action only
+observe current owner metadata. Positive readback can display and record that
+current audience but does not confirm the attempted content/version. Null/error
+readback never certifies Private while the uncertainty marker remains and does
+not erase a badge as proof of rollback. There is no automatic POST replay.
+
+Manual recovery rejects duplicate reads and active publication mutations using
+synchronous refs. Existing view/account/sequence ownership retires stale results;
+old finalizers cannot release newer reads. A pending same-view read can delay
+another read until settlement, even if a mutation intervenes. Later audience or
+unpublish success does not resolve the earlier publish-content uncertainty.
+The marker is view-local and clears on close/replacement or a new valid receipt,
+not a durable reconciliation record. Already-dispatched work, future competing
+writes, cross-controller ordering and later remounts remain outside this claim.
+
+Eight source/fixture files are independently reviewed. Shared receipt, route
+sequencing, service authority/error classification and component recovery fixtures
+are authored/adapted UNRUN, including stale views, manual read admission and
+clipboard failures. PATCH/DELETE receipt/replay behavior, web publisher adoption,
+durable unknown-write recovery and live server/native/auth/clipboard timing remain
+open. No product tests, lint, typechecks, builds, installs, app/module execution,
+live services/databases, migrations, fetch, push or deployment. The existing
+recovery-chain, unapplied-migration and lost-history limitations remain.
