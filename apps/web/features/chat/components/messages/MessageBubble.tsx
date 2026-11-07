@@ -1936,8 +1936,9 @@ const MessageBubbleComponent = function MessageBubble({
     [inlineArtifacts],
   );
   const handleRegenerateInterruptedArtifact = useCallback(() => {
+    if (awaitingApproval) return;
     onRegenerate?.(message.id);
-  }, [onRegenerate, message.id]);
+  }, [awaitingApproval, onRegenerate, message.id]);
 
   useEffect(() => {
     if (artifactDerivationPolicy !== EXPLICIT_ARTIFACT_DERIVATION_POLICY) return;
@@ -3219,9 +3220,6 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* A stopped turn leaves a partial artifact on the card above. The
-              card looks the same as a finished one, so the transcript has to
-              say which it is and offer the way to a whole document. */}
           {!isUser && hasInterruptedArtifact && (
             <div
               className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2"
@@ -3232,8 +3230,12 @@ const MessageBubbleComponent = function MessageBubble({
               }}
               data-testid="interrupted-artifact-notice"
             >
-              <span className="min-w-0 text-xs">{INTERRUPTED_ARTIFACT_NOTICE}</span>
-              {onRegenerate && (
+              <span className="min-w-0 text-xs">
+                {awaitingApproval
+                  ? 'This artifact is partial while the response awaits approval.'
+                  : INTERRUPTED_ARTIFACT_NOTICE}
+              </span>
+              {onRegenerate && !awaitingApproval && (
                 <button
                   type="button"
                   onClick={handleRegenerateInterruptedArtifact}

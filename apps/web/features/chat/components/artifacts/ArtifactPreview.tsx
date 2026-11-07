@@ -249,6 +249,7 @@ export interface ArtifactProjectSave {
 }
 interface ArtifactPreviewProps {
   artifact: ArtifactData;
+  awaitingApproval?: boolean;
   onShare?: () => void;
   className?: string;
   /** 'card' (default) = inline card with fixed heights + TabsList row.
@@ -528,6 +529,7 @@ export function ArtifactPreview({
   projectSave,
   onRequestEdits,
   liveRuntime = false,
+  awaitingApproval = false,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const live = useLiveArtifactRuntime(
@@ -2758,10 +2760,6 @@ export function ArtifactPreview({
           </div>
         </div>
 
-        {/* The turn was stopped before this artifact finished, so the panel is
-            showing a fragment. Saying so is the point: the content looks like a
-            whole document and a reader who copies or publishes it would carry
-            the truncation with them. */}
         {artifact.interrupted && (
           <div
             className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
@@ -2773,7 +2771,11 @@ export function ArtifactPreview({
             data-testid="artifact-interrupted-notice"
           >
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 text-xs">{INTERRUPTED_ARTIFACT_NOTICE}</span>
+            <span className="min-w-0 text-xs">
+              {awaitingApproval
+                ? 'This artifact is partial while the response awaits approval.'
+                : INTERRUPTED_ARTIFACT_NOTICE}
+            </span>
           </div>
         )}
 

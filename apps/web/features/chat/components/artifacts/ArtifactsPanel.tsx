@@ -18,6 +18,7 @@ import {
   type Artifact,
 } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
+import { hasPendingMessageApproval } from '../../lib/pending-approval';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import {
@@ -174,6 +175,7 @@ function ArtifactViewer({
   projectSave,
   onRequestEdits,
   liveRuntime,
+  awaitingApproval,
 }: {
   artifact: Artifact;
   versionHistory: SharedArtifact[];
@@ -185,6 +187,7 @@ function ArtifactViewer({
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
   liveRuntime: boolean;
+  awaitingApproval: boolean;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -201,6 +204,7 @@ function ArtifactViewer({
         {...(projectSave ? { projectSave } : {})}
         {...(onRequestEdits ? { onRequestEdits } : {})}
         liveRuntime={liveRuntime}
+        awaitingApproval={awaitingApproval}
       />
     </div>
   );
@@ -388,6 +392,11 @@ export function ArtifactsPanel({
     );
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
+
+  const selectedMessage = selectedArtifact?.messageId
+    ? conversationMessages.find((message) => message.id === selectedArtifact.messageId)
+    : undefined;
+  const awaitingApproval = selectedMessage ? hasPendingMessageApproval(selectedMessage) : false;
 
   const selectedConflict = selectedArtifact ? artifactConflicts[selectedArtifact.id] : undefined;
   const selectedArtifactKey =
@@ -662,6 +671,7 @@ export function ArtifactsPanel({
               ) : selectedArtifact ? (
                 <ArtifactViewer
                   artifact={selectedArtifact}
+                  awaitingApproval={awaitingApproval}
                   versionHistory={getArtifactVersions(selectedArtifact.id)}
                   onClose={() => setPanelOpen(false)}
                   publishArtifact={makePublishHandler(selectedArtifact)}
