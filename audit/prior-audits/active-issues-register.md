@@ -14094,27 +14094,48 @@ invariant.
 
 ## WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01
 
-Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime-reproduced.
+Severity: High. Participating current-writer admission source-corrected on
+2026-11-07 in `8bfc6cffd4692d55055979743b75b91b011b6ff9`; mixed-version,
+whole-lifecycle and database/runtime acceptance remain open. Source-confirmed,
+not runtime-reproduced.
 
-Advanced Account Security credential removal reads enrollment and credentials,
-checks the remaining minimum-method policy, then performs a separate DELETE.
-Concurrent removals can both pass against the same pre-delete set, leaving fewer
-methods than policy requires. Enrollment also checks methods before separately
-promoting its pending keys. The route's enrolled/proof decision is also read before
-the service mutation; a removal can observe unenrolled state and finish after
-enrollment promotion. Fixing client proof-target forwarding does not make
-these server transitions atomic or repair this invariant.
+Previously, concurrent removals could each validate the same pre-delete set and
+leave too few methods or no portable method. Enrollment checked methods before
+promotion, and the DELETE route could skip proof from an unenrolled snapshot
+that became stale before deletion. Target forwarding and local duplicate guards
+do not serialize these server transitions.
 
-Coordinate per-account admission across removal, enrollment and other lifecycle
-transitions; lock/check/delete or conditional writes must share a transaction and
-consistent lock order, including the enrolled state and its required proof. A
-DELETE-only transaction or credential-row lock is insufficient. Preserve the
-across-device-method requirement, user/session
-checks and audit failure semantics. A component duplicate-click guard cannot
-serialize another tab or authorized client. Sources:
-apps/web/lib/server/account-security/service.ts removeCredential and
-requireEnrollmentMethods/enrollAccountSecurity; store.ts listCredentials,
-deleteCredential and promotePendingRecoveryKeys. No server change was made here.
+The store now creates or updates the same user-owned enrollment row inside the
+caller's transaction. Its intentional no-op user_id UPDATE creates a row-version
+write barrier, rather than relying on SELECT FOR UPDATE and a fresh READ COMMITTED
+snapshot alone. A successful admission changes updated_at through the existing
+trigger; pending/active recovery and undo fields are preserved. The schema/RLS
+and trigger compatibility were source-reviewed, not exercised in PostgreSQL.
+
+Removal takes this barrier, determines current enrolled state, invokes canonical
+user/action/target-bound requireStepUp when needed, reads current credentials,
+applies the existing full count-and-portability predicate, and deletes in that
+transaction. Existing removal events use captured target/state after commit.
+Enrollment retains its early checks and one-time assertion/email-code consumption,
+then takes the same barrier and rechecks the full current method set plus asserted
+credential membership before batch promotion and undo arming. Its event count
+comes from the admitted set. Failed batch promotion now throws inside the
+transaction; post-proof refusals request a new email code and current passkey.
+There is no automatic proof replay or nested transaction.
+
+Existing clear/undo and recovery/pending writers update the enrollment row before
+related work. Old service instances and direct owner/RLS credential CRUD do not
+participate in this protocol: coordinated writer rollout/drain remains required,
+and rollback to old writers reopens the race. No new database-wide invariant is
+claimed. Disable/enroll ABA, registration event classification, postcommit session
+verification FK races, provider/cache/event effects and mapping remain separate.
+
+Three production and four fixture files were independently source-reviewed.
+Service fixtures serialize transactions in their own model and mock proof;
+they establish intended orchestration, not actual database contention or refusal
+auditing. Store fixtures inspect SQL/mapping and caller-owned transactions. Route
+fixtures preserve wrappers, exact delegation and error behavior. All are unrun.
+No tests, lint, typechecks, builds, database apply, push or deployment occurred.
 
 ## WEB-ACCOUNT-SECURITY-PROOF-TARGET-01
 
@@ -14209,35 +14230,49 @@ execution, push or deployment ran.
 
 ## WEB-EMAIL-CHANGE-COMPLETION-01
 
-Severity: High. Independently source-confirmed on 2026-11-06; unpatched and
-not runtime-reproduced. Source: apps/web/app/api/settings/email/route.ts.
+Severity: High. False-completion receipts are partially source-corrected on
+2026-11-07 in `e4388dc4ea8d664e436fea225e02e04c967855c4`; durable reconciliation,
+concurrent ordering and runtime acceptance remain open. Independently
+source-confirmed, not runtime-reproduced. Source:
+apps/web/app/api/settings/email/route.ts and its route fixtures.
 
-POST removes prior unverified, nonprimary addresses sequentially before adding
-the requested address. A later provider rejection can be mapped to a 4xx after
-one or more removals already succeeded. Neither a rejected request nor a client
-abort establishes that the address collection stayed unchanged. Concurrent
-clients can also invalidate each other's pending address; this slice does not
-serialize them or provide a recoverable operation identity.
+POST still removes prior unverified, nonprimary addresses sequentially before
+adding the requested address. A later rejection can follow successful removals;
+concurrent clients can invalidate each other's pending addresses. No rollback,
+operation identity or POST serialization is supplied by this correction.
 
-PATCH changes the provider primary address, writes the profile email, then tries
-to remove the old address. A profile failure or unknown removal failure can
-therefore leave a partial result. A recognized provider rejection during removal
-is instead caught and returns success with previousAddressRemoved:false.
-The already-primary branch returns previousAddressRemoved:true before these
-steps, without repairing a stale profile or checking whether the previous
-address was removed. Repeating PATCH after a partial failure is not proof that
-all side effects completed, even when the repeated request returns 200.
+PATCH promotes the provider address, writes profile email, then removes the old
+address. A profile failure or unknown removal failure can leave a partial result.
+Previously an already-primary retry fabricated previousAddressRemoved:true,
+without checking either profile synchronization or old-address cleanup. That
+shortcut now refuses with user-safe 409 and no completion receipt or further
+mutation. Legitimate completed requests whose response was lost also become
+unresolved on repeat; this conservative behavior is intentional, not durable
+idempotency. The target-only request cannot safely identify the original
+predecessor after promotion, so this branch does not infer or delete an alternate.
 
-A correction needs coordinated provider/profile reconciliation, accurate cleanup
-receipts and operation identity; a client lifetime fence or response schema alone
-cannot supply them. Preserve CSRF, authenticated user, owned verified address and
-resource-targeted step-up checks. The existing already-primary branch is an
-idempotent shortcut, not evidence of an authentication bypass. Organization
-resolution and policy/audit context remain as implemented; requireStepUp verifies
-user/action/resource, not an organization or session field in its grant subject.
-No server behavior was changed by this inventory, and no tests, lint, typechecks,
-builds, app/service execution, push or deployment ran.
+The profile UPDATE now returns id and requires exactly one row matching the
+mapped product user before cleanup/success. Missing, malformed, multiple or foreign
+receipts refuse explicitly after provider promotion, with no cleanup attempt.
+This does not undo promotion or make provider/profile writes atomic. A recognized
+provider rejection while removing the known predecessor still returns the
+existing successful previousAddressRemoved:false receipt; repeats cannot upgrade
+it to true. Existing dispatched-error UI retains uncertainty rather than success,
+and prevents another write until local acknowledgment; it is not durable recovery.
 
+CSRF, authenticated account resolution, native subject ownership, verified target,
+rate limiting and resource-targeted step-up remain. The prior read-only shortcut
+was not evidence of an authentication bypass. Concurrent provider/profile writes,
+zero-row causes, provider error ambiguity and the email_changed notice emitted
+before promotion require separate work. A final read alone cannot create an
+operation-bound predecessor or a cross-system transaction.
+
+Both changed files were independently source-reviewed. Authored fixtures cover
+normal exact-product receipts, invalid profile receipts, partial failure/retry,
+retained-address false receipts and conservative lost-response duplicate refusal.
+They are unrun mocks, not provider/database/browser acceptance. No tests, lint,
+typechecks, builds, application/provider/database execution, push or deployment
+occurred.
 
 ## WEB-EMAIL-CHANGE-LIFETIME-01
 

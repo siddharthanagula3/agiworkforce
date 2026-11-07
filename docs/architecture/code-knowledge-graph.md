@@ -5472,9 +5472,9 @@ challenge/grant helpers with mocked HTTP and does not establish server integrati
 The comprehensive settings inventory separates account credential editors,
 destructive account/session cleanup, workspace ownership, TOTP and Advanced
 Security/WebAuthn/recovery lifetimes. No broad legacy ownership correction follows
-from this target fix. Separate high-priority server gaps remain: pending recovery
-keys lack an acknowledged batch ID, and minimum-method/enrollment/proof decisions
-lack atomic account admission. Properly targeted grants were already obtainable;
+from this target fix. The later follow-ons below bind recovery batches and participating-writer
+minimum-method/enrollment/proof admission. Mixed-version and whole-lifecycle
+acceptance remain open. Properly targeted grants were already obtainable;
 the client mismatch was not a security control. See
 `WEB-ACCOUNT-SECURITY-PROOF-TARGET-01`, `WEB-SETTINGS-STEP-UP-OWNERSHIP-01`,
 `WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01` and
@@ -6097,9 +6097,46 @@ unrun models, not PostgreSQL concurrency or browser evidence. General transport
 ownership, credential-admission and post-activation cleanup remain outside scope.
 See WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01 for release/rollout limits.
 
+## Credential removal and enrollment share account admission
+
+Accepted `8bfc6cffd4692d55055979743b75b91b011b6ff9` moves removal proof and current
+count-and-portability admission into the same transaction as deletion. A shared
+owner-scoped enrollment upsert writes the mutex row even when its user_id is
+unchanged, preventing the stale higher-isolation admission allowed by a lock-only
+design. The existing timestamp trigger intentionally records this admission write;
+recovery, pending and undo data are not reset. Enrollment rechecks its current
+method set and asserted credential membership under that barrier before exact-batch
+promotion and undo arming. Rejections roll back admission; consumed proofs are not
+replayed. Removal and enrollment mutation events remain postcommit and use the
+admitted count/state; step-up audits occur during admission outside its rollback.
+
+Existing clear/undo and recovery/pending writers update enrollment before related
+mutation, but old service versions and direct credential CRUD do not follow this protocol. Coordinated
+writer rollout/drain remains mandatory. No cross-version database invariant,
+whole-lifecycle linearizability or postcommit session/cache/provider/event guarantee
+is claimed. Three production and four fixture files were independently reviewed;
+fixtures model orchestration/SQL/error paths and are unrun, not PostgreSQL
+contention evidence. See WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01.
+
+## Email completion refuses unconfirmed success receipts
+
+Accepted `e4388dc4ea8d664e436fea225e02e04c967855c4` refuses the already-primary PATCH
+shortcut instead of fabricating old-address cleanup. A fresh promotion must also
+receive exactly one updated profile id matching the mapped product account before
+cleanup/success. These user-safe refusals retain the possibility that the provider
+already changed. Existing dispatched-error UI reports uncertainty; a legitimate
+lost-response duplicate is conservatively refused too. No predecessor is inferred
+from other addresses and no repair mutation is hidden in the repeat branch.
+
+Known predecessor-removal rejection still yields previousAddressRemoved:false.
+Provider/profile concurrency, POST partial removals, operation-bound recovery and
+pre-promotion notices remain separate. Two independently reviewed files contain
+source changes and unrun route mocks, not live provider/database acceptance.
+See WEB-EMAIL-CHANGE-COMPLETION-01.
+
 ## Reconstruction boundary
 
-Only the two hundred fifty accepted production slices traced above are
+Only the two hundred fifty-two accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
