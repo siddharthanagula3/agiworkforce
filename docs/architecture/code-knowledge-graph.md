@@ -6468,8 +6468,8 @@ browser or server acceptance. See WEB-PUBLICATION-CACHE-LAZY-RESURRECTION-01.
 
 Explicit hydration remains an unconditional writer, not globally ordered data.
 The subsequent bounded SiteDetail/SitesPage corrections are described below.
-Global snapshot/receipt ordering and account cleanup remain open; the singleton
-has no account reset epoch. These need coordinated read and mutation ownership, not permanent
+Global snapshot/receipt ordering and identity binding remain open; a later
+common-cleanup epoch correction is described below. These need coordinated read and mutation ownership, not permanent
 deletion markers or a partial reset that old writers can undo. See
 WEB-SITE-SNAPSHOT-ORDERING-01 and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. Actual
 cross-account disclosure is not established. No backend or authentication change
@@ -6502,11 +6502,10 @@ A later GET is assumed to reflect an acknowledged mutation, not guaranteed by a
 revision/CAS or cache policy. Global ordering, same-field mutations, account reset
 and other controllers remain outside this fence. SitesPage reads receive the
 separate bounded lifetime correction below. useSiteActions
-records audience before its guarded callback, so stale global mutation receipts
-remain possible. Already-started restore or stale-confirmation DELETE can still
-finish; this correction does not change backend ordering or authorization. An
-account reset must fence all direct/lazy reads and mutation writers, including
-ArtifactsPanel. See WEB-SITE-SNAPSHOT-ORDERING-01 and
+records audience before its guarded callback. The later common-cleanup lease
+fences enumerated writers across that boundary, not every identity change or live
+controller. Already-started restore or same-epoch stale-confirmation DELETE can
+still finish; no backend ordering or authorization change is implied. See WEB-SITE-SNAPSHOT-ORDERING-01 and
 WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. No product checks, push or deployment ran.
 
 ## SitesPage refresh and Retry reads retire with their committed view
@@ -6530,7 +6529,48 @@ The fixture uses real cards/dialogs/actions/store with deferred services; route
 unmount/remount and synchronous hydration effect replacement are explicit models.
 Initial/Refresh/Retry lifetime, late success/error, mutation preservation, StrictMode
 and current AbortError recovery are covered in source only. All fixtures remain
-UNRUN. Global live-controller ordering, stale mutation receipts, account resets
-and backend ordering remain open. The two page read fences are not account epochs.
+UNRUN. Global live-controller and backend ordering remain open. The two original
+page read fences were not cleanup epochs; the subsequent correction below adds
+that boundary but is not universal identity/session binding.
 See WEB-SITE-SNAPSHOT-ORDERING-01 and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01.
 No product checks, push or deployment ran.
+
+## Common cleanup revokes captured publication leases
+
+Accepted `0a9de203ebc44d5c648a6d3de420e53a37ce3f69` changes nine production and eight
+unrun fixture files. cleanupAllStores directly begins synchronous publication
+cleanup before awaiting module work and releases its handle in finally. A Set of
+idempotent handles keeps admission closed through overlapping cleanup passes;
+only the last finish creates a fresh lease. Cache/status and pending lazy ownership
+are cleared at entry, not after a lazy module import.
+
+Every hydrate/record/forget/ensureLoaded requires its captured opaque lease and
+checks object identity. Lazy request identity/overlays remain separate. Synchronous
+subscriber cleanup can make a write return false, so follow-up local commits also
+recheck. usePublishedSite subscribes to lease changes and reloads once after release
+without retrying every error/status change.
+
+SiteDetail/SitesPage retire reads synchronously, key local inner views by epoch,
+and fence read results and useSiteActions intent/receipts. Name/Sharing Settings
+and Dialog continuations suppress old feedback. Panel publication/lookup/audience
+writers capture ownership before work; maps are per lease, with old finally guards.
+usePublicationView.active consults captured lease synchronously, so Preview's
+existing continuation guards work before React commits a replacement. Same-epoch
+retired-view central receipts remain allowed.
+
+Store/auth fixtures model stale writers, reentrant subscribers, handle overlap,
+mounted reload/no-loop and real cleanup/reset microtasks, not delayed dynamic-import
+passes. Component fixtures retain actual controls/store with modeled view boundaries;
+mocked Panel preview and separate actual Preview are not integrated browser proof.
+Detached confirmation-button coverage proves removal/no dispatch, while the retained
+callback guard is source-reviewed. All fixtures remain UNRUN.
+
+This is a common-cleanup boundary, not account/session authority. Auth paths skipping
+cleanup, first-scope adoption, workspace behavior and ambient-cookie dispatch remain
+open. Admission reopens when existing cleanup finishes, not after identity proof;
+asynchronous reset return values are not awaited by that existing cleanup loop.
+Already-admitted requests/clipboard writes may finish. Restore/data-clear/viewer
+mutators and feedback, unrelated artifact sync/provenance and global ordering are
+outside scope. No server authorization, actual cross-account disclosure, runtime
+acceptance, product checks, push or deployment is claimed. See
+WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01.

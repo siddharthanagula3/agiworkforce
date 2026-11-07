@@ -15398,34 +15398,88 @@ live-service behavior was executed.
 
 Limits: a subsequent GET is assumed to reflect the acknowledged mutation; the
 service has no client revision or cache-consistency guarantee. This is not server
-CAS, same-field ordering or global/cross-tab reconciliation. useSiteActions still
-writes audience receipts to the shared cache before onUpdated; stale mutation
-receipts from another controller/account are not fenced here. A stale confirmation
-may still execute DELETE and an already-started restore POST may finish; guarding
-callbacks does not undo either backend action. Concurrent restore/unpublish backend
-ordering is separate. The page fences do not globally order live controllers or
-coordinate account cleanup. Loading hides list cards and modal saving blocks close,
-so invented simultaneous-modal journeys are not evidence. Account reset must
-coordinate every direct/lazy read and mutation writer, including ArtifactsPanel receipts. Server access checks and
-authentication are unchanged; a stale cache cannot republish a deleted row.
+CAS, same-field ordering or global/cross-tab reconciliation. useSiteActions writes
+audience receipts before onUpdated. The later common-cleanup lease correction
+below now fences enumerated writers across that boundary, not all account/session
+changes or other live controllers. A same-epoch stale confirmation may still
+execute DELETE and an already-started restore POST may finish; guards do not undo
+backend actions. Concurrent restore/unpublish ordering is separate. Loading hides
+list cards and modal saving blocks close, so invented simultaneous-modal journeys
+are not evidence. Server access checks are unchanged; a stale cache cannot
+republish a deleted row. See WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 for the later
+bounded cleanup correction and remaining identity/transport gaps.
 No product tests, lint, typechecks, builds, installs, push or deployment ran.
 
 ## WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01
 
-Severity: Medium. Source-confirmed cleanup omission on 2026-11-07; open design
-and execution work. No actual cross-account disclosure is established.
+Severity: Medium. Common-cleanup publication ownership source-corrected in
+`0a9de203ebc44d5c648a6d3de420e53a37ce3f69`, independently reviewed 2026-11-07.
+Auth paths bypassing that boundary, identity/session/transport binding and runtime
+acceptance remain open. No actual cross-account disclosure is established.
 
-published-sites-store is a module singleton with no reset action, and it is not
-in USER_SCOPED_STORE_MODULES in shared/stores/authentication-store.ts. The common
-cleanupAllStores path therefore does not clear this map, loading/ready/error
-status or its pending work during in-process account cleanup. Retained status
-can suppress a fresh lazy load. Full-navigation behavior and artifact-ID
-reachability constrain any actual exposure and remain unverified.
+Original omission: published-sites-store was a singleton absent from common
+account cleanup, with no reset and retained entries/status/pending work. Ready or
+error status could suppress a fresh lazy load. Clearing only its lazy request
+would not fence explicit SiteDetail/SitesPage snapshots or later visibility,
+unpublish, panel publication/lookup/audience receipts. The shell does not key or
+gate routed children by account, so an account cleanup need not unmount those views.
+Full-navigation behavior and artifact-ID reachability constrain actual exposure.
 
-An eventual reset must invalidate pending reads as well as clear state and
-restore idle. Registering a reset that fences only ensureLoaded would still
-allow still-mounted pre-reset SiteDetail/SitesPage reads to refill the cache. Coordinate
-the reset/account epoch with all direct/lazy reads and mutation writers, including
-useSiteActions and ArtifactsPanel receipts. The bounded SiteDetail/SitesPage view
-fences above are not account binding, and raw setState clearing is not that contract.
-No authentication behavior was changed and no live account-switch validation occurred.
+The correction calls beginPublicationCleanup synchronously at cleanupAllStores
+entry, before its first await, and releases it in finally. It is a direct one-way
+import rather than another delayed registry reset. Each cleanup owns an idempotent
+handle in a Set: admission stays closed until every active handle finishes, then
+a fresh object lease is issued. Cleanup clears entries/status, detaches and clears
+the pending lazy map, and sets observable lease to null. A delayed or duplicate
+finish cannot reopen while another handle remains active.
+
+hydrate, record, forget and ensureLoaded require an explicitly captured opaque
+lease; no omitted argument defaults to the current lease. Object identity, not
+numeric epoch equality, decides ownership. Stale writers and status/finally work
+are inert. Existing request-local mutation overlays and atomic lazy merge remain.
+Store writes report whether ownership survived synchronous subscriber notification;
+consumers recheck before subsequent local commits. The hook depends on lease, not
+every status change: mounted same-artifact readers load once after release, while
+an error does not automatically retry.
+
+SiteDetail/SitesPage use epoch-keyed inner views and synchronous subscriptions to
+retire/abort their active reads at cleanup. Local ready state/dialogs remount when
+the lease changes; reads check both request and lease before hydration/local state.
+useSiteActions captures the originating lease for rename, audience, copy and
+unpublish intent, checks a retained confirmation before dispatch, and suppresses
+old-lease receipts, callbacks/navigation and feedback. Direct Name/Sharing Settings
+and rename/sharing Dialog continuations also check their captured lease.
+
+ArtifactsPanel captures before conversion/network work and fences publish callback,
+lookup and audience receipts. Operation maps belong to one lease, so an old finally
+cannot unblock/delete a replacement operation. usePublicationView.active checks
+its captured lease synchronously as well as committed view liveness; actual Preview
+post-await guards therefore reject old results before a React re-render is required.
+Same-epoch retired-view receipts may still update the central cache intentionally.
+
+Production scope is nine files: published-sites-store, authentication-store,
+SiteDetail, SitesPage, useSiteActions, ArtifactsPanel, usePublicationView,
+SiteSettingsTab (Name/Sharing only) and SiteDialogs (rename/sharing only).
+Eight fixture sources are adapted/authored and all UNRUN. Store models cover stale
+writers, old success/error/finally, overlays, reentrancy, overlapping handles and
+mounted reload/no-loop. Auth fixtures use the real cleanup/store, a reset hook and
+queued microtask, a throwing reset and a manual overlapping handle. They do not
+model independently deferred dynamic-import cleanup passes. Existing cleanup does
+not await arbitrary asynchronous reset return values. Component fixtures use real
+controls/actions/store where available, modeled epoch/view transitions, mocked
+Panel preview and a separate actual Preview pre-commit model, not an integrated
+browser journey. The detached confirmation-button case verifies dialog removal/no
+request, not direct execution of a retained onConfirm closure; that guard is
+source-reviewed. All seventeen changed source/fixture hashes were independently
+reviewed. No product checks, push or deployment ran.
+
+Limits: this is common-cleanup ownership, not a verified account/session authority.
+Admission reopens at cleanup completion, not after newly proven identity. Successful
+resync/fetchUser call applyCacheScope before committing a resolved user, but missing-
+cookie resolution, settled auth errors, updateUser and auth reset can bypass common
+cleanup. First recorded scope is adopted without clearing. Workspace cleanup/full
+navigation and ambient-cookie transport remain separate. Already-admitted requests,
+including work awaiting CSRF, and initiated clipboard writes may dispatch/finish
+later; no rollback or server-access change is promised. Version Restore, data-clear
+and viewer-editor mutators/feedback, unrelated artifact provenance/cloud sync,
+same-field/global ordering and real browser account-switch acceptance remain open.
