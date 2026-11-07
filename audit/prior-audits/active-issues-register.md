@@ -15739,8 +15739,9 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `31053fc862dea2a4e00637f5828414963601bc2a`; model/connector continuation in
 `d1123747532a84e34c0af1215c461e239974ea21`; billing/report continuation in
 `09073e677cf3971fc2f7c1ed929669e55158f78e`; owner-policy auth/scope continuation in
-`c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`, 2026-11-07. Other request-backed settings, client
-workspace binding and runtime acceptance remain open.
+`c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`; shared-project scope continuation in
+`2a5d910157b8b82127c79917140d705426e401a2`, 2026-11-07. Client workspace binding, shared-session
+audience scope, wider identity consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
 returns the authenticated request's organizationId. The affected handlers discarded
@@ -16127,3 +16128,77 @@ audit/cache/response failures or uncertain outcomes remain. No transaction, repl
 protocol or migration is added; prior 0394/0395 remain UNAPPLIED. Installed Next
 guidance and runtime state were unavailable. No product checks, live DB/provider
 action, push or deployment was performed.
+
+An eighth bounded continuation `2a5d910157b8b82127c79917140d705426e401a2` binds shared-project scope to the
+organization already captured by its caller. resolveSharedProjectScope now requires
+an explicit string-or-null organizationId and delegates to the canonical exact
+active-membership helper. Project list GET, detail GET and resolveProjectWriteAccess
+pass their captured value. There is no saved-selection fallback or default target.
+
+The previous helper ignored the request selector and resolved saved/cached A again.
+With an admitted B request, shared B projects could disappear from the list, detail
+could falsely return 404, and a valid B editor could be refused. Headerless requests
+could likewise disagree after an independently persisted selection change. This is
+a source-supported availability defect, not an observed incident or demonstrated
+cross-workspace disclosure/write: the existing caller organization-equality checks
+and project SQL organization predicates prevent consuming a differently scoped
+shared result. They remain unchanged.
+
+Do not attribute selected-organization isolation to sharing RLS. The checked-in
+0315 read and 0358 editor policies use app_org_resource_is_readable and permissions;
+0200 defines readability through content.read, with later active membership
+permission refinement. These predicates are not current_app_org_id equality, so
+a dual member can read sharing rows for another permitted organization. This
+correction chooses the intended target before those queries; it does not replace
+or expand database grants. Applied policy state remains unverified.
+
+Personal now returns no shared scope without querying membership or the saved
+selection. Missing/mismatched target membership returns no shared scope; database
+errors still propagate. Read grants, default_access resolution, explicit per-user
+write grants and content.share requirements remain unchanged. Viewer downgrade
+continues to strip editor access. The exact-target owner check still runs first
+in resolveProjectWriteAccess, including Personal owner access. No default
+authentication, SQL subject mapping, adapter or permission behavior changes.
+
+The indirect write effect reaches project PUT's editor fallback and
+checkProjectKnowledgeCapacity. That capacity check is used by direct knowledge
+registration and resumable knowledge upload creation/registration on completion.
+It is not a correction to every knowledge endpoint: statement-local knowledge
+reads retain their existing separate predicates; DELETE/reindex keep their
+independent owner filters. Drive import/refresh explicitly reject shared projects
+before their owner-only admission. Upload completion can
+already assemble an object before registration fails, and an existing completion
+receipt can take its own read path. No rollback, cleanup, quota reservation,
+upload authority or transactional completion guarantee is added.
+
+Authored UNRUN service fixtures exercise the real shared-scope and exact-membership
+owners over parameter-aware database/cache/permission boundaries. They cover
+captured B versus saved A, Personal without queries, absent/modeled-inactive or
+mismatched membership, membership and sharing-query errors, empty readable scope,
+explicit write versus reader/Viewer and unchanged owner paths. The earlier
+missing-sharing-table fixture now reaches the sharing query after valid membership
+instead of failing at membership.
+
+Route fixtures delegate to real canonical scope/write-access source while mocking
+authenticated scope, saved selection, database, permission, rate and CSRF boundaries.
+They cover explicit/headerless receipt cases, exact B list/detail/PUT bindings,
+Personal, target membership failures and owner preservation. Headers are present
+in fixtures, but actual auth/selector parsing is not exercised. PUT tests model
+the failed owner attempt before the editor fallback, not a real database update.
+
+Knowledge fixtures directly exercise real capacity -> write-access -> shared-scope
+-> exact-membership source over mocked database, saved selector, permissions and
+storage allowance/admission. The module's internal helper remains real despite an
+exported helper stub retained for older read fixtures. Captured B admission and
+Personal, Viewer/reader/member, archived, file-count, duplicate and storage refusal
+paths are covered. Mock implementations reset between cases. This does not execute
+object storage, extraction, indexing, upload routes or PostgreSQL/RLS. No new
+source-shape guard is added.
+
+All source/fixtures are independently reviewed only and UNRUN. Client/headerless
+selection intent before capture, shared-session audience targeting, default
+identity/RLS scope, post-check membership/grant changes and broader project
+workflows remain open. Existing project response-version handling, owner-only
+field checks, limits, transactions, response shape and errors are preserved. No migration, new
+transaction, replay or lease is introduced; prior 0394/0395 remain UNAPPLIED.
+No product checks, provider/SQL/RLS execution, push or deployment occurred.

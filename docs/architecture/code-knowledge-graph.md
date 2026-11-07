@@ -6823,8 +6823,9 @@ simulated revision triggers. All are UNRUN, not SQL/RLS or runtime acceptance.
 Three older scoped-cookie MFA assertions now include native session evidence.
 
 No direct resolveOrgMembership calls remain in the inspected settings routes, but
-headerless clients/global query keys, project/session helpers and wider identity
-consumers remain open. Timeout does not cancel lookup/cache work; checks are not
+headerless clients/global query keys, shared-session scope and wider identity
+consumers remain open. The later shared-project continuation below narrows that
+helper's repeated selection without changing global identity scope. Timeout does not cancel lookup/cache work; checks are not
 leases, claimed scope is not an arbitrary-SQL sandbox, and policy RLS is not
 universally selected-org equality. Main revision check/write are still separate;
 Code policy gains no revision protocol. No new transaction/replay guarantee or
@@ -6869,3 +6870,41 @@ Main revision check/write are still separate, Code gets no new protocol, and no
 transaction, replay or migration is added. Prior 0394/0395 remain UNAPPLIED. No
 product checks, live provider/SQL/RLS, push or deployment. Runtime acceptance is
 open; source review and backup integrity do not establish release readiness.
+
+## Shared-project scope retains the captured workspace
+
+Continuation `2a5d910157b8b82127c79917140d705426e401a2` makes resolveSharedProjectScope require an explicit
+organizationId and use canonical exact active membership. Project list/detail GET
+and the internal editor branch of resolveProjectWriteAccess pass their captured
+request organization; Personal yields no shared scope without a saved lookup.
+
+Previously, re-reading saved A after capturing B could omit B's shared projects
+or falsely refuse detail/editor access. Existing scope-equality guards and project
+SQL organization predicates already prevent using A's result in B; they remain.
+Sharing RLS uses permitted-organization readability, not universal selected-org
+equality. This is a bounded availability correction, not unrelated-tenant access,
+an observed incident or deployed-RLS acceptance.
+
+Explicit write grants plus content.share, viewer denial and owner-first access
+including Personal remain. Editor admission feeds project PUT and knowledge
+capacity for direct registration/resumable creation and registration on completion.
+Knowledge reads keep their separate statement predicates. Drive import/refresh
+still explicitly reject shared projects; this does not enable them. Completion may
+assemble bytes before later registration refusal; no rollback or cleanup guarantee.
+
+Authored UNRUN fixtures exercise real shared-scope/membership/write-access,
+project handlers and direct knowledge-capacity source over mocked auth receipts,
+database, saved selection, permission, storage, rate/CSRF boundaries. They cover
+B versus saved A, Personal, membership/error/empty scope, explicit grants and
+Viewer denial, owner preservation, GET/PUT target bindings, and retained knowledge
+archived-project/count/duplicate/storage refusals. Missing-sharing-table coverage now fails
+at sharing after valid membership; mock implementations reset between cases.
+No actual auth/header parsing, SQL/RLS, object storage, extraction, indexing,
+upload completion, concurrency or runtime acceptance is established.
+
+Default auth/identity/adapter behavior, limits, response-version handling,
+owner-only field checks and transactions stay unchanged. Client intent before capture, shared-session audience
+scope, default identity/RLS mapping and post-check grant/membership races remain.
+No lease, new transaction, quota reservation, replay protocol or migration. Prior
+0394/0395 remain UNAPPLIED; no product checks, live SQL/provider work, push or deploy.
+See WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for boundaries and unrun acceptance work.
