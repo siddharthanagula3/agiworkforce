@@ -7375,3 +7375,28 @@ is no new retry, recovery read or durable unknown-write record. Mobile Sites
 remains on the legacy update schema. Direct and real-helper/hook/store fixtures
 are UNRUN; no product checks, live services/migrations, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile Sites detail owns its view and continuations
+
+Continuation 7b4f393c4698993dffe5304523e2f1d67c312d07 introduces a site-local detail lifetime with
+full cloud epoch, live auth owner/readiness, mode and token checks. Subscribed
+transitions permanently retire old work; each fresh activation/refresh owns a
+keyed body. Render gating and post-read assertions prevent retired fallback
+results, titles or errors from repainting a newer view.
+
+Confirmation and mutation admission refs serialize local intent. Captured
+actions and completions check ownership before dispatch, refresh or navigation;
+old finalizers cannot reset the new body's state. Existing takedown disclosure
+and backend semantics remain.
+
+Optional service authority passes existing API epoch/signal and caller-owned
+401 options only for the detail consumer, including the clear-to-delete gap.
+Credentials stay ambient; global auth and other caller defaults are unchanged.
+Already-dispatched writes/native actions are not recalled and partial clearing
+is not atomic with unpublish. Shared copy-hook post-dispatch feedback is not
+newly lifetime-guarded.
+
+Fixtures are UNRUN. This does not add pagination, strict mutation receipts,
+durable recovery or global ordering. The separate Sites list and live
+React/native/auth/database acceptance remain open. No product checks, migration
+application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.

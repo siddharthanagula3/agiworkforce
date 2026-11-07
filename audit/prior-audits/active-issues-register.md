@@ -17139,10 +17139,10 @@ retention, app snapshots or other copies outside publication storage.
 Two source/fixture files are independently reviewed. Real-screen native alert
 fixtures name the exact consequence, hold dispatch until confirmation, preserve
 both existing request sequences, and reject cancellation/dismissal; all UNRUN.
-An existing unrelated Restore fixture still expects the obsolete root POST,
-although current service uses token/version POST; it is not repaired here.
-Legacy mobile Sites account/view lifetime, bodyless DELETE acceptance and the
-separate clear-then-delete partial-failure workflow remain unresolved. This
+At that slice, an unrelated Restore fixture still expected the obsolete root
+POST. It is aligned in the detail-lifetime continuation below. That continuation
+also bounds mobile detail ownership and the clear-to-delete retirement gap;
+bodyless DELETE acceptance and non-atomic partial failure remain unresolved. This
 copy correction adds no atomicity, recovery, receipt or lifecycle guarantee.
 No product checks, live service/database or migration actions, push or deploy.
 Existing fixed-base recovery dependencies and lost-history limits remain.
@@ -17183,3 +17183,52 @@ still uses legacy update receipts; web Sites Restore/DELETE receipt adoption
 and broader lifetime/reconciliation remain open. No product checks, live
 services/databases, migration application, push or deployment. Existing recovery
 dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Sites detail retires obsolete ownership
+
+Continuation 7b4f393c4698993dffe5304523e2f1d67c312d07, 2026-11-07, bounds the mobile SiteDetailScreen
+lifetime. Previously secondary history/data failures, including cancellation,
+could become fallback values and let an older load repaint state/title. The
+effect omitted owner identity, and ready-to-ready account changes could retain
+the prior view. Pending confirmations and mutation continuations also captured
+older state. These are source-qualified paths, not observed disclosure.
+
+A site-local lifetime captures the full cloud account epoch and token, checks
+live authentication readiness/owner and Cloud mode, and retires permanently on
+relevant account/auth/mode transitions. A new keyed detail body owns each view
+and explicit refresh, isolating read state, title, busy/error and action refs.
+Synchronous render checks hide retired content; subscribed transitions retire
+even when the final mode or owner value returns to its prior value. Initial
+subscription setup rechecks ownership to close the render-to-listener gap.
+
+Reads assert ownership after the list and secondary reads. Optional secondary
+failures retain the existing fallback only while current; retired work cannot
+commit success or errors. Site actions and pending destructive confirmations
+check their captured lifetime. Immediate confirmation and mutation admission
+refs reject duplicate work; cancellation/dismissal releases confirmation
+admission. Retired completion cannot refresh, navigate or clear the new body's
+busy/error state. Existing visitor-data deletion disclosure is unchanged.
+
+Optional SiteRequestAuthority supplies existing API epoch/signal and
+caller-owned 401 handling for this detail screen. Admission is checked before
+each dispatch, including the unpublish step after shared-data clearing. Other
+callers keep their existing defaults. This does not pin credentials or rewrite
+global auth: existing API generation/epoch checks remain, and view acceptance
+is still owned by the caller. Mocked option assertions do not establish actual
+network retry, sign-out or abort behavior.
+
+Five source/fixture files are independently reviewed; fixtures are
+authored/adapted UNRUN. The prior obsolete Restore screen fixture is aligned to
+the existing canonical endpoint and the new authority arguments, without a
+production Restore redesign. No new strict receipt, inventory pagination,
+durable unknown-write recovery or cross-controller ordering is added. An
+already-dispatched write/native action cannot be recalled; shared clearing
+may have completed before a retired second delete is suppressed. No atomicity,
+rollback, backend cancellation or universal account-isolation claim. Shared
+useCopyAction still owns its post-dispatch haptic/error feedback; not every
+platform/helper completion is lifetime-cancelled.
+
+The separate Sites list lifetime, legacy mobile receipts, capped detail
+discovery and live React/native/auth/database behavior remain open. No product
+checks, live services/migrations, push or deployment. Recovery dependencies,
+unapplied migrations and lost-history limitations remain.
