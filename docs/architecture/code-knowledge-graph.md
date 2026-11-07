@@ -6767,6 +6767,27 @@ mocked. Parameter-aware A/B data cover exact targets, Personal/gate refusal,
 ordinary-member GET, unchanged A and B's omitted connector toolRules. All UNRUN;
 no executed header parsing, SQL/RLS, enforcement, concurrency or runtime proof.
 
+Continuation `09073e677cf3971fc2f7c1ed929669e55158f78e` retains request scope at four billing/report lookup
+sites covering five handlers. Billing-contract GET/POST, posture GET and usage
+read/export now use exact active membership of the captured string-or-null target.
+Personal and lost target membership refuse before resources. Existing entitlement,
+billing.read/billing.contracts.manage/audit.read and default auth/MFA/IP gates remain.
+
+Old saved A billing reads and unreconciled payment-report inserts are supported
+under existing A rights; reporting moves no money and settles no invoice. Successful
+termination is not established by checked-in app_rls agreement grants/policies.
+Old posture can read permission-admitted A control-plane data. Direct usage tables
+instead enforce selected-org equality: mismatched A spend/export rows are empty,
+while A seatsInUse and permission-gated definer activity aggregates remain readable.
+CSV does not render seatsInUse. Applied SQL state and actual effects are unverified.
+
+Services, adapters, validation, CSRF/rate, deadline/circuit settings, bounded windows,
+activity fallback, CSV formula protection and no-store are unchanged. Fixtures retain
+real route/member/billing/report-builder source over mocked auth, DB/transactions,
+permission/plan, infrastructure/activity, audits and middleware. Parameter-aware
+targets and refusals are authored, all UNRUN; mocked termination is not RLS proof.
+The three GET hooks still use global query keys without explicit workspace selectors.
+
 Policy and policy/code remain unchanged pending a bound auth/scope correction.
 Their saved-owner exemption, request-target lockdown and later saved route target
 can diverge. The headerless MFA interleaving requires a separately admitted switch;
@@ -6777,8 +6798,19 @@ target lockdown, app_rls identity and route scope together. Both token adapter p
 can retain provider-subject RLS even when AuthResult names the mapped product account;
 see WEB-IDENTITY-POLICY-NAMESPACE-01. No auth/RLS change is included here.
 
+The reviewed future opt-in design remains unimplemented: authenticate once, capture
+the target once with fail-closed lookup errors/deadline, keep age/lifecycle, exact
+lockdown, account security, exact owner proof or aggregate MFA, IP and sightings
+ordered, then return an internally produced account/target receipt. getUserScopedDb
+must reject missing/mismatched receipts, copy primitive scope values and bind the
+existing app_rls claimed adapter only after trusted cookie/bearer admission. The
+same captured cookie session and token-required gate are retained; no fake JWT,
+service fallback or public receipt-input seam. Default auth and verified-bearer
+helpers remain unchanged. This is not implemented auth repair, a scope lease or
+universal RLS tenant equality; main-policy product-only MFA preflight remains open.
+
 Headerless clients and global query keys remain unbound to stale UI intent before
-the first server resolution. Six other organization settings files, project/session
+the first server resolution. Two other organization settings files, project/session
 target helpers and MFA owner-exemption scope (both policy and policy/code) remain
 separate work. Post-check membership/policy changes, post-write errors and uncertain
 outcomes are unchanged;

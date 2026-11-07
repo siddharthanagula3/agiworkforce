@@ -15669,7 +15669,8 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `2ae29f73ae6adaa7337f1ee1783d112401406ca3`; legal-hold/admin-key continuation in
 `2b88fbf779028837dbf33864103949a5343d4e5f`; retention/audit-destination continuation in
 `31053fc862dea2a4e00637f5828414963601bc2a`; model/connector continuation in
-`d1123747532a84e34c0af1215c461e239974ea21`, 2026-11-07. Other request-backed settings, client
+`d1123747532a84e34c0af1215c461e239974ea21`; billing/report continuation in
+`09073e677cf3971fc2f7c1ed929669e55158f78e`, 2026-11-07. Other request-backed settings, client
 workspace binding and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -15888,6 +15889,63 @@ Both hooks use global query keys and omit explicit workspace selectors in direct
 fetches. This source correction retains the first server resolution; it does not
 recover stale UI intent or stop a workspace switch before that resolution.
 
+A sixth bounded correction in `09073e677cf3971fc2f7c1ed929669e55158f78e` retains the captured request
+organization at four lookup sites covering five handlers: billing-contract GET/POST,
+posture GET, usage-analytics GET and usage-analytics/export GET. Default auth/MFA/IP,
+Team/Enterprise access and existing permission gates remain unchanged. Billing and
+usage reads require billing.read; billing actions require billing.contracts.manage;
+posture requires audit.read. None opts into the policy owner-MFA exemption.
+Personal and failed exact active membership stop before downstream resource effects.
+
+Old billing paths could read saved A contracts, invoices and agreement history
+despite Personal/B selection, under existing A membership, entitlement and permissions.
+Offline reporting could insert an unreconciled A report: 0288 grants scoped INSERT
+with billing.contracts.manage and null reconciliation columns. This is not a money
+transfer, provider payment or invoice settlement. Invoice ownership, allowed method,
+invoice state, outstanding amount and remittance-reference idempotency still apply;
+termination separately retains its executed-agreement/lifecycle gate.
+Termination attempts an A-scoped transactional UPDATE, but checked-in agreement
+app_rls grants/policies establish SELECT, not successful mutation. Mocked successful
+termination cannot prove a live contract change or legal acceptance.
+
+Read impacts differ by resource. The latest app_row_is_visible in 0272 retains
+selected-organization equality for managed_usage_requests. Old A-targeted spend,
+breakdown and freshness reads therefore see no A rows when DB scope is Personal/B;
+the export is A-attributed empty spend, not proven A spend disclosure. Usage can
+still return A seatsInUse through the organizations subquery and A daily session/tool
+activity aggregates through the permission-gated SECURITY DEFINER functions in
+0384/0386. CSV does not render seatsInUse. Posture can return A name/seats under the
+retained 0054 organization-membership policy, plus identity/provisioning state,
+audit counts and shared-resource counts where existing A permissions admit them.
+Other predicates may filter fields. These are source-supported wrong-target paths
+within existing authority, not acquisition of unrelated tenant rights or observed
+runtime incidents; applied SQL state is unknown.
+
+The retained target now reaches entitlement/permission checks, service query
+parameters, access/mutation audits and payload/CSV metadata. Existing scoped
+adapters, contract/invoice services, body validation, CSRF/rate guards, deadline/
+circuit configuration, usage windows and aggregation, partial activity-unavailable
+fallback and CSV escaping/no-store behavior are untouched. No financial action,
+auth repair, new transaction, migration, rollback or replay guarantee is added.
+
+All four fixtures retain real handlers, canonical membership validation and the
+billing/report builders; posture infrastructure and activity readers are mocked.
+Authentication, error wrappers, DB/transaction callbacks, plan/permission gates,
+audits and other effect boundaries are mocked. Parameter-aware A/B fixtures cover
+explicit/headerless capture versus saved A, canonical Personal/null, absent or
+mismatched membership, target authorization refusal, exact read/action/audit/payload
+targets and preserved early guards. Billing retains unchanged A state, A-only
+resource refusal, method/state/input rules and repeated-remittance idempotency.
+Usage/export retain all nine scoped queries, bounded/malformed/reversed windows,
+activity failure fallback and CSV formula guards. Simulated termination proves only
+argument propagation. All fixtures remain UNRUN: no real auth/header parsing,
+MFA/IP, middleware deadlines, SQL/RLS, provider, concurrency or runtime acceptance.
+No additional source-shape guard was added.
+
+The contract, posture and usage GET hooks retain global query keys and omit explicit
+workspace selectors in their direct fetches. The server correction does not recover
+stale client intent or stop a selection change before the first scope resolution.
+
 Current legal-hold and API-key hooks use global query keys and omit workspace
 selectors on their direct fetches; key creation separately binds its step-up flow
 to an organization. This source correction does not establish which headers an
@@ -15901,8 +15959,8 @@ recover client intent before that resolution or make stale client views safe.
 
 The sharing hooks use a constant query key and omit a selector; the spend UI also
 omits one. Keeping the first server resolution does not reconstruct stale UI intent
-or stop a selection change before that resolution. Six other organization
-settings route files, shared-project scope and conversation-sharing target helpers
+or stop a selection change before that resolution. Two other organization
+settings route files (policy and policy/code), shared-project scope and conversation-sharing target helpers
 still need separate scope review.
 Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
 were deliberately not migrated. Both policy and policy/code request the owner MFA
@@ -15941,6 +15999,33 @@ authentication and the app_rls boundary while binding both logical and DB identi
 The existing claimed-scope adapter is not authentication on its own. This namespace
 work remains under WEB-IDENTITY-POLICY-NAMESPACE-01; no JWT rewriting, raw-client
 identity proof or service-role fallback is proposed or implemented.
+
+A source-reviewed future design is now bounded to an opt-in-only change in
+api-auth, rls-db and these two policy routes; it is NOT implemented here. Successful
+owner-exempt authentication would produce an account/organization receipt only
+after verified identity and all applicable gates. Required target resolution must
+occur once after session age/account lifecycle, with a fail-closed timeout/error
+distinct from the existing flag-store availability contract. Exact-target lockdown,
+account security, active owner proof or unchanged aggregate MFA, IP checks and
+session sightings retain their order. Personal is a captured null, never fallback.
+
+The scoped helper would require this receipt only on the opt-in path, reject
+missing/mismatched account evidence, copy primitive scope values, and use the
+existing claimed adapter after trusted authentication. Cookie handling must capture
+one IdentityRequestAuth, keep token-required admission and authenticate that same
+session; bearer handling must verify once. Product identity and organization would
+then enter app_rls transaction-local claims together. No caller-supplied receipt
+proof, fake JWT, service-role fallback or new verified-principal API is proposed.
+Ordinary auth paths and getVerifiedBearerUserScopedDb stay unchanged; owner opt-in
+with resolveOrganization:false would refuse. All four route gates must retain the
+same target. Inspected downstream code does not need withOrg/withUser rebinding.
+
+This design preserves existing broad owner recovery only for the exact owned target.
+It is not a membership/lockdown lease or an arbitrary-SQL tenant sandbox. Existing
+lifecycle availability exceptions, the main policy PATCH product-only MFA-enrollment
+preflight and other namespace consumers remain separate. No migration is required
+by the proposed design. Real auth-to-scope and claimed-adapter fixtures must be
+authored and source-reviewed before implementation acceptance; runtime remains unverified.
 
 Membership/permission changes after checking, post-write audit/cache/response errors
 and uncertain outcomes remain separate; no transaction or replay guarantee was
