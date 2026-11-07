@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -54,9 +54,24 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { SiteDetailScreen } from '../SiteDetailScreen';
 import { SitesScreen } from '../SitesScreen';
+import { Button } from '@/components/ui/Button';
+import { ApiHttpError } from '@/services/api';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+const authorityOptions = () => expect.objectContaining({
+  accountEpoch: expect.objectContaining({ ownerId: 'user-1', epoch: expect.any(Number) }),
+  signal: expect.anything(),
+  auth401Recovery: 'caller-owned',
+});
 
 const SITE = {
-  token: 'tok_1',
+  token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
   artifactId: 'art-1',
   conversationId: 'conv-1',
   title: 'Pricing calculator',
@@ -67,11 +82,16 @@ const SITE = {
   visibility: 'public',
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-02T00:00:00.000Z',
-  shareUrl: 'https://agiworkforce.com/shared-artifact/tok_1',
+  shareUrl: 'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
   sandboxed: true,
 };
 
+const DETAIL_PATH = `/api/artifacts/publish/${SITE.token}`;
+
 function routeGet(path: string) {
+  if (path === DETAIL_PATH) {
+    return Promise.resolve({ artifact: SITE, workspace: { memberCount: 4 } });
+  }
   if (path === '/api/artifacts/publish') {
     return Promise.resolve({ artifacts: [SITE], workspace: { memberCount: 4 } });
   }
@@ -124,12 +144,283 @@ function routeGet(path: string) {
 describe('published sites on mobile', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGet.mockReset();
+    mockPost.mockReset();
+    mockPatch.mockReset();
+    mockDelete.mockReset();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('user-1');
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
     useChatAppModeStore.setState({ appMode: 'cloud' });
     mockGet.mockImplementation(routeGet);
-    mockParams.token = 'tok_1';
+    mockParams.token = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+  });
+
+  // UNRUN: detail must not depend on a capped or unavailable collection.
+  it.each([null, { memberCount: 0 }, { memberCount: 4 }])(
+    'loads exact detail with workspace %p while the collection is unavailable', async (workspace) => {
+      mockGet.mockImplementation((path: string) => {
+        if (path === '/api/artifacts/publish') return Promise.reject(new Error('Collection unavailable'));
+        if (path === DETAIL_PATH) return Promise.resolve({ artifact: SITE, workspace });
+        return routeGet(path);
+      });
+      const screen = render(<SiteDetailScreen />);
+      expect((await screen.findByLabelText('Site name')).props.value).toBe(SITE.title);
+      expect(Boolean(screen.queryByText('Only your workspace'))).toBe(workspace !== null);
+      expect(mockGet.mock.calls.map((call) => call[0])).toEqual([
+        DETAIL_PATH, `${DETAIL_PATH}/versions`, `${DETAIL_PATH}/data`,
+      ]);
+    },
+  );
+
+  it('stops at a real detail 404 without secondary reads', async () => {
+    mockGet.mockRejectedValue(new ApiHttpError('Missing', 404));
+    const screen = render(<SiteDetailScreen />);
+    expect(await screen.findByText('This site is not available')).toBeTruthy();
+    expect(screen.getByText('It was unpublished, or this account cannot manage it.')).toBeTruthy();
+    expect(mockGet.mock.calls).toEqual([[DETAIL_PATH, authorityOptions()]]);
+  });
+
+  it.each(['auth', 'rate', 'transport', 'schema', 'wrong token'] as const)(
+    'does not load secondary data after a detail %s failure', async (failure) => {
+      if (failure === 'schema') mockGet.mockResolvedValue({ artifact: null });
+      else if (failure === 'wrong token') mockGet.mockResolvedValue({ artifact: { ...SITE, token: 'b'.repeat(24) } });
+      else mockGet.mockRejectedValue(failure === 'transport' ? new Error('Transport failure')
+        : new ApiHttpError('Request refused', failure === 'auth' ? 401 : 429));
+      const screen = render(<SiteDetailScreen />);
+      expect(await screen.findByText('This site is not available')).toBeTruthy();
+      expect(screen.queryByText('It was unpublished, or this account cannot manage it.')).toBeNull();
+      expect(mockGet.mock.calls).toEqual([[DETAIL_PATH, authorityOptions()]]);
+    },
+  );
+
+  it.each(['error', '404'] as const)('ignores a retired exact detail %s', async (outcome) => {
+    const old = deferred<unknown>();
+    mockGet.mockImplementationOnce(() => old.promise);
+    const screen = render(<SiteDetailScreen />);
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    });
+    await screen.findByLabelText('Site name');
+    const reads = mockGet.mock.calls.length;
+    await act(async () => old.reject(outcome === '404'
+      ? new ApiHttpError('Missing', 404) : new Error('Retired failure')));
+    expect(screen.getByLabelText('Site name').props.value).toBe(SITE.title);
+    expect(screen.queryByText('This site is not available')).toBeNull();
+    expect(mockGet).toHaveBeenCalledTimes(reads);
+  });
+
+  it('loads after StrictMode effect replay', async () => {
+    const screen = render(<React.StrictMode><SiteDetailScreen /></React.StrictMode>);
+    expect((await screen.findByLabelText('Site name')).props.value).toBe(SITE.title);
+  });
+
+  it('does not request or keep loading for an empty token', async () => {
+    delete mockParams.token;
+    const screen = render(<SiteDetailScreen />);
+    expect(await screen.findByText('This site is not available')).toBeTruthy();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('does not request for deliberately unavailable cloud access', () => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+    const screen = render(<SiteDetailScreen />);
+    expect(screen.queryByLabelText('Site name')).toBeNull();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it.each(['token', 'mode', 'account', 'auth'] as const)(
+    'retires deferred exact detail reads across a %s round trip', async (transition) => {
+      const old = deferred<unknown>();
+      mockGet.mockImplementationOnce(() => old.promise);
+      const screen = render(<SiteDetailScreen />);
+      const oldOptions = mockGet.mock.calls[0]?.[1];
+      act(() => {
+        if (transition === 'token') {
+          mockParams.token = 'another-token';
+          screen.rerender(<SiteDetailScreen />);
+        } else if (transition === 'mode') {
+          useChatAppModeStore.setState({ appMode: 'local' });
+          useChatAppModeStore.setState({ appMode: 'cloud' });
+        } else if (transition === 'account') {
+          activateCloudAccount('user-2');
+          activateCloudAccount('user-1');
+        } else {
+          useAuthStore.setState({ isClerkSignedIn: false });
+          useAuthStore.setState({ isClerkSignedIn: true });
+        }
+      });
+      if (transition === 'token') {
+        act(() => {
+          mockParams.token = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+          screen.rerender(<SiteDetailScreen />);
+        });
+      }
+      expect(oldOptions.signal.aborted).toBe(true);
+      await screen.findByLabelText('Site name');
+      const requests = mockGet.mock.calls.length;
+      await act(async () => {
+        old.resolve({ artifact: { ...SITE, title: 'Obsolete title' }, workspace: null });
+      });
+      expect(screen.getByLabelText('Site name').props.value).toBe(SITE.title);
+      expect(mockGet).toHaveBeenCalledTimes(requests);
+    },
+  );
+
+  it('reconciles account changes between render and layout subscription', async () => {
+    function TransitionInLayout() {
+      React.useLayoutEffect(() => {
+        activateCloudAccount('user-2');
+        activateCloudAccount('user-1');
+      }, []);
+      return null;
+    }
+    const screen = render(<><TransitionInLayout /><SiteDetailScreen /></>);
+    await screen.findByLabelText('Site name');
+    expect(mockGet.mock.calls[0]?.[1].accountEpoch).toEqual({ ownerId: 'user-1', epoch: 3 });
+  });
+
+  it('restarts for a ready-to-ready account switch and refuses mismatched runtime ownership', async () => {
+    const screen = render(<SiteDetailScreen />);
+    await screen.findByLabelText('Site name');
+    mockGet.mockClear();
+    act(() => useAuthStore.setState({ clerkUserId: 'user-2' }));
+    expect(screen.queryByLabelText('Site name')).toBeNull();
+    expect(mockGet).not.toHaveBeenCalled();
+    act(() => activateCloudAccount('user-2'));
+    await screen.findByLabelText('Site name');
+    expect(mockGet.mock.calls[0]?.[1].accountEpoch.ownerId).toBe('user-2');
+  });
+
+  it.each(['resolve', 'reject'] as const)('does not commit retired child read %s fallbacks', async (outcome) => {
+    const versions = deferred<unknown>();
+    const data = deferred<unknown>();
+    mockGet.mockImplementation((path: string) => {
+      if (path.endsWith('/versions')) return versions.promise;
+      if (path.endsWith('/data')) return data.promise;
+      return routeGet(path);
+    });
+    const screen = render(<SiteDetailScreen />);
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+    mockGet.mockImplementation(routeGet);
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    });
+    await screen.findByLabelText('Put version 1 live');
+    await act(async () => {
+      if (outcome === 'resolve') {
+        versions.resolve({ versions: [] });
+        data.resolve({ supported: false });
+      } else {
+        versions.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        data.reject(new Error('old data failure'));
+      }
+    });
+    expect(screen.getByLabelText('Put version 1 live')).toBeTruthy();
+    expect(screen.getByText('Clear shared data')).toBeTruthy();
+  });
+
+  it('keeps optional read failure fallbacks in a current view', async () => {
+    mockGet.mockImplementation((path: string) => path === DETAIL_PATH
+      ? routeGet(path) : Promise.reject(new Error('optional read unavailable')));
+    const screen = render(<SiteDetailScreen />);
+    await screen.findByLabelText('Site name');
+    expect(screen.queryByText('Publish history')).toBeNull();
+    expect(screen.queryByText('Clear shared data')).toBeNull();
+  });
+
+  it.each(['token', 'mode', 'account', 'unmount'] as const)(
+    'rejects captured controls and confirmed intent after %s retirement', async (transition) => {
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      try {
+        const screen = render(<SiteDetailScreen />);
+        fireEvent.press(await screen.findByText('Unpublish'));
+        const confirm = alert.mock.calls[0]?.[2]?.find((button) => button.style === 'destructive')?.onPress;
+        const rename = screen.UNSAFE_getAllByType(Button).find((button) => button.props.title === 'Rename')?.props.onPress;
+        act(() => {
+          if (transition === 'token') {
+            mockParams.token = 'another-token';
+            screen.rerender(<SiteDetailScreen />);
+          } else if (transition === 'mode') {
+            useChatAppModeStore.setState({ appMode: 'local' });
+            useChatAppModeStore.setState({ appMode: 'cloud' });
+          } else if (transition === 'account') {
+            activateCloudAccount('user-2');
+            activateCloudAccount('user-1');
+          } else screen.unmount();
+        });
+        await act(async () => { confirm?.(); rename?.(); });
+        expect(mockDelete).not.toHaveBeenCalled();
+        expect(mockPatch).not.toHaveBeenCalled();
+        expect(mockReplace).not.toHaveBeenCalled();
+      } finally { alert.mockRestore(); }
+    },
+  );
+
+  it.each(['resolve', 'reject'] as const)('ignores stale mutation %s and finalization', async (outcome) => {
+    const old = deferred<unknown>();
+    const current = deferred<unknown>();
+    mockPatch.mockImplementationOnce(() => old.promise).mockImplementationOnce(() => current.promise);
+    const screen = render(<SiteDetailScreen />);
+    fireEvent.press(await screen.findByText('Only your workspace'));
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    });
+    fireEvent.press(await screen.findByText('Only your workspace'));
+    const requests = mockGet.mock.calls.length;
+    await act(async () => {
+      if (outcome === 'resolve') old.resolve({ token: SITE.token, shareUrl: SITE.shareUrl,
+        title: SITE.title, visibility: 'organization', organizationId: 'org-1', updatedAt: SITE.updatedAt });
+      else old.reject(new Error('retired mutation failed'));
+    });
+    expect(mockGet).toHaveBeenCalledTimes(requests);
+    expect(screen.queryByText('Could not change who can open this.')).toBeNull();
+    expect(screen.UNSAFE_getAllByType(Button).find((button) => button.props.title === 'Unpublish')?.props.disabled).toBe(true);
+    screen.unmount();
+    await act(async () => current.reject(new Error('retired current mutation')));
+  });
+
+  it('admits one confirmation at a time and releases it on cancel', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      const screen = render(<SiteDetailScreen />);
+      const unpublish = await screen.findByText('Unpublish');
+      act(() => {
+        fireEvent.press(unpublish);
+        fireEvent.press(unpublish);
+        fireEvent.press(screen.getByText('Clear shared data'));
+        fireEvent.press(screen.getByText('Only your workspace'));
+      });
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(mockPatch).not.toHaveBeenCalled();
+      await act(async () => alert.mock.calls[0]?.[2]?.find((button) => button.style === 'cancel')?.onPress?.());
+      fireEvent.press(unpublish);
+      expect(alert).toHaveBeenCalledTimes(2);
+      expect(mockDelete).not.toHaveBeenCalled();
+    } finally { alert.mockRestore(); }
+  });
+
+  it('does not continue clear-then-delete or navigate after retirement', async () => {
+    const cleared = deferred<unknown>();
+    mockDelete.mockImplementationOnce(() => cleared.promise);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      const screen = render(<SiteDetailScreen />);
+      fireEvent.press(await screen.findByText('Delete site and its data'));
+      await act(async () => alert.mock.calls[0]?.[2]?.find((button) => button.style === 'destructive')?.onPress?.());
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      act(() => {
+        useChatAppModeStore.setState({ appMode: 'local' });
+        useChatAppModeStore.setState({ appMode: 'cloud' });
+      });
+      await screen.findByLabelText('Site name');
+      await act(async () => cleared.resolve({ cleared: 1 }));
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      expect(mockReplace).not.toHaveBeenCalled();
+    } finally { alert.mockRestore(); }
   });
 
   it('lists what is published with who can open it', async () => {
@@ -137,64 +428,160 @@ describe('published sites on mobile', () => {
     fireEvent.press(await findByLabelText('Pricing calculator. Anyone with the link'));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/sites/[token]',
-      params: { token: 'tok_1' },
+      params: { token: 'aaaaaaaaaaaaaaaaaaaaaaaa' },
     });
   });
 
   it('limits a site to the workspace and renames it', async () => {
     mockPatch.mockResolvedValue({
-      token: 'tok_1',
+      token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
       shareUrl: SITE.shareUrl,
       title: 'Pricing',
       visibility: 'organization',
       organizationId: 'org-1',
       updatedAt: SITE.updatedAt,
     });
-    const { findByText, getByLabelText, getByText } = render(<SiteDetailScreen />);
+    const { findByText, findByLabelText, getByText } = render(<SiteDetailScreen />);
     fireEvent.press(await findByText('Only your workspace'));
     await waitFor(() =>
-      expect(mockPatch).toHaveBeenCalledWith('/api/artifacts/publish/tok_1', {
+      expect(mockPatch).toHaveBeenCalledWith('/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa', {
         visibility: 'organization',
-      }),
+      }, authorityOptions()),
     );
-    fireEvent.changeText(getByLabelText('Site name'), 'Pricing tool');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(6));
+    fireEvent.changeText(await findByLabelText('Site name'), 'Pricing tool');
     fireEvent.press(getByText('Rename'));
     await waitFor(() =>
-      expect(mockPatch).toHaveBeenLastCalledWith('/api/artifacts/publish/tok_1', {
+      expect(mockPatch).toHaveBeenLastCalledWith('/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa', {
         title: 'Pricing tool',
-      }),
+      }, authorityOptions()),
     );
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(9));
   });
 
-  it('puts an earlier version live by republishing its content', async () => {
-    mockPost.mockResolvedValue({ shareUrl: SITE.shareUrl });
+  it('puts an earlier version live through its canonical endpoint with captured authority', async () => {
+    mockPost.mockResolvedValue({ token: SITE.token, version: 8 });
     const { findByLabelText } = render(<SiteDetailScreen />);
     fireEvent.press(await findByLabelText('Put version 1 live'));
     await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/api/artifacts/publish', {
-        artifactId: 'art-1',
-        title: 'Pricing',
-        kind: 'html',
-        language: 'html',
-        content: '<p>v1</p>',
-      }),
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa/versions/1', undefined, authorityOptions(),
+      ),
     );
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(6));
   });
 
-  it('deletes the site and the data visitors saved, after naming the consequence', async () => {
-    mockDelete.mockResolvedValue({ cleared: 1 });
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, body, buttons) => {
-      expect(body).toMatch(/cannot be undone/);
-      buttons?.find((button) => button.style === 'destructive')?.onPress?.();
+  // UNRUN: actual service receipt rejection must not commit UI success.
+  it.each(['unpublish', 'delete', 'restore', 'visibility', 'rename'] as const)(
+    'shows uncertainty without navigation or reload for invalid %s success', async (operation) => {
+      mockDelete.mockImplementation(async (path: string) => path.endsWith('/data') ? { cleared: 1 } : {});
+      mockPost.mockResolvedValue({ token: 'other', version: 8 });
+      mockPatch.mockResolvedValue({});
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      try {
+        const screen = render(<SiteDetailScreen />);
+        await screen.findByLabelText('Site name');
+        const reads = mockGet.mock.calls.length;
+        if (operation === 'unpublish' || operation === 'delete') {
+          fireEvent.press(screen.getByText(operation === 'delete' ? 'Delete site and its data' : 'Unpublish'));
+          await act(async () => alert.mock.calls[0]?.[2]?.find((button) => button.style === 'destructive')?.onPress?.());
+        } else if (operation === 'restore') fireEvent.press(screen.getByLabelText('Put version 1 live'));
+        else if (operation === 'visibility') fireEvent.press(screen.getByText('Only your workspace'));
+        else {
+          fireEvent.changeText(screen.getByLabelText('Site name'), 'New name');
+          fireEvent.press(screen.getByText('Rename'));
+        }
+        expect(await screen.findByText(/could not be confirmed.*may have taken effect/)).toBeTruthy();
+        expect(mockReplace).not.toHaveBeenCalled();
+        expect(mockGet).toHaveBeenCalledTimes(reads);
+        expect(mockDelete).toHaveBeenCalledTimes(operation === 'delete' ? 2 : operation === 'unpublish' ? 1 : 0);
+        expect(mockPost).toHaveBeenCalledTimes(operation === 'restore' ? 1 : 0);
+        expect(mockPatch).toHaveBeenCalledTimes(operation === 'rename' || operation === 'visibility' ? 1 : 0);
+      } finally { alert.mockRestore(); }
+    },
+  );
+
+  it('keeps arbitrary transport error messages out of the UI', async () => {
+    mockPatch.mockRejectedValue(new Error('untrusted server detail'));
+    const screen = render(<SiteDetailScreen />);
+    fireEvent.press(await screen.findByText('Only your workspace'));
+    expect(await screen.findByText('Could not change who can open this.')).toBeTruthy();
+    expect(screen.queryByText('untrusted server detail')).toBeNull();
+    expect(screen.queryByText(/may have taken effect/)).toBeNull();
+  });
+
+  describe.each([
+    {
+      control: 'Unpublish',
+      title: 'Unpublish Pricing calculator?',
+      action: 'Unpublish',
+      paths: ['/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa'],
+    },
+    {
+      control: 'Delete site and its data',
+      title: 'Delete Pricing calculator and its data?',
+      action: 'Delete',
+      paths: ['/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa/data', '/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa'],
+    },
+  ])('$control confirmation', ({ control, title, action, paths }) => {
+    afterEach(() => {
+      jest.restoreAllMocks();
     });
-    const { findByText } = render(<SiteDetailScreen />);
-    expect(await findByText('1 shared entry, 12 B of 1.0 MB')).toBeTruthy();
-    fireEvent.press(await findByText('Delete site and its data'));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)/sites'));
-    expect(mockDelete.mock.calls.map((call) => call[0])).toEqual([
-      '/api/artifacts/publish/tok_1/data',
-      '/api/artifacts/publish/tok_1',
-    ]);
-    alert.mockRestore();
+
+    it('discloses irreversible shared and personal data loss before dispatching', async () => {
+      mockDelete.mockImplementation(async (path: string) => path.endsWith('/data')
+        ? { cleared: 1 } : { success: true, token: SITE.token });
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { findByText } = render(<SiteDetailScreen />);
+      fireEvent.press(await findByText(control));
+
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(alert).toHaveBeenCalledWith(
+        title,
+        'The link stops working for everyone, and all shared and personal data visitors saved in this site is permanently erased. The original artifact stays in its chat. The deleted data cannot be recovered.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: expect.any(Function) },
+          { text: action, style: 'destructive', onPress: expect.any(Function) },
+        ],
+        { cancelable: true, onDismiss: expect.any(Function) },
+      );
+      expect(mockDelete).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+
+      const confirm = alert.mock.calls[0]?.[2]?.find(
+        (button) => button.style === 'destructive',
+      )?.onPress;
+      expect(confirm).toEqual(expect.any(Function));
+      await act(async () => {
+        confirm?.();
+      });
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)/sites'));
+      expect(mockDelete.mock.calls.map((call) => call[0])).toEqual(paths);
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+    });
+
+    it.each(['cancel', 'dismiss'] as const)('does not mutate on %s', async (choice) => {
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { findByText } = render(<SiteDetailScreen />);
+      fireEvent.press(await findByText(control));
+
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(mockDelete).not.toHaveBeenCalled();
+      const cancel =
+        choice === 'cancel'
+          ? alert.mock.calls[0]?.[2]?.find((button) => button.style === 'cancel')?.onPress
+          : alert.mock.calls[0]?.[3]?.onDismiss;
+      expect(cancel).toEqual(expect.any(Function));
+      await act(async () => {
+        cancel?.();
+      });
+
+      expect(mockDelete).not.toHaveBeenCalled();
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
   });
 });

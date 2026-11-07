@@ -69,7 +69,7 @@ describe('POST /api/account-security/enrollment/undo', () => {
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getNeonDb.mockReturnValue(neonDb);
-    mocks.turnOffFromEmailLink.mockResolvedValue({ turnedOff: true });
+    mocks.turnOffFromEmailLink.mockResolvedValue({ sessionsSignedOut: 0, passwordReset: false });
   });
 
   it('refuses a request without a valid CSRF token', async () => {
@@ -111,12 +111,16 @@ describe('POST /api/account-security/enrollment/undo', () => {
     expect(mocks.turnOffFromEmailLink).not.toHaveBeenCalled();
   });
 
-  it('turns off account security with the link token and returns uncached', async () => {
+  it.each([
+    { sessionsSignedOut: 0, passwordReset: false },
+    { sessionsSignedOut: 3, passwordReset: true },
+  ])('returns the unchanged service response uncached: %j', async (result) => {
+    mocks.turnOffFromEmailLink.mockResolvedValue(result);
     const response = await POST(request({ token: TOKEN }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toContain('no-store');
-    await expect(response.json()).resolves.toEqual({ turnedOff: true });
+    await expect(response.json()).resolves.toEqual(result);
     expect(mocks.turnOffFromEmailLink).toHaveBeenCalledWith(neonDb, TOKEN, expect.anything());
   });
 

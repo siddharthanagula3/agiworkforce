@@ -88,7 +88,7 @@ describe('support actions, cross-account refusal', () => {
     expect(mocks.db!.callsMatching(/update api_keys set revoked_at/iu)).toHaveLength(0);
     expect(mocks.db!.callsMatching(/insert into api_keys/iu)).toHaveLength(0);
 
-    const read = mocks.db!.callsMatching(/select id, name, scopes from public\.api_keys/iu)[0];
+    const read = mocks.db!.callsMatching(/select id from public\.api_keys/iu)[0];
     expect(read).toBeDefined();
     expect(read!.sql.replace(/\s+/gu, ' ')).toContain('user_id = $2');
     expect(read!.params[1]).toBe(USER_A);

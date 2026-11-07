@@ -51,14 +51,10 @@ import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspac
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
-  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
-  NO_PENDING_ACCOUNT_DELETION,
   parseAccountDeletionStatus,
   parseAccountDeletionScheduleReceipt,
-  parseAccountDeletionCancellationReceipt,
   type AccountDeletionStatus,
   type AccountDeletionScheduleReceipt,
-  type AccountDeletionCancellationReceipt,
 } from '@agiworkforce/cloud-contracts';
 
 // ============================================================================
@@ -418,8 +414,6 @@ export type DeleteAccountResult = AccountDeletionScheduleReceipt;
 
 const DELETION_SCHEDULE_UNCONFIRMED =
   'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.';
-const DELETION_CANCELLATION_UNCONFIRMED =
-  'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.';
 
 function readDeleteAccountError(data: unknown, fallback: string, status: number): string {
   let raw = '';
@@ -554,57 +548,7 @@ export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus
   });
 }
 
-export type CancelAccountDeletionResult = AccountDeletionCancellationReceipt;
-
-/**
- * Cancels a pending account deletion inside its grace window. On success the
- * deletion-status query is written back to "nothing pending" directly from
- * the response, so the settings UI reflects the restored account without a
- * manual refresh.
- */
-export function useCancelAccountDeletion(): UseMutationResult<
-  CancelAccountDeletionResult,
-  Error,
-  void
-> {
-  const queryClient: QueryClient = useQueryClient();
-
-  return useMutation<CancelAccountDeletionResult, Error, void>({
-    retry: false,
-    mutationFn: async (): Promise<CancelAccountDeletionResult> => {
-      let res: Response;
-      try {
-        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-        res = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
-          method: 'POST',
-          headers,
-        });
-      } catch {
-        throw new Error(DELETION_CANCELLATION_UNCONFIRMED);
-      }
-      const data: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(
-          readDeleteAccountError(data, 'Could not cancel account deletion.', res.status),
-        );
-      }
-      try {
-        return parseAccountDeletionCancellationReceipt(data);
-      } catch {
-        throw new Error(DELETION_CANCELLATION_UNCONFIRMED);
-      }
-    },
-    onSuccess: (): void => {
-      queryClient.setQueryData<AccountDeletionStatus>(
-        queryKeys.settings.accountDeletionStatus(),
-        NO_PENDING_ACCOUNT_DELETION,
-      );
-    },
-    onError: (error: Error): void => {
-      logger.error('Error cancelling account deletion:', error);
-    },
-  });
-}
+export { useCancelAccountDeletion, type CancelAccountDeletionResult } from './use-cancel-account-deletion';
 
 // ============================================================================
 // ORGANIZATION SETTINGS HOOKS

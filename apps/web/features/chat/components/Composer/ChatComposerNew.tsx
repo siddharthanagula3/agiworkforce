@@ -445,6 +445,7 @@ interface ChatComposerProps {
   conversationId?: string | null;
   projectId?: string | null;
   isLoading?: boolean;
+  awaitingApproval?: boolean;
   /**
    * True while an SSE stream is actively generating output.
    * Combined with isLoading so Stop remains available for the entire turn and
@@ -799,6 +800,7 @@ const ChatComposerNewComponent = ({
   onSend,
   conversationId = null,
   isLoading = false,
+  awaitingApproval = false,
   isGenerating = false,
   placeholder = 'Ask anything. Type / for commands',
   disabled = false,
@@ -4791,6 +4793,12 @@ const ChatComposerNewComponent = ({
       }
       data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
     >
+      {awaitingApproval && (
+        <p role="status" className="mb-2 text-center text-xs text-muted-foreground">
+          This response has an unresolved approval request. Review it in the conversation or
+          Approvals menu.
+        </p>
+      )}
       <DragDropOverlay onDrop={handleFileDrop} maxFiles={attachmentsPerMessage} />
       {leaveLocalModelDialog}
 
@@ -7237,6 +7245,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     // where a queued follow-up may be delivered.
     prev.conversationId === next.conversationId &&
     prev.isLoading === next.isLoading &&
+    prev.awaitingApproval === next.awaitingApproval &&
     prev.isGenerating === next.isGenerating &&
     prev.placeholder === next.placeholder &&
     prev.disabled === next.disabled &&

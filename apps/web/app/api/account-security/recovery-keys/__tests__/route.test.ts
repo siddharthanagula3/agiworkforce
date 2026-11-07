@@ -85,6 +85,8 @@ import { POST, PUT } from '../route';
 
 const scoped = { db: { query: vi.fn() }, userId: 'user-1', organizationId: null };
 const caller = { ...scoped, sessionId: 'sess-1' };
+const recoveryBatchId = 'a'.repeat(43);
+const prepared = { recoveryKeys: ['AAAA-BBBB', 'CCCC-DDDD'], expiresAt: '2026-11-07T12:30:00.000Z', recoveryBatchId };
 
 function request(method: string, body?: unknown): never {
   return new Request('http://localhost/api/account-security/recovery-keys', {
@@ -102,7 +104,7 @@ describe('/api/account-security/recovery-keys', () => {
     mocks.getUserScopedDb.mockResolvedValue(scoped);
     mocks.accountSecurityCaller.mockResolvedValue(caller);
     mocks.requireStepUp.mockResolvedValue({});
-    mocks.prepareRecoveryKeys.mockResolvedValue({ keys: ['AAAA-BBBB', 'CCCC-DDDD'] });
+    mocks.prepareRecoveryKeys.mockResolvedValue(prepared);
     mocks.confirmReplacementRecoveryKeys.mockResolvedValue(undefined);
   });
 
@@ -130,7 +132,7 @@ describe('/api/account-security/recovery-keys', () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get('cache-control')).toContain('no-store');
-      await expect(response.json()).resolves.toEqual({ keys: ['AAAA-BBBB', 'CCCC-DDDD'] });
+      await expect(response.json()).resolves.toEqual(prepared);
       expect(mocks.prepareRecoveryKeys).toHaveBeenCalledWith(caller);
     });
   });
@@ -139,7 +141,7 @@ describe('/api/account-security/recovery-keys', () => {
     it('refuses a request without a valid CSRF token', async () => {
       mocks.requireCsrfToken.mockResolvedValue(new Response(null, { status: 403 }));
 
-      const response = await PUT(request('PUT', { recoveryKeysSaved: true }));
+      const response = await PUT(request('PUT', { recoveryKeysSaved: true, recoveryBatchId }));
 
       expect(response.status).toBe(403);
       expect(mocks.confirmReplacementRecoveryKeys).not.toHaveBeenCalled();
@@ -148,18 +150,18 @@ describe('/api/account-security/recovery-keys', () => {
     it('refuses an unauthenticated caller with 401', async () => {
       mocks.getUserScopedDb.mockRejectedValue(createError.unauthorized());
 
-      const response = await PUT(request('PUT', { recoveryKeysSaved: true }));
+      const response = await PUT(request('PUT', { recoveryKeysSaved: true, recoveryBatchId }));
 
       expect(response.status).toBe(401);
       expect(mocks.confirmReplacementRecoveryKeys).not.toHaveBeenCalled();
     });
 
     it('rejects a body that does not confirm the keys were saved', async () => {
-      const response = await PUT(request('PUT', { recoveryKeysSaved: false }));
+      const response = await PUT(request('PUT', { recoveryKeysSaved: false, recoveryBatchId }));
 
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toMatchObject({
-        error: { message: 'Confirm that you saved your new recovery keys.' },
+        error: { message: 'Reload and generate new recovery keys, then confirm that you saved them.' },
       });
       expect(mocks.requireStepUp).not.toHaveBeenCalled();
       expect(mocks.confirmReplacementRecoveryKeys).not.toHaveBeenCalled();
@@ -170,14 +172,14 @@ describe('/api/account-security/recovery-keys', () => {
         new AppError('STEP_UP_REQUIRED' as never, 'Confirm it is you.', 403),
       );
 
-      const response = await PUT(request('PUT', { recoveryKeysSaved: true }));
+      const response = await PUT(request('PUT', { recoveryKeysSaved: true, recoveryBatchId }));
 
       expect(response.status).toBe(403);
       expect(mocks.confirmReplacementRecoveryKeys).not.toHaveBeenCalled();
     });
 
     it('replaces the keys for the caller after step-up', async () => {
-      const response = await PUT(request('PUT', { recoveryKeysSaved: true }));
+      const response = await PUT(request('PUT', { recoveryKeysSaved: true, recoveryBatchId }));
 
       expect(response.status).toBe(204);
       expect(mocks.requireStepUp).toHaveBeenCalledWith(
@@ -187,7 +189,14 @@ describe('/api/account-security/recovery-keys', () => {
           endpoint: '/api/account-security/recovery-keys',
         }),
       );
-      expect(mocks.confirmReplacementRecoveryKeys).toHaveBeenCalledWith(caller, expect.anything());
+      expect(mocks.confirmReplacementRecoveryKeys).toHaveBeenCalledWith(caller, recoveryBatchId, expect.anything());
+    });
+
+    it.each([undefined, null, '', 'legacy', 'a'.repeat(42), 'a'.repeat(44), '!'.repeat(43)])('refuses missing or malformed receipt %s before step-up', async (batchId) => {
+      const response = await PUT(request('PUT', { recoveryKeysSaved: true, recoveryBatchId: batchId }));
+      expect(response.status).toBe(400);
+      expect(mocks.requireStepUp).not.toHaveBeenCalled();
+      expect(mocks.confirmReplacementRecoveryKeys).not.toHaveBeenCalled();
     });
 
     it('maps keys that were never prepared to 409', async () => {
@@ -195,7 +204,7 @@ describe('/api/account-security/recovery-keys', () => {
         createError.conflict('Create new recovery keys first.'),
       );
 
-      const response = await PUT(request('PUT', { recoveryKeysSaved: true }));
+      const response = await PUT(request('PUT', { recoveryKeysSaved: true, recoveryBatchId }));
 
       expect(response.status).toBe(409);
     });

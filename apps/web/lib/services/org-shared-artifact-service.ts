@@ -1,9 +1,17 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { createError } from '@/lib/errors';
+import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS } from '@agiworkforce/cloud-contracts';
+import { AppError, createError } from '@/lib/errors';
+import {
+  getWorkspaceArtifactSharingErrorMessage,
+  organizationCanShareArtifacts,
+} from '@/lib/services/org-entitlements';
+import {
+  requireOrganizationPermission,
+  SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+} from '@/lib/services/organization-permission-service';
 import { assertOrganizationSharedViewerAdmission } from '@/lib/services/organization-shared-viewer-admission';
-import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import {
   PUBLISHED_TOKEN_REGEX,
   rowToPublishedArtifact,
@@ -44,7 +52,7 @@ function toIso(value: string | Date): string {
 }
 
 function toVisibility(value: string): PublishedArtifactVisibility {
-  return value === 'organization' ? 'organization' : 'public';
+  return value === 'organization' || value === 'invited' ? value : 'public';
 }
 
 function rowToSummary(row: SharedArtifactRow): SharedArtifactSummary {
@@ -89,41 +97,6 @@ export async function listSharedArtifacts(
   return rows.map(rowToSummary);
 }
 
-export interface ShareArtifactInput {
-  organizationId: string;
-  publishedArtifactId: string;
-  actorUserId: string;
-}
-
-export async function shareArtifactWithOrganization(
-  db: DatabaseAdapter,
-  input: ShareArtifactInput,
-): Promise<SharedArtifactSummary> {
-  const [row] = await db.query<SharedArtifactRow>(
-    `with grant_row as materialized (
-       insert into public.organization_shared_artifacts
-         (organization_id, published_artifact_id, shared_by_user_id)
-       select $1, artifact.id, $3
-         from public.published_artifacts artifact
-        where artifact.id = $2
-       on conflict (organization_id, published_artifact_id) do update
-          set shared_by_user_id = excluded.shared_by_user_id,
-              updated_at = now()
-       returning organization_id, published_artifact_id, shared_by_user_id, created_at
-     )
-     select ${SUMMARY_COLUMNS}
-       from grant_row share
-       join public.published_artifacts artifact
-         on artifact.id = share.published_artifact_id`,
-    [input.organizationId, input.publishedArtifactId, input.actorUserId],
-  );
-
-  if (!row) {
-    throw createError.notFound('Published artifact not found');
-  }
-  return rowToSummary(row);
-}
-
 export async function unshareArtifactFromOrganization(
   db: DatabaseAdapter,
   organizationId: string,
@@ -139,13 +112,8 @@ export async function unshareArtifactFromOrganization(
   return rows.length > 0;
 }
 
-/**
- * The workspace-only read. The adapter is RLS-scoped, so the row comes back
- * only when the caller owns it or holds a grant through
- * `published_artifacts_org_shared_read` (0184). The statement adds no ownership
- * predicate of its own on purpose: repeating one here would hide whether the
- * database is actually enforcing the share.
- */
+// RLS decides owner, workspace and named-viewer access. Adding an owner filter
+// would hide permitted shared rows; 0395 excludes invited rows from workspace grants.
 export async function getOrgReadableArtifactByToken(
   db: DatabaseAdapter,
   token: string,
@@ -172,33 +140,152 @@ export async function getOrgReadableArtifactByToken(
   return artifact;
 }
 
-export interface ArtifactShareTarget {
-  organizationId: string;
-  publishedArtifactId: string;
+interface ArtifactOrganizationGrant {
+  organization_id: string;
+  published_artifact_id: string;
 }
 
-/**
- * Resolve the organization an artifact would be shared into: the caller's
- * active organization, and the artifact row they own under that token.
- */
-export async function resolveArtifactShareTarget(
+export interface PublishedArtifactAudienceAuthorization {
+  db: DatabaseAdapter;
+  publication: PublishedArtifact;
+  sharedOrganizationId: string | null;
+}
+
+export interface UpdatePublishedArtifactAudienceInput {
+  userId: string;
+  token: string;
+  visibility: PublishedArtifactVisibility;
+  organizationId: string | null;
+  title?: string;
+  authorize: (context: PublishedArtifactAudienceAuthorization) => Promise<void>;
+}
+
+export async function updatePublishedArtifactAudience(
   db: DatabaseAdapter,
-  input: { userId: string; token: string },
-): Promise<ArtifactShareTarget> {
-  const membership = await resolveOrgMembership(db, input.userId);
-  if (!membership) {
-    throw createError.forbidden(
-      'You are not a member of a workspace yet, so there is nobody to share this with.',
+  input: UpdatePublishedArtifactAudienceInput,
+): Promise<{ updated: PublishedArtifact; organizationId: string | null }> {
+  return db.transaction(async (tx) => {
+    const publications = await tx.query<PublishedArtifactRow>(
+      `select id, token, user_id, artifact_id, conversation_id, title, kind,
+              language, content, visibility, created_at, updated_at
+         from public.published_artifacts
+        where token = $1 and user_id = $2
+        for update`,
+      [input.token, input.userId],
     );
-  }
-  const [row] = await db.query<{ id: string }>(
-    `select id from public.published_artifacts
-      where token = $1 and user_id = $2
-      limit 1`,
-    [input.token, input.userId],
-  );
-  if (!row) {
-    throw createError.notFound('Published artifact not found');
-  }
-  return { organizationId: membership.organizationId, publishedArtifactId: row.id };
+    const publication = publications[0];
+    if (
+      publications.length !== 1 ||
+      !publication ||
+      publication.token !== input.token ||
+      publication.user_id !== input.userId
+    ) {
+      throw createError.notFound('Published artifact not found');
+    }
+
+    const title = input.title?.trim().slice(0, MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS);
+    if (title === '') {
+      throw createError.notFound('Published artifact not found');
+    }
+
+    const readGrants = () =>
+      tx.query<ArtifactOrganizationGrant>(
+        `select organization_id, published_artifact_id
+           from public.organization_shared_artifacts
+          where published_artifact_id = $1`,
+        [publication.id],
+      );
+    const grants = await readGrants();
+    if (
+      grants.length > 1 ||
+      grants.some((grant) => grant.published_artifact_id !== publication.id)
+    ) {
+      throw createError.conflict('Published artifact audience could not be verified');
+    }
+    const grant = grants[0];
+    const organizationId = input.visibility === 'organization' ? input.organizationId : null;
+    if (input.visibility === 'organization') {
+      if (!organizationId) {
+        throw createError.forbidden('Select a workspace to share this artifact.');
+      }
+      if (!(await organizationCanShareArtifacts(organizationId))) {
+        throw new AppError('SUBSCRIPTION_REQUIRED', getWorkspaceArtifactSharingErrorMessage(), 403);
+      }
+      await requireOrganizationPermission(
+        input.userId,
+        organizationId,
+        'content.share',
+        SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+      );
+    }
+    await input.authorize({
+      db: tx,
+      publication: rowToPublishedArtifact(publication),
+      sharedOrganizationId: grant?.organization_id ?? null,
+    });
+
+    if (grant && grant.organization_id !== organizationId) {
+      const removed = await tx.query<ArtifactOrganizationGrant>(
+        `delete from public.organization_shared_artifacts
+          where published_artifact_id = $1 and organization_id = $2
+          returning organization_id, published_artifact_id`,
+        [publication.id, grant.organization_id],
+      );
+      if (
+        removed.length !== 1 ||
+        removed[0]?.published_artifact_id !== publication.id ||
+        removed[0]?.organization_id !== grant.organization_id
+      ) {
+        throw createError.conflict('Published artifact workspace access could not be removed');
+      }
+    }
+    if (organizationId && grant?.organization_id !== organizationId) {
+      const inserted = await tx.query<ArtifactOrganizationGrant>(
+        `insert into public.organization_shared_artifacts
+           (organization_id, published_artifact_id, shared_by_user_id)
+         values ($1, $2, $3)
+         returning organization_id, published_artifact_id`,
+        [organizationId, publication.id, input.userId],
+      );
+      if (
+        inserted.length !== 1 ||
+        inserted[0]?.published_artifact_id !== publication.id ||
+        inserted[0]?.organization_id !== organizationId
+      ) {
+        throw createError.conflict('Published artifact workspace access could not be granted');
+      }
+    }
+
+    const updatedRows = await tx.query<PublishedArtifactRow>(
+      `update public.published_artifacts
+          set visibility = $4, title = coalesce($5::text, title), updated_at = now()
+        where id = $1 and token = $2 and user_id = $3
+        returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                  language, content, visibility, created_at, updated_at`,
+      [publication.id, input.token, input.userId, input.visibility, title ?? null],
+    );
+    const updated = updatedRows[0];
+    if (
+      updatedRows.length !== 1 ||
+      !updated ||
+      updated.id !== publication.id ||
+      updated.token !== input.token ||
+      updated.user_id !== input.userId ||
+      updated.visibility !== input.visibility ||
+      updated.title !== (title ?? publication.title)
+    ) {
+      throw createError.conflict('Published artifact audience update could not be verified');
+    }
+    const finalGrants = await readGrants();
+    if (
+      organizationId
+        ? finalGrants.length !== 1 ||
+          finalGrants[0]?.organization_id !== organizationId ||
+          finalGrants[0]?.published_artifact_id !== publication.id
+        : finalGrants.length !== 0
+    ) {
+      throw createError.conflict('Published artifact audience could not be verified');
+    }
+    return { updated: rowToPublishedArtifact(updated), organizationId };
+  });
 }

@@ -159,3 +159,123 @@ test('fails when no public share write is found at all', () => {
   assert.equal(result.code, 1);
   assert.match(result.output, /table list is stale/);
 });
+
+const PUBLICATION_POLICY_PATH = 'apps/web/lib/services/published-artifact-publication-policy.ts';
+const RESTORE_ROUTE_PATH = 'apps/web/app/api/artifacts/publish/[token]/versions/[version]/route.ts';
+const PUBLICATION_POLICY = `
+import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
+import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
+import { moderateManagedPrompt } from '@/lib/moderation';
+function refuseModeratedPublication(userId, title, content) {
+  const moderation = moderateManagedPrompt({ userId, segments: [title, content], surface: 'published-artifact' });
+  if (!moderation.allowed) {
+    throw createError.validation('refused');
+  }
+}
+export async function preparePublishedArtifactPublication(db, input) {
+  const sharingGateResponse = await buildExternalSharingGateResponse(input.userId, input.request);
+  if (sharingGateResponse) return sharingGateResponse;
+  refuseModeratedPublication(input.userId, input.title, input.content);
+  const outbound = await inspectOutboundContent({ value: input.content, userId: input.userId });
+  if (outbound.action === 'blocked') {
+    throw createError.validation(outbound.message);
+  }
+  return { content: outbound.value };
+}
+`;
+const RESTORE_SERVICE = `
+export async function restorePublishedArtifactRecord(db, input) {
+  return db.query(\`update public.published_artifacts set content = $1 where token = $2\`, [input.content, input.token]);
+}
+export async function renamePublishedArtifact(db, input) {
+  return db.query(\`update public.published_artifacts set title = $1 where token = $2\`, [input.title, input.token]);
+}
+export async function recordPublishedVersion(db, input) {
+  return db.query(\`update public.published_artifacts set version = $1 where token = $2\`, [input.version, input.token]);
+}
+`;
+const RESTORE_ROUTE = `
+import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
+import { restorePublishedArtifactRecord } from '@/lib/services/published-artifact-service';
+export async function POST(request) {
+  const preparation = await preparePublishedArtifactPublication(db, input);
+  if (preparation instanceof Response) return preparation;
+  return restorePublishedArtifactRecord(db, { ...input, content: preparation.content });
+}
+`;
+
+function restoreFiles(route = RESTORE_ROUTE, policy = PUBLICATION_POLICY) {
+  return {
+    [PUBLICATION_POLICY_PATH]: policy,
+    'apps/web/lib/services/published-artifact-service.ts': RESTORE_SERVICE,
+    [RESTORE_ROUTE_PATH]: route,
+  };
+}
+
+test('discovers an UPDATE-only restore and traces the imported policy implementation', () => {
+  const result = run(fixture(restoreFiles()));
+  assert.equal(result.code, 0);
+  assert.match(result.output, /1 public share writers/);
+});
+
+test('rejects an UPDATE-only restore with no preparation', () => {
+  const result = run(fixture(restoreFiles(`
+export async function POST(request) {
+  return restorePublishedArtifactRecord(db, input);
+}
+`)));
+  assert.equal(result.code, 1);
+  assert.match(result.output, /calls restorePublishedArtifactRecord/);
+});
+
+test('rejects a direct content UPDATE with no inspection', () => {
+  const result = run(fixture({ [RESTORE_ROUTE_PATH]: `
+export async function POST(request) {
+  return db.query(\`update published_artifacts set content = $1 where token = $2\`, []);
+}
+` }));
+  assert.equal(result.code, 1);
+  assert.match(result.output, /without inspecting/);
+});
+
+test('does not classify metadata-only updates as content publication', () => {
+  const result = run(fixture({
+    ...restoreFiles(),
+    'apps/web/app/api/artifacts/rename/route.ts': `
+export async function POST() {
+  await renamePublishedArtifact(db, input);
+  return recordPublishedVersion(db, input);
+}
+`,
+  }));
+  assert.equal(result.code, 0);
+});
+
+for (const [name, route, policy] of [
+  ['wrong helper import', RESTORE_ROUTE.replace('publication-policy', 'unrelated-policy'), PUBLICATION_POLICY],
+  ['missing helper implementation', RESTORE_ROUTE, ''],
+  ['missing inspection', RESTORE_ROUTE, PUBLICATION_POLICY.replace('await inspectOutboundContent(', 'await unrelatedInspection(')],
+  ['wrong inspector import', RESTORE_ROUTE, PUBLICATION_POLICY.replace('security/outbound-content-inspection', 'security/unrelated')],
+  ['missing sharing gate', RESTORE_ROUTE, PUBLICATION_POLICY.replace('await buildExternalSharingGateResponse(', 'await unrelatedGate(')],
+  ['missing moderation refusal', RESTORE_ROUTE, PUBLICATION_POLICY.replace('if (!moderation.allowed) {', 'if (false) {')],
+  ['missing outbound refusal', RESTORE_ROUTE, PUBLICATION_POLICY.replace("if (outbound.action === 'blocked') {", 'if (false) {')],
+  ['unawaited preparation', RESTORE_ROUTE.replace('await preparePublishedArtifactPublication(', 'preparePublishedArtifactPublication('), PUBLICATION_POLICY],
+  ['missing route refusal', RESTORE_ROUTE.replace('if (preparation instanceof Response) return preparation;', ''), PUBLICATION_POLICY],
+  ['preparation after write', RESTORE_ROUTE.replace(
+    'const preparation = await preparePublishedArtifactPublication(db, input);',
+    'await restorePublishedArtifactRecord(db, input);\n  const preparation = await preparePublishedArtifactPublication(db, input);',
+  ), PUBLICATION_POLICY],
+  ['helper gate after inspection', RESTORE_ROUTE, PUBLICATION_POLICY.replace(
+    'const sharingGateResponse = await buildExternalSharingGateResponse(input.userId, input.request);',
+    '',
+  ).replace(
+    'return { content: outbound.value };',
+    'const sharingGateResponse = await buildExternalSharingGateResponse(input.userId, input.request);\n  return { content: outbound.value };',
+  )],
+]) {
+  test(`rejects delegated publication with ${name}`, () => {
+    const result = run(fixture(restoreFiles(route, policy)));
+    assert.equal(result.code, 1);
+    assert.match(result.output, /calls restorePublishedArtifactRecord/);
+  });
+}

@@ -105,6 +105,7 @@ beforeEach(() => {
   mockGetUserScopedDb.mockResolvedValue({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user-1',
+    organizationId: ORG,
   });
 });
 

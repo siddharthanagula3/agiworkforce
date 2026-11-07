@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
-import type { IdentityEmailAddress, IdentityUser } from '@agiworkforce/identity';
+import { IdentityRequestRejectedError, type IdentityEmailAddress, type IdentityUser } from '@agiworkforce/identity';
 
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
@@ -163,7 +163,7 @@ beforeEach(() => {
   mocks.resolveOrganization.mockResolvedValue(ORGANIZATION);
   mocks.getUser.mockResolvedValue(providerUser());
   mocks.addEmailAddress.mockResolvedValue({ ...NEXT, verified: false });
-  mocks.query.mockResolvedValue([]);
+  mocks.query.mockResolvedValue([{ id: ACCOUNT }]);
   mocks.requireCsrfToken.mockResolvedValue(null);
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.recordAuditEvent.mockResolvedValue(undefined);
@@ -297,7 +297,7 @@ describe('PATCH /api/settings/email', () => {
     expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith(SUBJECT);
     expect(mocks.setPrimaryEmailAddress).toHaveBeenCalledExactlyOnceWith(SUBJECT, NEXT.id);
     expect(mocks.query).toHaveBeenCalledExactlyOnceWith(
-      'update public.profiles set email = $2, updated_at = now() where id = $1',
+      'update public.profiles set email = $2, updated_at = now() where id = $1 returning id',
       [ACCOUNT, NEXT.emailAddress],
     );
     expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
@@ -325,6 +325,91 @@ describe('PATCH /api/settings/email', () => {
       },
     }));
   });
+
+  it('refuses an already-primary verified address without proof, profile, provider, or event mutations', async () => {
+    mocks.getUser.mockResolvedValue({
+      ...providerUser([NEXT]),
+      primaryEmail: NEXT.emailAddress,
+      primaryEmailAddressId: NEXT.id,
+    });
+
+    const response = await PATCH(request('PATCH', { emailAddressId: NEXT.id }, { proof: null }));
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error.message).toBe('That address is already primary, but profile synchronization and previous-address cleanup cannot be confirmed. Check your account email and sign-in methods before starting another change.');
+    expect(body.previousAddressRemoved).toBeUndefined();
+    expect(body.emailAddress).toBeUndefined();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    assertNoMutations();
+  });
+
+  it.each([
+    { label: 'zero rows', rows: [] },
+    { label: 'missing result', rows: undefined },
+    { label: 'non-array result', rows: { id: ACCOUNT } },
+    { label: 'null row', rows: [null] },
+    { label: 'missing returned identity', rows: [{}] },
+    { label: 'foreign product account', rows: [{ id: 'foreign-account' }] },
+    { label: 'native subject instead of product account', rows: [{ id: SUBJECT }] },
+    { label: 'multiple rows', rows: [{ id: ACCOUNT }, { id: 'foreign-account' }] },
+  ])('refuses completion after promotion when the profile update returns $label', async ({ rows }) => {
+    mocks.query.mockResolvedValue(rows);
+
+    const response = await PATCH(request('PATCH', { emailAddressId: NEXT.id }));
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error.message).toBe('The address was made primary, but profile synchronization could not be confirmed and previous-address cleanup was not attempted. Check your account email and sign-in methods before starting another change.');
+    expect(body.previousAddressRemoved).toBeUndefined();
+    expect(body.emailAddress).toBeUndefined();
+    expect(mocks.setPrimaryEmailAddress).toHaveBeenCalledExactlyOnceWith(SUBJECT, NEXT.id);
+    expect(mocks.query).toHaveBeenCalledExactlyOnceWith(
+      'update public.profiles set email = $2, updated_at = now() where id = $1 returning id',
+      [ACCOUNT, NEXT.emailAddress],
+    );
+    expect(mocks.removeEmailAddress).not.toHaveBeenCalled();
+    expect(mocks.announceChange).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['profile exception', 'unconfirmed profile', 'unknown removal failure', 'known removal rejection', 'completed response lost'] as const)(
+    'does not upgrade a repeat request to confirmed completion after %s', async (outcome) => {
+      const promoted = { ...providerUser([NEXT]), primaryEmail: NEXT.emailAddress, primaryEmailAddressId: NEXT.id };
+      mocks.setPrimaryEmailAddress.mockImplementation(async () => {
+        mocks.getUser.mockResolvedValue(promoted);
+      });
+      if (outcome === 'profile exception') mocks.query.mockRejectedValue(new Error('Database unavailable'));
+      if (outcome === 'unconfirmed profile') mocks.query.mockResolvedValue([]);
+      if (outcome === 'unknown removal failure') mocks.removeEmailAddress.mockRejectedValue(new Error('Provider unavailable'));
+      if (outcome === 'known removal rejection') {
+        mocks.removeEmailAddress.mockRejectedValue(new IdentityRequestRejectedError('Address retained', 'removal_rejected'));
+      }
+
+      const first = await PATCH(request('PATCH', { emailAddressId: NEXT.id }));
+
+      expect(first.status).toBe(outcome === 'unconfirmed profile' ? 409
+        : outcome === 'known removal rejection' || outcome === 'completed response lost' ? 200 : 500);
+      const firstBody = await first.json();
+      expect(firstBody.previousAddressRemoved).toBe(outcome === 'known removal rejection' ? false
+        : outcome === 'completed response lost' ? true : undefined);
+      expect(mocks.setPrimaryEmailAddress).toHaveBeenCalledExactlyOnceWith(SUBJECT, NEXT.id);
+      expect(mocks.query).toHaveBeenCalledTimes(1);
+      expect(mocks.removeEmailAddress).toHaveBeenCalledTimes(
+        outcome === 'profile exception' || outcome === 'unconfirmed profile' ? 0 : 1,
+      );
+      vi.clearAllMocks();
+
+      const repeated = await PATCH(request('PATCH', { emailAddressId: NEXT.id }));
+
+      expect(repeated.status).toBe(409);
+      const repeatedBody = await repeated.json();
+      expect(repeatedBody.error.message).toContain('profile synchronization and previous-address cleanup cannot be confirmed');
+      expect(repeatedBody.previousAddressRemoved).toBeUndefined();
+      expect(repeatedBody.emailAddress).toBeUndefined();
+      expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+      assertNoMutations();
+    },
+  );
 
   it('does not accept an address belonging to another identity even with a grant for its id', async () => {
     const response = await PATCH(request('PATCH', { emailAddressId: 'foreign-address-id' }, {

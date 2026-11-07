@@ -32,11 +32,9 @@ import {
   getPublicSharedSessionByToken,
   readSharedSessionScope,
   resolveSessionShareTarget,
-  setSharedSessionVisibility,
   SHARE_IN_OTHER_WORKSPACE_MESSAGE,
   SHARE_TOKEN_REGEX,
-  shareSessionWithOrganization,
-  unshareSessionFromOrganization,
+  updateSharedSessionAudience,
 } from '@/lib/services/org-shared-session-service';
 
 const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
@@ -190,7 +188,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     throw createError.validation('Invalid share visibility request', parsed.error.flatten());
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const visibility = parsed.data.visibility;
 
   const ownerDb = getNeonDb();
@@ -209,12 +207,11 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     );
   }
 
-  const target = await resolveSessionShareTarget(db, { userId, token });
+  const target = await resolveSessionShareTarget(db, { userId, token, organizationId });
   if (conversationOrganizationId && conversationOrganizationId !== target.organizationId) {
     throw createError.forbidden(SHARE_IN_OTHER_WORKSPACE_MESSAGE).asUserSafe();
   }
 
-  let revoked = false;
   if (visibility === 'organization') {
     await requireOrganizationPermission(
       userId,
@@ -222,33 +219,28 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
       'content.share',
       SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
     );
-    await shareSessionWithOrganization(db, {
-      organizationId: target.organizationId,
-      sharedSessionId: target.sharedSessionId,
-      actorUserId: userId,
-    });
   } else {
     const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
       conversationOrganizationId,
       stored.grantOrganizationId,
     ]);
     if (sharingGateResponse) return sharingGateResponse;
-    revoked = await unshareSessionFromOrganization(
-      db,
-      target.organizationId,
-      target.sharedSessionId,
-    );
   }
 
-  const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
-  if (!updated) {
-    throw createError.notFound('Shared session not found');
-  }
+  const { updated, revokedOrganizationId } = await updateSharedSessionAudience(db, {
+    userId,
+    token,
+    sharedSessionId: target.sharedSessionId,
+    organizationId: target.organizationId,
+    visibility,
+    grantOrganizationId: stored.grantOrganizationId,
+  });
 
-  if (visibility === 'organization' || revoked) {
+  if (visibility === 'organization' || revokedOrganizationId) {
     await recordAuditEvent({
       userId,
-      organizationId: target.organizationId,
+      organizationId:
+        visibility === 'organization' ? target.organizationId : revokedOrganizationId,
       eventType:
         visibility === 'organization' ? 'organization_share_granted' : 'organization_share_revoked',
       request,

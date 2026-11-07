@@ -3,14 +3,21 @@ type ScanModule0 = typeof import('@/lib/services/org-entitlements');
 
 vi.mock('server-only', () => ({}));
 
-const { mockEntitlements, mockNeonQuery } = vi.hoisted(() => ({
+const { mockEntitlements, mockNeonQuery, mockCachedRead, mockCachedWrite } = vi.hoisted(() => ({
   mockEntitlements: vi.fn(),
   mockNeonQuery: vi.fn(),
+  mockCachedRead: vi.fn(async () => undefined),
+  mockCachedWrite: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   getOrganizationEntitlements: mockEntitlements,
+}));
+
+vi.mock('@/lib/server/request-context-cache', () => ({
+  getCachedActiveOrganizationId: mockCachedRead,
+  setCachedActiveOrganizationId: mockCachedWrite,
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
@@ -27,6 +34,7 @@ import {
   requireOrgMember,
   requireSharingManager,
   resolveOrgMembership,
+  resolveOrgMembershipForOrganization,
   resolveSharedProjectScope,
   setProjectMemberAccess,
   shareProject,
@@ -97,25 +105,87 @@ describe('role gates fail closed', () => {
   });
 });
 
-describe('resolveOrgMembership', () => {
-  it('reads the role from the membership table for the authenticated subject', async () => {
-    const { db, issued } = makeDb(() => [{ organization_id: ORG, role: 'admin' }]);
-    const membership = await resolveOrgMembership(db, 'user-1');
-    expect(membership).toEqual({ organizationId: ORG, role: 'admin' });
-
-    expect(issued[0]!.sql).toMatch(/from public\.user_settings/i);
-    expect(issued[0]!.sql).toMatch(/join public\.organization_members/i);
-    expect(issued[0]!.sql).toMatch(/where s\.user_id = \$1/i);
-    expect(issued[0]!.params).toEqual(['user-1']);
-
-    expect(issued[1]!.sql).toMatch(/from public\.organization_members/i);
-    expect(issued[1]!.sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
-    expect(issued[1]!.params).toEqual([ORG, 'user-1']);
+describe('resolveOrgMembershipForOrganization', () => {
+  it('binds only the requested organization, authenticated subject and active status', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      expect(sql).not.toMatch(/user_settings/i);
+      expect(sql).toMatch(/from public\.organization_members/i);
+      expect(sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+      expect(sql).toMatch(/and status = 'active'/i);
+      expect(params).toEqual([OTHER_ORG, 'user-1']);
+      return [{ organization_id: OTHER_ORG, role: 'admin' }];
+    });
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).toEqual({
+      organizationId: OTHER_ORG,
+      role: 'admin',
+    });
+    expect(issued).toHaveLength(1);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
   });
 
-  it('returns null when the caller belongs to no organization', async () => {
-    const { db } = makeDb(() => []);
+  it('keeps Personal null without any membership or saved-selection query', async () => {
+    const { db, issued } = makeDb(() => {
+      throw new Error('Personal scope must not query');
+    });
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', null)).toBeNull();
+    expect(issued).toHaveLength(0);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'inactive'])('refuses a %s membership excluded by the active predicate', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      expect(sql).toMatch(/and status = 'active'/i);
+      expect(params).toEqual([OTHER_ORG, 'user-1']);
+      return [];
+    });
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).toBeNull();
+    expect(issued).toHaveLength(1);
+  });
+
+  it('refuses a returned row for a different organization', async () => {
+    const { db } = makeDb(() => [{ organization_id: ORG, role: 'owner' }]);
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).toBeNull();
+  });
+
+  it('propagates database failures without falling back to saved scope', async () => {
+    const failure = new Error('membership read failed');
+    const { db, issued } = makeDb(() => {
+      throw failure;
+    });
+    await expect(resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).rejects.toBe(failure);
+    expect(issued).toHaveLength(1);
+  });
+});
+
+describe('resolveOrgMembership saved-selection wrapper', () => {
+  it('resolves the saved selection then uses the same explicit membership predicate', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      if (/from public\.user_settings/i.test(sql)) {
+        expect(params).toEqual(['user-1']);
+        return [{ organization_id: ORG }];
+      }
+      expect(sql).toMatch(/from public\.organization_members/i);
+      expect(sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+      expect(sql).toMatch(/and status = 'active'/i);
+      expect(params).toEqual([ORG, 'user-1']);
+      return [{ organization_id: ORG, role: 'admin' }];
+    });
+    expect(await resolveOrgMembership(db, 'user-1')).toEqual({ organizationId: ORG, role: 'admin' });
+    expect(issued).toHaveLength(2);
+    expect(issued[0]!.sql).toMatch(/join public\.organization_members/i);
+  });
+
+  it('returns null when the saved selection resolves Personal', async () => {
+    const { db, issued } = makeDb((sql) => {
+      expect(sql).toMatch(/from public\.user_settings/i);
+      return [];
+    });
     expect(await resolveOrgMembership(db, 'user-1')).toBeNull();
+    expect(issued).toHaveLength(1);
   });
 });
 
@@ -215,12 +285,121 @@ describe('listWritableSharedProjectIds', () => {
 });
 
 describe('resolveSharedProjectScope', () => {
+  it.each([
+    ['member', true, ['content.read', 'content.share'], [PROJECT]],
+    ['member', false, ['content.read', 'content.share'], []],
+    ['viewer', true, ['content.read'], []],
+  ] as const)(
+    'uses captured organization B rather than saved A for %s with explicit write %s',
+    async (role, explicitWrite, permissions, writableProjectIds) => {
+      mockNeonQuery.mockResolvedValue([{ permissions: [...permissions] }]);
+      const { db, issued } = makeDb((sql, params) => {
+        if (/user_settings/i.test(sql)) return [{ organization_id: ORG }];
+        expect(params).toEqual([OTHER_ORG, 'member-1']);
+        if (/from public\.organization_members/i.test(sql)) {
+          expect(sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+          expect(sql).toMatch(/and status = 'active'/i);
+          return [{ organization_id: OTHER_ORG, role }];
+        }
+        expect(sql).toMatch(/where s\.organization_id = \$1/i);
+        if (/a\.access = 'write'/.test(sql)) {
+          return explicitWrite ? [{ project_id: PROJECT }] : [];
+        }
+        expect(sql).toMatch(/\) <> 'none'/);
+        return [{ project_id: PROJECT }];
+      });
+
+      expect(await resolveSharedProjectScope(db, 'member-1', OTHER_ORG)).toEqual({
+        organizationId: OTHER_ORG,
+        projectIds: [PROJECT],
+        writableProjectIds: [...writableProjectIds],
+      });
+      expect(issued).toHaveLength(3);
+      expect(issued.every(({ sql }) => !/user_settings/i.test(sql))).toBe(true);
+      expect(mockCachedRead).not.toHaveBeenCalled();
+      expect(mockCachedWrite).not.toHaveBeenCalled();
+      if (explicitWrite) {
+        expect(mockNeonQuery).toHaveBeenCalledWith(
+          expect.stringContaining('organization_member_permissions'),
+          [OTHER_ORG, 'member-1'],
+        );
+      } else {
+        expect(mockNeonQuery).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('keeps captured Personal empty even when the saved selection is A', async () => {
+    const { db, issued } = makeDb(() => [{ organization_id: ORG, role: 'owner' }]);
+    expect(await resolveSharedProjectScope(db, 'member-1', null)).toBeNull();
+    expect(issued).toHaveLength(0);
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'inactive', 'mismatched'])(
+    'refuses %s captured membership without saved-selection fallback',
+    async (state) => {
+      const { db, issued } = makeDb((sql, params) => {
+        expect(sql).toMatch(/from public\.organization_members/i);
+        expect(sql).not.toMatch(/user_settings/i);
+        expect(sql).toMatch(/and status = 'active'/i);
+        expect(params).toEqual([OTHER_ORG, 'member-1']);
+        return state === 'mismatched' ? [{ organization_id: ORG, role: 'owner' }] : [];
+      });
+      expect(await resolveSharedProjectScope(db, 'member-1', OTHER_ORG)).toBeNull();
+      expect(issued).toHaveLength(1);
+      expect(mockCachedRead).not.toHaveBeenCalled();
+      expect(mockCachedWrite).not.toHaveBeenCalled();
+      expect(mockNeonQuery).not.toHaveBeenCalled();
+    },
+  );
+
+  it('propagates an exact membership error without consulting saved selection', async () => {
+    const failure = new Error('captured membership unavailable');
+    const { db, issued } = makeDb((sql, params) => {
+      expect(sql).toMatch(/from public\.organization_members/i);
+      expect(sql).not.toMatch(/user_settings/i);
+      expect(params).toEqual([OTHER_ORG, 'member-1']);
+      throw failure;
+    });
+    await expect(resolveSharedProjectScope(db, 'member-1', OTHER_ORG)).rejects.toBe(failure);
+    expect(issued).toHaveLength(1);
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('stops after an empty readable set in the captured organization', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      expect(params).toEqual([OTHER_ORG, 'member-1']);
+      expect(sql).not.toMatch(/user_settings/i);
+      if (/from public\.organization_members/i.test(sql)) {
+        expect(sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+        expect(sql).toMatch(/and status = 'active'/i);
+        return [{ organization_id: OTHER_ORG, role: 'member' }];
+      }
+      expect(sql).toMatch(/from public\.organization_shared_projects s/i);
+      expect(sql).toMatch(/where s\.organization_id = \$1/i);
+      expect(sql).toMatch(/\) <> 'none'/);
+      expect(sql).not.toMatch(/a\.access = 'write'/);
+      return [];
+    });
+
+    expect(await resolveSharedProjectScope(db, 'member-1', OTHER_ORG)).toBeNull();
+    expect(issued).toHaveLength(2);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+  });
+
   it('returns the caller’s org, readable ids and the subset they may edit', async () => {
     const { db } = makeDb((sql) => {
       if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'member' }];
       return /a\.access = 'write'/.test(sql) ? [] : [{ project_id: PROJECT }];
     });
-    expect(await resolveSharedProjectScope(db, 'member-1')).toEqual({
+    expect(await resolveSharedProjectScope(db, 'member-1', ORG)).toEqual({
       organizationId: ORG,
       projectIds: [PROJECT],
       writableProjectIds: [],
@@ -233,7 +412,7 @@ describe('resolveSharedProjectScope', () => {
         ? [{ organization_id: ORG, role: 'member' }]
         : [{ project_id: PROJECT }],
     );
-    expect((await resolveSharedProjectScope(db, 'member-1'))?.writableProjectIds).toEqual([
+    expect((await resolveSharedProjectScope(db, 'member-1', ORG))?.writableProjectIds).toEqual([
       PROJECT,
     ]);
   });
@@ -257,7 +436,7 @@ describe('a Viewer is read-only on shared projects', () => {
         organizationId: ORG,
       }),
     ).toBeNull();
-    expect((await resolveSharedProjectScope(db, 'viewer-1'))?.writableProjectIds).toEqual([]);
+    expect((await resolveSharedProjectScope(db, 'viewer-1', ORG))?.writableProjectIds).toEqual([]);
     const [sql, params] = mockNeonQuery.mock.calls.at(-1) as [string, unknown[]];
     expect(sql).toContain('organization_member_permissions');
     expect(params).toEqual([ORG, 'viewer-1']);
@@ -270,7 +449,7 @@ describe('a Viewer is read-only on shared projects', () => {
       return [{ project_id: PROJECT }];
     });
 
-    expect((await resolveSharedProjectScope(db, 'viewer-1'))?.projectIds).toEqual([PROJECT]);
+    expect((await resolveSharedProjectScope(db, 'viewer-1', ORG))?.projectIds).toEqual([PROJECT]);
   });
 
   it('refuses to give a Viewer edit access, and says how to change it', async () => {
@@ -306,6 +485,38 @@ describe('a Viewer is read-only on shared projects', () => {
 });
 
 describe('resolveProjectWriteAccess', () => {
+  it.each([null, OTHER_ORG])('preserves the owner path in workspace %s', async (organizationId) => {
+    const { db, issued } = makeDb((sql, params) => {
+      expect(sql).toMatch(/from user_projects/i);
+      expect(sql).toMatch(/user_id = \$2/i);
+      expect(sql).toMatch(/organization_id is not distinct from \$3::uuid/i);
+      expect(sql).toMatch(/deleted_at is null/i);
+      expect(params).toEqual([PROJECT, 'owner-1', organizationId]);
+      return [{ id: PROJECT }];
+    });
+    expect(await resolveProjectWriteAccess(db, {
+      projectId: PROJECT,
+      userId: 'owner-1',
+      organizationId,
+    })).toBe('owner');
+    expect(issued).toHaveLength(1);
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('keeps a non-owner Personal request out of organization grants', async () => {
+    const { db, issued } = makeDb(() => []);
+    expect(await resolveProjectWriteAccess(db, {
+      projectId: PROJECT,
+      userId: 'member-1',
+      organizationId: null,
+    })).toBeNull();
+    expect(issued).toHaveLength(1);
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
   it('calls the row’s own user the owner', async () => {
     const { db } = makeDb(() => [{ id: PROJECT }]);
 
@@ -319,9 +530,14 @@ describe('resolveProjectWriteAccess', () => {
   });
 
   it('calls a member holding a write grant an editor', async () => {
-    const { db } = makeDb((sql) => {
-      if (/from user_projects/i.test(sql)) return [];
-      if (/organization_members/i.test(sql)) return [{ organization_id: ORG, role: 'member' }];
+    const { db, issued } = makeDb((sql, params) => {
+      if (/user_settings/i.test(sql)) return [{ organization_id: ORG }];
+      if (/from user_projects/i.test(sql)) {
+        expect(params).toEqual([PROJECT, 'member-1', OTHER_ORG]);
+        return [];
+      }
+      expect(params).toEqual([OTHER_ORG, 'member-1']);
+      if (/organization_members/i.test(sql)) return [{ organization_id: OTHER_ORG, role: 'member' }];
       return [{ project_id: PROJECT }];
     });
 
@@ -329,9 +545,17 @@ describe('resolveProjectWriteAccess', () => {
       await resolveProjectWriteAccess(db, {
         projectId: PROJECT,
         userId: 'member-1',
-        organizationId: ORG,
+        organizationId: OTHER_ORG,
       }),
     ).toBe('editor');
+    expect(issued).toHaveLength(4);
+    expect(issued.every(({ sql }) => !/user_settings/i.test(sql))).toBe(true);
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+    expect(mockNeonQuery).toHaveBeenCalledWith(
+      expect.stringContaining('organization_member_permissions'),
+      [OTHER_ORG, 'member-1'],
+    );
   });
 
   it('refuses a reader on a shared project', async () => {
@@ -371,12 +595,15 @@ describe('resolveProjectWriteAccess', () => {
 describe('resolveSharedProjectScope failure modes', () => {
   it('returns null for a user in no organization, so project reads stay personal', async () => {
     const { db } = makeDb(() => []);
-    expect(await resolveSharedProjectScope(db, 'solo-user')).toBeNull();
+    expect(await resolveSharedProjectScope(db, 'solo-user', null)).toBeNull();
   });
 
   it('surfaces a missing sharing table instead of reading it as no shared scope', async () => {
     const db = {
-      query: vi.fn(async () => {
+      query: vi.fn(async (sql: string) => {
+        if (/from public\.organization_members/i.test(sql)) {
+          return [{ organization_id: ORG, role: 'member' }];
+        }
         const error: Error & { code?: string } = new Error(
           'relation "organization_shared_projects" does not exist',
         );
@@ -384,7 +611,7 @@ describe('resolveSharedProjectScope failure modes', () => {
         throw error;
       }),
     } as never;
-    await expect(resolveSharedProjectScope(db, 'user-1')).rejects.toMatchObject({
+    await expect(resolveSharedProjectScope(db, 'user-1', ORG)).rejects.toMatchObject({
       code: '42P01',
     });
   });
@@ -395,7 +622,7 @@ describe('resolveSharedProjectScope failure modes', () => {
         throw new Error('connection terminated');
       }),
     } as never;
-    await expect(resolveSharedProjectScope(db, 'user-1')).rejects.toThrow(/connection terminated/);
+    await expect(resolveSharedProjectScope(db, 'user-1', ORG)).rejects.toThrow(/connection terminated/);
   });
 });
 

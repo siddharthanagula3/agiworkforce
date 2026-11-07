@@ -1,6 +1,7 @@
 import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import jwt from 'jsonwebtoken';
+import argon2 from 'argon2';
 import { NextRequest } from 'next/server';
 
 import { resetSessionStartCache, unreadableSessionStartCount } from '@/lib/auth/session-age';
@@ -68,29 +69,92 @@ process.env['JWT_SECRET'] = TEST_DEVELOPER_JWT_SECRET;
 process.env['CSRF_SECRET'] = 'api-auth-step-up-secret-at-least-32-bytes';
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
-  })),
+  getNeonDb: vi.fn(() => makeTransactionAdapter()),
 }));
 
 vi.mock('@agiworkforce/data-layer', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
-  const rlsCapableAdapter: unknown = {
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: (fn: (db: unknown) => unknown) => fn(rlsCapableAdapter),
-    withUser: () => rlsCapableAdapter,
-    withOrg: () => rlsCapableAdapter,
-    dispose: vi.fn(),
-  };
-  return { ...actual, createDatabaseClient: vi.fn(() => rlsCapableAdapter) };
+  return { ...actual, createDatabaseClient: vi.fn(() => makeTransactionAdapter()) };
 });
 
 type FakeRow = Record<string, unknown>;
+const PROJECT_ID = '11111111-2222-4333-8444-555555555555';
+type FixtureAdapter = {
+  query: (sql: string, params?: unknown[]) => Promise<FakeRow[]>;
+  execute: (...args: unknown[]) => Promise<number>;
+  transaction: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+  withUser: (token: string) => FixtureAdapter;
+  withOrg: (organization: string | null) => FixtureAdapter;
+  dispose: () => void;
+};
+
+// Handle-lifetime model only; this does not implement PostgreSQL transactions or RLS.
+function makeTransactionAdapter() {
+  let active = false;
+  function adapter(user: string | null, org: string | null): FixtureAdapter {
+    return {
+      query: (sql: string, params?: unknown[]) => {
+        if (active || /insert into api_keys|update public\.developer_projects/i.test(sql)) {
+          throw new Error('Issuance query escaped its transaction');
+        }
+        return mockNeonQuery(sql, params);
+      },
+      execute: (...args: unknown[]) => {
+        if (active) throw new Error('Outer execute during transaction');
+        return mockNeonExecute(...args);
+      },
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+        if (active) throw new Error('Nested transaction');
+        active = true;
+        let open = true;
+        const tx = {
+          query: (...args: unknown[]) => {
+            if (!open) throw new Error('Transaction handle escaped');
+            return mockNeonQuery(...args);
+          },
+          execute: (...args: unknown[]) => {
+            if (!open) throw new Error('Transaction handle escaped');
+            return mockNeonExecute(...args);
+          },
+          transaction: () => { throw new Error('Nested transaction'); },
+          withUser: () => { throw new Error('Transaction scope escape'); },
+          withOrg: () => { throw new Error('Transaction scope escape'); },
+        };
+        try {
+          return await callback(tx);
+        } finally {
+          open = false;
+          active = false;
+        }
+      },
+      withUser: (token: string) => {
+        if (active) throw new Error('Outer scope change during transaction');
+        return adapter(token, org);
+      },
+      withOrg: (organization: string | null) => {
+        if (active) throw new Error('Outer scope change during transaction');
+        return adapter(user, organization);
+      },
+      dispose: vi.fn(),
+    };
+  }
+  return adapter(null, null);
+}
+
+function normalizedLookupSql(sql: string): string {
+  return sql.toLowerCase().replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+}
+
+function expectProjectAdmissionLookup() {
+  const lookups = mockNeonQuery.mock.calls.filter(([sql]) => String(sql).includes('key_prefix = $1'));
+  expect(lookups.length).toBeGreaterThan(0);
+  for (const [sql, params] of lookups) {
+    expect(normalizedLookupSql(String(sql))).toBe(
+      'select id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at from api_keys where key_prefix = $1 and revoked_at is null and (expires_at is null or expires_at > now()) and (api_keys.project_id is null or exists (select 1 from public.developer_projects p where p.id = api_keys.project_id and p.user_id = api_keys.user_id and p.archived_at is null)) limit 2',
+    );
+    expect(params).toEqual([expect.stringMatching(/^[0-9a-f]{16}$/)]);
+  }
+}
 
 /**
  * A fixture that stubs the whole query implementation must answer the bridge
@@ -110,6 +174,8 @@ function identityResolutionRows(sql: string, params: unknown[]): FakeRow[] | nul
 
 function makeFakeDb() {
   const store = new Map<string, FakeRow>();
+  const projects = new Map<string, { user_id: string; archived_at: string | null }>();
+  const lookup = { error: false };
   const revokedJtis = new Set<string>();
   const identities = new Map<string, { identityId: string | null; accountId: string }>();
   const accountStatuses = new Map<string, string>();
@@ -120,6 +186,15 @@ function makeFakeDb() {
 
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
     const s = sql.toLowerCase();
+
+    if (s.includes('update public.developer_projects')) {
+      expect(normalizedLookupSql(sql)).toBe(
+        'update public.developer_projects set updated_at = now() where id = $1 and user_id = $2 and archived_at is null returning id',
+      );
+      const [projectId, userId] = params as [string, string];
+      const project = projects.get(projectId);
+      return project?.user_id === userId && project.archived_at === null ? [{ id: projectId }] : [];
+    }
 
     if (s.includes('insert into public.identities')) {
       const [provider, subject, accountId] = params as [string, string, string];
@@ -181,7 +256,8 @@ function makeFakeDb() {
         key_prefix: keyPrefix,
         scopes,
         last_used_at: null,
-        expires_at: null,
+        expires_at: params[5] ?? null,
+        project_id: params[6] ?? null,
         revoked_at: null,
         created_at: new Date().toISOString(),
       };
@@ -190,10 +266,22 @@ function makeFakeDb() {
     }
 
     if (s.includes('key_prefix = $1')) {
+      if (lookup.error) throw new Error('project admission lookup unavailable');
       const keyPrefix = params[0] as string;
-      return [...store.values()].filter(
-        (r) => r['key_prefix'] === keyPrefix && r['revoked_at'] == null,
+      const hasProjectGate = normalizedLookupSql(s).includes(
+        'and (api_keys.project_id is null or exists (select 1 from public.developer_projects p where p.id = api_keys.project_id and p.user_id = api_keys.user_id and p.archived_at is null))',
       );
+      return [...store.values()].filter((r) => {
+        const project = projects.get(r['project_id'] as string);
+        return (
+          r['key_prefix'] === keyPrefix &&
+          (!s.includes('revoked_at is null') || r['revoked_at'] == null) &&
+          (!s.includes('(expires_at is null or expires_at > now())') ||
+            r['expires_at'] == null || Date.parse(String(r['expires_at'])) > Date.now()) &&
+          (!hasProjectGate || r['project_id'] == null ||
+            (project?.user_id === r['user_id'] && project.archived_at === null))
+        );
+      });
     }
 
     if (s.includes('from api_keys') || s.includes('from public.api_keys')) {
@@ -232,6 +320,8 @@ function makeFakeDb() {
   mockNeonExecute.mockImplementation(execute);
   return {
     store,
+    projects,
+    lookup,
     revokedJtis,
     identities,
     accountStatuses,
@@ -264,6 +354,13 @@ import { getKeyValueStore } from '@/lib/server/key-value';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { clearIpAllowListCacheForTests } from '@/lib/services/organization-ip-allow-list-cache';
+import * as activeWorkspace from '@/lib/services/active-workspace-service';
+import * as membershipService from '@/lib/services/org-sharing-service';
+import * as lockdownGate from '@/lib/feature-flags/tenant-lockdown';
+import * as accountSecurityGate from '@/lib/server/account-security/gate';
+import * as mfaGate from '@/lib/mfa-policy-gate';
+import * as ipGate from '@/lib/ip-allow-list-gate';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import {
   getTenantScope,
   newSpanId,
@@ -314,6 +411,66 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     vi.clearAllMocks();
     clearIpAllowListCacheForTests();
   });
+
+  // This predicate-sensitive model is not PostgreSQL, RLS, or concurrent archive proof.
+  it.each(['null', 'live', 'archived', 'foreign', 'missing', 'revoked', 'expired', 'lookup-error'] as const)(
+    'uses canonical project admission for a %s key',
+    async (state) => {
+      const fakeDb = makeFakeDb();
+      const { ApiKeyService } = await import('@/lib/services/api-key-service');
+      const { getNeonDb } = await import('@/lib/server/neon-db');
+      fakeDb.projects.set(PROJECT_ID, { user_id: 'project-key-owner', archived_at: null });
+      const { apiKey, rawKey } = await ApiKeyService.createApiKey(
+        getNeonDb(), 'project-key-owner', 'project admission', ['models:read'], null,
+        state === 'null' ? null : PROJECT_ID,
+      );
+      const admissions = mockNeonQuery.mock.calls.filter(([sql]) =>
+        String(sql).includes('update public.developer_projects'),
+      );
+      expect(admissions).toHaveLength(state === 'null' ? 0 : 1);
+      if (state !== 'null') expect(admissions[0]?.[1]).toEqual([PROJECT_ID, 'project-key-owner']);
+      if (state === 'missing') {
+        fakeDb.projects.delete(PROJECT_ID);
+      } else {
+        fakeDb.projects.set(PROJECT_ID, {
+          user_id: state === 'foreign' ? 'another-owner' : 'project-key-owner',
+          archived_at: state === 'archived' ? new Date().toISOString() : null,
+        });
+      }
+      const row = fakeDb.store.get(apiKey.id)!;
+      if (state === 'revoked') row['revoked_at'] = new Date().toISOString();
+      if (state === 'expired') row['expires_at'] = new Date(Date.now() - 60_000).toISOString();
+      fakeDb.lookup.error = state === 'lookup-error';
+      mockAuth.mockResolvedValue(authSession('cookie-must-not-rescue-key'));
+      mockNeonQuery.mockClear();
+      mockNeonExecute.mockClear();
+      const verify = vi.spyOn(argon2, 'verify');
+      try {
+        if (state === 'null' || state === 'live') {
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }))
+            .resolves.toEqual({ userId: 'project-key-owner', apiKeyId: apiKey.id });
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'inference:write' }))
+            .rejects.toMatchObject({ statusCode: 403 });
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey)))
+            .rejects.toMatchObject({ statusCode: 403 });
+          expect(verify).toHaveBeenCalled();
+          expect(mockNeonExecute).toHaveBeenCalledWith(
+            'UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [expect.any(String), apiKey.id],
+          );
+        } else {
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }))
+            .rejects.toMatchObject({ statusCode: 401 });
+          expect(verify).not.toHaveBeenCalled();
+          expect(mockNeonExecute.mock.calls.some(([sql]) => String(sql).includes('SET last_used_at'))).toBe(false);
+        }
+        expectProjectAdmissionLookup();
+        expect(mockAuth).not.toHaveBeenCalled();
+        expect(mockVerifyToken).not.toHaveBeenCalled();
+      } finally {
+        verify.mockRestore();
+      }
+    },
+  );
 
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
     makeFakeDb();
@@ -969,6 +1126,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       ).resolves.toEqual({
         userId: 'owner-user',
         sessionIdentity: { subject: 'owner-user', sessionId: null },
+        organizationScope: { userId: 'owner-user', organizationId: ORGANIZATION_ID },
       });
     });
 
@@ -1852,6 +2010,331 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
       sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'mobile',
     });
+  });
+});
+
+// Source-only UNRUN fixtures. Real auth, selection, and exact owner helper; storage/provider
+// adapters and admission-gate spies are not PostgreSQL/RLS or aggregate MFA policy proof.
+describe('policy authentication captures one admitted organization', () => {
+  const NATIVE = 'policy-native-subject';
+  const ACCOUNT = 'policy-product-account';
+  const SESSION = 'sess-policy-recovery';
+  const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const options = { mfaGateExemptForOwner: true };
+  let db: ReturnType<typeof makeFakeDb>;
+  let saved: string | null;
+  let roles: Map<string, string>;
+  let order: string[];
+  let select: MockInstance<typeof activeWorkspace.resolveActiveOrganizationId>;
+  let owner: MockInstance<typeof membershipService.resolveOrgMembershipForOrganization>;
+  let lockdown: MockInstance<typeof lockdownGate.assertTenantNotLockedDown>;
+  let security: MockInstance<typeof accountSecurityGate.assertAccountSecurity>;
+  let mfa: MockInstance<typeof mfaGate.assertMfaPolicy>;
+  let ip: MockInstance<typeof ipGate.assertIpAllowList>;
+
+  function request(target?: string, bearer = false): NextRequest {
+    return new NextRequest('http://localhost/api/settings/organization/policy', {
+      headers: {
+        ...(target === undefined ? {} : { [MANAGED_CLOUD_ORGANIZATION_HEADER]: target }),
+        ...(bearer ? { authorization: 'Bearer verified-policy-session' } : {}),
+      },
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSessionStartCache();
+    clearIpAllowListCacheForTests();
+    vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+    vi.mocked(getKeyValueStore).mockReturnValue(null);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Unexpected fixture network I/O')));
+    mockAuth.mockReset().mockResolvedValue(authSession(NATIVE, SESSION));
+    mockVerifyToken.mockReset().mockResolvedValue({ sub: NATIVE, sid: SESSION });
+    mockClerkGetSession.mockReset().mockResolvedValue({
+      id: SESSION, userId: NATIVE, status: 'active',
+      createdAt: Date.now() - 60_000, lastActiveAt: Date.now(),
+    });
+    mockClerkRevokeSession.mockReset().mockResolvedValue(undefined);
+    db = makeFakeDb();
+    db.identities.set(`clerk:${NATIVE}`, { identityId: 'policy-identity', accountId: ACCOUNT });
+    saved = A;
+    roles = new Map([[A, 'owner'], [B, 'member']]);
+    order = [];
+    const query = mockNeonQuery.getMockImplementation()!;
+    mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const s = normalizedLookupSql(sql);
+      if (s.includes('account_status')) order.push('lifecycle');
+      if (s.includes('from public.user_settings')) {
+        return saved === null ? [] : [{ organization_id: saved }];
+      }
+      if (s.includes('from public.organization_members')) {
+        expect(s).toContain("status = 'active'");
+        expect(params[1]).toBe(ACCOUNT);
+        const role = roles.get(String(params[0]));
+        return role ? [{ organization_id: params[0], role }] : [];
+      }
+      return query(sql, params);
+    });
+    const resolve = activeWorkspace.resolveActiveOrganizationId;
+    select = vi.spyOn(activeWorkspace, 'resolveActiveOrganizationId').mockImplementation((...args) => {
+      order.push('selection');
+      return resolve(...args);
+    });
+    const exactOwner = membershipService.resolveOrgMembershipForOrganization;
+    owner = vi.spyOn(membershipService, 'resolveOrgMembershipForOrganization').mockImplementation((...args) => {
+      order.push('owner');
+      return exactOwner(...args);
+    });
+    lockdown = vi.spyOn(lockdownGate, 'assertTenantNotLockedDown').mockImplementation(async () => {
+      order.push('lockdown');
+    });
+    security = vi.spyOn(accountSecurityGate, 'assertAccountSecurity').mockImplementation(async () => {
+      order.push('security');
+    });
+    mfa = vi.spyOn(mfaGate, 'assertMfaPolicy').mockImplementation(async () => {
+      order.push('mfa');
+    });
+    ip = vi.spyOn(ipGate, 'assertIpAllowList').mockImplementation(async () => {
+      order.push('ip');
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it.each([false, true])('uses mapped account and native session evidence (bearer=%s)', async (bearer) => {
+    const req = request(B, bearer);
+    const result = await getClerkAuthUser(req, options);
+    expect(result).toMatchObject({
+      userId: ACCOUNT,
+      sessionIdentity: { subject: NATIVE, sessionId: SESSION },
+      organizationScope: { userId: ACCOUNT, organizationId: B },
+    });
+    expect(select).toHaveBeenCalledExactlyOnceWith(expect.anything(), ACCOUNT, req);
+    expect(owner).toHaveBeenCalledExactlyOnceWith(expect.anything(), ACCOUNT, B);
+    expect(lockdown).toHaveBeenCalledExactlyOnceWith(B);
+    expect(security).toHaveBeenCalledExactlyOnceWith(ACCOUNT, { kind: 'session', sessionId: SESSION });
+    expect(mfa).toHaveBeenCalledExactlyOnceWith(ACCOUNT, { subject: NATIVE, sessionId: SESSION });
+    expect(ip).toHaveBeenCalledExactlyOnceWith(ACCOUNT, req);
+    expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(ACCOUNT, NATIVE, SESSION, req);
+    expect(order).toEqual(['lifecycle', 'selection', 'lockdown', 'security', 'owner', 'mfa', 'ip']);
+  });
+
+  it('does not let saved owner A exempt an explicit nonowner B from aggregate MFA', async () => {
+    mfa.mockRejectedValue(new mfaGate.MfaRequiredError('Aggregate MFA required'));
+    await expect(getClerkAuthUser(request(B), options)).rejects.toSatisfy(isMfaRequiredError);
+    expect(owner).toHaveBeenCalledWith(expect.anything(), ACCOUNT, B);
+    expect(ip).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it('allows exact B owner recovery even when saved A is not owned', async () => {
+    roles.set(A, 'member');
+    roles.set(B, 'owner');
+    mfa.mockRejectedValue(new mfaGate.MfaRequiredError('Aggregate MFA required'));
+    await expect(getClerkAuthUser(request(B), options)).resolves.toMatchObject({
+      organizationScope: { userId: ACCOUNT, organizationId: B },
+    });
+    expect(mfa).not.toHaveBeenCalled();
+    expect(ip).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns an explicit Personal receipt and still applies aggregate MFA', async () => {
+    await expect(getClerkAuthUser(request(activeWorkspace.PERSONAL_WORKSPACE_KEY), options))
+      .resolves.toMatchObject({ organizationScope: { userId: ACCOUNT, organizationId: null } });
+    expect(lockdown).toHaveBeenCalledExactlyOnceWith(null);
+    expect(mfa).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves equal product and native ids', async () => {
+    db.identities.delete(`clerk:${NATIVE}`);
+    await expect(getClerkAuthUser(request(activeWorkspace.PERSONAL_WORKSPACE_KEY), options))
+      .resolves.toMatchObject({
+        userId: NATIVE, organizationScope: { userId: NATIVE, organizationId: null },
+      });
+    expect(mfa).toHaveBeenCalledWith(NATIVE, { subject: NATIVE, sessionId: SESSION });
+  });
+
+  it('does not reselect when saved selection changes during account security', async () => {
+    security.mockImplementation(async () => { saved = B; });
+    await expect(getClerkAuthUser(request(), options)).resolves.toMatchObject({
+      organizationScope: { userId: ACCOUNT, organizationId: A },
+    });
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(owner).toHaveBeenCalledWith(expect.anything(), ACCOUNT, A);
+    expect(lockdown).toHaveBeenCalledExactlyOnceWith(A);
+    expect(mfa).not.toHaveBeenCalled();
+  });
+
+  it('does not exempt a mismatched exact owner row', async () => {
+    const query = mockNeonQuery.getMockImplementation()!;
+    mockNeonQuery.mockImplementation((sql: string, params: unknown[] = []) =>
+      normalizedLookupSql(sql).startsWith('select organization_id, role')
+        ? Promise.resolve([{ organization_id: A, role: 'owner' }])
+        : query(sql, params),
+    );
+    mfa.mockRejectedValue(new mfaGate.MfaRequiredError('Aggregate MFA required'));
+    await expect(getClerkAuthUser(request(B), options)).rejects.toSatisfy(isMfaRequiredError);
+    expect(ip).not.toHaveBeenCalled();
+  });
+
+  it.each(['admin', 'member', 'viewer'])('keeps aggregate MFA for an exact %s', async (role) => {
+    roles.set(B, role);
+    await getClerkAuthUser(request(B), options);
+    expect(mfa).toHaveBeenCalledExactlyOnceWith(ACCOUNT, { subject: NATIVE, sessionId: SESSION });
+  });
+
+  it('does not admit a receipt when exact owner proof throws', async () => {
+    owner.mockRejectedValue(new Error('Owner lookup unavailable'));
+    await expect(getClerkAuthUser(request(B), options)).rejects.toThrow('Owner lookup unavailable');
+    expect(mfa).not.toHaveBeenCalled();
+    expect(ip).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it.each(['not-a-uuid', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'])(
+    'rejects invalid or nonmember target %s before later gates', async (target) => {
+      await expect(getClerkAuthUser(request(target), options)).rejects.toBeDefined();
+      expect(lockdown).not.toHaveBeenCalled();
+      expect(security).not.toHaveBeenCalled();
+      expect(owner).not.toHaveBeenCalled();
+      expect(mfa).not.toHaveBeenCalled();
+      expect(ip).not.toHaveBeenCalled();
+      expect(noteSessionSighting).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['exception', 'deadline'] as const)('fails closed on selection %s', async (failure) => {
+    if (failure === 'deadline') {
+      vi.useFakeTimers();
+      select.mockImplementation(() => new Promise<string | null>(() => {}));
+    } else {
+      select.mockRejectedValue(new Error('Selection unavailable'));
+    }
+    const result = getClerkAuthUser(request(B), options);
+    const rejected = expect(result).rejects.toMatchObject({ statusCode: 503 });
+    if (failure === 'deadline') await vi.advanceTimersByTimeAsync(2_001);
+    await rejected;
+    expect(lockdown).not.toHaveBeenCalled();
+    expect(security).not.toHaveBeenCalled();
+    expect(owner).not.toHaveBeenCalled();
+    expect(mfa).not.toHaveBeenCalled();
+    expect(ip).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it('checks exact target lockdown before account security or ownership', async () => {
+    lockdown.mockRejectedValue(new Error('B locked'));
+    await expect(getClerkAuthUser(request(B), options)).rejects.toThrow('B locked');
+    expect(lockdown).toHaveBeenCalledExactlyOnceWith(B);
+    expect(security).not.toHaveBeenCalled();
+    expect(owner).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it('retains passkey-required native session sightings without admitting a receipt', async () => {
+    security.mockRejectedValue(new accountSecurityGate.PasskeyRequiredError());
+    const req = request(B);
+    await expect(getClerkAuthUser(req, options)).rejects.toSatisfy(isPasskeyRequiredError);
+    expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(ACCOUNT, NATIVE, SESSION, req);
+    expect(owner).not.toHaveBeenCalled();
+    expect(mfa).not.toHaveBeenCalled();
+    expect(ip).not.toHaveBeenCalled();
+  });
+
+  it('does not issue a receipt when the final IP gate refuses an owner', async () => {
+    ip.mockRejectedValue(new Error('IP refused'));
+    await expect(getClerkAuthUser(request(A), options)).rejects.toThrow('IP refused');
+    expect(mfa).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it('keeps the default branch aggregate and receipt-free', async () => {
+    const result = await getClerkAuthUser(request(A));
+    expect(result).not.toHaveProperty('organizationScope');
+    expect(owner).not.toHaveBeenCalled();
+    expect(mfa).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['lifecycle', 'selection', 'lockdown', 'security', 'mfa', 'ip']);
+  });
+
+  it('preserves default lockdown lookup failure behavior without minting a receipt', async () => {
+    select.mockRejectedValue(new Error('Default selection unavailable'));
+    const result = await getClerkAuthUser(request(B));
+    expect(result).not.toHaveProperty('organizationScope');
+    expect(lockdown).toHaveBeenCalledExactlyOnceWith(null);
+    expect(mfa).toHaveBeenCalledTimes(1);
+    expect(ip).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps enrollment exempt without exempting IP admission', async () => {
+    await getClerkAuthUser(request(B), { ...options, mfaEnrollment: true });
+    expect(mfa).not.toHaveBeenCalled();
+    expect(ip).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses unavailable accounts before target selection', async () => {
+    db.accountStatuses.set(ACCOUNT, 'suspended');
+    await expect(getClerkAuthUser(request(B), options)).rejects.toMatchObject({ statusCode: 403 });
+    expect(select).not.toHaveBeenCalled();
+    expect(security).not.toHaveBeenCalled();
+  });
+
+  it('refuses old native sessions before lifecycle and target selection', async () => {
+    mockClerkGetSession.mockResolvedValue({
+      id: SESSION, userId: NATIVE, status: 'active',
+      createdAt: 0, lastActiveAt: Date.now(),
+    });
+    await expect(getClerkAuthUser(request(B), options)).rejects.toMatchObject({ statusCode: 401 });
+    expect(order).toEqual([]);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it('ignores forged organization receipts in verified provider claims and request bodies', async () => {
+    mockVerifyToken.mockResolvedValue({
+      sub: NATIVE, sid: SESSION, organizationScope: { userId: NATIVE, organizationId: A },
+    });
+    const req = new NextRequest('http://localhost/api/settings/organization/policy', {
+      method: 'POST',
+      headers: { authorization: 'Bearer verified-policy-session', [MANAGED_CLOUD_ORGANIZATION_HEADER]: B },
+      body: JSON.stringify({ organizationScope: { userId: NATIVE, organizationId: A } }),
+    });
+    await expect(getClerkAuthUser(req, options)).resolves.toMatchObject({
+      organizationScope: { userId: ACCOUNT, organizationId: B },
+    });
+  });
+
+  it('still refuses valid API keys when the policy endpoint has no apiKeyScope', async () => {
+    const { ApiKeyService } = await import('@/lib/services/api-key-service');
+    vi.spyOn(ApiKeyService, 'verifyKey').mockResolvedValue({
+      id: 'policy-key', user_id: ACCOUNT, scopes: ['models:read'],
+    } as NonNullable<Awaited<ReturnType<typeof ApiKeyService.verifyKey>>>);
+    await expect(getClerkAuthUser(makeBearerRequest('sk_live_policy_fixture'), options))
+      .rejects.toMatchObject({ statusCode: 403 });
+    expect(select).not.toHaveBeenCalled();
+    expect(security).not.toHaveBeenCalled();
+    expect(owner).not.toHaveBeenCalled();
+  });
+
+  it('preserves developer device principal admission without inventing a session', async () => {
+    const token = jwt.sign({ userId: ACCOUNT, sub: ACCOUNT, surface: 'developer' },
+      TEST_DEVELOPER_JWT_SECRET, {
+        expiresIn: 3600, issuer: 'agiworkforce-api-gateway', audience: 'agiworkforce',
+        jwtid: 'policy-device-fixture',
+      });
+    await expect(getClerkAuthUser(makeBearerRequest(token), options)).resolves.toMatchObject({
+      userId: ACCOUNT, surfaceClass: 'developer',
+      organizationScope: { userId: ACCOUNT, organizationId: A },
+    });
+    expect(security).toHaveBeenCalledWith(ACCOUNT, {
+      kind: 'device', issuedAtSeconds: expect.any(Number),
+    });
+    expect(mockClerkGetSession).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
   });
 });
 

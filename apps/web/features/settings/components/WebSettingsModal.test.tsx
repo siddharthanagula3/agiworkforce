@@ -31,10 +31,13 @@ vi.mock('@clerk/nextjs', async (original) => ({
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 const emailAdmission = vi.hoisted(() => vi.fn());
+const cancellationAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
-  AccountSection: ({ emailEditorActive }: { emailEditorActive?: boolean }) => {
+  AccountSection: ({ emailEditorActive, cancellationActive }: { emailEditorActive?: boolean; cancellationActive?: boolean }) => {
     emailAdmission(emailEditorActive);
-    return <div data-testid="email-editor-admission">{String(emailEditorActive)}</div>;
+    cancellationAdmission(cancellationActive);
+    return <><div data-testid="email-editor-admission">{String(emailEditorActive)}</div>
+      <div data-testid="cancellation-admission">{String(cancellationActive)}</div></>;
   },
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));
@@ -952,6 +955,20 @@ it('withdraws email editor admission on Settings close before retained content u
   expect(screen.getByTestId('email-editor-admission')).toHaveTextContent('false');
   mounted.rerender(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
   await waitFor(() => expect(emailAdmission).toHaveBeenLastCalledWith(true));
+});
+
+it('withdraws cancellation admission on Settings close before retained content unmounts', async () => {
+  cancellationAdmission.mockClear();
+  retainedSettings.enabled = true;
+  stubFetch({});
+  const mounted = render(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
+  await waitFor(() => expect(cancellationAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal open={false} onClose={vi.fn()} initialSection="account" />);
+  expect(cancellationAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('cancellation-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
+  await waitFor(() => expect(cancellationAdmission).toHaveBeenLastCalledWith(true));
+  retainedSettings.enabled = false;
 });
 
 

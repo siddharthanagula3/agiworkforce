@@ -7,10 +7,12 @@ import { MessageBubble } from './MessageBubble';
 
 type UsechatstreamModule = typeof import('@/lib/hooks/useChatStream');
 
+const liveness = vi.hoisted(() => ({ live: true }));
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/hooks/useChatStream', async (importOriginal) => ({
   ...(await importOriginal<UsechatstreamModule>()),
-  isApprovalTurnLive: () => true,
+  isApprovalTurnLive: () => liveness.live,
 }));
 
 const name = 'mcp__github__get_pull_request_diff';
@@ -70,6 +72,7 @@ function message(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  liveness.live = true;
   useChatToolAllowanceStore.setState({ allowedByConversation: {} });
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Unexpected network call')));
 });
@@ -168,3 +171,26 @@ it('keeps a decided server review disabled while canonical activity catches up',
   expect(group.getByRole('button', { name: 'Allow for this chat' })).toBeDisabled();
   expect(resolve).not.toHaveBeenCalled();
 });
+
+for (const canonical of [false, true]) {
+  it(`keeps explicit Resend recovery for an expired ${canonical ? 'canonical' : 'legacy'} approval`, () => {
+    liveness.live = false;
+    const onRegenerate = vi.fn();
+    render(
+      <ToolApprovalProvider value={resolve}>
+        <MessageBubble message={message(canonical, ['once'])} onRegenerate={onRegenerate} />
+      </ToolApprovalProvider>,
+    );
+
+    expect(
+      screen.getByText(
+        'This response is partial. The approval request can no longer be resumed; send a new message to try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for approval\. This response is partial/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Resend' }));
+    expect(onRegenerate).toHaveBeenCalledExactlyOnceWith('scope-message');
+    expect(resolve).not.toHaveBeenCalled();
+  });
+}

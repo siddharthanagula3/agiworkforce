@@ -163,6 +163,100 @@ describe('GET /api/share', () => {
     const body = await response.json();
     expect(body.shares).toHaveLength(1);
     expect(body.workspace).toEqual({ memberCount: 3 });
+    expect(body.complete).toBe(true);
+  });
+
+  it.each([
+    { count: 0, returned: 0, complete: true },
+    { count: 199, returned: 199, complete: true },
+    { count: 200, returned: 200, complete: true },
+    { count: 201, returned: 200, complete: false },
+    { count: 205, returned: 200, complete: false },
+  ])(
+    'bounds $count fetched rows to $returned shares with complete=$complete',
+    async ({ count, returned, complete }) => {
+      const rows = Array.from({ length: count }, (_, index) => row({ token: `tok-${index}` }));
+      mocks.query.mockResolvedValue(rows);
+
+      const response = await call();
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.shares).toHaveLength(returned);
+      expect(body.complete).toBe(complete);
+      expect(body.shares.map((share: { token: string }) => share.token)).toEqual(
+        rows.slice(0, 200).map((share) => share.token),
+      );
+      const [sql, params] = mocks.query.mock.calls[0]!;
+      expect(sql).toContain('owner_id = $1');
+      expect(sql).not.toContain('conversation_id = $2');
+      expect(sql).toMatch(/order by created_at desc\s+limit 201\b/i);
+      expect(params).toEqual(['user-1']);
+    },
+  );
+
+  it('reports an incomplete workspace inventory when newer expired links hide an older live link', async () => {
+    const organizationId = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    const rows = [
+      ...Array.from({ length: 200 }, (_, index) =>
+        row({
+          token: `expired-${index}`,
+          expires_at: PAST,
+          visibility: 'organization',
+          owner_id: 'user-1',
+          conversation_id: CONVERSATION_ID,
+          organization_id: organizationId,
+          created_at: new Date(Date.UTC(2026, 6, 2) - index * 1000).toISOString(),
+        }),
+      ),
+      row({
+        token: 'older-live',
+        expires_at: FUTURE,
+        visibility: 'public',
+        owner_id: 'user-1',
+        conversation_id: CONVERSATION_ID,
+        organization_id: organizationId,
+        created_at: '2026-07-01T00:00:00.000Z',
+      }),
+    ];
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from shared_sessions')) return rows;
+      if (sql.includes('count(*) as member_count')) return [{ member_count: '3' }];
+      if (sql.includes('from public.organization_members')) {
+        return [{ organization_id: organizationId }];
+      }
+      return [];
+    });
+
+    const response = await GET(
+      new NextRequest(`https://agiworkforce.com/api/share?conversation_id=${CONVERSATION_ID}`, {
+        headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.complete).toBe(false);
+    expect(body.shares).toHaveLength(200);
+    expect(body.shares.map((share: { token: string }) => share.token)).toEqual(
+      rows.slice(0, 200).map((share) => share.token),
+    );
+    expect(body.shares.every((share: { expired: boolean }) => share.expired)).toBe(true);
+    expect(
+      body.shares.every((share: { visibility: string }) => share.visibility === 'organization'),
+    ).toBe(true);
+    expect(body.shares).not.toContainEqual(expect.objectContaining({ token: 'older-live' }));
+    expect(body.workspace).toEqual({ memberCount: 3 });
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain('owner_id = $1');
+    expect(sql).toContain('conversation_id = $2');
+    expect(sql).toMatch(/order by created_at desc\s+limit 201\b/i);
+    expect(sql).not.toMatch(/expires_at\s*[><=]/i);
+    expect(params).toEqual(['user-1', CONVERSATION_ID]);
+    expect(mocks.query).toHaveBeenCalledWith(
+      expect.stringContaining('from public.organization_members'),
+      [organizationId, 'user-1'],
+    );
   });
 
   it('refuses a conversation filter that is not a conversation id', async () => {

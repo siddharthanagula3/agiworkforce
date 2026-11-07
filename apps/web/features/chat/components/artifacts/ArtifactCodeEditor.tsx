@@ -10,7 +10,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
 import {
   drawSelection,
   EditorView,
@@ -36,6 +36,8 @@ export interface ArtifactCodeEditorProps {
   ariaLabel: string;
   focusRequest?: number | undefined;
 }
+
+const valueSynchronization = Annotation.define<boolean>();
 
 const syntaxStyle = HighlightStyle.define([
   {
@@ -139,7 +141,12 @@ export function ArtifactCodeEditor({
       EditorView.lineWrapping,
       EditorView.contentAttributes.of({ 'aria-label': ariaLabel, spellcheck: 'false' }),
       EditorView.updateListener.of((update) => {
-        if (!update.docChanged) return;
+        if (
+          !update.docChanged ||
+          update.transactions.some((transaction) => transaction.annotation(valueSynchronization))
+        ) {
+          return;
+        }
         // Report the repaired text. The value effect writes it back into the
         // document, so a dispatch here is not needed and would nest updates.
         onChangeRef.current(separateGluedStatements(update.state.doc.toString()));
@@ -169,7 +176,10 @@ export function ArtifactCodeEditor({
     const current = view.state.doc.toString();
     const next = separateGluedStatements(value);
     if (current !== next) {
-      view.dispatch({ changes: { from: 0, to: current.length, insert: next } });
+      view.dispatch({
+        changes: { from: 0, to: current.length, insert: next },
+        annotations: valueSynchronization.of(true),
+      });
     }
   }, [value]);
 

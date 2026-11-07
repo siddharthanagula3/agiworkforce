@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS,
   type ManagedCloudPublishedArtifactVersion,
@@ -9,6 +9,8 @@ import { Copy } from '@agiworkforce/icons';
 import { Button, Input, Label, Spinner } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import { isPublicationLeaseCurrent, usePublishedSitesStore } from '../stores/published-sites-store';
 import { unpublishConsequence } from '../hooks/useSiteActions';
 import { formatRelativeTime } from '../lib/site-format';
 import {
@@ -58,6 +60,7 @@ function NameSetting({
   onRename: (site: PublishedSite, title: string) => Promise<void>;
 }) {
   const [value, setValue] = useState(site.title);
+  const lease = usePublishedSitesStore((state) => state.lease);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,16 +71,18 @@ function NameSetting({
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!trimmed || unchanged) return;
+    if (!isPublicationLeaseCurrent(lease) || !trimmed || unchanged) return;
     setSaving(true);
     setError(null);
     try {
       await onRename(site, trimmed);
+      if (!isPublicationLeaseCurrent(lease)) return;
       toast.success('Site renamed');
     } catch (caught) {
+      if (!isPublicationLeaseCurrent(lease)) return;
       setError(toUserMessage(caught, 'Failed to rename this site'));
     } finally {
-      setSaving(false);
+      if (isPublicationLeaseCurrent(lease)) setSaving(false);
     }
   };
 
@@ -117,15 +122,17 @@ function SharingSetting({
   workspace: { memberCount: number } | null;
   onChange: (site: PublishedSite, visibility: SiteVisibility) => Promise<void>;
 }) {
+  const lease = usePublishedSitesStore((state) => state.lease);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const change = async (next: SiteVisibility) => {
-    if (next === site.visibility) return;
+    if (!isPublicationLeaseCurrent(lease) || next === site.visibility) return;
     setSaving(true);
     setError(null);
     try {
       await onChange(site, next);
+      if (!isPublicationLeaseCurrent(lease)) return;
       toast.success(
         next === 'public'
           ? 'Anyone with the link can open it'
@@ -134,9 +141,10 @@ function SharingSetting({
             : 'Shared with your workspace',
       );
     } catch (caught) {
+      if (!isPublicationLeaseCurrent(lease)) return;
       setError(toUserMessage(caught, 'Failed to change who can open this site'));
     } finally {
-      setSaving(false);
+      if (isPublicationLeaseCurrent(lease)) setSaving(false);
     }
   };
 
@@ -160,40 +168,105 @@ function SharingSetting({
 }
 
 function VersionsSetting({ site, onRestored }: { site: PublishedSite; onRestored: () => void }) {
-  const [versions, setVersions] = useState<ManagedCloudPublishedArtifactVersion[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState<number | null>(null);
+  const lease = usePublishedSitesStore((state) => state.lease);
+  return <VersionsSession key={JSON.stringify([site.token, site.artifactId, site.version, site.visibility, site.updatedAt, lease?.epoch])} site={site} onRestored={onRestored} />;
+}
 
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      setError(null);
-      try {
-        setVersions(await listPublishedArtifactVersions(site.token, signal));
-      } catch (caught) {
-        if (caught instanceof DOMException && caught.name === 'AbortError') return;
-        setError(toUserMessage(caught, 'Failed to load the versions of this site'));
-      }
+type VersionsLane = {
+  active: boolean;
+  operation: VersionsRequest | null;
+  versions: ManagedCloudPublishedArtifactVersion[] | null;
+};
+
+type VersionsRequest = Pick<RequestAuthority, 'assertCurrent' | 'fetch' | 'isCurrent' | 'retire'>;
+
+function createVersionsRequest(owns: () => boolean): VersionsRequest {
+  const controller = new AbortController();
+  const retire = () => controller.abort();
+  const isCurrent = () => {
+    if (!owns()) retire();
+    return !controller.signal.aborted;
+  };
+  const assertCurrent = () => {
+    if (!isCurrent()) throw new DOMException('Version history owner changed', 'AbortError');
+  };
+  return {
+    isCurrent, assertCurrent, retire,
+    fetch: (input, init) => {
+      assertCurrent();
+      const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      return fetch(input, { ...init, signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal });
     },
-    [site.token],
-  );
+  };
+}
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load, site.version]);
+function VersionsSession({ site, onRestored }: { site: PublishedSite; onRestored: () => void }) {
+  const lease = usePublishedSitesStore((state) => state.lease);
+  const activation = useRef<VersionsLane | null>(null);
+  const [state, setState] = useState<{
+    lane: VersionsLane | null;
+    versions: ManagedCloudPublishedArtifactVersion[] | null;
+    error: string | null;
+    restoring: number | null;
+    consumed: boolean;
+  }>({ lane: null, versions: null, error: null, restoring: null, consumed: false });
+  const current = useCallback((lane: VersionsLane) => lane.active && activation.current === lane &&
+    isPublicationLeaseCurrent(lease), [lease]);
+
+  useLayoutEffect(() => {
+    const lane: VersionsLane = { active: true, operation: null, versions: null };
+    activation.current = lane;
+    setState({ lane, versions: null, error: null, restoring: null, consumed: false });
+    const retire = () => {
+      lane.active = false;
+      lane.operation?.retire();
+      lane.operation = null;
+    };
+    if (isPublicationLeaseCurrent(lease)) {
+      const request = createVersionsRequest(() => current(lane) && lane.operation === request);
+      lane.operation = request;
+      void (async () => {
+        try {
+          const versions = await listPublishedArtifactVersions(site.token, undefined, request);
+          if (!request.isCurrent()) return;
+          lane.versions = versions;
+          setState((previous) => current(lane) ? { lane, versions, error: null, restoring: null, consumed: false } : previous);
+        } catch (caught) {
+          if (!request.isCurrent()) return;
+          setState((previous) => current(lane) ? { ...previous, error: toUserMessage(caught, 'Failed to load the versions of this site') } : previous);
+        } finally {
+          if (lane.operation === request) lane.operation = null;
+          request.retire();
+        }
+      })();
+    }
+    return retire;
+  }, [current, lease, site.token]);
+
+  const { lane, versions, error, restoring, consumed } = state;
 
   const restore = async (version: number) => {
-    setRestoring(version);
-    setError(null);
+    if (!lane || !current(lane) || lane.operation || lane.versions !== versions ||
+        !versions?.some((entry) => entry.version === version && !entry.live)) return;
+    const request = createVersionsRequest(() => current(lane) && lane.operation === request && lane.versions === versions);
+    lane.operation = request;
+    setState((previous) => ({ ...previous, restoring: version, error: null }));
     try {
-      await republishArtifactVersion(site, version);
+      await republishArtifactVersion(site, version, request);
+      if (!request.isCurrent()) return;
+      lane.versions = null;
+      setState((previous) => current(lane) ? { ...previous, consumed: true } : previous);
       toast.success(`Version ${version} is live again`);
       onRestored();
     } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to restore that version'));
+      if (!request.isCurrent()) return;
+      setState((previous) => current(lane) ? { ...previous, error: toUserMessage(caught, 'Failed to restore that version') } : previous);
     } finally {
-      setRestoring(null);
+      if (current(lane) && lane.operation === request) {
+        lane.operation = null;
+        setState((previous) => current(lane) ? { ...previous, restoring: null } : previous);
+      }
+      request.retire();
     }
   };
 
@@ -202,6 +275,11 @@ function VersionsSetting({ site, onRestored }: { site: PublishedSite; onRestored
       title="Versions"
       description="Each publish is kept. Restoring an older one publishes it again as the newest version."
     >
+      {consumed ? (
+        <p role="status" className="text-sm text-[var(--chat-text-secondary)]">
+          Restore confirmed. Refresh the site details before restoring another version.
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="text-sm text-[var(--chat-destructive-text)]">
           {error}
@@ -245,7 +323,7 @@ function VersionsSetting({ site, onRestored }: { site: PublishedSite; onRestored
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={restoring !== null}
+                  disabled={restoring !== null || consumed}
                   onClick={() => void restore(entry.version)}
                 >
                   {restoring === entry.version ? 'Restoring…' : 'Restore'}

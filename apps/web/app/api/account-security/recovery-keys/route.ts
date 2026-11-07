@@ -46,10 +46,10 @@ async function handleConfirmReplacement(request: NextRequest) {
     request,
     await getUserScopedDb(request, ACCOUNT_SECURITY_SCOPE),
   );
-  await readValidatedJsonBody(
+  const body = await readValidatedJsonBody(
     request,
     AccountSecurityRecoveryKeysSavedSchema,
-    'Confirm that you saved your new recovery keys.',
+    'Reload and generate new recovery keys, then confirm that you saved them.',
   );
   await requireStepUp({
     userId: caller.userId,
@@ -57,7 +57,7 @@ async function handleConfirmReplacement(request: NextRequest) {
     request,
     endpoint: ACCOUNT_SECURITY_RECOVERY_KEYS_PATH,
   });
-  await confirmReplacementRecoveryKeys(caller, request);
+  await confirmReplacementRecoveryKeys(caller, body.recoveryBatchId, request);
   return new NextResponse(null, { status: 204 });
 }
 

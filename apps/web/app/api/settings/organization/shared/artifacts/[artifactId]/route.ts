@@ -8,7 +8,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { unshareArtifactFromOrganization } from '@/lib/services/org-shared-artifact-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { isUuid } from '@/lib/uuid';
@@ -46,8 +49,10 @@ async function handleUnshare(
   const { artifactId } = await context.params;
   const publishedArtifactId = parseArtifactId(artifactId);
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
 
   const removed = await unshareArtifactFromOrganization(
     db,

@@ -7,7 +7,9 @@ import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import argon2 from 'argon2';
-import { API_KEY_SCOPE_VALUES, type ApiKeyScope } from '@/lib/api-key-scopes';
+import { API_KEY_SCOPE_VALUES, resolveApiKeyScopes, type ApiKeyScope } from '@/lib/api-key-scopes';
+import { isUuid } from '@/lib/uuid';
+import { admitLiveDeveloperProjectForKey } from './developer-project-service';
 
 const ARGON2_OPTIONS: argon2.HashOptions = {
   type: argon2.argon2id,
@@ -67,6 +69,63 @@ async function verifyKeyHash(rawKey: string, storedHash: string): Promise<boolea
   }
 }
 
+export type ApiKeyRotationRefusalReason =
+  | 'not_found'
+  | 'changed'
+  | 'permissions'
+  | 'metadata'
+  | 'project';
+
+export class ApiKeyRotationRefusal extends Error {
+  constructor(readonly reason: ApiKeyRotationRefusalReason) {
+    super(`API key rotation refused: ${reason}`);
+    this.name = 'ApiKeyRotationRefusal';
+  }
+}
+
+interface OwnedRotationKey {
+  id: string;
+  name: unknown;
+  scopes: unknown;
+  expires_at: unknown;
+  project_id: unknown;
+}
+
+function isProjectAssociation(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && isUuid(value));
+}
+
+function validScopes(scopes: readonly ApiKeyScope[]): boolean {
+  return (
+    scopes.length > 0 &&
+    new Set(scopes).size === scopes.length &&
+    scopes.every((scope) => API_KEY_SCOPE_VALUES.includes(scope))
+  );
+}
+
+async function readRotationKey(
+  tx: DatabaseAdapter,
+  userId: string,
+  keyId: string,
+  lock: boolean,
+): Promise<OwnedRotationKey> {
+  const rows = await tx.query<OwnedRotationKey>(
+    `select id, name, scopes, expires_at, project_id
+       from public.api_keys
+      where id = $1 and user_id = $2 and revoked_at is null
+      limit 2${lock ? ' for update' : ''}`,
+    [keyId, userId],
+  );
+  if (
+    rows.length !== 1 ||
+    typeof rows[0]?.id !== 'string' ||
+    rows[0].id.toLowerCase() !== keyId.toLowerCase()
+  ) {
+    throw new ApiKeyRotationRefusal('not_found');
+  }
+  return rows[0];
+}
+
 export class ApiKeyService {
   static async createApiKey(
     db: DatabaseAdapter,
@@ -76,23 +135,91 @@ export class ApiKeyService {
     expiresAt: Date | null = null,
     projectId: string | null = null,
   ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
-    const uniqueScopes = new Set(scopes);
-    if (
-      scopes.length === 0 ||
-      uniqueScopes.size !== scopes.length ||
-      scopes.some((scope) => !API_KEY_SCOPE_VALUES.includes(scope))
-    ) {
+    return db.transaction(async (tx) => {
+      if (!isProjectAssociation(projectId)) {
+        throw createError.validation('That project does not exist or is archived.');
+      }
+      if (
+        projectId !== null &&
+        !(await admitLiveDeveloperProjectForKey(tx, userId, projectId))
+      ) {
+        throw createError.validation('That project does not exist or is archived.');
+      }
+      return this.insertApiKey(tx, userId, name, scopes, expiresAt, projectId);
+    });
+  }
+
+  static async rotateApiKey(
+    db: DatabaseAdapter,
+    userId: string,
+    keyId: string,
+  ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
+    return db.transaction(async (tx) => {
+      const discovered = await readRotationKey(tx, userId, keyId, false);
+      if (!isProjectAssociation(discovered.project_id)) {
+        throw new ApiKeyRotationRefusal('metadata');
+      }
+      if (
+        discovered.project_id !== null &&
+        !(await admitLiveDeveloperProjectForKey(tx, userId, discovered.project_id))
+      ) {
+        throw new ApiKeyRotationRefusal('project');
+      }
+
+      const existing = await readRotationKey(tx, userId, keyId, true);
+      if (
+        !isProjectAssociation(existing.project_id) ||
+        existing.project_id?.toLowerCase() !== discovered.project_id?.toLowerCase()
+      ) {
+        throw new ApiKeyRotationRefusal('changed');
+      }
+      if (!isProjectAssociation(existing.project_id) || typeof existing.name !== 'string') {
+        throw new ApiKeyRotationRefusal('metadata');
+      }
+      if (
+        existing.scopes !== null &&
+        (!Array.isArray(existing.scopes) ||
+          !existing.scopes.every((scope): scope is string => typeof scope === 'string'))
+      ) {
+        throw new ApiKeyRotationRefusal('permissions');
+      }
+      const scopes = resolveApiKeyScopes(existing.scopes ?? []);
+      if (!validScopes(scopes)) throw new ApiKeyRotationRefusal('permissions');
+      const expiresAt =
+        existing.expires_at === null
+          ? null
+          : existing.expires_at instanceof Date
+            ? existing.expires_at
+            : typeof existing.expires_at === 'string'
+              ? new Date(existing.expires_at)
+              : new Date(Number.NaN);
+      if (expiresAt !== null && apiKeyExpiryProblem(expiresAt, Date.now()) !== null) {
+        throw new ApiKeyRotationRefusal('metadata');
+      }
+      if ((await this.revokeApiKey(tx, existing.id, userId)) !== 1) {
+        throw new ApiKeyRotationRefusal('changed');
+      }
+      return this.insertApiKey(tx, userId, existing.name, scopes, expiresAt, existing.project_id);
+    });
+  }
+
+  private static async insertApiKey(
+    tx: DatabaseAdapter,
+    userId: string,
+    name: string,
+    scopes: ApiKeyScope[],
+    expiresAt: Date | null,
+    projectId: string | null,
+  ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
+    if (!validScopes(scopes)) {
       throw new Error('At least one unique, supported API key scope is required');
     }
-
     if (expiresAt !== null) {
       const problem = apiKeyExpiryProblem(expiresAt, Date.now());
       if (problem) throw createError.validation(apiKeyExpiryMessage(problem));
     }
-
     const { raw, hash, keyId } = await generateKey();
-
-    const rows = await db.query<ApiKeyRow>(
+    const rows = await tx.query<ApiKeyRow>(
       `INSERT INTO api_keys (user_id, name, key_hash, key_prefix, scopes, expires_at, project_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
@@ -106,13 +233,11 @@ export class ApiKeyService {
         projectId,
       ],
     );
-
-    if (!rows[0]) {
-      const err = new Error('Failed to create API key: no row returned');
+    if (rows.length !== 1 || !rows[0]) {
+      const err = new Error('Failed to create API key: expected one row returned');
       logger.error({ userId }, err.message);
       throw err;
     }
-
     return { apiKey: rows[0], rawKey: raw };
   }
 
@@ -145,6 +270,12 @@ export class ApiKeyService {
        WHERE key_prefix = $1
          AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > now())
+         AND (api_keys.project_id IS NULL OR EXISTS (
+           SELECT 1 FROM public.developer_projects p
+           WHERE p.id = api_keys.project_id
+             AND p.user_id = api_keys.user_id
+             AND p.archived_at IS NULL
+         ))
        LIMIT 2`,
       [keyId],
     );

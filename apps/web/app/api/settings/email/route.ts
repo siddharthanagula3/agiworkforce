@@ -120,7 +120,9 @@ async function handleMakePrimary(request: NextRequest) {
   }
   const previousId = user.primaryEmailAddressId;
   if (previousId === emailAddressId) {
-    return NextResponse.json({ emailAddress: next.emailAddress, previousAddressRemoved: true });
+    throw createError.conflict(
+      'That address is already primary, but profile synchronization and previous-address cleanup cannot be confirmed. Check your account email and sign-in methods before starting another change.',
+    ).asUserSafe();
   }
 
   const grant = await requireStepUp({
@@ -144,10 +146,15 @@ async function handleMakePrimary(request: NextRequest) {
 
   const identity = getIdentityProvider();
   await identity.setPrimaryEmailAddress(sessionIdentity.subject, emailAddressId).catch(rejected);
-  await db.query('update public.profiles set email = $2, updated_at = now() where id = $1', [
-    userId,
-    next.emailAddress,
-  ]);
+  const updatedProfiles = await db.query<{ id: string }>(
+    'update public.profiles set email = $2, updated_at = now() where id = $1 returning id',
+    [userId, next.emailAddress],
+  );
+  if (!Array.isArray(updatedProfiles) || updatedProfiles.length !== 1 || updatedProfiles[0]?.id !== userId) {
+    throw createError.conflict(
+      'The address was made primary, but profile synchronization could not be confirmed and previous-address cleanup was not attempted. Check your account email and sign-in methods before starting another change.',
+    ).asUserSafe();
+  }
 
   let previousAddressRemoved = previousId === null;
   if (previousId !== null) {

@@ -6,7 +6,6 @@ import {
   getPublishedArtifactByToken,
   isPublishedArtifactVisibility,
   listPublishedArtifacts,
-  setPublishedArtifactVisibility,
 } from '../published-artifact-service';
 
 const TOKEN = 'AAAAAAAAAAAAAAAAAAAAAAAA';
@@ -66,32 +65,6 @@ describe('the anonymous token read', () => {
   it('returns null when the predicate matched nothing', async () => {
     const { db } = makeDb(() => []);
     await expect(getPublishedArtifactByToken(db, TOKEN)).resolves.toBeNull();
-  });
-});
-
-describe('setPublishedArtifactVisibility', () => {
-  it('binds the owner and changes nothing but the audience', async () => {
-    const { db, issued } = makeDb(() => [row('organization')]);
-
-    const updated = await setPublishedArtifactVisibility(db, {
-      userId: 'user-1',
-      token: TOKEN,
-      visibility: 'organization',
-    });
-
-    expect(updated?.visibility).toBe('organization');
-    expect(updated?.token).toBe(TOKEN);
-    expect(issued[0]?.sql).toContain('where token = $1 and user_id = $2');
-    expect(issued[0]?.sql).not.toMatch(/set[\s\S]*content =/i);
-    expect(issued[0]?.params).toEqual([TOKEN, 'user-1', 'organization']);
-  });
-
-  it('refuses a malformed token without touching the database', async () => {
-    const { db, issued } = makeDb(() => []);
-    await expect(
-      setPublishedArtifactVisibility(db, { userId: 'user-1', token: 'nope', visibility: 'public' }),
-    ).resolves.toBeNull();
-    expect(issued).toHaveLength(0);
   });
 });
 

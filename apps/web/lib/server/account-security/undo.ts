@@ -70,9 +70,8 @@ export async function turnOffFromEmailLink(
     userId: open.userId,
     event: 'advanced_security_disabled',
     subjectRef: new Date().toISOString(),
-    context: passwordReset
-      ? 'It was turned off from the link emailed when it was turned on, every session was signed out and the password was reset. Choose a new one with Forgot password on the sign-in screen.'
-      : 'It was turned off from the link emailed when it was turned on, and every session was signed out. Change your password now.',
+    context:
+      'Advanced Account Security was turned off from the emailed link. Review your sign-in methods and active sessions. Account recovery may need further attention.',
     request,
     detail: { source: 'email_link', deleted: contained.deviceCredentialsRevoked },
   });

@@ -12,7 +12,10 @@ import {
   servicePrincipalActorId,
 } from '@/lib/server/service-principal';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import {
   getTeamAdminAccess,
@@ -76,8 +79,10 @@ export async function resolveComplianceCaller(
     };
   }
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
   const permissions = await requireMemberPermission(
     membership.organizationId,

@@ -1,9 +1,352 @@
+import { act, renderHook } from '@testing-library/react-native';
 import { ApiHttpError } from '@/services/apiErrors';
-import { PUBLISH_FAILED_MESSAGE, publishFailureMessage } from '../artifactPublishing';
+import {
+  capturePostUnpublishAudienceReconciliation,
+  fetchArtifactPublication,
+  setPublishedArtifactAudience,
+  publishArtifact,
+  unpublishArtifact,
+  isPublicationOutcomeUncertain,
+  recordPublishedArtifactAudience,
+  refreshPublishedArtifactAudiences,
+  PUBLISH_FAILED_MESSAGE,
+  publishFailureMessage,
+  usePublishedArtifactAudience,
+  usePublishedArtifactAudiences,
+} from '../artifactPublishing';
+import { api } from '@/services/api';
+import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+  invalidateCloudAccount,
+  StaleCloudAccountOperationError,
+} from '@/src/features/auth/services/cloudAccountSession';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS, MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS } from '@agiworkforce/cloud-contracts';
 
-jest.mock('@/services/api', () => ({ api: { post: jest.fn() } }));
+jest.mock('@/services/api', () => ({ api: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() } }));
+
+const publication = (artifactId = 'artifact-1') => ({
+  token: 'a'.repeat(24),
+  artifactId,
+  title: 'Landing page',
+  kind: 'html',
+  language: 'html',
+  contentChars: 14,
+  visibility: 'organization',
+  createdAt: '2026-11-07T00:00:00Z',
+  updatedAt: '2026-11-07T00:00:00Z',
+  shareUrl: `https://example.com/shared-artifact/${'a'.repeat(24)}`,
+  sandboxed: true,
+});
+
+// UNRUN: source-authored publish acknowledgement and account fixtures.
+describe('publish acknowledgement', () => {
+  const input = { artifactId: 'artifact-1', title: 'Page', kind: 'html', content: '<p>new</p>' };
+  const receipt = { ...publication(), version: 2, publishedAt: '2026-11-07T00:00:00Z', workspace: null };
+
+  beforeEach(() => {
+    jest.mocked(api.post).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  it('uses a full epoch, disables automatic auth replay and returns actual audience', async () => {
+    jest.mocked(api.post).mockResolvedValue(receipt);
+    await expect(publishArtifact(input)).resolves.toMatchObject({ visibility: 'organization', version: 2 });
+    expect(api.post).toHaveBeenCalledWith('/api/artifacts/publish', input, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ shareUrl: publication().shareUrl }, { ...receipt, artifactId: 'other' },
+    { ...receipt, visibility: 'unknown' }, { ...receipt, shareUrl: 'javascript:alert(1)' }])(
+    'rejects invalid acknowledgement without replay %p', async (reply) => {
+      jest.mocked(api.post).mockResolvedValue(reply);
+      await expect(publishArtifact(input)).rejects.toThrow();
+      expect(api.post).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('rejects an A to B to A completion without recording a badge', async () => {
+    let resolve!: (reply: unknown) => void;
+    jest.mocked(api.post).mockReturnValue(new Promise((done) => { resolve = done; }));
+    const pending = publishArtifact(input);
+    const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    activateCloudAccount('owner-b');
+    activateCloudAccount('owner-a');
+    resolve(receipt);
+    await rejection;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+  });
+
+  it('does not transport without a current account', async () => {
+    invalidateCloudAccount();
+    await expect(publishArtifact(input)).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+// UNRUN: WEB-PUBLICATION-QUOTA-ADMISSION-01 audience receipt boundaries.
+describe('audience change acknowledgement', () => {
+  const shareUrl = publication().shareUrl;
+  const receipt = {
+    token: 'a'.repeat(24), shareUrl, title: 'Landing page',
+    visibility: 'organization', organizationId: 'org-1', updatedAt: '2026-11-07T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    jest.mocked(api.patch).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    recordPublishedArtifactAudience('artifact-1', 'public');
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  it.each(['public', 'organization', 'invited'] as const)(
+    'returns a matching %s receipt without recording a badge itself', async (visibility) => {
+      jest.mocked(api.patch).mockResolvedValue({ ...receipt, visibility });
+      await expect(setPublishedArtifactAudience(shareUrl, visibility)).resolves.toEqual({ shareUrl, visibility });
+      expect(api.patch).toHaveBeenCalledWith(`/api/artifacts/publish/${receipt.token}`, { visibility }, {
+        accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+      });
+      expect(api.patch).toHaveBeenCalledTimes(1);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+    },
+  );
+
+  it.each([
+    undefined, null, {}, { shareUrl, visibility: 'organization' },
+    { ...receipt, shareUrl: undefined }, { ...receipt, visibility: undefined },
+    { ...receipt, visibility: 'unknown' }, { ...receipt, visibility: 'public' },
+    { ...receipt, token: 'b'.repeat(24), shareUrl: shareUrl.replace(/a{24}$/, 'b'.repeat(24)) },
+    { ...receipt, shareUrl: shareUrl.replace(/a{24}$/, 'b'.repeat(24)) },
+    { ...receipt, shareUrl: 'javascript:alert(1)' }, { ...receipt, shareUrl: `${shareUrl}?extra=1` },
+    { ...receipt, organizationId: undefined }, { ...receipt, updatedAt: '' },
+  ])('rejects incomplete, invalid or mismatched acknowledgement %p', async (reply) => {
+    jest.mocked(api.patch).mockResolvedValue(reply);
+    await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toThrow();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each([401, 403, 500])('propagates HTTP %i without retrying or clearing the account', async (status) => {
+    const account = captureCloudAccountEpoch();
+    const failure = new ApiHttpError('Audience unavailable', status, null);
+    jest.mocked(api.patch).mockRejectedValue(failure);
+    await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toBe(failure);
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(captureCloudAccountEpoch()).toEqual(account);
+  });
+
+  it.each(['other-owner', 'round-trip', 'sign-out'])(
+    'rejects an old completion after %s', async (transition) => {
+      let resolve!: (reply: unknown) => void;
+      jest.mocked(api.patch).mockReturnValue(new Promise((done) => { resolve = done; }));
+      const pending = setPublishedArtifactAudience(shareUrl, 'organization');
+      const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+      if (transition === 'sign-out') invalidateCloudAccount();
+      else activateCloudAccount('owner-b');
+      if (transition === 'round-trip') activateCloudAccount('owner-a');
+      resolve(receipt);
+      await rejection;
+      expect(api.patch).toHaveBeenCalledTimes(1);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    },
+  );
+
+  it('requires a current account and a valid target before transport', async () => {
+    await expect(setPublishedArtifactAudience('invalid', 'organization')).rejects.toThrow();
+    invalidateCloudAccount();
+    await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+});
+
+// UNRUN: unpublish receipt and account boundaries through the actual service parser.
+describe('unpublish acknowledgement', () => {
+  const shareUrl = publication().shareUrl;
+  const receipt = { success: true, token: 'a'.repeat(24) };
+
+  beforeEach(() => {
+    jest.mocked(api.delete).mockReset();
+    jest.mocked(api.get).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    recordPublishedArtifactAudience('artifact-1', 'public');
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  it('accepts a matching receipt with a full epoch and caller-owned 401 recovery', async () => {
+    jest.mocked(api.delete).mockResolvedValue(receipt);
+    await expect(unpublishArtifact(shareUrl)).resolves.toBeUndefined();
+    expect(api.delete).toHaveBeenCalledWith(`/api/artifacts/publish/${receipt.token}`, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each([
+    undefined, null, {}, { success: true }, { token: receipt.token },
+    { ...receipt, success: false }, { ...receipt, success: 'true' },
+    { ...receipt, token: '' }, { ...receipt, token: 'b'.repeat(24) },
+  ])('rejects an invalid acknowledgement %p without replay or badge removal', async (reply) => {
+    jest.mocked(api.delete).mockResolvedValue(reply);
+    const failure = await unpublishArtifact(shareUrl).then(() => null, (error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(publishFailureMessage(failure)).toBe(PUBLISH_FAILED_MESSAGE);
+    expect(isPublicationOutcomeUncertain(failure)).toBe(true);
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each([
+    new ApiHttpError('Unpublish unavailable', 401, null),
+    new ApiHttpError('Unpublish unavailable', 403, null),
+    new ApiHttpError('Unpublish unavailable', 404, null),
+    new ApiHttpError('Unpublish unavailable', 500, null),
+    new SyntaxError('Invalid JSON'), new TypeError('Network request failed'),
+  ])('preserves a rejected transport result %p without replay or account teardown', async (failure) => {
+    const account = captureCloudAccountEpoch();
+    jest.mocked(api.delete).mockRejectedValue(failure);
+    await expect(unpublishArtifact(shareUrl)).rejects.toBe(failure);
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(captureCloudAccountEpoch()).toEqual(account);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each(['other-owner', 'round-trip', 'sign-out'])(
+    'retires a pending acknowledgement after %s', async (transition) => {
+      let resolve!: (reply: unknown) => void;
+      jest.mocked(api.delete).mockReturnValue(new Promise((done) => { resolve = done; }));
+      const pending = unpublishArtifact(shareUrl);
+      const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+      if (transition === 'sign-out') invalidateCloudAccount();
+      else activateCloudAccount('owner-b');
+      if (transition === 'round-trip') activateCloudAccount('owner-a');
+      resolve(receipt);
+      await rejection;
+      expect(api.delete).toHaveBeenCalledTimes(1);
+      expect(api.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires a valid target and current account before transport', async () => {
+    await expect(unpublishArtifact('invalid')).rejects.toThrow();
+    invalidateCloudAccount();
+    await expect(unpublishArtifact(shareUrl)).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('exact artifact publication lookup', () => {
+  beforeEach(() => {
+    jest.mocked(api.get).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    usePublishedArtifactAudiences.setState({
+      ownerId: 'owner-a',
+      byId: { unrelated: 'public' },
+    });
+  });
+
+  afterEach(() => invalidateCloudAccount());
+
+  it('encodes the complete artifact ID and binds the request to the current epoch', async () => {
+    const artifactId = 'folder/a?b&c=#雪';
+    jest.mocked(api.get).mockResolvedValue({
+      artifact: publication(artifactId),
+      workspace: { memberCount: 7 },
+    });
+    await expect(fetchArtifactPublication(artifactId)).resolves.toEqual({
+      publication: { shareUrl: publication().shareUrl, visibility: 'organization' },
+      workspaceMemberCount: 7,
+    });
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith(
+      `/api/artifacts/publish/lookup?artifactId=${encodeURIComponent(artifactId)}`,
+      { accountEpoch: captureCloudAccountEpoch() },
+    );
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ unrelated: 'public' });
+  });
+
+  it.each(['', '   ', 'a'.repeat(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS + 1)])(
+    'rejects invalid IDs before transport: %p',
+    async (artifactId) => {
+      await expect(fetchArtifactPublication(artifactId)).rejects.toThrow();
+      expect(api.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([null, { memberCount: 0 }, { memberCount: 7 }])(
+    'accepts only explicit validated absence with workspace %p',
+    async (workspace) => {
+      jest.mocked(api.get).mockResolvedValue({ artifact: null, workspace });
+      await expect(fetchArtifactPublication('artifact-1')).resolves.toEqual({
+        publication: null,
+        workspaceMemberCount: workspace?.memberCount ?? null,
+      });
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({ unrelated: 'public' });
+    },
+  );
+
+  it.each([
+    undefined,
+    null,
+    {},
+    { artifacts: [] },
+    { artifact: null },
+    { artifact: null, workspace: { memberCount: -1 } },
+    { artifact: {}, workspace: null },
+    { artifact: { ...publication(), shareUrl: '' }, workspace: null },
+    { artifact: publication('other-artifact'), workspace: null },
+  ])('rejects malformed or mismatched lookup response %p without clearing cache', async (reply) => {
+    jest.mocked(api.get).mockResolvedValue(reply);
+    await expect(fetchArtifactPublication('artifact-1')).rejects.toThrow();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ unrelated: 'public' });
+  });
+
+  it.each([401, 403, 404, 500])('does not translate HTTP %i into private', async (status) => {
+    const error = new ApiHttpError('Lookup unavailable', status, null);
+    jest.mocked(api.get).mockRejectedValue(error);
+    await expect(fetchArtifactPublication('artifact-1')).rejects.toBe(error);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ unrelated: 'public' });
+  });
+
+  it('rejects an A to B to A account transition while the lookup is pending', async () => {
+    let resolve!: (response: unknown) => void;
+    jest.mocked(api.get).mockReturnValue(new Promise((done) => { resolve = done; }));
+    const pending = fetchArtifactPublication('artifact-1');
+    const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    activateCloudAccount('owner-b');
+    activateCloudAccount('owner-a');
+    resolve({ artifact: publication(), workspace: null });
+    await rejection;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+  });
+
+  it('does not send an unauthenticated lookup', async () => {
+    invalidateCloudAccount();
+    await expect(fetchArtifactPublication('artifact-1')).rejects.toBeInstanceOf(
+      StaleCloudAccountOperationError,
+    );
+    expect(api.get).not.toHaveBeenCalled();
+  });
+});
 
 describe('what a reader is told when publishing fails', () => {
+  // UNRUN: a timeout or upstream error is not a rollback receipt.
+  it.each([408, 404, 500, 503])('keeps HTTP %i uncertain', (status) => {
+    const error = new ApiHttpError('Request unavailable.', status, null);
+    expect(isPublicationOutcomeUncertain(error)).toBe(true);
+    expect(publishFailureMessage(error)).toContain(PUBLISH_FAILED_MESSAGE);
+  });
   it("shows the server's own sentence with the reference that finds it", () => {
     const refused = new ApiHttpError('Publishing is turned off for this workspace.', 403, null, {
       requestId: 'req_7f3a',
@@ -23,5 +366,295 @@ describe('what a reader is told when publishing fails', () => {
     ]) {
       expect(publishFailureMessage(thrown)).toBe(PUBLISH_FAILED_MESSAGE);
     }
+  });
+});
+
+
+describe('publication badge refresh authority', () => {
+  beforeEach(() => {
+    jest.mocked(api.get).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    recordPublishedArtifactAudience('older', 'public');
+  });
+
+  afterEach(() => {
+    invalidateCloudAccount();
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  function deferredList() {
+    let resolve!: (response: unknown) => void;
+    const promise = new Promise<unknown>((done) => { resolve = done; });
+    jest.mocked(api.get).mockReturnValueOnce(promise);
+    return resolve;
+  }
+
+  const page = (artifacts = [publication()], nextCursor: string | null = null) => ({
+    artifacts, pageInfo: { nextCursor }, workspace: null,
+  });
+
+  it.each([undefined, { nextCursor: 'more' }])(
+    'merges incomplete or legacy page %p without more requests', async (pageInfo) => {
+      jest.mocked(api.get).mockResolvedValue({ artifacts: [publication()], pageInfo });
+      await refreshPublishedArtifactAudiences();
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({
+        older: 'public', 'artifact-1': 'organization',
+      });
+      expect(api.get).toHaveBeenCalledTimes(1);
+      expect(api.get).toHaveBeenCalledWith('/api/artifacts/publish', {
+        accountEpoch: captureCloudAccountEpoch(), signal: expect.objectContaining({ aborted: false }),
+      });
+    },
+  );
+
+  it('clears omissions only on a validated complete first page', async () => {
+    jest.mocked(api.get).mockResolvedValue(page([]));
+    await refreshPublishedArtifactAudiences();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+  });
+
+  it.each([
+    {}, { artifacts: [] , pageInfo: {} }, page([{} as ReturnType<typeof publication>]),
+    page([publication(), publication()]),
+    page(Array.from({ length: MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS + 1 },
+      (_, index) => publication(`artifact-${index}`))),
+  ])('rejects malformed, duplicate or oversized pages without clearing badges: %p', async (reply) => {
+    jest.mocked(api.get).mockResolvedValue(reply);
+    await expect(refreshPublishedArtifactAudiences()).rejects.toThrow();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ older: 'public' });
+  });
+
+  it('keeps known badges on transport failure and permits a later retry', async () => {
+    jest.mocked(api.get).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(page());
+    await expect(refreshPublishedArtifactAudiences()).rejects.toThrow('offline');
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ older: 'public' });
+    await refreshPublishedArtifactAudiences();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'organization' });
+  });
+
+  it.each([null, 'more'])('preserves newer records and forgets over page %p', async (cursor) => {
+    const resolve = deferredList();
+    const pending = refreshPublishedArtifactAudiences();
+    recordPublishedArtifactAudience('new', 'invited');
+    recordPublishedArtifactAudience('artifact-1', 'public');
+    recordPublishedArtifactAudience('older', null);
+    resolve(page([publication(), publication('older')], cursor));
+    await pending;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({
+      new: 'invited', 'artifact-1': 'public',
+    });
+    jest.mocked(api.get).mockResolvedValue(page([publication('older')]));
+    await refreshPublishedArtifactAudiences();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ older: 'organization' });
+  });
+
+  it.each([true, false])('only the latest-started refresh may commit; newer resolves first: %p', async (newerFirst) => {
+    const first = deferredList();
+    const older = refreshPublishedArtifactAudiences();
+    const firstSignal = jest.mocked(api.get).mock.calls[0]![1]!.signal!;
+    const second = deferredList();
+    const newer = refreshPublishedArtifactAudiences();
+    expect(firstSignal.aborted).toBe(true);
+    if (newerFirst) {
+      second(page([publication('latest')]));
+      await newer;
+      first(page());
+      await older;
+    } else {
+      first(page());
+      await older;
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({ older: 'public' });
+      second(page([publication('latest')]));
+      await newer;
+    }
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ latest: 'organization' });
+  });
+
+  it('keeps the newer refresh and its overlay when a superseded request rejects', async () => {
+    let reject!: (error: Error) => void;
+    jest.mocked(api.get).mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
+    const older = refreshPublishedArtifactAudiences();
+    const failure = new Error('superseded request failed');
+    const rejection = expect(older).rejects.toBe(failure);
+    const resolve = deferredList();
+    const newer = refreshPublishedArtifactAudiences();
+    reject(failure);
+    await rejection;
+    recordPublishedArtifactAudience('artifact-1', 'public');
+    recordPublishedArtifactAudience('new', 'invited');
+    resolve(page());
+    await newer;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({
+      'artifact-1': 'public', new: 'invited',
+    });
+  });
+
+  it.each(['other-owner', 'same-owner'])('invalidates and notifies across %s epoch transitions', async (transition) => {
+    const resolve = deferredList();
+    const pending = refreshPublishedArtifactAudiences();
+    const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    const listener = jest.fn();
+    const unsubscribe = usePublishedArtifactAudiences.subscribe(listener);
+    if (transition === 'other-owner') activateCloudAccount('owner-b');
+    else invalidateCloudAccount();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    expect(listener).toHaveBeenCalled();
+    activateCloudAccount('owner-a');
+    recordPublishedArtifactAudience('current', 'invited');
+    resolve(page());
+    await rejection;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ current: 'invited' });
+    expect(jest.mocked(api.get).mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    unsubscribe();
+  });
+
+  it('retires a cloud refresh across Local and back without rolling back explicit writes', async () => {
+    const resolve = deferredList();
+    const pending = refreshPublishedArtifactAudiences();
+    useChatAppModeStore.setState({ appMode: 'local' });
+    recordPublishedArtifactAudience('explicit', 'public');
+    await refreshPublishedArtifactAudiences();
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(api.get).mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    resolve(page());
+    await pending;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ older: 'public', explicit: 'public' });
+  });
+
+  it('does not request a list without an active account', async () => {
+    invalidateCloudAccount();
+    await expect(refreshPublishedArtifactAudiences()).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it.each(['constructor', 'toString'])(
+    'reads only own audience entries for %s through the hook', (artifactId) => {
+      usePublishedArtifactAudiences.setState({ ownerId: 'owner-a', byId: {} });
+      const { result, unmount } = renderHook(() => usePublishedArtifactAudience(artifactId));
+      expect(result.current).toBeNull();
+      act(() => recordPublishedArtifactAudience(artifactId, 'public'));
+      expect(result.current).toBe('public');
+      act(() => recordPublishedArtifactAudience(artifactId, null));
+      expect(result.current).toBeNull();
+      unmount();
+    },
+  );
+
+  it('stores prototype-looking IDs as own audience entries', async () => {
+    jest.mocked(api.get).mockResolvedValue(page([publication('__proto__'), publication('constructor')]));
+    await refreshPublishedArtifactAudiences();
+    expect(Object.keys(usePublishedArtifactAudiences.getState().byId)).toEqual(['__proto__', 'constructor']);
+    recordPublishedArtifactAudience('__proto__', 'public');
+    expect(usePublishedArtifactAudiences.getState().byId['__proto__']).toBe('public');
+    recordPublishedArtifactAudience('__proto__', null);
+    expect(Object.prototype.hasOwnProperty.call(usePublishedArtifactAudiences.getState().byId, '__proto__')).toBe(false);
+  });
+});
+
+// UNRUN: bounded post-Unpublish reconciliation through the real service and store.
+describe('post-Unpublish audience reconciliation', () => {
+  beforeEach(() => {
+    jest.mocked(api.get).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    recordPublishedArtifactAudience('artifact-1', null);
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  function pendingRefresh() {
+    let resolve!: (response: unknown) => void;
+    jest.mocked(api.get).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    return { resolve, promise: refreshPublishedArtifactAudiences() };
+  }
+  const page = { artifacts: [publication()], pageInfo: { nextCursor: null }, workspace: null };
+
+  it.each(['public', 'organization', 'invited'] as const)(
+    'records a current %s observation once', (audience) => {
+      const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+      expect(reconcile(audience)).toBe(true);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': audience });
+      recordPublishedArtifactAudience('artifact-1', null);
+      expect(reconcile(audience)).toBe(false);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+      expect(api.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['newer', 'repeated-null', 'aba', 'unrelated', 'reset'] as const)(
+    'rejects after an intervening %s store write', (write) => {
+      const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+      if (write === 'reset') usePublishedArtifactAudiences.setState({ ownerId: 'owner-a', byId: {} });
+      else if (write === 'unrelated') recordPublishedArtifactAudience('other', 'invited');
+      else {
+        recordPublishedArtifactAudience('artifact-1', write === 'repeated-null' ? null : 'invited');
+        if (write === 'aba') recordPublishedArtifactAudience('artifact-1', null);
+      }
+      const state = usePublishedArtifactAudiences.getState();
+      expect(reconcile('public')).toBe(false);
+      expect(usePublishedArtifactAudiences.getState()).toBe(state);
+    },
+  );
+
+  it('refuses a snapshot of an already-present newer badge', () => {
+    recordPublishedArtifactAudience('artifact-1', 'invited');
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    expect(reconcile('public')).toBe(false);
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('invited');
+  });
+
+  it.each(['sign-out', 'other-owner', 'round-trip'] as const)(
+    'rejects a full account epoch change: %s', (transition) => {
+      const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+      if (transition === 'sign-out') invalidateCloudAccount();
+      else activateCloudAccount('owner-b');
+      if (transition === 'round-trip') activateCloudAccount('owner-a');
+      expect(reconcile('public')).toBe(false);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    },
+  );
+
+  it('preserves reconciliation through the already-pending older bulk response overlay', async () => {
+    const refresh = pendingRefresh();
+    recordPublishedArtifactAudience('artifact-1', null);
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    expect(reconcile('invited')).toBe(true);
+    refresh.resolve(page);
+    await refresh.promise;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'invited' });
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects when an older pending bulk response commits before reconciliation', async () => {
+    const refresh = pendingRefresh();
+    recordPublishedArtifactAudience('artifact-1', null);
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    refresh.resolve(page);
+    await refresh.promise;
+    expect(reconcile('invited')).toBe(false);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+  });
+
+  it.each([false, true])('does not overlay a newly started refresh; older active: %p', async (olderActive) => {
+    const older = olderActive ? pendingRefresh() : null;
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    const newer = pendingRefresh();
+    expect(reconcile('invited')).toBe(false);
+    newer.resolve(page);
+    await newer.promise;
+    older?.resolve(page);
+    await older?.promise;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'organization' });
+  });
+
+  it('does not promise invalidation by a failed refresh that leaves no accepted cache write', async () => {
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    jest.mocked(api.get).mockRejectedValueOnce(new Error('offline'));
+    await expect(refreshPublishedArtifactAudiences()).rejects.toThrow('offline');
+    expect(reconcile('invited')).toBe(true);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'invited' });
   });
 });

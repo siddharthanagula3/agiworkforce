@@ -58,6 +58,11 @@ export type ManagedCloudPublishedArtifactVisibility =
   (typeof MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES)[number];
 
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS = 300;
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS = 200;
+
+export const ManagedCloudPublishedArtifactLookupQuerySchema = z.object({
+  artifactId: z.string().trim().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS),
+});
 
 export const ManagedCloudPublishedArtifactSchema = z.object({
   token: z.string().min(1),
@@ -80,8 +85,61 @@ export const ManagedCloudPublishedArtifactWorkspaceSchema = z.object({
   memberCount: z.number().int().nonnegative(),
 });
 
+function hasPublishedArtifactReceiptLink(receipt: { token: string; shareUrl: string }): boolean {
+  try {
+    const url = new URL(receipt.shareUrl);
+    return (url.protocol === 'https:' || url.protocol === 'http:') &&
+      !url.username && !url.password && !url.search && !url.hash &&
+      url.pathname === `/shared-artifact/${receipt.token}`;
+  } catch {
+    return false;
+  }
+}
+
+export const ManagedCloudPublishedArtifactPublishResponseSchema = z.object({
+  artifactId: z.string().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS),
+  token: z.string().regex(/^[A-Za-z0-9_-]{24}$/),
+  shareUrl: z.string().url(),
+  visibility: z.enum(MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES),
+  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  publishedAt: z.string().min(1),
+  kind: z.string().min(1),
+  title: z.string(),
+  sandboxed: z.boolean(),
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable(),
+}).refine(hasPublishedArtifactReceiptLink, {
+  message: 'The publication receipt must link to its token.',
+});
+export type ManagedCloudPublishedArtifactPublishResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactPublishResponseSchema
+>;
+
+export const ManagedCloudPublishedArtifactLookupResponseSchema = z.object({
+  artifact: ManagedCloudPublishedArtifactSchema.nullable(),
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable(),
+});
+export type ManagedCloudPublishedArtifactLookupResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactLookupResponseSchema
+>;
+
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS = 200;
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS = 2048;
+
+export const ManagedCloudPublishedArtifactPageInfoSchema = z.object({
+  nextCursor: z.string().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS).nullable(),
+});
+
+export const ManagedCloudPublishedArtifactDetailResponseSchema = z.object({
+  artifact: ManagedCloudPublishedArtifactSchema,
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable().default(null),
+});
+export type ManagedCloudPublishedArtifactDetailResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactDetailResponseSchema
+>;
+
 export const ManagedCloudPublishedArtifactListResponseSchema = z.object({
   artifacts: z.array(ManagedCloudPublishedArtifactSchema),
+  pageInfo: ManagedCloudPublishedArtifactPageInfoSchema.optional(),
   workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable().default(null),
 });
 export type ManagedCloudPublishedArtifactListResponse = z.infer<
@@ -123,6 +181,11 @@ export function managedCloudPublishedArtifactPath(token: string): string {
   return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/${encodeURIComponent(token)}`;
 }
 
+export function managedCloudPublishedArtifactLookupPath(artifactId: string): string {
+  const query = ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId });
+  return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/lookup?${new URLSearchParams(query)}`;
+}
+
 export function managedCloudPublishedArtifactViewersPath(token: string): string {
   return `${managedCloudPublishedArtifactPath(token)}/viewers`;
 }
@@ -141,14 +204,20 @@ export type ManagedCloudPublishedArtifactViewerRequest = z.input<
   typeof ManagedCloudPublishedArtifactViewerRequestSchema
 >;
 
-export interface ManagedCloudPublishedArtifactViewer {
-  email: string;
-  invitedAt: string;
-}
+export const ManagedCloudPublishedArtifactViewerSchema = z.object({
+  email: z.string(),
+  invitedAt: z.string(),
+});
+export type ManagedCloudPublishedArtifactViewer = z.infer<
+  typeof ManagedCloudPublishedArtifactViewerSchema
+>;
 
-export interface ManagedCloudPublishedArtifactViewersResponse {
-  viewers: ManagedCloudPublishedArtifactViewer[];
-}
+export const ManagedCloudPublishedArtifactViewersResponseSchema = z.object({
+  viewers: z.array(ManagedCloudPublishedArtifactViewerSchema),
+});
+export type ManagedCloudPublishedArtifactViewersResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactViewersResponseSchema
+>;
 
 export function managedCloudPublishedArtifactVersionsPath(token: string): string {
   return `${managedCloudPublishedArtifactPath(token)}/versions`;
@@ -191,6 +260,24 @@ export const ManagedCloudPublishedArtifactUpdateResponseSchema = z.object({
 export type ManagedCloudPublishedArtifactUpdateResponse = z.infer<
   typeof ManagedCloudPublishedArtifactUpdateResponseSchema
 >;
+
+export const ManagedCloudPublishedArtifactUpdateReceiptSchema =
+  ManagedCloudPublishedArtifactUpdateResponseSchema.extend({
+    token: z.string().regex(/^[A-Za-z0-9_-]{24}$/),
+    shareUrl: z.string().url(),
+  }).refine(hasPublishedArtifactReceiptLink, {
+    message: 'The publication receipt must link to its token.',
+  });
+
+export const ManagedCloudPublishedArtifactDeleteReceiptSchema = z.object({
+  success: z.literal(true),
+  token: ManagedCloudPublishedArtifactSchema.shape.token,
+});
+
+export const ManagedCloudPublishedArtifactRestoreReceiptSchema = z.object({
+  token: ManagedCloudPublishedArtifactSchema.shape.token,
+  version: z.number().int().positive().safe(),
+});
 
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_DATA_PREVIEW_CHARS = 240;
 

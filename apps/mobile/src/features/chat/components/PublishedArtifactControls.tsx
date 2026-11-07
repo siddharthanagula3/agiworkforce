@@ -17,8 +17,11 @@ interface PublishedArtifactControlsProps {
   title: string;
   publication: ArtifactPublication;
   workspaceMemberCount: number | null;
-  onChanged: (publication: ArtifactPublication) => void;
-  onUnpublished: () => void;
+  onChanged: (publication: ArtifactPublication, mutation?: number) => void;
+  onUnpublished: (mutation?: number) => void;
+  onMutationStart?: () => number | false;
+  isMutationCurrent?: (mutation: number) => boolean;
+  onMutationEnd?: (mutation: number) => void;
 }
 
 function confirm(title: string, message: string, confirmLabel: string, destructive: boolean) {
@@ -45,6 +48,9 @@ export function PublishedArtifactControls({
   workspaceMemberCount,
   onChanged,
   onUnpublished,
+  onMutationStart,
+  isMutationCurrent,
+  onMutationEnd,
 }: PublishedArtifactControlsProps) {
   const colors = useThemeColors();
   const [busy, setBusy] = useState<'audience' | 'unpublish' | null>(null);
@@ -71,37 +77,70 @@ export function PublishedArtifactControls({
               false,
             );
       if (!confirmed) return;
+      const mutation = onMutationStart?.();
+      if (mutation === false) return;
+      const isCurrent = () => mutation === undefined || isMutationCurrent?.(mutation) !== false;
       setBusy('audience');
       try {
-        onChanged(await setPublishedArtifactAudience(publication.shareUrl, next));
+        const result = await setPublishedArtifactAudience(publication.shareUrl, next);
+        if (isCurrent()) {
+          if (mutation === undefined) onChanged(result);
+          else onChanged(result, mutation);
+        }
       } catch (error) {
-        Alert.alert('Could not change who can open this', publishFailureMessage(error));
+        if (isCurrent()) {
+          Alert.alert('Could not change who can open this', publishFailureMessage(error));
+        }
       } finally {
-        setBusy(null);
+        if (isCurrent()) setBusy(null);
+        if (mutation !== undefined) onMutationEnd?.(mutation);
       }
     },
-    [busy, onChanged, publication, workspaceMemberCount],
+    [
+      busy,
+      onChanged,
+      onMutationStart,
+      isMutationCurrent,
+      onMutationEnd,
+      publication,
+      workspaceMemberCount,
+    ],
   );
 
   const handleUnpublish = useCallback(async () => {
     if (busy) return;
     const confirmed = await confirm(
       'Unpublish this artifact?',
-      `Anyone using the link for “${title}” will immediately lose access. This cannot be undone.`,
+      `Anyone using the link for “${title}” will immediately lose access, and its visitor data will be deleted. This cannot be undone.`,
       'Unpublish',
       true,
     );
     if (!confirmed) return;
+    const mutation = onMutationStart?.();
+    if (mutation === false) return;
+    const isCurrent = () => mutation === undefined || isMutationCurrent?.(mutation) !== false;
     setBusy('unpublish');
     try {
       await unpublishArtifact(publication.shareUrl);
-      onUnpublished();
+      if (isCurrent()) {
+        if (mutation === undefined) onUnpublished();
+        else onUnpublished(mutation);
+      }
     } catch (error) {
-      Alert.alert('Could not unpublish', publishFailureMessage(error));
+      if (isCurrent()) Alert.alert('Could not unpublish', publishFailureMessage(error));
     } finally {
-      setBusy(null);
+      if (isCurrent()) setBusy(null);
+      if (mutation !== undefined) onMutationEnd?.(mutation);
     }
-  }, [busy, onUnpublished, publication.shareUrl, title]);
+  }, [
+    busy,
+    onUnpublished,
+    onMutationStart,
+    isMutationCurrent,
+    onMutationEnd,
+    publication.shareUrl,
+    title,
+  ]);
 
   const options: { value: PublishedArtifactAudience; label: string }[] = [
     { value: 'public', label: 'Anyone with the link' },

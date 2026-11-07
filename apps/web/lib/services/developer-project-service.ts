@@ -74,6 +74,28 @@ export async function readLiveDeveloperProject(
   return row ? toProject(row) : null;
 }
 
+export async function admitLiveDeveloperProjectForKey(
+  tx: DatabaseAdapter,
+  userId: string,
+  projectId: string,
+): Promise<boolean> {
+  // A row write, not just a lock, also conflicts with archive's older repeatable-read snapshot.
+  const rows = await tx.query<{ id: string }>(
+    `update public.developer_projects
+        set updated_at = now()
+      where id = $1
+        and user_id = $2
+        and archived_at is null
+      returning id`,
+    [projectId, userId],
+  );
+  return (
+    rows.length === 1 &&
+    typeof rows[0]?.id === 'string' &&
+    rows[0].id.toLowerCase() === projectId.toLowerCase()
+  );
+}
+
 export async function createDeveloperProject(
   db: DatabaseAdapter,
   userId: string,

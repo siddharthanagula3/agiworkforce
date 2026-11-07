@@ -23,6 +23,8 @@ import {
   ACCOUNT_SECURITY_RECOVERY_PATH,
   ACCOUNT_SECURITY_VERIFICATION_OPTIONS_PATH,
   ACCOUNT_SECURITY_VERIFICATION_PATH,
+  AccountSecurityRecoveryBatchIdSchema,
+  AccountSecurityUndoResponseSchema,
   accountSecurityCredentialPath,
   type AccountSecurityCredential,
   type AccountSecurityEnrollmentCodeResponse,
@@ -137,16 +139,23 @@ export async function removeCredential(
 }
 
 export async function generateRecoveryKeys(): Promise<AccountSecurityRecoveryKeysResponse> {
-  return readJson(
+  const receipt = await readJson<AccountSecurityRecoveryKeysResponse>(
     await send(ACCOUNT_SECURITY_RECOVERY_KEYS_PATH, 'POST'),
     'Recovery keys could not be generated.',
   );
+  if (!AccountSecurityRecoveryBatchIdSchema.safeParse(receipt?.recoveryBatchId).success) {
+    throw new AccountSecurityRequestError('Reload and generate new recovery keys before confirming them.', 409);
+  }
+  return receipt;
 }
 
-export async function confirmReplacementRecoveryKeys(runStepUp: StepUpRunner): Promise<void> {
+export async function confirmReplacementRecoveryKeys(
+  runStepUp: StepUpRunner,
+  recoveryBatchId: string,
+): Promise<void> {
   await expectEmpty(
     await runStepUp((headers) =>
-      send(ACCOUNT_SECURITY_RECOVERY_KEYS_PATH, 'PUT', { recoveryKeysSaved: true }, headers),
+      send(ACCOUNT_SECURITY_RECOVERY_KEYS_PATH, 'PUT', { recoveryKeysSaved: true, recoveryBatchId }, headers),
     ),
     'Your new recovery keys could not be saved.',
   );
@@ -170,6 +179,7 @@ export async function sendEnrollmentCode(): Promise<AccountSecurityEnrollmentCod
 export async function enrollAccountSecurity(
   runStepUp: StepUpRunner,
   emailCode: string,
+  recoveryBatchId: string,
 ): Promise<AccountSecurityEnrollmentResponse> {
   const response = await assertWithPasskey();
   return readJson(
@@ -177,7 +187,7 @@ export async function enrollAccountSecurity(
       send(
         ACCOUNT_SECURITY_ENROLLMENT_PATH,
         'POST',
-        { recoveryKeysSaved: true, emailCode, response },
+        { recoveryKeysSaved: true, recoveryBatchId, emailCode, response },
         headers,
       ),
     ),
@@ -185,11 +195,34 @@ export async function enrollAccountSecurity(
   );
 }
 
-export async function turnOffFromEmailLink(token: string): Promise<AccountSecurityUndoResponse> {
-  return readJson(
-    await send(ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH, 'POST', { token }),
-    'Advanced Account Security could not be turned off.',
-  );
+export interface AccountSecurityUndoCustody {
+  isCurrent: () => boolean;
+  onDispatch: () => void;
+}
+
+export async function turnOffFromEmailLink(
+  token: string,
+  custody?: AccountSecurityUndoCustody,
+): Promise<AccountSecurityUndoResponse> {
+  const assertCurrent = () => {
+    if (custody && !custody.isCurrent()) {
+      throw new DOMException('This link intent is no longer active.', 'AbortError');
+    }
+  };
+  assertCurrent();
+  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  assertCurrent();
+  const init: RequestInit = {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    cache: 'no-store',
+    body: JSON.stringify({ token }),
+  };
+  custody?.onDispatch();
+  const response = await fetch(ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH, init);
+  const body = await readJson<unknown>(response, 'Advanced Account Security could not be turned off.');
+  return AccountSecurityUndoResponseSchema.parse(body);
 }
 
 export async function verifyWithPasskey(): Promise<string> {

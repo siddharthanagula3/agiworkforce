@@ -3,14 +3,110 @@ import {
   MANAGED_CLOUD_ARTIFACT_INDEX_PATH,
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   ManagedCloudArtifactIndexResponseSchema,
+  ManagedCloudPublishedArtifactViewersResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
+  ManagedCloudPublishedArtifactDeleteReceiptSchema,
+  ManagedCloudPublishedArtifactRestoreReceiptSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
+  ManagedCloudPublishedArtifactDetailResponseSchema,
+  ManagedCloudPublishedArtifactLookupQuerySchema,
+  ManagedCloudPublishedArtifactLookupResponseSchema,
+  ManagedCloudPublishedArtifactPublishResponseSchema,
+  managedCloudPublishedArtifactLookupPath,
   ManagedCloudPublishedArtifactUpdateRequestSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
+  ManagedCloudPublishedArtifactUpdateResponseSchema,
   managedCloudArtifactIndexQueryString,
   managedCloudPublishedArtifactDataPath,
   managedCloudPublishedArtifactPath,
   managedCloudPublishedArtifactVersionsPath,
 } from '../artifact-index';
+
+// UNRUN: source-authored publication receipt fixtures.
+describe('publication acknowledgement contract', () => {
+  const receipt = {
+    artifactId: 'artifact-1', token: 'a'.repeat(24),
+    shareUrl: `https://example.test/shared-artifact/${'a'.repeat(24)}`,
+    visibility: 'invited', version: 1, publishedAt: '2026-11-07T00:00:00Z',
+    title: 'Page', kind: 'html', sandboxed: true, workspace: null,
+  };
+
+  it.each(['public', 'organization', 'invited'])('preserves acknowledged audience %s', (visibility) => {
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.parse({ ...receipt, visibility }))
+      .toEqual({ ...receipt, visibility });
+  });
+
+  it.each([
+    { artifactId: undefined }, { token: 'invalid' }, { visibility: undefined },
+    { visibility: 'future' }, { version: 0 }, { version: Number.MAX_SAFE_INTEGER + 1 },
+    { version: -1 }, { version: 1.5 },
+    { workspace: undefined },
+    { shareUrl: 'not a URL' }, { shareUrl: 'javascript:alert(1)' },
+    { shareUrl: `https://example.test/shared-artifact/${'b'.repeat(24)}` },
+    { shareUrl: `${receipt.shareUrl}?redirect=other` },
+    { shareUrl: `${receipt.shareUrl}#fragment` },
+  ])('rejects incomplete or mismatched receipt %p', (change) => {
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.safeParse({ ...receipt, ...change }).success)
+      .toBe(false);
+  });
+});
+
+// UNRUN: WEB-PUBLICATION-QUOTA-ADMISSION-01 strict update acknowledgement boundary.
+describe('publication update receipt contract', () => {
+  const receipt = {
+    token: 'a'.repeat(24), shareUrl: `https://example.test/shared-artifact/${'a'.repeat(24)}`,
+    visibility: 'invited', title: 'Page', organizationId: null, updatedAt: '2026-11-07T00:00:00Z',
+  };
+
+  it.each(['public', 'organization', 'invited'])('accepts complete %s acknowledgements', (visibility) => {
+    const body = { ...receipt, visibility, organizationId: visibility === 'organization' ? 'org-1' : null };
+    expect(ManagedCloudPublishedArtifactUpdateReceiptSchema.parse(body)).toEqual(body);
+  });
+
+  it.each([
+    ...Object.keys(receipt).map((field) => ({ [field]: undefined })),
+    { token: 'invalid' }, { visibility: 'future' }, { organizationId: 1 },
+    { shareUrl: 'javascript:alert(1)' }, { shareUrl: '/shared-artifact/' + receipt.token },
+    { shareUrl: `https://example.test/shared-artifact/${'b'.repeat(24)}` },
+    { shareUrl: `${receipt.shareUrl}?query=1` }, { shareUrl: `${receipt.shareUrl}#fragment` },
+    { shareUrl: `${receipt.shareUrl}/` },
+    { shareUrl: receipt.shareUrl.replace('https://', 'https://user:password@') },
+  ])('rejects invalid update receipt %j', (change) => {
+    expect(ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse({ ...receipt, ...change }).success)
+      .toBe(false);
+  });
+
+  it('preserves the existing general update response contract for other clients', () => {
+    const legacy = { ...receipt, token: 'tok_1', shareUrl: 'https://example.test/shared-artifact/tok_1' };
+    expect(ManagedCloudPublishedArtifactUpdateResponseSchema.parse(legacy)).toEqual(legacy);
+    expect(ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse(legacy).success).toBe(false);
+  });
+});
+
+// UNRUN: source-authored exact publication lookup contract fixtures.
+describe('exact publication lookup contract', () => {
+  it('normalizes trim-only text identity and encodes reserved characters as query data', () => {
+    const artifactId = 'Artifact/Upper?x=1+#片';
+    const path = managedCloudPublishedArtifactLookupPath(` ${artifactId} `);
+    const url = new URL(path, 'https://example.test');
+    expect(url.pathname).toBe('/api/artifacts/publish/lookup');
+    expect([...url.searchParams]).toEqual([['artifactId', artifactId]]);
+    expect(ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId: 'a'.repeat(200) }))
+      .toEqual({ artifactId: 'a'.repeat(200) });
+  });
+
+  it.each(['', '  ', 'a'.repeat(201)])('rejects invalid request identity %s', (artifactId) => {
+    expect(() => managedCloudPublishedArtifactLookupPath(artifactId)).toThrow();
+  });
+
+  it('requires an explicit null and workspace for confirmed absence', () => {
+    expect(ManagedCloudPublishedArtifactLookupResponseSchema.parse({ artifact: null, workspace: null }))
+      .toEqual({ artifact: null, workspace: null });
+    for (const response of [{}, { artifacts: [] }, { workspace: null }, { artifact: null }]) {
+      expect(ManagedCloudPublishedArtifactLookupResponseSchema.safeParse(response).success).toBe(false);
+    }
+  });
+});
 
 describe('artifact index contract (apps/web/app/api/artifacts/index/route.ts)', () => {
   it('accepts the row the route emits, nulls included', () => {
@@ -169,5 +265,84 @@ describe('published site contract (apps/web/app/api/artifacts/publish/[token]/ro
         ownPersonalEntryCount: 0,
       }).success,
     ).toBe(true);
+  });
+});
+
+// UNRUN: additive owner inventory metadata contract fixtures.
+describe('published artifact pagination compatibility', () => {
+  it('keeps missing legacy metadata unknown rather than inventing exhaustion', () => {
+    expect(ManagedCloudPublishedArtifactListResponseSchema.parse({ artifacts: [] }).pageInfo)
+      .toBeUndefined();
+  });
+
+  it('distinguishes an exhausted page from one with a continuation', () => {
+    expect(ManagedCloudPublishedArtifactListResponseSchema.parse({
+      artifacts: [], pageInfo: { nextCursor: null },
+    }).pageInfo).toEqual({ nextCursor: null });
+    expect(ManagedCloudPublishedArtifactListResponseSchema.parse({
+      artifacts: [], pageInfo: { nextCursor: 'opaque-cursor' },
+    }).pageInfo).toEqual({ nextCursor: 'opaque-cursor' });
+  });
+
+  it.each([null, {}, { nextCursor: '' }, { nextCursor: 1 }, { nextCursor: 'a'.repeat(2049) }])(
+    'rejects malformed page metadata rather than treating it as exhausted', (pageInfo) => {
+      expect(ManagedCloudPublishedArtifactListResponseSchema.safeParse({ artifacts: [], pageInfo }).success)
+        .toBe(false);
+    },
+  );
+
+  it('requires a direct detail artifact instead of accepting a list response', () => {
+    expect(ManagedCloudPublishedArtifactDetailResponseSchema.safeParse({ artifacts: [], workspace: null }).success)
+      .toBe(false);
+  });
+});
+
+// UNRUN: minimum deletion and restore acknowledgement contracts.
+describe('publication delete and restore receipts', () => {
+  it('accepts minimum receipts and strips unrelated fields', () => {
+    expect(ManagedCloudPublishedArtifactDeleteReceiptSchema.parse({ success: true, token: 'token', extra: 1 }))
+      .toEqual({ success: true, token: 'token' });
+    expect(ManagedCloudPublishedArtifactRestoreReceiptSchema.parse({ token: 'token', version: 8, extra: 1 }))
+      .toEqual({ token: 'token', version: 8 });
+  });
+
+  it.each([null, {}, { success: false, token: 'token' }, { success: true },
+    { success: true, token: '' }, { success: true, token: 1 }])('rejects invalid delete %p', (raw) => {
+    expect(ManagedCloudPublishedArtifactDeleteReceiptSchema.safeParse(raw).success).toBe(false);
+  });
+
+  it.each([null, {}, { token: '', version: 1 }, { token: 'token' },
+    ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1'].map((version) => ({ token: 'token', version }))])(
+    'rejects invalid restore %p', (raw) => {
+      expect(ManagedCloudPublishedArtifactRestoreReceiptSchema.safeParse(raw).success).toBe(false);
+    },
+  );
+});
+
+
+describe('published viewer response shape (UNRUN source fixtures)', () => {
+  it.each([
+    { viewers: [] },
+    { viewers: [{ email: 'ana@example.com', invitedAt: '2026-11-07T00:00:00.000Z' }] },
+    { viewers: [{ email: ' Legacy Address ', invitedAt: 'now' }, { email: '', invitedAt: '' }] },
+  ])('accepts route-shaped and legacy string responses %p', (body) => {
+    expect(ManagedCloudPublishedArtifactViewersResponseSchema.parse(body)).toEqual(body);
+  });
+
+  it('allows unrelated response and row fields without changing viewer strings', () => {
+    expect(ManagedCloudPublishedArtifactViewersResponseSchema.parse({
+      extra: true, viewers: [{ email: ' ANA@example.com ', invitedAt: 'now', extra: true }],
+    })).toEqual({ viewers: [{ email: ' ANA@example.com ', invitedAt: 'now' }] });
+  });
+
+  it.each([
+    null, {}, [], { viewers: null }, { viewers: {} }, { viewers: 'none' },
+    { viewers: [null] }, { viewers: [{}] }, { viewers: ['ana@example.com'] },
+    ...[undefined, null, 1, false, {}, []].flatMap((value) => [
+      { viewers: [{ email: value, invitedAt: 'now' }] },
+      { viewers: [{ email: 'ana@example.com', invitedAt: value }] },
+    ]),
+  ])('rejects malformed response or row %p', (body) => {
+    expect(ManagedCloudPublishedArtifactViewersResponseSchema.safeParse(body).success).toBe(false);
   });
 });

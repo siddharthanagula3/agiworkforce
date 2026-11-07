@@ -10417,6 +10417,42 @@ or full erasure. An audit failure can still occur after a successful write.
 No tests, lint, typechecks, builds, installations, live/database actions, push or
 deployment ran.
 
+Cancellation request-ownership addendum, 2026-11-07: Source-corrected in
+`ce083f4072cc2b59beb751505b392cce71ca467f`. The previous cancellation hook
+could dispatch after its view retired while CSRF preparation was pending and
+unconditionally replace newer deletion-status cache data after success.
+A dedicated controller now captures the native session when confirmation opens,
+uses fresh layout generations and permanently retired one-shot intents, and
+receives a separate active-view prop from the settings modal. Inactive view,
+unmount and observed session changes retire the request and its presentation.
+
+Exact ready QueryState identity is checked at confirmation and again at physical
+POST dispatch after CSRF and captured-token waits. RequestAuthority supplies
+captured Bearer authentication with cookies omitted. Intent lifetime is separate
+from QueryState identity: a synchronous comparison permits no-pending cache
+publication only when the captured state is unchanged, and that own write does
+not invalidate settlement. A valid receipt after a newer state preserves that
+state and offers an explicit status-query-only refetch. Its admission and UI
+settlement are guarded; no full-page reload or cancellation replay is added.
+Retired results cannot publish cache, close a replacement dialog or emit errors.
+
+The original global status GET/cache remains unowned and cookie-authenticated,
+including reconciliation's reader. Capturing a session does not prove ownership
+of the originally displayed status. The server still cancels its authenticated
+account's schedule current at execution, without a version precondition;
+different-device cancel/re-schedule races remain. Scheduling, success logout,
+global cleanup and durable uncertainty recovery are unchanged. Already-accepted
+server effects cannot be recalled, and a cancellation receipt is not final
+remote-state or erasure proof. Existing receipt/refusal parsing and retry:false
+are retained.
+
+Independent source review accepted four production and six fixture files.
+UNRUN fixtures cover duplicate/retained handles, CSRF/token waits, later query
+state, response/body retirement, status-only reconciliation and StrictMode
+generation retirement; they do not establish real browser/auth/React/database
+behavior. No product tests, lint, typechecks, builds, installations, live account
+actions, migration application, push or deployment ran.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
@@ -12830,10 +12866,13 @@ failure/authority change, not an observed production incident or established
 project-budget bypass. Ownership, Personal scope, CSRF, step-up and single-use
 proposal checks already existed and remain.
 
-The executor now uses one caller-scoped transaction. It reads the owned live row
-FOR UPDATE, validates retained expiry/project metadata, requires exactly one
-revocation and calls the canonical creator with the same name, effective scopes,
-expiry and project. Invalid, expired, missing or newly-disallowed expiry and
+The original correction used one caller-scoped transaction for the owned live
+key, metadata validation, exact revocation and replacement. The 2026-11-07 follow-on
+`b1f930dae7082658bb037643eb699ea952824c1c` centralizes that transaction in
+ApiKeyService.rotateApiKey, with a shared private inserter and typed support refusal
+mapping. It discovers association without a key lock, writes the owned live project,
+then locks/rereads the key and refuses any changed association before revocation.
+Locked name, effective scopes, expiry and project are retained. Invalid, expired, missing or newly-disallowed expiry and
 invalid/missing project metadata refuse before revocation. A null expiry remains
 null. Existing legacy scope resolution is unchanged. The shared revocation helper
 now returns its affected count; the ordinary settings DELETE still ignores that
@@ -12850,52 +12889,80 @@ consumption remains outside rotation: failed execution consumes that proposal;
 a fresh proposal can target an original key retained by a confirmed rollback.
 No automatic retry/idempotency or guaranteed secret recovery is claimed.
 
-Preserving project metadata does not establish project-archive concurrency safety.
-Archive updates the project before revoking keys, while this correction locks the
-key. A complete coordinated admission design must retain project-first ordering,
-check a current owned live project with an archive-conflicting lock, then re-read
-the key and reject changed metadata. That broader correction is not implemented.
+The follow-on uses a project row write, not only a lock, before any key lock.
+It coordinates participating creation/rotation with archive, including source-level
+higher-isolation conflict reasoning. Old writers and global workspace revocation
+remain outside it. See WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01 for the exact boundary.
 
 Authored fixtures are unrun. A dedicated distinct outer/transaction-handle model
 covers supplied metadata, refusal, receipt checks and staged success/failure;
 it does not execute SQL, RLS, database locking or real concurrent proposals. The
-existing full-support fake only preserves metadata and remains nontransactional.
+shared support fake now stages key rows but not project timestamps or concurrency;
+the dedicated lifecycle model has separate staged SQL/order/fault coverage.
 No tests, lint, typechecks, builds, provider calls, push or deployment ran.
 
 ## WEB-SECURITY-SESSION-COMPLETION-01: emailed undo and recovery custody
 
-Additional independently reviewed source finding, 2026-11-05. The earlier
-password/support-recovery correction does not cover emailed enrollment undo.
-`account-security/undo.ts` consumes the one-time link and disables enrollment
-through the store transaction before awaiting mobile-intent revocation. If that
-await rejects, enrolling-session revocation, password reset and general
-containment are skipped. The link hash is already cleared, so retrying it does
-not resume cleanup. No durable operation receipt was found in this flow.
+High. Source finding first reviewed 2026-11-05; bounded anonymous-link intent and
+presentation correction `ce91425416e7a0e1fca2db50d239a6f5009c9ef7` independently
+source-reviewed on 2026-11-07. Durable recovery remains open.
 
-The shared compromise response processes a sweep containing failed session IDs
-or incompleteness. Its public result omits enumeration completeness and mobile-cleanup
-outcome, while undo ignores even the failed count. Undo's event context and
-`AccountSecurityUndo.tsx` success copy claim every session/device was signed out.
-The shared notice title also says the account was secured, though its body reports
-a count rather than literally all sessions/devices. The shared audit does mark
-failure for failed IDs, incomplete enumeration or mobile failure; this is not an
-entirely unrecorded failure. Its detail status is based only on incompleteness.
+The client validates the existing sessionsSignedOut/passwordReset response fields
+through a canonical schema that accepts additive fields. The anonymous undo
+transport retains cookie credentials, CSRF and token payload. Optional custody
+checks run before and after CSRF; request options are prepared before dispatch is
+marked immediately ahead of fetch. This is not authenticated session authority.
+Other account-security transport calls are unchanged.
 
-Counterguards remain: route CSRF, rate limiting and validated token input; store
-hash/expiry/enrollment checks with transaction locking; a deliberate UI click
-and fragment removal; cache write-error handling; caught enrolling-session and
-password-reset failures. Provider enumeration rejection can separately stop the
-shared response before device-refresh cleanup. None of this establishes an
-actual compromised-account incident or bypass of the one-time-link protections.
+The component confirms irreversible disabling and removal of recovery keys and
+saved key registrations existing at activation, matching the store cutoff. A
+synchronous attempt/phase lock prevents duplicate prompts or mutation dispatch.
+The fragment is captured once, exact-length validated and scrubbed; layout cleanup
+and generation/attempt identity prevent Strict Mode replay or an unmounted intent
+from publishing or dispatching after CSRF. Current pathname/query/hash checks and
+popstate/pagehide/hashchange retirement cover observed navigation. Retirement
+preserves an unconfirmed dispatched result as uncertainty and a validated receipt
+as confirmed. Hash scrubbing is confined to the original route, preserving
+unrelated destination fragments. No automatic POST is introduced.
 
-Acceptance requires explicit subsystem outcomes, truthful partial/pending
-notifications and UI, independent cleanup attempts, and durable owner-scoped
-reconciliation state created with token consumption. Preserve one-time authority
-without blindly replaying password changes. Include failures in mobile cleanup,
-provider enumeration, individual session revocation, device cleanup and
-post-action notification/response, plus concurrent token use. Suppressing one
-success string or catching one await alone is not complete recovery. Product
-code is unchanged for this finding; no service or runtime was exercised.
+Cancellation and predispatch failure permit retry. Any dispatched failure,
+malformed response or invalid receipt blocks another action in the current view
+and directs security review rather than blind replay. This is not a durable
+receipt or cross-tab/reload lease. Unobserved transient history changes are not
+detected; a silent URL mismatch can leave the old view inert until navigation or
+remount. Browser event ordering and BFCache behavior remain unverified.
+
+Success no longer displays the suspect session count or treats passwordReset as
+verified own-account password evidence. Component/page, server event and only the
+undo-specific enabled-email sentence stop promising universal sign-out/reset.
+The enabled email's separate enrollment summary remains unchanged and unverified.
+The earlier `40cd6e7131cb20dacb5d1069285f99f2fbda17d9` correction already qualified
+the shared in-app compromise notice. Neither copy correction guarantees delivery
+or repairs account containment.
+
+Server token consumption and cleanup ordering are unchanged: undo consumes its
+one-time link and disables enrollment in the store transaction before mobile-intent
+revocation. A later rejection can skip the remaining cleanup, and the consumed
+link cannot resume it. Provider operations still pass product IDs where mapped
+native subjects may differ; no reverse resolver or fallback was introduced.
+The enrolling-session attempt plus general sweep can double-count the same session.
+The shared public compromise result still omits aggregate incompleteness, and undo
+ignores its failed count. Counterguards remain CSRF/rate limiting/schema validation,
+store hash/expiry/enrollment locking, cache error handling and caught individual
+provider failures. They do not establish actual recovery success.
+
+Full acceptance requires explicit subsystem outcomes, independently attempted
+cleanup and durable owner-scoped reconciliation captured with token consumption,
+with a coherent product/native identity contract. Preserve one-time authority
+without replaying password changes blindly. Include partial provider/mobile/device
+cleanup, post-action response/notification failure and concurrent token use.
+
+Six production and six fixture files were independently source-reviewed. UI
+fixtures use the real confirmation hook/dialog, client and schema with controlled
+CSRF/fetch and a layout stub. Service/email/route/schema fixtures model boundaries,
+not real provider ownership, unique counts, token rollback, database or browser
+acceptance. Deferred cases settle their gates; no product tests, lint, typechecks,
+builds, installs, live services or migration actions were run.
 
 
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
@@ -12997,53 +13064,72 @@ typechecks, builds, service/runtime calls, push or deployment ran.
 
 ## WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01
 
-Severity: High. Independently source-confirmed 2026-11-05; no product correction
-or runtime reproduction in this slice.
+Severity: High. Participating creation/rotation/archive admission and canonical
+lookup are source-corrected; cross-workspace revocation, old writers, commit/secret
+delivery and database/runtime acceptance remain open. Independently source-reviewed
+on 2026-11-07, not runtime-reproduced. Accepted lookup slice:
+`562fb2dc0fc6a80031b58dc8c7e9727d011d74d9`. Accepted transaction slice:
+`b1f930dae7082658bb037643eb699ea952824c1c`.
 
-Settings key creation checks `readLiveDeveloperProject` before count, step-up and
-rate-limit work, outside the canonical key insertion. `ApiKeyService.createApiKey`
-only inserts the supplied project ID. Archive can therefore finish between
-preflight and insertion. Support rotation now preserves project metadata atomically,
-but locks the key before inserting a replacement; archive updates the project
-before bulk-revoking keys. An archive bulk-update snapshot can miss a concurrent
-replacement while waiting for its old key. The project FK checks existence, not
-ownership or archive admission. See `SUPPORT-API-KEY-ROTATION-ATOMICITY-01` for the
-accepted earlier transaction/metadata correction and its remaining limits.
+Original races: settings checked a live project before count, proof/rate work and
+canonical insertion. Archive could commit before that insertion. Support rotation
+retained metadata but locked the key first; archive locked the project first and
+its key-update snapshot could miss a replacement committed while it waited.
+The project existence FK did not enforce owned/live admission.
 
-There is a separate scope mismatch: migration 0321's developer projects are
-user-global, while API keys default to the active organization under 0110 and
-use the workspace visibility/writability policies from 0073, 0110 and 0272.
-Settings creation and project archive use normal active-workspace resolution;
-support confirmation explicitly uses Personal scope. The same project can thus
-hold keys in several workspaces, but archive's scoped UPDATE reaches only the
-current workspace. Other existing keys can remain unrevoked. Canonical key
-verification checks hash, revocation and expiry, not project archive status;
-other account/endpoint admission gates still apply.
+Canonical creation now owns one caller-scoped transaction. Non-NULL associations
+require an owner-qualified live-project UPDATE RETURNING before shared private
+insertion. The intentional project updated_at write creates a row version, rather
+than relying on a lock alone. In higher-isolation transactions, a stale archive
+snapshot must conflict with that write instead of successfully missing the new
+key. This is source-level concurrency reasoning, not executed database evidence.
+NULL association skips project admission. Invalid association refuses; no migration,
+RLS weakening, workspace rebinding or privileged fallback was added.
 
-Source owners: `lib/services/developer-project-service.ts`,
-`lib/services/api-key-service.ts`, `app/api/settings/api-keys/route.ts`,
-`app/api/developers/projects/[projectId]/route.ts`, support confirmation/executor,
-and the cited append-only migrations. Project association participates in usage
-aggregation and the project-spend refusal called by chat completions and audio
-transcription; it is not merely display metadata. However, `project-spend.ts`
-binds Personal scope explicitly, so its key/project query cannot see an
-organization-owned key under current RLS and returns no project refusal for that
-row. The same adapter scopes spend aggregation. This is a source visibility
-limitation, not proven global enforcement or a demonstrated end-to-end budget
-bypass.
+Canonical rotation owns one transaction: unlocked owned/nonrevoked key discovery,
+validated project association, project write, locked owned key reread, unchanged
+association check, current metadata validation, exactly-one revocation and private
+insertion. A changed association, including NULL transitions, refuses without
+acquiring a different project after the key lock. UUID case is compared semantically;
+product owner identity stays exact. Missing/malformed project and expiry metadata
+refuse. The locked name, effective scopes, expiry and project are retained, including
+legacy scope expansion and NULL expiry. Typed domain refusals map to existing
+support outcomes. Secrets return only after the transaction resolves; nested
+transactions and automatic serialization retries are not introduced. Archive's
+existing project-first transaction remains unchanged.
 
-A complete lifecycle decision must address both concurrency and scope. Admission
-needs project-before-key ordering, an owned live-project lock conflicting with
-archive, and a locked key reread refusing changed project association; null project
-issuance stays supported. A late project lock inside the current key-first rotation
-is unsafe. For global archive semantics, either align project/workspace ownership
-with an existing-data policy or provide a narrowly authorized owner-qualified
-cross-workspace revocation operation. Do not weaken RLS or silently rebind scope.
-A verifier archive check alone would not make all keys revoked or emit their
-revocation events. Future acceptance must cover both archive interleavings,
-concurrent rotations, changed association, rollback and multi-workspace keys.
-No such database or runtime checks ran here.
+Scope remains a separate defect: 0321 developer projects are user-global while
+0073/0110/0272 key policies are workspace-scoped. Archive only revokes keys visible
+and writable in its selected workspace. Existing keys elsewhere can remain stored
+as unrevoked; creation/rotation now touch the same owned project across participating
+workspaces but do not supply global revocation or its events. Support remains
+Personal-scoped. Project-spend also selects Personal scope, so it cannot establish
+organization-wide project spending enforcement.
 
+The lookup correction requires either NULL project_id or a matching owned live
+project in the existing owner-connected query. Prefix/revocation/expiry/hash and
+last-used behavior remain. API authentication refuses invalid/errored keys without
+cookie fallback. CSRF refuses the invalid key's Bearer exemption, but separate
+valid CSRF proof can pass that check without authenticating the key. The unbound
+query path and documented BYPASSRLS role contract were read; actual deployed
+privileges and FORCE RLS behavior remain unverified.
+
+Lookup sees one statement snapshot and cannot cancel an admitted request. Old
+verifiers/issuers/rotators do not follow the new protocol; coordinated rollout is
+required. Hard deletion uses ON DELETE SET NULL and can restore projectless
+admission for an otherwise-live key. Uncertain commit, consumed support proposals,
+lost once-only secret delivery, global revocation/events, spending and deletion
+history remain open. No automatic retry or durable secret recovery is claimed.
+
+The latest transaction slice has three production files and nine fixture files,
+independently source-reviewed. New lifecycle fixtures call actual services with
+strict SQL, staged state, owner/workspace models, sequential archive schedules,
+association/receipt/metadata faults, commit gates and injected serialization errors.
+They do not model simultaneous PostgreSQL transactions, real RLS or uncertain
+commit outcomes. Existing caller fixtures enforce distinct transaction handles;
+API-auth/CSRF stores do not model rollback. Shared support fake stages key rows,
+not project timestamps/concurrency. All fixtures are unrun. No product tests,
+lint, typechecks, builds, live services, database changes, push or deployment ran.
 
 ## WEB-DEVELOPER-MUTATION-RETRY-01
 
@@ -14033,49 +14119,109 @@ No tests, lint, typechecks, builds, app/service execution, push or deployment ra
 
 ## WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01
 
-Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime-reproduced.
+Severity: High. Source-confirmed on 2026-11-06; bounded correction
+`27f5415844504cf244095595dcff175ffa3fbcc5` independently source-reviewed on 2026-11-07.
+Migration, database concurrency, browser and rollout acceptance remain open.
 
-Recovery preparation returns keys and expiry without a batch identifier. The
-store overwrites one account-wide pending slot; promotion checks user, session,
-expiry and enrollment mode, then promotes whichever pending hashes are current.
-Two views in the same session can generate A then B, while view A saves A and
-confirms the pending B batch. A local request/session fence cannot prove that the
-promoted batch is the one acknowledged by the user. Different-session promotion
-is correctly refused and does not close this same-session case.
+Previously, preparation returned keys/expiry without a batch identity and
+replaced one account-wide pending slot. Promotion checked user, session, expiry
+and enrollment mode, then activated whichever hashes occupied that slot. Two
+views sharing one session could generate A then B, save/acknowledge A, and
+activate B. Enrollment had the same mismatch after email/passkey proof. Existing
+authentication and session guards did not distinguish those two batches. This
+was a recovery-availability/wrong-batch defect, not an unauthenticated bypass;
+no deployed incident or runtime reproduction is claimed.
 
-A correction needs an opaque batch identity in the canonical response and
-confirmation/enrollment request, owner/session/expiry-bound compare-and-swap at
-promotion, and matching UI receipt/export lifetime. Preserve old-contract handling
-explicitly and use a new migration if storage changes; no applied migration edits.
-Sources: packages/contracts/cloud-contracts/src/account-security.ts recovery-key
-and enrollment contracts; apps/web/lib/server/account-security/store.ts
-storePendingRecoveryKeys/promotePendingRecoveryKeys; service.ts preparation,
-replacement and enrollment; AdvancedAccountSecurityPanel and RecoveryKeysSheet.
-No contract, database or production behavior was changed by this inventory.
+The canonical response now carries an opaque recoveryBatchId generated alongside
+the keys. Strict replacement and enrollment requests require that exact receipt.
+The recovery schema checks length 43 plus URL-safe characters; malformed IDs are
+also refused at service entry before proof consumption. Legacy identity-less
+preparation responses and confirmation requests fail closed, without a fallback
+to the latest pending slot. Both route/client chains carry the acknowledged ID,
+including step-up replay. Store preparation persists it with pending hashes,
+session and expiry; the atomic promotion UPDATE compares the receipt alongside
+all prior guards, then activates and clears the paired pending fields together.
+Disable/undo shared clearing also removes the receipt.
+
+Append-only migration 0394_account_security_recovery_batch.sql requires a
+privileged migration role, adds the batch column, invalidates legacy pending
+material and preserves active keys/enrollment. Existing pending-field constraints
+combine with a new receipt shape constraint. A null-safe trigger refuses a
+pending payload change retaining the old receipt. Thus old identity-less inserts,
+old overwrites of new pending material and old promotions fail rather than
+silently activating the wrong batch. Old-node disable/undo also fail when they
+would leave a newer pending receipt behind. This is a deliberate availability
+caveat: the migration must precede new application code, and mixed-version
+traffic needs coordinated rollout. Nothing has been applied to a database;
+applied migration 0338 remains unchanged.
+
+The panel retains the exact receipt through keys and email steps, binds saved
+acknowledgment to its ID, retires it before regeneration and on cancel/confirmed
+conflict, and keys sheet state by batch. Canonical session ownership retires
+receipt publication on account/session replacement. Copy/export admission and
+clipboard settlement check current ownership; a native clipboard write already
+started cannot be reversed. Confirmed 409 retires local acknowledgment; ambiguous
+transport failures retain receipt/error and do not prove activation failed.
+Enrollment may consume passkey/email proof before a stale receipt conflicts, so
+its message requires new keys, email code and passkey confirmation.
+
+Nine implementation/migration files and eight authored fixture files were
+independently source-reviewed. Unrun coverage models A/B stale confirmation,
+correct activation/replay, existing user/session/expiry/mode predicates, paired
+clears, strict/legacy schemas including trailing line terminators, route/service/
+client propagation, proof consumption, receipt/UI retirement, copy/export and
+migration invariants. SQL-shape models are not PostgreSQL concurrency evidence;
+component fixtures are not browser or actual renewed-proof acceptance. No tests,
+lint, typechecks, builds, product execution, migration apply, push or deployment
+were performed. General request transport ownership, credential-admission races,
+post-promotion event/cleanup failure and other lifecycle atomicity remain outside
+this correction. See WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01 for that distinct
+invariant.
 
 ## WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01
 
-Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime-reproduced.
+Severity: High. Participating current-writer admission source-corrected on
+2026-11-07 in `8bfc6cffd4692d55055979743b75b91b011b6ff9`; mixed-version,
+whole-lifecycle and database/runtime acceptance remain open. Source-confirmed,
+not runtime-reproduced.
 
-Advanced Account Security credential removal reads enrollment and credentials,
-checks the remaining minimum-method policy, then performs a separate DELETE.
-Concurrent removals can both pass against the same pre-delete set, leaving fewer
-methods than policy requires. Enrollment also checks methods before separately
-promoting its pending keys. The route's enrolled/proof decision is also read before
-the service mutation; a removal can observe unenrolled state and finish after
-enrollment promotion. Fixing client proof-target forwarding does not make
-these server transitions atomic or repair this invariant.
+Previously, concurrent removals could each validate the same pre-delete set and
+leave too few methods or no portable method. Enrollment checked methods before
+promotion, and the DELETE route could skip proof from an unenrolled snapshot
+that became stale before deletion. Target forwarding and local duplicate guards
+do not serialize these server transitions.
 
-Coordinate per-account admission across removal, enrollment and other lifecycle
-transitions; lock/check/delete or conditional writes must share a transaction and
-consistent lock order, including the enrolled state and its required proof. A
-DELETE-only transaction or credential-row lock is insufficient. Preserve the
-across-device-method requirement, user/session
-checks and audit failure semantics. A component duplicate-click guard cannot
-serialize another tab or authorized client. Sources:
-apps/web/lib/server/account-security/service.ts removeCredential and
-requireEnrollmentMethods/enrollAccountSecurity; store.ts listCredentials,
-deleteCredential and promotePendingRecoveryKeys. No server change was made here.
+The store now creates or updates the same user-owned enrollment row inside the
+caller's transaction. Its intentional no-op user_id UPDATE creates a row-version
+write barrier, rather than relying on SELECT FOR UPDATE and a fresh READ COMMITTED
+snapshot alone. A successful admission changes updated_at through the existing
+trigger; pending/active recovery and undo fields are preserved. The schema/RLS
+and trigger compatibility were source-reviewed, not exercised in PostgreSQL.
+
+Removal takes this barrier, determines current enrolled state, invokes canonical
+user/action/target-bound requireStepUp when needed, reads current credentials,
+applies the existing full count-and-portability predicate, and deletes in that
+transaction. Existing removal events use captured target/state after commit.
+Enrollment retains its early checks and one-time assertion/email-code consumption,
+then takes the same barrier and rechecks the full current method set plus asserted
+credential membership before batch promotion and undo arming. Its event count
+comes from the admitted set. Failed batch promotion now throws inside the
+transaction; post-proof refusals request a new email code and current passkey.
+There is no automatic proof replay or nested transaction.
+
+Existing clear/undo and recovery/pending writers update the enrollment row before
+related work. Old service instances and direct owner/RLS credential CRUD do not
+participate in this protocol: coordinated writer rollout/drain remains required,
+and rollback to old writers reopens the race. No new database-wide invariant is
+claimed. Disable/enroll ABA, registration event classification, postcommit session
+verification FK races, provider/cache/event effects and mapping remain separate.
+
+Three production and four fixture files were independently source-reviewed.
+Service fixtures serialize transactions in their own model and mock proof;
+they establish intended orchestration, not actual database contention or refusal
+auditing. Store fixtures inspect SQL/mapping and caller-owned transactions. Route
+fixtures preserve wrappers, exact delegation and error behavior. All are unrun.
+No tests, lint, typechecks, builds, database apply, push or deployment occurred.
 
 ## WEB-ACCOUNT-SECURITY-PROOF-TARGET-01
 
@@ -14170,35 +14316,49 @@ execution, push or deployment ran.
 
 ## WEB-EMAIL-CHANGE-COMPLETION-01
 
-Severity: High. Independently source-confirmed on 2026-11-06; unpatched and
-not runtime-reproduced. Source: apps/web/app/api/settings/email/route.ts.
+Severity: High. False-completion receipts are partially source-corrected on
+2026-11-07 in `e4388dc4ea8d664e436fea225e02e04c967855c4`; durable reconciliation,
+concurrent ordering and runtime acceptance remain open. Independently
+source-confirmed, not runtime-reproduced. Source:
+apps/web/app/api/settings/email/route.ts and its route fixtures.
 
-POST removes prior unverified, nonprimary addresses sequentially before adding
-the requested address. A later provider rejection can be mapped to a 4xx after
-one or more removals already succeeded. Neither a rejected request nor a client
-abort establishes that the address collection stayed unchanged. Concurrent
-clients can also invalidate each other's pending address; this slice does not
-serialize them or provide a recoverable operation identity.
+POST still removes prior unverified, nonprimary addresses sequentially before
+adding the requested address. A later rejection can follow successful removals;
+concurrent clients can invalidate each other's pending addresses. No rollback,
+operation identity or POST serialization is supplied by this correction.
 
-PATCH changes the provider primary address, writes the profile email, then tries
-to remove the old address. A profile failure or unknown removal failure can
-therefore leave a partial result. A recognized provider rejection during removal
-is instead caught and returns success with previousAddressRemoved:false.
-The already-primary branch returns previousAddressRemoved:true before these
-steps, without repairing a stale profile or checking whether the previous
-address was removed. Repeating PATCH after a partial failure is not proof that
-all side effects completed, even when the repeated request returns 200.
+PATCH promotes the provider address, writes profile email, then removes the old
+address. A profile failure or unknown removal failure can leave a partial result.
+Previously an already-primary retry fabricated previousAddressRemoved:true,
+without checking either profile synchronization or old-address cleanup. That
+shortcut now refuses with user-safe 409 and no completion receipt or further
+mutation. Legitimate completed requests whose response was lost also become
+unresolved on repeat; this conservative behavior is intentional, not durable
+idempotency. The target-only request cannot safely identify the original
+predecessor after promotion, so this branch does not infer or delete an alternate.
 
-A correction needs coordinated provider/profile reconciliation, accurate cleanup
-receipts and operation identity; a client lifetime fence or response schema alone
-cannot supply them. Preserve CSRF, authenticated user, owned verified address and
-resource-targeted step-up checks. The existing already-primary branch is an
-idempotent shortcut, not evidence of an authentication bypass. Organization
-resolution and policy/audit context remain as implemented; requireStepUp verifies
-user/action/resource, not an organization or session field in its grant subject.
-No server behavior was changed by this inventory, and no tests, lint, typechecks,
-builds, app/service execution, push or deployment ran.
+The profile UPDATE now returns id and requires exactly one row matching the
+mapped product user before cleanup/success. Missing, malformed, multiple or foreign
+receipts refuse explicitly after provider promotion, with no cleanup attempt.
+This does not undo promotion or make provider/profile writes atomic. A recognized
+provider rejection while removing the known predecessor still returns the
+existing successful previousAddressRemoved:false receipt; repeats cannot upgrade
+it to true. Existing dispatched-error UI retains uncertainty rather than success,
+and prevents another write until local acknowledgment; it is not durable recovery.
 
+CSRF, authenticated account resolution, native subject ownership, verified target,
+rate limiting and resource-targeted step-up remain. The prior read-only shortcut
+was not evidence of an authentication bypass. Concurrent provider/profile writes,
+zero-row causes, provider error ambiguity and the email_changed notice emitted
+before promotion require separate work. A final read alone cannot create an
+operation-bound predecessor or a cross-system transaction.
+
+Both changed files were independently source-reviewed. Authored fixtures cover
+normal exact-product receipts, invalid profile receipts, partial failure/retry,
+retained-address false receipts and conservative lost-response duplicate refusal.
+They are unrun mocks, not provider/database/browser acceptance. No tests, lint,
+typechecks, builds, application/provider/database execution, push or deployment
+occurred.
 
 ## WEB-EMAIL-CHANGE-LIFETIME-01
 
@@ -14356,13 +14516,14 @@ is not a backend mapping lease.
 
 The remaining policy and response consumers still use the wrong namespace:
 
-- Product-only mfa-policy-gate.ts resolveMfaEnrolled still uses product cache keys
+- One-argument mfa-policy-gate.ts resolveMfaEnrolled still uses product cache keys
   and passes product ID to getIdentityUser. API keys, developer/device tokens and
   mobile-intent checks are not given invented native identity. Existing positive
   cache admission and missing/error denial remain unchanged for these consumers.
-  Organization-policy enablement/self-lockout preflight and second-factor
-  enrollment/cache writers also remain open. Global cookie DB scoping still
-  discards the resolved product ID; bearer scope retains native token claims.
+  Main policy PATCH's native-session preflight is corrected below; its device
+  path and product-only enrollment/cache writers remain open. Outside the bounded
+  owner-policy opt-in corrected below, getUserScopedDb cookie scoping still discards the
+  resolved product ID and session-token adapters retain native claims.
   The bounded session path does not certify these related flows or universal
   mapped-account email availability.
 - Legacy compromise producers still omit a native subject: other identity
@@ -14587,6 +14748,73 @@ revoke response integrity and cross-request ownership races remain unchanged.
 Fixtures cover target substitutions, malformed evidence and retained exact-target
 and partial-effect behavior; they are source-reviewed only and unrun.
 
+The owner-policy opt-in continuation `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658` now captures the verified product
+account and one request organization through authentication and restricted DB scope.
+Cookie getUserScopedDb authenticates the same captured server session and retains
+token-required admission; bearer verifies once. The resulting internally produced
+receipt is account-matched and copied into the existing app_rls claimed adapter,
+which binds product subject and target transaction-locally. No token rewriting or
+service-role fallback is introduced. This is limited to mfaGateExemptForOwner and
+the two policy routes; default cookie/session-token adapters and other namespace
+consumers remain open. Main policy native-session preflight is corrected in the
+subsequent continuation below, without changing the device fallback. See
+WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for exact gates, fixtures and lifetime limits.
+All new fixtures remain UNRUN; no live SQL/RLS or provider acceptance is established.
+
+The policy-save preflight continuation `6c60f38d0415816f9fd611a01001402d5414749b` extends that native-session
+MFA decision to main organization policy PATCH. The existing owner-policy scoped
+helper now returns a separate copy of the admitted native subject/session pair,
+only on that opt-in path. PATCH passes the same evidence to resolveMfaEnrolled;
+present evidence dispatches to the existing exact-native resolver before any
+product cache access. No second request-identity read, reverse mapping, request-
+supplied proof or default cookie/Bearer DB-scope change is introduced.
+
+Before this continuation, a mapped enrolled identity could be falsely refused,
+while a stale or product-keyed enrolled verdict could approve a policy save by
+an unenrolled authenticated identity. This is an enrollment preflight mismatch
+under existing policy.manage authority, not a non-admin policy-edit bypass or an
+observed incident. An admin may then lose MFA-governed access; the exact-target
+owner recovery exemption remains. The preflight still checks every resulting
+requireMfa=true policy, including unrelated edits to an already-required policy;
+disabling the requirement skips enrollment lookup.
+
+Only exact returned native ID and twoFactorEnabled === true pass. Blank subject,
+absent/foreign/malformed provider user and provider errors refuse without product
+fallback or cache writes. Enrollment is not a fresh challenge, a provider-mapping
+lease or an assurance that enrollment remains unchanged until the write. Native
+preflight now adds an uncached provider read, even for equal-ID accounts, and loses
+product-cache outage tolerance. It adds no deadline or cancellation; latency,
+rate limits and actual provider availability remain unverified.
+
+Signed developer/device tokens have no native evidence and deliberately retain
+legacy product-keyed cache/lookup behavior, including the existing 300-second
+cache TTL. Policy routes still do not admit API keys. Other one-argument callers,
+enrollment/cache writers, default RLS helpers and legacy compromise namespaces
+remain open. No native identity is invented for product-only credentials.
+
+Authored UNRUN fixtures retain the real shared enrollment resolver, exact membership,
+policy merge/revision/cache source, and real auth-to-scope/claimed-adapter source at
+their respective boundaries. External provider SDK, identity/KV storage, auth
+receipts in route cases, database transport/effects, plan/permissions and audit
+are mocked. Direct resolver cases cover mapped/equal subjects, contradictory
+legacy caches, invalid native reads and retained one-argument behavior. Scoped
+cases cover cookie/bearer mapped/equal accounts with present/null session IDs,
+forged request metadata, copied-evidence mutation, device/scoped-key absence and
+unchanged default output; the scoped-key fixture explicitly supplies a key scope
+and does not imply policy-route admission. Existing role/claims/operation ordering
+assertions remain. Route cases use the real MFA resolver behind a restored wrapper,
+cover exact evidence despite forged fields, failure before writes/cache/audit,
+already-required unrelated edits, disabling and device fallback. Fixture state and
+session-start cache are reset; narrow auth spies remain limited to receipt-mutation
+cases. No new source-shape guard is added, and no fixture is execution evidence.
+
+Policy permission/plan, owner recovery, exact target, CSRF/rate/input validation,
+enrollment availability, IP self-lockout check, revision checks, write/cache/audit
+ordering and response shape are unchanged. Main revision check/write remain
+separate, not CAS; Code gains no new protocol. No migration, replay or transaction
+guarantee is added. Prior 0394/0395 remain UNAPPLIED. This is source review only:
+no product checks, provider/SQL/RLS execution, push or deployment occurred.
+
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
 provider operations. Include remaining account-security/factor consumers,
@@ -14605,31 +14833,101 @@ runtime/timer or installed provider acceptance were run.
 
 ## WEB-COMPROMISE-WRITE-AUTHORITY-01
 
-Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime reproduced.
-Migration 0255_identity_risk_signals.sql grants app_rls SELECT on
-account_compromise_responses and defines only its FOR SELECT policy. Both the
-legacy scoped adapter and claimed product scope use app_rls. No later write
-policy for this table was found. Protective POST inserts a hold through that
-scoped database, and resolution PATCH updates it after sweeping sessions; those
-writes are excluded by the checked RLS contract. Deployed schema state is unknown.
+Severity: High. Source-confirmed on 2026-11-06; broader authority and recovery
+repair remains open. Bounded receipt correction
+`2488135d50436840c619a4535297db61f8ebad54` is independently source-reviewed on
+2026-11-07, not runtime reproduced or accepted.
 
-If UPDATE privilege is present through inherited grants, SELECT-only RLS can
-produce no updated row rather than proving the hold is already resolved. The
-service currently treats every empty UPDATE RETURNING result as already_resolved.
-Provider revocation may therefore precede a failed or excluded hold update, and
-a success-shaped response is not proof that password_reset_required was cleared.
-The report/resolve API is registered as an emergency endpoint without a routine
-first-party settings caller; external-client and operational behavior are unverified.
+Migration 0255_identity_risk_signals.sql defines only the FOR SELECT app_rls
+policy on account_compromise_responses. Migration 0037 grants table/default DML;
+0255's explicit SELECT grant does not revoke those privileges. Where those default
+grants apply, SELECT-only RLS can exclude an UPDATE and return no row. Both legacy
+scoped and claimed product adapters use app_rls, and no later write policy for this
+table was found. Scoped report insertion and resolution updates therefore lack
+checked-schema row authority. Deployed grants, schema and migration ownership are
+unknown. No migration, grant or unrestricted owner-connection fallback is added by
+this correction.
+
+The report service now requires exactly one nonblank inserted ID before its
+subsequent report audit, session sweep, intent/device cleanup or containment notice.
+This does not establish that a missing receipt means no insert occurred, nor undo
+effects already performed by callers such as emailed enrollment undo or identity
+event handling. Resolution requires one matching response identity, a finite
+string/Date resolved timestamp and password_reset_required exactly false before
+reporting completion. An initially closed record must meet the same conditions.
+Only an empty UPDATE triggers a fresh response-ID-and-owner-qualified read;
+already_resolved then requires that read to prove completion. Other missing,
+malformed, mismatched or inconsistent receipts produce user-safe 503 errors and no
+success audit, retaining the possibility that sessions were already ended. Raw
+database failures still propagate and are not all converted to 503. The actual
+sweep count is retained for a confirmed concurrent completion.
+
+PostgreSQL UUID case, braces and documented grouping equivalents compare by UUID
+identity; user IDs and SQL owner predicates are unchanged. This is a receipt
+correction, not fresh password/factor proof, durable operation reconciliation,
+atomic provider cleanup or all-session containment. The later counter-receipt correction below verifies that write. Repository source has no authentication gate
+reading this compromise reset marker: it is an operational record, not demonstrated
+password-reset enforcement or account lockdown. Inaccurate permanent-lockout
+comments were removed. The emergency endpoint has no routine first-party settings
+caller; external-client behavior and recovery usability remain unverified.
+
+A second bounded correction, `40cd6e7131cb20dacb5d1069285f99f2fbda17d9`, derives
+cleanupIncomplete once from the existing failed-session, incomplete-sweep and
+failed-intent predicate. The required internal notification field and existing
+audit outcome share it; audit detail.status deliberately retains its sweep-only
+meaning. The notice no longer says the account was secured. It counts only
+sweep.ended, removes "other" because this sweep exempts no current session, asks
+for review of sign-in methods and active sessions, and warns about unconfirmed
+cleanup/support when incomplete. No new all-account containment, password-reset
+or provider-coverage guarantee is made even on the neutral branch.
+
+This corrects one in-app notice producer, not guaranteed delivery: recordNotification
+can swallow insert errors into recorded:false, and existing dedupe does not rewrite
+older notices. Recipient, category, severity, target, dedupe, public response,
+provider calls and receipt guards are unchanged. Earlier errors can still prevent
+notification; notification-before-audit ordering remains. The later `ce91425416e7a0e1fca2db50d239a6f5009c9ef7` undo-link correction bounds
+that workflow's copy and local request lifetime, but does not repair server cleanup
+or identity custody. The public response still lacks the aggregate incomplete state.
+Two production and two fixture files were independently source-reviewed. Exact-copy,
+count, predicate and failure fixtures are unrun models; isolated failed intent with
+a complete sweep is defensive mock input, not a demonstrated current helper path.
+
+The bounded counter-receipt follow-on `e8838da24366532ba91ee31d1e42abefe8294fc1`
+uses an owner-and-response-qualified UPDATE RETURNING instead of unchecked execute.
+It requires exactly one non-array record with the same response UUID identity,
+exact text owner, and the exact observed finite nonnegative integer revoked/failed
+counts. Missing, malformed, duplicate or inconsistent receipts produce a user-safe
+503 before the containment notice, containment audit and normal report return.
+The message warns that some sessions may already have been signed out. There is no
+retry or reread fallback; original query failures still propagate and are masked
+by the route error handler rather than converted to this user-safe message.
+
+The report audit, provider sweep, mobile-intent and device-credential cleanup occur
+before this counter write. Automatic identity events and emailed enrollment undo
+may have still earlier effects; their later success continuations stop when this
+receipt is refused. This is evidence of counter persistence at the returned write,
+not an atomic recovery operation, stable read-after-write guarantee, repair of RLS
+write authority, or proof that every session was contained. It adds no marker-clear
+permission, identity resolver, migration or public response field. Three source and
+fixture files were independently reviewed. Unrun models cover zero/nonzero counts,
+UUID-equivalent IDs, exact owners, malformed receipts, cleanup ordering, prior
+identity events and raw rejection; the route fixture covers the explicit 503, not
+an executed raw-database-error path.
 
 Repair the canonical product/native contract across GET/report/resolve together
-with narrowly authorized service writes and truthful completion. Do not grant
-general clients unrestricted hold-clearing privileges, infer provider subjects
-from device credentials, or add an unverified cross-owner row fallback. Preserve
-product-only protective-report eligibility while explicitly defining its provider
-coverage. Current-session evidence checks do not establish password reset, fresh
-factor proof bound to that session, atomic cleanup/update or all-provider
-containment. Source fixtures mock DB operations and were not executed; they do
-not verify deployed privileges, RLS behavior or recovery usability.
+with narrowly authorized service writes. Preserve product-only protective-report
+eligibility and define its provider coverage. Do not grant general clients
+unrestricted marker-clearing privileges, infer provider subjects from device
+credentials, or add an unverified cross-owner fallback. PATCH still mixes scoped
+owner admission with cookie session evidence; current-session checks do not prove
+password reset or fresh factor proof bound to that session.
+
+The receipt correction separately reviewed four files: service behavior, route
+comment cleanup and two fixture sources. Service fixtures control returned receipts, errors and
+side-effect calls; route fixtures mock the service and inspect the real error
+wrapper. They are unrun source models, not PostgreSQL/RLS, provider, concurrency or
+end-to-end evidence. No product tests, lint, typechecks, builds, migrations or
+runtime acceptance were performed.
 
 ## WEB-SESSION-LIFETIME-CONVERSION-01
 
@@ -14684,3 +14982,2805 @@ current-time validation, finite-deadline guarantee, mandatory unknown-age logout
 ownership lease or mutation atomicity is added. Fixtures cover coerced/nonfinite
 fields, later invalid rows, mixed bounds, null behavior and retained explicit
 revocation; they are source-reviewed only and unrun.
+
+
+## WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01
+
+Severity: Medium. Bounded presentation correction `1326931361ad0754f3a97f37f46b5f9d127231d9` is
+independently source-reviewed on 2026-11-07; runtime acceptance remains open.
+This is a fresh reconstruction from published base 90de7bbaf2d17f35cedc8f8c519e755ca8bf5468,
+not recovery of the unavailable earlier local implementation/checkpoint identities.
+
+The server persists an approval checkpoint before yielding approval/paused frames
+and DONE. The client retains the pending decision but clears transport streaming
+and loading. The assistant bubble previously used that transport completion to
+expose ordinary Regenerate and finished-search verdicts, while the composer
+returned to its normal idle presentation. Partial prose and sources survive the
+pause. The older claim that only a header badge indicated the pause was too broad:
+inline approval controls and sidebar attention already existed. This is a
+presentation contradiction, not evidence of approval bypass or a lost response;
+no production reproduction is claimed.
+
+The canonical pending-approval owner exposes its per-message predicate. Persisted
+cloudApproval decisions take precedence over stale legacy tools; absent/null
+projection retains the existing undecided awaiting-tool predicate. MessageBubble
+labels the response as partial through a status notice, labels web sources as
+sources so far, suppresses ordinary assistant Regenerate and premature missing-
+search/empty-output verdicts, and observes cloudApproval in its memo comparison.
+Existing recoverability determines expired-request wording; no wall-clock expiry
+policy is introduced. WebChatPage supplies the displayed conversation's pending
+state to both composer placements. The composer shows an unresolved-request
+notice pointing to existing conversation/Approvals controls, without changing
+actual transport flags, send/stop behavior or adding another approval inbox.
+
+This does not disable every replay action. Existing expired-request Resend and
+user-message Retry remain. The later artifact-presentation correction below
+withholds interrupted-artifact Regenerate while that message has pending approval.
+Canonical activity-only states, approval restoration and server decision/resume
+semantics are unchanged. No new promise of checkpoint liveness is made.
+
+Four production files and five regression-source files were independently read.
+Unrun fixtures cover projection precedence, legacy fallback, partial decisions,
+metadata-only rerender, retained partial sources, ordinary regeneration and
+search-verdict suppression/restoration, expired Resend, composer prop transitions
+and send availability, plus approval/DONE/resume/reject/new-round transport
+assertions. Composer navigation is modeled by prop changes, not integrated
+routing. There is no direct new empty-content projection fixture. Full browser,
+accessibility and image/video/stopped/failed acceptance remain open. No tests,
+lint, typechecks, builds, application execution, push or deployment were performed.
+
+The bounded follow-on `9badea92ff459ff8e275aa213622cea44a0f710b` keeps retained
+partial content while replacing stopped/regenerate wording with approval-wait
+wording in the transcript and selected artifact panel. MessageBubble hides the
+interrupted-artifact Regenerate control and guards its handler with the current
+render's canonical pending predicate. This is a render-scoped presentation guard,
+not a live-store authorization or retained-callback lifetime guarantee. Once no
+approval remains pending, ordinary interrupted-artifact recovery is available again.
+
+ArtifactsPanel derives the transient prop from the selected artifact's own origin
+message in its subscribed conversation messages, not from another message's or the
+whole conversation's pending state. Missing/non-assistant origins do not borrow
+approval. ArtifactPreview requires interrupted evidence for the partial notice;
+completed artifacts are not relabeled. Panel callers omitting the prop keep the
+non-approval notice. The later stop-retention correction below qualifies both
+notice variants as saved copies that may omit later output. Default card/gallery
+previews have no interrupted notice and remain unchanged. Content, stored/user-renamed titles, IDs, transport flags,
+approval authority and persistence are unchanged; the fallback title "Stopped
+artifact" can still be retained.
+
+The interruption marker exists only in WebSideEntry and is omitted from the shared
+persisted artifact shape. Rehydration clears that side data; a cold hook without
+an observed streamed snapshot does not reconstruct it. This correction therefore
+does not provide reload-complete partial status. A retained same-ID partial can
+still suppress the resumed panel streaming overlay and win over later closed-fence
+extraction. Those lifecycle reconciliation gaps remain open, rather than being
+hidden by a persisted pause flag or a change to stream state.
+
+Three production and three fixture files were independently source-reviewed.
+Unrun cases cover projected/legacy/partial approvals, metadata-only decisions,
+resolved projection over stale tools, ordinary recovery, selected origin and
+selection/branch/conversation changes, missing origins, completed/default preview
+behavior and content preservation. Panel wiring uses a controlled preview stub;
+separate preview fixtures exercise the real notice. Shared-snapshot restoration is
+a model, not actual browser rehydration. Resume and closed-fence cases characterize
+unchanged gaps. No tests, lint, typechecks, builds or browser execution were run.
+
+## WEB-ARTIFACT-STOP-RETENTION-OWNERSHIP-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded preservation correction
+`56d642cf52c57d137d49863420600ddde5f345d9` is independently source-reviewed only.
+No runtime overwrite or deployment incident is claimed.
+
+useStreamingArtifactSync previously upserted an observed unclosed-fence snapshot
+whenever streaming stopped. Resuming and stopping again could replace an existing
+artifact's current content/title, including user edits or renames. Version history
+may retain earlier content, but does not preserve the user's current working content/title.
+The deterministic ID proves conversation/message/fence ordinal, not generation or
+exclusive stream ownership. The interrupted side marker survives edits/renames and
+is not permission to overwrite. Rehydration can also remove that marker.
+
+The canonical web artifact store now exposes synchronous create-only partial
+retention. Known identity evidence includes raw local records, raw cloud records
+including tombstones, nonempty version history, conflicts, in-flight/rejected push
+records, rename markers and side-map own keys. Rejected-content key presence
+includes an empty string; side-map residue is deliberately conservative even when
+its entry is empty. An empty history array alone does not block creation. The
+merged visible list alone is not sufficient absence proof because tombstones can
+hide local records. None of these records is cleared to permit retention.
+
+With known evidence, the action changes no content, title, type, versions, side
+metadata, selection or sync state. It compares incoming content exactly with the
+canonical effective visible copy: equal content is quiet despite metadata changes;
+differing visible content produces a preserved outcome; absent visible content
+produces a blocked outcome. With no known identity, existing creation semantics
+retain the observed partial. These outcomes describe only this operation, not a
+persisted artifact lifecycle or remote commit receipt.
+
+The hook consumes its watched snapshot before retention, keeps temporary-to-real
+conversation settlement and existing dismissal/cleanup behavior, and clears the
+ephemeral stream before an advisory toast. A differing visible copy reports that
+new partial output was not saved over the existing artifact; hidden/provenance-only
+refusal says only that new partial output was not saved. Ordinary stopped-effect
+replay does not repeat the notification; remounts/repeated attempts are not globally
+once-only. Both transcript and panel notice variants now identify saved partials
+that may omit later output, without promising regeneration success or newest-byte
+retention. Existing approval controls and default card/gallery behavior are unchanged.
+
+This deliberately keeps an older partial even after an unedited repeated pause.
+Newer bytes can remain in transcript data while existing artifact rendering hides
+them; no complete recovery affordance is claimed. The guard covers only currently
+known client evidence, not unseen remote records or deletion after all provenance
+has disappeared. Existing cloud arbitration, old writers, separate SVG promotion,
+completed-fence reconciliation, same-ID resumed overlay, marker persistence and
+editor lifecycle remain open. No automatic live overlay was added: unmounting the
+current viewer could discard its newest sourceDraft before debounced autosave.
+No sourceDraft handling, shared schema, canonical IDs or cloud protocol changed.
+
+Four production and four fixture files were independently source-reviewed. Unrun
+models cover first retention, repeated/edited/renamed/restored/empty artifacts,
+cloud-only and tombstone-hidden records, residual push/conflict/rename/history/side
+state, exact merged-content comparison and refusal without mutation. Most residual
+states use existing actions; standalone history injection is explicitly a source
+model, not upstream reachability evidence. Hook cases cover StrictMode/repetition,
+quiet equal content, neutral hidden-work notice, settlement/dismissal and stale
+cleanup. Copy cases use the existing actual renderers. No tests, lint, typechecks,
+builds, browser, database, push or deployment execution occurred.
+
+## WEB-ARTIFACT-PUBLICATION-OWNERSHIP-01
+
+Severity: High. Source-confirmed on 2026-11-07; bounded correction
+`03a1c5ba51c7351eb842077ef502f6ca4de6d67e` is independently source-reviewed only.
+No deployed incident, browser reproduction or server authorization bypass is claimed.
+
+ArtifactsPanel previously held publication details without an artifact/view owner.
+A publish response for A could arrive after selecting B and install A's URL and
+audience under B. The reused ArtifactPreview could independently install A's local
+URL after its selection reset, overriding B's later host link. Changing the shown
+audience could then PATCH A's token while recording the response under B in the
+published-sites store. ArtifactCard consumes that mapping. Invited-viewer controls
+also derive their token from the displayed URL, so this was a wrong-target access
+control path, not only misleading progress feedback. Server owner checks do not
+establish which artifact the user intended to change.
+
+Publication state now carries a committed view owner. Conversation, artifact,
+managed-publication eligibility, panel open/closed state and streaming-view
+replacement define separate lifetimes. Rendered details must match the current
+owner; a later reset effect is not the visibility guard. Captured callbacks reject
+stale starts, including after A-to-B-to-A navigation. The host constructs the cloud
+publisher inside the captured operation, and successful mutation responses are
+recorded under that operation's artifact ID, even if the user has moved away.
+They never use a newly selected artifact's ID for attribution.
+
+Within one mounted panel controller, synchronous per-artifact locks reject
+concurrent publication/audience starts. Mutation revisions invalidate earlier
+lookup results. Lookup is suppressed while that artifact's mutation is pending;
+a settlement signal lets a reopened view reconcile afterward. Inactive operation
+entries are released, and render does not allocate operation entries. Audience
+callbacks additionally require their exact publication snapshot and operation
+revision, including when republishing keeps the same token. Local coordination
+is not evidence of server commit order or cross-controller serialization.
+
+ArtifactPreview uses a separate committed lifetime and immediate operation gate.
+Publish feedback also belongs to its submitted content/viewed-version lifetime.
+Stale success, error and finally continuations cannot write another view's URL or
+pending state. Clipboard initiation is guarded after publication, and feedback is
+guarded again after a clipboard await. Delayed audience confirmations recheck
+view, snapshot and operation generation before invoking the mutation. The host
+publication link takes precedence over a preview-local result so host link,
+audience and invited-viewer target stay paired. The invited editor is keyed by
+artifact ID and token; the whole artifact viewer is not remounted.
+
+The accepted scope is three production files and two unrun fixture files under
+apps/web/features/chat/components/artifacts: ArtifactsPanel.tsx,
+ArtifactPreview.tsx, usePublicationView.ts, ArtifactsPanel.publish.test.tsx and
+ArtifactPreview.publish.test.tsx. Source-reviewed cases cover A-to-B-to-A,
+close/reopen before settlement, unmount, hidden streaming, viewed-version changes,
+managed-to-local/unknown eligibility changes, stale GETs, captured callbacks,
+same-token confirmation replacement, duplicate starts, captured canonical IDs,
+late audience responses, old rejection/finally versus new pending work, and
+navigation during a clipboard await. The panel fixture mocks the preview; the
+preview fixture separately uses the actual preview. They are not integrated
+browser proof, and none were executed.
+
+Already-started requests may still transmit or finish, and an initiated clipboard
+write cannot be undone. Cross-tab/other-controller/remote-writer ordering, uncertain
+server outcomes, authoritative revision/CAS recovery, pre-existing cached mapping
+repair remain outside this correction. The invitation editor's separately
+qualified same-token race received the bounded correction in
+WEB-SITE-VIEWER-REQUEST-OWNERSHIP-01 below. Existing publication privacy/refusal policy, server
+contracts, source editing and ordinary export/save workflows are unchanged.
+No tests, lint, typechecks, builds, browser, database, push or deployment ran.
+
+## WEB-ARTIFACT-DRAFT-RETENTION-01
+
+Severity: Medium. Independently source-qualified on 2026-11-07; bounded correction
+`fa3ad230d85f939a089b24832f804611f11de553` is independently source-reviewed only.
+Broader recovery/durability and runtime acceptance remain open.
+
+ArtifactPreview previously held sourceDraft in component state and delayed its
+separate localStorage recovery write by 800 ms. Timer cleanup canceled the write
+on unmount or replacement. Closing the panel, switching to streaming, or replacing
+an artifact/version could lose the newest edits or retain only an older recovery
+copy. The kept/not-kept status could still describe an earlier successful write.
+Manual Save, not that timer, commits a canonical artifact version.
+
+Recovery text is now written synchronously only when a changed editor or checklist
+callback is admitted for its current owner/session. The owner identity depends on
+artifact ID, actual artifact content and version count; a per-edit session further
+separates repeated editing lifetimes. Owned snapshots are filtered during render,
+so an outgoing artifact's draft is not displayed as the incoming artifact's edit.
+Committed owner liveness rejects callbacks after replacement/unmount, and session
+checks reject old editor callbacks. Only editor children are keyed by session;
+the entire preview, its publication guards and stopped-stream retention remain
+unchanged. This tuple is a client lifecycle boundary, not a server revision/CAS.
+
+The 800 ms recovery writer is removed. Cleanup, restoration, initialization and
+edit entry do not write recovery text. Each admitted edit stores the exact new
+text and its actual write success/failure status before returning. A live session
+snapshot composes rapid checklist toggles without storage side effects inside a
+React state updater. Its separate four-second canonical commit remains. Ending
+or restarting editing changes an event epoch; stale checklist/confirmed-Restore
+callbacks must pass current owner/epoch checks. Canonical Save reads current live
+session text and uses the existing store upsert/version path.
+
+A successful Save removes its captured recovery key after the canonical call
+returns, even if that call changed the view owner; an exception skips cleanup.
+UI clearing remains session/owner guarded. Successful confirmed Restore likewise
+removes the captured key; a failed/no-op Restore does not discard recovery.
+Cancel remains an explicit removal. There is no later timer/cleanup write to
+resurrect saved or discarded text, and merely closing an old owner does not
+replace a newer recovery value another owner wrote.
+
+CodeMirror's external value synchronization is marked with a private Annotation;
+the update listener ignores that transaction rather than reporting it as an edit.
+Normal changed transactions still report through the same callback. The official
+Annotation/AnnotationType/Transaction API contract was checked, but installed
+package declarations were unavailable. ArtifactDocumentEditor's lifetime-bound
+initialValue is isolated by editor-session keys. No storage schema or dependency
+was added.
+
+History navigation does not replace the draft owner merely because the viewed
+version changes. A same-owner live draft also prevents recovery reads from
+replacing newer failed-write text/status with an older stored string when the
+reader returns from history. This preserves the existing unsaved-discard warning
+and does not claim that a failed write survived closing the component.
+
+Two production files and two unrun fixtures under
+apps/web/features/chat/components/artifacts were independently source-reviewed:
+ArtifactPreview.tsx, ArtifactCodeEditor.tsx,
+ArtifactPreview.draftRetention.test.tsx and ArtifactCodeEditor.externalSync.test.tsx.
+The first fixture uses the real reactive store/preview with modeled editor and
+Markdown boundaries; it covers close/unmount, artifact switching, older/newest
+text, same-count replacement, stale callbacks, Save/Cancel/Restore, foreign newer
+recovery, storage failure/history return, and StrictMode rapid checklist timing.
+The second uses actual CodeMirror transactions plus actual preview/rich-document
+and Markdown-fallback bindings. These are authored source models, not passing
+runs. Integrated real-rich switching/reopening, streaming takeover, browser/IME
+ordering and installed-library execution remain unverified.
+
+Raw recovery strings still lack base-revision and concurrent-owner/CAS metadata.
+Restoration across genuinely new owners can load stale text; later intentional
+edits/removals by another editor, swallowed storage-removal failures, quota/device
+loss, account/cloud reconciliation and durable browser storage remain outside
+this correction. Per-edit synchronous localStorage latency is unbenchmarked.
+Canonical activeContent/copy/export semantics, other save paths and publication
+ownership are unchanged. No tests, lint, typechecks, builds, product/browser or
+live-provider execution, push or deployment ran.
+
+## WEB-SITE-VIEWER-REQUEST-OWNERSHIP-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded correction
+`1d5460d7660c563f03d489751320a01c08c8469d` is independently source-reviewed only.
+No live incident, browser reproduction or server authorization bypass is claimed.
+
+SiteViewersEditor previously started an initial GET while Add remained usable.
+A successful POST could grant access and display its new list before the earlier
+GET returned an old empty list, replacing the display with “Nobody yet” and
+hiding the newly invited person's remove control. A failed GET also displayed
+that empty-state claim. Both the Sites settings and artifact-preview callers
+reach this same-instance ordering; artifact/token keying alone cannot fix it.
+
+The shared editor now renders a token-keyed session and serializes loads and
+mutations through a synchronous request ref and phase. A successful GET is
+required before add/remove admission. Submit and mutation handlers enforce the
+gate before awaited CSRF/fetch work, not only through disabled buttons. Retry
+also has synchronous admission. Request identity rejects retired settlements
+and prevents old finally blocks from clearing a newer request. Cleanup aborts
+reads and invalidates the request; token replacement isolates drafts and state.
+
+Loading and changing have explicit Spinner/status states. “Updating access…”
+hides the previous list and empty-state claim while a mutation is pending.
+Failed reads remain unknown with an explicit Retry. The server mutates rows
+before relisting and recording the audit event, so mutation rejection does not
+prove rollback. Rejection now hides the obsolete list, preserves the input,
+states that access may have changed, and requires an explicit read-only Retry
+before further mutation. No mutation is automatically replayed. A retry returns
+a read snapshot, not a guarantee that an uncertain earlier write cannot finish
+later. Server services, authorization and response parsing are unchanged.
+
+The source-reviewed scope is SiteViewersEditor.tsx and its unrun fixture in
+apps/web/features/sites/components, plus the support-article-claims.test.ts
+assertion for the already-correct artifact/token-keyed caller. That assertion
+now requires the exact key rather than failing on the added prop. Authored
+deferred-fetch cases cover loading admission, load failure/retry, synchronous
+duplicate submit and mixed submit/remove, pending-state copy, uncertain add and
+remove failures without replay, token replacement/reuse, unmount/remount and
+retired StrictMode GET success/error after a successful mutation. They use the
+actual component and service with controlled fetch responses; none ran.
+Standalone duplicate-remove and directly retained obsolete callbacks are not
+separate fixture cases. Actual browser, Next route and server timing are unproven.
+
+This is per-session client coordination. Passive cleanup is not immediate
+commit-time invalidation; already-admitted mutations, including those awaiting
+CSRF, may dispatch or finish after leaving. No externally retained confirmation
+callback path was found here. Cross-token production instance reuse under the
+dynamic Sites route was not established and is not claimed as a separate defect.
+Cross-tab/other-controller writers, upstream SiteDetail/SitesPage ordering,
+server revision/CAS, durable uncertain-outcome reconciliation and the existing
+successful-malformed-payload-to-empty behavior remain outside the correction.
+No tests, lint, typechecks, builds, installs, product/browser or live-provider
+execution, push or deployment ran.
+
+## WEB-SITE-SETTINGS-FIELD-COMPOSITION-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded correction
+`53492c64edb8f5f501aa5b4bc99109cd70f60854` is independently source-reviewed only.
+This is misleading client sharing state, not an authorization bypass or observed
+live exposure. The user-requested backend audience change remains in force.
+
+SiteDetail renders Name and Sharing with independent saving flags. Previously,
+useSiteActions built each successful completion by spreading its whole captured
+site snapshot, and both SiteDetail and SitesPage replaced current records with
+that result. Starting a rename while invited, changing to public, then receiving
+the rename response last could make the header, selected audience and conditional
+invited editor look invite-only even though the server remained public. The
+reverse completion order could discard the displayed new title. Backend SQL
+updates title and visibility separately; this did not require reversing server
+write order or a response with incorrect fields. Unrelated fields in the reply
+were ignored in favor of the captured pre-request snapshot.
+
+The hook now captures token and artifactId before the request, then emits a
+SiteUpdate carrying only returned fields owned by that operation. Rename owns
+title/update metadata; sharing owns visibility/shareUrl/update metadata. Both
+consumers use functional state setters and the same mergeSiteUpdate helper to
+merge into the current matching token and artifactId. Existing version, kind,
+conversation, content-size and other fields survive an independent completion.
+Non-ready state is not replaced, missing records are not inserted, and an update
+cannot overwrite a differently identified current record. Sharing still records
+its canonical publication mapping under the captured artifactId.
+
+The helper retains a valid current updatedAt when it is later than a valid
+incoming timestamp or the incoming string is invalid. Otherwise it uses the
+incoming metadata. This never suppresses a title or audience field patch and
+does not mutate the input record. The existing response schema accepts nonempty
+strings, so finite parsing is explicit. Timestamp handling is conservative
+display metadata, not a revision, clock-consistency rule or server/CAS guarantee.
+In particular, older same-field completions are not resolved by this comparison.
+
+Source-reviewed production scope is useSiteActions.ts, SiteDetail.tsx and
+SitesPage.tsx. The existing SiteDetail.test.tsx gains deferred-service cases using
+the actual Name/Sharing components and hook, with only the invited-viewer boundary
+stubbed to prevent unrelated GETs. Both response-arrival orders use a consistent
+rename-then-sharing SQL snapshot model. Separate rejected-promise cases prove
+that no client patch is emitted on rejection, not that the backend rolled back.
+The new SitesPage.updates.test.tsx explicitly models its callback/card-prop
+boundary and covers both patch orders, complete current record preservation,
+identity mismatches, empty/loading/error state and six timestamp combinations.
+It does not claim ordinary simultaneous modal interactions: those dialogs prevent
+closing while saving. Shared store/callback state is reset, and existing configured
+mock reset and cleanup apply. Both fixture files remain unrun.
+
+Full reload/restore GET ordering, same-field concurrency, cross-tab or other
+controllers, uncertain backend outcomes, canonical publication-cache races and
+route/lifecycle ownership remain outside this correction. A late field patch can
+preserve unrelated refreshed metadata without making every refresh consistent.
+No service, backend, permission, confirmation or response-schema contract changed.
+No tests, lint, typechecks, builds, installs, product/browser or live-provider
+execution, push or deployment ran.
+
+## WEB-PUBLICATION-CACHE-LAZY-RESURRECTION-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded correction
+`b7d8791960b43f0478722df1a70ee0ca95fe6fde` is independently source-reviewed only.
+This corrects stale publication labels/audiences and dead links, not restoration
+of server access. No live incident, browser reproduction or authorization bypass
+is claimed.
+
+ArtifactCard calls usePublishedSite, whose singleton ensureLoaded lookup survives
+component unmount. The chat sidebar uses router.push for client navigation. A
+user can open Sites while that lazy request is pending; SitesPage performs and
+hydrates a separate list, then its confirmed unpublish deletes the server record
+and calls forget. Previously the older lazy response unconditionally hydrated
+its old snapshot and merged remaining positive records. Absence had no deletion
+provenance, so the deleted publication returned to the cache. Returning to chat
+could show Published and a dead management link; ready status prevented ordinary
+card mounting from reloading it. The plain published-link anchor is not the
+client-navigation evidence.
+
+The store now owns one Map for the active lazy request, using its identity and
+per-artifact positive/deletion overrides. Existing positive records seed it,
+preserving prior precedence; valid record and every forget update it, including
+forget of an absent ID. The latest record/forget for an ID wins over that lazy
+snapshot, while unrelated server entries remain. Accepted completion constructs
+the merged map before one ready-state publication, eliminating the intermediate
+unmerged notification. Map and Object.fromEntries preserve own-property behavior
+for special string IDs rather than introducing prototype assignment.
+
+Explicit hydrate clears and retires the lazy request before publishing its own
+snapshot. Later success/error/finally from that retired request cannot replace
+that state or a subsequent forget. Settlement also clears request metadata. No
+permanent tombstones are retained: later explicit hydration or record can admit
+a legitimate publication again. Metadata is per request and per distinct changed
+ID, not a claimed constant-space global history. Pre-load positives retain their
+existing priority; this is not remote-cache reconciliation. Explicit hydration
+supersedes the lazy read, but that priority does not prove the explicit snapshot
+is globally newer or current.
+
+Production scope is published-sites-store.ts. Its unrun store fixture covers
+duplicate admission, positive/deletion ordering, absent forget, unrelated entries,
+hydrate supersession on success/error, subsequent forget, later re-publication,
+special own keys and atomic subscriber notification with a pre-load positive.
+The SitesPage.test.tsx case uses the actual page, actions, confirmation, store
+and hook with mocked list/delete services. A probe replaces ArtifactCard and
+rerender models the route transition; actual router/browser/server behavior was
+not executed. Fixtures retire pending closure state through hydrate, settle their
+deferred work, and then reset; raw setState is not a production reset API.
+
+This lazy-store slice did not change direct page reads or authentication cleanup.
+The later bounded SiteDetail correction is recorded in
+WEB-SITE-SNAPSHOT-ORDERING-01; global same-field/cross-controller receipt
+ordering and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 remain open. No tests, lint,
+typechecks, builds, installs, product/browser or live-provider execution, push or
+deployment ran.
+
+## WEB-SITE-SNAPSHOT-ORDERING-01
+
+Severity: Medium. SiteDetail read/view ownership is source-corrected in
+`bcfe8931644a3e79e7a4cf0925ee6d6cc5ea6066`, independently reviewed 2026-11-07.
+SitesPage read lifetimes are additionally source-corrected in
+`414f2ca2dbbaccc625469ddf42ad176ec38454f5`, independently reviewed 2026-11-07.
+Global snapshot/receipt ordering, account ownership and runtime acceptance remain
+open. No deployed incident or server access bypass is claimed.
+
+Original qualified path: version Restore triggered onRestored -> load while
+Settings remained usable. A later audience PATCH could succeed and record its
+new audience before that earlier list response unconditionally hydrated the
+store and replaced detail state. The client could look invite-only while the
+requested public backend state remained in force. A reload pending through
+unpublish/navigation could likewise refill the cache. The earlier lazy lookup
+correction did not fence these explicit list writers.
+
+SiteDetail now keys its inner view by token. Layout setup creates a distinct
+active view and request owner, including StrictMode setup replay; cleanup retires
+and aborts its read. Initial, restore, manual Retry and reconciliation reads share
+one loader. Only the active view's exact current request can hydrate or replace
+local state, with a second ownership check after synchronous hydration subscribers.
+Request retirement precedes abort. Stale success/error cannot commit state.
+
+Matching token/artifact name or audience receipts retire any pending read, merge
+only their owned fields into current ready state, and start one replacement read
+only when a read was interrupted. This preserves independent controls and
+reconciles complete restored version/content/title/workspace metadata rather than
+dropping the response permanently. Successful matching unpublish retires the view
+and pending read before navigation; stale callbacks cannot navigate a replacement
+view or start a new read. Current initial failures, including unexpected AbortError,
+settle into retryable error. Automatic refresh failures retain controls and drafts
+with an explicit possibly-out-of-date notice and manual Retry. Retry deliberately
+shows loading; there is no recursive retry, timer or mutation replay.
+
+Source scope is SiteDetail.tsx and its unrun fixture. The fixture retains actual
+Settings controls, useSiteActions and store with deferred service mocks that may
+ignore abort. It covers restore/read/receipt order, late success/error, multiple
+receipts, complete metadata, refresh failure/draft retention/Retry, no needless
+post-read reread, unpublish, unmount, A-to-B-to-A, late restore, initial AbortError
+and StrictMode. Direct callback mismatch/staleness and synchronous subscriber
+invalidation cases are explicitly models, not claimed user journeys. All fixtures
+remain UNRUN; no browser, transport, SQL or runtime acceptance is established.
+
+SitesPage follow-on: initial load was abortable, but manual Refresh/Retry had no
+signal or request/view identity. A qualified sequential route is loaded Sites ->
+Refresh -> sidebar Library -> sidebar Sites -> fresh list -> sharing or confirmed
+Unpublish -> old Refresh completion. Both sidebar routes use WebAppShell's Next
+router navigation; ordinary visible navigation items suffice. Refresh hides cards,
+so no click on a disappearing card or simultaneous dialog is assumed. The obsolete
+completion could refill global publication metadata after the newer record/forget;
+it did not directly replace the new component's local list/detail state. The fetch
+and JSON/schema parsing path had no ownership fence.
+
+SitesPage now uses one committed layout owner and current request for initial,
+Refresh and Retry. Replacement/cleanup invalidate before abort. Exact active
+request checks precede hydrate and follow synchronous subscribers before local
+state commits. StrictMode setup gets a new owner. Retired success/error is ignored;
+a current AbortError becomes explicit error/Retry rather than permanent loading.
+The existing loading UI, mutation hooks and store writer contracts are unchanged.
+Its unrun fixture preserves prior lazy-cache cases and uses actual cards, dialogs,
+actions and store after an explicit unmount/remount route model. It covers late
+success/error, sharing/unpublish, initial/Refresh/Retry abort ownership, successful
+Retry release, StrictMode and current AbortError recovery. Synchronous hydration
+effect replacement is explicitly an artificial model. No router/browser timing or
+live-service behavior was executed.
+
+Limits: a subsequent GET is assumed to reflect the acknowledged mutation; the
+service has no client revision or cache-consistency guarantee. This is not server
+CAS, same-field ordering or global/cross-tab reconciliation. useSiteActions writes
+audience receipts before onUpdated. The later common-cleanup lease correction
+below now fences enumerated writers across that boundary, not all account/session
+changes or other live controllers. A same-epoch stale confirmation may still
+execute DELETE and an already-started restore POST may finish; guards do not undo
+backend actions. Restore recreation is separately corrected in
+WEB-SITE-RESTORE-REPUBLICATION-01; mixed-writer history and stale feedback remain open.
+Loading hides
+list cards and modal saving blocks close, so invented simultaneous-modal journeys
+are not evidence. Server access checks are unchanged; a stale cache cannot
+republish a deleted row. See WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 for the later
+bounded cleanup correction and remaining identity/transport gaps.
+No product tests, lint, typechecks, builds, installs, push or deployment ran.
+
+## WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01
+
+Severity: Medium. Common-cleanup publication ownership source-corrected in
+`0a9de203ebc44d5c648a6d3de420e53a37ce3f69`, independently reviewed 2026-11-07.
+Auth paths bypassing that boundary, identity/session/transport binding and runtime
+acceptance remain open. No actual cross-account disclosure is established.
+
+Original omission: published-sites-store was a singleton absent from common
+account cleanup, with no reset and retained entries/status/pending work. Ready or
+error status could suppress a fresh lazy load. Clearing only its lazy request
+would not fence explicit SiteDetail/SitesPage snapshots or later visibility,
+unpublish, panel publication/lookup/audience receipts. The shell does not key or
+gate routed children by account, so an account cleanup need not unmount those views.
+Full-navigation behavior and artifact-ID reachability constrain actual exposure.
+
+The correction calls beginPublicationCleanup synchronously at cleanupAllStores
+entry, before its first await, and releases it in finally. It is a direct one-way
+import rather than another delayed registry reset. Each cleanup owns an idempotent
+handle in a Set: admission stays closed until every active handle finishes, then
+a fresh object lease is issued. Cleanup clears entries/status, detaches and clears
+the pending lazy map, and sets observable lease to null. A delayed or duplicate
+finish cannot reopen while another handle remains active.
+
+hydrate, record, forget and ensureLoaded require an explicitly captured opaque
+lease; no omitted argument defaults to the current lease. Object identity, not
+numeric epoch equality, decides ownership. Stale writers and status/finally work
+are inert. Existing request-local mutation overlays and atomic lazy merge remain.
+Store writes report whether ownership survived synchronous subscriber notification;
+consumers recheck before subsequent local commits. The hook depends on lease, not
+every status change: mounted same-artifact readers load once after release, while
+an error does not automatically retry.
+
+SiteDetail/SitesPage use epoch-keyed inner views and synchronous subscriptions to
+retire/abort their active reads at cleanup. Local ready state/dialogs remount when
+the lease changes; reads check both request and lease before hydration/local state.
+useSiteActions captures the originating lease for rename, audience, copy and
+unpublish intent, checks a retained confirmation before dispatch, and suppresses
+old-lease receipts, callbacks/navigation and feedback. Direct Name/Sharing Settings
+and rename/sharing Dialog continuations also check their captured lease.
+
+ArtifactsPanel captures before conversion/network work and fences publish callback,
+lookup and audience receipts. Operation maps belong to one lease, so an old finally
+cannot unblock/delete a replacement operation. usePublicationView.active checks
+its captured lease synchronously as well as committed view liveness; actual Preview
+post-await guards therefore reject old results before a React re-render is required.
+Same-epoch retired-view receipts may still update the central cache intentionally.
+
+Production scope is nine files: published-sites-store, authentication-store,
+SiteDetail, SitesPage, useSiteActions, ArtifactsPanel, usePublicationView,
+SiteSettingsTab (Name/Sharing only) and SiteDialogs (rename/sharing only).
+Eight fixture sources are adapted/authored and all UNRUN. Store models cover stale
+writers, old success/error/finally, overlays, reentrancy, overlapping handles and
+mounted reload/no-loop. Auth fixtures use the real cleanup/store, a reset hook and
+queued microtask, a throwing reset and a manual overlapping handle. They do not
+model independently deferred dynamic-import cleanup passes. Existing cleanup does
+not await arbitrary asynchronous reset return values. Component fixtures use real
+controls/actions/store where available, modeled epoch/view transitions, mocked
+Panel preview and a separate actual Preview pre-commit model, not an integrated
+browser journey. The detached confirmation-button case verifies dialog removal/no
+request, not direct execution of a retained onConfirm closure; that guard is
+source-reviewed. All seventeen changed source/fixture hashes were independently
+reviewed. No product checks, push or deployment ran.
+
+Limits: this is common-cleanup ownership, not a verified account/session authority.
+Admission reopens at cleanup completion, not after newly proven identity. Successful
+resync/fetchUser call applyCacheScope before committing a resolved user, but missing-
+cookie resolution, settled auth errors, updateUser and auth reset can bypass common
+cleanup. First recorded scope is adopted without clearing. Workspace cleanup/full
+navigation and ambient-cookie transport remain separate. Already-admitted requests,
+including work awaiting CSRF, and initiated clipboard writes may dispatch/finish
+later; no rollback or server-access change is promised. Version Restore, data-clear
+and viewer-editor mutators/feedback, unrelated artifact provenance/cloud sync,
+same-field/global ordering and real browser account-switch acceptance remain open.
+
+## WEB-SITE-RESTORE-REPUBLICATION-01
+
+Severity: High. Bounded existing-publication Restore correction source-reviewed in
+`48155a459eb59c7c4b5ce25c466a66a86b710f98`, 2026-11-07. Runtime acceptance,
+client turnover, history concurrency and stale success feedback remain open.
+
+The old web and Mobile services read a historical snapshot and sent its bytes to
+generic Publish without the original token or conversation. If Unpublish deleted
+the original row before that upsert, Restore could create a new publication ID and
+token, normally public unless a matching live_artifacts row selected invited.
+The original token stayed dead; this is not old-link resurrection or evidence of
+token discovery. Prior conversation, grants, workspace shares, storage and history
+did not follow the new row. Web Restore left Unpublish available; Mobile's busy
+control limits same-screen overlap, but not another client/device or retired work.
+This is a source-qualified ordering, not an observed runtime incident.
+
+Both current clients now send a bodyless POST to the existing token/version
+resource without generic-Publish fallback. Mobile retains its authenticated API
+transport. The server joins the owner publication and selected historical snapshot
+in one query and derives all write identity from that source. A shared server-only
+preparation helper preserves conversation and workspace-share gates, snapshot-title
+moderation, outbound inspection/redaction, artifact context and secret policy.
+Ordinary Publish consumes that same helper without changing its contract.
+
+Restore persistence shares validation, quota and conversation-ownership preflight
+with Publish, then UPDATEs only matching owner, publication ID, artifact ID and
+original token. It never inserts, upserts or mints a token. Existing audience,
+conversation, createdAt and dependent relationships remain untouched; a current
+nonempty title is preserved. Missing initial source returns 404; an exact UPDATE
+miss returns 409 after earlier policy/validation gates permit. History is appended
+only after a successful update, using returned persisted title/content.
+
+Six production files and ten fixture/guard sources were independently reviewed.
+Predicate-sensitive adapter models cover both deletion orderings and identity
+replacement; request fixtures invoke actual handlers/services with boundary mocks.
+The existing E10 release source now uses canonical Restore, but was not executed.
+Safety source guards follow the canonical helper implementation and payload UPDATE
+writers, excluding metadata-only updates; they are lexical evidence, not complete
+control-flow or data-flow proof. All fixtures and guards remain UNRUN.
+
+Old loaded web bundles and older installed Mobile versions still use generic
+Publish until refreshed/upgraded. New callers have no fallback against an old
+GET-only backend; actual routing/OPTIONS/CORS rollout is unverified and installed
+Next guidance was unavailable. No migration is needed for this correction.
+The later WEB-PUBLICATION-HISTORY-ATOMICITY-01 correction transaction-couples
+content, history and pointer for participating current backend writers. Mixed old
+writers, policy TOCTOU, uncertain/postcommit outcomes, stale "live again" feedback
+and broader identity/transport binding remain open.
+No product tests, lint, typechecks, builds, installs, live DB/provider actions,
+push or deployment ran.
+
+## WEB-PUBLICATION-HISTORY-ATOMICITY-01
+
+Severity: Medium. Participating current-writer correction source-reviewed in
+`96a460430f9921f7fbbd9f9fa8920119c3282724`, 2026-11-07. Mixed-backend rollout, real database
+acceptance and uncertain/postcommit outcomes remain open.
+
+The prior service committed content before separately reading/inserting history
+and updating its live pointer. Two owner-authorized requests could commit content
+A then B, record B as N+1 then A as N+2, both succeed, and leave live content B while
+history marked A live. Unique publication/version history keys do not reject that
+ordering. A collision or history/pointer failure could instead leave an error
+after durable content changes; dedup returned before repairing a stale pointer.
+Web, Mobile, CLI and multiple sessions can issue overlapping requests despite
+same-view busy controls. This is source qualification, not a deployed incident.
+Rename intentionally edits page metadata without rewriting version history.
+
+Both existing exported mutation services now own mandatory transactions on the
+already user/org-scoped adapter. Preflight, the live upsert or exact Restore UPDATE,
+history selection/dedup/append and pointer receipt use only the callback adapter.
+Policy, moderation and outbound preparation remain outside. Successful live DML
+holds the publication row before history is read; same-row participating writers
+therefore use one order through commit. Concurrent first upserts use the existing
+owner/artifact uniqueness conflict. No extra preselect or advisory lock was added.
+
+The private history helper uses persisted RETURNING title/kind/language/content,
+validates positive safe versions and the expected inserted version, and requires
+one exact owner/id/version pointer receipt. Dedup also aligns the pointer. Callback
+failure before commit rolls back the transaction; routes use the combined returned
+version only after commit. Restore retains its original four-field UPDATE predicate,
+missing-source/conflict behavior and no-create guarantee. Ordinary publication
+defaults, title retention and conversation/audience behavior are unchanged.
+
+Three production and five fixture files were independently source-reviewed.
+Compatibility fixtures retain prior validation/metadata contracts; the new stateful
+model admits concurrent preflight, acquires modeled ownership at live DML, stages
+writes and holds through commit. It covers callback rollback, receipts, dedup,
+first publishes, both mutation orders and uncertain acknowledgement without replay.
+It is not a PostgreSQL lock/RLS/isolation/trigger test. Route fixtures distinguish
+root and transaction queries, completion gating and postcommit workspace-read
+failure. All fixtures, guards and runtime acceptance remain UNRUN.
+
+This is current application-writer coordination, not a database-enforced invariant
+against old code or direct writers. Old backend publishers and in-flight requests
+must drain before deployment-wide claims; older-client generic Restore behavior
+remains separately tracked. COMMIT acknowledgement loss is uncertain, and workspace
+summary reads, response construction or delivery can fail after durable commit.
+A failed HTTP request does not prove rollback. No automatic replay is added.
+Policy TOCTOU, per-user quota races across distinct artifacts, historical backfill
+and arbitrary old-history repair remain open. The later bounded audience/grant
+correction is tracked under WEB-INVITED-WORKSPACE-GRANT-01; its migration and rollout
+acceptance remain pending.
+A later rename may legitimately differ from the snapshot title. Applied schema,
+database isolation, real rollback/locking/deadlocks and installed Next guidance
+were not verified. No migration, product checks, live DB/provider actions, push
+or deployment is included.
+
+## WEB-INVITED-WORKSPACE-GRANT-01
+
+Severity: High. Bounded current-writer correction source-reviewed in
+`966b8402c6eba629109df12c721cdeb95cae7a9c`, 2026-11-07. Migration 0395 is authored but
+UNAPPLIED; database acceptance, coordinated rollout and older writers remain open.
+
+A supported null-conversation publication could be shared into workspace A, then
+changed to invited after the owner selected Personal or workspace B. The old PATCH
+removed only the selected workspace's grant (or none), ignored a missing deletion,
+and committed invited visibility. A's active members with content.read still had
+full content and runnable access through visibility-blind organization RLS and
+0372 helper branches. The same grant could remain after a public-to-invited change.
+This is source-qualified, not an observed incident. Anonymous reads still required
+public; this does not expose publisher connector credentials or another viewer's
+personal storage. The unique publication grant index permits at most one grant.
+Separate grant/visibility writes also admitted partial failure and overlapping
+successful requests with invited visibility plus a workspace grant.
+
+The canonical updatePublishedArtifactAudience service now owns a mandatory
+transaction on the existing scoped adapter. It locks the owned publication first,
+reads its actual grant by publication ID and uses the request-resolved destination
+from getUserScopedDb, without resolving the saved selection again. Target
+entitlement/content.share checks and the route's public connector/external-sharing
+callback precede all writes. The callback receives the transaction and locked
+publication/actual grant; policy refusal throws across the rollback boundary.
+
+Grant removal, destination insertion, visibility and optional inspected title share
+one transaction. Title normalization retains the canonical contract limit. Exact
+owner/token/publication receipts and final grant state are required. Missing or
+foreign publication is 404; invalid removal/write receipts fail closed. The response
+waits for transaction completion. Three now-unused share/selection/visibility
+helpers and their obsolete-only fixtures were removed, rather than preserving
+unsafe alternative write seams. Existing Publish/Restore/history code and exact
+Restore identity remain unchanged. Standalone manager unshare remains revocation-only.
+
+Append-only 0395 adds a current-subject-only boolean ownership helper with fixed
+search path, row_security off, checked privileged function owner, PUBLIC execute
+revoked and app_rls execute granted. Separate grant SELECT/DELETE policies let
+owners see/revoke old grants after leaving the workspace without the 0185 recursive
+publication-to-grant policy cycle. INSERT/UPDATE and manager permissions are unchanged.
+Grant-backed publication SELECT permits public/organization, preserving historical
+public-plus-workspace discovery while excluding invited. Both runnable helpers
+require organization visibility for their workspace branch, retaining independent
+public, owner and named-invitation admission. Storage and connector authorization
+inherit those predicates. No grant rows are deleted or backfilled by migration.
+The paired down migration warns that rollback restores the privacy flaw.
+
+Source-reviewed fixtures cover actual-grant targeting, authoritative resolver
+forwarding, permission/public-policy refusal before writes, strict receipts, staged
+rollback, no/same grant cases, combined title updates and applied-but-unacknowledged
+COMMIT without replay. SQL fixtures compare predecessor behavior and guard helper
+ownership/ACL/policy shape; external-sharing coverage follows the callback into
+the transaction. All remain UNRUN, not PostgreSQL RLS/role/locking/concurrency,
+actual header parsing, runtime storage or browser evidence.
+
+Apply/validate 0395 before new application traffic and drain old writers before
+claiming deployment-wide write correctness. New application code with the old
+schema is not safe: hidden grants can escape its scoped reads. With 0395, stale
+invited grants cease authorizing new workspace reads, but old writers can still
+produce wrong-target/partial writes. Existing snapshots, served content and already
+authorized requests cannot be withdrawn retroactively. Later authorized manager
+revocation may narrow access after final validation. Policy/live-artifact changes,
+stale-client intent (no audience CAS), other settings APIs' saved-selector usage,
+non-null conversation scope restrictions and cross-artifact quotas remain outside
+this correction. Sharing/spend settings receive the later bounded correction under
+WEB-ORG-SETTINGS-REQUEST-SCOPE-01. COMMIT acknowledgement loss or response failure can follow durable
+effects; failed HTTP is not rollback proof. Installed Next guidance and applied
+schema were not verified. No product checks, DB/provider actions, push or deployment.
+
+## WEB-ORG-SETTINGS-REQUEST-SCOPE-01
+
+Severity: Medium. Bounded sharing/spend correction source-reviewed in
+`12c9a9a7c85536c373968c5e9137c1af04eade1b`; interactive caller continuation in
+`2ae29f73ae6adaa7337f1ee1783d112401406ca3`; legal-hold/admin-key continuation in
+`2b88fbf779028837dbf33864103949a5343d4e5f`; retention/audit-destination continuation in
+`31053fc862dea2a4e00637f5828414963601bc2a`; model/connector continuation in
+`d1123747532a84e34c0af1215c461e239974ea21`; billing/report continuation in
+`09073e677cf3971fc2f7c1ed929669e55158f78e`; owner-policy auth/scope continuation in
+`c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`; shared-project scope continuation in
+`2a5d910157b8b82127c79917140d705426e401a2`; shared-session target/receipt continuation in
+`7bab6613db418be541428fc48e7a3b32721b9cf9`; shared-session transaction continuation in
+`74658ddcc2d4e9e331a3dbaf986131cd991adaab`; web share confirmation scope in
+`36081001d8f696c5bd5afb7a216b3ff0bc903efe`; share inventory completeness in
+`d9bf60f52b3ff692f44e2f58d3819f8656e71a41`; settings conversation-link lifetime in
+`6bcf2de7b3dad763a70177b97d75e9c14867bf04`; settings published-artifact lifetime in
+`2d91eb8857b34a3c4fe303e59487924d8eec03c6`, 2026-11-07. Wider clients, audience races,
+identity consumers and runtime acceptance remain open.
+
+getUserScopedDb already resolves an explicit workspace or Personal selector and
+returns the authenticated request's organizationId. The affected handlers discarded
+it and called resolveOrgMembership, which independently resolved the saved/cached
+selection again. A valid authenticated/CSRF spend-limit DELETE explicitly selecting
+Personal could therefore remove saved workspace A's cap, provided the caller had
+active A membership, the required Team/Enterprise access and policy.manage. PUT
+could likewise change A's cap. Existing privileged spend storage writes consumed
+the reselected A, so request-scoped RLS did not correct the destination.
+
+Sharing overview and project/connector/artifact/conversation operations used the
+same second selection. Membership, permission, ownership and resource predicates
+still applied to A: this is authorized-but-unintended targeting, not acquisition
+of another tenant's rights. Nonmembers, inadequate permissions and resource scope
+can refuse the operation. An explicit B selector can be ignored similarly when
+its upstream membership check permits it. A no-header request can also resolve A,
+then reselect B after a concurrent persisted/cache workspace switch. These are
+source-supported paths, not executed reproductions or observed incidents.
+
+The canonical service now offers resolveOrgMembershipForOrganization with a
+required string-or-null target. Personal returns null without querying. Non-null
+lookup is bound to exact organization, authenticated subject and active membership;
+a mismatched returned organization fails closed and database errors propagate.
+The existing saved-selection wrapper delegates to this lookup, preserving its
+intentional callers rather than globally redefining authentication or bootstrap.
+
+Five sharing route files and the spend-limit route capture organizationId once
+from getUserScopedDb and use the explicit helper. Every sharing method and the
+spend GET/admin gates retain that target for permissions, writes, response, audit
+and connector cache cleanup. Existing CSRF/rate/input/owner/plan/custom-role gates,
+scoped sharing adapters and spend storage adapter remain unchanged. Personal and
+lost target membership fail existing membership gates before resource effects.
+No migration, client change, additional privilege or new fallback is introduced.
+
+Fixtures exercise the real membership helper and sharing permission-gate functions
+behind mocked auth/scope and resource boundaries. Spend entitlement, permission
+and storage boundaries are mocked, with target and refusal assertions. They cover B versus saved A, Personal,
+headerless captured scope, missing/inactive/mismatched membership, target permissions,
+read/write/audit/cache attribution and retained refusal paths. The prior cross-org
+fixture's null-scoped mock plus header-B/saved-A premise was corrected while
+retaining untrusted query/body override and resource-boundary checks. A bounded
+source guard requires explicit scope propagation at all ten corrected call sites.
+All fixtures and guards remain UNRUN; none proves real auth/header parsing, database
+RLS, concurrent selection, integrated UI or deployment behavior.
+
+A second bounded correction in 2ae29f73ae6adaa7337f1ee1783d112401406ca3 retains the same request-resolved
+organization in the interactive branches of resolveWorkspaceApiCaller and
+resolveComplianceCaller. Their ten route files contain fourteen handler call
+sites: member roster/detail/role/removal, invitations, usage report, automation
+principals, audit reads/exports and legal-hold preservation/export. The strongest
+qualified write is service-principals PATCH: valid A membership, Team/Enterprise
+access, identity.manage, normal session/CSRF controls and a known A principal can
+otherwise enable/disable that principal despite an explicit Personal or B
+selector. setServicePrincipalDisabled uses the privileged service adapter with
+the reselected A. A principal existing only in B instead fails A's resource
+predicate. Roster and legal-hold preservation readers also use privileged adapters;
+audit readers bind the caller organization and applicable permission RLS, not an
+automatic request-organization equality guard. These are source-supported target
+confusion paths, not observed incidents or permission acquisition.
+
+Both interactive helpers now use the canonical explicit membership lookup before
+the unchanged entitlement/permission gates and return that same organization.
+The API-key branches are unchanged: verified key organization, scopes, entitlement
+and IP controls remain authoritative regardless of a conflicting request selector.
+The workspace caller retains its unknown-route and members-only guards. Direct
+compliance consumers still supply their own permission argument rather than
+universally consulting the workspace route table; legal-hold preservation is an
+existing such consumer. No new table enforcement, bearer fallback or MFA exemption
+is added.
+
+New helper fixtures invoke both real callers and the canonical membership lookup
+behind mocked scoped auth, key verification, database rows, entitlement/permission
+and IP boundaries. They cover captured B/headerless scope, Personal, empty or
+mismatched membership, auth/query errors, gate denials, route permission mapping,
+delegation and key A with conflicting selectors. The automation-principal route
+fixture retains real handlers, callers, storage-query construction and key
+verification against mocked DB responses; auth, entitlement and permission
+boundaries remain mocked. Parameter-sensitive rows assert B reads/writes/audits,
+Personal refusal, A-only principal not-found under B, key GET anchored to A and
+key PATCH refusal.
+The existing audit/export fixture now supplies its authenticated organization,
+preserving earlier assertions. These fixtures are UNRUN, not executed header
+parsing, SQL/RLS, authentication, cache races or runtime acceptance. Empty query
+results model filtered inactive membership; SQL text asserts the active predicate.
+No additional source-shape guard was added for this continuation.
+
+A third bounded correction in `2b88fbf779028837dbf33864103949a5343d4e5f` retains the captured request
+organization in the shared gates for legal-holds and admin-api-keys, covering
+GET/POST/DELETE on each route. Previously a caller with active A membership,
+Team/Enterprise access and content.govern or identity.manage could submit a known
+active A hold/key ID with an explicit Personal or B selector and release/revoke A
+through the privileged service adapter. Normal authentication, rate limits, CSRF
+and resource predicates still applied; B selection also required upstream B
+membership. Neither DELETE adds or previously required step-up. A B-only resource
+under the old A target is not found, not modified.
+
+Releasing a hold removes that hold's protection, not the records themselves.
+Subsequent deletion still depends on an eligible deletion/retention operation and
+other applicable holds. Key revocation affects subsequent verification; stopping
+already-running work is not established. Hold creation could preserve A while
+leaving intended B without the requested hold. Key listing returns key metadata and
+principals, not existing plaintext secrets. Wrong-target key creation additionally
+requires an A-bound valid api_credential.reveal step-up proof; a B-only proof fails.
+Its existing principal/permission ceilings and optional organization-scoped
+idempotency remain intact. This continuation changes no credential generator,
+transaction, authorization policy or replay guarantee.
+
+Both routes now resolve exact active membership using the captured string-or-null
+organization. Personal fails before privileged resources, step-up, idempotency and
+route-level mutation/access audit calls; target membership loss fails before downstream authorization. Permission,
+entitlement, resource, step-up, storage, payload and audit destinations retain that
+target. Default authentication/account-security/MFA/IP checks are untouched, and
+neither route opts into the separate MFA-owner exemption. These are authorized
+wrong-target source paths, not demonstrated unauthorized access or runtime incidents.
+
+The two route fixtures retain real handlers, canonical membership and storage-query
+construction with mocked authentication, database/transaction callbacks, entitlement,
+permissions and audit sinks. All verbs cover captured scope, Personal, membership
+and gate denials; parameter-sensitive hold/key/principal responses distinguish A
+from B. Legal-hold fixtures retain retention/admin-audit helpers and check target
+arguments, not executed release SQL or rollback. Key fixtures also retain real
+step-up grant verification, idempotency and credential/principal helper source:
+B proof admits the B path, A proof refuses before B replay/storage, and the replay
+map now includes organization, scope and key so a seeded A result cannot stand in
+for B. Existing assertions are preserved. These fixtures remain UNRUN; no live
+authentication, header parsing, SQL/RLS, persisted credential, transaction or
+concurrency result is established. No additional source-shape guard was added.
+
+A fourth bounded correction in `31053fc862dea2a4e00637f5828414963601bc2a` retains the captured request
+organization at both retention lookup sites and the audit-destination shared gate,
+covering retention GET/PUT and destination GET/PUT/PATCH/DELETE. Previously a valid
+A administrator could disable or remove A's audit destination despite explicit
+Personal/B selection; retention PUT could change A's per-domain windows and
+enforcement. The writes use privileged storage with the reselected A. Active A
+membership, Team/Enterprise access, policy.manage and normal authentication,
+CSRF/rate/input checks remain prerequisites; explicit B also requires upstream B
+membership. Retention GET instead requires audit.read. Destination GET uses the
+scoped adapter, whose existing owner/admin read policy is membership-based rather
+than selected-organization equality. Delegated policy.manage alone is not evidence
+that its older read policy admits that read.
+
+Retention configuration changes do not immediately delete records or bypass holds;
+later deletion depends on enforcement execution, eligibility and applicable holds.
+Destination PUT can replace A's endpoint and signing material after existing
+HTTPS/public-host checks; PATCH/DELETE can affect subsequent delivery, not prove
+cancellation of a delivery already underway. A freshly minted signing secret is
+returned only by PUT with no-store, not recovered from GET. Secret generation,
+organization-bound sealing, cache markers and egress controls are unchanged.
+The default authentication/account-security/MFA/IP path is retained; neither route
+uses the owner exemption. These are authorized wrong-target source paths, not an
+observed incident or acquisition of unrelated tenant rights.
+
+All six handlers now use exact active membership for the captured string-or-null
+organization. Personal and failed target membership stop before downstream
+entitlement/permission checks and resource effects. All subsequent storage, payload
+and audit destinations retain the captured target. No new transaction, migration,
+policy revision or replay protocol is introduced. The retention loop still writes
+each policy separately; partial writes and post-write audit/response failures
+remain possible. Destination cache/DB/audit effects are not one atomic transaction.
+
+The two route fixtures preserve the existing assertions and retain real handlers,
+canonical membership, schema/body validation and service read/write query construction.
+Authentication, error wrapping, plan/permission gates, database responses, audits and
+effectful imports are mocked. Separate parameter-sensitive scoped/privileged data
+distinguish A from B; cases cover every verb with captured B versus saved A,
+headerless captured B, Personal, missing/mismatched membership, target permission/plan
+denial and retained CSRF/rate/input guards. Retention cases check exact per-domain
+arguments, B responses/audits and unchanged A policies. Destination cases check B
+storage, audit and secret-sealing context, A-only destination refusal, egress
+validation and new-secret/no-store behavior. Saved selectors and unexpected I/O
+are guarded against. All fixtures remain UNRUN: they do not establish actual header
+parsing, auth, middleware behavior, SQL/RLS, encryption, delivery or transaction
+semantics. No additional source-shape guard was added.
+
+The retention and audit-destination hooks use global query keys and omit explicit
+workspace selectors on their direct fetches. They do not establish which headers
+an ordinary UI interaction ultimately sends. Keeping the first server resolution
+does not recover stale client intent or prevent a switch before that resolution.
+
+A fifth bounded correction in `d1123747532a84e34c0af1215c461e239974ea21` retains the captured organization
+at all four GET/PUT gates in model-policy and connector-policy. A valid A member
+could previously read A's policy despite explicit Personal/B selection, and a
+valid A policy manager could replace A's model/connector restrictions through
+privileged storage. Team/Enterprise access, normal authentication/MFA/IP, CSRF,
+rate and input gates still applied; explicit B requires upstream B membership.
+The scoped reads use membership-based policy RLS, not selected-organization equality.
+Neither route opts into the separate MFA-owner exemption or API-key admission.
+
+Both routes now use the canonical exact active-membership lookup with the required
+string-or-null target. Personal and lost target membership refuse before resource
+effects. GET remains available to eligible ordinary members, with target permissions
+used to report management capability; PUT still requires policy.manage. Catalog
+validation, provider/model lists, connector/plugin/domain normalization, overlap
+checks, omitted connector toolRules merge, query adapters and audit/response targets
+are unchanged. The correction binds configuration storage, not proof of downstream
+model/connector enforcement, cancellation of admitted work or retroactive cleanup.
+Post-check permission/policy races and post-write audit/response failures remain.
+
+The two route fixtures retain real handlers, canonical membership validation,
+policy service read/write/format/diff logic and request-body/schema validation.
+Model catalog lookup remains real in fixture source; connector catalog mapping is
+mocked. Scoped authentication, error wrappers, plan/permission gates, separate
+parameter-sensitive scoped/privileged databases, saved selectors and audit/effect
+boundaries are mocked and reset per case. Existing assertions are preserved.
+Cases cover B versus saved A with explicit/headerless capture, canonical Personal,
+missing/mismatched membership, target plan/permission refusal, ordinary-member GET,
+B storage/payload/audit and unchanged A, plus early CSRF/rate and schema/catalog
+coherence refusals. Connector fixtures distinguish A/B prior toolRules and preserve
+B's omitted rules, while explicit rules retain normalization/deduplication.
+All fixtures remain UNRUN and do not prove header parsing, auth, middleware,
+SQL/RLS, actual policy enforcement, concurrency or runtime acceptance.
+No additional source-shape guard was added.
+
+Both hooks use global query keys and omit explicit workspace selectors in direct
+fetches. This source correction retains the first server resolution; it does not
+recover stale UI intent or stop a workspace switch before that resolution.
+
+A sixth bounded correction in `09073e677cf3971fc2f7c1ed929669e55158f78e` retains the captured request
+organization at four lookup sites covering five handlers: billing-contract GET/POST,
+posture GET, usage-analytics GET and usage-analytics/export GET. Default auth/MFA/IP,
+Team/Enterprise access and existing permission gates remain unchanged. Billing and
+usage reads require billing.read; billing actions require billing.contracts.manage;
+posture requires audit.read. None opts into the policy owner-MFA exemption.
+Personal and failed exact active membership stop before downstream resource effects.
+
+Old billing paths could read saved A contracts, invoices and agreement history
+despite Personal/B selection, under existing A membership, entitlement and permissions.
+Offline reporting could insert an unreconciled A report: 0288 grants scoped INSERT
+with billing.contracts.manage and null reconciliation columns. This is not a money
+transfer, provider payment or invoice settlement. Invoice ownership, allowed method,
+invoice state, outstanding amount and remittance-reference idempotency still apply;
+termination separately retains its executed-agreement/lifecycle gate.
+Termination attempts an A-scoped transactional UPDATE, but checked-in agreement
+app_rls grants/policies establish SELECT, not successful mutation. Mocked successful
+termination cannot prove a live contract change or legal acceptance.
+
+Read impacts differ by resource. The latest app_row_is_visible in 0272 retains
+selected-organization equality for managed_usage_requests. Old A-targeted spend,
+breakdown and freshness reads therefore see no A rows when DB scope is Personal/B;
+the export is A-attributed empty spend, not proven A spend disclosure. Usage can
+still return A seatsInUse through the organizations subquery and A daily session/tool
+activity aggregates through the permission-gated SECURITY DEFINER functions in
+0384/0386. CSV does not render seatsInUse. Posture can return A name/seats under the
+retained 0054 organization-membership policy, plus identity/provisioning state,
+audit counts and shared-resource counts where existing A permissions admit them.
+Other predicates may filter fields. These are source-supported wrong-target paths
+within existing authority, not acquisition of unrelated tenant rights or observed
+runtime incidents; applied SQL state is unknown.
+
+The retained target now reaches entitlement/permission checks, service query
+parameters, access/mutation audits and payload/CSV metadata. Existing scoped
+adapters, contract/invoice services, body validation, CSRF/rate guards, deadline/
+circuit configuration, usage windows and aggregation, partial activity-unavailable
+fallback and CSV escaping/no-store behavior are untouched. No financial action,
+auth repair, new transaction, migration, rollback or replay guarantee is added.
+
+All four fixtures retain real handlers, canonical membership validation and the
+billing/report builders; posture infrastructure and activity readers are mocked.
+Authentication, error wrappers, DB/transaction callbacks, plan/permission gates,
+audits and other effect boundaries are mocked. Parameter-aware A/B fixtures cover
+explicit/headerless capture versus saved A, canonical Personal/null, absent or
+mismatched membership, target authorization refusal, exact read/action/audit/payload
+targets and preserved early guards. Billing retains unchanged A state, A-only
+resource refusal, method/state/input rules and repeated-remittance idempotency.
+Usage/export retain all nine scoped queries, bounded/malformed/reversed windows,
+activity failure fallback and CSV formula guards. Simulated termination proves only
+argument propagation. All fixtures remain UNRUN: no real auth/header parsing,
+MFA/IP, middleware deadlines, SQL/RLS, provider, concurrency or runtime acceptance.
+No additional source-shape guard was added.
+
+The contract, posture and usage GET hooks retain global query keys and omit explicit
+workspace selectors in their direct fetches. The server correction does not recover
+stale client intent or stop a selection change before the first scope resolution.
+
+Current legal-hold and API-key hooks use global query keys and omit workspace
+selectors on their direct fetches; key creation separately binds its step-up flow
+to an organization. This source correction does not establish which headers an
+ordinary UI interaction ultimately sends, repair stale cached intent or stop a
+selection change before the first authoritative server resolution.
+
+The automation-principal UI currently omits workspace selectors and uses a global
+query key. Audit queries and export links likewise do not bind a workspace
+snapshot. The helper correction preserves the first server resolution; it cannot
+recover client intent before that resolution or make stale client views safe.
+
+The sharing hooks use a constant query key and omit a selector; the spend UI also
+omits one. Keeping the first server resolution does not reconstruct stale UI intent
+or stop a selection change before that resolution. Shared-project scope and
+conversation-sharing target helpers remain separate work. Bootstrap/layout
+saved-selection semantics are intentionally unchanged.
+
+A seventh bounded correction in `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658` implements the reviewed owner-policy
+auth/scope design for policy and policy/code. Before this correction, owner
+exemption used saved-workspace membership, lockdown and DB scope used the request
+selector, and the routes reselected saved membership. Saved locked A with explicit
+Personal/unlocked B could check the wrong lockdown target while acting on A under
+existing A rights. A conditional headerless interleaving could instead exempt an
+A owner before a separately admitted selection write moved later scopes to B.
+Both switch endpoints enforce ordinary MFA; another eligible session or previously
+admitted write was needed, not a fresh ungated switch by an unenrolled caller.
+No runtime exploit or actual timing schedule was demonstrated. A route-only
+replacement would have introduced a stable saved-owner-A/nonowner-B mismatch;
+this correction binds authentication and route scope together.
+
+Only the existing mfaGateExemptForOwner opt-in captures the request organization
+once after applicable absolute-session-age and account-lifecycle gates. Required lookup uses the
+existing 2,000ms deadline and fails closed: typed application refusals propagate,
+other lookup failures/timeouts become service unavailable. Target lockdown is
+checked outside that catch, so an affirmative denial is not swallowed. Existing
+flag-store availability behavior remains unchanged. Applicable account security, exact active
+owner proof or ordinary aggregate MFA with native session evidence, IP restrictions
+and sightings retain their order. Personal is captured null, never saved fallback.
+Nonowners and Personal still undergo ordinary MFA unless the existing separate
+enrollment exemption applies. Existing broad recovery is retained only on the
+owned target, not narrowed to a dedicated disable-MFA action.
+
+Successful opt-in authentication returns an internally produced account/organization
+receipt after applicable gates. getUserScopedDb requires that receipt to match the
+authenticated account, rejects missing/mismatched evidence and refuses the conflicting
+resolveOrganization:false option. The cookie path captures one IdentityRequestAuth,
+retains nonempty-token admission and authenticates that same server session through
+getCookieSessionAuthUser. Bearer verification is not repeated. Primitive receipt
+values are copied into the existing claimed adapter: app_rls is set transaction-locally,
+then product account and organization claims, then the query/execute/transaction body.
+The cookie token is not repurposed as product-identity proof. No fake JWT, caller-
+provided receipt proof, service-role fallback or new verified-principal input seam
+is added. Cookie surface remains web; bearer surface classification is unchanged.
+
+All four policy GET/PATCH gates retain this organization through exact active
+membership, plan/permissions, reads, revisions, writes, overrides, cache and audit.
+Personal and lost membership refuse before route resources. No direct resolveOrgMembership call remains in the inspected organization settings
+route files; this is not a codebase-wide scope guarantee. Ordinary auth, exported assertAccountActive and
+getVerifiedBearerUserScopedDb are unchanged. API-key scope admission, device tokens,
+account lifecycle cache/retry/fail-open configuration, unknown-age degradation,
+account-security verification, passkey-required sightings and enrollment exemption
+retain existing behavior. The two policy routes do not request API-key admission.
+
+This also narrows WEB-IDENTITY-POLICY-NAMESPACE-01 for this opt-in: logical account
+and DB subject now use the verified product identity together. Non-opt-in cookie
+scoping can still discard the mapped account, and other session-token adapters
+retain native subjects. The subsequent native-session preflight continuation
+`6c60f38d0415816f9fd611a01001402d5414749b` retains copied admitted session evidence in main policy PATCH;
+device fallback and wider product-only consumers remain unchanged. See
+WEB-IDENTITY-POLICY-NAMESPACE-01 for its exact scope and unrun fixtures. No global
+identity/RLS or provider-mapping repair is claimed; the claimed adapter alone is
+not authentication.
+
+The auth fixture retains real authentication, lifecycle/age, request selection and
+exact owner lookup over mocked database/provider adapters and isolated admission
+gate spies. It covers mapped/equal native identities, target owner versus saved
+owner, aggregate MFA invocation, Personal, malformed/nonmember selection, lookup
+exception/deadline, gate order, selection changes between awaits, passkey sightings,
+forged fields, API-key refusal and device admission. A mismatched owner row denies
+the exemption; the test does not invent a real selector-SQL mismatch.
+
+The scoped fixture keeps real auth-to-scope and claimed-adapter code over mocked
+provider/storage/owner/lockdown boundaries. It covers one cookie identity/token,
+one target resolution, equal/mapped cookie and bearer accounts, target changes
+during awaited gates, owner recovery/Personal, lookup/MFA/IP denial and role-then-
+claims-then-operation ordering across query, execute and transaction. Narrow
+restored auth spies cover missing/mismatched receipts and mutation of receipt
+objects after scope creation; they do not replace the real integration cases.
+Three pre-existing MFA expectations were corrected to include native session
+evidence while preserving their identity assertions.
+
+Both route fixtures retain real canonical membership and policy/schema logic;
+main revision checks and scoped Code layering/cache eviction are real source.
+Auth/RLS results, database effects and simulated revision triggers, plan/permissions,
+audits, override retrieval and saved-selection cache are mocked. A/B cases cover
+explicit/headerless scope, Personal/membership/gate refusals, ordinary-member GET,
+exact B reads/writes/revisions/overrides/cache/audit/payload and unchanged A, plus
+existing CSRF/rate/validation/self-lockout behavior. Code's lack of an If-Match/ETag
+protocol is preserved. All fixtures remain UNRUN, not proof of PostgreSQL/RLS,
+provider acceptance, all-organization MFA SQL, middleware or concurrency behavior.
+No additional source-shape guard was added.
+
+The 2,000ms race refuses admission but does not cancel underlying lookup/cache work.
+Owner, membership, identity and lockdown checks are not leases. Policy RLS remains
+membership/permission-based, not universal selected-organization equality; every
+consumer must retain its target. Existing main-policy revision check and write are
+separate queries/transactions, not an atomic compare-and-swap, and Code policy
+has no newly added revision protocol. Post-check changes and post-write
+audit/cache/response failures or uncertain outcomes remain. No transaction, replay
+protocol or migration is added; prior 0394/0395 remain UNAPPLIED. Installed Next
+guidance and runtime state were unavailable. No product checks, live DB/provider
+action, push or deployment was performed.
+
+An eighth bounded continuation `2a5d910157b8b82127c79917140d705426e401a2` binds shared-project scope to the
+organization already captured by its caller. resolveSharedProjectScope now requires
+an explicit string-or-null organizationId and delegates to the canonical exact
+active-membership helper. Project list GET, detail GET and resolveProjectWriteAccess
+pass their captured value. There is no saved-selection fallback or default target.
+
+The previous helper ignored the request selector and resolved saved/cached A again.
+With an admitted B request, shared B projects could disappear from the list, detail
+could falsely return 404, and a valid B editor could be refused. Headerless requests
+could likewise disagree after an independently persisted selection change. This is
+a source-supported availability defect, not an observed incident or demonstrated
+cross-workspace disclosure/write: the existing caller organization-equality checks
+and project SQL organization predicates prevent consuming a differently scoped
+shared result. They remain unchanged.
+
+Do not attribute selected-organization isolation to sharing RLS. The checked-in
+0315 read and 0358 editor policies use app_org_resource_is_readable and permissions;
+0200 defines readability through content.read, with later active membership
+permission refinement. These predicates are not current_app_org_id equality, so
+a dual member can read sharing rows for another permitted organization. This
+correction chooses the intended target before those queries; it does not replace
+or expand database grants. Applied policy state remains unverified.
+
+Personal now returns no shared scope without querying membership or the saved
+selection. Missing/mismatched target membership returns no shared scope; database
+errors still propagate. Read grants, default_access resolution, explicit per-user
+write grants and content.share requirements remain unchanged. Viewer downgrade
+continues to strip editor access. The exact-target owner check still runs first
+in resolveProjectWriteAccess, including Personal owner access. No default
+authentication, SQL subject mapping, adapter or permission behavior changes.
+
+The indirect write effect reaches project PUT's editor fallback and
+checkProjectKnowledgeCapacity. That capacity check is used by direct knowledge
+registration and resumable knowledge upload creation/registration on completion.
+It is not a correction to every knowledge endpoint: statement-local knowledge
+reads retain their existing separate predicates; DELETE/reindex keep their
+independent owner filters. Drive import/refresh explicitly reject shared projects
+before their owner-only admission. Upload completion can
+already assemble an object before registration fails, and an existing completion
+receipt can take its own read path. No rollback, cleanup, quota reservation,
+upload authority or transactional completion guarantee is added.
+
+Authored UNRUN service fixtures exercise the real shared-scope and exact-membership
+owners over parameter-aware database/cache/permission boundaries. They cover
+captured B versus saved A, Personal without queries, absent/modeled-inactive or
+mismatched membership, membership and sharing-query errors, empty readable scope,
+explicit write versus reader/Viewer and unchanged owner paths. The earlier
+missing-sharing-table fixture now reaches the sharing query after valid membership
+instead of failing at membership.
+
+Route fixtures delegate to real canonical scope/write-access source while mocking
+authenticated scope, saved selection, database, permission, rate and CSRF boundaries.
+They cover explicit/headerless receipt cases, exact B list/detail/PUT bindings,
+Personal, target membership failures and owner preservation. Headers are present
+in fixtures, but actual auth/selector parsing is not exercised. PUT tests model
+the failed owner attempt before the editor fallback, not a real database update.
+
+Knowledge fixtures directly exercise real capacity -> write-access -> shared-scope
+-> exact-membership source over mocked database, saved selector, permissions and
+storage allowance/admission. The module's internal helper remains real despite an
+exported helper stub retained for older read fixtures. Captured B admission and
+Personal, Viewer/reader/member, archived, file-count, duplicate and storage refusal
+paths are covered. Mock implementations reset between cases. This does not execute
+object storage, extraction, indexing, upload routes or PostgreSQL/RLS. No new
+source-shape guard is added.
+
+All source/fixtures are independently reviewed only and UNRUN. Client/headerless
+selection intent before capture, shared-session audience targeting, default
+identity/RLS scope, post-check membership/grant changes and broader project
+workflows remain open. Existing project response-version handling, owner-only
+field checks, limits, transactions, response shape and errors are preserved. No migration, new
+transaction, replay or lease is introduced; prior 0394/0395 remain UNAPPLIED.
+No product checks, provider/SQL/RLS execution, push or deployment occurred.
+
+### Shared-session target and observed-grant receipt continuation
+
+Source-reviewed continuation `7bab6613db418be541428fc48e7a3b32721b9cf9` makes
+resolveSessionShareTarget require the captured request organizationId and use
+canonical exact active membership. PATCH /api/share/[token] passes the value from
+its existing getUserScopedDb result. Both audience branches still require a
+non-null active target; Personal no longer falls back to saved A. This is an
+intentional fail-closed change, not new Personal/offboarded publication support.
+
+Previously a share without a linked conversation could grant saved A despite
+captured B. A linked B conversation with explicit B could instead be falsely
+refused when the resolver reselected A; an explicitly Personal linked conversation
+could fall through the truthy organization comparison and grant saved A. Existing
+membership, owner/token, conversation, content.share and external-sharing gates
+still apply. The privileged scope read remains owner-qualified; conversation
+ownership is checked in its join. No unrelated-tenant privilege or observed
+incident is established. For linked conversations, requireSelectedWorkspace
+checks an explicit selector and returns early for headerless requests. The later
+non-null conversation-organization equality guard still checks the captured
+target; it does not add a headerless Personal-conversation equality check.
+
+Public transition now deletes the scope snapshot's observed grant organization,
+not the newly captured destination, and audits that actual organization. A present
+grant must yield exactly one matching shared_session_id receipt before visibility
+is changed. Zero, mismatched or multiple receipts cause conflict, without a
+privileged retry or revoke audit. Such a refusal does not prove nothing was
+deleted. An absent observed grant skips deletion/revoke audit. The settings
+organization-unshare route uses the same stricter receipt helper and remains
+delete-only; it never reopens the public link. Its validated UUID route parameter
+is canonicalized to lowercase so PostgreSQL's lowercase receipt does not produce
+a false 404 and suppress audit after a mixed-case-ID deletion.
+
+The combined change is necessary: simply changing the resolver to B while retaining
+DELETE B could leave an observed grant A behind on a public transition that
+previously deleted A. Existing grant A -> organization B still conflicts with the
+unique per-session grant instead of relocating it. Checked-in 0186 permits at most
+one grant via UNIQUE(shared_session_id); LIMIT 1 is not a demonstrated multi-grant
+defect. Anonymous visibility and workspace grant are independent concepts, and a
+public row with a grant is not universally invalid. Org-shared reads do not filter
+visibility. Applied schema/RLS state remains unverified.
+
+The old grant's scoped SELECT/DELETE policies require readable organization
+authority, including content.read under the checked-in permission functions;
+being the session owner alone need not suffice after offboarding or permission
+loss. Failure to confirm revocation refuses publication rather than bypassing
+RLS. Default auth/native-to-product identity and scoped-adapter behavior are
+unchanged.
+
+At this earlier target/receipt checkpoint, scope read, grant/delete, visibility
+update and audit remained separate. The transaction continuation below groups
+only the current request writes. A concurrent insertion after an absent-grant
+snapshot is now skipped, whereas the previous selected-target DELETE could catch
+a same-target insertion. Replacement before deletion, reinsertion afterward and
+permission changes remain possible; concurrent removal causes conservative
+conflict. An exact receipt proves that statement, not final grant absence.
+Successful grant followed by visibility failure may retain public access plus a
+grant; successful deletion followed by failure may leave an organization-only
+share without a grant. No response/error proves rollback. A future atomic design
+must address row locking, all participating writers and owner revocation under
+RLS without recursive policies. No transaction or migration is added here.
+
+Authored UNRUN fixtures exercise real target/membership/service owners and PATCH
+source with modeled database results, saved-selection sentinels, auth receipts,
+policy/cache/permissions and effect boundaries. They cover captured B/saved A,
+explicit/headerless inputs, Personal/missing/mismatched membership, owner/token
+binding, actual A deletion/audit, exact/zero/mismatched/multiple receipts,
+no observed grant, retained permissions/external-policy refusals, unique-conflict
+non-relocation and separate-write failure. Settings fixtures call the real delete
+helper through mocked route infrastructure and assert truthful 404/200 receipts
+without visibility changes, including mixed-case UUID input with a canonical
+receipt. End-to-end authenticated selector admission, PostgreSQL/RLS,
+concurrency and real audit failure behavior are not established by these fixtures.
+No product checks, live SQL/provider work, push or deployment; prior 0394/0395
+remain UNAPPLIED. Runtime acceptance and broader audience-transition repair remain
+open. Source review and backup integrity are not release readiness.
+
+### Shared-session grant and visibility transaction continuation
+
+Source-reviewed continuation `74658ddcc2d4e9e331a3dbaf986131cd991adaab` groups the current PATCH's
+grant/deletion and visibility write in one existing scoped database transaction.
+Previously these operations committed separately: a later visibility failure
+could leave a new grant while the link stayed public, or remove the grant while
+the row stayed organization-only. This is partial execution of the requested
+transition, not proof that public visibility plus a grant is globally invalid.
+
+updateSharedSessionAudience is the canonical transaction owner. It uses the
+callback's tx for existing grant/delete and visibility primitives, and throws
+inside the callback on missing or unconfirmed receipts. It returns updated fields
+and the actual revoked organization only after the outer transaction resolves.
+The route's owner snapshot, explicit-selector/conversation checks, captured
+non-null membership and content.share/external-sharing gates remain beforehand.
+Audit remains an independent postcommit operation. No privileged fallback,
+rebinding, nested transaction or automatic retry is introduced.
+
+Grant receipts must be one row matching organization, session, actor and owner
+before summary mapping. Visibility input now requires the resolved session ID;
+UPDATE binds that ID as well as token and owner, avoiding a replacement same-token
+row. Exactly one raw receipt must match ID, token, owner and requested visibility
+before visibility normalization. Zero rows return null to the orchestration,
+which throws inside the transaction. Token, expiry and response shape remain
+unchanged. Existing A -> organization B still conflicts rather than relocating.
+The organization-console unshare consumer remains a separate delete-only action.
+
+The real Neon/Postgres adapters retain one client and await COMMIT after callback
+success, attempting rollback on rejection. Tracing preserves delegation and the
+claimed-user adapter binds the existing role/subject/org within the same
+transaction. These are source findings, not live transaction/RLS acceptance.
+A later callback/statement error no longer leaves an independently committed
+first write from this request. COMMIT acknowledgement loss can still mean both
+writes committed despite a rejected request; rollback attempts do not prove
+absence. There is no automatic compensation or retry. Audit persistence is
+separate and best-effort, and postcommit response failures cannot roll back data.
+
+This is failure-atomic grouping, not serialized audience switching. Scope and
+policy reads remain outside; the no-grant snapshot skip, replacement/reinsertion,
+membership/policy changes, default identity mapping and old-grant RLS refusal
+remain. No explicit owner-row lock or policy expansion is added. Grant-before-session
+write order now retains locks until commit and can contend with parent deletion
+and cascading grant deletion; deadlock/timeout aborts propagate. Older deployed
+writers still perform separate commits. The new path does not repair their
+partial effects or establish a global audience invariant.
+
+Authored UNRUN service and route fixtures use real source with mocked adapters
+and explicit transaction models. Coverage includes both successful branches,
+no observed grant, malformed/missing grant/delete/visibility receipts, exact
+session identity, first/second operation errors, modeled callback rollback,
+pending commit ordering, rejected/uncertain commit, no retries and postcommit
+audit failure. Models are assertions about caller behavior, not actual
+PostgreSQL durability, locking, deadlocks or concurrency. Existing target/gate
+cases remain and two exhaustive module mocks include the new canonical export.
+No product checks or guard execution occurred; prior 0394/0395 remain UNAPPLIED.
+No new migration, live SQL/provider action, push or deployment.
+
+At this server-transaction checkpoint a separate source-qualified client issue
+remained: the web use-share-conversation hook sent headerless lookup/audience
+requests and retained
+member count without workspace identity. A real Personal conversation can remain
+loaded in one tab while another selects A before the dialog lookup and B before
+confirmation. The lookup can describe A while PATCH captures B; existing null
+conversation scope checks allow B's authorized grant. Ordinary same-tab workspace
+switching reloads and conversation navigation is keyed, so those are not the
+demonstrated paths. The client continuation below binds this hook's lookup, confirmation, cache and
+async mutations to admitted session/workspace lifetime and a pinned explicit
+selector, including Personal. Server transaction grouping
+does not solve that user-intent race; no runtime incident is claimed.
+
+### Web share confirmation retains admitted workspace and view
+
+Source-reviewed continuation `36081001d8f696c5bd5afb7a216b3ff0bc903efe` corrects the previously qualified
+web-client path: a retained Personal chat could describe workspace A after lookup,
+then a headerless confirmation could grant B after another tab changed selection.
+The current hook captures the admitted account/workspace, explicit organization or
+Personal selector, conversation and open-dialog lifetime. GET, POST, PUT, DELETE
+and every audience PATCH reuse canonical request authority with the captured
+native-session bearer and credentials omitted. These route/auth/CSRF owners
+accept that bearer path by source inspection; public token-page GET is not used.
+
+A scope descriptor captures the owner epoch and scope key. Each layout-effect
+setup creates a distinct view activation; cleanup permanently retires it and
+its requests. StrictMode setup/cleanup/setup cannot revive an old callback.
+Owner/session retirement, conversation change, dismissal and close/reopen
+invalidate retained callbacks, lookup/cache/error state and pending confirmations.
+The dialog displays a confirmation only for its current activation and checks
+that captured activation again before the retained mutation. Deferred success
+toasts, clipboard feedback and revoke refocus are similarly guarded. An already
+dispatched clipboard write or server mutation cannot be undone by retirement.
+
+Writes freeze their payload before CSRF/token waits, retain the explicit selector
+through those waits, and recheck authority before dispatch and after response
+bodies. Functional state updaters recheck the owning view; busy/cleanup state is
+request-tagged so an old finalizer cannot clear a newer request. Each link in an
+audience loop checks the same authority. Timeout abort retires the request while
+leaving the view retryable, and timeout errors remain visible for the current
+view. Dismissal is not server rollback; multi-link changes remain sequential and
+can partially complete before a later refusal, retirement or failure.
+
+Admission loading is distinct from unavailable/uncertain admission, which shows
+finite retry/reload guidance and disables sharing. This is not a new deadline for
+workspace admission or ordinary list lookup. Ordinary lookup failure retains the
+existing create fallback after admission. Temporary-chat and transcript-readiness
+guards remain. Personal is explicitly Personal, not a fallback to saved selection;
+the server's existing non-null membership requirement can still refuse changing
+a Personal share's audience. No server authorization, shared confirmation
+primitive, grant transaction, policy, migration or other client is changed here.
+
+Authored hook/dialog fixtures are UNRUN. They use real workspace admission,
+QueryClient, request authority and confirmation source with mocked session, CSRF,
+network and notification boundaries. Cases cover pinned selectors/bearer,
+saved-selection changes, owner/session/conversation/close retirement, deferred
+CSRF/token/response/body work, stale cache/error/busy state, multi-link stopping,
+StrictMode activation, timeout retry, temporary/transcript refusal and frozen
+payloads. Seventeen page fixtures add truthful closed-hook fields without
+removing their assertions. The selector matrix mocks successful replies even for Personal organization PATCH;
+it asserts outgoing identity, not a backend grant or Personal denial. These
+source-reviewed assertions do not establish
+React/browser behavior, cross-tab delivery, end-to-end auth/CSRF, SQL/RLS or
+concurrency. No product tests, lint, typechecks, builds, app execution, live
+provider/database/migration actions, push or deployment. Prior 0394/0395 remain
+UNAPPLIED. Wider consumers, server snapshot/policy races, old writers and runtime
+acceptance remain open; this is not release readiness.
+
+### Shared-link inventory completeness continuation
+
+Source-reviewed continuation `d9bf60f52b3ff692f44e2f58d3819f8656e71a41` narrows a distinct deterministic
+truncation problem. The list returned the newest 200 raw rows, then the hook
+removed expired rows and treated a successful response as the complete inventory.
+For a matching organization-owned conversation with valid membership and
+content.share permission, an older live 30-day public link can be hidden behind
+199 newer expired one-day links and one newest live link. Changing that visible
+link to organization-only can succeed while the omitted older public URL remains
+readable. No workspace switch, concurrency, partial PATCH failure or observed
+incident is needed; creation rate limits do not bound a conversation's lifetime
+link count. More than 200 live links can also truncate, so filtering expired rows
+alone is insufficient.
+
+The canonical response now carries complete, defaulting to false when an older
+server omits it. Invalid types still fail parsing. The list queries at most 201
+raw rows, returns at most 200, and determines completeness before expiry
+filtering. Owner/conversation predicates and expired-row metadata remain.
+Completeness describes this listing statement, not a concurrency lease, current
+authorization guarantee or permanent absence of other links.
+
+The chat hook keeps completeness with its view/conversation-owned inventory and
+exposes incomplete state independently of a displayed live share. Create retains
+uncertainty rather than treating a new link as enumeration. Update and audience
+callbacks refuse incomplete inventory before mutation, as do their controls.
+An authoritative current inventory reference is updated synchronously before
+state publication; queued state updates must still match its exact identity and
+current view. Retained update/audience callbacks require that same complete
+inventory identity, so a formerly complete closure cannot bypass a later known
+incomplete state after revoke/failed refresh. The dialog qualifies per-link
+audience descriptions, suppresses incomplete all-link counts, warns that
+unlisted links may remain accessible, and offers confirmed conversation-wide
+revocation even when no live link is displayed. Existing create fallback remains
+with a warning that creating does not close old links.
+
+Revoke retains captured authority, valid stored-conversation guards and the
+existing deadline. A valid DELETE receipt acknowledges that statement; it clears
+listed revoked links into an unknown inventory, then rereads under the same
+authority/selector. Failed, malformed or timed-out reread does not restore stale
+links, turn the acknowledged deletion into a failure, claim rollback or retry
+DELETE. It keeps an incomplete inventory and explicit refresh guidance.
+Only a complete successful reread can support the ordinary empty state.
+Bulk DELETE removes live rows only: expired-row saturation may keep later lists
+incomplete even after successful revocation. Concurrent new links remain possible.
+
+Settings retains the same parsed completeness metadata instead of discarding it.
+Its per-token open/copy/revoke actions remain available; removing displayed rows
+preserves the flag. An incomplete empty list says no links are shown, not that no
+shared links exist. This introduces no account-wide bulk action.
+
+New clients with old servers conservatively disable complete-inventory mutations;
+old clients ignore the additive field and retain the defect. Backend-first rollout
+alone is not full correction. Current client confirmation lifetime, server
+transaction/receipt checks, sequential multi-link partial effects, snapshots,
+policy races, old writers and identity/RLS limitations remain as documented.
+No new schema migration or server mutation semantics.
+
+Authored contract, route, hook, dialog and settings fixtures remain UNRUN. They
+cover raw row boundaries, expired overflow, omitted/invalid metadata, bounded
+output, incomplete zero-live recovery, direct callback refusals, retained POST
+uncertainty, acknowledged DELETE versus refresh failures, stale views, settings
+metadata and per-token removal. Existing normal fixtures explicitly identify
+complete lists; seventeen closed page mocks declare inactive inventory state.
+Source review and mocked assertions do not establish browser/React, auth/CSRF,
+SQL/RLS, timing, concurrency or end-to-end acceptance. No product tests, lint,
+typechecks, builds, app execution, live service/database/migration actions, push or
+deployment. Prior 0394/0395 remain UNAPPLIED; release readiness remains unverified.
+
+### Settings conversation-link session lifetime continuation
+
+Source-reviewed continuation `6bcf2de7b3dad763a70177b97d75e9c14867bf04` binds the settings conversation-link
+subsection to its initiating native session. The settings/provider chain does not
+key this surviving view by account/session; previously local inventory, notices
+and revoke confirmation could remain across an observed identity transition, and
+late reads or writes could settle into that view. Retained Copy/Open actions
+could still use the previous account's share URLs. This is stale own-account
+client data and action lifetime, not unauthorized server reads or cross-account
+deletion: token DELETE already matches authenticated owner and token.
+
+The list intentionally spans the account, so same-account workspace selection
+alone is not the qualified defect and no workspace admission requirement is
+added. Ordinary settings close or section replacement unmounts the subsection;
+identity changes while it remains mounted are the distinct source-qualified path.
+Actual browser/SDK transition delivery is not runtime-verified.
+
+The two share service helpers now require canonical RequestAuthority instead of
+ambient fetch. GET remains account-wide; DELETE retains its encoded token path.
+Captured native-session Bearer and omitted cookies come from canonical transport.
+Currentness is checked before and after CSRF, token/fetch and success/error body
+boundaries, including rejected or malformed bodies. A successful DELETE must
+parse the canonical success:true receipt. Neither helper retries a mutation.
+
+The subsection keeps a stable captured session descriptor and creates a fresh
+activation on each layout-effect setup, including StrictMode replay. Cleanup
+permanently retires that activation, not a reusable session descriptor. Observed
+session retirement aborts its operation and invalidates its view and confirmation.
+Render and event admission require the current activation and exact latest view;
+row actions also require exact inventory membership. Queued state publication
+rechecks activation and latest-view identity, rather than reviving old state.
+
+List, clipboard and revoke operations are serialized per activation. A request
+can settle or clear busy state only while it still owns the operation; an old
+finalizer cannot clear replacement-session work. Revoke confirmation captures
+the exact row/inventory, advances once from confirming to writing, and cannot be
+replayed after cancellation, replacement or retirement. Retry rereads inventory
+and does not repeat DELETE. Captured authority guards later CSRF/token dispatch.
+
+Open is now a guarded button opening a new tab with noopener/noreferrer, rather
+than an anchor whose retained href could bypass a click guard through auxiliary
+or context-menu navigation. This intentionally changes ordinary link-specific
+middle-click/context-menu behavior; Copy remains an explicit action. Clipboard
+dispatch and later feedback are guarded separately. Already dispatched external
+effects cannot be undone.
+
+A dispatched DELETE without a confirmed receipt reports that revocation could
+not be confirmed and asks the user to reload. Pre-dispatch failures retain
+sanitized start guidance. The old row is not proof it remains live; no automatic
+DELETE retry or rollback claim is introduced. No new network deadline is added.
+
+That continuation corrected only conversation links. PublishedArtifactsSection
+was outside that boundary and is addressed by the later continuation below; other
+settings consumers are not certified by either correction. Already
+copied/opened URLs or dispatched server actions cannot be recalled by retiring
+the view. Server owner checks, account-wide list semantics and v35 completeness
+remain; there is no new privilege, workspace binding, migration or server writer.
+
+Authored service and component fixtures are UNRUN. Service fixtures invoke real
+service and request authority over mocked session/CSRF/network boundaries.
+The new identity suite uses the real subsection, service, transport and dialog,
+with mocked identity observations, clipboard/window and the out-of-scope artifact
+sibling. Broad section fixtures remain wiring coverage. Assertions cover captured
+Bearer/account-wide scope, completeness, encoded tokens, session retirement at
+CSRF/token/fetch/body boundaries, receipts, unknown outcomes/read-only Retry,
+copy/open admission, confirmation retirement/clearing, serialized operations and
+stale finalizers. Mounted-before-notification events exercise currentness; detached DOM
+clicks alone do not prove a retained React callback was invoked. The StrictMode
+fixture asserts replay operability, not every first-activation stale callback.
+They are source-reviewed models, not browser/React/auth/CSRF/SQL acceptance or
+proof that uncooperative I/O settles. No product tests, lint, typechecks, builds,
+app execution, live provider/database/migration actions, push or deployment.
+Prior 0394/0395 remain UNAPPLIED. Wider identity consumers and runtime acceptance
+remain open.
+
+### Settings published-artifact session lifetime continuation
+
+Source-reviewed continuation `2d91eb8857b34a3c4fe303e59487924d8eec03c6` binds the separately mounted
+PublishedArtifactsSection to its initiating native session. Its previous inventory,
+history, notices and unpublish confirmation could survive observed identity changes;
+old reads/writes could settle, and retained Copy/Open or history actions could use
+the previous session's rows. A service waiting for CSRF could dispatch afterward.
+This is retired client data/intent, not a demonstrated cross-owner bypass: list is
+account-wide, and token deletion/history/restore already enforce authenticated owner.
+Same-account replacement sessions qualify; workspace switching alone does not.
+Ordinary close/section replacement unmounts the manager. Actual browser/SDK delivery
+and live occurrence remain unverified.
+
+The manager supplies canonical RequestAuthority to four existing site helpers:
+listPublishedSites, listPublishedArtifactVersions, republishArtifactVersion and
+unpublishArtifact. Their optional trailing parameter preserves actual legacy Sites
+callers and legacy bodyless success behavior; those callers are not migrated or
+certified here. This manager always passes authority. Guarded requests use captured
+native-session Bearer and omitted cookies, rechecking around CSRF, credential,
+fetch and success/error JSON boundaries. Rejected or malformed body settlement
+also reasserts currentness. No workspace selector or privilege expansion is added.
+
+Guarded DELETE requires success:true and the exact token. Guarded restore requires
+the exact token and a positive safe integer version; it does not validate the
+entire POST receipt or require the returned version to equal the selected history
+version. The server may append a version or reuse an identical newest snapshot.
+Existing server transactions, policy gates and ownership predicates are unchanged.
+
+A stable session descriptor owns a fresh activation on every layout-effect setup.
+Cleanup and observed retirement permanently invalidate that activation, request,
+view and unpublish intent without poisoning a reusable descriptor. Render, queued
+state publication and row events require exact current/latest-view identity.
+History belongs to its exact inventory/row and version entries; retained callbacks
+cannot act against replacement inventory or history. List/history/clipboard/writes
+serialize under an operation identity, and old finalizers cannot release new work.
+
+Unpublish uses the shared useConfirmAction primitive with an exact intent child;
+synchronous confirming-to-writing consumption prevents repeated confirmation.
+Cancel consumes the intent, and retirement removes the dialog. Its consequence now
+discloses deletion of visitor data, supported by the existing
+published_artifact_storage foreign-key cascade in 0325. History/viewer association
+cascades already exist; no migration was added or applied. Restore remains an
+explicit single-click action for a recoverable historical snapshot, guarded by
+current history membership and synchronous operation ownership.
+
+Open is a guarded new-tab button with noopener/noreferrer instead of a retained
+href. This changes ordinary link-specific middle-click/context-menu behavior.
+Copy dispatch and later notice/error settlement are separately guarded. Neither
+retirement nor abort recalls clipboard/navigation or already-dispatched writes.
+
+A dispatched write without a matching acknowledgement clears inventory/history to
+unknown, removes mutation admission and asks for a read-only reload. Retry performs
+GET, never automatic DELETE/POST replay. Pre-dispatch failures retain sanitized
+start guidance. Acknowledged restore retires its write request before a separate
+inventory GET; failed refresh retains the success notice alongside the list error,
+not a false restore failure or rollback claim. History closes and may be reopened.
+No new network deadline, cross-tab ordering or inventory completeness guarantee.
+
+Authored component and service fixtures are UNRUN. They exercise real manager,
+service, RequestAuthority and confirmation primitive with mocked identity/CSRF,
+transport, clipboard/window boundaries. Coverage includes same-account replacement,
+other account/unavailable identity, mounted pre-notification actions, deferred
+credentials/CSRF/transport/body success/error, cancellation, one-shot writes,
+strict minimum receipts, deduplicated restoration, uncertain writes/read-only Retry,
+acknowledged write versus failed refresh, stale finalizers, StrictMode operability
+and unmount. Existing support-article source assertions are adapted to the guarded
+call without weakening their claim. Detached DOM clicks do not establish retained
+React callback invocation; these are source-reviewed models, not browser/React,
+native auth/CSRF, SQL/RLS or end-to-end acceptance. Wider Sites callers and capped
+publication inventory remain outside this correction. No product tests, lint,
+typechecks, builds, app execution, live provider/database/migration actions,
+push or deployment. Prior 0394/0395 remain UNAPPLIED.
+
+## WEB-PUBLICATION-QUOTA-ADMISSION-01
+
+Severity: Medium. Bounded canonical admission correction source-reviewed in
+`cd014f06accf93bc09145cc5eb314409add7c5ef`, 2026-11-07. Legacy publication detection, mixed-writer rollout and
+database acceptance remain open. Bounded management enumeration is source-reviewed
+in the continuation below.
+
+Source evidence: preparePublishArtifactRecord previously counted other owner
+publications before UPSERT without an owner-wide lock. With 199 rows, two
+transactions publishing distinct artifact IDs can each observe 199 and commit
+a new row under ordinary READ COMMITTED isolation, leaving 201. Token and
+(user_id, artifact_id) uniqueness do not conflict for those distinct inserts;
+distinct publication/history rows do not serialize owner quota admission.
+The existing share-create rate gate permits multiple requests and does not
+exclude this interleaving.
+
+Neon/Postgres adapters use ordinary BEGIN and transaction-local role/tenant
+binding. The claimed-user adapter and tracing wrapper preserve that transaction.
+No live database, role or session default was inspected. This is a qualified
+source path under the stated isolation, not an executed reproduction or observed
+incident. Different-account data access is not the defect.
+
+At admission correction cd014f06ac, the list helper returned only the newest 200
+publications without pagination or completeness metadata. Settings consumed that
+list; SiteDetail also loaded it and found a token locally, so direct navigation
+was not then a full recovery path. An older public URL may remain available while absent from that
+inventory, subject to normal audience/account gates. This is not permanent loss:
+owner-scoped DELETE by known token remains, and deleting a visible publication
+then reloading can reveal the omitted row. Existing over-cap accounts remain
+possible after the admission correction. The later bounded enumeration correction
+below addresses current management views, not all legacy detection consumers.
+
+The correction keeps input/conversation validation and canonical Publish's
+existing transaction. Admission requires exactly one isolation receipt equal to
+read committed; it does not attempt to change isolation after tenant-binding
+SELECT has potentially established a snapshot. Other isolation modes are refused
+for this path, not declared intrinsically unsafe. This intentional compatibility
+narrowing must be validated against deployment configuration.
+
+The same transaction acquires an owner-keyed pg_advisory_xact_lock using a
+namespaced hash and requires the lock statement's exact boolean receipt.
+Existing-row lookup and quota count are separate later statements, allowing fresh
+READ COMMITTED snapshots after waiting. A matching owner/artifact row is selected
+FOR UPDATE, with cardinality and identity checks, before exemption from quota.
+That row stays pinned through UPSERT/history/commit; a concurrent delete cannot
+turn the observed exemption into a fresh uncontrolled insertion. If absent,
+a strict owner count must be below MAX_PUBLISHED_PER_USER before UPSERT.
+
+Missing/multiple aggregate receipts and invalid, negative, fractional or unsafe
+counts fail closed rather than becoming zero. Ownership evidence remains required;
+known ownership refusal and genuine quota refusal retain their existing error
+categories. Publish RETURNING must contain exactly one nonempty row ID and the
+requested owner/artifact, and match the pinned ID for an existing-row exemption,
+before history writes. Restore RETURNING additionally
+must match the exact publication ID/token; zero restored rows retain the existing
+not-found outcome. These are identity receipts, not validation of every returned
+column.
+
+Restore performs UPDATE-only against exact publication/owner/artifact/token and
+cannot grow the publication inventory. It therefore retains preparation,
+conversation ownership, publication policy and history transaction but no longer
+applies new-publication quota admission. Pinned existing Publish updates and
+UPDATE-only Restore can operate above the cap without increasing its count.
+
+Lock order is owner admission lock, existing publication row, UPSERT/publication
+row, history and pointer, then commit. Restore/delete/audience paths do not acquire
+the new owner lock after locking a publication. Hash collisions can add unrelated
+waiting; the scheme is not a database-enforced row-count invariant. Old deployed
+writers, external SQL and future nonparticipating inserts remain outside its
+guarantee. Drain older publishing writers before relying on universal prevention.
+No automatic transaction retry is added. Existing policy snapshots, SQL/RLS
+behavior, deadlock/timeout errors, commit acknowledgement uncertainty and
+cross-process deployment behavior remain unverified; abort is not rollback proof.
+
+Authored/adapted service, transaction, connector and publish-route fixtures remain
+UNRUN. A deterministic admission fixture simulates owner queues, staged writes and
+rollback and asserts ordering, last-slot competition, same-artifact history,
+different-owner progress, strict receipts and over-cap existing updates.
+It does not prove PostgreSQL locks, snapshots, isolation, RLS or adapter behavior.
+Existing history/pointer and route assertions are preserved while obsolete
+restore-quota expectations are updated. No product tests, lint, typechecks,
+builds, app execution, live provider/database/migration actions, push or deployment.
+No new migration; prior 0394/0395 remain UNAPPLIED. Remaining work includes actual
+database/role/isolation acceptance and legacy-client discovery, plus runtime
+acceptance of the bounded enumeration continuation below.
+
+### Bounded publication management enumeration
+
+Continuation `5d9b3c09ae2c5b472b8199e16a04de5f13da3769` on 2026-11-07 adds a separate owner-page reader and
+owner-token detail reader. The legacy array helper remains first-page-only.
+The collection route preserves artifacts/workspace and adds pageInfo.nextCursor;
+the shared schema accepts missing pageInfo for older clients, but current
+management readers require it. Missing metadata is unknown, never exhausted.
+The strict page reader bounds returned items and rejects a repeated next cursor.
+
+Pages use created_at DESC, id DESC and an exclusive tuple predicate after the
+authenticated owner predicate. A limit+1 lookahead yields at most the existing
+200-item page cap; continuation comes from the last returned row, not lookahead.
+SQL emits canonical UTC timestamp text with six fractional digits for the cursor;
+the display mapper's JavaScript Date conversion is never used for positioning.
+A versioned, bounded, canonical base64url JSON cursor validates its exact shape,
+UTF-8 encoding, calendar date, UUID and owner before query dispatch. It carries
+values rather than a reference to a boundary row, so deleting that row does not
+break continuation. Cursor owner is a consistency check, not authorization:
+the authenticated user still supplies SQL owner scope and the scoped adapter
+retains RLS. Well-formed own-owner cursor edits can skip the caller's own rows.
+
+The token GET selects owner-scoped summary metadata, not artifact content or the
+anonymous public reader. Missing and nonowned tokens have the same not-found
+outcome. Collection/detail success responses are private/no-store. Workspace
+audience metadata retains the existing entitlement/count behavior in a shared
+helper; this slice does not change workspace sharing policy.
+
+Settings and Sites replace one visible page on Older and expose Back to newest.
+They do not automatically fetch every page or retain a page-history stack.
+Continuation failure retains the displayed page and retries its exact boundary.
+Refresh returns to newest. Page controls remain reachable when filtering matches
+nothing or an older page becomes empty. Sites explicitly labels title filtering
+and updated-date sorting as page-local. Detail uses the exact token read rather
+than searching the first inventory page.
+
+Settings keeps its captured session, activation, request, inventory/history and
+one-shot confirmation guards. Navigation clears history and cannot start during
+a conflicting operation/confirmation. Non-page errors retire a prior failed-page
+retry boundary; uncertain mutations still remove actionable inventory and use
+GET-only recovery. An acknowledged restore clears inventory for its separate
+refresh, retaining acknowledgement separately from refresh failure.
+Sites retains lease/request checks and interrupts local pending reads when a
+matching mutation settles. Partial pages and detail results never replace the
+entire publication store through hydrate: each observed row is recorded with
+currentness checks after synchronous subscriber notification. This preserves
+other known keys but does not establish a global snapshot or bounded store size.
+
+This is live traversal, not point-in-time completeness. Normal edits retain
+creation order; deletions disappear and newer inserts require refresh.
+Backdated inserts, delayed commits or external ordering-field changes can enter
+or escape a traversal. At this management-enumeration slice, deployed clients, web/mobile exact-artifact
+detection, initial badge-store reads and VS Code's first-list consumers remained
+capped. The exact-lookup continuation below corrects the interactive web/mobile
+readers. Background/list consumers remain incomplete; missing inventory is not
+proof that an artifact was never published. No global reconciliation is added.
+
+The existing (user_id, created_at DESC) index supports the ordering prefix;
+PostgreSQL can sort ties for correctness. Response size is bounded, but database
+work and large tie-group/planner performance are unverified. No new migration.
+Cursor contents are unsigned positioning data, not a tamper-proof snapshot.
+Core quota admission, history/audience transactions and the old-writer rollout
+requirements above remain unchanged.
+
+Service/route/shared-contract/client/component fixtures are authored or adapted
+UNRUN. They cover cursor precision and malformed input, owner predicates and
+direct lookup, page retries/navigation, metadata rejection, existing session/
+lease retirement and local mutation interactions. Mock adapters and component
+fixtures do not establish PostgreSQL ordering/RLS, actual browser/auth behavior
+or deployment acceptance. No product tests, lint, typechecks, builds, installs,
+app/module execution, live providers/databases, migration application, fetch,
+push or deployment. Prior 0394/0395 remain UNAPPLIED.
+
+### Exact artifact lookup and scoped mobile absence
+
+Continuation `6db8da19ad1299068331072563549e36cfc541aa` on 2026-11-07 replaces the web and mobile
+interactive artifact-publication list/find reads with an exact owner/artifact-ID
+lookup. Before this change, a publication beyond the first 200 rows looked absent
+to those helpers. This concerns historical over-cap accounts or nonparticipating
+writers, not ordinary sequential creation under current quota admission.
+Existing republish preserves the token and audience; false absence hid management
+controls and could prompt unnecessary content republish, but did not itself turn
+a private publication public.
+
+The separate static GET /api/artifacts/publish/lookup accepts one artifactId query
+value. Shared validation trims, preserves case/arbitrary text, and retains the
+existing 1–200 JavaScript-character publication-ID bound. The path helper encodes
+the query; missing, repeated, empty and oversized IDs are refused. The bound is
+shared by current publish validation rather than duplicated as another limit.
+A parameterized user_id/artifact_id query returns at most one metadata summary
+under getUserScopedDb. Existing migration 0095's unique owner/artifact key supports
+the lookup; no migration is added and no artifact content body is returned. Authentication/RLS,
+share-view rate limiting, CORS/error wrappers and workspace audience description
+are reused. Successful responses are private/no-store.
+
+The response requires artifact and workspace fields. Only a successfully parsed
+artifact:null means no owner publication at that read. HTTP errors, old-server
+404s, malformed/legacy envelopes and mismatched returned artifact IDs remain
+errors, with no capped-list fallback. Shared audience parsing retains its
+restrictive unknown-to-invited behavior instead of the web lookup's former public
+fallback. Exact lookup is not a snapshot of later changes or permanent absence.
+
+The web helper checks the normalized response identity and returns existing
+publication details independent of collection position. Production ArtifactsPanel
+and its lease/view/revision/cancellation guards are unchanged; it still silently
+handles lookup errors and adopts only positive details. This is not complete
+cache reconciliation or improved error presentation.
+
+The mobile helper captures and asserts the full cloud account epoch, passes it
+to the API boundary, validates the exact response, and does not replace or write
+the whole audience map. ArtifactFullScreen ties lookup results to selected
+artifact, visible view, account epoch and app mode, with a read generation and
+synchronous currentness checks. Its Private text now requires validated absence
+for that exact current view. Pending/failed lookup or a globally initialized
+badge map is not proof of privacy. Account round trips, changed selections,
+closing/reopening and superseded responses retire the old lookup's result.
+
+Publication and audience/unpublish controls share synchronous per-view mutation
+ownership. Admission follows actual confirmation; an overlapping admission is
+refused, and result/error/finalizer callbacks must still own the exact token.
+Admission invalidates older reads. A retired operation cannot clear a replacement
+operation's local state. Optional control callbacks preserve legacy invocation
+arity. A resolved unpublish clears local controls and triggers exact readback;
+the old bodyless mutation-success convention alone does not authorize Private.
+The unpublish prompt now names existing visitor-data deletion as well as loss of
+link access. No deletion SQL or cascade changes.
+
+Existing explicit local-to-cloud publishing confirmation is preserved, not
+silently disabled by the lookup correction. At that slice, the mobile publish
+helper returned only a URL and its UI could guess public until an exact reread.
+The later outcome continuation below replaces that mobile receipt/fallback;
+the lookup correction itself did not certify mutation receipts. Already-dispatched effects cannot be recalled;
+error/abort is not proof of rollback. The per-view token does not serialize
+other components, tabs, devices or server writers, and no deadline is added.
+
+At this exact-lookup slice, web background initialization, mobile bulk audience
+refresh and Sites management, and VS Code's first-list decoration remained
+incomplete. The following continuation bounds mobile badge refresh ownership
+and partial-page merging without universal discovery, per-row fan-out or fetch-all.
+The earlier web management pagination and token detail corrections remain intact.
+
+Seventeen source/fixture files were independently source-reviewed. Contract,
+service, route, web client/panel and mobile helper/component fixtures are authored
+or adapted UNRUN. They inspect exact selectors, schema failures, owner predicates,
+lifecycle/epoch transitions, mutation ownership, readback and preserved callbacks,
+not live database/RLS, browser/native ordering, auth SDK or deployment acceptance.
+No product tests, lint, typechecks, builds, installs, app/module execution,
+live providers/databases, migration application, fetch, push or deployment.
+Prior 0394/0395 remain UNAPPLIED; earlier rollout and lost-history limits remain.
+
+### Mobile badge refresh keeps account and request ownership
+
+Continuation `4d4e94a85801da0c1d4047f80674629f5a9cee22`, 2026-11-07, narrows the mobile bulk-refresh boundary.
+The former service captured an account snapshot but admitted results by owner ID
+alone and replaced the entire badge map from a capped first page. Overlapping
+reads could settle out of order, and a later local audience record or unpublish
+forget could be replaced by an older response. A partial list also erased known
+off-page publications. Existing API account-generation checks already cover
+ordinary teardown paths; this is not evidence that every account change leaked
+data. Badge absence hides the chip, not a Private assertion.
+
+The refresh now supplies the full captured account epoch and a request-owned
+AbortSignal to the existing API. Only the latest active refresh may parse and
+commit a successful response. Account notifications clear badge state and notify
+store readers while retiring pending work; mode changes retire pending reads
+without erasing explicit local records. Cloud-to-Local-to-Cloud and account
+round trips cannot revive the old request identity. Local refresh is a no-op,
+and unauthenticated Cloud refresh refuses before API dispatch.
+
+A request-local Map overlays audience records and null-forgets made after that
+read starts. Retirement happens before abort, and overlay entries clear on
+supersession, account/mode invalidation or settlement. An old finalizer cannot
+release a newer active request. Retired transport failures still reject to the
+existing warning callers; successful retired responses do not parse or commit.
+Aborting is not proof that already-dispatched network work stopped.
+
+The canonical list schema is parsed before cache mutation. Oversized pages use
+the shared 200-item bound and duplicate artifact IDs are refused. An explicit
+validated first-page nextCursor:null permits replacement and omission clearing,
+subject to the newer-write overlay. Missing legacy pageInfo or a non-null cursor
+means partial knowledge and merges observed rows into retained positives. No
+extra pages, per-card requests, mutation or permission expansion is added.
+The schema's existing unknown/missing visibility-to-invited fallback remains.
+The page-size check follows parsing; it does not bound transport or parser memory.
+
+Badge writes use null-prototype dictionaries, and the reader checks own keys.
+Valid text IDs such as constructor, toString and __proto__ no longer become
+inherited positives or disappear through the prototype setter. This is a
+dictionary boundary correction, not a change to artifact-ID normalization.
+
+Incomplete merging deliberately may retain a remotely deleted or changed
+off-page badge. Ordinary exact lookup leaves this map untouched. Explicit
+record/forget, a complete first-page refresh or account invalidation changes
+retained knowledge. The later outcome continuation adds a validated initial
+publish badge and current positive reconciliation, replacing the mobile URL-only
+receipt/fallback without establishing global cache freshness.
+The existing Local publish confirmation source flow is untouched; actual Local
+publishing through the generic egress guard is not established by this slice.
+The overlay grows with distinct writes during its current request, and retained
+positive metadata can accumulate during an account session. No global cache-size
+cap, cross-device freshness, snapshot completeness, new deadline or durable
+reconciliation is claimed.
+
+Two source/fixture files are independently reviewed. Authored UNRUN fixtures
+cover page authority, failures/retry, newer local changes, overlap success and
+failure, full epoch/mode round trips, store notifications and prototype-key
+reads/writes. They use real activate/invalidate transitions without clearing
+the singleton account listeners through the test-only reset helper. Native
+subscription/AbortSignal/auth transport timing and all product behavior remain
+unverified. No product tests, lint, typechecks, builds, installs, app/module
+execution, live services/databases, migration application, fetch, push or deploy.
+
+### Mobile publication distinguishes acknowledgement from uncertainty
+
+Continuation `58ab25804df4d7d49a7c1cf284908768d7153638`, 2026-11-07, narrows mobile Publish outcome reporting.
+The POST route could commit publication/history and then fail its awaited
+workspace summary. Transport loss or malformed JSON could also hide the reply.
+Mobile accepted only a nonempty URL, discarded returned visibility and guessed
+public when no previous local audience existed. New live artifacts actually
+default to invited, other new artifacts to public, and republish preserves the
+existing audience. A clipboard/haptic exception could additionally enter the
+publication failure catch after a successful receipt. These are qualified source
+paths, not observed incidents, disclosure or live rollback evidence.
+
+A shared publish-response schema now requires artifact identity, token, an
+absolute HTTP(S) URL whose path matches that token without credentials/query/hash,
+strict audience, positive safe integer version and existing response metadata.
+The URL origin is not pinned, timestamp/kind are nonempty text, and this is not
+content-hash or every-field semantic verification. The backend adds artifactId
+and computes descriptive workspace metadata after preparation but before the
+publication transaction. Summary failure now refuses before that write; it can
+reduce availability when descriptive lookup fails. Audience policy, transaction
+body, quota admission and permissions are unchanged. Later commit acknowledgement,
+serialization or transport failure can still leave an unknown outcome.
+
+Mobile validates its normalized intended ID, captures the full account epoch,
+passes that epoch to POST, and validates the matching receipt before adoption.
+The existing per-request caller-owned 401-recovery option returns a refusal
+without replay or first-401 ambient sign-out. Credentials still come from ambient
+getAuthHeaders; they are not pinned. No global API or Local egress exception is
+introduced. New mobile code requires the additive backend receipt field; a
+legacy/malformed response is unknown, not silently accepted as a public link.
+
+A current owned receipt sets the actual audience/workspace, records the initial
+badge, and remains confirmed independently of clipboard/haptic failure. Copy has
+separate feedback; no success-path GET is needed to guess the audience. Link
+copy/share labels are neutral rather than calling invited/organization links
+public. The existing explicit Local publication confirmation flow remains;
+generic managed-cloud Local egress still blocks it, and this slice does not
+enable or verify that flow.
+
+Ambiguous outcomes use uncertainty wording instead of Nothing was shared.
+Only HTTP 400/401/403/409/429 refusals are classified separately; timeouts,
+other errors, malformed receipts and unknown outcomes remain conservative.
+The current view retains a warning that a displayed publication may be an older
+version. One automatic GET and an explicit Check publication status action only
+observe current owner metadata. Positive readback can display and record that
+current audience but does not confirm the attempted content/version. Null/error
+readback never certifies Private while the uncertainty marker remains and does
+not erase a badge as proof of rollback. There is no automatic POST replay.
+
+Manual recovery rejects duplicate reads and active publication mutations using
+synchronous refs. Existing view/account/sequence ownership retires stale results;
+old finalizers cannot release newer reads. A pending same-view read can delay
+another read until settlement, even if a mutation intervenes. Later audience or
+unpublish success does not resolve the earlier publish-content uncertainty.
+The marker is view-local and clears on close/replacement or a new valid receipt,
+not a durable reconciliation record. Already-dispatched work, future competing
+writes, cross-controller ordering and later remounts remain outside this claim.
+
+Eight source/fixture files are independently reviewed. Shared receipt, route
+sequencing, service authority/error classification and component recovery fixtures
+are authored/adapted UNRUN, including stale views, manual read admission and
+clipboard failures. Web publisher adoption was still open at this mobile slice;
+the following continuation bounds its receipt acceptance. PATCH/DELETE receipt/
+replay behavior, durable unknown-write recovery and live server/native/auth/
+clipboard timing remain open. No product tests, lint, typechecks, builds, installs, app/module execution,
+live services/databases, migrations, fetch, push or deployment. The existing
+recovery-chain, unapplied-migration and lost-history limitations remain.
+
+### Web Publish requires a matching acknowledgement
+
+Continuation 34fe86ebd59bd993f88c5fbb362431d9f05223ee, 2026-11-07, adopts the shared Publish receipt at
+the web adapter boundary. Previously a nonempty share URL was enough to invoke
+the callback and return cloud success, and a missing or unknown audience became
+public. The chat panel then recorded that metadata in its lease-owned Sites
+cache; the Library caller could copy the same unvalidated URL. This is a
+qualified malformed-response path, not evidence of a server policy bypass,
+observed disclosure or a wrong-account incident.
+
+The adapter validates and normalizes the intended artifact ID before dispatch,
+parses the canonical identity/token/link/audience/version receipt and requires
+an exact response-ID match before calling onPublished or returning success.
+Actual audience and workspace are preserved without permissive coercion or a
+public fallback. Invalid JSON, malformed or legacy receipts and wrong identity
+are unconfirmed, not proof that no write happened. The backend must supply the
+additive artifactId field introduced in the preceding mobile outcome slice.
+
+Existing chat publication lease, view, revision and pending-operation guards,
+the shared origin trust-boundary gate and CSRF/cookie transport remain unchanged.
+Library sharing and audience-change confirmations are retained; chat Publish's
+direct invocation is not changed or certified as a confirmed flow. Library
+inherits the adapter validation but
+its separate lifecycle is not certified here. No new retries, additional writes, recovery GETs, UI controls or permission
+expansion are introduced. Non-2xx/transport error handling and existing automatic
+lookup behavior remain unchanged; the new uncertainty message is limited to
+invalid successful receipts. URL origin is not
+pinned; nonempty kind/timestamp and other receipt shape checks do not prove exact
+content/version bytes, and server policy may redact submitted content.
+
+Three source/fixture files are independently reviewed. Receipt rejection,
+confirmed actual metadata and existing interrupted/stale panel fixtures are
+authored/adapted UNRUN. The following continuation bounds web chat PATCH
+acknowledgement fallback. Durable unknown writes, ambient credential binding,
+cross-controller ordering and live browser/auth/database acceptance remain open. No product tests, lint,
+typechecks, builds, installs, app/module execution, live services/databases,
+migration application, fetch, push or deployment. The prior recovery-chain,
+unapplied-migration and lost-history limits still apply.
+
+### Web audience changes require matching acknowledgement
+
+Continuation ecae371624f140b8cec5ef7059e542280f10f28e, 2026-11-07, narrows the web chat audience PATCH
+boundary. Previously any successful JSON response could reuse the original URL
+and requested audience when fields were missing or unknown. The response token
+was ignored. Normal resolution then updated the Sites cache and panel metadata,
+and Preview announced the requested restriction or public access. This is a
+qualified false-acknowledgement path, not proof of an actual policy bypass or
+observed disclosure.
+
+A new strict shared update receipt extends the existing update-response schema.
+It requires a 24-character token and an absolute HTTP(S) share link with that
+token's exact parsed path, no credentials, query or fragment. This is parsed
+URL shape, not raw-string canonicality. The link predicate is
+factored from Publish without changing Publish's validation semantics. Existing
+web/mobile Sites consumers kept their original schema at that boundary.
+Web and mobile Sites adoption follow in their later continuations below.
+
+The web chat client parses the strict receipt and requires its token and audience
+to equal the requested values before resolving. It uses the returned validated
+URL and audience without either fallback. Invalid JSON, incomplete legacy
+receipts, mismatched target or mismatched audience report that access may have
+changed but acknowledgement is unconfirmed. This does not prove rollback, current
+state after later writes or successful revocation of access. URL origin is not
+pinned, and other metadata is shape-checked rather than semantically certified.
+
+Panel cache adoption and Preview success already follow successful resolution,
+so those product components need no change. Their existing confirmation,
+lease/view/revision/pending-operation and stale-result guards remain. The
+client's non-2xx/transport handling, automatic lookup, CSRF/cookie credentials and
+token extraction for other consumers remain unchanged. No new retries, extra
+writes, recovery GETs, controls, durable uncertainty or permission expansion is
+introduced. After an uncertain PATCH, existing displayed/cached metadata may
+still reflect earlier knowledge; it is not certified as current by this slice.
+
+Six source/fixture files are independently reviewed. Shared receipt, direct
+client and real-client Preview rejection fixtures are authored UNRUN; panel
+success and stale/interrupted PATCH fixtures now carry complete receipts.
+Mobile chat audience acknowledgement is bounded in the following continuation;
+legacy Sites target binding, DELETE receipts, durable reconciliation and live
+browser/auth/database behavior remain open. No product tests, lint, typechecks, builds, installs, app/module execution,
+live services/databases, migration application, fetch, push or deployment.
+Recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile audience changes require an owned matching acknowledgement
+
+Continuation d509e2422173dd21d016bed3e0c5d0607b54f4bc, 2026-11-07, narrows mobile chat audience PATCH.
+The previous helper reused an absent URL and mapped unknown or missing returned
+visibility to invited, without checking receipt token or requested audience.
+Controls could pass that fabricated result to FullScreen and its badge record.
+This is a qualified malformed-acknowledgement path, not an observed disclosure
+or evidence that ordinary account transitions universally leaked data.
+
+The helper captures and asserts the full cloud account epoch, supplies it to
+PATCH with the existing caller-owned 401-recovery option, and checks it again
+after the response. This avoids automatic 401 replay and first-401 ambient
+sign-out for this request. Existing API account-generation checks, credential
+retrieval and Local egress remain; credentials are still ambient rather than
+pinned. No global transport behavior changes.
+
+The canonical strict update receipt must parse and match both requested token
+and audience before resolution. Its parsed HTTP(S) link must match that token,
+without credentials, query or fragment. No missing-URL or invited fallback is
+used for PATCH. Invalid or mismatched receipts reject into existing uncertainty
+feedback rather than callback/state/badge success. URL origin, raw-string
+canonicality and full metadata semantics remain outside the receipt guarantee;
+a valid acknowledgement is not proof of remote state after a later write.
+
+Production controls and FullScreen remain unchanged. Existing confirmation,
+view/account/mutation ownership and callback arity govern adoption and stale
+result/error/finalizer handling. Actual controls offer public and organization;
+invited remains a display state, not a new option. Strict mutation receipts are
+separate from the unchanged lookup/list unknown-audience-to-invited fallback.
+The existing Publish uncertainty marker is not extended to PATCH: earlier
+displayed/cache knowledge may remain after an unknown audience change, with no
+new GET recovery action or durable reconciliation record.
+
+Four source/fixture files are independently reviewed. Direct service authority
+and receipt cases, real-parser controls rejection, and FullScreen stale/current
+PATCH fixtures are authored/adapted UNRUN. DELETE and legacy Sites behavior,
+cross-controller ordering, delayed writes and live native/auth/database behavior
+remain open. No product tests, lint, typechecks, builds, installs, app/module
+execution, live services/databases, migration application, fetch, push or deploy.
+The existing recovery-chain, unapplied-migration and lost-history limits remain.
+
+### Mobile Sites takedown names visitor-data loss
+
+Continuation 31df4da54c8c7b7405c54ea24e5c6f44e8f7676d, 2026-11-07, corrects the mobile Sites confirmation.
+Ordinary Unpublish previously said the link stopped working and the artifact
+stayed in chat, without naming the irreversible visitor-data loss. The separate
+Delete option mentioned erasure, suggesting a difference the backend does not
+provide. This is a source-qualified disclosure gap, not an observed incident.
+
+Both options now explicitly name loss of all shared and personal data visitors
+saved in this site, loss of link access for everyone, and non-recoverability.
+The original artifact remaining in chat is distinguished from published data.
+Native confirmation titles, destructive action labels, cancellation/dismissal
+and service dispatch are unchanged.
+
+The source chain is mobile unpublishSite to owner-scoped publication DELETE,
+then unpublishArtifactRecord's parent-row deletion. Migration 0325 declares
+the publication-storage foreign key ON DELETE CASCADE for shared and personal
+rows. No database schema or deletion behavior changes; deployed schema and
+actual deletion were not inspected or exercised. This does not certify backup
+retention, app snapshots or other copies outside publication storage.
+
+Two source/fixture files are independently reviewed. Real-screen native alert
+fixtures name the exact consequence, hold dispatch until confirmation, preserve
+both existing request sequences, and reject cancellation/dismissal; all UNRUN.
+At that slice, an unrelated Restore fixture still expected the obsolete root
+POST. It is aligned in the detail-lifetime continuation below. That continuation
+also bounds mobile detail ownership and the clear-to-delete retirement gap;
+mobile Sites DELETE acknowledgement is bounded in the later receipt continuation,
+while non-atomic partial failure remains unresolved. This
+copy correction adds no atomicity, recovery, receipt or lifecycle guarantee.
+No product checks, live service/database or migration actions, push or deploy.
+Existing fixed-base recovery dependencies and lost-history limits remain.
+
+### Web Sites updates require matching publication receipts
+
+Continuation cc90dc57b4e60a86b39ac25fb672b7835ea6daeb, 2026-11-07, adopts the existing strict update
+receipt in web Sites. The prior legacy parser accepted a different returned
+token or audience; useSiteActions then recorded the returned link/audience under
+the intended artifact ID and passed it to onUpdated under the captured token.
+Existing lease checks protect lifecycle, not receipt identity. This is a
+qualified false-acknowledgement path, not an observed disclosure.
+
+updatePublishedSite snapshots the top-level change and serialized request body
+before awaited CSRF preparation. Returned token must match the requested token,
+and returned audience must match any requested visibility. The canonical
+receipt also checks the 24-character token and matching parsed HTTP(S) link
+without credentials, query or fragment. Invalid JSON, incomplete legacy or
+mismatched successful responses reject before cache/callback success, explicitly
+warning that the update may have taken effect and should be checked.
+
+Returned title remains server-authoritative: handleUpdate applies moderation
+and outbound secret policy, which may transform the submitted title. Exact
+title equality would reject a legitimate redaction. Rename-only responses do
+not assert an unchanged audience; combined updates still bind requested
+visibility. No shared schema or backend behavior changes.
+
+Existing caller lease/view checks, UI actions, ambient cookie/CSRF transport,
+non-2xx errors and unrelated DELETE/Restore helpers remain unchanged. No new
+retry, recovery GET, account authority or durable uncertainty marker is added.
+Earlier cache/display knowledge may persist after failure. URL origin, raw URL
+canonicality, full metadata semantics and lasting remote state are not proved.
+
+Three source/fixture files are independently reviewed. Direct real-parser
+and real-helper/hook/store fixtures are authored UNRUN; existing component
+suites mock the service and are not transport/parser acceptance. Mobile Sites
+kept legacy update receipts at this slice; adoption is recorded below.
+Web Sites Restore receipt adoption remained
+open at this slice and is corrected below; ordinary DELETE acknowledgement is
+corrected in the later Unpublish continuation below. Broader lifetime and
+reconciliation remain open. No product checks, live
+services/databases, migration application, push or deployment. Existing recovery
+dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Sites detail retires obsolete ownership
+
+Continuation 7b4f393c4698993dffe5304523e2f1d67c312d07, 2026-11-07, bounds the mobile SiteDetailScreen
+lifetime. Previously secondary history/data failures, including cancellation,
+could become fallback values and let an older load repaint state/title. The
+effect omitted owner identity, and ready-to-ready account changes could retain
+the prior view. Pending confirmations and mutation continuations also captured
+older state. These are source-qualified paths, not observed disclosure.
+
+A site-local lifetime captures the full cloud account epoch and token, checks
+live authentication readiness/owner and Cloud mode, and retires permanently on
+relevant account/auth/mode transitions. A new keyed detail body owns each view
+and explicit refresh, isolating read state, title, busy/error and action refs.
+Synchronous render checks hide retired content; subscribed transitions retire
+even when the final mode or owner value returns to its prior value. Initial
+subscription setup rechecks ownership to close the render-to-listener gap.
+
+Reads assert ownership after the list and secondary reads. Optional secondary
+failures retain the existing fallback only while current; retired work cannot
+commit success or errors. Site actions and pending destructive confirmations
+check their captured lifetime. Immediate confirmation and mutation admission
+refs reject duplicate work; cancellation/dismissal releases confirmation
+admission. Retired completion cannot refresh, navigate or clear the new body's
+busy/error state. Existing visitor-data deletion disclosure is unchanged.
+
+Optional SiteRequestAuthority supplies existing API epoch/signal and
+caller-owned 401 handling for this detail screen. Admission is checked before
+each dispatch, including the unpublish step after shared-data clearing. Other
+callers keep their existing defaults. This does not pin credentials or rewrite
+global auth: existing API generation/epoch checks remain, and view acceptance
+is still owned by the caller. Mocked option assertions do not establish actual
+network retry, sign-out or abort behavior.
+
+Five source/fixture files are independently reviewed; fixtures are
+authored/adapted UNRUN. The prior obsolete Restore screen fixture is aligned to
+the existing canonical endpoint and the new authority arguments, without a
+production Restore redesign. No new strict receipt, inventory pagination,
+durable unknown-write recovery or cross-controller ordering is added. An
+already-dispatched write/native action cannot be recalled; shared clearing
+may have completed before a retired second delete is suppressed. No atomicity,
+rollback, backend cancellation or universal account-isolation claim. Shared
+useCopyAction still owns its post-dispatch haptic/error feedback; not every
+platform/helper completion is lifetime-cancelled.
+
+At this detail slice, the separate Sites list lifetime remained open; its later
+correction is recorded below, as are mobile Sites receipts and exact detail
+lookup. Bounded list paging is recorded below; live React/native/auth/database
+behavior remains open. No product checks, live services/migrations, push or deployment. Recovery dependencies,
+unapplied migrations and lost-history limitations remain.
+
+### Mobile Sites list owns account and refresh lifetimes
+
+Continuation c0f9843c1ff881faf0026d4cda7cf69156c4884f, 2026-11-07, bounds the separate mobile SitesScreen.
+The prior list retained displayed metadata across ready-to-ready account
+transitions because its load effect watched readiness only. Same-account reads
+could settle out of order, and older refresh finalizers could clear a newer
+spinner. Retained row actions lacked current-owner checks. These are
+source-qualified UI paths, not observed cross-account disclosure; existing API
+generation guards and backend owner enforcement already existed.
+
+A list-local lifetime captures the full cloud account epoch and live auth
+readiness/owner and mode. Synchronous subscriptions retire changes permanently,
+including batched round trips; a post-subscription environment comparison
+reconciles the initial render-to-listener gap. Rendered sites, errors and
+refresh status are stamped with that lifetime and hidden when it is no longer
+current. Unavailable/misaligned ownership does not dispatch.
+
+Each initial load, retry or refresh supersedes and aborts the previous read.
+Success/error state updaters recheck both view and latest-read identity. The
+unguarded refresh finalizer is removed; only a current read ends its refresh
+state. Current-view failed refreshes may retain prior rows, as before. Retained
+refresh/retry callbacks intentionally remain usable within the same live view,
+but cannot dispatch after retirement.
+
+Row navigation checks its view, latest read and displayed state identity. A
+handler captured before a refresh, or while a refresh retains older rows,
+cannot later navigate after that read replaces the displayed rows. Already
+dispatched navigation cannot be recalled.
+
+The screen supplies the existing SiteRequestAuthority to listPublishedSites:
+full epoch, request abort signal and caller-owned 401 options. Service/API,
+detail helper, backend and ambient defaults for other callers are unchanged.
+This is request admission and caller acceptance, not pinned credentials or a
+global auth rewrite. API generation checks and owner enforcement remain.
+
+Three source/fixture files are independently reviewed. Fifteen expanded cases
+cover current actions, ready-to-ready owner changes, epoch/auth/mode round trips,
+overlapping resolve/reject outcomes, retained rows/retries, unmount,
+subscription-gap reconciliation, StrictMode and Local-to-Cloud readiness.
+
+Fixture cases are authored UNRUN. No product checks, migration application,
+live services, push or deployment. This slice does not complete paginated
+inventory or strict mobile mutation receipts; later Sites receipt adoption is
+recorded below. Durable unknown-write recovery and global ordering remain open.
+Credentials remain ambient and mocked request options
+do not prove actual network/auth/abort behavior. Existing recovery dependencies,
+unapplied migrations and lost-history limits remain.
+
+### Ordinary web Sites Restore requires acknowledgement
+
+Continuation c58f3433da6222e8224731ac5843152eb1a7e8b6, 2026-11-07, closes the ordinary web Sites
+republishArtifactVersion path that previously resolved on every successful HTTP
+status, including an empty 204. VersionsSetting then emitted its existing live
+toast and invoked onRestored without response evidence. The settings manager
+already supplied RequestAuthority and required a minimum receipt; that bounded
+path is preserved.
+
+The helper captures the requested token before asynchronous CSRF preparation,
+uses that token for the existing bodyless token/version POST, and requires
+the existing minimum receipt for both ordinary and authority consumers:
+matching token and a positive safe integer version. The return remains void.
+Empty, malformed or unreadable successful bodies and mismatched receipts reject
+with explicit unconfirmed/may-have-taken-effect guidance before ordinary Sites
+can toast success or call onRestored. Authority assertions remain before and
+after asynchronous boundaries, including after body-read failure normalization.
+
+The backend route returns its persisted publication token and live version
+only after the restore/history transaction. recordPublishedVersion can reuse
+the newest identical snapshot rather than append a new number; the client
+therefore imposes neither equality with the selected history number nor a
+version-increase rule. The parser does not certify every field in the response.
+
+Three source/fixture files are independently reviewed. Direct ordinary and
+authority cases cover minimum success, malformed/empty/unreadable replies and
+mutable target changes during CSRF/body reads. Existing authority fixtures
+remain unchanged. New real SiteSettingsTab fixtures use the actual helper/parser
+to reject success toast and onRestored on invalid acknowledgement, and preserve
+matching-receipt success for equal or different positive versions. Existing
+SiteDetail suites mock the service and are not parser acceptance.
+
+This is acknowledgement validation, not proof of restored content bytes,
+requested history identity in the response, final remote state after another
+writer, or rollback after uncertainty. Existing UI success wording, ordinary
+ambient cookie/CSRF transport, optional authority behavior, non-2xx/transport
+handling and unrelated helpers remain. No extra GET, retry, Publish fallback,
+durable unknown-write record or backend/shared-contract change.
+
+The ordinary version UI's lifetime/admission gaps remained open at this slice
+and are bounded below. Ordinary DELETE acknowledgement is corrected in the later continuation below;
+mobile Sites and chat Unpublish receipt adoption are recorded below, while
+broader recovery limits remain. Existing parent SiteDetail lease/token and reload guards are not removed
+or treated as missing. Fixtures are UNRUN; no product checks, live services,
+migration application, push or deployment. Recovery prerequisites, unapplied
+migrations and lost-history limitations remain.
+
+### Web version-history and Restore own their view
+
+Continuation f257608a82221c4483e2ca59ab9f8c6e3722ad55, 2026-11-07, bounds VersionsSetting's child reads,
+retained controls and mutation continuations. Previously a superseded history
+read could update child state, repeated same-turn Restore calls lacked immediate
+admission, and a retired Restore could emit its success toast even though the
+parent SiteDetail correctly refused the obsolete reload. Parent token/lease
+keying and read/cache protections already existed and remain.
+
+The child is keyed by token, artifact ID, version, audience, updatedAt and
+publication lease epoch. Each layout setup creates a fresh activation and
+operation slot, including StrictMode replay. Cleanup permanently retires its
+operation. Reads and current-state updates check activation/lease ownership;
+retained callbacks cannot dispatch for a replaced target or retired lease.
+
+Restore admission checks the captured history-array identity and selected
+non-live version against the current lane, with an immediate operation slot
+before asynchronous CSRF. Accepted history is not mutated or refreshed within
+that lane. The request-local fetch wrapper checks ownership immediately before
+the existing cookie fetch and adds its abort signal. History/Restore helper
+types accept their required assertCurrent/fetch subset; existing full
+RequestAuthority callers remain compatible and keep their behavior.
+
+Success, error and busy completion check current ownership. Acknowledged
+Restore consumes the lane's history before toast/onRestored, preventing reuse
+of an old row while the parent detail refresh is pending or failed. A status
+message asks for refreshed site details before another restore; new keyed
+metadata supplies a fresh history. Unconfirmed failures retain the existing
+error path and do not establish rollback or safe repetition.
+
+Five source/fixture files are independently reviewed. New real-service fixtures
+cover repeated/retained callbacks, target changes during CSRF, old history
+resolve/reject through token round trips, late unmounted success, lease
+replacement failure, StrictMode and consumed acknowledgement. Existing real
+Restore consumer and SiteDetail fixture arguments are adapted for the optional
+authority/signal. Fixtures remain authored UNRUN, not browser/type/runtime
+acceptance.
+
+This is publication-lease/view/request ownership, not native session or
+credential pinning. Ordinary cookie transport remains; no global auth rewrite,
+backend cancellation, cross-controller ordering or rollback claim. Existing
+Restore minimum receipt and history deduplication semantics are preserved.
+
+Restore republishes through retained history; this slice establishes no new
+irreversible consequence and adds no confirmation requirement. Ordinary DELETE
+acknowledgement and mobile Sites receipts are corrected below. Capped discovery,
+other mobile receipt paths and durable recovery remain separate. Fixtures are UNRUN; no product checks, live services,
+migration application, push or deployment. Existing recovery dependencies,
+unapplied migrations and lost-history limitations remain.
+
+### Web Unpublish requires a matching acknowledgement
+
+Continuation 895b30991c302ceb1bb81e086d4bc0ba6a9c3540, 2026-11-07, closes an ordinary web Unpublish
+false-success path. The cookie-based helper previously accepted every HTTP 2xx
+without inspecting its body; useSiteActions could then forget the publication,
+announce that its link no longer worked and remove the site from its parent.
+The optional full-authority path already required an acknowledgement.
+
+The helper now requires the existing minimum receipt, success true and the
+exact requested token, for both paths. Empty, unreadable, malformed or mismatched
+successful replies produce explicit uncertainty rather than deletion success.
+The token parameter is already an immutable primitive. Existing cookie/CSRF
+transport, authority assertions, non-2xx handling and backend owner checks remain.
+The backend returns this receipt only after its owner-scoped delete reports a row.
+
+Focused helper and real helper/action/store fixtures are authored UNRUN.
+Invalid acknowledgement cannot trigger the existing successful cache removal,
+toast or parent callback; a valid matching receipt retains the normal path.
+This is minimum acknowledgement validation, not proof of final remote state,
+rollback, cascade execution or recovery. Prior cache may remain after uncertainty.
+No automatic replay, recovery GET, durable marker or new lifecycle guard.
+Mocked CSRF fixtures assert one mutation after preparation, not zero total GETs;
+real CSRF preparation can still fetch its token.
+Mobile Sites receipts are bounded in the following continuation; other mobile
+receipt paths and broader request ownership remain separate.
+
+No product checks, live services, migration application, push or deployment.
+Existing recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Sites mutations require matching receipts
+
+Continuation 6f642fbc06d3a8f2f0f7067cfb4f6dc91dde3a97, 2026-11-07, bounds decoded successful mutation
+acknowledgements in mobile Sites. Previously Unpublish discarded the DELETE
+body and could navigate away without confirming the target. Restore also
+discarded its reply, and PATCH accepted a legacy shape without binding token
+or requested audience. PATCH/Restore already refreshed details rather than
+directly adopting returned permissions; that safeguard remains.
+
+Delete and Restore minimum receipt schemas now live in cloud-contracts and
+replace the equivalent private web definitions without a web behavior change.
+Minimum token shape remains nonempty text, as in the previous web definitions.
+Delete requires success true and the requested token; Restore requires the
+requested token and a positive safe live version. The returned version need
+not equal the selected historical number because history can append or reuse
+an identical snapshot. PATCH uses the existing strict receipt, exact token and
+requested audience, with an immutable top-level requested-change snapshot.
+Server policy can transform titles, so title equality is not required.
+
+Mobile helpers reject invalid decoded acknowledgements with a feature-owned
+uncertainty error. SiteDetail presents only that narrow safe message directly;
+arbitrary errors still pass through its existing formatter. Invalid receipts
+cannot trigger successful detail navigation or refresh. Existing lifetime,
+account epoch, abort signal, caller-owned 401 policy, ambient calling forms and
+clear-before-delete sequencing remain.
+
+Focused contract, direct helper and actual detail/service fixtures are UNRUN.
+This is receipt validation, not content equality, final remote-state,
+rollback, cascade or cancellation proof. The transport still owns JSON decoding
+and non-2xx errors; those failures are not newly classified as receipt errors.
+Shared-data clearing can succeed before a later uncertain unpublish and is
+not made atomic. No automatic retry, recovery GET or durable unknown marker.
+Capped mobile discovery and broader ordering remain separate.
+
+No product checks, live services, migration application, push or deployment.
+Existing recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Site detail reads the requested owner token
+
+Continuation c5dffe6d5ae115961385d277ebf68485412d86fe, 2026-11-07, removes the mobile detail screen's
+dependency on the first publication list page. Previously it searched one
+capped response and rendered absence when a requested token was outside that
+page. A recently edited older publication does not necessarily enter the
+server's creation-ordered first page. Current admission caps ordinary owners
+at 200 publications; affected legacy or nonparticipating over-cap inventories
+are source-qualified, not observed production incidents.
+
+The mobile service now reads the existing exact owner-scoped detail endpoint,
+parses its canonical envelope and requires the returned token to match.
+Only a real API HTTP 404 means absence. Other transport, authentication,
+rate-limit and schema failures propagate without list or public-link fallback.
+Authority is asserted before dispatch and after settlement, including before
+interpreting a 404, preserving captured epoch, signal and caller-owned 401.
+
+SiteDetail derives its site and workspace presence from that response.
+A present workspace with zero members is still present. Existing secondary
+history/data reads and their currentness-protected fallbacks remain, as do
+keyed detail lifetime and mutation receipt protections. No shared schema,
+backend, authorization policy or lifetime redesign.
+
+Direct service and actual-service detail fixtures are authored UNRUN, covering
+exact reads, target/envelope rejection, error classes, workspace presence,
+retired requests and existing identity/navigation lifetimes. This is not
+pagination or complete inventory discovery. The separate mobile list paging
+correction is recorded below; snapshot completeness is not established. No quota lift, public access, automatic retry or recovery write.
+No product checks, live services, migration application, push or deployment.
+Existing recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Sites inventory traverses bounded pages
+
+Continuation 627e47991324028769fe1ff20aeada49b62eb202, 2026-11-07, replaces the mobile list's one-response
+inventory assumption with explicit one-page navigation. The former header
+claimed everything was shown although pageInfo was discarded; errors and
+legacy empty replies could also display account-wide emptiness. Over-cap
+legacy inventory remains conditional and unobserved because current creation
+and page caps are both 200.
+
+The sole production list caller now uses a page service with the canonical
+row/cursor bounds, encoded opaque cursor, continuation metadata requirement,
+immediate self-repeat rejection and unique page-local token keys. It preserves
+backend creation order rather than sorting each page by latest edit. Missing
+first-page metadata remains unknown, not terminal; no automatic traversal or
+accumulated inventory is introduced.
+
+Native Older and Back to first page replace the current page. Accepted rows,
+workspace metadata, requested cursor and completeness stay together. Pending
+and failed cursors are separate; failure retains the accepted page and Retry
+uses the exact failed target, including null. Count and empty-state copy describe
+only the accepted page and distinguish known terminal, unknown and failed reads.
+
+Existing lifetime and beginRead ownership remain. Rows and cursor-bound
+Older/Back/Retry callbacks require the current displayed state and latest read;
+new reads synchronously retire old callbacks. Pending replacement disables
+rows/page controls and labels retained data. After failure only newly rendered
+controls reauthorize retained rows. Refresh deliberately remains view-owned
+and always requests the first page, so it can supersede a same-view navigation.
+
+Four source/fixture files are independently reviewed. Fixtures cover service
+bounds/legacy replies, exact failed-page retries, empty states, ordering,
+retained callbacks, identity round trips and recovery; all are UNRUN.
+The existing StrictMode fixture wraps the screen but does not independently
+assert that effect replay occurred.
+The lifetime hook, exact detail and mutation receipt behavior remain unchanged.
+
+Bounds apply after JSON decoding; they are not a transport memory limit.
+Immediate self-repeat is not arbitrary cursor-cycle detection. Cursor pages
+are live positions, not a snapshot, global updated-time order or total count.
+No quota lift, backend/schema change, migration application, product checks,
+live service, push or deployment. Existing recovery prerequisites, unapplied
+migrations and lost-history limits remain.
+
+### Mobile chat Unpublish owns acknowledgement and 401 recovery
+
+Continuation c48e5aab9d14b6ba77f4340a8ca321b6ba186cec, 2026-11-07, aligns mobile chat Unpublish with
+the neighbouring audience operation's captured account boundary. The prior
+helper discarded its successful JSON value and used ambient 401 recovery,
+whose source path could refresh/reissue the DELETE or tear down Cloud state
+after failed recovery. No duplicate successful deletion or live auth incident
+was established.
+
+The helper captures and checks the full account epoch, passes the existing
+caller-owned 401 option and rechecks after transport completion. It parses the
+canonical minimum Delete receipt and requires the requested token before
+resolving. Credentials remain ambient and existing API generation checks remain;
+this is a per-request choice, not a global auth rewrite.
+
+Existing controls handle invalid acknowledgements as uncertain and return before
+onUnpublished, preserving the current link and badge. FullScreen production
+code, confirmation, lifecycle/sequence guards, Publish uncertainty marker and
+existing exact readback remain unchanged. That readback already gates Private;
+the former unchecked receipt alone did not demonstrate a false-Private path.
+
+Three source/fixture files are independently reviewed. Direct and actual
+controls/FullScreen fixtures cover matching and invalid receipts, callback and
+cache preservation, epoch retirement, error propagation and acknowledged-delete
+readback. Existing successful DELETE fixtures now use the actual receipt shape.
+All are UNRUN. Mocked transport asserts options and service error propagation,
+not real HTTP retry, refresh or sign-out behavior. Existing special 403,
+passkey and account-unavailable transport handling is unchanged; these mocks
+do not prove that every real 403 preserves the account.
+
+No extra GET, automatic replay, alternate mutation or recovery mechanism is
+added. The subsequent bounded reconciliation continuation below addresses
+positive post-delete readback without overwriting accepted local cache changes. No lasting
+remote-state, deletion/cascade or rollback guarantee. No product checks, live
+services, migration application, push or deployment. Existing recovery
+prerequisites, unapplied migrations and lost-history limits remain.
+
+### Post-Unpublish audience readback preserves newer local cache writes
+
+Continuation 92838c006b41a8ac93194c94c697341cecb4d71d, 2026-11-07, addresses a missing publication
+indicator after acknowledged mobile chat Unpublish. The existing exact
+readback can observe a concurrent republication and restore its link, while
+the audience badge remains absent because ordinary lookups do not update
+that cache. Badge absence is not an explicit Private assertion.
+
+The post-Unpublish read now has a named purpose and a service-owned one-shot
+positive reconciliation guard. It captures the account epoch, cache identity
+and active bulk-refresh identity after the null record, and requires an initially
+absent target badge. Existing component
+view/read-sequence checks still gate the result. Comparison and recording are
+synchronous; the existing record path preserves its pending-refresh overlay.
+
+Any intervening accepted cache write or reset prevents that older read from
+overwriting newer local knowledge. A different active bulk refresh also blocks
+adoption; an older refresh already pending at capture can retain accepted
+reconciliation through its overlay. Ordinary opening and uncertain-Publish
+lookup semantics remain separate.
+
+This is deliberately conservative: unrelated cache changes may suppress a
+useful positive result and leave a missing badge. It does not prove server
+freshness, content, availability or cross-view consistency. Active refresh
+identity is not a permanent history of every attempted refresh: a newly attempted
+refresh that fails and returns the pointer to null need not invalidate the guard. No persistent
+per-artifact revision map, extra GET, replay or durable recovery marker.
+
+Focused fixtures are authored UNRUN. Existing Private readback and Publish
+uncertainty-marker semantics remain; failed/malformed readback stays unknown.
+No product checks, live calls, migrations, push or deployment. Existing
+recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+### Web shared-data clearing stays with its owning view
+
+Continuation 496f40e6ce5bb7d5779f632debcf7b1463b06a86, 2026-11-07, addresses a web Data-tab operation
+that could outlive its owning view. A confirmed clear awaited CSRF preparation,
+then dispatched DELETE even if navigation had already unmounted that tab.
+Later settlement could also show feedback and start another GET after retirement.
+The request still named its original token and backend ownership checks remained;
+no wrong-token deletion, cross-account bypass or observed incident is established.
+
+The Data tab keys its session by token, artifact and publication lease, then
+creates a fresh activation lane in its layout effect. Cleanup permanently
+retires the lane and its read/mutation requests. Accepted data identity and a
+one-shot ticket bind confirmation/cancellation; a retained or repeated callback
+cannot acquire a newer operation. Retry is bound to its accepted error state.
+
+Data helpers now accept narrow optional request authority, check before work,
+after CSRF preparation and around response/body settlement, and use its
+cookie-preserving fetch. Component requests also check lane, operation and
+lease identity, with abort as an additional signal rather than the sole guard.
+A retired completion cannot adopt data, show feedback or launch a refresh.
+Current mutation completion retains the existing guarded readback behavior.
+
+The existing clear response is legitimately { cleared }, including zero.
+No token or success field is invented and no backend/schema or shared
+confirmation primitive changes are made. Cookie transport remains ambient;
+local view/lease authority is not native credential binding.
+
+Five source/fixture files include real-service component coverage of CSRF
+retirement, delayed success/error/decoding, token and lease round trips, stale
+confirm/cancel/Retry callbacks, duplicate admission, zero/positive receipts
+and fresh StrictMode lanes. Two existing data-helper assertions adopt the new
+authority argument. All fixtures are UNRUN; mock transport and source inspection
+are not React/browser/CSRF, actual cancellation or deployed-data acceptance.
+
+Already-dispatched server mutations cannot be recalled; abort/currentness
+guards do not establish rollback or server cancellation. No atomicity, durable
+unknown-write record, automatic retry or cross-controller ordering claim.
+No product checks, live services, migration application, push or deployment.
+Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+### Web viewer changes keep their editor request ownership
+
+Continuation c8eca8ff9c6160a94c031db4632c45069cdbd94c, 2026-11-07, addresses a permission mutation that
+could dispatch after its initiating editor retired. The editor checked activity
+before and after the service call, but the service awaited CSRF preparation
+inside an unguarded fetch. A token switch, unmount or publication-lease
+retirement during that wait did not prevent the later add/remove request.
+
+The editor now keys its session by token and publication lease, creates a fresh
+layout-effect activation and permanently retires its owned request on cleanup.
+Accepted-result identity and operation identity gate form, remove and retry
+callbacks and duplicate admission. This is not an older-email-draft freshness
+guarantee.
+
+Viewer GET/change helpers accept optional narrow request authority. They check
+before work, after CSRF, around response/body decoding and error propagation,
+and dispatch through the authority's cookie-preserving fetch with an owned
+abort signal. Component currentness rejects retired response adoption and draft
+clearing. Existing unknown-mutation state and explicit GET recovery remain.
+
+The request still names its original token and backend publisher/CSRF checks
+remain. This is obsolete UI permission dispatch, not an observed incident or
+demonstrated wrong-token or cross-account authorization bypass. Cookies remain
+ambient; local view/lease authority is not native session credential binding.
+Already-dispatched writes may complete server-side despite client retirement.
+
+Four independently source-reviewed files include 315 lines of new real-editor
+and helper fixtures for deferred add/remove CSRF, token/unmount/lease retirement,
+synchronous lease checks, delayed bodies/errors, retained callbacks, operation
+ABA, active success and fresh StrictMode lanes. All fixtures are UNRUN; no
+browser/auth/CSRF/type or deployed permission behavior has been exercised.
+The StrictMode fixture covers stale first-response suppression, not specifically
+an already-entered StrictMode JSON decode; separate body fixtures cover decoding.
+
+The canonical server response remains { viewers }, without token/action receipt
+fields. Contract-validation work is separate. Existing explicit recovery GET
+and unknown-mutation handling remain; no automatic mutation replay, rollback,
+durable recovery or cross-controller ordering guarantee. No product checks,
+live services, migrations, push or deployment. Existing recovery prerequisites,
+unapplied migrations and lost-history limits remain.
+
+### Viewer success payloads must contain the declared list shape
+
+Continuation d0a34310183cec030b7a6d69d5428aef21b35984, 2026-11-07, addresses conditional malformed-success
+handling in the web viewer manager. Missing or non-array viewers previously
+became an empty successful list; malformed entries could reach rendering.
+An initial read could therefore show Nobody yet and enable changes, or a
+mutation reply could clear an add draft and falsely restore readiness.
+
+Canonical runtime schemas now require the declared viewers array and string
+email/invitedAt fields. Public type names now infer the same declared shape.
+Empty arrays, arbitrary strings and harmless unknown fields are accepted;
+unknown fields are stripped by the object parser;
+the request email normalizer and timestamp/quota assumptions are not reused.
+
+The web helper parses this canonical shape instead of casting and inventing an
+empty list. Existing authority/settlement checks and editor production behavior
+remain. Read rejection yields unknown/error; mutation rejection hides the list,
+preserves its draft, disables further changes and allows explicit GET Retry.
+
+Current backend routes already return { viewers: [{ email, invitedAt }] };
+no incompatible current backend reply or observed incident is established.
+The prior JSON-null and invalid-JSON paths already rejected and are not described
+as empty-list normalization.
+
+Five independently source-reviewed source/fixture files include UNRUN canonical
+contract, GET/POST/DELETE helper and real-helper editor cases. They cover valid
+and malformed payloads, existing HTTP/JSON failures, disabled mutation, draft
+preservation and GET-only recovery. No product or browser acceptance is claimed.
+
+Validation is structural only, not semantic email/date validity, duplicate-key,
+quota, complete-inventory, target/action binding or final remote-state proof.
+No native/backend or database migration changes, additional reads, automatic replay
+or new recovery mechanism. Existing request ownership and ambient cookies remain.
+No product checks, live services, migration application, push or deployment.
+Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+### Viewer additions serialize bounded quota admission
+
+Continuation aa1d382072855715a529847cce88aeca7766ee48, 2026-11-07, addresses normal concurrent admission
+that could exceed the intended 100-viewer cap. Separate count and insert calls
+allowed two distinct authorized additions to each observe 99 and insert.
+An already-present email at the cap was also rejected before the existing
+conflict/no-op behavior. These are quota/idempotency defects, not unintended
+recipients or a demonstrated cross-tenant bypass.
+
+The add path now uses one transaction callback for local ownership validation,
+exact READ COMMITTED isolation evidence, a validated namespaced publication-ID
+advisory lock, and separate subsequent existing-email/count reads. Existing
+email succeeds without inserting; new admission requires a single valid
+nonnegative safe count below the cap. Insert and returned-list reads stay on
+the transaction adapter.
+
+The shared ownership helper remains unchanged. Local malformed ownership,
+isolation, lock, existing-email or count evidence fails closed. Parameterized
+owner predicates, conflict/no-op behavior, RLS scope and route 409 mapping
+remain; no client or migration change is introduced.
+
+The bound is a protocol for participating current service writers on the same
+database, with a pinned transaction and fresh READ COMMITTED statement snapshots.
+It is not a database aggregate constraint; old/raw/future uncooperative writers
+can bypass it. Existing over-cap data is not removed. Concurrent deletions only
+reduce cardinality and are outside a full linearizable add/remove result promise.
+
+Three independently source-reviewed source/fixture files include a deterministic
+queued/staged transaction simulation and adapted route fixture. UNRUN cases
+cover last-slot distinct additions, same-email additions, duplicates at/above
+cap, distinct publication lock inputs, malformed evidence, simulated failure
+release, missing/nonowned publication and route normalization/CSRF/audit behavior.
+The simulation models the required protocol; it is not PostgreSQL evidence.
+
+No database role, RLS, advisory permission/wait, isolation, snapshot, rollback,
+durability or deployed concurrency behavior has been exercised. No transaction
+retry, migration application, client change, live service, push or deployment.
+Existing recovery prerequisites, unapplied migrations and lost-history limits remain.

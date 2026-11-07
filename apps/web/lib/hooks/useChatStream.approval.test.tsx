@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { collectPendingApprovals } from '@/features/chat/components/approvals/ApprovalInbox';
+import { hasPendingApproval, hasPendingMessageApproval } from '@/features/chat/lib/pending-approval';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useChatStream, __resetPendingTurnsForTests, isApprovalTurnLive } from './useChatStream';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
@@ -81,6 +82,17 @@ function assistantMessage() {
   return useChatStore.getState().messages.find((m) => m.role === 'assistant');
 }
 
+function expectApprovalStateAfterDone(pending: boolean) {
+  const state = useChatStore.getState();
+  expect(hasPendingMessageApproval(assistantMessage()!)).toBe(pending);
+  expect(hasPendingApproval(state.messages)).toBe(pending);
+  expect(assistantMessage()?.isStreaming).toBe(false);
+  expect(state.isStreaming).toBe(false);
+  expect(state.isLoading).toBe(false);
+  expect(state.streamingConversationIds).not.toContain(TEMP_CONVERSATION.id);
+  expect(state.loadingConversationIds).not.toContain(TEMP_CONVERSATION.id);
+}
+
 describe('useChatStream, tool approval → resume', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
@@ -116,6 +128,7 @@ describe('useChatStream, tool approval → resume', () => {
     expect(awaiting?.toolCallId).toBe('call_1');
     expect(awaiting?.requiresApproval).toBe(true);
     expect(awaiting?.name).toBe(TOOL);
+    expectApprovalStateAfterDone(true);
   });
 
   it('dispatches the resume request on approve and streams the continuation', async () => {
@@ -146,6 +159,7 @@ describe('useChatStream, tool approval → resume', () => {
     expect(body).not.toHaveProperty('model');
 
     expect(assistantMessage()?.content).toContain('The PR renames a function.');
+    expectApprovalStateAfterDone(false);
   });
 
   it('sends typed guidance with the resume so the run can be redirected instead of stopped', async () => {
@@ -185,6 +199,7 @@ describe('useChatStream, tool approval → resume', () => {
       });
     });
     const assistantId = assistantMessage()!.id;
+    expectApprovalStateAfterDone(true);
 
     const REAL_RESULT = '# My Project\n\nThis project does X, Y, and Z.';
 
@@ -217,6 +232,8 @@ describe('useChatStream, tool approval → resume', () => {
       await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
     });
 
+    expectApprovalStateAfterDone(true);
+
     mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
     await act(async () => {
       await result.current.resolveToolApproval(assistantId, 'call_2', 'approved');
@@ -232,6 +249,7 @@ describe('useChatStream, tool approval → resume', () => {
     expect(secondBody.run_id).toBe(RUN_ID);
     expect(secondBody.tool_approvals).toEqual([{ tool_call_id: 'call_2', decision: 'approved' }]);
     expect(secondBody).not.toHaveProperty('messages');
+    expectApprovalStateAfterDone(false);
   });
 
   it("folds the continuation into the same message: the approved call's result, then the next card", async () => {
@@ -367,6 +385,7 @@ describe('useChatStream, tool approval → resume', () => {
     expect(settledActivityStatus(spine)).toBe('awaiting-approval');
 
     expect(metadata.cloudApproval?.calls.map((call) => call.toolCallId)).toEqual(['call_2']);
+    expectApprovalStateAfterDone(true);
     expect(isApprovalTurnLive(assistantId)).toBe(true);
   });
 
@@ -611,6 +630,7 @@ describe('useChatStream, tool approval → resume', () => {
       });
     });
     const assistantId = assistantMessage()!.id;
+    expectApprovalStateAfterDone(true);
 
     mockSseStream([{ choices: [{ delta: { content: 'Understood, skipping.' } }] }]);
     await act(async () => {
@@ -625,6 +645,7 @@ describe('useChatStream, tool approval → resume', () => {
     const card = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_1');
     expect(['failed', 'completed']).toContain(card?.status);
     expect(assistantMessage()?.content).toContain('Understood, skipping.');
+    expectApprovalStateAfterDone(false);
   });
 
   it('stopGeneration aborts an in-flight tool-approval resume (Finding 4: resolveToolApproval used to keep its own private AbortController that stopGeneration never touched)', async () => {

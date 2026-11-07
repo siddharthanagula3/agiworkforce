@@ -103,17 +103,58 @@ describe('identity security notifications', () => {
     });
   });
 
-  it('names what the compromise response revoked and what is still owed', async () => {
-    await notifyAccountCompromiseContained(db, {
-      userId: 'user-1',
-      responseId: 'resp-1',
-      sessionsRevoked: 1,
-    });
+  it.each([
+    { sessionsRevoked: 0, count: '0 sessions' },
+    { sessionsRevoked: 1, count: '1 session' },
+    { sessionsRevoked: 3, count: '3 sessions' },
+  ])('records the observed $count without a containment guarantee', async ({ sessionsRevoked, count }) => {
+    for (const cleanupIncomplete of [false, true]) {
+      mocks.record.mockClear();
+      await notifyAccountCompromiseContained(db, {
+        userId: 'product-account', responseId: 'resp-1', sessionsRevoked, cleanupIncomplete,
+      });
 
-    const notice = mocks.record.mock.calls[0]![1];
-    expect(notice.message).toContain('1 other session ');
-    expect(notice.message).toContain('Set a new password');
-    expect(notice).toMatchObject({ severity: 'error', dedupeKey: 'account-compromise:resp-1' });
+      expect(mocks.record).toHaveBeenCalledExactlyOnceWith(db, {
+        userId: 'product-account',
+        category: 'security',
+        severity: 'error',
+        title: cleanupIncomplete
+          ? 'Account security response needs attention'
+          : 'Account security response',
+        message: `We signed out ${count} after a possible account compromise. ` +
+          'Review your sign-in methods and active sessions.' +
+          (cleanupIncomplete
+            ? ' We could not confirm that all cleanup steps finished. Contact support for help with unresolved access.'
+            : ''),
+        target: { kind: 'settings', id: 'security' },
+        dedupeKey: 'account-compromise:resp-1',
+      });
+      const notice = mocks.record.mock.calls[0]![1];
+      expect(`${notice.title} ${notice.message}`).not.toMatch(
+        /account was secured|other session|every session|all sessions|password|all providers|try again|retry/i,
+      );
+    }
+  });
+
+  it('leaves an unrecorded compromise notice to the existing notification transport', async () => {
+    mocks.record.mockResolvedValueOnce({ recorded: false });
+
+    await expect(notifyAccountCompromiseContained(db, {
+      userId: 'user-1', responseId: 'resp-1', sessionsRevoked: 0, cleanupIncomplete: true,
+    })).resolves.toBeUndefined();
+
+    expect(mocks.record).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates compromise notice recording failure to the caller', async () => {
+    const failure = new Error('notification recording unavailable');
+    mocks.record.mockRejectedValueOnce(failure);
+
+    await expect(notifyAccountCompromiseContained(db, {
+      userId: 'user-1', responseId: 'resp-1', sessionsRevoked: 1, cleanupIncomplete: true,
+    })).rejects.toBe(failure);
+
+    expect(mocks.record).toHaveBeenCalledTimes(1);
   });
 
   it('every event opens a settings section that exists', async () => {

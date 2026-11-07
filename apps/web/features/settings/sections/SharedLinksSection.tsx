@@ -1,10 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
 import {
   listSharedLinks,
   revokeSharedLink,
   type SharedLinkSummary,
+  type SharedLinkList,
 } from '../services/conversation-data-service';
 import { PublishedArtifactsSection } from './PublishedArtifactsSection';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
@@ -39,64 +42,165 @@ const actionButtonStyle = {
   cursor: 'pointer',
 } as const;
 
+type RevokeIntent = {
+  share: SharedLinkSummary;
+  inventory: SharedLinkList;
+  phase: 'confirming' | 'writing';
+};
+type ShareLane = {
+  session: SessionAuthority;
+  active: boolean;
+  operation: RequestAuthority | null;
+  view: ShareView | null;
+};
+type ShareView = {
+  lane: ShareLane;
+  inventory: SharedLinkList | null;
+  loading: boolean;
+  busy: boolean;
+  actionToken: string | null;
+  confirmation: RevokeIntent | null;
+  error: string | null;
+  loadFailed: boolean;
+  notice: string | null;
+};
+
 export function SharedLinksSection() {
-  const [shares, setShares] = useState<SharedLinkSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionToken, setActionToken] = useState<string | null>(null);
-  const [shareToRevoke, setShareToRevoke] = useState<SharedLinkSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    setLoadFailed(false);
+  const capture = useSessionSnapshot();
+  const sessionSlot = useRef<SessionAuthority | null>(null);
+  if (!sessionSlot.current?.isCurrent()) sessionSlot.current = capture();
+  const session = sessionSlot.current;
+  const activation = useRef<ShareLane | null>(null);
+  const [state, setState] = useState<ShareView | null>(null);
+  const current = useCallback((lane: ShareLane) => lane.active && activation.current === lane &&
+    sessionSlot.current === lane.session && lane.session.isCurrent(), []);
+  const publish = useCallback((lane: ShareLane, patch: Partial<ShareView>) => {
+    if (!current(lane)) return;
+    const next: ShareView = { lane, inventory: null, loading: false, busy: false,
+      actionToken: null, confirmation: null, error: null, loadFailed: false, notice: null,
+      ...lane.view, ...patch };
+    lane.view = next;
+    setState((previous) => current(lane) && lane.view === next ? next : previous);
+  }, [current]);
+  const load = useCallback(async (lane: ShareLane) => {
+    if (!current(lane) || lane.operation) return;
+    const request = createRequestAuthority(lane.session, () => current(lane) && lane.operation === request);
+    lane.operation = request;
+    publish(lane, { inventory: null, loading: true, busy: true, confirmation: null,
+      error: null, notice: null, loadFailed: false });
     try {
-      setShares(await listSharedLinks(signal));
+      const inventory = await listSharedLinks(request);
+      request.assertCurrent();
+      lane.operation = null;
+      publish(lane, { inventory, loading: false, busy: false });
     } catch (caught) {
-      if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      setLoadFailed(true);
-      setError(toUserMessage(caught, 'Failed to load shared links'));
+      if (request.isCurrent()) {
+        lane.operation = null;
+        publish(lane, { loading: false, busy: false, loadFailed: true,
+          error: toUserMessage(caught, 'Failed to load shared links') });
+      }
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (lane.operation === request) lane.operation = null;
+      request.retire();
     }
-  }, []);
+  }, [current, publish]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  useLayoutEffect(() => {
+    if (!session) return;
+    const lane: ShareLane = { session, active: true, operation: null, view: null };
+    activation.current = lane;
+    const retire = () => {
+      lane.active = false;
+      lane.operation?.retire();
+      lane.operation = null;
+      lane.view = null;
+      if (activation.current === lane) activation.current = null;
+    };
+    const stop = session.subscribe?.(() => {
+      if (!session.isCurrent()) {
+        retire();
+        setState((previous) => previous?.lane === lane ? null : previous);
+      }
+    });
+    if (current(lane)) void load(lane);
+    else retire();
+    return () => { stop?.(); retire(); };
+  }, [session, current, load]);
+
+  const view = state && current(state.lane) && state.lane.view === state ? state : null;
+  const { shares, complete } = view?.inventory ?? { shares: [], complete: false };
+  const loading = view?.loading ?? true;
+  const actionToken = view?.actionToken ?? null;
+  const shareToRevoke = view?.confirmation?.share ?? null;
+  const error = view?.error ?? null;
+  const loadFailed = view?.loadFailed ?? false;
+  const notice = view?.notice ?? null;
+  const viewCurrent = () => !!view && current(view.lane) && view.lane.view === view;
+  const rowCurrent = (share: SharedLinkSummary) => viewCurrent() && !view!.lane.operation &&
+    !view!.confirmation && view!.inventory?.shares.includes(share) === true;
 
   const handleCopy = async (share: SharedLinkSummary) => {
-    setError(null);
-    setNotice(null);
+    if (!rowCurrent(share)) return;
+    const lane = view!.lane;
     if (!navigator.clipboard?.writeText) {
-      setError('Clipboard access is unavailable. Open the link and copy it from the address bar.');
+      publish(lane, { notice: null,
+        error: 'Clipboard access is unavailable. Open the link and copy it from the address bar.' });
       return;
     }
+    const request = createRequestAuthority(lane.session, () => current(lane) && lane.operation === request);
+    lane.operation = request;
+    publish(lane, { error: null, notice: null, busy: true });
     try {
+      request.assertCurrent();
       await navigator.clipboard.writeText(share.shareUrl);
-      setNotice(`Copied the link for “${share.title}”.`);
+      request.assertCurrent();
+      lane.operation = null;
+      publish(lane, { busy: false, notice: `Copied the link for “${share.title}”.` });
     } catch {
-      setError('Could not copy the link. Open it and copy from the address bar.');
+      if (request.isCurrent()) {
+        lane.operation = null;
+        publish(lane, { busy: false,
+          error: 'Could not copy the link. Open it and copy from the address bar.' });
+      }
+    } finally {
+      if (lane.operation === request) lane.operation = null;
+      request.retire();
     }
   };
 
-  const handleRevoke = async (share: SharedLinkSummary) => {
-    setActionToken(share.token);
-    setError(null);
-    setNotice(null);
+  const handleRevoke = async () => {
+    if (!viewCurrent() || view!.lane.operation) return;
+    const lane = view!.lane;
+    const intent = view!.confirmation;
+    if (!intent || intent.phase !== 'confirming' || intent.inventory !== view!.inventory ||
+        !intent.inventory.shares.includes(intent.share)) return;
+    intent.phase = 'writing';
+    const { share } = intent;
+    let dispatched = false;
+    const request = createRequestAuthority(lane.session,
+      () => current(lane) && lane.operation === request,
+      () => { dispatched = true; });
+    lane.operation = request;
+    publish(lane, { actionToken: share.token, busy: true, error: null, notice: null });
     try {
-      await revokeSharedLink(share.token);
-      setShares((current) => current.filter(({ token }) => token !== share.token));
-      setNotice(`Revoked the link for “${share.title}”.`);
-      setShareToRevoke(null);
+      await revokeSharedLink(share.token, request);
+      request.assertCurrent();
+      lane.operation = null;
+      publish(lane, { inventory: { ...intent.inventory,
+        shares: intent.inventory.shares.filter(({ token }) => token !== share.token) },
+        busy: false, actionToken: null, confirmation: null,
+        notice: `Revoked the link for “${share.title}”.` });
     } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to revoke shared link'));
+      if (request.isCurrent()) {
+        lane.operation = null;
+        publish(lane, { busy: false, actionToken: null, confirmation: null,
+          error: dispatched
+            ? 'Could not confirm whether the link was revoked. Reload the list to check.'
+            : toUserMessage(caught, 'Could not start revoking the link. Please try again.') });
+      }
     } finally {
-      setActionToken(null);
+      if (lane.operation === request) lane.operation = null;
+      request.retire();
     }
   };
 
@@ -138,7 +242,8 @@ export function SharedLinksSection() {
       {error ? (
         <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {error}{' '}
-          <button type="button" onClick={() => void load()} style={actionButtonStyle}>
+          <button type="button" disabled={view?.busy}
+            onClick={() => { if (viewCurrent()) void load(view!.lane); }} style={actionButtonStyle}>
             Retry
           </button>
         </div>
@@ -158,9 +263,15 @@ export function SharedLinksSection() {
           overflow: 'hidden',
         }}
       >
+        {!loading && !loadFailed && !complete ? (
+          <p role="status" style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-2)', fontSize: 13 }}>
+            This list may not show every shared link. You can manage the links shown here individually;
+            links not shown may still be accessible.
+          </p>
+        ) : null}
         {loading ? (
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
-            Loading shared links…
+            {session ? 'Loading shared links…' : 'Sign in to manage shared conversation links.'}
           </p>
         ) : loadFailed ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
@@ -174,15 +285,17 @@ export function SharedLinksSection() {
         ) : shares.length === 0 ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
-              No shared links
+              {complete ? 'No shared links' : 'No shared links shown'}
             </div>
             <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
-              Links you create from a conversation will appear here.
+              {complete
+                ? 'Links you create from a conversation will appear here.'
+                : 'An empty list does not confirm that all shared links have been revoked.'}
             </p>
           </div>
         ) : (
           shares.map((share, index) => {
-            const busy = actionToken === share.token;
+            const busy = view?.busy === true || view?.confirmation !== null;
             return (
               <div
                 key={share.token}
@@ -223,14 +336,16 @@ export function SharedLinksSection() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-                  <a
-                    href={share.shareUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ ...actionButtonStyle, textDecoration: 'none' }}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (rowCurrent(share)) window.open(share.shareUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                    style={actionButtonStyle}
                   >
                     Open
-                  </a>
+                  </button>
                   <button
                     type="button"
                     onClick={() => void handleCopy(share)}
@@ -241,7 +356,12 @@ export function SharedLinksSection() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShareToRevoke(share)}
+                    onClick={() => {
+                      if (rowCurrent(share)) publish(view!.lane, {
+                        confirmation: { share, inventory: view!.inventory!, phase: 'confirming' },
+                        error: null, notice: null,
+                      });
+                    }}
                     disabled={busy}
                     style={{
                       ...actionButtonStyle,
@@ -249,7 +369,7 @@ export function SharedLinksSection() {
                       cursor: busy ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    {busy ? 'Revoking…' : 'Revoke'}
+                    {actionToken === share.token ? 'Revoking…' : 'Revoke'}
                   </button>
                 </div>
               </div>
@@ -261,7 +381,7 @@ export function SharedLinksSection() {
       <AlertDialog
         open={shareToRevoke !== null}
         onOpenChange={(open) => {
-          if (!open && actionToken === null) setShareToRevoke(null);
+          if (!open && viewCurrent() && !view!.lane.operation) publish(view!.lane, { confirmation: null });
         }}
       >
         <AlertDialogContent>
@@ -279,7 +399,7 @@ export function SharedLinksSection() {
               disabled={!shareToRevoke || actionToken !== null}
               onClick={(event) => {
                 event.preventDefault();
-                if (shareToRevoke) void handleRevoke(shareToRevoke);
+                void handleRevoke();
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

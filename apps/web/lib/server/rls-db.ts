@@ -37,6 +37,7 @@ function getRlsCapableDb(): DatabaseAdapter {
 
 export interface UserScopedDb {
   surface?: CloudChatSurface;
+  readonly sessionIdentity?: AuthResult['sessionIdentity'];
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
@@ -108,17 +109,31 @@ export async function getUserScopedDb(
   options: UserScopedDbOptions = {},
 ): Promise<UserScopedDb> {
   const resolveOrganization = options.resolveOrganization ?? true;
+  if (options.mfaGateExemptForOwner && !resolveOrganization) {
+    throw createError.forbidden('Owner policy recovery requires a workspace scope');
+  }
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     const auth = await getClerkAuthUser(request, options);
+    if (options.mfaGateExemptForOwner) {
+      return scopeAuthenticatedOrganization(
+        auth,
+        resolveAuthenticatedSurface(request, { ...auth, token }),
+      );
+    }
     return scopeVerifiedBearer(request, { ...auth, token }, resolveOrganization);
   }
 
-  const { subject: userId, getToken } = await getRequestIdentity();
+  const session = await getRequestIdentity();
+  const { subject: userId, getToken } = session;
   if (userId) {
     const token = await getToken();
     if (token) {
+      if (options.mfaGateExemptForOwner) {
+        const auth = await getCookieSessionAuthUser(request, session, options);
+        return scopeAuthenticatedOrganization(auth, 'web');
+      }
       // The workspace mfa gate and ip allow list live in getClerkAuthUser, so a
       // cookie session that skipped it here reached the database with neither
       // policy applied while the same route on a bearer token was refused.
@@ -137,6 +152,27 @@ export async function getUserScopedDb(
   }
 
   throw createError.unauthorized();
+}
+
+function scopeAuthenticatedOrganization(
+  auth: AuthResult,
+  surface: CloudChatSurface,
+): UserScopedDb {
+  const scope = auth.organizationScope;
+  if (!scope || scope.userId !== auth.userId) throw createError.unauthorized();
+  const { userId, organizationId } = scope;
+  const sessionIdentity = auth.sessionIdentity
+    ? { subject: auth.sessionIdentity.subject, sessionId: auth.sessionIdentity.sessionId }
+    : undefined;
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId });
+  setTenantScope({ userId, organizationId: organizationId ?? undefined });
+  return {
+    surface,
+    ...(sessionIdentity ? { sessionIdentity } : {}),
+    db,
+    userId,
+    organizationId,
+  };
 }
 
 export interface CurrentUserRlsDb {

@@ -277,12 +277,11 @@ document.getElementById('increment').onclick = async () => { try { const entry =
     const old = await apiCall(page, `/api/artifacts/publish/${token}/versions/1`);
     expect(old.status, old.body).toBe(200);
     expect(JSON.parse(old.body)).toMatchObject({ content });
-    const restore = await apiCall(page, '/api/artifacts/publish', {
+    const restore = await apiCall(page, `/api/artifacts/publish/${token}/versions/1`, {
       method: 'POST',
-      body: { artifactId, title, kind: 'html', content },
     });
-    expect(restore.status, restore.body).toBe(201);
-    expect(JSON.parse(restore.body)).toMatchObject({ token, version: 3 });
+    expect(restore.status, restore.body).toBe(200);
+    expect(JSON.parse(restore.body)).toMatchObject({ token, version: 3, title: `${title} renamed` });
     const versions = await apiCall(page, `/api/artifacts/publish/${token}/versions`);
     expect(versions.status, versions.body).toBe(200);
     expect(

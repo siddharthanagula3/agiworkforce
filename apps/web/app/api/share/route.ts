@@ -562,14 +562,15 @@ async function handleListShares(request: NextRequest) {
      where owner_id = $1
      ${conversationId ? 'and conversation_id = $2' : ''}
      order by created_at desc
-     limit ${SHARE_LIST_LIMIT}`,
+     limit ${SHARE_LIST_LIMIT + 1}`,
     conversationId ? [userId, conversationId] : [userId],
   );
 
   const now = Date.now();
 
   const listed: ConversationShareListResponse = {
-    shares: rows.map((row) => ({
+    complete: rows.length <= SHARE_LIST_LIMIT,
+    shares: rows.slice(0, SHARE_LIST_LIMIT).map((row) => ({
       token: row.token,
       title: row.title ?? 'Shared Session',
       shareUrl: `${SITE_URL}/share/${row.token}`,

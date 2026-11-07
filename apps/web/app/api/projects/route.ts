@@ -49,7 +49,7 @@ async function handleGetProjects(request: NextRequest) {
   // affect later pages. Offset stays for clients that still send it.
   const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
 
-  const sharedScope = await resolveSharedProjectScope(db, userId);
+  const sharedScope = await resolveSharedProjectScope(db, userId, organizationId);
   const sharedProjectIds =
     sharedScope?.organizationId === organizationId ? sharedScope.projectIds : [];
 

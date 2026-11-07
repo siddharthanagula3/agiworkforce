@@ -164,7 +164,15 @@ vi.mock('../../hooks/use-artifact-cloud-sync', async (importOriginal) => ({
 }));
 vi.mock('../../hooks/use-share-conversation', async (importOriginal) => ({
   ...(await importOriginal<ScanModule12>()),
-  useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
+  useShareConversation: () => ({
+    share: vi.fn(),
+    isSharing: false,
+    view: null,
+    isViewCurrent: () => false,
+    workspacePending: false,
+    workspaceUnavailable: false,
+    inventoryIncomplete: false,
+  }),
 }));
 vi.mock('../../hooks/use-conversation-branches', async (importOriginal) => ({
   ...(await importOriginal<ScanModule13>()),

@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
   permissions: vi.fn(),
-  resolveOrgMembership: vi.fn(),
+  resolveOrgMembershipForOrganization: vi.fn(),
   shareConnector: vi.fn(),
   unshareConnector: vi.fn(),
   evict: vi.fn(),
@@ -72,7 +72,7 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  resolveOrgMembership: mocks.resolveOrgMembership,
+  resolveOrgMembershipForOrganization: mocks.resolveOrgMembershipForOrganization,
 }));
 vi.mock('@/lib/services/org-shared-connector-service', () => ({
   listSharedConnectors: vi.fn(),
@@ -141,8 +141,8 @@ describe('shared connector route', () => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.requireCsrfToken.mockResolvedValue(null);
-    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'admin-1' });
-    mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'admin' });
+    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'admin-1', organizationId: ORG });
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({ organizationId: ORG, role: 'admin' });
     mocks.permissions.mockResolvedValue(new Set(['sharing.manage']));
   });
 
@@ -173,7 +173,7 @@ describe('shared connector route', () => {
   });
 
   it('returns 403 when the caller is not in an organization', async () => {
-    mocks.resolveOrgMembership.mockResolvedValue(null);
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue(null);
     const response = await PUT(request('PUT'), ctx());
     expect(response.status).toBe(403);
     expect(mocks.shareConnector).not.toHaveBeenCalled();
@@ -243,8 +243,8 @@ describe('shared connector route while connectors are coming soon', () => {
     connectorRelease.released = false;
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.requireCsrfToken.mockResolvedValue(null);
-    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'admin-1' });
-    mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'admin' });
+    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'admin-1', organizationId: ORG });
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({ organizationId: ORG, role: 'admin' });
     mocks.permissions.mockResolvedValue(new Set(['sharing.manage']));
   });
   afterEach(() => {

@@ -58,20 +58,77 @@ export async function addSiteViewer(
   db: DatabaseAdapter,
   input: { userId: string; token: string; email: string },
 ): Promise<PublishedSiteViewer[] | null> {
-  const id = await ownedPublicationId(db, input.userId, input.token);
-  if (!id) return null;
-  const [count] = await db.query<{ total: number | string }>(
-    `select count(*) as total from public.published_artifact_viewers where published_artifact_id = $1 and invited_by_user_id = $2`,
-    [id, input.userId],
-  );
-  if (Number(count?.total ?? 0) >= MAX_VIEWERS_PER_SITE) throw new ViewerLimitError();
-  await db.query(
-    `insert into public.published_artifact_viewers (published_artifact_id, email, invited_by_user_id)
-     values ($1, $2, $3)
-     on conflict (published_artifact_id, email) do nothing`,
-    [id, input.email, input.userId],
-  );
-  return listSiteViewers(db, input);
+  return db.transaction(async (tx) => {
+    if (!PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
+    const publications = await tx.query<{ id: string }>(
+      `select id from public.published_artifacts where token = $1 and user_id = $2 limit 1`,
+      [input.token, input.userId],
+    );
+    if (!Array.isArray(publications) || publications.length > 1) {
+      throw new Error('Site viewer admission identity is invalid');
+    }
+    if (publications.length === 0) return null;
+    const id = publications[0]?.id;
+    if (typeof id !== 'string' || !id.trim()) {
+      throw new Error('Site viewer admission identity is invalid');
+    }
+    const isolation = await tx.query<{ isolation: string }>(
+      `select current_setting('transaction_isolation') as isolation`,
+    );
+    if (
+      !Array.isArray(isolation) ||
+      isolation.length !== 1 ||
+      isolation[0]?.isolation !== 'read committed'
+    ) {
+      throw new Error('Site viewer admission requires read committed isolation');
+    }
+    const locks = await tx.query<{ locked: boolean }>(
+      `select pg_advisory_xact_lock(hashtextextended('agi:published-site-viewer-quota:' || $1, 0)),
+              true as locked`,
+      [id],
+    );
+    if (!Array.isArray(locks) || locks.length !== 1 || locks[0]?.locked !== true) {
+      throw new Error('Site viewer admission lock was not acquired');
+    }
+    // Separate statements refresh the READ COMMITTED snapshot after waiting for the publication lock.
+    const existing = await tx.query<{ email: string }>(
+      `select email from public.published_artifact_viewers
+        where published_artifact_id = $1 and email = $2 and invited_by_user_id = $3`,
+      [id, input.email, input.userId],
+    );
+    if (
+      !Array.isArray(existing) ||
+      existing.length > 1 ||
+      (existing.length === 1 && existing[0]?.email !== input.email)
+    ) {
+      throw new Error('Site viewer admission existing identity is invalid');
+    }
+    if (existing.length === 0) {
+      const counts = await tx.query<{ total: number | string }>(
+        `select count(*) as total from public.published_artifact_viewers where published_artifact_id = $1 and invited_by_user_id = $2`,
+        [id, input.userId],
+      );
+      if (!Array.isArray(counts) || counts.length !== 1 || !counts[0]) {
+        throw new Error('Site viewer admission count is missing');
+      }
+      const value = counts[0].total;
+      if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value))) {
+        throw new Error('Site viewer admission count is invalid');
+      }
+      const total = Number(value);
+      if (!Number.isSafeInteger(total) || total < 0) {
+        throw new Error('Site viewer admission count is invalid');
+      }
+      if (total >= MAX_VIEWERS_PER_SITE) throw new ViewerLimitError();
+      await tx.query(
+        `insert into public.published_artifact_viewers (published_artifact_id, email, invited_by_user_id)
+         values ($1, $2, $3)
+         on conflict (published_artifact_id, email) do nothing`,
+        [id, input.email, input.userId],
+      );
+    }
+    return listSiteViewers(tx, input);
+  });
 }
 
 export async function removeSiteViewer(

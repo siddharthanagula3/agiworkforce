@@ -13,7 +13,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import {
   clearProjectMemberAccess,
   requireProjectSharingRight,
-  resolveOrgMembership,
+  resolveOrgMembershipForOrganization,
   setProjectMemberAccess,
   shareProject,
   unshareProject,
@@ -63,10 +63,10 @@ async function handleShare(
   const { projectId } = await context.params;
   const parsedProjectId = parseProjectId(projectId);
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const membership = await requireProjectSharingRight(
     db,
-    await resolveOrgMembership(db, userId),
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
     userId,
     parsedProjectId,
   );
@@ -113,10 +113,10 @@ async function handleMemberAccess(
   const { projectId } = await context.params;
   const parsedProjectId = parseProjectId(projectId);
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const membership = await requireProjectSharingRight(
     db,
-    await resolveOrgMembership(db, userId),
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
     userId,
     parsedProjectId,
   );
@@ -189,10 +189,10 @@ async function handleUnshare(
   const { projectId } = await context.params;
   const parsedProjectId = parseProjectId(projectId);
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const membership = await requireProjectSharingRight(
     db,
-    await resolveOrgMembership(db, userId),
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
     userId,
     parsedProjectId,
   );

@@ -18,7 +18,10 @@ import {
   withWorkspaceRevisionHeaders,
 } from '@/lib/server/workspace-revision';
 import { readJsonBody } from '@/lib/read-json-body';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
@@ -33,7 +36,7 @@ import { ControlsPatchSchema } from './controls-schema';
 import { assertOwnerTurnsOnFastMode } from '@/lib/services/organization-membership-service';
 import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
 import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
-import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
+import { resolveMfaEnrolled, type MfaSessionIdentity } from '@/lib/mfa-policy-gate';
 
 const MFA_GATE_EXEMPT_OWNER_OPTIONS = { mfaGateExemptForOwner: true } as const;
 
@@ -131,9 +134,10 @@ async function assertPolicyChangeWontLockOutRequester(
   policy: AdminPolicyInput,
   userId: string,
   request: NextRequest,
+  sessionIdentity?: MfaSessionIdentity,
 ): Promise<void> {
   if (policy.requireMfa) {
-    const enrolled = await resolveMfaEnrolled(userId);
+    const enrolled = await resolveMfaEnrolled(userId, sessionIdentity);
     if (!enrolled) {
       throw createError.validation(
         'Enrol in two-factor authentication first, then require it for the workspace.',
@@ -175,8 +179,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const effective = await getEffectiveOrganizationPolicy(db, membership.organizationId);
@@ -204,8 +210,13 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId, sessionIdentity } = await getUserScopedDb(
+    request,
+    MFA_GATE_EXEMPT_OWNER_OPTIONS,
+  );
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
@@ -275,7 +286,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     current.policy.controls.featureAccess.fast_mode === true,
     next.controls.featureAccess.fast_mode,
   );
-  await assertPolicyChangeWontLockOutRequester(next, userId, request);
+  await assertPolicyChangeWontLockOutRequester(next, userId, request, sessionIdentity);
   assertPolicyCoherent(next);
 
   const policy = await upsertOrganizationPolicy(db, membership.organizationId, next);

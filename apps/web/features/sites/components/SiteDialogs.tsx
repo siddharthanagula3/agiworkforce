@@ -14,6 +14,7 @@ import {
   Label,
 } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { isPublicationLeaseCurrent, usePublishedSitesStore } from '../stores/published-sites-store';
 import { siteName } from '../lib/site-format';
 import type { PublishedSite, SiteVisibility } from '../services/sites-service';
 import { SiteSharingOptions } from './SiteSharingOptions';
@@ -28,6 +29,7 @@ export function RenameSiteDialog({
   onRename: (site: PublishedSite, title: string) => Promise<void>;
 }) {
   const [value, setValue] = useState('');
+  const lease = usePublishedSitesStore((state) => state.lease);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,16 +44,18 @@ export function RenameSiteDialog({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!site || !trimmed || unchanged) return;
+    if (!isPublicationLeaseCurrent(lease) || !site || !trimmed || unchanged) return;
     setSaving(true);
     setError(null);
     try {
       await onRename(site, trimmed);
+      if (!isPublicationLeaseCurrent(lease)) return;
       onOpenChange(false);
     } catch (caught) {
+      if (!isPublicationLeaseCurrent(lease)) return;
       setError(toUserMessage(caught, 'Failed to rename this site'));
     } finally {
-      setSaving(false);
+      if (isPublicationLeaseCurrent(lease)) setSaving(false);
     }
   };
 
@@ -112,6 +116,7 @@ export function SiteSharingDialog({
   onChange: (site: PublishedSite, visibility: SiteVisibility) => Promise<void>;
 }) {
   const [value, setValue] = useState<SiteVisibility>('public');
+  const lease = usePublishedSitesStore((state) => state.lease);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,7 +127,7 @@ export function SiteSharingDialog({
   }, [site]);
 
   const save = async () => {
-    if (!site) return;
+    if (!isPublicationLeaseCurrent(lease) || !site) return;
     if (value === site.visibility) {
       onOpenChange(false);
       return;
@@ -131,11 +136,13 @@ export function SiteSharingDialog({
     setError(null);
     try {
       await onChange(site, value);
+      if (!isPublicationLeaseCurrent(lease)) return;
       onOpenChange(false);
     } catch (caught) {
+      if (!isPublicationLeaseCurrent(lease)) return;
       setError(toUserMessage(caught, 'Failed to change who can open this site'));
     } finally {
-      setSaving(false);
+      if (isPublicationLeaseCurrent(lease)) setSaving(false);
     }
   };
 

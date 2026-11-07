@@ -1,7 +1,12 @@
+import { NextRequest, NextResponse } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/security-audit');
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/request-context-cache', () => ({
+  getCachedActiveOrganizationId: vi.fn(async () => undefined),
+  setCachedActiveOrganizationId: vi.fn(async () => undefined),
+}));
 
 const {
   mockQuery,
@@ -9,12 +14,18 @@ const {
   mockRecordAuditEvent,
   mockRequireTeamAdminAccess,
   mockResolveMfaEnrolled,
+  mockGetIdentityUser,
+  mockEnrollmentCacheGet,
+  mockEnrollmentCacheSet,
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
   mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
   mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
-  mockResolveMfaEnrolled: vi.fn(async () => true),
+  mockResolveMfaEnrolled: vi.fn<typeof import('@/lib/mfa-policy-gate').resolveMfaEnrolled>(async () => true),
+  mockGetIdentityUser: vi.fn(),
+  mockEnrollmentCacheGet: vi.fn(),
+  mockEnrollmentCacheSet: vi.fn(async () => undefined),
 }));
 
 const currentRole = vi.hoisted(() => ({ value: 'admin' as string }));
@@ -31,6 +42,20 @@ vi.mock('@/lib/security-audit', async (importOriginal) => {
   return { ...actual, recordAuditEvent: mockRecordAuditEvent };
 });
 vi.mock('@/lib/mfa-policy-gate', () => ({ resolveMfaEnrolled: mockResolveMfaEnrolled }));
+vi.mock('@/lib/server/identity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/identity')>();
+  return { ...actual, getIdentityUser: mockGetIdentityUser };
+});
+vi.mock('@/lib/server/key-value', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/key-value')>();
+  return {
+    ...actual,
+    getKeyValueStore: vi.fn(() => ({
+      get: mockEnrollmentCacheGet,
+      set: mockEnrollmentCacheSet,
+    })),
+  };
+});
 vi.mock('@/lib/services/organization-permission-service', () => ({
   resolveOrganizationPermissions: vi.fn(async () => {
     const role = currentRole.value;
@@ -43,6 +68,18 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 }));
 
 import { GET, PATCH } from '../route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
+import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
+import { requireCsrfToken } from '@/lib/csrf';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
+import {
+  clearIpAllowListCacheForTests,
+  getCachedIpAllowList,
+  setCachedIpAllowList,
+} from '@/lib/services/organization-ip-allow-list-cache';
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -119,6 +156,7 @@ describe('GET /api/settings/organization/policy', () => {
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-1',
+      organizationId: ORG_ID,
     });
   });
 
@@ -193,6 +231,7 @@ describe('PATCH /api/settings/organization/policy', () => {
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-1',
+      organizationId: ORG_ID,
     });
   });
 
@@ -629,6 +668,7 @@ describe('optimistic concurrency on policy writes', () => {
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-1',
+      organizationId: ORG_ID,
     });
   });
 
@@ -683,5 +723,488 @@ describe('optimistic concurrency on policy writes', () => {
     );
 
     expect(response.status).toBe(400);
+  });
+});
+
+// UNRUN: auth and database effects are fixtures; this does not prove auth/RLS binding.
+// Membership, policy mapping/merge, validation, and cache eviction use production code.
+const CAPTURED_ORG = '22222222-2222-4222-8222-222222222222';
+const CAPTURED_USER = 'captured-user';
+const SAVED_ORG = ORG_ID;
+
+type ScopedRow = Record<string, unknown>;
+
+function bindCapturedScope(options: {
+  organizationId?: string | null;
+  membership?: 'active' | 'absent' | 'mismatched';
+  role?: 'owner' | 'admin' | 'member';
+  entitled?: boolean;
+  canManage?: boolean;
+  sessionIdentity?: { subject: string; sessionId: string | null };
+} = {}) {
+  const rows = new Map<string, ScopedRow>([
+    [SAVED_ORG, {
+      organization_id: SAVED_ORG,
+      default_privacy_mode: 'local',
+      allowed_privacy_modes: ['local'],
+      allow_managed_compute: false,
+      require_local_to_byok_preview: true,
+      chat_sync_surfaces: ['web'],
+      allow_cli_cloud_sync: false,
+      allow_vscode_cloud_sync: false,
+      allow_chrome_cloud_sync: false,
+      audit_export_enabled: true,
+      retention_days: 11,
+      retention_enforced: false,
+      external_sharing_enabled: false,
+      allow_memory: false,
+      metadata: { marker: 'A', codeControls: { allowGithubConnection: false } },
+      updated_at: '2026-11-01T00:00:00.000Z',
+    }],
+    [CAPTURED_ORG, {
+      organization_id: CAPTURED_ORG,
+      default_privacy_mode: 'managed',
+      allowed_privacy_modes: ['local', 'byok', 'managed'],
+      allow_managed_compute: true,
+      require_local_to_byok_preview: true,
+      chat_sync_surfaces: ['web', 'desktop'],
+      allow_cli_cloud_sync: true,
+      allow_vscode_cloud_sync: true,
+      allow_chrome_cloud_sync: true,
+      audit_export_enabled: true,
+      retention_days: 222,
+      retention_enforced: false,
+      external_sharing_enabled: true,
+      allow_memory: true,
+      metadata: { marker: 'B', codeControls: { allowGithubConnection: true } },
+      updated_at: '2026-11-02T00:00:00.000Z',
+    }],
+  ]);
+  const revisions = new Map([[SAVED_ORG, 3], [CAPTURED_ORG, 9]]);
+  const originalA = JSON.stringify(rows.get(SAVED_ORG));
+  const query = mockQuery;
+  query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+    if (/from public\.user_settings/i.test(sql)) return [{ organization_id: SAVED_ORG }];
+    if (/from public\.organization_members/i.test(sql)) {
+      expect(sql).toMatch(/organization_id = \$1 and user_id = \$2/);
+      expect(sql).toMatch(/status = 'active'/);
+      if (params[1] !== CAPTURED_USER) return [];
+      if (params[0] === SAVED_ORG) return [{ organization_id: SAVED_ORG, role: 'owner' }];
+      if (params[0] !== CAPTURED_ORG || options.membership === 'absent') return [];
+      return [{
+        organization_id: options.membership === 'mismatched' ? SAVED_ORG : CAPTURED_ORG,
+        role: options.role ?? 'admin',
+      }];
+    }
+    const organizationId = String(params[0]);
+    if (/insert into public\.organization_admin_policies/i.test(sql)) {
+      const columns = [
+        'organization_id', 'default_privacy_mode', 'allowed_privacy_modes',
+        'allow_managed_compute', 'require_local_to_byok_preview', 'chat_sync_surfaces',
+        'allow_cli_cloud_sync', 'allow_vscode_cloud_sync', 'allow_chrome_cloud_sync',
+        'audit_export_enabled', 'retention_days', 'retention_enforced',
+        'external_sharing_enabled', 'allow_memory',
+      ];
+      const row = { ...rows.get(organizationId), ...Object.fromEntries(
+        columns.map((column, index) => [column, params[index]]),
+      ), metadata: JSON.parse(params[14] as string) };
+      rows.set(organizationId, row);
+      // Simulate the database revision trigger, not a production trigger test.
+      revisions.set(organizationId, (revisions.get(organizationId) ?? 0) + 1);
+      return [row];
+    }
+    if (/from public\.organization_admin_policies/i.test(sql)) {
+      const row = rows.get(organizationId);
+      return row ? [{ ...row, revision: revisions.get(organizationId), override_count: 1 }] : [];
+    }
+    if (/from public\.organization_policy_revisions/i.test(sql)) {
+      return [{ revision: revisions.get(organizationId) }];
+    }
+    throw new Error(`Unexpected scoped fixture SQL: ${sql}`);
+  });
+  const db = { query };
+  vi.mocked(getUserScopedDb).mockResolvedValue({
+    db,
+    userId: CAPTURED_USER,
+    organizationId: options.organizationId === undefined ? CAPTURED_ORG : options.organizationId,
+    ...(options.sessionIdentity ? { sessionIdentity: options.sessionIdentity } : {}),
+  } as never);
+  vi.mocked(requireTeamAdminAccess).mockImplementation(async (scopedDb, userId, orgId) => {
+    expect(scopedDb).toBe(db);
+    expect(userId).toBe(CAPTURED_USER);
+    if (orgId === CAPTURED_ORG && options.entitled === false) {
+      throw createError.forbidden('Captured workspace has no eligible subscription');
+    }
+    return {
+      plan: 'team',
+      canManageTeam: true,
+      maxMembers: null,
+      seatsConsumed: null,
+      seatsAvailable: null,
+      seatSource: 'unknown',
+    };
+  });
+  vi.mocked(resolveOrganizationPermissions).mockImplementation(async (orgId, userId) => {
+    expect(userId).toBe(CAPTURED_USER);
+    return new Set(
+      orgId === CAPTURED_ORG && options.canManage === false
+        ? ['content.read']
+        : ['content.read', 'policy.manage'],
+    );
+  });
+
+  setCachedIpAllowList(SAVED_ORG, ['192.0.2.1']);
+  setCachedIpAllowList(CAPTURED_ORG, ['198.51.100.1']);
+  return {
+    db, rows, revisions,
+    assertAUnchanged() {
+      expect(JSON.stringify(rows.get(SAVED_ORG))).toBe(originalA);
+      expect(revisions.get(SAVED_ORG)).toBe(3);
+      expect(getCachedIpAllowList(SAVED_ORG)).toEqual(['192.0.2.1']);
+      expect(
+        query.mock.calls.some(([sql]) => /from public\.user_settings/i.test(String(sql))),
+      ).toBe(false);
+      for (const [sql, params] of query.mock.calls) {
+        if (/public\.organization_(members|admin_policies|policy_revisions)/i.test(String(sql))) {
+          expect(params?.[0]).toBe(CAPTURED_ORG);
+        }
+      }
+    },
+    assertNoWrite() {
+      expect(query.mock.calls.some(([sql]) => /insert into/i.test(String(sql)))).toBe(false);
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+      expect(getCachedIpAllowList(CAPTURED_ORG)).toEqual(['198.51.100.1']);
+    },
+  };
+}
+
+function scopedRequest(
+  method: 'GET' | 'PATCH',
+  explicit: boolean,
+  body: Record<string, unknown> = { retentionDays: 30 },
+  extraHeaders: Record<string, string> = {},
+) {
+  return new NextRequest('https://app.test/api/settings/organization/policy', {
+    method,
+    headers: {
+      ...(explicit ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: CAPTURED_ORG } : {}),
+      ...(method === 'PATCH' ? { 'content-type': 'application/json' } : {}),
+      ...extraHeaders,
+    },
+    ...(method === 'PATCH' ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+describe('native policy preflight (real MFA resolver; admitted auth/provider/DB mocked; UNRUN)', () => {
+  const nativeSubject = 'native-captured-subject';
+  const forgedSubject = 'forged-enrolled-subject';
+
+  function forgedMfaRequest(body: Record<string, unknown> = { requireMfa: true }) {
+    return scopedRequest('PATCH', true, {
+      ...body,
+      userId: forgedSubject,
+      subject: forgedSubject,
+      sessionIdentity: { subject: forgedSubject, sessionId: 'forged-session' },
+    }, {
+      'x-user-id': forgedSubject,
+      'x-session-id': 'forged-session',
+      'x-identity-subject': forgedSubject,
+    });
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
+    vi.mocked(requireCsrfToken).mockResolvedValue(null);
+    vi.mocked(withRateLimit).mockResolvedValue(null);
+    const actual = await vi.importActual<typeof import('@/lib/mfa-policy-gate')>(
+      '@/lib/mfa-policy-gate',
+    );
+    mockResolveMfaEnrolled.mockReset().mockImplementation(actual.resolveMfaEnrolled);
+    mockGetIdentityUser.mockReset();
+    mockEnrollmentCacheGet.mockReset().mockResolvedValue('enrolled');
+    mockEnrollmentCacheSet.mockReset().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    mockResolveMfaEnrolled.mockReset().mockResolvedValue(true);
+    vi.unstubAllEnvs();
+    clearIpAllowListCacheForTests();
+  });
+
+  for (const subject of [nativeSubject, CAPTURED_USER]) {
+    it(`allows exact enrolled ${subject === CAPTURED_USER ? 'equal-ID' : 'mapped-ID'} native identity despite forged request evidence`, async () => {
+      const sessionIdentity = { subject, sessionId: 'captured-session' };
+      const state = bindCapturedScope({ role: 'owner', sessionIdentity });
+      mockGetIdentityUser.mockImplementation(async (requestedSubject: string) => (
+        requestedSubject === subject ? { id: subject, twoFactorEnabled: true } : null
+      ));
+      mockEnrollmentCacheGet.mockResolvedValue('unenrolled');
+
+      const response = await PATCH(forgedMfaRequest());
+
+      expect(response.status).toBe(200);
+      expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER, sessionIdentity);
+      expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(subject);
+      expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
+      expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+      expect(state.rows.get(CAPTURED_ORG)?.metadata).toMatchObject({ requireMfa: true });
+      expect(state.revisions.get(CAPTURED_ORG)).toBe(10);
+      expect(getCachedIpAllowList(CAPTURED_ORG)).toBeUndefined();
+      expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+      state.assertAUnchanged();
+    });
+  }
+
+  for (const failure of ['unenrolled', 'absent', 'foreign', 'malformed', 'provider-error', 'blank-subject'] as const) {
+    for (const alreadyRequired of [false, true]) {
+      it(`refuses ${failure} native evidence ${alreadyRequired ? 'when MFA remains required' : 'when enabling MFA'} before effects`, async () => {
+        const subject = failure === 'blank-subject' ? '   ' : nativeSubject;
+        const sessionIdentity = { subject, sessionId: 'captured-session' };
+        const state = bindCapturedScope({ role: 'owner', sessionIdentity });
+        const row = state.rows.get(CAPTURED_ORG)!;
+        row.metadata = { ...(row.metadata as Record<string, unknown>), requireMfa: alreadyRequired };
+        const original = JSON.stringify(row);
+        mockGetIdentityUser.mockImplementation(async (requestedSubject: string) => {
+          if (requestedSubject === CAPTURED_USER || requestedSubject === forgedSubject) {
+            return { id: requestedSubject, twoFactorEnabled: true };
+          }
+          if (failure === 'provider-error') throw new Error('Provider unavailable');
+          if (failure === 'absent') return null;
+          if (failure === 'foreign') return { id: forgedSubject, twoFactorEnabled: true };
+          if (failure === 'malformed') return { id: nativeSubject, twoFactorEnabled: 'true' };
+          return { id: nativeSubject, twoFactorEnabled: false };
+        });
+
+        const response = await PATCH(forgedMfaRequest(
+          alreadyRequired ? { retentionDays: 30 } : { requireMfa: true },
+        ));
+
+        expect(response.status).toBe(400);
+        expect(JSON.stringify(await response.json())).toMatch(/Enrol in two-factor authentication first/i);
+        expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER, sessionIdentity);
+        if (failure === 'blank-subject') {
+          expect(mockGetIdentityUser).not.toHaveBeenCalled();
+        } else {
+          expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(nativeSubject);
+        }
+        expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
+        expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+        expect(JSON.stringify(state.rows.get(CAPTURED_ORG))).toBe(original);
+        expect(state.revisions.get(CAPTURED_ORG)).toBe(9);
+        state.assertNoWrite();
+        state.assertAUnchanged();
+      });
+    }
+  }
+
+  for (const alreadyRequired of [false, true]) {
+    it(`skips enrollment when the resulting policy does not require MFA (previously ${alreadyRequired})`, async () => {
+      const state = bindCapturedScope({
+        role: 'owner',
+        sessionIdentity: { subject: nativeSubject, sessionId: 'captured-session' },
+      });
+      const row = state.rows.get(CAPTURED_ORG)!;
+      row.metadata = { ...(row.metadata as Record<string, unknown>), requireMfa: alreadyRequired };
+
+      const response = await PATCH(forgedMfaRequest(
+        alreadyRequired ? { requireMfa: false } : { retentionDays: 30 },
+      ));
+
+      expect(response.status).toBe(200);
+      expect(mockResolveMfaEnrolled).not.toHaveBeenCalled();
+      expect(mockGetIdentityUser).not.toHaveBeenCalled();
+      expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
+      expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+      expect(state.rows.get(CAPTURED_ORG)?.metadata).toMatchObject({ requireMfa: false });
+      state.assertAUnchanged();
+    });
+  }
+
+  for (const cached of ['enrolled', 'unenrolled', null] as const) {
+    it(`preserves product enrollment for device/no-evidence callers (${cached ?? 'cache miss'})`, async () => {
+      const state = bindCapturedScope({ role: 'owner' });
+      mockEnrollmentCacheGet.mockResolvedValue(cached);
+      mockGetIdentityUser.mockResolvedValue({ id: CAPTURED_USER, twoFactorEnabled: true });
+
+      const response = await PATCH(forgedMfaRequest());
+
+      expect(response.status).toBe(cached === 'unenrolled' ? 400 : 200);
+      expect(mockResolveMfaEnrolled).toHaveBeenCalledExactlyOnceWith(CAPTURED_USER, undefined);
+      expect(mockEnrollmentCacheGet).toHaveBeenCalledExactlyOnceWith(`mfa-enrolled:${CAPTURED_USER}`);
+      if (cached === null) {
+        expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(CAPTURED_USER);
+        expect(mockEnrollmentCacheSet).toHaveBeenCalledWith(
+          `mfa-enrolled:${CAPTURED_USER}`, 'enrolled', { ttlSeconds: 300 },
+        );
+      } else {
+        expect(mockGetIdentityUser).not.toHaveBeenCalled();
+        expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+      }
+      if (cached === 'unenrolled') state.assertNoWrite();
+      state.assertAUnchanged();
+    });
+  }
+});
+
+describe('captured policy scope (auth mocked; UNRUN)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+    vi.mocked(requireCsrfToken).mockResolvedValue(null);
+    vi.mocked(withRateLimit).mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    clearIpAllowListCacheForTests();
+  });
+
+  for (const explicit of [true, false]) {
+    it(`reads captured B, never saved A (${explicit ? 'explicit selector' : 'headerless'})`, async () => {
+      const state = bindCapturedScope({ role: 'member', canManage: false });
+      const req = scopedRequest('GET', explicit);
+      const response = await GET(req);
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.organizationId).toBe(CAPTURED_ORG);
+      expect(body.configured).toBe(true);
+      expect(body.canManagePolicy).toBe(false);
+      expect(body.currentUserRole).toBe('member');
+      expect(body.policy.retentionDays).toBe(222);
+      expect(body.policy.metadata.marker).toBe('B');
+      expect(body.revision).toBe(9);
+      expect(response.headers.get('ETag')).toBe('W/"wsrev-9"');
+      expect(getUserScopedDb).toHaveBeenCalledWith(req, { mfaGateExemptForOwner: true });
+      expect(requireTeamAdminAccess).toHaveBeenCalledWith(state.db, CAPTURED_USER, CAPTURED_ORG);
+      expect(resolveOrganizationPermissions).toHaveBeenCalledWith(CAPTURED_ORG, CAPTURED_USER);
+      state.assertNoWrite();
+      state.assertAUnchanged();
+    });
+
+    it(`writes only captured B (${explicit ? 'explicit selector' : 'headerless'})`, async () => {
+      const state = bindCapturedScope();
+      const req = scopedRequest('PATCH', explicit, { retentionDays: 30 }, { 'If-Match': 'W/"wsrev-9"' });
+      const response = await PATCH(req);
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.organizationId).toBe(CAPTURED_ORG);
+      expect(body.canManagePolicy).toBe(true);
+      expect(getUserScopedDb).toHaveBeenCalledWith(req, { mfaGateExemptForOwner: true });
+      expect(requireTeamAdminAccess).toHaveBeenCalledWith(state.db, CAPTURED_USER, CAPTURED_ORG);
+      expect(resolveOrganizationPermissions).toHaveBeenCalledWith(CAPTURED_ORG, CAPTURED_USER);
+      expect(state.rows.get(CAPTURED_ORG)).toMatchObject({
+        organization_id: CAPTURED_ORG, allow_managed_compute: true,
+        metadata: { marker: 'B' },
+      });
+      expect(state.rows.get(CAPTURED_ORG)?.retention_days).toBe(30);
+      expect(body.policy.organizationId).toBe(CAPTURED_ORG);
+      expect(body.policy.retentionDays).toBe(30);
+      expect(body.revision).toBe(10);
+      expect(response.headers.get('ETag')).toBe('W/"wsrev-10"');
+      expect(response.headers.get('x-workspace-revision')).toBe('10');
+      expect(getCachedIpAllowList(CAPTURED_ORG)).toBeUndefined();
+      expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+        userId: CAPTURED_USER, organizationId: CAPTURED_ORG,
+        eventType: 'admin_policy_changed',
+        detail: expect.objectContaining({ resourceId: CAPTURED_ORG, changedKeys: ['retentionDays'] }),
+      }));
+      state.assertAUnchanged();
+    });
+  }
+
+  for (const method of ['GET', 'PATCH'] as const) {
+    for (const membership of ['absent', 'mismatched'] as const) {
+      it(`refuses ${method} with ${membership} exact B membership`, async () => {
+        const state = bindCapturedScope({ membership });
+        expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(403);
+        expect(requireTeamAdminAccess).not.toHaveBeenCalled();
+        expect(resolveOrganizationPermissions).not.toHaveBeenCalled();
+        state.assertNoWrite();
+        state.assertAUnchanged();
+      });
+    }
+
+    it(`refuses ${method} for captured Personal without falling back to saved A`, async () => {
+      const state = bindCapturedScope({ organizationId: null });
+      const response = await (method === 'GET' ? GET : PATCH)(scopedRequest(method, false));
+      expect(response.status).toBe(403);
+      expect(mockQuery).not.toHaveBeenCalled();
+      expect(requireTeamAdminAccess).not.toHaveBeenCalled();
+      state.assertNoWrite();
+      state.assertAUnchanged();
+    });
+
+    it(`refuses ${method} for ineligible B even when A is eligible`, async () => {
+      const state = bindCapturedScope({ entitled: false });
+      expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(403);
+      expect(requireTeamAdminAccess).toHaveBeenCalledWith(state.db, CAPTURED_USER, CAPTURED_ORG);
+      expect(resolveOrganizationPermissions).not.toHaveBeenCalled();
+      state.assertNoWrite();
+      state.assertAUnchanged();
+    });
+
+    it(`preserves the ${method} rate-limit short circuit before auth`, async () => {
+      const state = bindCapturedScope();
+      vi.mocked(withRateLimit).mockResolvedValueOnce(new NextResponse(null, { status: 429 }));
+      expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(429);
+      expect(getUserScopedDb).not.toHaveBeenCalled();
+      expect(mockQuery).not.toHaveBeenCalled();
+      state.assertNoWrite();
+    });
+  }
+
+  it('refuses a B write without policy.manage even when A permits management', async () => {
+    const state = bindCapturedScope({ canManage: false });
+    expect((await PATCH(scopedRequest('PATCH', true))).status).toBe(403);
+    expect(resolveOrganizationPermissions).toHaveBeenCalledWith(CAPTURED_ORG, CAPTURED_USER);
+    state.assertNoWrite();
+    state.assertAUnchanged();
+  });
+
+  it('preserves the CSRF short circuit before rate limiting and auth', async () => {
+    const state = bindCapturedScope();
+    vi.mocked(requireCsrfToken).mockResolvedValueOnce(new NextResponse(null, { status: 403 }));
+    expect((await PATCH(scopedRequest('PATCH', true))).status).toBe(403);
+    expect(withRateLimit).not.toHaveBeenCalled();
+    expect(getUserScopedDb).not.toHaveBeenCalled();
+    expect(mockQuery).not.toHaveBeenCalled();
+    state.assertNoWrite();
+  });
+
+  it('compares If-Match against B, not the saved A revision', async () => {
+    const state = bindCapturedScope();
+    const response = await PATCH(scopedRequest('PATCH', true, { retentionDays: 30 }, {
+      'If-Match': 'W/"wsrev-3"',
+    }));
+    expect(response.status).toBe(409);
+    state.assertNoWrite();
+    state.assertAUnchanged();
+  });
+
+  it('rejects invalid policy input without changing either workspace', async () => {
+    const state = bindCapturedScope();
+    expect((await PATCH(scopedRequest('PATCH', true, { retentionDays: 0 }))).status).toBe(400);
+    state.assertNoWrite();
+    state.assertAUnchanged();
+  });
+
+  it('checks self-lockout against the captured user before any B write', async () => {
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
+    const state = bindCapturedScope();
+    mockResolveMfaEnrolled.mockResolvedValueOnce(false);
+    try {
+      const req = scopedRequest('PATCH', true);
+      const response = await PATCH(new NextRequest(req.url, {
+        method: 'PATCH', headers: req.headers, body: JSON.stringify({ requireMfa: true }),
+      }));
+      expect(response.status).toBe(400);
+      expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER, undefined);
+      state.assertNoWrite();
+      state.assertAUnchanged();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
