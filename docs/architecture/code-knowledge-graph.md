@@ -7425,3 +7425,26 @@ The existing service/API and backend remain unchanged. Credentials are ambient,
 not newly pinned. No pagination, global reconciliation or backend cancellation
 claim. Fixtures are UNRUN; no product checks, migrations, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web Sites Restore validates acknowledgement for every caller
+
+Continuation c58f3433da6222e8224731ac5843152eb1a7e8b6 extends republishArtifactVersion's minimum receipt
+boundary to ordinary Sites as well as existing authority consumers.
+
+The requested token is captured before asynchronous CSRF and reused for
+dispatch and acknowledgement comparison. Existing bodyless token/version POST,
+void return and authority assertions are retained. Successful bodies must parse
+to matching token plus positive safe integer version; unreadable or invalid
+acknowledgement reports uncertainty before ordinary Sites success/reload.
+
+The backend history owner can deduplicate an identical newest snapshot, so
+receipt version need not equal the selected historical number or increase.
+Real SiteSettingsTab/actual-helper fixtures cover success and rejection, with
+direct ordinary/authority target-snapshot and malformed-body fixtures.
+
+No UI, backend/shared schema, ambient transport, retry, recovery GET or durable
+uncertainty mechanism changes. Minimum acknowledgement does not certify content
+bytes, selected historical identity in the reply, rollback or lasting remote
+state. Separate version-view ownership/admission and ordinary DELETE/mobile
+receipt limits remain. All fixtures are UNRUN; no product checks, live services,
+migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.

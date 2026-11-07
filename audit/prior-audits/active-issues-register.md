@@ -17179,8 +17179,9 @@ canonicality, full metadata semantics and lasting remote state are not proved.
 Three source/fixture files are independently reviewed. Direct real-parser
 and real-helper/hook/store fixtures are authored UNRUN; existing component
 suites mock the service and are not transport/parser acceptance. Mobile Sites
-still uses legacy update receipts; web Sites Restore/DELETE receipt adoption
-and broader lifetime/reconciliation remain open. No product checks, live
+still uses legacy update receipts. Web Sites Restore receipt adoption remained
+open at this slice and is corrected below; ordinary DELETE acknowledgement and
+broader lifetime/reconciliation remain open. No product checks, live
 services/databases, migration application, push or deployment. Existing recovery
 dependencies, unapplied migrations and lost-history limits remain.
 
@@ -17280,3 +17281,49 @@ strict mobile mutation receipts, durable unknown-write recovery or global
 cross-controller ordering. Credentials remain ambient and mocked request options
 do not prove actual network/auth/abort behavior. Existing recovery dependencies,
 unapplied migrations and lost-history limits remain.
+
+### Ordinary web Sites Restore requires acknowledgement
+
+Continuation c58f3433da6222e8224731ac5843152eb1a7e8b6, 2026-11-07, closes the ordinary web Sites
+republishArtifactVersion path that previously resolved on every successful HTTP
+status, including an empty 204. VersionsSetting then emitted its existing live
+toast and invoked onRestored without response evidence. The settings manager
+already supplied RequestAuthority and required a minimum receipt; that bounded
+path is preserved.
+
+The helper captures the requested token before asynchronous CSRF preparation,
+uses that token for the existing bodyless token/version POST, and requires
+the existing minimum receipt for both ordinary and authority consumers:
+matching token and a positive safe integer version. The return remains void.
+Empty, malformed or unreadable successful bodies and mismatched receipts reject
+with explicit unconfirmed/may-have-taken-effect guidance before ordinary Sites
+can toast success or call onRestored. Authority assertions remain before and
+after asynchronous boundaries, including after body-read failure normalization.
+
+The backend route returns its persisted publication token and live version
+only after the restore/history transaction. recordPublishedVersion can reuse
+the newest identical snapshot rather than append a new number; the client
+therefore imposes neither equality with the selected history number nor a
+version-increase rule. The parser does not certify every field in the response.
+
+Three source/fixture files are independently reviewed. Direct ordinary and
+authority cases cover minimum success, malformed/empty/unreadable replies and
+mutable target changes during CSRF/body reads. Existing authority fixtures
+remain unchanged. New real SiteSettingsTab fixtures use the actual helper/parser
+to reject success toast and onRestored on invalid acknowledgement, and preserve
+matching-receipt success for equal or different positive versions. Existing
+SiteDetail suites mock the service and are not parser acceptance.
+
+This is acknowledgement validation, not proof of restored content bytes,
+requested history identity in the response, final remote state after another
+writer, or rollback after uncertainty. Existing UI success wording, ordinary
+ambient cookie/CSRF transport, optional authority behavior, non-2xx/transport
+handling and unrelated helpers remain. No extra GET, retry, Publish fallback,
+durable unknown-write record or backend/shared-contract change.
+
+The ordinary version UI's separate lifetime/admission/confirmation questions,
+bodyless ordinary DELETE acknowledgement and mobile legacy receipts remain
+open. Existing parent SiteDetail lease/token and reload guards are not removed
+or treated as missing. Fixtures are UNRUN; no product checks, live services,
+migration application, push or deployment. Recovery prerequisites, unapplied
+migrations and lost-history limitations remain.
