@@ -4,18 +4,11 @@ import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
+  ManagedCloudPublishedArtifactPublishResponseSchema,
   managedCloudPublishedArtifactLookupPath,
   type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
 import type { PublishedArtifactKind } from './publishedArtifactRender';
-
-interface PublishResponse {
-  token?: unknown;
-  shareUrl?: unknown;
-  publishedAt?: unknown;
-  visibility?: unknown;
-  workspace?: unknown;
-}
 
 export interface WebPublishDetails {
   shareUrl: string;
@@ -31,12 +24,6 @@ function readVisibility(
   fallback: PublishedArtifactAudience = 'public',
 ): PublishedArtifactAudience {
   return MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES.find((known) => known === value) ?? fallback;
-}
-
-function readWorkspace(value: unknown): WebPublishDetails['workspace'] {
-  if (!value || typeof value !== 'object') return null;
-  const count = Number((value as { memberCount?: unknown }).memberCount ?? 0);
-  return { memberCount: Number.isFinite(count) && count > 0 ? Math.floor(count) : 0 };
 }
 
 export function resolvePublishableKind(
@@ -102,12 +89,15 @@ export function createWebCloudPublisher(
       throw new ArtifactNotPublishableError(artifact.type);
     }
 
+    const { artifactId } = ManagedCloudPublishedArtifactLookupQuerySchema.parse({
+      artifactId: artifact.id,
+    });
     const response = await doFetch('/api/artifacts/publish', {
       method: 'POST',
       credentials: 'include',
       headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
-        artifactId: artifact.id,
+        artifactId,
         title: artifact.title ?? '',
         kind,
         ...(artifact.language ? { language: artifact.language } : {}),
@@ -120,23 +110,28 @@ export function createWebCloudPublisher(
       throw new Error(await readErrorMessage(response, 'Failed to publish artifact'));
     }
 
-    const body = (await response.json()) as PublishResponse;
-    if (typeof body.shareUrl !== 'string' || !body.shareUrl) {
-      throw new Error('The publish endpoint returned no share URL.');
+    const receipt = ManagedCloudPublishedArtifactPublishResponseSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    if (!receipt.success || receipt.data.artifactId !== artifactId) {
+      throw new Error(
+        'Publication could not be confirmed. The artifact may have been published, but its receipt was invalid.',
+      );
     }
+    const body = receipt.data;
 
     options.onPublished?.(
       {
         shareUrl: body.shareUrl,
-        visibility: readVisibility(body.visibility),
-        workspace: readWorkspace(body.workspace),
+        visibility: body.visibility,
+        workspace: body.workspace,
       },
-      artifact.id,
+      body.artifactId,
     );
 
     return {
       shareUrl: body.shareUrl,
-      ...(typeof body.publishedAt === 'string' ? { publishedAt: body.publishedAt } : {}),
+      publishedAt: body.publishedAt,
     };
   };
 }

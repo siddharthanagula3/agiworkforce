@@ -45,6 +45,22 @@ const MESSAGE_ID = 'msg-publish-test';
 const ARTIFACT_ID = 'artifact-publish-test';
 const CONTENT = '<h1>Sales dashboard</h1>';
 
+// UNRUN: source-authored confirmed receipts preserve the existing stale-flow fixtures.
+function publishBody(shareUrl: string, visibility = 'public') {
+  return {
+    artifactId: ARTIFACT_ID,
+    token: shareUrl.split('/').at(-1)!,
+    shareUrl,
+    publishedAt: '2026-08-05T00:00:00.000Z',
+    version: 1,
+    kind: 'html',
+    title: 'Sales dashboard',
+    sandboxed: true,
+    visibility,
+    workspace: null,
+  };
+}
+
 function lookupBody(shareUrl: string | null) {
   return {
     artifact: shareUrl === null ? null : {
@@ -119,11 +135,7 @@ describe('ArtifactsPanel · publish wiring', () => {
   it('publishes the selected artifact through POST /api/artifacts/publish', async () => {
     const fetchMock = vi.fn(async () =>
       Response.json(
-        {
-          token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
-          shareUrl: 'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
-          publishedAt: '2026-08-05T00:00:00.000Z',
-        },
+        publishBody('https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa'),
         { status: 201 },
       ),
     );
@@ -155,15 +167,30 @@ describe('ArtifactsPanel · publish wiring', () => {
     });
   });
 
+  it.each(['legacy', 'identity', 'audience'])('does not cache an unconfirmed %s receipt', async (invalid) => {
+    const valid = publishBody('https://example.test/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa');
+    const body = invalid === 'legacy'
+      ? { shareUrl: valid.shareUrl }
+      : invalid === 'identity'
+        ? { ...valid, artifactId: 'another-artifact' }
+        : { ...valid, visibility: 'unknown' };
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) =>
+      Response.json(init?.method === 'POST' ? body : lookupBody(null))));
+    render(<ArtifactsPanel />);
+    await act(async () => {
+      await expect(capturedPublish!({ content: CONTENT, versionIndex: 0 }))
+        .rejects.toThrow('Publication could not be confirmed');
+    });
+    expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]).toBeUndefined();
+    expect(capturedLink).toBeUndefined();
+    expect(capturedAudience).toBeUndefined();
+  });
+
   it('publishes the version the viewer selected, not the latest content', async () => {
     const OLDER = '<h1>Sales dashboard, first draft</h1>';
     const fetchMock = vi.fn(async () =>
       Response.json(
-        {
-          token: 'bbbbbbbbbbbbbbbbbbbbbbbb',
-          shareUrl: 'https://agiworkforce.com/shared-artifact/bbbbbbbbbbbbbbbbbbbbbbbb',
-          publishedAt: '2026-08-05T00:00:00.000Z',
-        },
+        publishBody('https://agiworkforce.com/shared-artifact/bbbbbbbbbbbbbbbbbbbbbbbb'),
         { status: 201 },
       ),
     );
@@ -187,12 +214,7 @@ describe('ArtifactsPanel · publish wiring', () => {
       'fetch',
       vi.fn(async () =>
         Response.json(
-          {
-            token: 'cccccccccccccccccccccccc',
-            shareUrl: 'https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc',
-            publishedAt: '2026-08-05T00:00:00.000Z',
-            visibility: 'public',
-          },
+          publishBody('https://agiworkforce.com/shared-artifact/cccccccccccccccccccccccc'),
           { status: 201 },
         ),
       ),
@@ -300,7 +322,7 @@ describe('ArtifactsPanel publication ownership', () => {
     if (transition === 'close') await act(async () => useArtifactsStore.getState().setPanelOpen(true));
     await expect(oldPublish({ content: CONTENT, versionIndex: 0 })).rejects.toThrow();
     await act(async () => {
-      post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+      post.resolve(Response.json(publishBody(OWNED_URL)));
       await pending;
     });
     expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]?.shareUrl).toBe(OWNED_URL);
@@ -313,7 +335,7 @@ describe('ArtifactsPanel publication ownership', () => {
     const get = deferredResponse();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) =>
       init?.method === 'POST'
-        ? Response.json({ shareUrl: OWNED_URL, visibility: 'invited' })
+        ? Response.json(publishBody(OWNED_URL, 'invited'))
         : get.promise));
     render(<ArtifactsPanel />);
     await act(async () => { await capturedPublish!({ content: CONTENT, versionIndex: 0 }); });
@@ -337,7 +359,7 @@ describe('ArtifactsPanel publication ownership', () => {
     const pending = publish({ content: CONTENT, versionIndex: 0 });
     await expect(publish({ content: CONTENT, versionIndex: 0 })).rejects.toThrow();
     await expect(oldAudience.onChange('invited')).rejects.toThrow();
-    await act(async () => { post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' })); await pending; });
+    await act(async () => { post.resolve(Response.json(publishBody(OWNED_URL))); await pending; });
     await expect(oldAudience.onChange('invited')).rejects.toThrow();
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0);
   });
@@ -377,7 +399,7 @@ describe('ArtifactsPanel publication ownership', () => {
     expect(capturedLink).toBeUndefined();
     await act(async () => {
       published = true;
-      post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+      post.resolve(Response.json(publishBody(OWNED_URL)));
       await pending;
     });
     await waitFor(() => expect(capturedLink).toBe(OWNED_URL));
@@ -439,7 +461,7 @@ describe('ArtifactsPanel publication ownership', () => {
       await expect(oldAudience.onChange('invited')).rejects.toThrow();
 
       await act(async () => {
-        post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+        post.resolve(Response.json(publishBody(OWNED_URL)));
         await pending;
       });
       expect(capturedLink).toBeUndefined();
@@ -475,7 +497,9 @@ describe('ArtifactsPanel publication ownership', () => {
       await act(async () => {
         old.resolve(Response.json(kind === 'lookup'
           ? lookupBody(OWNED_URL)
-          : { shareUrl: OWNED_URL, visibility: 'invited' }));
+          : kind === 'publish'
+            ? publishBody(OWNED_URL, 'invited')
+            : { shareUrl: OWNED_URL, visibility: 'invited' }));
         const outcomes = await settled;
         if (pending) expect(outcomes[0]?.status).toBe('rejected');
       });
@@ -512,14 +536,14 @@ describe('ArtifactsPanel publication ownership', () => {
       secondSettled = Promise.allSettled([second]);
       await waitFor(() => expect(posts).toBe(2));
       await act(async () => {
-        old.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+        old.resolve(Response.json(publishBody(OWNED_URL)));
         expect((await firstSettled)[0]?.status).toBe('rejected');
       });
       expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
       await expect(currentPublish({ content: CONTENT, versionIndex: 0 })).rejects.toThrow();
       expect(posts).toBe(2);
       await act(async () => {
-        current.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'invited' }));
+        current.resolve(Response.json(publishBody(OWNED_URL, 'invited')));
         expect((await secondSettled)[0]?.status).toBe('fulfilled');
       });
       expect(capturedLink).toBe(OWNED_URL);
@@ -527,8 +551,8 @@ describe('ArtifactsPanel publication ownership', () => {
     } finally {
       cleanup();
       finish();
-      old.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
-      current.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'invited' }));
+      old.resolve(Response.json(publishBody(OWNED_URL)));
+      current.resolve(Response.json(publishBody(OWNED_URL, 'invited')));
       await Promise.all([firstSettled, secondSettled]);
     }
   });
@@ -549,7 +573,7 @@ describe('ArtifactsPanel publication ownership', () => {
     const settled = Promise.allSettled([pending]);
     try {
       await act(async () => {
-        post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+        post.resolve(Response.json(publishBody(OWNED_URL)));
         expect((await settled)[0]?.status).toBe('rejected');
       });
       expect(retired).toBe(true);
@@ -559,7 +583,7 @@ describe('ArtifactsPanel publication ownership', () => {
       unsubscribe();
       cleanup();
       finish();
-      post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+      post.resolve(Response.json(publishBody(OWNED_URL)));
       await settled;
     }
   });
