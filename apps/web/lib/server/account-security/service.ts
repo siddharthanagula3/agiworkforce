@@ -9,6 +9,7 @@ import type {
 import {
   ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH,
   ACCOUNT_SECURITY_POLICY,
+  AccountSecurityRecoveryBatchIdSchema,
   accountSecurityHandoffPageHref,
   accountSecurityUndoPageHref,
   type AccountSecurityCredential,
@@ -358,32 +359,43 @@ export async function removeCredential(
   });
 }
 
+function requireRecoveryBatchId(batchId: string): void {
+  if (!AccountSecurityRecoveryBatchIdSchema.safeParse(batchId).success) {
+    throw createError.validation('Reload and generate new recovery keys before confirming them.');
+  }
+}
+
 export async function prepareRecoveryKeys(
   caller: AccountSecurityCaller,
 ): Promise<AccountSecurityRecoveryKeysResponse> {
   await enrolledOrAvailable(caller);
+  const recoveryBatchId = newOpaqueToken();
   const { keys, hashes } = generateRecoveryKeys(ACCOUNT_SECURITY_POLICY.recoveryKeyCount);
   const expiresAt = await storePendingRecoveryKeys(caller.db, {
     userId: caller.userId,
     sessionId: caller.sessionId,
     hashes,
+    batchId: recoveryBatchId,
     ttlMinutes: ACCOUNT_SECURITY_POLICY.pendingRecoveryKeysMinutes,
   });
-  return { recoveryKeys: keys, expiresAt: iso(expiresAt) };
+  return { recoveryBatchId, recoveryKeys: keys, expiresAt: iso(expiresAt) };
 }
 
 export async function confirmReplacementRecoveryKeys(
   caller: AccountSecurityCaller,
+  recoveryBatchId: string,
   request: NextRequest,
 ): Promise<void> {
+  requireRecoveryBatchId(recoveryBatchId);
   const replaced = await promotePendingRecoveryKeys(caller.db, {
     userId: caller.userId,
     sessionId: caller.sessionId,
     mode: 'replace',
+    batchId: recoveryBatchId,
   });
   if (replaced === null) {
     throw createError.conflict(
-      'These recovery keys expired, were generated on another device, or Advanced Account Security is off. Generate new recovery keys here and try again.',
+      'These recovery keys were superseded, expired, were generated on another device, or Advanced Account Security is off. Generate new recovery keys here and try again.',
     );
   }
   await emitIdentitySecurityEvent(caller.db, {
@@ -505,9 +517,10 @@ async function emailUndoLink(input: {
 export async function enrollAccountSecurity(
   caller: AccountSecurityCaller,
   ownerDb: DatabaseAdapter,
-  input: { emailCode: string; response: unknown },
+  input: { emailCode: string; response: unknown; recoveryBatchId: string },
   request: NextRequest,
 ): Promise<AccountSecurityEnrollmentResponse> {
+  requireRecoveryBatchId(input.recoveryBatchId);
   await requireAvailable(caller.userId);
   const credentials = await requireEnrollmentMethods(caller);
   const address = await requireSettledAddress(caller);
@@ -538,6 +551,7 @@ export async function enrollAccountSecurity(
       userId: caller.userId,
       sessionId: caller.sessionId,
       mode: 'enroll',
+      batchId: input.recoveryBatchId,
     });
     if (enrolledAt === null) return null;
     const undoExpiresAt = await armEnrollmentUndo(tx, {
@@ -551,7 +565,7 @@ export async function enrollAccountSecurity(
   });
   if (!enrolled) {
     throw createError.conflict(
-      'Your recovery keys expired, were generated on another device, or Advanced Account Security is already on. Generate new recovery keys here and try again.',
+      'Your recovery keys were superseded, expired, were generated on another device, or Advanced Account Security is already on. Generate new keys, request a new email code and confirm with your passkey again.',
     );
   }
   await rememberEnrollment(caller.userId, enrolled.enrolledAt);

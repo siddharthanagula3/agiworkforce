@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { accountSecurityCredentialPath } from '@agiworkforce/cloud-contracts/account-security';
 import { fetchWithStepUp, requestStepUpGrant, STEP_UP_TOKEN_HEADER } from '@/features/auth/step-up-fetch';
-import { removeCredential, type StepUpRunner } from './account-security-client';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { confirmReplacementRecoveryKeys, enrollAccountSecurity, generateRecoveryKeys, removeCredential, type StepUpRunner } from './account-security-client';
 
 vi.mock('@simplewebauthn/browser', () => ({
   browserSupportsWebAuthn: vi.fn(() => false),
@@ -72,5 +73,59 @@ describe('account security credential removal proof target', () => {
     await removeCredential('credential-a');
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe('include');
+  });
+});
+
+
+describe('recovery batch receipt transport', () => {
+  const recoveryBatchId = 'a'.repeat(43);
+
+  it('returns the canonical prepared keys, expiry and receipt together', async () => {
+    const prepared = { recoveryKeys: ['AAAA-BBBB'], expiresAt: '2026-11-07T12:30:00.000Z', recoveryBatchId };
+    fetchMock.mockResolvedValueOnce(json(prepared));
+    await expect(generateRecoveryKeys()).resolves.toEqual(prepared);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/account-security/recovery-keys');
+  });
+
+  it.each([undefined, null, '', 'legacy'])('refuses a preparation response without a valid receipt %s', async (batchId) => {
+    fetchMock.mockResolvedValueOnce(json({ recoveryKeys: ['AAAA-BBBB'], expiresAt: '2026-11-07T12:30:00.000Z', recoveryBatchId: batchId }));
+    await expect(generateRecoveryKeys()).rejects.toMatchObject({ status: 409 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['replace', 'enroll'] as const)('preserves the exact %s receipt through step-up replay', async (mode) => {
+    const path = mode === 'replace' ? '/api/account-security/recovery-keys' : '/api/account-security/enrollment';
+    const assertion = { id: 'passkey', response: { authenticatorData: 'fixture' } };
+    vi.mocked(startAuthentication).mockResolvedValue(assertion as never);
+    const bodies: unknown[] = [];
+    fetchMock.mockImplementation(async (url, init) => {
+      if (String(url) === '/api/account-security/verification/options') return json({ challenge: 'fixture-challenge' });
+      if (String(url) === '/api/auth/step-up') {
+        expect(JSON.parse(String(init?.body))).toEqual({ action: mode === 'replace' ? 'account_security.change' : 'account_security.enroll' });
+        return json({ token: 'fixture-batch-proof' });
+      }
+      expect(String(url)).toBe(path);
+      expect(init?.credentials).toBe('include');
+      expect(new Headers(init?.headers).get('x-csrf-token')).toBe('fixture-csrf');
+      bodies.push(JSON.parse(String(init?.body)));
+      if (!new Headers(init?.headers).has(STEP_UP_TOKEN_HEADER)) {
+        return json({ error: { code: 'STEP_UP_REQUIRED', details: { action: mode === 'replace' ? 'account_security.change' : 'account_security.enroll' } } }, 403);
+      }
+      return mode === 'replace' ? new Response(null, { status: 204 }) : json({ enrolledAt: 'now', verifiedUntil: 'later', sessionsSignedOut: 0, devicesSignedOut: 0 }, 201);
+    });
+    if (mode === 'replace') await confirmReplacementRecoveryKeys(runStepUp, recoveryBatchId);
+    else await enrollAccountSecurity(runStepUp, '123456', recoveryBatchId);
+    const expected = mode === 'replace'
+      ? { recoveryKeysSaved: true, recoveryBatchId }
+      : { recoveryKeysSaved: true, recoveryBatchId, emailCode: '123456', response: assertion };
+    expect(bodies).toEqual([expected, expected]);
+    expect(vi.mocked(startAuthentication)).toHaveBeenCalledTimes(mode === 'enroll' ? 1 : 0);
+  });
+
+  it('surfaces stale replacement conflict without generating or confirming another batch', async () => {
+    fetchMock.mockResolvedValueOnce(json({ error: { message: 'Generate new recovery keys.' } }, 409));
+    await expect(confirmReplacementRecoveryKeys(runStepUp, recoveryBatchId)).rejects.toMatchObject({ status: 409 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ recoveryKeysSaved: true, recoveryBatchId });
   });
 });

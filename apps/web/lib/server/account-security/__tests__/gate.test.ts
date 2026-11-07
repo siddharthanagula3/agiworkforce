@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { ACCOUNT_SECURITY_POLICY } from '@agiworkforce/cloud-contracts/account-security';
 type ScanModule0 = typeof import('../webauthn');
 type ScanModule1 = typeof import('@agiworkforce/data-layer');
 
@@ -8,6 +9,7 @@ const SESSION = 'sess_signed_in_with_password';
 const DESKTOP_SESSION = 'sess_redeemed_in_the_desktop_window';
 const CHALLENGE = 'c'.repeat(43);
 const OWNER_EMAIL = 'owner@example.com';
+const RECOVERY_BATCH = 'r'.repeat(43);
 
 const state = vi.hoisted(() => {
   process.env['CSRF_SECRET'] = 'gate-proof-signing-secret-that-is-long-enough';
@@ -22,6 +24,8 @@ const state = vi.hoisted(() => {
     attackerPasskeys: false,
     addressJustLearned: false,
     statements: [] as string[],
+    bindings: [] as unknown[][],
+    acceptEnrollmentCode: false,
   };
 });
 
@@ -153,6 +157,15 @@ function passkeyRow(id: string, deviceType: 'singleDevice' | 'multiDevice') {
 function answer(sql: string, params: unknown[]): Record<string, unknown>[] {
   const statement = sql.toLowerCase();
   state.statements.push(statement);
+  state.bindings.push(params);
+  if (statement.includes('insert into public.account_security_enrollments') && statement.includes('returning pending_recovery_keys_expire_at')) {
+    return [{ pending_recovery_keys_expire_at: new Date('2026-11-07T12:30:00.000Z') }];
+  }
+  if (statement.includes("purpose = 'enrollment_email'") && statement.includes('returning id::text as id')) {
+    const accepted = state.acceptEnrollmentCode;
+    state.acceptEnrollmentCode = false;
+    return accepted ? [{ id: 'email-proof' }] : [];
+  }
   if (statement.includes('from public.profiles') && statement.includes('changed_recently')) {
     return [{ email: OWNER_EMAIL, changed_recently: state.addressJustLearned }];
   }
@@ -193,7 +206,7 @@ function answer(sql: string, params: unknown[]): Record<string, unknown>[] {
 
 interface AnsweringDb {
   query: (sql: string, params?: unknown[]) => Promise<Record<string, unknown>[]>;
-  execute: (sql: string) => Promise<number>;
+  execute: (sql: string, params?: unknown[]) => Promise<number>;
   transaction: (run: (tx: AnsweringDb) => Promise<unknown>) => Promise<unknown>;
   withUser: () => AnsweringDb;
   withOrg: () => AnsweringDb;
@@ -202,8 +215,9 @@ interface AnsweringDb {
 function answeringDb(): AnsweringDb {
   const db: AnsweringDb = {
     query: async (sql, params = []) => answer(sql, params),
-    execute: async (sql) => {
+    execute: async (sql, params = []) => {
       state.statements.push(sql.toLowerCase());
+      state.bindings.push(params);
       return sql.toLowerCase().includes('update public.account_security_credentials') ? 1 : 0;
     },
     transaction: async (run) => run(db),
@@ -228,6 +242,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { isPasskeyRequiredError } from '../gate';
+import { confirmReplacementRecoveryKeys, enrollAccountSecurity as enrollService, prepareRecoveryKeys, type AccountSecurityCaller } from '../service';
 
 function browserRequest(): NextRequest {
   return new NextRequest('https://agiworkforce.com/api/chat/conversations');
@@ -277,6 +292,8 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
     state.attackerPasskeys = false;
     state.addressJustLearned = false;
     state.statements = [];
+    state.bindings = [];
+    state.acceptEnrollmentCode = false;
   });
 
   it('lets a session through when the account has not enrolled', async () => {
@@ -336,7 +353,7 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
 
   it('refuses to turn the mode on with only a password step-up grant', async () => {
     const response = await enrollAccountSecurity(
-      passwordOnlyEnrollment({ recoveryKeysSaved: true }),
+      passwordOnlyEnrollment({ recoveryKeysSaved: true, recoveryBatchId: RECOVERY_BATCH }),
     );
 
     expect(response.status).toBe(400);
@@ -348,7 +365,7 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
 
     const response = await enrollAccountSecurity(
       passwordOnlyEnrollment({
-        recoveryKeysSaved: true,
+        recoveryKeysSaved: true, recoveryBatchId: RECOVERY_BATCH,
         emailCode: '000000',
         response: { id: 'attacker-phone-credential-id-0000', type: 'public-key' },
       }),
@@ -370,7 +387,7 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
 
     const response = await enrollAccountSecurity(
       passwordOnlyEnrollment({
-        recoveryKeysSaved: true,
+        recoveryKeysSaved: true, recoveryBatchId: RECOVERY_BATCH,
         emailCode: '000000',
         response: { id: 'attacker-phone-credential-id-0000', type: 'public-key' },
       }),
@@ -385,4 +402,50 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
     );
     expect(enrollmentWasPromoted()).toBe(false);
   });
+
+  it('returns exactly the batch identity persisted with preparation', async () => {
+    const caller = { db: answeringDb(), userId: ACCOUNT, sessionId: SESSION } as unknown as AccountSecurityCaller;
+    const prepared = await prepareRecoveryKeys(caller);
+    expect(prepared.recoveryBatchId).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(prepared.recoveryKeys).toHaveLength(ACCOUNT_SECURITY_POLICY.recoveryKeyCount);
+    expect(prepared.expiresAt).toBe('2026-11-07T12:30:00.000Z');
+    const index = state.statements.findIndex((sql) => sql.includes('insert into public.account_security_enrollments'));
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(state.bindings[index]?.[4]).toBe(prepared.recoveryBatchId);
+    expect(state.bindings[index]?.[0]).toBe(ACCOUNT);
+    expect(state.bindings[index]?.[3]).toBe(SESSION);
+  });
+
+  it.each([undefined, null, '', 'legacy', '!'.repeat(43), ...['\n', '\r', '\u2028', '\u2029'].map((terminator) => 'a'.repeat(43) + terminator)])('rejects malformed receipt %s at both service boundaries before proof or SQL', async (recoveryBatchId) => {
+    const caller = { db: answeringDb(), userId: ACCOUNT, sessionId: SESSION } as unknown as AccountSecurityCaller;
+    const request = browserRequest();
+    await expect(confirmReplacementRecoveryKeys(caller, recoveryBatchId as string, request)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(enrollService(caller, caller.db, { recoveryBatchId: recoveryBatchId as string, emailCode: '123456', response: {} }, request)).rejects.toMatchObject({ statusCode: 400 });
+    expect(state.statements).toEqual([]);
+  });
+
+  it('passes the acknowledged replacement batch to promotion and surfaces stale conflict', async () => {
+    const caller = { db: answeringDb(), userId: ACCOUNT, sessionId: SESSION } as unknown as AccountSecurityCaller;
+    await expect(confirmReplacementRecoveryKeys(caller, RECOVERY_BATCH, browserRequest())).rejects.toMatchObject({ statusCode: 409 });
+    const index = state.statements.findIndex((sql) => sql.includes('set recovery_key_hashes = pending_recovery_key_hashes'));
+    expect(state.bindings[index]).toEqual([ACCOUNT, 'replace', SESSION, RECOVERY_BATCH]);
+  });
+
+  it('keeps the enrollment receipt after consuming proof and explains renewed proof on stale conflict', async () => {
+    state.attackerPasskeys = true;
+    state.acceptEnrollmentCode = true;
+    const response = await enrollAccountSecurity(passwordOnlyEnrollment({
+      recoveryKeysSaved: true, recoveryBatchId: RECOVERY_BATCH, emailCode: '123456',
+      response: { id: 'attacker-phone-credential-id-0000', type: 'public-key' },
+    }));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { message: expect.stringContaining('new email code') } });
+    const promoted = state.statements.findIndex((sql) => sql.includes('set recovery_key_hashes = pending_recovery_key_hashes'));
+    const proof = state.statements.findIndex((sql) => sql.includes('returning id::text as id'));
+    expect(proof).toBeGreaterThanOrEqual(0);
+    expect(promoted).toBeGreaterThan(proof);
+    expect(state.bindings[promoted]).toEqual([ACCOUNT, 'enroll', SESSION, RECOVERY_BATCH]);
+    expect(state.acceptEnrollmentCode).toBe(false);
+  });
+
 });

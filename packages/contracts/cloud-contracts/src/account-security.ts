@@ -97,6 +97,7 @@ export type AccountSecurityStatus =
   | { state: 'verification_required'; recovery: AccountSecurityRecoveryHold | null };
 
 export interface AccountSecurityRecoveryKeysResponse {
+  recoveryBatchId: string;
   recoveryKeys: string[];
   expiresAt: string;
 }
@@ -137,6 +138,8 @@ export interface AccountSecurityHandoffVerifiedResponse {
 
 const webAuthnResponseSchema = z.record(z.string(), z.unknown());
 
+export const AccountSecurityRecoveryBatchIdSchema = z.string().length(43).regex(/^[A-Za-z0-9_-]{43}$/);
+
 const handoffTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
 export const AccountSecurityRegistrationRequestSchema = z
@@ -151,12 +154,16 @@ export const AccountSecurityAssertionRequestSchema = z
   .strict();
 
 export const AccountSecurityRecoveryKeysSavedSchema = z
-  .object({ recoveryKeysSaved: z.literal(true) })
+  .object({
+    recoveryKeysSaved: z.literal(true),
+    recoveryBatchId: AccountSecurityRecoveryBatchIdSchema,
+  })
   .strict();
 
 export const AccountSecurityEnrollmentRequestSchema = z
   .object({
     recoveryKeysSaved: z.literal(true),
+    recoveryBatchId: AccountSecurityRecoveryBatchIdSchema,
     emailCode: z.string().length(ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH).regex(/^\d+$/),
     response: webAuthnResponseSchema,
   })

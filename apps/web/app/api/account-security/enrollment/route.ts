@@ -47,7 +47,7 @@ async function handleEnroll(request: NextRequest) {
   const enrolled: AccountSecurityEnrollmentResponse = await enrollAccountSecurity(
     caller,
     getNeonDb(),
-    { emailCode: body.emailCode, response: body.response },
+    { emailCode: body.emailCode, response: body.response, recoveryBatchId: body.recoveryBatchId },
     request,
   );
   return NextResponse.json(enrolled, { status: 201 });
