@@ -18,7 +18,7 @@ import { managedCloudPublishedArtifactPath, managedCloudPublishedArtifactVersion
 import {
   clearSiteSharedData,
   deleteSiteAndData,
-  listPublishedSites,
+  listPublishedSitesPage,
   readPublishedSite,
   republishSiteVersion,
   unpublishSite,
@@ -70,9 +70,9 @@ describe('detail request authority', () => {
   it('forwards captured epoch, cancellation and caller-owned 401 recovery for detail reads', async () => {
     const { context, options } = authority();
     mockGet.mockResolvedValue({ artifacts: [] });
-    await listPublishedSites(context.signal, context);
+    await listPublishedSitesPage(null, context.signal, context);
     expect(mockGet).toHaveBeenCalledWith('/api/artifacts/publish', options);
-    expect(context.assertCurrent).toHaveBeenCalledTimes(1);
+    expect(context.assertCurrent).toHaveBeenCalledTimes(2);
   });
 
   it('forwards authority without changing restore endpoint or supplying content', async () => {
@@ -97,7 +97,7 @@ describe('detail request authority', () => {
     controller.abort();
     await expect(unpublishSite(site.token, context)).rejects.toThrow('retired view');
     await expect(clearSiteSharedData(site.token, context)).rejects.toThrow('retired view');
-    await expect(listPublishedSites(context.signal, context)).rejects.toThrow('retired view');
+    await expect(listPublishedSitesPage(null, context.signal, context)).rejects.toThrow('retired view');
     expect(mockDelete).not.toHaveBeenCalled();
     expect(mockGet).not.toHaveBeenCalled();
   });
@@ -319,4 +319,75 @@ describe('mobile exact publication detail', () => {
       expect(mockGet).toHaveBeenCalledTimes(1);
     },
   );
+});
+
+// UNRUN: bounded single-page reads, legacy coverage and opaque cursors.
+describe('mobile publication pages', () => {
+  const artifact = {
+    token: 'a'.repeat(24), artifactId: 'art-1', conversationId: null, title: 'Site',
+    kind: 'html', language: 'html', contentChars: 12, version: 1, visibility: 'public',
+    createdAt: '2026-10-01', updatedAt: '2026-10-01',
+    shareUrl: `https://example.test/shared-artifact/${'a'.repeat(24)}`, sandboxed: true,
+  };
+
+  it('preserves backend order, workspace metadata and an opaque encoded cursor', async () => {
+    const cursor = 'older+/=?& #';
+    const olderUpdated = { ...artifact, token: 'b'.repeat(24), updatedAt: '2026-09-01' };
+    mockGet.mockResolvedValue({ artifacts: [olderUpdated, artifact],
+      workspace: { memberCount: 4 }, pageInfo: { nextCursor: 'next+/=' } });
+    await expect(listPublishedSitesPage(cursor)).resolves.toEqual({
+      sites: [olderUpdated, artifact], workspaceMemberCount: 4, nextCursor: 'next+/=',
+    });
+    expect(mockGet.mock.calls).toEqual([[
+      '/api/artifacts/publish?cursor=older%2B%2F%3D%3F%26+%23', { signal: undefined },
+    ]]);
+  });
+
+  it('keeps missing first-page metadata unknown rather than terminal', async () => {
+    mockGet.mockResolvedValue({ artifacts: [] });
+    await expect(listPublishedSitesPage()).resolves.toEqual({
+      sites: [], workspaceMemberCount: null, nextCursor: undefined,
+    });
+  });
+
+  it.each([{}, { pageInfo: {} }, { pageInfo: { nextCursor: '' } },
+    { pageInfo: { nextCursor: 'same' } }])('rejects unconfirmed continuation metadata %p', async (metadata) => {
+    mockGet.mockResolvedValue({ artifacts: [artifact], ...metadata });
+    await expect(listPublishedSitesPage('same')).rejects.toThrow();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['', 'x'.repeat(2049)])('rejects out-of-bounds outgoing cursor before dispatch', async (cursor) => {
+    await expect(listPublishedSitesPage(cursor)).rejects.toThrow();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('accepts the canonical page and cursor boundary without traversing', async () => {
+    const artifacts = Array.from({ length: 200 }, (_, i) => ({ ...artifact, token: String(i) }));
+    mockGet.mockResolvedValue({ artifacts, pageInfo: { nextCursor: 'y'.repeat(2048) } });
+    await expect(listPublishedSitesPage('x'.repeat(2048))).resolves.toEqual({
+      sites: artifacts, workspaceMemberCount: null, nextCursor: 'y'.repeat(2048),
+    });
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { artifacts: Array.from({ length: 201 }, (_, i) => ({ ...artifact, token: String(i) })) },
+    { artifacts: [artifact, artifact] },
+    { artifacts: [], pageInfo: { nextCursor: 'x'.repeat(2049) } },
+  ])('rejects oversized, duplicate-key or invalid metadata pages %p', async (raw) => {
+    mockGet.mockResolvedValue(raw);
+    await expect(listPublishedSitesPage()).rejects.toThrow();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a stale successful response before parsing it', async () => {
+    let current = true;
+    const authority: SiteRequestAuthority = {
+      accountEpoch: { ownerId: 'owner-1', epoch: 3 }, signal: new AbortController().signal,
+      assertCurrent: () => { if (!current) throw new Error('retired'); },
+    };
+    mockGet.mockImplementation(async () => { current = false; return {}; });
+    await expect(listPublishedSitesPage(null, undefined, authority)).rejects.toThrow('retired');
+  });
 });

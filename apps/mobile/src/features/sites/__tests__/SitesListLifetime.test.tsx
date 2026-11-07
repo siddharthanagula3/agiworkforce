@@ -54,6 +54,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { SitesScreen } from '../SitesScreen';
 import { PressableBox } from '@/components/ui/PressableBox';
+import { Button } from '@/components/ui/Button';
 import { ErrorBanner } from '@/src/shared/components/cloud-screen';
 
 function deferred<T>() {
@@ -85,10 +86,16 @@ const SITE = {
   sandboxed: true,
 };
 
-const response = (title = SITE.title) => ({ artifacts: [{ ...SITE, title }] });
+const response = (title = SITE.title, nextCursor: string | null = null) => ({
+  artifacts: [{ ...SITE, title }], pageInfo: { nextCursor },
+});
 const refresh = () => screen.UNSAFE_getByType(RefreshControl).props.onRefresh as () => void;
 const rowPress = () => screen.UNSAFE_getAllByType(PressableBox)
   .find((row) => row.props.accessibilityLabel === `${SITE.title}. Anyone with the link`)!.props.onPress as () => void;
+
+const pageButton = (title: string) => screen.UNSAFE_getAllByType(Button)
+  .find((button) => button.props.title === title)!;
+const pagePress = (title: string) => pageButton(title).props.onPress as () => void;
 
 describe('UNRUN source-only Sites list lifetime fixtures', () => {
   beforeEach(() => {
@@ -197,7 +204,7 @@ describe('UNRUN source-only Sites list lifetime fixtures', () => {
     mockGet.mockImplementationOnce(() => pending.promise);
     act(() => refresh()());
     const pendingRow = rowPress();
-    await act(async () => pending.resolve({ artifacts: [] }));
+    await act(async () => pending.resolve({ artifacts: [], pageInfo: { nextCursor: null } }));
     expect(screen.getByText('Nothing published')).toBeOnTheScreen();
     act(() => pendingRow());
     expect(mockPush).not.toHaveBeenCalled();
@@ -272,4 +279,193 @@ describe('UNRUN source-only Sites list lifetime fixtures', () => {
     act(() => useChatAppModeStore.setState({ appMode: 'cloud' }));
     await screen.findByText(SITE.title);
   });
+
+  it('replaces one page at a time and retries the exact failed Older and Back cursors', async () => {
+    mockGet.mockResolvedValueOnce(response(SITE.title, 'older+/='));
+    render(<SitesScreen />);
+    await screen.findByText(SITE.title);
+    const firstRow = rowPress();
+    const firstOlder = pagePress('Older');
+    mockGet.mockRejectedValueOnce(new Error('older failed'));
+    act(() => firstOlder());
+    await screen.findByText('Could not load your published sites.');
+    expect(screen.getByText(SITE.title)).toBeOnTheScreen();
+    const failedOlderRetry = screen.UNSAFE_getByType(ErrorBanner).props.onRetry;
+    const count = mockGet.mock.calls.length;
+    act(() => { firstRow(); firstOlder(); });
+    expect(mockGet).toHaveBeenCalledTimes(count);
+    expect(mockPush).not.toHaveBeenCalled();
+    act(() => rowPress()());
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    mockGet.mockResolvedValueOnce(response('Older page', 'oldest'));
+    act(() => failedOlderRetry());
+    await screen.findByText('Older page');
+    expect(screen.queryByText(SITE.title)).not.toBeOnTheScreen();
+    expect(mockGet.mock.calls.slice(1).map(([path]) => path)).toEqual([
+      '/api/artifacts/publish?cursor=older%2B%2F%3D',
+      '/api/artifacts/publish?cursor=older%2B%2F%3D',
+    ]);
+    const back = pagePress('Back to first page');
+    const older = pagePress('Older');
+    mockGet.mockRejectedValueOnce(new Error('back failed'));
+    act(() => back());
+    await screen.findByText('Could not load your published sites.');
+    expect(screen.getByText('Older page')).toBeOnTheScreen();
+    const before = mockGet.mock.calls.length;
+    act(() => { back(); older(); failedOlderRetry(); });
+    expect(mockGet).toHaveBeenCalledTimes(before);
+    mockGet.mockResolvedValueOnce(response('First again'));
+    act(() => screen.UNSAFE_getByType(ErrorBanner).props.onRetry());
+    await screen.findByText('First again');
+    expect(mockGet.mock.calls.slice(-2).map(([path]) => path)).toEqual([
+      '/api/artifacts/publish', '/api/artifacts/publish',
+    ]);
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'lets retained same-view refresh supersede Older and ignores its later %s', async (outcome) => {
+      mockGet.mockResolvedValueOnce(response(SITE.title, 'older'));
+      render(<SitesScreen />);
+      await screen.findByText(SITE.title);
+      const sameViewRefresh = refresh();
+      const oldRow = rowPress();
+      const older = pagePress('Older');
+      const pendingOlder = deferred<unknown>();
+      const pendingRefresh = deferred<unknown>();
+      mockGet.mockImplementationOnce(() => pendingOlder.promise).mockImplementationOnce(() => pendingRefresh.promise);
+      act(() => { older(); oldRow(); older(); });
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(pageButton('Older').props.disabled).toBe(true);
+      const pendingControl = pagePress('Older');
+      const pendingRow = rowPress();
+      act(() => sameViewRefresh());
+      expect(mockGet.mock.calls[1][1].signal.aborted).toBe(true);
+      expect(mockGet.mock.calls[2][0]).toBe('/api/artifacts/publish');
+      await act(async () => {
+        if (outcome === 'resolve') pendingOlder.resolve(response('Obsolete page'));
+        else pendingOlder.reject(new Error('Obsolete error'));
+      });
+      expect(screen.UNSAFE_getByType(RefreshControl).props.refreshing).toBe(true);
+      expect(screen.queryByText('Obsolete page')).not.toBeOnTheScreen();
+      await act(async () => pendingRefresh.resolve(response(SITE.title, 'fresh-older')));
+      expect(screen.UNSAFE_getByType(RefreshControl).props.refreshing).toBe(false);
+      const calls = mockGet.mock.calls.length;
+      act(() => { pendingControl(); pendingRow(); older(); oldRow(); });
+      expect(mockGet).toHaveBeenCalledTimes(calls);
+      expect(mockPush).not.toHaveBeenCalled();
+      act(() => rowPress()());
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      mockGet.mockResolvedValueOnce(response('Current older'));
+      act(() => pagePress('Older')());
+      await screen.findByText('Current older');
+      expect(mockGet.mock.calls.at(-1)?.[0]).toBe('/api/artifacts/publish?cursor=fresh-older');
+    },
+  );
+
+  it.each(['legacy', 'error', 'terminal', 'more'] as const)(
+    'uses honest first-page empty wording for %s', async (kind) => {
+      if (kind === 'error') mockGet.mockRejectedValueOnce(new Error('failed'));
+      else mockGet.mockResolvedValueOnce({ artifacts: [], ...(kind === 'legacy' ? {} : {
+        pageInfo: { nextCursor: kind === 'more' ? 'older' : null },
+      }) });
+      render(<SitesScreen />);
+      await screen.findByText(kind === 'terminal' ? 'Nothing published' : 'No sites on this page');
+      if (kind !== 'terminal') expect(screen.queryByText('Nothing published')).not.toBeOnTheScreen();
+      if (kind === 'legacy') expect(screen.getByText('0 sites on this page. Page coverage is unknown.')).toBeOnTheScreen();
+    },
+  );
+
+  it('keeps a terminal empty continuation recoverable with a current Back control', async () => {
+    mockGet.mockResolvedValueOnce(response(SITE.title, 'older'));
+    render(<SitesScreen />);
+    await screen.findByText(SITE.title);
+    mockGet.mockResolvedValueOnce({ artifacts: [], pageInfo: { nextCursor: null } });
+    act(() => pagePress('Older')());
+    await screen.findByText('No sites on this page');
+    expect(screen.queryByText('Nothing published')).not.toBeOnTheScreen();
+    mockGet.mockResolvedValueOnce(response('Recovered first'));
+    act(() => pagePress('Back to first page')());
+    await screen.findByText('Recovered first');
+    expect(mockGet.mock.calls.at(-1)?.[0]).toBe('/api/artifacts/publish');
+  });
+
+  it.each(['mode', 'account', 'signedIn', 'loaded'] as const)(
+    'retires Older, Back and Retry through a batched %s round trip', async (transition) => {
+      mockGet.mockResolvedValueOnce(response(SITE.title, 'older'));
+      render(<SitesScreen />);
+      await screen.findByText(SITE.title);
+      const oldOlder = pagePress('Older');
+      mockGet.mockResolvedValueOnce(response('Later page', 'oldest'));
+      act(() => oldOlder());
+      await screen.findByText('Later page');
+      const oldBack = pagePress('Back to first page');
+      mockGet.mockRejectedValueOnce(new Error('failed'));
+      act(() => oldBack());
+      await screen.findByText('Could not load your published sites.');
+      const oldRetry = screen.UNSAFE_getByType(ErrorBanner).props.onRetry;
+      const currentOlder = pagePress('Older');
+      const currentBack = pagePress('Back to first page');
+      mockGet.mockResolvedValue(response('Fresh view', 'new-older'));
+      act(() => {
+        if (transition === 'mode') {
+          useChatAppModeStore.setState({ appMode: 'local' });
+          useChatAppModeStore.setState({ appMode: 'cloud' });
+        } else if (transition === 'account') {
+          activateCloudAccount('user-2'); activateCloudAccount('user-1');
+        } else if (transition === 'signedIn') {
+          useAuthStore.setState({ isClerkSignedIn: false });
+          useAuthStore.setState({ isClerkSignedIn: true });
+        } else {
+          useAuthStore.setState({ isClerkLoaded: false });
+          useAuthStore.setState({ isClerkLoaded: true });
+        }
+        oldOlder(); oldBack(); oldRetry(); currentOlder(); currentBack();
+      });
+      await screen.findByText('Fresh view');
+      const calls = mockGet.mock.calls.length;
+      act(() => { oldOlder(); oldBack(); oldRetry(); currentOlder(); currentBack(); });
+      expect(mockGet).toHaveBeenCalledTimes(calls);
+      mockGet.mockResolvedValueOnce(response('Current page'));
+      act(() => pagePress('Older')());
+      await screen.findByText('Current page');
+    },
+  );
+
+
+  it('retires Retry synchronously and keeps pending Back and row callbacks retired after failure', async () => {
+    mockGet.mockResolvedValueOnce(response(SITE.title, 'older'));
+    render(<SitesScreen />);
+    await screen.findByText(SITE.title);
+    mockGet.mockResolvedValueOnce(response(SITE.title, 'oldest'));
+    act(() => pagePress('Older')());
+    await screen.findByText('Back to first page');
+    const back = pagePress('Back to first page');
+    const beforeRow = rowPress();
+    const pending = deferred<unknown>();
+    mockGet.mockImplementationOnce(() => pending.promise);
+    act(() => { back(); beforeRow(); back(); });
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(pageButton('Back to first page').props.disabled).toBe(true);
+    expect(pageButton('Older').props.disabled).toBe(true);
+    const pendingBack = pagePress('Back to first page');
+    const pendingRow = rowPress();
+    await act(async () => pending.reject(new Error('Back failed')));
+    act(() => { pendingBack(); pendingRow(); beforeRow(); back(); });
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(mockPush).not.toHaveBeenCalled();
+    const retry = screen.UNSAFE_getByType(ErrorBanner).props.onRetry;
+    const retryPending = deferred<unknown>();
+    mockGet.mockImplementationOnce(() => retryPending.promise);
+    act(() => { retry(); retry(); });
+    expect(mockGet).toHaveBeenCalledTimes(4);
+    await act(async () => retryPending.reject(new Error('Back still failed')));
+    act(() => retry());
+    expect(mockGet).toHaveBeenCalledTimes(4);
+    mockGet.mockResolvedValueOnce(response('Recovered'));
+    act(() => screen.UNSAFE_getByType(ErrorBanner).props.onRetry());
+    await screen.findByText('Recovered');
+  });
+
 });

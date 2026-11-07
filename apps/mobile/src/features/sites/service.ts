@@ -1,5 +1,7 @@
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS,
   ManagedCloudPublishedArtifactDataClearResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactDetailResponseSchema,
@@ -44,20 +46,41 @@ function requestOptions(authority: SiteRequestAuthority) {
   };
 }
 
-export interface PublishedSiteList {
+export interface PublishedSitePage {
   sites: ManagedCloudPublishedArtifact[];
   workspaceMemberCount: number | null;
+  nextCursor: string | null | undefined;
 }
 
-export async function listPublishedSites(signal?: AbortSignal, authority?: SiteRequestAuthority): Promise<PublishedSiteList> {
-  const body = ManagedCloudPublishedArtifactListResponseSchema.parse(
-    await api.get<unknown>(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH, authority ? requestOptions(authority) : { signal }),
-  );
+const PublishedSitePageResponseSchema = ManagedCloudPublishedArtifactListResponseSchema.extend({
+  artifacts: ManagedCloudPublishedArtifactListResponseSchema.shape.artifacts
+    .max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS),
+});
+
+export async function listPublishedSitesPage(
+  cursor: string | null = null,
+  signal?: AbortSignal,
+  authority?: SiteRequestAuthority,
+): Promise<PublishedSitePage> {
+  if (cursor !== null && (cursor.length === 0 || cursor.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS)) {
+    throw new Error('Invalid publication page cursor');
+  }
+  const path = cursor === null ? MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH
+    : `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}?${new URLSearchParams({ cursor })}`;
+  const raw = await api.get<unknown>(path, authority ? requestOptions(authority) : { signal });
+  authority?.assertCurrent();
+  const body = PublishedSitePageResponseSchema.parse(raw);
+  if (cursor !== null && (!body.pageInfo || body.pageInfo.nextCursor === cursor)) {
+    throw new Error('The next publication page could not be confirmed. Refresh to try again.');
+  }
+  // FlatList keys must be unique within the single accepted page.
+  if (new Set(body.artifacts.map((site) => site.token)).size !== body.artifacts.length) {
+    throw new Error('Publication page contains duplicate sites');
+  }
   return {
-    sites: [...body.artifacts].sort(
-      (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
-    ),
+    sites: body.artifacts,
     workspaceMemberCount: body.workspace?.memberCount ?? null,
+    nextCursor: body.pageInfo?.nextCursor,
   };
 }
 
