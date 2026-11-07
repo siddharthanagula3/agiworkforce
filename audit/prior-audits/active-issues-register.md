@@ -10536,6 +10536,42 @@ original-key reconciliation. Source reasoning is not React/SDK/browser/transport
 acceptance. No product tests, lint, typechecks, builds, installations, live account
 actions, migration application or deployment ran.
 
+Web schedule-value adoption addendum, 2026-11-07: Source-corrected in
+`69c2bd0aee7e7ab664810aabd1e314a5413c3d03`. A cancellation confirmation now
+captures an immutable JSON body from its original owned ready snapshot only
+when the exact precondition marker and strict schedule pair are present.
+Timestamp strings, microseconds and explicit null remain unchanged. Dispatch
+uses PUT to the protected cancel-schedule endpoint, captured Bearer authority,
+omitted cookies, browser redirect rejection and final state checks after CSRF
+and token awaits. There is no legacy fallback, mutation retry or auth replay.
+Missing provenance is not presented as an expired cancellation deadline.
+
+The protected endpoint now exports PUT only; the legacy cancellation endpoint
+still exports POST. This separation prevents ordinary method-preserving
+redirects from invoking that inspected legacy POST handler. It is not a claim
+about arbitrary redirects, unknown edge dispatch rules or native transport
+retries. Browser redirect:error is independently requested. Mobile remains on
+the legacy endpoint pending its separate adoption.
+
+Reader-owned read counters fence both dispatch and terminal refusal or
+uncertainty. A status request started before the outcome, or a change to cache
+state alone, cannot restore cancellation admission after close/reopen. A fresh
+successful original-owner status read and a new confirmation are required.
+GET-only recovery does not report an ambiguous mutation as successful merely
+because the later schedule is absent. The fence is distinct from exact-state
+compare-and-set and lifetime: a valid unchanged-state receipt can still settle
+its own cache write, while a newer state is preserved.
+
+Independent source review accepted eleven source/fixture files. UNRUN fixtures
+cover marker absence, exact microseconds/null, refusal and transport uncertainty,
+stale reads, invalidation, recovery, route method exports and fetch options.
+Mock assertions are not router, browser, native-device or database acceptance.
+The pair remains value equality rather than a unique generation; an identical
+recreated schedule is indistinguishable. Later scheduling, step-up,
+Continue/logout, cleanup and durable uncertainty recovery remain open.
+No product tests, lint, typechecks, builds, installations, live account actions,
+migration application or deployment ran. Publication is tracked separately.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 

@@ -7714,3 +7714,23 @@ This does not adopt the strict cancellation endpoint or bind later scheduling,
 step-up, Continue/logout effects. No native-subject/product-account ID equality,
 unique schedule identity or final-state guarantee. Twelve independently reviewed
 source/fixture files; all fixtures UNRUN. See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Web cancellation uses the inspected schedule pair
+
+Continuation 69c2bd0aee7e7ab664810aabd1e314a5413c3d03 adopts the strict
+schedule-value contract for Web only. Dialog-open capture requires the exact
+marker and preserves an immutable pair of timestamp strings/null. The captured
+owner sends PUT to cancel-schedule with browser redirect rejection, omitted
+cookies and after-await checks; no legacy fallback or mutation/auth replay.
+
+PUT-only protected routing is distinct from the inspected legacy POST handler.
+Reader sequencing fences dispatched refusal/uncertainty across close/reopen,
+rejecting pre-outcome reads and cache-state churn as renewed admission. Recovery
+is GET-only plus new confirmation, never proof of ambiguous success. Exact-state
+receipt settlement and lifetime remain separate, preserving newer state and
+allowing the operation's own valid cache write.
+
+Mobile remains legacy. Identical-value schedule recreation, unknown edge
+dispatch, native retries and later scheduling/Continue/logout are not resolved.
+Eleven independently reviewed source/fixture files; all fixtures UNRUN.
+See WEB-ACCOUNT-DELETION-INTENT-01.
