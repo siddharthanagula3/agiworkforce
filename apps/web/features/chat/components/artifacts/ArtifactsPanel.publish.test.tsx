@@ -61,6 +61,13 @@ function publishBody(shareUrl: string, visibility = 'public') {
   };
 }
 
+function audienceBody(shareUrl: string, visibility = 'invited') {
+  return {
+    token: shareUrl.split('/').at(-1)!, shareUrl, visibility, title: 'Sales dashboard',
+    organizationId: null, updatedAt: '2026-11-07T00:00:00.000Z',
+  };
+}
+
 function lookupBody(shareUrl: string | null) {
   return {
     artifact: shareUrl === null ? null : {
@@ -234,10 +241,7 @@ describe('ArtifactsPanel · publish wiring', () => {
   it('offers the invited audience to a publisher with no workspace', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
       init?.method === 'PATCH'
-        ? Response.json({
-            shareUrl: 'https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee',
-            visibility: 'invited',
-          })
+        ? Response.json(audienceBody('https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee'))
         : Response.json(lookupBody('https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee')),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -364,6 +368,28 @@ describe('ArtifactsPanel publication ownership', () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0);
   });
 
+  // UNRUN: WEB-PUBLICATION-QUOTA-ADMISSION-01 audience acknowledgement integration.
+  it.each(['legacy', 'identity', 'audience', 'link', 'json'])('does not cache an unconfirmed audience %s receipt', async (invalid) => {
+    const valid = audienceBody(OWNED_URL);
+    const body = invalid === 'legacy' ? { shareUrl: OWNED_URL }
+      : invalid === 'identity' ? { ...valid, token: 'b'.repeat(24), shareUrl: OWNED_URL.replace('a'.repeat(24), 'b'.repeat(24)) }
+      : invalid === 'audience' ? { ...valid, visibility: 'public' }
+      : { ...valid, shareUrl: `${OWNED_URL}?unverified=1` };
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'PATCH'
+      ? invalid === 'json' ? new Response('{') : Response.json(body)
+      : Response.json(lookupBody(OWNED_URL)));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ArtifactsPanel />);
+    await waitFor(() => expect(capturedAudience).toBeDefined());
+    await act(async () => {
+      await expect(capturedAudience!.onChange('invited')).rejects.toThrow('Audience change could not be confirmed');
+    });
+    expect(capturedAudience?.current).toBe('public');
+    expect(capturedLink).toBe(OWNED_URL);
+    expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]?.visibility).toBe('public');
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
+  });
+
   it('records an audience response under A after switching to B', async () => {
     const patch = deferredResponse();
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'PATCH'
@@ -377,7 +403,7 @@ describe('ArtifactsPanel publication ownership', () => {
     await act(async () => useArtifactsStore.getState().selectArtifact('artifact-b'));
     expect(capturedLink).toBeUndefined();
     expect(capturedAudience).toBeUndefined();
-    await act(async () => { patch.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'invited' })); await pending; });
+    await act(async () => { patch.resolve(Response.json(audienceBody(OWNED_URL))); await pending; });
     expect(capturedLink).toBeUndefined();
     expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]?.visibility).toBe('invited');
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-b']).toBeUndefined();
@@ -499,7 +525,7 @@ describe('ArtifactsPanel publication ownership', () => {
           ? lookupBody(OWNED_URL)
           : kind === 'publish'
             ? publishBody(OWNED_URL, 'invited')
-            : { shareUrl: OWNED_URL, visibility: 'invited' }));
+            : audienceBody(OWNED_URL)));
         const outcomes = await settled;
         if (pending) expect(outcomes[0]?.status).toBe('rejected');
       });

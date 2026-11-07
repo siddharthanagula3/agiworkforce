@@ -11,6 +11,8 @@ import {
   ManagedCloudPublishedArtifactPublishResponseSchema,
   managedCloudPublishedArtifactLookupPath,
   ManagedCloudPublishedArtifactUpdateRequestSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
+  ManagedCloudPublishedArtifactUpdateResponseSchema,
   managedCloudArtifactIndexQueryString,
   managedCloudPublishedArtifactDataPath,
   managedCloudPublishedArtifactPath,
@@ -43,6 +45,38 @@ describe('publication acknowledgement contract', () => {
   ])('rejects incomplete or mismatched receipt %p', (change) => {
     expect(ManagedCloudPublishedArtifactPublishResponseSchema.safeParse({ ...receipt, ...change }).success)
       .toBe(false);
+  });
+});
+
+// UNRUN: WEB-PUBLICATION-QUOTA-ADMISSION-01 strict update acknowledgement boundary.
+describe('publication update receipt contract', () => {
+  const receipt = {
+    token: 'a'.repeat(24), shareUrl: `https://example.test/shared-artifact/${'a'.repeat(24)}`,
+    visibility: 'invited', title: 'Page', organizationId: null, updatedAt: '2026-11-07T00:00:00Z',
+  };
+
+  it.each(['public', 'organization', 'invited'])('accepts complete %s acknowledgements', (visibility) => {
+    const body = { ...receipt, visibility, organizationId: visibility === 'organization' ? 'org-1' : null };
+    expect(ManagedCloudPublishedArtifactUpdateReceiptSchema.parse(body)).toEqual(body);
+  });
+
+  it.each([
+    ...Object.keys(receipt).map((field) => ({ [field]: undefined })),
+    { token: 'invalid' }, { visibility: 'future' }, { organizationId: 1 },
+    { shareUrl: 'javascript:alert(1)' }, { shareUrl: '/shared-artifact/' + receipt.token },
+    { shareUrl: `https://example.test/shared-artifact/${'b'.repeat(24)}` },
+    { shareUrl: `${receipt.shareUrl}?query=1` }, { shareUrl: `${receipt.shareUrl}#fragment` },
+    { shareUrl: `${receipt.shareUrl}/` },
+    { shareUrl: receipt.shareUrl.replace('https://', 'https://user:password@') },
+  ])('rejects invalid update receipt %j', (change) => {
+    expect(ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse({ ...receipt, ...change }).success)
+      .toBe(false);
+  });
+
+  it('preserves the existing general update response contract for other clients', () => {
+    const legacy = { ...receipt, token: 'tok_1', shareUrl: 'https://example.test/shared-artifact/tok_1' };
+    expect(ManagedCloudPublishedArtifactUpdateResponseSchema.parse(legacy)).toEqual(legacy);
+    expect(ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse(legacy).success).toBe(false);
   });
 });
 

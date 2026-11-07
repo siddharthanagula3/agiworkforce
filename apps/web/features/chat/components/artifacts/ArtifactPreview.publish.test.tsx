@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { ArtifactPreview } from './ArtifactPreview';
+import { setPublishedArtifactAudience } from './publishArtifactClient';
+
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/client/csrf')>(),
+  addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
+}));
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() } }));
@@ -222,6 +228,34 @@ describe('ArtifactPreview publication lifecycle', () => {
     expect(writeText).toHaveBeenCalledWith(PUBLIC_URL);
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('artifact-published-url')).toHaveTextContent(PUBLIC_URL);
+  });
+
+  // UNRUN: WEB-PUBLICATION-QUOTA-ADMISSION-01 real audience client feedback integration.
+  it.each(['legacy', 'audience', 'identity', 'json'])('does not announce success for an unconfirmed %s audience receipt', async (invalid) => {
+    const receipt = {
+      token: PUBLIC_URL.split('/').at(-1)!, shareUrl: PUBLIC_URL, visibility: 'invited',
+      title: 'Page', organizationId: null, updatedAt: '2026-11-07T00:00:00Z',
+    };
+    const body = invalid === 'legacy' ? { shareUrl: PUBLIC_URL }
+      : invalid === 'audience' ? { ...receipt, visibility: 'public' }
+      : { ...receipt, token: 'z'.repeat(24), shareUrl: `https://example.test/shared-artifact/${'z'.repeat(24)}` };
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(invalid === 'json' ? new Response('{') : Response.json(body));
+    const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
+    const onChange = vi.fn(async (next: 'public' | 'organization' | 'invited') => {
+      await setPublishedArtifactAudience(PUBLIC_URL, next, fetchImpl);
+    });
+    render(<ArtifactPreview artifact={artifact} variant="panel" publishedLink={PUBLIC_URL}
+      artifactAudience={{ current: 'public', memberCount: null, onChange }} />);
+    fireEvent.change(screen.getByLabelText('Who can open this'), { target: { value: 'invited' } });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Limit to invited people' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+      'Audience change could not be confirmed. Access may have changed, but its receipt was invalid.',
+    ));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Who can open this')).toHaveValue('public');
+    expect(screen.getByLabelText('Who can open this')).not.toBeDisabled();
   });
 
   it.each(['resolve', 'reject'])('suppresses an abandoned audience %s after switching artifacts', async (outcome) => {

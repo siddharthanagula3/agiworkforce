@@ -1,10 +1,10 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { CloudPublisher, PublishableArtifact } from '@agiworkforce/artifacts';
 import {
-  MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
   ManagedCloudPublishedArtifactPublishResponseSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
   managedCloudPublishedArtifactLookupPath,
   type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
@@ -18,13 +18,6 @@ export interface WebPublishDetails {
 }
 
 export type PublishedArtifactAudience = ManagedCloudPublishedArtifactVisibility;
-
-function readVisibility(
-  value: unknown,
-  fallback: PublishedArtifactAudience = 'public',
-): PublishedArtifactAudience {
-  return MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES.find((known) => known === value) ?? fallback;
-}
 
 export function resolvePublishableKind(
   type: string,
@@ -197,9 +190,15 @@ export async function setPublishedArtifactAudience(
     throw new Error(await readErrorMessage(response, 'Failed to change who can open this'));
   }
 
-  const body = (await response.json()) as { shareUrl?: unknown; visibility?: unknown };
-  return {
-    shareUrl: typeof body.shareUrl === 'string' ? body.shareUrl : shareUrl,
-    visibility: readVisibility(body.visibility, visibility),
-  };
+  const receipt = ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse(
+    await response.json().catch(() => null),
+  );
+  if (
+    !receipt.success || receipt.data.token !== token || receipt.data.visibility !== visibility
+  ) {
+    throw new Error(
+      'Audience change could not be confirmed. Access may have changed, but its receipt was invalid.',
+    );
+  }
+  return { shareUrl: receipt.data.shareUrl, visibility: receipt.data.visibility };
 }

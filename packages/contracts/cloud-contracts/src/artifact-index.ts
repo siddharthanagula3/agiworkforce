@@ -85,6 +85,17 @@ export const ManagedCloudPublishedArtifactWorkspaceSchema = z.object({
   memberCount: z.number().int().nonnegative(),
 });
 
+function hasPublishedArtifactReceiptLink(receipt: { token: string; shareUrl: string }): boolean {
+  try {
+    const url = new URL(receipt.shareUrl);
+    return (url.protocol === 'https:' || url.protocol === 'http:') &&
+      !url.username && !url.password && !url.search && !url.hash &&
+      url.pathname === `/shared-artifact/${receipt.token}`;
+  } catch {
+    return false;
+  }
+}
+
 export const ManagedCloudPublishedArtifactPublishResponseSchema = z.object({
   artifactId: z.string().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS),
   token: z.string().regex(/^[A-Za-z0-9_-]{24}$/),
@@ -96,16 +107,9 @@ export const ManagedCloudPublishedArtifactPublishResponseSchema = z.object({
   title: z.string(),
   sandboxed: z.boolean(),
   workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable(),
-}).refine((receipt) => {
-  try {
-    const url = new URL(receipt.shareUrl);
-    return (url.protocol === 'https:' || url.protocol === 'http:') &&
-      !url.username && !url.password && !url.search && !url.hash &&
-      url.pathname === `/shared-artifact/${receipt.token}`;
-  } catch {
-    return false;
-  }
-}, { message: 'The publication receipt must link to its token.' });
+}).refine(hasPublishedArtifactReceiptLink, {
+  message: 'The publication receipt must link to its token.',
+});
 export type ManagedCloudPublishedArtifactPublishResponse = z.infer<
   typeof ManagedCloudPublishedArtifactPublishResponseSchema
 >;
@@ -250,6 +254,14 @@ export const ManagedCloudPublishedArtifactUpdateResponseSchema = z.object({
 export type ManagedCloudPublishedArtifactUpdateResponse = z.infer<
   typeof ManagedCloudPublishedArtifactUpdateResponseSchema
 >;
+
+export const ManagedCloudPublishedArtifactUpdateReceiptSchema =
+  ManagedCloudPublishedArtifactUpdateResponseSchema.extend({
+    token: z.string().regex(/^[A-Za-z0-9_-]{24}$/),
+    shareUrl: z.string().url(),
+  }).refine(hasPublishedArtifactReceiptLink, {
+    message: 'The publication receipt must link to its token.',
+  });
 
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_DATA_PREVIEW_CHARS = 240;
 
