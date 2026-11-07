@@ -2,12 +2,13 @@
 
 Status: Source snapshot, not runtime acceptance
 Owner: Platform + application maintainers
-Last updated: 2026-11-06
+Last updated: 2026-11-07
 
 ## Provenance and coverage
 
 This document maps only the source reconstructed and independently read on
-`fix/recovered-core-safety`, starting from `ee717702b0`. It is not a recovered
+`fix/recovered-core-safety`, starting from `ee717702b0`, and its local audit
+continuation from `90de7bbaf2d17f35cedc8f8c519e755ca8bf5468`. It is not a recovered
 copy of the earlier architecture graph or an exhaustive codebase audit.
 
 Coordination history reports that the earlier 217-commit working branch and
@@ -6048,9 +6049,31 @@ strict policy reader, and policy read/grant mutation are not one transaction.
 Modeled regression sources are unrun, not production RLS or runtime evidence.
 See WEB-DEVICE-SIGNIN-POLICY-FAILOPEN-01 for those remaining limitations.
 
+## Approval waits are separate from transport completion
+
+Accepted `1326931361ad0754f3a97f37f46b5f9d127231d9` is a fresh reconstruction from the
+published base, not an exact recovery of the unavailable earlier local attempt.
+It reuses the canonical pending-approval owner for per-message presentation.
+Durable projection decisions take precedence over legacy tool metadata. The
+server's checkpoint-and-DONE path can stop actual streaming while a decision
+remains unresolved; the bubble now labels partial prose and web sources,
+withholds ordinary assistant Regenerate and premature search/empty-output
+verdicts, and includes projection changes in memo comparison. The page feeds only
+the displayed conversation's pending state to both composer placements. The
+composer notice directs users to existing approval controls without changing
+send/stop behavior or pretending the transport is active.
+
+Existing recoverability controls expired-request wording; no deadline policy or
+checkpoint guarantee is added. Expired Resend, user-message Retry and interrupted-
+artifact Regenerate remain explicit replay paths. An unfinished artifact fence
+can still be marked interrupted on a paused transport's end; that interaction is
+not corrected here. Four production and five authored regression-source files
+were independently reviewed, but no product checks or browser acceptance ran.
+See WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01 for the remaining acceptance limits.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-eight accepted production slices traced above are
+Only the two hundred forty-nine accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

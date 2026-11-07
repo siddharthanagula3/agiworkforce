@@ -14684,3 +14684,50 @@ current-time validation, finite-deadline guarantee, mandatory unknown-age logout
 ownership lease or mutation atomicity is added. Fixtures cover coerced/nonfinite
 fields, later invalid rows, mixed bounds, null behavior and retained explicit
 revocation; they are source-reviewed only and unrun.
+
+
+## WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01
+
+Severity: Medium. Bounded presentation correction `1326931361ad0754f3a97f37f46b5f9d127231d9` is
+independently source-reviewed on 2026-11-07; runtime acceptance remains open.
+This is a fresh reconstruction from published base 90de7bbaf2d17f35cedc8f8c519e755ca8bf5468,
+not recovery of the unavailable earlier local implementation/checkpoint identities.
+
+The server persists an approval checkpoint before yielding approval/paused frames
+and DONE. The client retains the pending decision but clears transport streaming
+and loading. The assistant bubble previously used that transport completion to
+expose ordinary Regenerate and finished-search verdicts, while the composer
+returned to its normal idle presentation. Partial prose and sources survive the
+pause. The older claim that only a header badge indicated the pause was too broad:
+inline approval controls and sidebar attention already existed. This is a
+presentation contradiction, not evidence of approval bypass or a lost response;
+no production reproduction is claimed.
+
+The canonical pending-approval owner exposes its per-message predicate. Persisted
+cloudApproval decisions take precedence over stale legacy tools; absent/null
+projection retains the existing undecided awaiting-tool predicate. MessageBubble
+labels the response as partial through a status notice, labels web sources as
+sources so far, suppresses ordinary assistant Regenerate and premature missing-
+search/empty-output verdicts, and observes cloudApproval in its memo comparison.
+Existing recoverability determines expired-request wording; no wall-clock expiry
+policy is introduced. WebChatPage supplies the displayed conversation's pending
+state to both composer placements. The composer shows an unresolved-request
+notice pointing to existing conversation/Approvals controls, without changing
+actual transport flags, send/stop behavior or adding another approval inbox.
+
+This does not disable every replay action. Existing expired-request Resend,
+user-message Retry and interrupted-artifact Regenerate remain. An unclosed
+artifact can still be marked interrupted when transport stops for approval;
+that artifact-specific recovery/pause interaction remains to be reconciled.
+Canonical activity-only states, approval restoration and server decision/resume
+semantics are unchanged. No new promise of checkpoint liveness is made.
+
+Four production files and five regression-source files were independently read.
+Unrun fixtures cover projection precedence, legacy fallback, partial decisions,
+metadata-only rerender, retained partial sources, ordinary regeneration and
+search-verdict suppression/restoration, expired Resend, composer prop transitions
+and send availability, plus approval/DONE/resume/reject/new-round transport
+assertions. Composer navigation is modeled by prop changes, not integrated
+routing. There is no direct new empty-content projection fixture. Full browser,
+accessibility and image/video/stopped/failed acceptance remain open. No tests,
+lint, typechecks, builds, application execution, push or deployment were performed.
