@@ -1,11 +1,23 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => getCloudMemoryFixtureSession,
+  useReadonlyIdentityLifetime: () => () => {
+    const session = getCloudMemoryFixtureSession();
+    return { isCurrent: () => session?.isCurrent() === true };
+  },
+}));
+
+let cloud: ReturnType<typeof createCloudMemoryFixture>;
+beforeEach(() => { cloud = createCloudMemoryFixture(); });
+afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
 
 const clipboard = vi.hoisted(() => ({ writeText: vi.fn<(text: string) => Promise<boolean>>() }));
 
-vi.mock('@/lib/client/csrf', () => ({
-  addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
-}));
 vi.mock('@shared/utils/browser-utils', async (importOriginal) => ({
   ...(await importOriginal<BrowserUtilsModule>()),
   safeClipboard: clipboard,
@@ -17,11 +29,12 @@ type BrowserUtilsModule = typeof import('@shared/utils/browser-utils');
 
 beforeEach(() => {
   clipboard.writeText.mockReset();
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new Error('Prompt must not request memory data')));
 });
 
-describe('ImportMemoryDialog prompt', () => {
+describe('Unexecuted cloud ImportMemoryDialog prompt', () => {
   it('explains the import in one sentence and links the memory article', () => {
-    render(<ImportMemoryDialog open onOpenChange={() => {}} />);
+    render(<ImportMemoryDialog open onOpenChange={() => {}} />, { wrapper: cloud.wrapper });
 
     expect(
       screen.getByRole('heading', { name: 'Import memory from other AI providers' }),
@@ -37,7 +50,7 @@ describe('ImportMemoryDialog prompt', () => {
 
   it('copies a one-fact-per-line export prompt the importer can read', async () => {
     clipboard.writeText.mockResolvedValue(true);
-    render(<ImportMemoryDialog open onOpenChange={() => {}} />);
+    render(<ImportMemoryDialog open onOpenChange={() => {}} />, { wrapper: cloud.wrapper });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));
@@ -53,7 +66,7 @@ describe('ImportMemoryDialog prompt', () => {
 
   it('says so when the prompt could not be copied', async () => {
     clipboard.writeText.mockResolvedValue(false);
-    render(<ImportMemoryDialog open onOpenChange={() => {}} />);
+    render(<ImportMemoryDialog open onOpenChange={() => {}} />, { wrapper: cloud.wrapper });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' }));

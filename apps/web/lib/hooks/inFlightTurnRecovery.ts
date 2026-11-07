@@ -83,8 +83,9 @@ export function readInFlightTurnVerdict(
 export async function askWhetherTurnIsRunning(
   conversationId: string,
   signal: AbortSignal,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<InFlightTurnRecovery> {
-  const response = await fetch(
+  const response = await fetchImpl(
     `${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?conversationId=${encodeURIComponent(conversationId)}`,
     {
       signal,

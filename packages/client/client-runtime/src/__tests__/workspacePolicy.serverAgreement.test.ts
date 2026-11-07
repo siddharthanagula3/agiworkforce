@@ -108,7 +108,7 @@ describe('the client shows exactly what the server allows', () => {
 });
 
 describe('the client reads the Code controls the server resolved', () => {
-  it('keeps a payload whose Code controls are malformed out of the snapshot', () => {
+  it('retains a fail-closed host projection when Code controls are malformed', () => {
     const wire = {
       organizationId: ORGANIZATION_ID,
       governed: true,
@@ -117,6 +117,8 @@ describe('the client reads the Code controls the server resolved', () => {
       code: { allowGithubConnection: 'no' },
     };
 
-    expect(parseEffectiveWorkspacePolicy(wire)?.code).toBeNull();
+    expect(parseEffectiveWorkspacePolicy(wire)?.code).toMatchObject({
+      allowMcpServers: false, mcpRestrictionActive: true, egressRestrictionActive: true,
+    });
   });
 });

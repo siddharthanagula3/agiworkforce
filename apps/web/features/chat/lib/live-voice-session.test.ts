@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+
+function voiceAuthority(isCurrent = () => true) {
+  return createRequestAuthority({
+    userId: 'voice-user', sessionId: 'voice-login', isCurrent,
+    getToken: async () => 'voice-token',
+  });
+}
 
 import {
   KEEPALIVE_INTERVAL_MS,
@@ -156,6 +163,7 @@ describe('LiveVoiceSession', () => {
 
   async function startSession(cb = callbacks(), reasoning?: 'instant' | 'thinking') {
     const session = await LiveVoiceSession.start({
+      authority: voiceAuthority(),
       voice: 'marin',
       conversationId: null,
       ...(reasoning ? { reasoning } : {}),
@@ -163,6 +171,75 @@ describe('LiveVoiceSession', () => {
     });
     return { session, cb };
   }
+
+  it('finalizes the original buffered transcript before reporting terminal failure', async () => {
+    const cb = callbacks();
+    const order: string[] = [];
+    cb.onTranscript = vi.fn((turn) => { if (turn.final) order.push('final'); });
+    cb.onError = vi.fn(() => order.push('error'));
+    await startSession(cb);
+    peer.channel.receive({ type: 'session.input_transcript.delta', delta: 'buffered' });
+    peer.connectionState = 'failed';
+    peer.dispatchEvent(new Event('connectionstatechange'));
+    expect(order).toEqual(['final', 'error']);
+  });
+
+  it('keeps only the original close acknowledgement and final transcript window after control retirement', async () => {
+    const authority = voiceAuthority();
+    const cb = callbacks();
+    const session = await LiveVoiceSession.start({
+      authority, voice: 'marin', conversationId: 'original', callbacks: cb,
+    });
+    peer.channel.receive({ type: 'session.started' });
+    peer.channel.receive({ type: 'session.input_transcript.delta', delta: 'before ' });
+    const closing = session.close();
+    authority.retire();
+    expect(peer.closed).toBe(false);
+    peer.channel.receive({ type: 'session.delegation.created', delegation: { id: 'forbidden' } });
+    peer.channel.receive({ type: 'session.input_transcript.delta', delta: 'stop' });
+    peer.channel.receive({ type: 'session.usage.updated', usage: { seconds: 19 } });
+    peer.channel.receive({ type: 'session.closed', reason: 'close_requested', usage: { seconds: 20 } });
+    await expect(closing).resolves.toEqual({ reason: 'close_requested', seconds: 20 });
+    expect(cb.turns.at(-1)).toMatchObject({ text: 'before stop', final: true });
+    expect(peer.closed).toBe(true);
+  });
+
+  it('stops microphone tracks granted after the owning attempt retires', async () => {
+    const authority = voiceAuthority();
+    let grant!: (stream: MediaStream) => void;
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValueOnce(
+      new Promise<MediaStream>((resolve) => { grant = resolve; }),
+    );
+    const starting = LiveVoiceSession.start({
+      authority, voice: 'marin', conversationId: 'original', callbacks: callbacks(),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    authority.retire();
+    grant({ getTracks: () => tracks, getAudioTracks: () => tracks } as unknown as MediaStream);
+    await expect(starting).rejects.toMatchObject({ name: 'AbortError' });
+    expect(tracks[0]!.stop).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('releases acquired microphone tracks when peer construction fails', async () => {
+    vi.stubGlobal('RTCPeerConnection', class {
+      constructor() { throw new Error('peer unavailable'); }
+    });
+    await expect(startSession()).rejects.toMatchObject({ code: 'connection_failed' });
+    expect(tracks[0]!.stop).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('closes a known created session with its original bearer when answer setup fails', async () => {
+    vi.spyOn(peer, 'setRemoteDescription').mockRejectedValueOnce(new Error('answer failed'));
+    await expect(startSession()).rejects.toMatchObject({ code: 'connection_failed' });
+    const [path, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(path).toBe('/api/voice/live/sessions/live_1/close');
+    expect(init.credentials).toBe('omit');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer voice-token');
+    expect(tracks[0]!.stop).toHaveBeenCalled();
+  });
 
   it('asks the server for the reasoning level the user chose', async () => {
     await startSession(callbacks(), 'thinking');
@@ -182,7 +259,8 @@ describe('LiveVoiceSession', () => {
       language: null,
       surface: 'web',
     });
-    expect((init.headers as Record<string, string>)['x-csrf-token']).toBe('csrf-token');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer voice-token');
+    expect(init.credentials).toBe('omit');
     expect(peer.remote).toEqual({ type: 'answer', sdp: 'answer-sdp' });
     expect(session.sessionId).toBe('live_1');
     expect(cb.onStarted).not.toHaveBeenCalled();
@@ -194,6 +272,7 @@ describe('LiveVoiceSession', () => {
 
   it('tells the server when memory is off for the chat', async () => {
     await LiveVoiceSession.start({
+      authority: voiceAuthority(),
       voice: 'marin',
       conversationId: 'conv-1',
       memoryEnabled: false,

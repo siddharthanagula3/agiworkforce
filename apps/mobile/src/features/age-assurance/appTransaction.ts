@@ -2,9 +2,13 @@ import { NativeModules, Platform } from 'react-native';
 import type { MobileAppTransactionRegistrationRequest } from '@agiworkforce/types';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const APP_TRANSACTION_PATH = '/api/mobile/age-assurance/app-transaction';
-const REGISTERED_KEY_PREFIX = 'age-assurance:app-transaction:v1:';
+const REGISTERED_KEY_PREFIX = 'age-assurance:app-transaction:v2:';
 
 interface AGIAppTransactionModule {
   signedAppTransaction(): Promise<string>;
@@ -28,15 +32,20 @@ function isRegistered(userId: string): boolean {
  * guardian withdrew consent. A failure is retried on the next sign-in.
  */
 export async function registerAppTransactionForAccount(userId: string): Promise<void> {
-  if (Platform.OS !== 'ios' || isRegistered(userId)) return;
+  if (Platform.OS !== 'ios') return;
+  const account = captureCloudAccountEpoch();
+  if (!account || account.ownerId !== userId || isRegistered(account.ownerId)) return;
   const module = NativeModules.AGIAppTransaction as AGIAppTransactionModule | undefined;
   if (!module?.signedAppTransaction) return;
   try {
     const signedAppTransaction = await module.signedAppTransaction();
+    if (!isCloudAccountEpochCurrent(account)) return;
     const body: MobileAppTransactionRegistrationRequest = { signedAppTransaction };
-    await api.post(APP_TRANSACTION_PATH, body);
-    storage.set(registeredKey(userId), new Date().toISOString());
+    await api.post(APP_TRANSACTION_PATH, body, { accountEpoch: account });
+    if (!isCloudAccountEpochCurrent(account)) return;
+    storage.set(registeredKey(account.ownerId), new Date().toISOString());
   } catch (error) {
+    if (!isCloudAccountEpochCurrent(account)) return;
     console.warn('[AgeAssurance] App transaction not registered, retrying next sign-in', error);
   }
 }

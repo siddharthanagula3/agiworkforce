@@ -15,6 +15,7 @@ export const ManagedCloudWorkspaceSummarySchema: z.ZodType<WorkspaceSummary> = z
 
 export const ManagedCloudAccountWorkspacesSchema = z
   .object({
+    accountId: z.string().min(1).optional(),
     workspaces: z.array(ManagedCloudWorkspaceSummarySchema),
     activeWorkspaceId: z.string().min(1).nullable(),
     activeOrganizationId: z.string().uuid().nullable(),
@@ -49,4 +50,31 @@ export const ManagedCloudWorkspaceOwnershipTransferSchema = z.object({
 
 export type ManagedCloudWorkspaceOwnershipTransfer = z.input<
   typeof ManagedCloudWorkspaceOwnershipTransferSchema
+>;
+
+export const ManagedCloudWorkspaceLeaveReceiptSchema = z.object({
+  organizationId: z.string().uuid(),
+  userId: z.string().min(1),
+  successorUserId: z.string().min(1).nullable(),
+  revoked: z.object({
+    sessions: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    deviceTokens: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    apiKeys: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }),
+  sharedConnectorsUnshared: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  warnings: z.array(z.string()),
+});
+
+export type ManagedCloudWorkspaceLeaveReceipt = z.infer<
+  typeof ManagedCloudWorkspaceLeaveReceiptSchema
+>;
+
+export const ManagedCloudWorkspaceOwnershipTransferReceiptSchema = z.object({
+  organizationId: z.string().uuid(),
+  ownerUserId: z.string().min(1),
+  previousOwnerRole: z.enum(['admin', 'member', 'viewer']),
+});
+
+export type ManagedCloudWorkspaceOwnershipTransferReceipt = z.infer<
+  typeof ManagedCloudWorkspaceOwnershipTransferReceiptSchema
 >;

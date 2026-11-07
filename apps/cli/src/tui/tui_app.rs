@@ -3978,14 +3978,12 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
     use crate::platform::runtime::session_control as sessions;
 
     let text = match sessions::resolve_managed_session_reference(reference) {
-        Ok(resolved) => match sessions::load_managed_session(reference) {
+        Ok(resolved) => match crate::runtime::session::ManagedSession::load_from_path(&resolved.path) {
             Ok(managed) => {
                 let session_id = managed.session_id.clone();
-                let messages = managed.messages.clone();
-                let count = messages.len();
-                match app.session.adopt_managed_session(managed, resolved.path) {
+                let count = managed.messages.len();
+                match app.session.load_managed_conversation(managed, resolved.path) {
                     Ok(()) => {
-                        app.session.messages = messages;
                         app.session.turn_count = app
                             .session
                             .messages
@@ -6405,16 +6403,14 @@ pub async fn run(
     }
 
     match (resume_messages, resume_managed_session) {
-        (Some(messages), Some((managed_session, path))) => {
-            if !messages.is_empty() {
-                session.messages = messages;
-            }
+        (Some(messages), Some((mut managed_session, path))) => {
+            managed_session.messages = messages;
+            session.load_managed_conversation(managed_session, path)?;
             session.turn_count = session
                 .messages
                 .iter()
                 .filter(|message| message.role == "user")
                 .count() as u32;
-            session.adopt_managed_session(managed_session, path)?;
         }
         (Some(messages), None) => {
             if !messages.is_empty() {
@@ -6428,13 +6424,12 @@ pub async fn run(
             session.enable_managed_session()?;
         }
         (None, Some((managed_session, path))) => {
-            session.messages = managed_session.messages.clone();
+            session.load_managed_conversation(managed_session, path)?;
             session.turn_count = session
                 .messages
                 .iter()
                 .filter(|message| message.role == "user")
                 .count() as u32;
-            session.adopt_managed_session(managed_session, path)?;
         }
         (None, None) => {
             session.enable_managed_session()?;
@@ -8056,6 +8051,36 @@ mod tests {
     use crate::command_registry::builtin_slash_registry_commands;
     use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 
+    #[test]
+    fn resuming_an_empty_managed_path_clears_transcript_but_keeps_tui_tokens() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let path = temp.path().join("empty.json");
+        let mut app = minimal_app();
+        app.session.set_session_persistence(false);
+        app.session.messages.push(crate::models::Message::text("user", "previous conversation"));
+        app.session.total_input_tokens = 7;
+        app.session.total_output_tokens = 9;
+        app.session.turn_count = 1;
+        app.session.recent_tool_calls = vec![17];
+        app.session.loop_strike_count = 2;
+        let mut managed = crate::runtime::session::ManagedSession::new("empty-target", chrono::Utc::now());
+        managed.model = Some(app.session.model.clone());
+        managed.routing_authority = Some(app.session.current_routing_authority());
+        managed.save_to_path(&path).expect("save fixture");
+
+        resume_session(path.to_str().expect("fixture path"), &mut app);
+
+        assert!(app.session.messages.is_empty());
+        assert_eq!(app.session.managed_session_path.as_ref(), Some(&path));
+        assert_eq!(app.session.managed_session_id(), Some("empty-target"));
+        assert_eq!(app.session.turn_count, 0);
+        assert_eq!(app.session.total_input_tokens, 7);
+        assert_eq!(app.session.total_output_tokens, 9);
+        assert!(app.session.recent_tool_calls.is_empty());
+        assert_eq!(app.session.loop_strike_count, 0);
+        assert!(app.chat_messages.iter().any(|message| message.text.contains("Resumed session empty-target")));
+    }
+
     fn quiet_chrome() -> FrameChrome<'static> {
         FrameChrome {
             browser: crate::browser_bridge::BrowserAvailability::ShellNotRunning,
@@ -8855,7 +8880,7 @@ mod tests {
     #[test]
     fn workspace_mcp_tui_lists_blocked_status_and_reason() {
         crate::cloud::workspace_policy::with_test_policy(
-            serde_json::json!({"code": {"allowMcpServers": false}}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
             || {
                 crate::mcp::with_test_configs(
                     std::collections::HashMap::from([(

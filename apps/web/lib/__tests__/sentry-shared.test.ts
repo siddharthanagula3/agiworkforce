@@ -24,6 +24,12 @@ import {
 
 type Obj = Record<string, unknown>;
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  setTelemetryConsentCache(false);
+  window.localStorage.clear();
+});
+
 const REQUEST_ERROR_OAUTH_CODE = 'oauth_code_req_err_001';
 
 // Shaped like what @sentry/nextjs onRequestError -> captureRequestError produces:
@@ -668,5 +674,174 @@ describe('shouldInitializeSentry (pre-mount init gate)', () => {
     it('fails closed when neither the document nor the mirror carries a signal', () => {
       expect(shouldInitializeSentry()).toBe(false);
     });
+  });
+});
+
+describe('current-page telemetry refusal when storage writes fail', () => {
+  const pendingKey = 'agi.privacy.pendingTelemetryOptOut';
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    setTelemetryConsentCache(true);
+    document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'true');
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', 'https://fixture@sentry.example/1');
+  });
+
+  afterEach(() => {
+    document.documentElement.removeAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE);
+    vi.unstubAllEnvs();
+  });
+
+  function expectPageRefusal() {
+    expect(hasPendingTelemetryOptOut()).toBe(true);
+    expect(hasTelemetryConsent()).toBe(false);
+    expect(shouldInitializeSentry()).toBe(false);
+    expect(scrubEvent({ user: { id: 'old-user' } })?.user).toBeUndefined();
+  }
+
+  it('refuses immediately when the pending marker write fails but old consent remains readable', () => {
+    let refusedAtWrite = false;
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      refusedAtWrite = hasPendingTelemetryOptOut();
+      throw new DOMException('Storage is full', 'QuotaExceededError');
+    });
+
+    requestTelemetryOptOut();
+
+    expect(refusedAtWrite).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+    expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    expectPageRefusal();
+    write.mockRestore();
+    setTelemetryConsentCache(true);
+    expectPageRefusal();
+    document.documentElement.removeAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE);
+    expectPageRefusal();
+  });
+
+  it('retains refusal when the pending marker succeeds but writing consent false fails', () => {
+    const originalWrite = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (key === TELEMETRY_CONSENT_STORAGE_KEY) throw new Error('Write refused');
+      originalWrite.call(this, key, value);
+    });
+
+    requestTelemetryOptOut();
+
+    expect(window.localStorage.getItem(pendingKey)).toBe('true');
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+    expectPageRefusal();
+  });
+
+  it('refuses before a failed server-false cache write despite old readable consent', () => {
+    let refusedAtWrite = false;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      refusedAtWrite = hasPendingTelemetryOptOut();
+      throw new DOMException('Write denied', 'SecurityError');
+    });
+
+    setTelemetryConsentCache(false);
+
+    expect(refusedAtWrite).toBe(true);
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+    expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    expectPageRefusal();
+  });
+
+  it('retains refusal when a false cache write succeeds but clearing pending fails', () => {
+    requestTelemetryOptOut();
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('Removal refused');
+    });
+
+    setTelemetryConsentCache(false);
+
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('false');
+    expect(window.localStorage.getItem(pendingKey)).toBe('true');
+    expectPageRefusal();
+  });
+
+  it('does not remove pending denial before a failed explicit opt-in write', () => {
+    requestTelemetryOptOut();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Write refused');
+    });
+    const remove = vi.spyOn(Storage.prototype, 'removeItem');
+
+    confirmTelemetryConsent(true);
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(pendingKey)).toBe('true');
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('false');
+    expectPageRefusal();
+  });
+
+  it('refuses a failed explicit opt-in even without a previously persisted pending marker', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Write refused');
+    });
+
+    confirmTelemetryConsent(true);
+
+    expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+    expectPageRefusal();
+  });
+
+  it.each([false, true])(
+    'keeps the page refused when explicit opt-in cannot remove pending (existing marker: %s)',
+    (hasPersistedPending) => {
+      if (hasPersistedPending) requestTelemetryOptOut();
+      const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+        throw new Error('Removal refused');
+      });
+
+      confirmTelemetryConsent(true);
+
+      expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+      expect(window.localStorage.getItem(pendingKey)).toBe(hasPersistedPending ? 'true' : null);
+      expectPageRefusal();
+      remove.mockRestore();
+      setTelemetryConsentCache(true);
+      expectPageRefusal();
+      confirmTelemetryConsent(true);
+      expect(hasPendingTelemetryOptOut()).toBe(false);
+      expect(hasTelemetryConsent()).toBe(true);
+      expect(shouldInitializeSentry()).toBe(true);
+    },
+  );
+
+  it('clears a write-refusal latch after a persisted server-false acknowledgment', () => {
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('Write refused');
+    });
+    requestTelemetryOptOut();
+    expectPageRefusal();
+    write.mockRestore();
+    document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'false');
+
+    expect(shouldInitializeSentry()).toBe(false);
+
+    expect(hasPendingTelemetryOptOut()).toBe(false);
+    expect(hasTelemetryConsent()).toBe(false);
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('false');
+    expect(window.localStorage.getItem(pendingKey)).toBeNull();
+  });
+
+  it('does not expose or change browser refusal state in a server or edge runtime', () => {
+    requestTelemetryOptOut();
+    vi.stubGlobal('window', undefined);
+    try {
+      requestTelemetryOptOut();
+      setTelemetryConsentCache(false);
+      confirmTelemetryConsent(true);
+      expect(hasPendingTelemetryOptOut()).toBe(false);
+      expect(hasTelemetryConsent()).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expectPageRefusal();
   });
 });

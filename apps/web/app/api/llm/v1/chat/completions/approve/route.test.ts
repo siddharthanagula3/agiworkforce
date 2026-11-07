@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
@@ -68,7 +69,7 @@ vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
 
 const db = { query: vi.fn(), transaction: vi.fn() };
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({ db })),
+  getUserScopedDb: vi.fn(async () => ({ db, userId: 'user-1', organizationId: null })),
 }));
 
 const checkpointMocks = vi.hoisted(() => ({
@@ -156,6 +157,7 @@ const claimedCheckpoint = {
     nextEventSequence: 6,
     completedSteps: 1,
     request: {
+      x_context_policy_snapshot: contextPolicySnapshotFixture(),
       model: 'claude-test',
       stream: true,
       conversation_id: CONVERSATION_ID,
@@ -268,6 +270,26 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
     );
   });
 
+  it.each([
+    undefined,
+    { ...contextPolicySnapshotFixture(), version: 2 },
+    contextPolicySnapshotFixture('other-user'),
+    contextPolicySnapshotFixture('user-1', 'other-org'),
+    { ...contextPolicySnapshotFixture(), policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false } },
+  ])('releases the claim before processing an invalid or changed policy snapshot: %j', async (snapshot) => {
+    const original = claimedCheckpoint;
+    checkpointMocks.claim.mockResolvedValue({
+      ...original,
+      checkpoint: { ...original.checkpoint, request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot } },
+    });
+    const response = await POST(makeRequest(resumeBody()));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'context_policy_restart_required' } });
+    expect(checkpointMocks.release).toHaveBeenCalledOnce();
+    expect(mockProcessRequest).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
   it('releases the checkpoint when the current processor refuses a resumed Google-data model route', async () => {
     const refusal = NextResponse.json(
       { error: { code: 'no_training_model_unavailable' } },
@@ -328,6 +350,8 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
           [],
           undefined,
           refusedCode,
+          undefined,
+          contextPolicySnapshotFixture(),
         ),
       },
     });
@@ -782,6 +806,18 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
       }),
     );
     db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('revoke_connector_tool_session_grants')) {
+        const existing = sessionGrants;
+        sessionGrants = existing.filter(
+          (row) =>
+            !(
+              row[0] === 'user-1' &&
+              row[2] === params[0] &&
+              (params[1] === null || row[3] === params[1])
+            ),
+        );
+        return [{ removed: existing.length - sessionGrants.length }];
+      }
       if (sql.includes('delete from public.connector_tool_session_grants')) {
         const existing = sessionGrants;
         sessionGrants = existing.filter((row) =>

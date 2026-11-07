@@ -3,7 +3,9 @@
 import { useCallback, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
-import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/unified-chat';
+import { MemoryEditor } from '@agiworkforce/unified-chat';
+import { useCloudMemory, useCloudMemoryAdapter, useCloudMemorySnapshot, useMemoryView } from '@/features/memory/use-cloud-memory';
+import type { CloudMemoryController } from '@/features/memory/cloud-memory-controller';
 import { Switch, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 
 import { MemoryConflicts } from '@/features/settings/components/MemoryConflicts';
@@ -14,20 +16,16 @@ import {
   useImportMemoryDialog,
 } from '@/features/settings/components/ImportMemoryDialog';
 import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
-import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
+import { useCapabilitiesPreferences, type UseCapabilitiesPreferencesResult } from '../hooks/use-capabilities-preferences';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { toUserMessage } from '@/lib/user-error-message';
-import { apiErrorMessage } from '@/lib/client/api-error-message';
 
 const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
 const SAVE_FAILED_MESSAGE = 'Your memory settings were not saved, so nothing changed.';
 const SAVE_RETRY_LABEL = 'Try again';
-const CLEAR_FAILED_MESSAGE = 'Your memories were not deleted. Try again.';
+const CLEAR_FAILED_MESSAGE = 'The deletion could not be confirmed. Check your saved memories before trying again.';
 const CONTROL_HEIGHT = 32;
 const EXPORT_FAILED_MESSAGE = 'Your memories could not be exported. Try again.';
-const MEMORY_EXPORT_PATH = '/api/memory/export';
-const MEMORY_EXPORT_FALLBACK_FILENAME = 'memories.json';
-const ATTACHMENT_FILENAME_RE = /filename="([^"]+)"/;
 const WORKSPACE_MEMORY_OFF_NOTICE =
   'Your workspace has memory turned off, so none of these settings apply until an owner or admin turns it back on in Workspace → Policy.';
 
@@ -56,16 +54,10 @@ const NEEDS_PERSISTENT_MEMORY_HINT = 'Turn on persistent memory to change this.'
 const MEMORY_DISABLED_CONTRACT =
   'Turning persistent memory off stops both halves: nothing new is saved, and the memories you already have are no longer read into any answer. They are kept until you delete them.';
 
-async function downloadMemoryExport(): Promise<void> {
-  const response = await fetch(MEMORY_EXPORT_PATH, { credentials: 'include' });
-  if (!response.ok) {
-    const body: unknown = await response.json().catch(() => null);
-    throw new Error(apiErrorMessage(body, EXPORT_FAILED_MESSAGE));
-  }
-  const filename =
-    ATTACHMENT_FILENAME_RE.exec(response.headers.get('Content-Disposition') ?? '')?.[1] ??
-    MEMORY_EXPORT_FALLBACK_FILENAME;
-  const url = URL.createObjectURL(await response.blob());
+async function downloadMemoryExport(controller: CloudMemoryController, current: () => boolean): Promise<void> {
+  const { blob, filename } = await controller.exportMemories(current);
+  if (!current()) return;
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
@@ -128,16 +120,29 @@ function memoryRow(title: string, description: string, control: ReactNode, hint?
 }
 
 export function MemorySection() {
-  const { settings, organizationMemoryAllowed, saveError, retrySave, loadError, setBoolean } =
-    useCapabilitiesPreferences();
-  const togglesDisabled = loadError !== null || !organizationMemoryAllowed;
+  const controller = useCloudMemory();
+  const capabilities = useCapabilitiesPreferences();
+  return <OwnedMemorySection key={controller?.key ?? 'unavailable'} controller={controller} capabilities={capabilities} />;
+}
+
+function CloudMemoryEditor({ controller }: { controller: CloudMemoryController }) {
+  const adapter = useCloudMemoryAdapter(controller);
+  return <MemoryEditor title={null} description="" hideClearAll conversationHref={conversationHref} adapter={adapter} />;
+}
+
+function OwnedMemorySection({ controller, capabilities }: {
+  controller: CloudMemoryController | null;
+  capabilities: UseCapabilitiesPreferencesResult;
+}) {
+  const { settings, loaded, organizationMemoryAllowed, saveError, retrySave, loadError, setBoolean } = capabilities;
+  const togglesDisabled = !loaded || loadError !== null || !organizationMemoryAllowed;
   const needsMemory = !togglesDisabled && !settings.memory;
   const dependentHint = (id: string): MemoryRowHint | undefined =>
     needsMemory ? { id, text: NEEDS_PERSISTENT_MEMORY_HINT } : undefined;
-  const memoryCount = useMemoryStore(selectMemoryCount);
-  const isEmpty = memoryCount === 0;
-  const clearAllMemories = useMemoryStore((s) => s.clear);
-  const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
+  const snapshot = useCloudMemorySnapshot(controller);
+  const memoryCount = snapshot.facts.length;
+  const isEmpty = memoryCount === 0 || snapshot.syncStatus !== 'synced';
+  const capture = useMemoryView(controller);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const importDialog = useImportMemoryDialog();
   const [clearError, setClearError] = useState<string | null>(null);
@@ -145,27 +150,26 @@ export function MemorySection() {
   const [exporting, setExporting] = useState(false);
 
   const onExport = useCallback(async () => {
+    const current = capture();
+    if (!controller || !current()) return;
     setExporting(true);
     setExportError(null);
     try {
-      await downloadMemoryExport();
+      await downloadMemoryExport(controller, current);
     } catch (error) {
-      setExportError(toUserMessage(error, EXPORT_FAILED_MESSAGE));
+      if (current()) setExportError(toUserMessage(error, EXPORT_FAILED_MESSAGE));
     } finally {
-      setExporting(false);
+      if (current()) setExporting(false);
     }
-  }, []);
+  }, [controller, capture]);
 
   const onManageMemories = useCallback(() => {
     document.getElementById(MEMORY_EDITOR_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  const onImported = useCallback(() => {
-    void hydrateMemories();
-  }, [hydrateMemories]);
-
   const onClearAll = useCallback(() => {
-    if (isEmpty) return;
+    const current = capture();
+    if (isEmpty || !controller || !current()) return;
     confirm({
       title: 'Delete all memory facts?',
       description: translateUiPlural('settings', 'counts.deleteAllMemoryFacts', memoryCount, {
@@ -176,15 +180,16 @@ export function MemorySection() {
       confirmLabel: 'Forget everything',
       destructive: true,
       onConfirm: async () => {
+        if (!current()) return;
         setClearError(null);
         try {
-          await clearAllMemories();
+          await controller.adapter(current).clear();
         } catch (error) {
-          setClearError(toUserMessage(error, CLEAR_FAILED_MESSAGE));
+          if (current()) setClearError(toUserMessage(error, CLEAR_FAILED_MESSAGE));
         }
       },
     });
-  }, [isEmpty, memoryCount, confirm, clearAllMemories]);
+  }, [isEmpty, memoryCount, confirm, controller, capture]);
 
   return (
     <section
@@ -197,8 +202,8 @@ export function MemorySection() {
           Memory
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Facts the assistant should remember about you across conversations. Stored on this device,
-          and synced to your account across devices when you&apos;re signed in.
+          Facts saved in your selected Managed Cloud workspace. Device-local and offline memories
+          are separate and are not shown or uploaded here.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="memory" label="How memory works" />
@@ -294,7 +299,7 @@ export function MemorySection() {
           }}
         >
           <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }} role="status">
-            {translateUiPlural('settings', 'counts.savedMemories', memoryCount, {
+            {snapshot.syncStatus !== 'synced' ? 'Cloud memories are not loaded.' : translateUiPlural('settings', 'counts.savedMemories', memoryCount, {
               one: '{{count}} saved memory',
               other: '{{count}} saved memories',
             })}
@@ -402,7 +407,7 @@ export function MemorySection() {
         {memoryRow(
           'Import memory from other AI providers',
           'Bring what another assistant knows about you into your saved memories.',
-          <button type="button" onClick={importDialog.open} style={pillButtonStyle(false)}>
+          <button type="button" onClick={importDialog.open} disabled={!controller} style={pillButtonStyle(!controller)}>
             Start import
           </button>,
         )}
@@ -459,12 +464,7 @@ export function MemorySection() {
           minHeight: 360,
         }}
       >
-        <MemoryEditor
-          title={null}
-          description=""
-          hideClearAll
-          conversationHref={conversationHref}
-        />
+        {controller ? <CloudMemoryEditor controller={controller} /> : <p role="status">Cloud memory is unavailable until your account and workspace are ready.</p>}
       </section>
 
       <MemoryConflicts />
@@ -472,7 +472,6 @@ export function MemorySection() {
       <ImportMemoryDialog
         open={importDialog.isOpen}
         onOpenChange={(next) => (next ? importDialog.open() : importDialog.close())}
-        onImported={onImported}
       />
     </section>
   );

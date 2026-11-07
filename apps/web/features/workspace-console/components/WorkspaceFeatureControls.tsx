@@ -119,6 +119,7 @@ export function describeLayer(layer: WorkspaceControlsLayer): string {
     );
   }
   if (layer.allowedCountries?.length) parts.push(`only from ${layer.allowedCountries.join(', ')}`);
+  else if (layer.countryRestrictionActive === true) parts.push('no countries permitted');
   return parts.join(' · ') || 'No changes';
 }
 
@@ -136,14 +137,28 @@ function WorkspaceDefaults({
   const models = useModelPolicy();
   const [draft, setDraft] = useState(controls);
   const [countries, setCountries] = useState(controls.allowedCountries.join(', '));
+  const [countriesEdited, setCountriesEdited] = useState(false);
 
   useEffect(() => {
     setDraft(controls);
     setCountries(controls.allowedCountries.join(', '));
+    setCountriesEdited(false);
   }, [controls]);
 
-  const next: WorkspaceControls = { ...draft, allowedCountries: parseCountries(countries) };
-  const dirty = JSON.stringify(next) !== JSON.stringify(controls);
+  const allowedCountries = parseCountries(countries);
+  const invalidCountries = countries
+    .split(/[\s,]+/)
+    .some((country) => country.length > 0 && !/^[A-Za-z]{2}$/.test(country));
+  const countriesChanged =
+    countriesEdited || JSON.stringify(allowedCountries) !== JSON.stringify(controls.allowedCountries);
+  const next: WorkspaceControls = {
+    ...draft,
+    allowedCountries,
+    countryRestrictionActive: countriesChanged
+      ? allowedCountries.length > 0
+      : controls.countryRestrictionActive,
+  };
+  const dirty = invalidCountries || JSON.stringify(next) !== JSON.stringify(controls);
   const { dialog: discardDialog } = useUnsavedChangesGuard({
     dirty: dirty && !update.isPending,
     description:
@@ -242,16 +257,41 @@ function WorkspaceDefaults({
           className="flex flex-col gap-1 text-xs sm:col-span-2"
           style={{ color: 'var(--text-3)' }}
         >
-          Allowed countries, as two-letter codes. Empty allows every country; a request whose
-          country cannot be determined is refused once any are listed.
+          Allowed countries, as two-letter codes. Saving an empty list allows every country;
+          a request whose country cannot be determined is refused once any are listed.
           <input
             value={countries}
+            aria-invalid={invalidCountries}
+            aria-describedby={invalidCountries ? 'workspace-country-error' : undefined}
             disabled={!canEdit || update.isPending}
             placeholder="US, DE"
-            onChange={(event) => setCountries(event.target.value)}
+            onChange={(event) => {
+              setCountries(event.target.value);
+              setCountriesEdited(true);
+            }}
             style={controlStyle}
           />
         </label>
+        {invalidCountries ? (
+          <p id="workspace-country-error" role="alert" className="text-xs sm:col-span-2">
+            Use two-letter country codes separated by spaces or commas.
+          </p>
+        ) : null}
+        {controls.countryRestrictionActive === true && controls.allowedCountries.length === 0 ? (
+          <div className="text-xs sm:col-span-2">
+            <p>No countries are currently permitted by the stored restriction.</p>
+            <button
+              type="button"
+              disabled={!canEdit || update.isPending}
+              onClick={() => {
+                setCountries('');
+                setCountriesEdited(true);
+              }}
+            >
+              Clear country restriction
+            </button>
+          </div>
+        ) : null}
       </div>
       {canManage && !configured ? (
         <p className="px-5 pb-4 text-xs" style={{ color: 'var(--text-3)' }}>
@@ -264,8 +304,14 @@ function WorkspaceDefaults({
           <button
             type="button"
             className={primaryButton}
-            disabled={!dirty || update.isPending}
-            onClick={() => update.mutate({ controls: next })}
+            disabled={!dirty || invalidCountries || update.isPending}
+            onClick={() => {
+              if (invalidCountries) return;
+              const patch: Partial<WorkspaceControls> = { ...next };
+              delete patch.countryRestrictionActive;
+              if (!countriesChanged) delete patch.allowedCountries;
+              update.mutate({ controls: patch });
+            }}
           >
             {update.isPending ? 'Saving…' : 'Save features and defaults'}
           </button>

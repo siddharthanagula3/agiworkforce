@@ -3498,6 +3498,9 @@
   "freeChatDailyShare": {
     "tokensPerUser": 120000
   },
+  "limitedMediaOffer": {
+    "dailyCapPerUser": { "image": 10, "video": 5 }
+  },
   "quotaExperimentPolicy": {
     "verificationMaxAgeMs": 3600000,
     "maxOutputTokens": 128,

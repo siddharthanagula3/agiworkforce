@@ -1,3 +1,7 @@
+import { replayScheduledShortcut, ScheduledShortcutReplayDeferredError, ScheduledShortcutReplayCancelledError } from './features/background/scheduled-shortcut-replay';
+import { platformRequestHeaders } from './platformHeaders';
+import { createManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import { createScheduledTaskTransport, ScheduledTaskTransportControl, type ScheduledTaskTransport, type ScheduledTaskFetch } from './features/background/scheduled-task-transport';
 import type { ChatChunkMessage, WebMCPToolInfo } from './types';
 import type {
   ConnectionStatus,
@@ -54,6 +58,7 @@ import {
   type BackgroundChatDelivery,
 } from './features/background/background-results';
 import { settleDetachedAssistantTurn } from './features/background/conversation-history';
+import { createMaintenanceAlarmController } from './features/background/maintenance-alarm';
 import {
   deliverPageCapture,
   pageCaptureFailureMessage,
@@ -67,6 +72,7 @@ import {
   loadScheduledTaskRunJournals,
   removeScheduledTaskRunJournal,
   updateScheduledTaskRunJournal,
+  restoreDeferredScheduledRecoveryAttempt,
   type ScheduledTaskRunJournal,
 } from './features/background/scheduled-task-runs';
 import {
@@ -144,8 +150,9 @@ import {
   validateBridgeUrl,
   type NormalizedWebMCPToolsUpdate,
 } from './background/policy';
-import type { SiteToolDescriptor } from './features/tools/siteToolRegistry';
-import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy } from './features/site-policy/store';
+import { ADMIN_SITE_POLICY_STORAGE_KEY, readAdminSitePolicy, loadScheduledSitePolicyInput } from './features/site-policy/store';
+import { createSitePolicyPublicationOwner } from './background/site-policy-publication';
+import { scheduledSourceAuthority } from './features/background/scheduled-task-source-authority';
 import {
   CONTEXT_HANDOFF_CLI_DESTINATION,
   CONTEXT_HANDOFF_DESTINATION,
@@ -225,6 +232,8 @@ import {
 import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
+  streamFreeChat,
+  FREE_TRIAL_GATEWAY,
   MANAGED_CHAT_MAX_INPUT_CHARS,
   type ManagedCloudAuthContext,
 } from './features/cloud-bridge/freeTrialClient';
@@ -239,10 +248,7 @@ import {
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
-import {
-  BROWSER_TOOL_DEFINITIONS,
-  resolveManagedComputerUseModel,
-} from './features/computer-use/cloudAgentClient';
+import { resolveManagedComputerUseModel } from './features/computer-use/cloudAgentClient';
 import {
   initDownloadLedger,
   listSessionDownloads,
@@ -1811,55 +1817,6 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
   }
 }
 
-const SITE_TOOL_RESULT_MAX_CHARS = 8_000;
-
-async function discoverRunSiteTools(tabId: number, tabUrl: string): Promise<SiteToolDescriptor[]> {
-  try {
-    const discovery = (await forwardToContentScript(tabId, {
-      type: 'WEBMCP_DISCOVER_TOOLS',
-    } as ExtensionMessage)) as unknown as { success?: boolean; tools?: unknown; url?: unknown };
-    if (discovery.success !== true) return [];
-    const normalized = normalizeWebMCPToolsUpdate(discovery.tools, discovery.url, tabUrl);
-    if (!normalized) return [];
-    const taken = new Set(BROWSER_TOOL_DEFINITIONS.map((tool) => tool.function.name));
-    return normalized.tools.flatMap((tool): SiteToolDescriptor[] => {
-      const name = `site_${tool.name.replace(/[^A-Za-z0-9_-]/g, '_')}`.slice(0, 64);
-      if (taken.has(name)) return [];
-      taken.add(name);
-      return [
-        {
-          name,
-          pageName: tool.name,
-          effect: tool.effect,
-          source: tool.source,
-          description: tool.description,
-          ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
-}
-
-async function callRunSiteTool(
-  tabId: number,
-  pageName: string,
-  args: Record<string, unknown>,
-): Promise<string> {
-  const response = (await forwardToContentScript(tabId, {
-    type: 'WEBMCP_CALL_TOOL',
-    toolName: pageName,
-    arguments: args,
-  } as ExtensionMessage)) as unknown as { success?: boolean; result?: unknown; error?: string };
-  if (response.success !== true) {
-    throw new Error(response.error ?? 'The page did not complete its tool.');
-  }
-  const text =
-    typeof response.result === 'string' ? response.result : JSON.stringify(response.result ?? null);
-  return sanitizePageText(text).slice(0, SITE_TOOL_RESULT_MAX_CHARS);
-}
-
 async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
   const leaveAsIs = async (): Promise<void> => undefined;
   if (!chrome.tabGroups) return leaveAsIs;
@@ -2000,6 +1957,64 @@ async function scheduledTaskUsesManagedCloud(
   task: Pick<ScheduledTask, 'prompt' | 'shortcutId'>,
 ): Promise<boolean> {
   return (await scheduledTaskManagedPrompt(task)) !== undefined;
+}
+
+class ScheduledTaskSourceUnavailableError extends Error {}
+class ScheduledTaskSourceDeniedError extends Error {
+  constructor(message: string, readonly taskOriginDenied = false) { super(message); }
+}
+
+async function assertScheduledTaskSourceAuthority(task: ScheduledTask): Promise<string | undefined> {
+  if (task.prompt !== undefined && typeof task.prompt !== 'string') {
+    throw new ScheduledTaskSourceUnavailableError('The scheduled prompt is unreadable.');
+  }
+  const directPrompt = task.prompt?.slice(0, TASK_PROMPT_MAX_CHARS).trim();
+  let shortcut: Awaited<ReturnType<typeof loadShortcuts>>[number] | undefined;
+  try {
+    // A direct prompt takes precedence over a shortcut, as in scheduledTaskManagedPrompt.
+    if (!directPrompt && task.shortcutId) {
+      shortcut = (await loadShortcuts()).find((candidate) => candidate.id === task.shortcutId);
+    }
+  } catch {
+    throw new ScheduledTaskSourceUnavailableError('The scheduled shortcut could not be read.');
+  }
+  const storedPolicy = await loadScheduledSitePolicyInput();
+  const policy = storedPolicy ? {
+    ...storedPolicy,
+    userAllowlist: [...storedPolicy.userAllowlist, ...oneTimeGrantedOrigins()],
+  } : null;
+  const taskAuthority = scheduledSourceAuthority([task.createdByOrigin], policy);
+  const authority = scheduledSourceAuthority([task.createdByOrigin, shortcut?.createdByOrigin], policy);
+  if (authority === 'unavailable') {
+    throw new ScheduledTaskSourceUnavailableError('Scheduled source policy is temporarily unavailable.');
+  }
+  if (authority === 'denied') {
+    throw new ScheduledTaskSourceDeniedError('A scheduled source is no longer approved.', taskAuthority === 'denied');
+  }
+  if (directPrompt) return directPrompt;
+  if (!shortcut) return undefined;
+  try {
+    const plan = planShortcutReplay(shortcut);
+    return plan.kind === 'prompt' ? plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS).trim() || undefined : undefined;
+  } catch {
+    throw new ScheduledTaskSourceUnavailableError('The scheduled shortcut is unreadable.');
+  }
+}
+
+async function assertScheduledJournalSourceAuthority(journal: ScheduledTaskRunJournal): Promise<void> {
+  let task: ScheduledTask | undefined;
+  try {
+    task = (await loadScheduledTasks()).find((candidate) => candidate.id === journal.taskId);
+  } catch {
+    throw new ScheduledTaskSourceUnavailableError('Scheduled task storage is temporarily unavailable.');
+  }
+  if (!task?.enabled || task.managedCloudAccountId !== journal.owner.accountId) {
+    throw new ScheduledTaskSourceDeniedError('The scheduled task lost its authority.');
+  }
+  const prompt = await assertScheduledTaskSourceAuthority(task);
+  if (prompt !== journal.prompt) {
+    throw new ScheduledTaskSourceDeniedError('The scheduled prompt changed.');
+  }
 }
 
 class ScheduledTaskRecoveryPendingError extends Error {
@@ -2152,6 +2167,7 @@ async function resumeScheduledTaskJournal(
   delivery: BackgroundChatDelivery,
   credential: { token: string; owner: ManagedCloudOwner },
   signal: AbortSignal,
+  fetchImpl: ScheduledTaskFetch,
 ): Promise<unknown> {
   const cloudRun = state.journal.cloudRun;
   if (!cloudRun) return scheduledTaskError('server_error', 'The durable Cloud run is missing.');
@@ -2161,6 +2177,12 @@ async function resumeScheduledTaskJournal(
     { run: cloudRun, alreadyVisibleText: '', signal },
     {
       getAuthToken: async () => credential.token,
+      createClient: (token) => createManagedCloudAgentRunClient({
+        baseUrl: FREE_TRIAL_GATEWAY, getAuthToken: async () => token, fetchImpl,
+        decorateMutationHeaders: (headers) => ({
+          ...headers, 'X-Requested-With': 'XMLHttpRequest', ...platformRequestHeaders(),
+        }),
+      }),
       onText: (text) => {
         transcript.push(text);
       },
@@ -2295,7 +2317,54 @@ async function executeScheduledTaskJournalWithAuthority(
   recover: boolean,
   admissionSignal?: AbortSignal,
 ): Promise<ScheduledTaskExecutionOutcome> {
+  let recoveryAttemptRecorded = false;
+  let executionStarted = false;
+  try {
+    return await executeScheduledTaskJournalWithSourceAuthority(
+      initialJournal, credential, recover, admissionSignal,
+      () => { recoveryAttemptRecorded = true; },
+      () => { executionStarted = true; },
+    );
+  } catch (caught) {
+    const error = caught instanceof ScheduledTaskTransportControl ? caught.original : caught;
+    if (error instanceof ScheduledTaskSourceUnavailableError && recoveryAttemptRecorded && !executionStarted) {
+      // Never restore a newer attempt, cancellation, or an execution already started.
+      await restoreDeferredScheduledRecoveryAttempt(initialJournal, () => !admissionSignal?.aborted).catch((restoreError) => {
+        logger.warn('Could not restore deferred scheduled recovery budget', restoreError);
+      });
+    }
+    throw error;
+  }
+}
+
+async function executeScheduledTaskJournalWithSourceAuthority(
+  initialJournal: ScheduledTaskRunJournal,
+  credential: { token: string; owner: ManagedCloudOwner },
+  recover: boolean,
+  admissionSignal: AbortSignal | undefined,
+  onRecoveryAttempt: () => void,
+  onExecutionStarted: () => void,
+): Promise<ScheduledTaskExecutionOutcome> {
+  await assertScheduledJournalSourceAuthority(initialJournal);
   const state = { journal: initialJournal, answer: '' };
+  const assertCurrent = (): void => {
+    if (admissionSignal?.aborted || isRetiredManagedCloudOwner(credential.owner) ||
+      state.journal.cancellationPending || abandonedScheduledTaskRequestIds.has(state.journal.requestId)) {
+      throw new ScheduledTaskCancelledError();
+    }
+  };
+  const transport = createScheduledTaskTransport(async () => {
+    assertCurrent();
+    await assertScheduledJournalSourceAuthority(state.journal);
+    const current = await getManagedCloudAuthContext();
+    assertCurrent();
+    if (!current) {
+      throw new ScheduledTaskSourceUnavailableError('The scheduled account could not be verified.');
+    }
+    if (!sameManagedCloudOwner(current.owner, credential.owner)) {
+      throw new ScheduledTaskSourceDeniedError('The scheduled account changed before transport.');
+    }
+  }, onExecutionStarted, assertCurrent);
   const delivery = createJournalDelivery(initialJournal, state);
   if (!delivery) {
     return {
@@ -2325,7 +2394,10 @@ async function executeScheduledTaskJournalWithAuthority(
       state.journal.requestId,
       { recoveryAttempts: state.journal.recoveryAttempts + 1 },
     );
-    if (updated) state.journal = updated;
+    if (updated) {
+      state.journal = updated;
+      onRecoveryAttempt();
+    }
     if (admissionSignal?.aborted) {
       return {
         result: scheduledTaskError('cancelled', 'The scheduled task lost account authority.'),
@@ -2334,10 +2406,20 @@ async function executeScheduledTaskJournalWithAuthority(
       };
     }
     if (!state.journal.cloudRun) {
+      await assertScheduledJournalSourceAuthority(state.journal);
+      if (admissionSignal?.aborted) throw new ScheduledTaskCancelledError();
       const recoveredRun = await findChromeManagedRunByRequestId(
         state.journal.requestId,
         {
           getAuthToken: async () => credential.token,
+          createClient: (token) => createManagedCloudAgentRunClient({
+            baseUrl: FREE_TRIAL_GATEWAY,
+            getAuthToken: async () => token,
+            fetchImpl: transport.fetch,
+            decorateMutationHeaders: (headers) => ({
+              ...headers, 'X-Requested-With': 'XMLHttpRequest', ...platformRequestHeaders(),
+            }),
+          }),
         },
         admissionSignal,
       );
@@ -2378,7 +2460,9 @@ async function executeScheduledTaskJournalWithAuthority(
     if (admissionSignal?.aborted) controller.abort();
     if (!registeredRecovery) activeScheduledRecoveries.set(state.journal.requestId, recovery);
     try {
-      return await resumeScheduledTaskJournal(state, delivery, credential, controller.signal);
+      await assertScheduledJournalSourceAuthority(state.journal);
+      if (controller.signal.aborted) throw new ScheduledTaskCancelledError();
+      return await resumeScheduledTaskJournal(state, delivery, credential, controller.signal, transport.fetch);
     } finally {
       if (linkAdmission) admissionSignal.removeEventListener('abort', abortForAdmission);
       if (
@@ -2433,6 +2517,8 @@ async function executeScheduledTaskJournalWithAuthority(
         journal: state.journal,
       };
     }
+    await assertScheduledJournalSourceAuthority(state.journal);
+    if (admissionSignal?.aborted) throw new ScheduledTaskCancelledError();
     result = await handleChatMessage(
       {
         type: 'CHAT_MESSAGE',
@@ -2449,6 +2535,7 @@ async function executeScheduledTaskJournalWithAuthority(
       { id: chrome.runtime.id },
       delivery,
       admissionSignal,
+      transport,
     );
     if (
       result &&
@@ -2690,6 +2777,11 @@ async function recoverScheduledTaskRun(
     await abandonScheduledTaskRun(outcome.journal, credential);
     assertScheduledExecutionSucceeded(outcome.result);
   } catch (error) {
+    if (error instanceof ScheduledTaskSourceUnavailableError) return;
+    if (error instanceof ScheduledTaskSourceDeniedError) {
+      await abandonScheduledTaskRun(journal, credential);
+      return;
+    }
     if (
       recoveryGate.controller.signal.aborted ||
       abandonedScheduledTaskRequestIds.has(journal.requestId)
@@ -2737,22 +2829,34 @@ const MAINTENANCE_PERIOD_MINUTES = 1;
  */
 const RETIRED_ALARM_NAMES = ['keep-alive', SYNC_SWEEP_ALARM];
 
-let maintenanceAlarmArmed = false;
+const maintenanceAlarm = createMaintenanceAlarmController({
+  periodInMinutes: MAINTENANCE_PERIOD_MINUTES,
+  read: () => chrome.alarms.get(MAINTENANCE_ALARM),
+  create: () =>
+    new Promise<void>((resolve, reject) => {
+      chrome.alarms.create(MAINTENANCE_ALARM, { periodInMinutes: MAINTENANCE_PERIOD_MINUTES }, () => {
+        const error = chrome.runtime.lastError;
+        if (error) reject(new Error(error.message ?? 'Failed to create maintenance alarm'));
+        else resolve();
+      });
+    }),
+  clear: async () => {
+    await chrome.alarms.clear(MAINTENANCE_ALARM);
+  },
+  runPass: runMaintenancePass,
+  onError: (error) => logger.warn('Maintenance alarm reconciliation failed', error),
+});
 
 function armMaintenanceAlarm(): void {
-  if (maintenanceAlarmArmed) return;
-  maintenanceAlarmArmed = true;
-  chrome.alarms.create(MAINTENANCE_ALARM, { periodInMinutes: MAINTENANCE_PERIOD_MINUTES }, () => {
-    if (chrome.runtime.lastError) {
-      maintenanceAlarmArmed = false;
-      logger.warn('Failed to create maintenance alarm', chrome.runtime.lastError.message);
-    }
-  });
+  maintenanceAlarm.requestWork();
 }
 
-function disarmMaintenanceAlarm(): void {
-  maintenanceAlarmArmed = false;
-  void chrome.alarms.clear(MAINTENANCE_ALARM);
+let maintenanceObservedOwner: ManagedCloudOwner | null = null;
+
+function observeMaintenanceOwner(owner: ManagedCloudOwner | null): void {
+  const changed = owner !== null && !sameManagedCloudOwner(maintenanceObservedOwner, owner);
+  maintenanceObservedOwner = owner ? { ...owner } : null;
+  if (changed) armMaintenanceAlarm();
 }
 
 /**
@@ -2776,7 +2880,11 @@ async function runMaintenancePass(): Promise<boolean> {
   }
 
   try {
-    if (await sweepConversationSync()) outstanding = true;
+    if (await sweepConversationSync(() => {
+      // Auth can be temporarily unavailable without a sign-out event. Let a
+      // later successful token read wake the same owner again, without polling.
+      maintenanceObservedOwner = null;
+    })) outstanding = true;
   } catch (error) {
     logger.debug('Conversation sync sweep failed', error);
     outstanding = true;
@@ -2791,8 +2899,7 @@ async function runMaintenancePass(): Promise<boolean> {
 }
 
 async function settleMaintenanceAlarm(): Promise<void> {
-  if (await runMaintenancePass()) armMaintenanceAlarm();
-  else disarmMaintenanceAlarm();
+  await maintenanceAlarm.settle();
 }
 
 async function recoverScheduledTaskRuns(): Promise<void> {
@@ -2814,7 +2921,17 @@ async function recoverScheduledTaskRuns(): Promise<void> {
       continue;
     }
     const task = tasks.find((candidate) => candidate.id === journal.taskId);
-    const managedPrompt = task ? await scheduledTaskManagedPrompt(task) : undefined;
+    let managedPrompt: string | undefined;
+    try {
+      if (task) managedPrompt = await assertScheduledTaskSourceAuthority(task);
+    } catch (error) {
+      if (error instanceof ScheduledTaskSourceDeniedError) {
+        await abandonScheduledTaskRun(journal, credential);
+      } else if (!(error instanceof ScheduledTaskSourceUnavailableError)) {
+        throw error;
+      }
+      continue;
+    }
     const expectedPrompt = managedPrompt?.slice(0, TASK_PROMPT_MAX_CHARS).trim();
     if (
       !task?.enabled ||
@@ -2948,29 +3065,38 @@ async function executeScheduledTask(
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
   try {
-    if (
-      task.createdByOrigin &&
-      task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
-      !isOriginApprovedForAutomation(task.createdByOrigin)
-    ) {
+    try {
+      await assertScheduledTaskSourceAuthority(task);
+    } catch (error) {
+      if (!(error instanceof ScheduledTaskSourceDeniedError) || !error.taskOriginDenied) throw error;
+      if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) return;
       logger.warn('Auto-deleting scheduled task whose origin is no longer allowlisted', {
         taskId: task.id,
         createdByOrigin: task.createdByOrigin,
       });
-      await handleDeleteScheduledTask(
+      let deletionGeneration: number | undefined;
+      const deletion = await handleDeleteScheduledTask(
         {
           type: 'DELETE_SCHEDULED_TASK',
           taskId: task.id,
         } as import('./types').DeleteScheduledTaskMessage,
         task.managedCloudAccountId,
         () => {
-          scheduledTaskExecutions.invalidate(task.id);
+          deletionGeneration = scheduledTaskExecutions.invalidate(task.id);
         },
+        (current) => current.createdByOrigin === task.createdByOrigin &&
+          current.prompt === task.prompt && current.shortcutId === task.shortcutId &&
+          (deletionGeneration === undefined
+            ? scheduledTaskExecutions.isCurrent(lease)
+            : scheduledTaskExecutions.generation(task.id) === deletionGeneration),
       );
+      if (!deletion.success || deletionGeneration === undefined) return;
       const journal = (await loadScheduledTaskRunJournals()).find(
         (candidate) => candidate.taskId === task.id,
       );
-      if (journal) await abandonScheduledTaskRun(journal, await getManagedCloudAuthContext());
+      const credential = await getManagedCloudAuthContext();
+      if (scheduledTaskExecutions.generation(task.id) !== deletionGeneration) return;
+      if (journal) await abandonScheduledTaskRun(journal, credential);
       return;
     }
 
@@ -3023,14 +3149,15 @@ async function executeScheduledTask(
     }
     let result: unknown;
     if (task.shortcutId) {
-      result = await handleReplayShortcut(
-        {
-          type: 'REPLAY_SHORTCUT',
-          shortcutId: task.shortcutId,
-        } as import('./types').ReplayShortcutMessage,
-        undefined,
-        false,
-      );
+      result = await replayScheduledShortcut(task, {
+        isCurrent: () => scheduledTaskExecutions.isCurrent(lease),
+        loadShortcuts,
+        queryActiveTab: async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0],
+        getTab: (tabId) => chrome.tabs.get(tabId),
+        loadPolicy: loadScheduledSitePolicyInput,
+        liveGrantedOrigins: oneTimeGrantedOrigins,
+        forward: forwardToContentScript,
+      });
     }
 
     assertScheduledExecutionSucceeded(result);
@@ -3043,7 +3170,19 @@ async function executeScheduledTask(
       signal: lease.controller.signal,
     });
   } catch (error) {
-    if (error instanceof ScheduledTaskCancelledError || lease.controller.signal.aborted) {
+    if (error instanceof ScheduledTaskSourceUnavailableError || error instanceof ScheduledShortcutReplayDeferredError) {
+      logger.warn('Scheduled source authority could not be read; preserving work', { taskId: task.id });
+      return;
+    }
+    if (error instanceof ScheduledTaskSourceDeniedError) {
+      if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) return;
+      const journal = (await loadScheduledTaskRunJournals()).find((run) => run.taskId === task.id);
+      const credential = await getManagedCloudAuthContext();
+      if (lease.controller.signal.aborted || !scheduledTaskExecutions.isCurrent(lease)) return;
+      if (journal) await abandonScheduledTaskRun(journal, credential);
+      return;
+    }
+    if (error instanceof ScheduledTaskCancelledError || error instanceof ScheduledShortcutReplayCancelledError || lease.controller.signal.aborted) {
       logger.info('Scheduled task execution lost authority', { taskId: task.id });
       return;
     }
@@ -3117,6 +3256,10 @@ const SITE_NOT_APPROVED_MESSAGE =
 let siteAllowlistCache = new Set<string>();
 let adminSitePolicyCache: SitePolicyAdminState = null;
 let siteAllowlistLoaded = false;
+const siteAllowlistPublication = createSitePolicyPublicationOwner();
+const adminSitePolicyPublication = createSitePolicyPublicationOwner();
+const startupSiteAllowlistOwner = siteAllowlistPublication.claim();
+const startupAdminSitePolicyOwner = adminSitePolicyPublication.claim();
 // Held rather than dropped: the message that wakes a dormant MV3 worker arrives
 // before this read resolves, and a floating promise left that first message
 // deciding against an empty set.
@@ -3126,16 +3269,22 @@ const siteAllowlistReady: Promise<void> = Promise.all([
     .then((res) => {
       const list = res[SITE_ALLOWLIST_STORAGE_KEY];
       if (Array.isArray(list)) {
-        siteAllowlistCache = new Set(list as string[]);
+        siteAllowlistPublication.publish(startupSiteAllowlistOwner, () => {
+          siteAllowlistCache = new Set(list as string[]);
+        });
       }
     })
     .catch(() => {}),
   readAdminSitePolicy()
     .then((policy) => {
-      adminSitePolicyCache = policy;
+      adminSitePolicyPublication.publish(startupAdminSitePolicyOwner, () => {
+        adminSitePolicyCache = policy;
+      });
     })
     .catch(() => {
-      adminSitePolicyCache = SITE_POLICY_ADMIN_UNAVAILABLE;
+      adminSitePolicyPublication.publish(startupAdminSitePolicyOwner, () => {
+        adminSitePolicyCache = SITE_POLICY_ADMIN_UNAVAILABLE;
+      });
     }),
 ])
   .then(() => undefined)
@@ -3175,6 +3324,7 @@ function cancelActiveRunUnlessOriginStillApproved(
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
+  siteAllowlistPublication.claim();
   const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
   cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
@@ -3182,11 +3332,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if ((area !== 'local' && area !== 'managed') || !changes[ADMIN_SITE_POLICY_STORAGE_KEY]) return;
+  const owner = adminSitePolicyPublication.claim();
   void readAdminSitePolicy()
     .catch(() => SITE_POLICY_ADMIN_UNAVAILABLE as SitePolicyAdminState)
     .then((policy) => {
-      adminSitePolicyCache = policy;
-      cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+      adminSitePolicyPublication.publish(owner, () => {
+        adminSitePolicyCache = policy;
+        cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+      });
     });
 });
 
@@ -3871,6 +4024,7 @@ async function handleMessageAsync(
       const candidate = await getManagedCloudAuthContext(message.refresh);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
+      observeMaintenanceOwner(context?.owner ?? null);
       return {
         success: true,
         ...(context ? { token: context.token, owner: context.owner } : {}),
@@ -3885,6 +4039,9 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
       }
       retireManagedCloudOwner(previousOwner);
+      if (sameManagedCloudOwner(maintenanceObservedOwner, previousOwner)) {
+        observeMaintenanceOwner(null);
+      }
       await revokeAllOneTimeSiteGrants();
       if (computerUseStarts.getPending()) {
         computerUseStartGeneration += 1;
@@ -4899,6 +5056,7 @@ async function handleMessageAsync(
         delCloudMsg.cloudConversationId,
         delCloudMsg.organizationId,
       );
+      if (queued) armMaintenanceAlarm();
       return queued
         ? ({ success: true } as ExtensionResponse)
         : ({ success: false, error: 'Could not queue account chat deletion' } as ExtensionResponse);
@@ -5119,11 +5277,6 @@ async function handleMessageAsync(
         credential: authContext.token,
       });
 
-      const siteTools = await discoverRunSiteTools(cuTabId, cuTab.url);
-      if (!computerUseRuns.isCurrent(lease)) {
-        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
-      }
-
       const allowedForTask = new Set<string>();
       const approvedUploadFiles = new WeakMap<
         Record<string, unknown>,
@@ -5138,13 +5291,12 @@ async function handleMessageAsync(
         signal: AbortSignal | undefined,
         requirement: ActionApprovalRequirement,
       ): Promise<boolean> => {
-        const siteTool = siteTools.find((tool) => tool.name === toolName);
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
           crucial: isCrucialAction(requirement),
           mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
-          readsOnly: readsWithoutActing(toolName, siteTool?.effect),
+          readsOnly: readsWithoutActing(toolName),
           siteApproved: async () => {
             const origin = normalizeApprovedSiteOrigin((await chrome.tabs.get(lease.tabId)).url);
             return origin !== null && originApprovedForBrowserControl(origin);
@@ -5335,13 +5487,6 @@ async function handleMessageAsync(
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
-        siteTools,
-        refreshSiteTools: async () => {
-          const tab = await chrome.tabs.get(cuTabId).catch(() => null);
-          if (!tab?.url) return;
-          siteTools.splice(0, siteTools.length, ...(await discoverRunSiteTools(cuTabId, tab.url)));
-        },
-        callSiteTool: (pageName, args) => callRunSiteTool(cuTabId, pageName, args),
         ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),
         runId: lease.runId,
         signal: lease.controller.signal,
@@ -6178,6 +6323,7 @@ async function handleChatMessage(
   _sender: chrome.runtime.MessageSender,
   delivery?: BackgroundChatDelivery,
   admissionSignal?: AbortSignal,
+  scheduledTransport?: ScheduledTaskTransport,
 ): Promise<ChromeManagedChatResult> {
   if (admissionSignal?.aborted) {
     return scheduledTaskError('cancelled', 'The scheduled task was disabled or deleted.');
@@ -6459,6 +6605,19 @@ async function handleChatMessage(
               ? requestChatToolHandoff(activeStream, id, calls)
               : Promise.resolve({ status: 'cancelled' }),
         }),
+        ...(scheduledTransport ? {
+          streamChat: (...args: Parameters<typeof streamFreeChat>) => {
+            const [messages, token, options] = args;
+            return streamFreeChat(messages, token, {
+              ...(options && 'aborted' in options ? { signal: options } : options),
+              fetchImpl: scheduledTransport.fetch,
+            });
+          },
+          getModelAccess: async (token: string, signal?: AbortSignal) => {
+            await scheduledTransport.beforeModelAccess();
+            return getManagedModelAccess(token, signal);
+          },
+        } : {}),
         getAuthToken: async () => {
           activeStream.controller.signal.throwIfAborted();
           if (activeChatStreams.get(streamKey) !== activeStream)
@@ -6519,6 +6678,7 @@ async function handleChatMessage(
     if (deliveryFailure) return scheduledTaskError('server_error', deliveryFailure);
     return result;
   } catch (error) {
+    if (error instanceof ScheduledTaskTransportControl) throw error;
     const deliveryFailure = await deliverBackgroundResult();
     // Whatever threw here is this extension's own fault, and its words name a
     // module or a browser API rather than anything a reader can act on.

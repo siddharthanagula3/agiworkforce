@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');
@@ -12,7 +13,7 @@ type ComposerOnSend = (
   attachments?: File[],
   skillId?: string,
   meta?: Record<string, unknown>,
-) => false | void | typeof SEND_GUARD_BLOCKED;
+) => false | void | typeof SEND_GUARD_BLOCKED | Promise<false | void | typeof SEND_GUARD_BLOCKED>;
 
 type UploadAttempt = {
   id: string;
@@ -22,6 +23,12 @@ type UploadAttempt = {
 };
 
 const mocks = vi.hoisted(() => ({
+  sdk: {
+    loaded: true,
+    user: { id: 'fixture-user' },
+    session: { id: 'fixture-session', user: { id: 'fixture-user' } },
+    signOut: vi.fn(),
+  },
   composerOnSend: null as ComposerOnSend | null,
   composerDroppedFiles: null as File[] | null,
   composerConversationId: null as string | null,
@@ -52,8 +59,10 @@ vi.mock('@clerk/nextjs', () => ({
     getToken: async () => 'fixture-token',
     isLoaded: true,
     userId: 'fixture-user',
+    sessionId: 'fixture-session',
+    isSignedIn: true,
   }),
-  useClerk: () => ({ signOut: vi.fn() }),
+  useClerk: () => mocks.sdk,
   useUser: () => ({ user: null }),
 }));
 
@@ -152,7 +161,8 @@ vi.mock('../../components/messages/ChatMessageList', () => ({
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useChatStreamRuntime: () => ({
     sendMessage: mocks.sendMessage,
     stopGeneration: vi.fn(),
@@ -269,6 +279,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { firstParkedSend, selectParkedSends, useChatStore } from '@shared/stores/web-chat-store';
@@ -310,7 +322,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   });
 
   it('blocks a second, different send while the first attachment upload is in flight and parks it where a remount can still find it', async () => {
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
@@ -322,7 +334,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     await waitFor(() => expect(mocks.composerConversationId).not.toBeNull());
 
     const secondFile = new File(['other'], 'other.txt', { type: 'text/plain' });
-    let secondSendResult: false | void | typeof SEND_GUARD_BLOCKED = undefined;
+    let secondSendResult: ReturnType<ComposerOnSend> = undefined;
     act(() => {
       secondSendResult = mocks.composerOnSend!(SECOND_MESSAGE, [secondFile], undefined, {});
     });
@@ -360,7 +372,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   });
 
   it('lets the first send proceed normally once its upload settles', async () => {
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
@@ -374,6 +386,33 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
     expect(mocks.toastError).not.toHaveBeenCalled();
+    const sendOptions = mocks.sendMessage.mock.calls[0]![1] as { authority: unknown };
+    expect(sendOptions.authority).toBe(mocks.uploadChatAttachments.mock.calls[0]![2]);
+  });
+
+  it('does not send or recover an old payload when the SDK switches during upload', async () => {
+    const originalSession = mocks.sdk.session;
+    const originalUser = mocks.sdk.user;
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [new File(['notes'], 'notes.txt', { type: 'text/plain' })]);
+    });
+    await waitFor(() => expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1));
+    const authority = mocks.uploadChatAttachments.mock.calls[0]![2] as { isCurrent: () => boolean };
+    try {
+      mocks.sdk.user = { id: 'other-user' };
+      mocks.sdk.session = { id: 'other-session', user: { id: 'other-user' } };
+      await act(async () => { mocks.uploadResolvers[0]!([]); });
+      expect(authority.isCurrent()).toBe(false);
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+      expect(mocks.createConversation).not.toHaveBeenCalled();
+      expect(mocks.toastError).not.toHaveBeenCalled();
+      expect(firstParkedSend(selectParkedSends(useChatStore.getState()))).toBeNull();
+    } finally {
+      mocks.sdk.session = originalSession;
+      mocks.sdk.user = originalUser;
+    }
   });
 
   it('keeps a failed file visible with its phase and retries the original turn', async () => {
@@ -396,7 +435,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
         throw new Error('Storage unavailable');
       },
     );
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
@@ -424,7 +463,7 @@ describe('WebChatPage concurrent send during attachment upload', () => {
   });
 
   it('forwards the composer connector state to sendMessage', async () => {
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {
@@ -472,7 +511,7 @@ function conversationTitles(): unknown[] {
 }
 
 async function sendTyped() {
-  render(<WebChatPage />);
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
   await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
   act(() => {
     mocks.composerOnSend!(PROMPT, undefined, undefined, {});
@@ -489,6 +528,9 @@ describe('WebChatPage typed image request by plan', () => {
     mocks.createConversation.mockClear();
     mocks.toastError.mockClear();
     originalSubscription = useBillingStore.getState().subscription;
+    mocks.sdk.loaded = true;
+    mocks.sdk.user = { id: 'fixture-user' };
+    mocks.sdk.session = { id: 'fixture-session', user: { id: 'fixture-user' } };
   });
 
   afterEach(() => {
@@ -500,7 +542,7 @@ describe('WebChatPage typed image request by plan', () => {
     expect(classifyTaskLocally(PROMPT, []).type).toBe('image_generation');
   });
 
-  it.each(['free', 'pro'] as const)(
+  it.each(['pro'] as const)(
     'takes the image path on the %s plan and never sends it to a free model as a chat turn',
     async (tier) => {
       useBillingStore.setState({ subscription: subscription(tier) });
@@ -515,4 +557,50 @@ describe('WebChatPage typed image request by plan', () => {
       expect(mocks.toastError).not.toHaveBeenCalled();
     },
   );
+  it('does not dispatch a typed free image when catalogue authority is unknown', async () => {
+    useBillingStore.setState({ subscription: subscription('free') });
+    stubFetch();
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    let outcome: Awaited<ReturnType<ComposerOnSend>>;
+    await act(async () => { outcome = await mocks.composerOnSend!(PROMPT); });
+    expect(outcome!).toBe(false);
+    expect(mocks.createConversation).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('refuses an old prompt after the live SDK switches before React renders', async () => {
+    useBillingStore.setState({ subscription: subscription('free') });
+    let finishCatalogue!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) =>
+      String(input) === '/api/models/free-quota'
+        ? new Promise<Response>((resolve) => { finishCatalogue = resolve; })
+        : Promise.resolve(Response.json({})),
+    ));
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    let pending!: ReturnType<ComposerOnSend>;
+    act(() => { pending = mocks.composerOnSend!(PROMPT); });
+    expect(finishCatalogue).toBeDefined();
+    mocks.sdk.user = { id: 'other-account' };
+    mocks.sdk.session = { id: 'other-session', user: { id: 'other-account' } };
+    let outcome: Awaited<ReturnType<ComposerOnSend>>;
+    await act(async () => {
+      finishCatalogue(Response.json({
+        issuer: 'Fixture provider', observedOn: '2026-11-04',
+        evidenceUrl: 'https://provider.example/offer', reportedEligible: 1, reportedUnavailable: 0,
+        models: [{ key: 'fixture-image-offering', providerModelId: 'fixture-image',
+          displayName: 'Fixture image', category: 'image', unit: 'images', limit: 100,
+          consumedApproximate: 0, expiresOn: null, status: 'ready' }],
+        limitedOffer: [{ category: 'image', dailyCap: 10, remainingToday: 10,
+          resetsAt: '2026-11-05T00:00:00.000Z' }],
+        mediaAvailability: { image: 'offered', video: 'not_offered' },
+      }));
+      outcome = await pending;
+    });
+    expect(outcome!).toBe(false);
+    expect(mocks.createConversation).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
 });

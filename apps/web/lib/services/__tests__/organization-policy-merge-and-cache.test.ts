@@ -64,6 +64,7 @@ describe('a malformed policy payload never widens what is in force', () => {
       defaultModelId: null,
       maxReasoningEffort: null,
       allowedCountries: [],
+      countryRestrictionActive: false,
       allowedSurfaces: null,
     });
   });
@@ -71,6 +72,15 @@ describe('a malformed policy payload never widens what is in force', () => {
   it('keeps only the country codes that are well formed', () => {
     const layer = parseWorkspaceControlsLayer({ allowedCountries: ['us', 'DEU', 7, 'FR'] });
     expect(layer.allowedCountries).toEqual(['FR', 'US']);
+  });
+
+  it('preserves malformed nonempty country intent through normalized storage', () => {
+    const controls = readWorkspaceControls({ controls: { allowedCountries: ['invalid', 7] } });
+    expect(controls.allowedCountries).toEqual([]);
+    expect(controls.countryRestrictionActive).toBe(true);
+    expect(readWorkspaceControls({ controls }).countryRestrictionActive).toBe(true);
+    expect(readWorkspaceControls({ controls: { allowedCountries: [] } }).countryRestrictionActive)
+      .toBe(false);
   });
 });
 
@@ -199,6 +209,19 @@ describe('blast radius of a policy change', () => {
     );
     expect(result.revokesAccess).toBe(false);
     expect(result.widening.map((impact) => impact.key)).toEqual(['allowManagedCompute']);
+  });
+
+  it('classifies clearing an active-empty country restriction as widening', () => {
+    const before = policy({
+      controls: { ...DEFAULT_WORKSPACE_CONTROLS, countryRestrictionActive: true },
+    });
+    const after = policy({ controls: DEFAULT_WORKSPACE_CONTROLS });
+    expect(simulateAdminPolicyChange(before, after).widening).toContainEqual({
+      key: 'controls.allowedCountries', from: [], to: null, direction: 'widens',
+    });
+    expect(simulateAdminPolicyChange(after, before).narrowing).toContainEqual({
+      key: 'controls.allowedCountries', from: null, to: [], direction: 'narrows',
+    });
   });
 
   it('reads a first IP allow list as narrowing and its removal as widening', () => {

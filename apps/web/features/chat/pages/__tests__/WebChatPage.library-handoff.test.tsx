@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,15 +24,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -102,7 +111,8 @@ vi.mock('../../components/messages/ChatMessageList', () => ({
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useChatStreamRuntime: () => ({
     sendMessage: vi.fn(),
     stopGeneration: vi.fn(),
@@ -228,6 +238,8 @@ vi.mock('@features/library/lib/library-chat-handoff', () => ({
 }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 function lastDroppedFiles(): File[] | null {
@@ -266,7 +278,7 @@ describe('WebChatPage library hand-off', () => {
     mocks.takeStagedLibraryAttachments.mockReturnValueOnce([file]);
     mocks.params = {};
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() => expect(lastDroppedFiles()).toEqual([file]));
   });
@@ -290,7 +302,7 @@ describe('WebChatPage library hand-off', () => {
       },
     ]);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() => expect(mocks.composerDroppedFiles).toHaveBeenCalled());
     expect(mocks.takeStagedLibraryAttachments).not.toHaveBeenCalled();

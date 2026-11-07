@@ -7,6 +7,7 @@ vi.mock('@shared/lib/logger', () => ({
 
 const {
   stopStreaming,
+  cancelActiveOperations,
   cancelListening,
   chatReset,
   chatWorkspaceReset,
@@ -19,6 +20,7 @@ const {
   resetConnectorCapabilities,
 } = vi.hoisted(() => ({
   stopStreaming: vi.fn(),
+  cancelActiveOperations: vi.fn(),
   cancelListening: vi.fn(),
   chatReset: vi.fn(),
   chatWorkspaceReset: vi.fn(),
@@ -39,12 +41,12 @@ vi.mock('../layout-store', () => ({}));
 vi.mock('../web-chat-store', () =>
   storeModule({
     stopStreaming,
+    cancelActiveOperations,
     resetOnWorkspaceSwitch: chatWorkspaceReset,
     reset: chatReset,
   }),
 );
 vi.mock('../web-settings-store', () => ({}));
-vi.mock('../media-store', () => ({}));
 vi.mock('../model-store', () => ({
   useModelStore: {
     getState: () => ({ reset: modelReset }),
@@ -74,17 +76,89 @@ vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
 import { applyCacheScope } from '../authentication-store';
+import { useMediaStore } from '../media-store';
 
 const SCOPE_KEY = 'agi.cache-scope';
+const mediaOwner = {
+  userId: 'media-user', sessionId: 'media-session',
+  isCurrent: () => true, getToken: async () => 'media-token',
+};
 const MODEL_PREFERENCES = JSON.stringify([resolveModelFamilySlot('openai/gpt-fast')]);
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   sessionStorage.clear();
+  useMediaStore.getState().reset();
 });
 
 describe('applyCacheScope', () => {
+  it.each(['account', 'workspace'] as const)('resets actual media jobs on a %s scope change', async (kind) => {
+    await applyCacheScope({ accountId: 'user_1', workspaceId: null });
+    useMediaStore.getState().addJob({
+      id: 'previous-scope-job', type: 'video', prompt: 'previous scope prompt',
+      status: 'generating', createdAt: '2026-11-04T00:00:00.000Z',
+    }, mediaOwner);
+    await applyCacheScope(kind === 'account'
+      ? { accountId: 'user_2', workspaceId: null }
+      : { accountId: 'user_1', workspaceId: 'org_a' });
+    expect(useMediaStore.getState().jobs).toEqual([]);
+  });
+
+  it('preserves current media work on first and unchanged scope observation', async () => {
+    const job = {
+      id: 'current-job', type: 'image' as const, prompt: 'current prompt',
+      status: 'generating' as const, createdAt: '2026-11-04T00:00:00.000Z',
+    };
+    useMediaStore.getState().addJob(job, mediaOwner);
+    expect(await applyCacheScope({ accountId: 'user_1', workspaceId: null })).toBe(false);
+    expect(useMediaStore.getState().jobs).toEqual([{ ...job, owner: mediaOwner }]);
+    expect(await applyCacheScope({ accountId: 'user_1', workspaceId: null })).toBe(false);
+    expect(useMediaStore.getState().jobs).toEqual([{ ...job, owner: mediaOwner }]);
+  });
+
+  it('does not purge or record scope after the captured owner retires during cancellation', async () => {
+    await applyCacheScope({ accountId: 'user_1', workspaceId: null });
+    let current = true;
+    stopStreaming.mockImplementationOnce(() => { current = false; });
+    localStorage.setItem('agi-composer-draft:v2:tab-a:conversation-a', 'kept');
+    expect(await applyCacheScope({ accountId: 'user_1', workspaceId: 'org_a' }, () => current)).toBe(false);
+    expect(chatWorkspaceReset).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SCOPE_KEY)).toBe('user_1/personal');
+    expect(localStorage.getItem('agi-composer-draft:v2:tab-a:conversation-a')).toBe('kept');
+  });
+
+  it('does not enter account-wide logout cleanup from a captured workspace switch', async () => {
+    await applyCacheScope({ accountId: 'user_2', workspaceId: null });
+    await expect(applyCacheScope({ accountId: 'user_1', workspaceId: 'org_a' }, () => true))
+      .rejects.toThrow('Account cache scope is still resolving');
+    expect(chatReset).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SCOPE_KEY)).toBe('user_2/personal');
+  });
+
+  it('does not invoke later cancellation methods or clear replacement state after a cancellation changes ownership', async () => {
+    await applyCacheScope({ accountId: 'old-account', workspaceId: 'old-workspace' });
+    let current = true;
+    const replacementJob = {
+      id: 'replacement-job', type: 'image' as const, prompt: 'replacement workspace prompt',
+      status: 'generating' as const, createdAt: '2026-11-06T00:00:00.000Z',
+    };
+    stopStreaming.mockImplementationOnce(() => {
+      current = false;
+      localStorage.setItem(SCOPE_KEY, 'replacement-account/replacement-workspace');
+      localStorage.setItem('agi-composer-draft:v2:replacement', 'replacement draft');
+      useMediaStore.getState().addJob(replacementJob, mediaOwner);
+    });
+
+    expect(await applyCacheScope({ accountId: 'old-account', workspaceId: 'next-workspace' }, () => current)).toBe(false);
+    expect(stopStreaming).toHaveBeenCalledOnce();
+    expect(cancelActiveOperations).not.toHaveBeenCalled();
+    expect(chatWorkspaceReset).not.toHaveBeenCalled();
+    expect(chatReset).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SCOPE_KEY)).toBe('replacement-account/replacement-workspace');
+    expect(localStorage.getItem('agi-composer-draft:v2:replacement')).toBe('replacement draft');
+    expect(useMediaStore.getState().jobs).toEqual([{ ...replacementJob, owner: mediaOwner }]);
+  });
   it('adopts the first scope it sees without dropping the signed-in account state', async () => {
     localStorage.setItem('agi.chat-drafts', 'draft');
 

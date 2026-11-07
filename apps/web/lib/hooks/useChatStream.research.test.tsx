@@ -2,9 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 const getTokenMock = vi.fn();
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ getToken: getTokenMock }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
+    getToken: getTokenMock,
+    userId: 'user-1',
+    isSignedIn: true,
+    isLoaded: true,
+    sessionId: 'session-1',
+  }));
+});
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: async () => 'csrf-token',
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
@@ -142,7 +149,7 @@ function installFetch(events: unknown[], opts: { hang?: boolean } = {}) {
       const parsed = init.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : {};
       saveBodies.push({
         ...parsed,
-        __auth: (init.headers as Record<string, string>)['Authorization'],
+        __auth: new Headers(init.headers).get('Authorization'),
       });
       return {
         ok: true,
@@ -526,8 +533,9 @@ describe('useChatStream research retry request', () => {
     await act(async () => {
       await result.current.sendMessage('research the topic', { research: true });
     });
-    const firstKey = fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init
-      .headers as Record<string, string> | undefined;
+    const firstKey = new Headers(
+      fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init.headers,
+    ).get('Idempotency-Key');
 
     installFetch([contentDelta('second attempt'), researchStatus('complete')]);
     await act(async () => {
@@ -536,12 +544,13 @@ describe('useChatStream research retry request', () => {
         researchResume: { sources: [{ url: 'https://a.com', title: 'A' }], steps: [] },
       });
     });
-    const secondKey = fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init
-      .headers as Record<string, string> | undefined;
+    const secondKey = new Headers(
+      fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init.headers,
+    ).get('Idempotency-Key');
 
-    expect(firstKey?.['Idempotency-Key']).toBeTruthy();
-    expect(secondKey?.['Idempotency-Key']).toBeTruthy();
-    expect(secondKey?.['Idempotency-Key']).not.toBe(firstKey?.['Idempotency-Key']);
+    expect(firstKey).toBeTruthy();
+    expect(secondKey).toBeTruthy();
+    expect(secondKey).not.toBe(firstKey);
   });
 });
 

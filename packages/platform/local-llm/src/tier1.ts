@@ -8,7 +8,12 @@ let fallbackRequestSequence = 0;
 export async function tier1Generate(opts: GenerateOptions): Promise<GenerateResult> {
   const requestId = opts.requestId ?? createFallbackRequestId();
   const messages = (opts.messages ?? []).filter((m) => m.role !== 'system');
-  const systemPrompt = opts.systemPrompt ?? '';
+  const systemPrompt = [
+    opts.systemPrompt ?? '',
+    ...(opts.messages ?? []).filter((m) => m.role === 'system').map((m) => m.content),
+  ]
+    .filter((instruction) => instruction.trim().length > 0)
+    .join('\n\n');
 
   if (opts.signal?.aborted) {
     opts.onDone?.({ aborted: true, reason: 'cancel' });

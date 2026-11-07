@@ -586,6 +586,34 @@ describe('PATCH /api/settings/organization/policy', () => {
     ]);
   });
 
+  it('preserves active-empty state on unrelated edits but honors an explicit empty-list reset', async () => {
+    bindCaller({
+      policyRow: {
+        ...SAVED_POLICY,
+        metadata: { controls: { allowedCountries: [], countryRestrictionActive: true } },
+      },
+    });
+    const response = await PATCH(request({ controls: { maxReasoningEffort: 'low' } }) as never);
+    expect(response.status).toBe(200);
+    expect(JSON.parse(upsertParams()[14] as string).controls).toMatchObject({
+      allowedCountries: [], countryRestrictionActive: true,
+    });
+    mockQuery.mockClear();
+    const cleared = await PATCH(request({ controls: { allowedCountries: [] } }) as never);
+    expect(cleared.status).toBe(200);
+    expect(JSON.parse(upsertParams()[14] as string).controls).toMatchObject({
+      allowedCountries: [], countryRestrictionActive: false,
+    });
+  });
+
+  it('does not expose derived restriction state as an administrator write field', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+    const response = await PATCH(
+      request({ controls: { countryRestrictionActive: true } }) as never,
+    );
+    expect(response.status).toBe(400);
+  });
+
   it('refuses a viewer', async () => {
     bindCaller({ role: 'viewer', policyRow: SAVED_POLICY });
 

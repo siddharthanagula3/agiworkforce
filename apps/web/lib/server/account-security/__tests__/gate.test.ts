@@ -294,7 +294,12 @@ describe('the Advanced Account Security gate on a signed-in session', () => {
       code: 'PASSKEY_REQUIRED',
       details: { reason: 'passkey_required' },
     });
-    expect(state.noteSessionSighting).toHaveBeenCalledWith(ACCOUNT, SESSION, expect.anything());
+    expect(state.noteSessionSighting).toHaveBeenCalledWith(
+      ACCOUNT,
+      ACCOUNT,
+      SESSION,
+      expect.anything(),
+    );
   });
 
   it('lets the same session through once a passkey check is recorded against it', async () => {

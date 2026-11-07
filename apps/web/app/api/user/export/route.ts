@@ -13,7 +13,10 @@ import {
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
+import {
+  BILLING_INVOICE_PAGE_LIMIT,
+  readUserBillingInvoicePage,
+} from '@/lib/services/billing-invoice-service';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
@@ -759,7 +762,7 @@ export interface ExportCompleteness {
 const EXPORT_ROW_LIMIT = 1000;
 
 const EXPORT_RETRY_INSTRUCTION =
-  'Request the export again. Sections listed as unavailable were not read, skipped rows were present but could not be exported in this format, and truncated sections hold only their most recent rows.';
+  'Request the export again for unavailable sections. Skipped rows were present but could not be exported in this format. Truncated sections contain only a limited subset of their rows; repeating this bounded export does not retrieve the omitted rows.';
 
 class ExportCompletenessLedger {
   private readonly unavailable = new Set<string>();
@@ -3197,7 +3200,18 @@ async function collectUserData(
   }
 
   try {
-    exportData['billing_invoices'] = await listUserBillingInvoices(db, user.id);
+    const invoices = await readUserBillingInvoicePage(db, user.id);
+    exportData['billing_invoices'] = invoices.invoices;
+    if (!invoices.available) ledger.sectionUnavailable('billing_invoices');
+    if (invoices.hasMore) {
+      ledger.sectionTruncated('billing_invoices', BILLING_INVOICE_PAGE_LIMIT);
+    }
+    for (const lines of invoices.truncatedLineItems) {
+      ledger.sectionTruncated(
+        `billing_invoices.${lines.invoiceId}.line_items`,
+        lines.returnedCount,
+      );
+    }
   } catch (error) {
     ledger.sectionUnavailable('billing_invoices');
     logger.warn({ error, userId: user.id }, 'Billing invoices unavailable for user export');

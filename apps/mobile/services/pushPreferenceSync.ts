@@ -47,12 +47,21 @@ export interface PushDeliveryPreferences {
   quietHoursExemptEventTypes: NotificationEventType[];
 }
 
-let activeToken: string | null = null;
-let activeContext: PushNotificationAccountContext | null = null;
-let deliveredSignature: string | null = null;
-let pendingFlush: ReturnType<typeof setTimeout> | null = null;
-let unsubscribePreferences: (() => void) | null = null;
-let appStateSubscription: NativeEventSubscription | null = null;
+export interface PushRegistrationHandle {
+  isCurrent: () => boolean;
+}
+
+interface PushRegistration extends PushRegistrationHandle {
+  token: string;
+  context: PushNotificationAccountContext;
+  deliveredSignature: string | null;
+  pendingFlush: ReturnType<typeof setTimeout> | null;
+  unsubscribePreferences: (() => void) | null;
+  appStateSubscription: NativeEventSubscription | null;
+}
+
+let activeRegistration: PushRegistration | null = null;
+const registrations = new WeakMap<PushRegistrationHandle, PushRegistration>();
 
 function contextIsCurrent(accountContext: PushNotificationAccountContext): boolean {
   return !accountContext.signal.aborted && accountContext.isCurrent();
@@ -90,17 +99,48 @@ export function buildPushDeliveryPreferences(): PushDeliveryPreferences {
   };
 }
 
-export async function postPushRegistration(
+/** Claims a lifetime, but activates preference listeners only after a successful POST. */
+export function beginPushRegistration(
   token: string,
   accountContext: PushNotificationAccountContext,
-): Promise<boolean> {
+): PushRegistrationHandle {
+  if (
+    activeRegistration?.token === token &&
+    activeRegistration.context === accountContext &&
+    activeRegistration.isCurrent()
+  ) {
+    return activeRegistration;
+  }
+
+  // A stale caller cannot retire a newer registration.
+  if (!contextIsCurrent(accountContext)) return { isCurrent: () => false };
+  stopPushPreferenceSync();
+  const registration: PushRegistration = {
+    token,
+    context: accountContext,
+    deliveredSignature: null,
+    pendingFlush: null,
+    unsubscribePreferences: null,
+    appStateSubscription: null,
+    isCurrent: () =>
+      activeRegistration === registration && contextIsCurrent(accountContext),
+  };
+  registrations.set(registration, registration);
+  activeRegistration = registration;
+  return registration;
+}
+
+export async function postPushRegistration(handle: PushRegistrationHandle): Promise<boolean> {
+  const registration = registrations.get(handle);
+  if (!registration) return false;
+  const { token, context: accountContext } = registration;
   try {
-    if (!contextIsCurrent(accountContext)) return false;
+    if (!registration.isCurrent()) return false;
     const authToken = await accountContext.getAuthToken();
-    if (!authToken || !contextIsCurrent(accountContext)) return false;
+    if (!authToken || !registration.isCurrent()) return false;
 
     const deviceId = await getDeviceId();
-    if (!contextIsCurrent(accountContext)) return false;
+    if (!registration.isCurrent()) return false;
 
     const preferences = buildPushDeliveryPreferences();
     const signature = JSON.stringify(preferences);
@@ -115,65 +155,66 @@ export async function postPushRegistration(
       },
       {
         headers: { Authorization: `Bearer ${authToken}` },
+        auth401Recovery: 'caller-owned',
         signal: accountContext.signal,
       },
     );
-    deliveredSignature = signature;
-    return contextIsCurrent(accountContext);
+    if (!registration.isCurrent()) return false;
+    // A newer failed request in this same lifetime must not discard this receipt.
+    registration.deliveredSignature = signature;
+    activatePreferenceSync(registration);
+    return true;
   } catch {
     return false;
   }
 }
 
-async function flushPushPreferences(): Promise<void> {
-  const token = activeToken;
-  const accountContext = activeContext;
-  if (!token || !accountContext) return;
-  if (!contextIsCurrent(accountContext)) {
-    stopPushPreferenceSync();
+async function flushPushPreferences(registration: PushRegistration): Promise<void> {
+  if (activeRegistration !== registration) return;
+  if (!registration.isCurrent()) {
+    retireRegistration(registration);
     return;
   }
-  if (JSON.stringify(buildPushDeliveryPreferences()) === deliveredSignature) return;
-  await postPushRegistration(token, accountContext);
+  if (JSON.stringify(buildPushDeliveryPreferences()) === registration.deliveredSignature) return;
+  await postPushRegistration(registration);
 }
 
-function scheduleFlush(delayMs: number): void {
-  if (pendingFlush) clearTimeout(pendingFlush);
-  pendingFlush = setTimeout(() => {
-    pendingFlush = null;
-    void flushPushPreferences();
+function scheduleFlush(registration: PushRegistration, delayMs: number): void {
+  if (!registration.isCurrent()) return;
+  if (registration.pendingFlush !== null) clearTimeout(registration.pendingFlush);
+  const timer = setTimeout(() => {
+    if (!registration.isCurrent() || registration.pendingFlush !== timer) return;
+    registration.pendingFlush = null;
+    void flushPushPreferences(registration);
   }, delayMs);
+  registration.pendingFlush = timer;
 }
 
-/**
- * Keeps the server's copy of this device's preferences converged on the local
- * store, which stays the source of truth: a failed push leaves the delivered
- * signature untouched, so the next change or foreground retries it.
- */
-export function beginPushPreferenceSync(
-  token: string,
-  accountContext: PushNotificationAccountContext,
-): void {
-  activeToken = token;
-  activeContext = accountContext;
-
-  unsubscribePreferences ??= useNotificationPrefsStore.subscribe(() => {
-    scheduleFlush(PREFERENCE_SYNC_DEBOUNCE_MS);
+/** Failed requests retain receipts; the next change or foreground can retry. */
+function activatePreferenceSync(registration: PushRegistration): void {
+  if (!registration.isCurrent()) return;
+  registration.unsubscribePreferences ??= useNotificationPrefsStore.subscribe(() => {
+    scheduleFlush(registration, PREFERENCE_SYNC_DEBOUNCE_MS);
   });
+  registration.appStateSubscription ??= AppState.addEventListener(
+    'change',
+    (nextState: AppStateStatus) => {
+      if (nextState === ACTIVE_APP_STATE) void flushPushPreferences(registration);
+    },
+  );
+}
 
-  appStateSubscription ??= AppState.addEventListener('change', (nextState: AppStateStatus) => {
-    if (nextState === ACTIVE_APP_STATE) void flushPushPreferences();
-  });
+function retireRegistration(registration: PushRegistration): void {
+  if (activeRegistration === registration) activeRegistration = null;
+  if (registration.pendingFlush !== null) clearTimeout(registration.pendingFlush);
+  registration.pendingFlush = null;
+  registration.unsubscribePreferences?.();
+  registration.unsubscribePreferences = null;
+  registration.appStateSubscription?.remove();
+  registration.appStateSubscription = null;
+  registration.deliveredSignature = null;
 }
 
 export function stopPushPreferenceSync(): void {
-  if (pendingFlush) clearTimeout(pendingFlush);
-  pendingFlush = null;
-  unsubscribePreferences?.();
-  unsubscribePreferences = null;
-  appStateSubscription?.remove();
-  appStateSubscription = null;
-  activeToken = null;
-  activeContext = null;
-  deliveredSignature = null;
+  if (activeRegistration) retireRegistration(activeRegistration);
 }

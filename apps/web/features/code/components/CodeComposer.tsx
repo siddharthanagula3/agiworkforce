@@ -68,6 +68,7 @@ import {
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
+import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import {
   readManagedUsageBuckets,
@@ -1657,6 +1658,8 @@ export function CodeUsageWarning() {
 }
 
 export interface CodeComposerProps {
+  dictationDestination: string | null;
+  dictationModel: string | null;
   value: string;
   onChange: (value: string) => void;
   onSubmit: (text: string, repository: CodeRepositoryEntry | null) => void;
@@ -1685,6 +1688,8 @@ export interface CodeComposerProps {
 }
 
 export function CodeComposer({
+  dictationDestination,
+  dictationModel,
   value,
   onChange,
   onSubmit,
@@ -1721,6 +1726,10 @@ export function CodeComposer({
     onSubmit(text, url ? { url, branch: repositoryEntry.current.branch } : null);
   };
   const dictation = useDictation({
+    scope: JSON.stringify([dictationDestination, dictationModel, draft.environment, draft.localRootId, draft.localModelId, draft.runtimeId, draft.harnessModelId]),
+    isAvailable: () => Boolean(dictationDestination && dictationModel &&
+      getProviderModeForModel(dictationModel) === 'ManagedGateway' &&
+      (!showChips || draft.environment === 'cloud') && !disabled && !busy),
     onInsert: (text) => onChange(value ? `${value} ${text}` : text),
     onSend: (text) => {
       const next = value ? `${value} ${text}` : text;

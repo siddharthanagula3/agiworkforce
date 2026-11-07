@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
@@ -22,6 +22,8 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+  type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -34,26 +36,25 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/Common';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
-import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
+import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { TwoFactorSection } from './TwoFactorSection';
+import {
+  useSecurityPreferences,
+  isSecuritySettingsOwnerCurrent,
+  type SecuritySettingsOwner,
+} from './useSecurityPreferences';
 import { AskFromSiriSetting } from '@/src/features/siri';
 import {
-  DEFAULT_SESSION_TIMEOUT,
-  SESSION_TIMEOUT_MINUTES,
   WEB_SECURITY_URL,
   changeAccountPassword,
   fetchAccountSecurityStatus,
   fetchAccountSessions,
   fetchAuditLog,
-  fetchLockdownMode,
-  fetchSessionTimeout,
   fetchSignInMethods,
   groupAuditEntries,
   revokeAccountSession,
   revokeAllAccountSessions,
-  saveLockdownMode,
-  saveSessionTimeout,
   type AccountSecurityStatus,
   type AccountSessionRow,
   type AccountSessions,
@@ -118,22 +119,62 @@ export default function AccountSecurityScreen() {
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const { user: clerkUser } = useUser();
-  const [status, setStatus] = useState<AccountSecurityStatus | null>(null);
+  const [ownedStatus, setOwnedStatus] = useState<{
+    account: CloudAccountEpoch;
+    value: AccountSecurityStatus;
+  } | null>(null);
+  const status = ownedStatus && isCloudAccountEpochCurrent(ownedStatus.account)
+    && ownedStatus.account.ownerId === clerkUserId ? ownedStatus.value : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionTimeout, setSessionTimeout] = useState<SessionTimeoutMinutes | null>(null);
-  const [savingTimeout, setSavingTimeout] = useState(false);
+  const preferences = useSecurityPreferences();
+  const {
+    owner: settingsOwner, timeout: sessionTimeout, savingTimeout, lockdown, savingLockdown,
+  } = preferences;
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordAccount, setPasswordAccount] = useState<CloudAccountEpoch | null>(null);
+  const [accountRevision, setAccountRevision] = useState(0);
+  const passwordRequest = useRef(0);
+  const revokeRequest = useRef(0);
+  const passwordModalOpen = isCloudAccountEpochCurrent(passwordAccount)
+    && passwordAccount.ownerId === clerkUserId && clerkUser?.id === passwordAccount.ownerId;
+  const closePassword = useCallback(() => {
+    passwordRequest.current += 1;
+    setPasswordAccount(null);
+    setChangingPassword(false);
+  }, []);
+  useEffect(() => {
+    const invalidate = () => {
+      closePassword();
+      revokeRequest.current += 1;
+      setRevokingAll(false);
+      setOwnedStatus(null);
+      setAccountRevision((revision) => revision + 1);
+    };
+    const unsubscribe = subscribeCloudAccountEpochChange(invalidate);
+    return () => {
+      unsubscribe();
+      passwordRequest.current += 1;
+      revokeRequest.current += 1;
+    };
+  }, [closePassword]);
   const { withStepUp, modal: stepUpModal } = useStepUp();
-  const hasPassword = clerkUser?.passwordEnabled === true;
-  const [sessions, setSessions] = useState<AccountSessions | null>(null);
+  const hasPassword = clerkUser?.id === clerkUserId && clerkUser?.passwordEnabled === true;
+  const [ownedSessions, setOwnedSessions] = useState<{
+    owner: SecuritySettingsOwner;
+    value: AccountSessions;
+  } | null>(null);
+  const sessions = ownedSessions && ownedSessions.owner === settingsOwner &&
+    isSecuritySettingsOwnerCurrent(ownedSessions.owner) ? ownedSessions.value : null;
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
-  const [lockdown, setLockdown] = useState<boolean | null>(null);
-  const [savingLockdown, setSavingLockdown] = useState(false);
+  const singleRevokeIntent = useRef<{
+    owner: SecuritySettingsOwner;
+    phase: 'prompt' | 'request';
+  } | null>(null);
+  const sessionsRequest = useRef(0);
   const signOut = useAuthStore((state) => state.signOut);
   const appLockHydrated = useBiometricFlag((state) => state.hydrated);
   const appLockEnabled = useBiometricFlag((state) => state.enabled);
@@ -146,14 +187,12 @@ export default function AccountSecurityScreen() {
       setLoading(true);
       setError(null);
       try {
-        const [nextStatus, timeout, entries] = await Promise.all([
+        const [nextStatus, entries] = await Promise.all([
           fetchAccountSecurityStatus(signal),
-          fetchSessionTimeout().catch(() => DEFAULT_SESSION_TIMEOUT),
           fetchAuditLog(20, signal).catch(() => [] as AuditLogEntry[]),
         ]);
         if (!isCloudAccountEpochCurrent(account)) return;
-        setStatus(nextStatus);
-        setSessionTimeout(timeout);
+        setOwnedStatus({ account, value: nextStatus });
         setAuditEntries(entries);
       } catch {
         if (signal?.aborted) return;
@@ -168,94 +207,83 @@ export default function AccountSecurityScreen() {
 
   const loadSessions = useCallback(
     async (signal?: AbortSignal) => {
-      const account = captureCloudAccountEpoch();
-      if (!account || account.ownerId !== clerkUserId) return;
-
+      const owner = settingsOwner;
+      if (!isSecuritySettingsOwnerCurrent(owner)) return;
+      const request = ++sessionsRequest.current;
+      const current = () => request === sessionsRequest.current && isSecuritySettingsOwnerCurrent(owner);
       try {
-        const next = await fetchAccountSessions(signal);
-        if (!isCloudAccountEpochCurrent(account)) return;
-        setSessions(next);
+        const next = await fetchAccountSessions(signal ?? owner.controller.signal, owner.account);
+        if (!current() || signal?.aborted) return;
+        setOwnedSessions({ owner, value: next });
         setSessionsError(null);
       } catch {
-        if (signal?.aborted) return;
-        if (!isCloudAccountEpochCurrent(account)) return;
-        setSessions(null);
+        if (signal?.aborted || !current()) return;
+        setOwnedSessions(null);
         setSessionsError('Could not load your devices. Retry.');
       }
     },
-    [clerkUserId],
+    [settingsOwner],
   );
 
   const confirmRevokeSession = useCallback(
     (row: AccountSessionRow) => {
+      const owner = settingsOwner;
+      if (!isSecuritySettingsOwnerCurrent(owner) || !sessions?.sessions.includes(row)) return;
+      if (
+        singleRevokeIntent.current &&
+        isSecuritySettingsOwnerCurrent(singleRevokeIntent.current.owner)
+      ) return;
+      const intent = { owner, phase: 'prompt' as 'prompt' | 'request' };
+      singleRevokeIntent.current = intent;
+      const current = () => singleRevokeIntent.current === intent && isSecuritySettingsOwnerCurrent(owner);
+      const cancel = () => {
+        if (singleRevokeIntent.current === intent && intent.phase === 'prompt') {
+          singleRevokeIntent.current = null;
+        }
+      };
       Alert.alert(
         'Sign out this device?',
         `${formatSessionLabel(row)} will lose access to your AGI account immediately.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel', onPress: cancel },
           {
             text: 'Sign out',
             style: 'destructive',
             onPress: () => {
+              if (!current() || intent.phase !== 'prompt') return;
+              intent.phase = 'request';
+              const active = current;
               void (async () => {
                 setRevokingSessionId(row.id);
                 try {
-                  await revokeAccountSession(row.id);
-                  await loadSessions();
+                  await revokeAccountSession(row.id, owner.account, owner.controller.signal);
+                  if (active()) await loadSessions();
                 } catch {
-                  Alert.alert('Could not sign out that device', 'Please try again.');
+                  if (!active()) return;
+                  Alert.alert(
+                    'Could not confirm device sign-out',
+                    'The server may have received the request. The device list will be refreshed.',
+                  );
+                  await loadSessions();
                 } finally {
-                  setRevokingSessionId(null);
+                  if (active()) setRevokingSessionId(null);
+                  if (singleRevokeIntent.current === intent) singleRevokeIntent.current = null;
                 }
               })();
             },
           },
         ],
+        { cancelable: true, onDismiss: cancel },
       );
     },
-    [loadSessions],
-  );
-
-  useEffect(() => {
-    if (!isClerkSignedIn || appMode !== 'cloud') return;
-    let cancelled = false;
-    fetchLockdownMode()
-      .then((enabled) => {
-        if (!cancelled) setLockdown(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setLockdown(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [appMode, isClerkSignedIn, clerkUserId]);
-
-  const changeLockdown = useCallback(
-    (next: boolean) => {
-      const previous = lockdown;
-      setLockdown(next);
-      void (async () => {
-        setSavingLockdown(true);
-        try {
-          await saveLockdownMode(next);
-        } catch (saveError) {
-          setLockdown(previous);
-          Alert.alert(
-            'Lockdown mode was not changed',
-            toUserMessage(saveError, 'Please try again.'),
-          );
-        } finally {
-          setSavingLockdown(false);
-        }
-      })();
-    },
-    [lockdown],
+    [loadSessions, sessions, settingsOwner],
   );
 
   const confirmRevokeAllSessions = useCallback(() => {
     const account = captureCloudAccountEpoch();
     if (!account || account.ownerId !== clerkUserId) return;
+    const request = ++revokeRequest.current;
+    const current = () => request === revokeRequest.current && isCloudAccountEpochCurrent(account);
     Alert.alert(
       'Log out of all devices?',
       'Every signed-in device, including this one, is signed out. You will need to sign in again.',
@@ -265,22 +293,24 @@ export default function AccountSecurityScreen() {
           text: 'Log out everywhere',
           style: 'destructive',
           onPress: () => {
+            if (!current()) return;
             void (async () => {
               setRevokingAll(true);
               try {
-                await withStepUp('session.revoke_all', null, (headers) =>
-                  revokeAllAccountSessions(headers),
-                );
-                if (!isCloudAccountEpochCurrent(account)) return;
+                await withStepUp('session.revoke_all', null, (headers) => {
+                  if (!current()) throw new StepUpCancelledError();
+                  return revokeAllAccountSessions(headers, account);
+                });
+                if (!current()) return;
                 await signOut();
               } catch (revokeError) {
-                if (isStepUpCancelled(revokeError)) return;
+                if (!current() || isStepUpCancelled(revokeError)) return;
                 Alert.alert(
                   'Could not log out of all devices',
                   toUserMessage(revokeError, 'Please try again.'),
                 );
               } finally {
-                setRevokingAll(false);
+                if (current()) setRevokingAll(false);
               }
             })();
           },
@@ -298,66 +328,47 @@ export default function AccountSecurityScreen() {
     [clerkUserId],
   );
 
-  const cycleSessionTimeout = useCallback(() => {
-    const current = sessionTimeout ?? DEFAULT_SESSION_TIMEOUT;
-    const index = SESSION_TIMEOUT_MINUTES.indexOf(current);
-    const next =
-      SESSION_TIMEOUT_MINUTES[(index + 1) % SESSION_TIMEOUT_MINUTES.length] ??
-      DEFAULT_SESSION_TIMEOUT;
-
-    void (async () => {
-      const previous = sessionTimeout;
-      setSessionTimeout(next);
-      setSavingTimeout(true);
-      try {
-        await saveSessionTimeout(next);
-      } catch {
-        setSessionTimeout(previous);
-        Alert.alert('Could not save session timeout', 'Please try again.');
-      } finally {
-        setSavingTimeout(false);
-      }
-    })();
-  }, [sessionTimeout]);
-
+  const passwordIntentVersion = passwordRequest.current;
   const handleChangePassword = useCallback(
     (change: PasswordChange) => {
-      const account = captureCloudAccountEpoch();
-      if (!account || account.ownerId !== clerkUserId) return;
+      const account = passwordAccount;
+      if (passwordIntentVersion !== passwordRequest.current || !isCloudAccountEpochCurrent(account) || account.ownerId !== clerkUserId || clerkUser?.id !== account.ownerId) return;
+      const request = ++passwordRequest.current;
+      const current = () => request === passwordRequest.current && isCloudAccountEpochCurrent(account);
       void (async () => {
         setChangingPassword(true);
         try {
-          await withStepUp('password.change', null, (headers) =>
-            changeAccountPassword(change, headers),
-          );
-          if (!isCloudAccountEpochCurrent(account)) return;
-          setPasswordModalOpen(false);
+          await withStepUp('password.change', null, (headers) => {
+            if (!current()) throw new StepUpCancelledError();
+            return changeAccountPassword(change, headers, account);
+          });
+          if (!current()) return;
+          setPasswordAccount(null);
           Alert.alert(
             'Password changed',
             'Your account password has been updated and your other sessions were signed out.',
           );
-          await clerkUser?.reload();
+          if (current() && clerkUser?.id === account.ownerId) await clerkUser.reload().catch(() => undefined);
         } catch (changeError) {
-          if (isStepUpCancelled(changeError)) return;
+          if (!current() || isStepUpCancelled(changeError)) return;
           Alert.alert('Could not change password', toUserMessage(changeError, 'Please try again.'));
         } finally {
-          setChangingPassword(false);
+          if (current()) setChangingPassword(false);
         }
       })();
     },
-    [clerkUser, clerkUserId, withStepUp],
+    [clerkUser, clerkUserId, passwordAccount, passwordIntentVersion, withStepUp],
   );
 
   useEffect(() => {
-    setStatus(null);
+    setOwnedStatus(null);
     setLoading(false);
     setError(null);
-    setSessionTimeout(null);
     setAuditEntries(null);
-    setSessions(null);
+    setOwnedSessions(null);
     setSessionsError(null);
     setRevokingSessionId(null);
-  }, [clerkUserId]);
+  }, [clerkUserId, settingsOwner]);
 
   const [signInMethods, setSignInMethods] = useState<SignInMethods | null>(null);
   const [signInMethodsError, setSignInMethodsError] = useState(false);
@@ -377,7 +388,7 @@ export default function AccountSecurityScreen() {
         if (!controller.signal.aborted) setSignInMethodsError(true);
       });
     return () => controller.abort();
-  }, [appMode, isClerkSignedIn, loadSessions, loadStatus]);
+  }, [accountRevision, appMode, isClerkSignedIn, loadSessions, loadStatus]);
 
   const groupedAuditEntries = useMemo(
     () => (auditEntries ? groupAuditEntries(auditEntries) : []),
@@ -416,10 +427,13 @@ export default function AccountSecurityScreen() {
     >
       {passwordModalOpen ? null : stepUpModal}
       <ChangePasswordModal
+        key={passwordAccount ? `${passwordAccount.ownerId}:${passwordAccount.epoch}` : 'closed'}
         visible={passwordModalOpen}
         hasPassword={hasPassword}
         saving={changingPassword}
-        onCancel={() => setPasswordModalOpen(false)}
+        onCancel={() => {
+          if (passwordIntentVersion === passwordRequest.current) closePassword();
+        }}
         onSubmit={handleChangePassword}
       >
         {passwordModalOpen ? stepUpModal : null}
@@ -430,6 +444,8 @@ export default function AccountSecurityScreen() {
 
       {appMode === 'cloud' ? <AskFromSiriSetting /> : null}
       <TwoFactorSection
+        key={ownedStatus ? `${ownedStatus.account.ownerId}:${ownedStatus.account.epoch}` : 'unavailable'}
+        account={appMode === 'cloud' && status ? ownedStatus!.account : null}
         status={appMode === 'cloud' ? status : null}
         statusLabel={twoFactorValue}
         withStepUp={withStepUp}
@@ -502,7 +518,13 @@ export default function AccountSecurityScreen() {
           label={hasPassword ? 'Change password' : 'Set a password'}
           icon={KeyRound}
           value={changingPassword ? 'Saving…' : hasPassword ? 'Change' : 'Set'}
-          onPress={appMode === 'cloud' ? () => setPasswordModalOpen(true) : undefined}
+          onPress={appMode === 'cloud' ? () => {
+            const account = captureCloudAccountEpoch();
+            if (!account || account.ownerId !== clerkUserId || clerkUser?.id !== account.ownerId) return;
+            passwordRequest.current += 1;
+            setChangingPassword(false);
+            setPasswordAccount(account);
+          } : undefined}
           isLast
         />
       </SettingsGroup>
@@ -519,14 +541,23 @@ export default function AccountSecurityScreen() {
           value={
             appMode !== 'cloud'
               ? 'Cloud mode required'
-              : sessionTimeout === null
+              : preferences.timeoutError && sessionTimeout === null
+                ? 'Unavailable'
+                : sessionTimeout === null
                 ? 'Checking…'
                 : savingTimeout
                   ? 'Saving…'
                   : formatTimeout(sessionTimeout)
           }
-          onPress={appMode === 'cloud' && sessionTimeout !== null ? cycleSessionTimeout : undefined}
+          onPress={appMode === 'cloud' && sessionTimeout !== null && !savingTimeout ? () => void preferences.cycleTimeout() : undefined}
         />
+        {preferences.timeoutError ? (
+          <SettingsRow
+            label={preferences.timeoutError}
+            value="Retry"
+            onPress={savingTimeout ? undefined : preferences.retryTimeout}
+          />
+        ) : null}
         {appMode !== 'cloud' ? (
           <SettingsRow label="Devices" icon={Laptop} value="Cloud mode required" />
         ) : sessionsError ? (
@@ -636,9 +667,19 @@ export default function AccountSecurityScreen() {
             description="Blocks connectors, web access, code execution and Deep Research in every chat."
             icon={Lock}
             value={lockdown}
-            onValueChange={changeLockdown}
+            onValueChange={(next) => void preferences.changeLockdown(next)}
             disabled={savingLockdown}
             isLast
+          />
+        </SettingsGroup>
+      ) : null}
+
+      {preferences.lockdownError ? (
+        <SettingsGroup>
+          <SettingsRow
+            label={preferences.lockdownError}
+            value="Retry lockdown"
+            onPress={savingLockdown ? undefined : preferences.retryLockdown}
           />
         </SettingsGroup>
       ) : null}

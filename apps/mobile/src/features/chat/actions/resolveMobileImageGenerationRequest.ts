@@ -51,6 +51,7 @@ export type MobileImageGenerationRequestDecision =
       code: MobileImageGenerationBlockCode;
       alert: MobileImageGenerationAlert;
       switchModel?: MobileImageModelOption;
+      prompt?: string;
     }
   | {
       status: 'ready';
@@ -249,13 +250,16 @@ export function resolveMobileImageGenerationRequest(
   if (!input.globalImageGenerationEnabled) return blocked('feature_unavailable');
   if (!input.imageGenerationEnabled) return blocked('disabled');
   if (!input.isClerkSignedIn || !input.ownerId) return blocked('auth_required');
+  if (!input.isOnline) return blocked('offline');
   if (
     !input.grantedCapabilities.includes('canUseImages') ||
     !canUseBillingPlanCapability(input.subscriptionTier, 'image_generation')
   ) {
-    return blocked('plan_required');
+    const refusal = blocked('plan_required');
+    return attachments.length === 0 && refusal.status === 'blocked'
+      ? { ...refusal, prompt }
+      : refusal;
   }
-  if (!input.isOnline) return blocked('offline');
 
   if (explicitImageMode || slashImageRequest) {
     const modelId = resolveMediaModelId('image');

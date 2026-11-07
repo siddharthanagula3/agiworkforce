@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { composeFreeModelProviderNotice } from '@agiworkforce/compliance';
@@ -53,15 +54,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -278,6 +287,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -309,7 +320,7 @@ const FREE_SUBSCRIPTION: SubscriptionPlan = {
 const QUESTION = 'Which planet has the most moons?';
 
 async function renderChat() {
-  render(<WebChatPage />);
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
   await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
   await act(async () => {
     await Promise.resolve();

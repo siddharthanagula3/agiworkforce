@@ -40,7 +40,7 @@ async function handleRevoke(
   } catch {
     throw createError.notFound('Session not found');
   }
-  if (!target || target.userId !== userId) {
+  if (!target || target.userId !== userId || target.id !== sessionId) {
     throw createError.notFound('Session not found');
   }
 

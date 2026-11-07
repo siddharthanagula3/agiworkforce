@@ -1,3 +1,4 @@
+import { ScheduledTaskTransportControl, type ScheduledTaskFetch } from '../background/scheduled-task-transport';
 import {
   ServerSentEventDecoder,
   ServerSentEventFrameLimitError,
@@ -721,6 +722,8 @@ export interface ManagedMemoryCommandTurn {
 }
 
 export interface ManagedChatStreamOptions {
+  /** Private in-process transport; never serialized into the chat request. */
+  fetchImpl?: ScheduledTaskFetch;
   model?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
   skillName?: string;
@@ -1330,7 +1333,7 @@ export async function* streamFreeChat(
 
     let response: Response;
     try {
-      response = await fetch(resumeEndpoint ?? FREE_TRIAL_ENDPOINT, {
+      response = await (options.fetchImpl ?? fetch)(resumeEndpoint ?? FREE_TRIAL_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1378,7 +1381,8 @@ export async function* streamFreeChat(
         ),
         signal: controller.signal,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScheduledTaskTransportControl) throw error;
       if (controller.signal.aborted) {
         yield abortError();
         return;
@@ -1599,6 +1603,7 @@ export async function* streamFreeChat(
       const client = createManagedCloudAgentRunClient({
         baseUrl: FREE_TRIAL_GATEWAY,
         getAuthToken: async () => token,
+        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
       });
       const replayed: FreeTrialChunk[] = [];
       const toolUseJournal = createToolUseJournal(options.tools ?? []);
@@ -1765,6 +1770,7 @@ export async function* streamFreeChat(
         };
       }
     } catch (error) {
+      if (error instanceof ScheduledTaskTransportControl) throw error;
       if (controller.signal.aborted) {
         reader.cancel().catch(() => {});
         yield* publicTextChunks(contentSplitter.flush(true));
@@ -1790,6 +1796,7 @@ export async function* streamFreeChat(
           for await (const chunk of followDurableRun()) yield chunk;
           return;
         } catch (followError) {
+          if (followError instanceof ScheduledTaskTransportControl) throw followError;
           if (controller.signal.aborted) {
             yield abortError();
             return;

@@ -3,7 +3,9 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { Skill } from '@agiworkforce/skills';
 
+import { createError } from '@/lib/errors';
 import { filterSkillsByInstallOverrides } from './skill-catalog-service';
+import { serializeUserSettings } from './user-settings-payload';
 
 export const SKILL_SETTINGS_NAMESPACE = 'skills';
 const SKILL_INSTALLS_KEY = 'installs';
@@ -46,6 +48,44 @@ export async function getSkillInstallOverrides(
   return extractInstallOverrides(await readUserSettings(db, userId));
 }
 
+async function readLockedUserSettings(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<UserSettingsRow | null> {
+  const [row] = await db.query<UserSettingsRow>(
+    'select settings from public.user_settings where user_id = $1 for update',
+    [userId],
+  );
+  return row ?? null;
+}
+
+function settingsWithInstallOverride(
+  settings: Record<string, unknown>,
+  skillName: string,
+  installed: boolean,
+): Record<string, unknown> {
+  const namespace = isRecord(settings[SKILL_SETTINGS_NAMESPACE])
+    ? (settings[SKILL_SETTINGS_NAMESPACE] as Record<string, unknown>)
+    : {};
+  const installs = isRecord(namespace[SKILL_INSTALLS_KEY])
+    ? (namespace[SKILL_INSTALLS_KEY] as Record<string, unknown>)
+    : {};
+  return {
+    ...settings,
+    [SKILL_SETTINGS_NAMESPACE]: {
+      ...namespace,
+      [SKILL_INSTALLS_KEY]: { ...installs, [skillName]: installed },
+    },
+  };
+}
+
+function storedInstallOverrides(row: UserSettingsRow | undefined): ReadonlyMap<string, boolean> {
+  if (!row || !isRecord(row.settings)) {
+    throw createError.internal('Settings were not returned after saving');
+  }
+  return extractInstallOverrides(row.settings);
+}
+
 export async function setSkillInstallOverride(
   db: DatabaseAdapter,
   userId: string,
@@ -53,28 +93,30 @@ export async function setSkillInstallOverride(
   installed: boolean,
 ): Promise<ReadonlyMap<string, boolean>> {
   return db.transaction(async (tx) => {
-    const settings = await readUserSettings(tx, userId);
-    const namespace = isRecord(settings[SKILL_SETTINGS_NAMESPACE])
-      ? (settings[SKILL_SETTINGS_NAMESPACE] as Record<string, unknown>)
-      : {};
-    const installs = isRecord(namespace[SKILL_INSTALLS_KEY])
-      ? (namespace[SKILL_INSTALLS_KEY] as Record<string, unknown>)
-      : {};
-    const nextSettings = {
-      ...settings,
-      [SKILL_SETTINGS_NAMESPACE]: {
-        ...namespace,
-        [SKILL_INSTALLS_KEY]: { ...installs, [skillName]: installed },
-      },
-    };
-    await tx.execute(
-      `insert into public.user_settings (user_id, settings, updated_at)
-       values ($1, $2::jsonb, timezone('utc'::text, now()))
-       on conflict (user_id)
-       do update set settings = excluded.settings, updated_at = excluded.updated_at`,
-      [userId, JSON.stringify(nextSettings)],
+    let current = await readLockedUserSettings(tx, userId);
+    if (!current) {
+      const initial = settingsWithInstallOverride({}, skillName, installed);
+      const [inserted] = await tx.query<UserSettingsRow>(
+        `insert into public.user_settings (user_id, settings, updated_at)
+         values ($1, $2::jsonb, timezone('utc'::text, now()))
+         on conflict (user_id) do nothing
+         returning settings`,
+        [userId, serializeUserSettings(initial)],
+      );
+      if (inserted) return storedInstallOverrides(inserted);
+      current = await readLockedUserSettings(tx, userId);
+      if (!current) throw createError.internal('Settings row could not be locked');
+    }
+
+    const nextSettings = settingsWithInstallOverride(current.settings ?? {}, skillName, installed);
+    const [row] = await tx.query<UserSettingsRow>(
+      `update public.user_settings
+       set settings = $2::jsonb, updated_at = timezone('utc'::text, now())
+       where user_id = $1
+       returning settings`,
+      [userId, serializeUserSettings(nextSettings)],
     );
-    return extractInstallOverrides(nextSettings);
+    return storedInstallOverrides(row);
   });
 }
 

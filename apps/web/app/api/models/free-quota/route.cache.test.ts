@@ -229,5 +229,5 @@ it('serves every account from one read of the quota state', async () => {
 
   expect(reads).toHaveBeenCalledTimes(1);
   expect(second.models).toEqual(first.models);
-  expect(first).not.toHaveProperty('limitedOffer');
+  expect(first.limitedOffer?.map((offer) => offer.category)).toEqual(['image', 'video']);
 });

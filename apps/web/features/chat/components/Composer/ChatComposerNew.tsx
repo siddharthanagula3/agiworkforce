@@ -58,6 +58,11 @@ import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import { useReadonlyIdentityLifetime } from '@/lib/identity/useSessionSnapshot';
+import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
+import { getConversationProviderMode } from '@features/chat/lib/localByokHandoff';
+import { conversationHoldsLocalTurns } from '@features/chat/lib/local-origin';
 import { dictationSwitchedOffReason, useDictation } from '@features/chat/hooks/use-dictation';
 import {
   DesktopRuntimeError,
@@ -112,6 +117,8 @@ import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-l
 import { readFolderForMention, useMentionFolders } from '@features/chat/hooks/use-mention-folders';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { usePromotionalMediaModels } from '@features/chat/hooks/use-promotional-media-models';
+import { useWorkspacePolicy } from '@shared/hooks/use-workspace-policy';
+import { freeMediaAccess, freeMediaOfferNote } from '@/features/models/lib/free-media';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { useSearchAllowance } from '@features/chat/hooks/use-search-allowance';
 import {
@@ -207,6 +214,7 @@ import {
   readPersistedDraft,
   writePersistedDraft,
 } from './composer-draft-storage';
+import { useClipboardDraftLifetime } from './use-clipboard-draft-lifetime';
 import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
@@ -423,7 +431,8 @@ interface ChatComposerProps {
     attachments?: File[],
     skillId?: string,
     meta?: ComposerSendMeta,
-  ) => void | false | typeof SEND_GUARD_BLOCKED;
+    isCurrent?: () => boolean,
+  ) => ComposerSendResult | Promise<ComposerSendResult>;
   /**
    * Conversation this composer is currently editing for (`null` on the
    * new-chat surface).
@@ -449,7 +458,7 @@ interface ChatComposerProps {
   /** Callback fired after prefillText has been consumed and applied. */
   onPrefillConsumed?: () => void;
   draftReplacement?: DraftReplacement | null;
-  onDraftReplacementApplied?: () => void;
+  onDraftReplacementApplied?: (nonce: number) => void;
   /** Files dropped onto the message area that should be added as attachments. */
   droppedFiles?: File[] | null;
   /** Callback fired after droppedFiles have been consumed and added to attachments. */
@@ -686,6 +695,7 @@ const DRAFT_NOT_SAVED_NOTICE =
  * that case holds the flag.
  */
 export const SEND_GUARD_BLOCKED = 'guard-blocked' as const;
+export type ComposerSendResult = void | false | typeof SEND_GUARD_BLOCKED;
 
 // The send control looks the same while shut, so the reason goes to assistive technology.
 const SEND_REASON = {
@@ -754,8 +764,10 @@ type SlashCommandOutcome =
  * when an earlier, already-unmounted instance changed the flag.
  */
 let sendPendingFlag = false;
+let sendPendingRevision = 0;
 const sendPendingListeners = new Set<() => void>();
 function setSendPendingFlag(next: boolean): void {
+  sendPendingRevision += 1;
   if (sendPendingFlag === next) return;
   sendPendingFlag = next;
   for (const listener of sendPendingListeners) listener();
@@ -879,6 +891,7 @@ const ChatComposerNewComponent = ({
   messageRef.current = message;
   const setDraftContent = useChatStore((state) => state.setDraftContent);
   const clearDraftContent = useChatStore((state) => state.clearDraftContent);
+  const captureDraftIdentity = useReadonlyIdentityLifetime();
   const parkedDraft = useChatStore(selectDraftContent(conversationId));
   const deferredUnsentDraft = useChatStore(selectDeferredUnsentDraft(conversationId));
   const clearDeferredUnsentDraft = useChatStore((state) => state.clearDeferredUnsentDraft);
@@ -899,6 +912,15 @@ const ChatComposerNewComponent = ({
   const attachLimitNote = `Up to ${attachmentsPerMessage} files, ${chatAttachmentSizeLabel(
     Math.min(MAX_CHAT_ATTACHMENT_BYTES, getPlanMaxAttachmentBytes(attachmentPlanTier)),
   )} each`;
+  const deferredSendRef = useRef(false);
+  const { readingClipboard, retire: retireClipboardDraft, begin: beginClipboardRead } =
+    useClipboardDraftLifetime({
+      conversationId,
+      projectId,
+      pickerProjectId: projectPicker?.activeProjectId ?? null,
+      pickerOwned: projectPicker !== undefined,
+      onRetire: () => { deferredSendRef.current = false; },
+    });
   const {
     attachments,
     previews,
@@ -906,13 +928,18 @@ const ChatComposerNewComponent = ({
     preparing: preparingAttachments,
     addFiles,
     removeFile,
-    clearAll: clearAttachments,
+    clearAll: clearAttachmentDraft,
   } = useAttachments({
     maxFiles: attachmentsPerMessage,
     planFileLimitBytes: getPlanMaxAttachmentBytes(attachmentPlanTier),
     planLabel: getBillingPlanPricing(attachmentPlanTier).label,
     onError: (message) => setLocalNotice(message),
   });
+  const clearAttachments = useCallback(() => {
+    retireClipboardDraft();
+    deferredSendRef.current = false;
+    clearAttachmentDraft();
+  }, [clearAttachmentDraft, retireClipboardDraft]);
   const uploadAttemptId = attachmentUploadAttempt?.id;
   const uploadAttemptFiles = attachmentUploadAttempt?.files;
   const [uploadAttemptPreviews, setUploadAttemptPreviews] = useState<
@@ -1003,6 +1030,8 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const subscriptionTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
+  const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
+  const mediaWorkspacePolicy = useWorkspacePolicy();
   const billingUserId = useBillingStore((s) => s.user?.id ?? null);
   const entitlementTier = isFreeTrial ? normalizeBillingPlanTier(null) : subscriptionTier;
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
@@ -1218,15 +1247,51 @@ const ChatComposerNewComponent = ({
     admissionFor: mediaAdmissionFor,
     retry: retryMediaAvailability,
   } = useMediaModelAvailability();
+  const [freeMediaOfferRequested, setFreeMediaOfferRequested] = useState(false);
+  useEffect(() => {
+    if (showOverflowMenu || showSlashMenu) setFreeMediaOfferRequested(true);
+  }, [showOverflowMenu, showSlashMenu]);
   const {
     models: promotionalMediaModels,
     issuer: promotionalMediaIssuer,
+    limited: limitedMedia,
+    availability: promotionalMediaAvailability,
     status: promotionalMediaStatus,
     retry: retryPromotionalMedia,
-  } = usePromotionalMediaModels(canUseImageGeneration || canUseVideoGeneration);
+    refresh: refreshPromotionalMedia,
+  } = usePromotionalMediaModels(
+    canUseImageGeneration ||
+      canUseVideoGeneration ||
+      (billingPolicyReady &&
+        (hostCanGenerateImage || hostCanGenerateVideo) &&
+        (freeMediaOfferRequested || showOverflowMenu || showSlashMenu || imageMode || videoMode)),
+    JSON.stringify([billingUserId, subscriptionTier, conversationId, composerSelectedModelId, pickerActiveProjectId, mediaWorkspacePolicy.policy?.organizationId, mediaWorkspacePolicy.policy?.revision]),
+  );
+  const imageAccess = freeMediaAccess({
+    planIncludes: canUseImageGeneration,
+    offer: limitedMedia.image,
+    availability: promotionalMediaAvailability.image,
+  });
+  const videoAccess = freeMediaAccess({
+    planIncludes: canUseVideoGeneration,
+    offer: limitedMedia.video,
+    availability: promotionalMediaAvailability.video,
+  });
+  const imageOfferLimited = imageAccess.label === 'limited';
+  const videoOfferLimited = videoAccess.label === 'limited';
+  const freeMediaOfferChecking = promotionalMediaStatus === 'loading';
+  const limitedMediaListed = imageOfferLimited || videoOfferLimited;
+  const overflowMenuWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (showOverflowMenu && !overflowMenuWasOpenRef.current && limitedMediaListed) {
+      refreshPromotionalMedia();
+    }
+    overflowMenuWasOpenRef.current = showOverflowMenu;
+  }, [showOverflowMenu, limitedMediaListed, refreshPromotionalMedia]);
   const mediaModelsReady =
     mediaAvailabilityStatus === 'ready' ||
-    ((canUseImageGeneration || canUseVideoGeneration) && promotionalMediaStatus === 'ready');
+    ((canUseImageGeneration || canUseVideoGeneration || limitedMediaListed) &&
+      promotionalMediaStatus === 'ready');
   const mediaModelsSettled =
     mediaAvailabilityStatus !== 'loading' && promotionalMediaStatus !== 'loading';
   const availableImageModels = useMemo(
@@ -1238,13 +1303,13 @@ const ChatComposerNewComponent = ({
           label: model.displayName,
           source: 'promotional' as const,
         })),
-      ...(mediaAvailabilityStatus === 'ready'
+      ...(mediaAvailabilityStatus === 'ready' && !imageOfferLimited
         ? IMAGE_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled').map(
             (model) => ({ ...model, source: 'paid' as const }),
           )
         : []),
     ],
-    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
+    [imageOfferLimited, mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
   );
   const availableVideoModels = useMemo(
     () => [
@@ -1255,13 +1320,13 @@ const ChatComposerNewComponent = ({
           label: model.displayName,
           source: 'promotional' as const,
         })),
-      ...(mediaAvailabilityStatus === 'ready'
+      ...(mediaAvailabilityStatus === 'ready' && !videoOfferLimited
         ? VIDEO_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled').map(
             (model) => ({ ...model, source: 'paid' as const }),
           )
         : []),
     ],
-    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
+    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels, videoOfferLimited],
   );
   const selectedImageIsPromotional = availableImageModels.some(
     (model) => model.id === imageModelId && model.source === 'promotional',
@@ -1404,7 +1469,6 @@ const ChatComposerNewComponent = ({
   // Capability gating: enable/disable composer affordances based on the SELECTED
   // model's capabilities so a user never sends an input the model can't handle
   // (e.g. an image to a text-only model, or web search to a no-search model).
-  const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
   const selectedFreeOffering = freeQuotaSelection(composerSelectedModelId);
   const freeQuotaSelected = Boolean(selectedFreeOffering);
   const promotionalTextOnlyChat = selectedFreeOffering?.quotaProbeProtocol === 'chat';
@@ -1636,31 +1700,49 @@ const ChatComposerNewComponent = ({
       setComposerToggles({ officeCreationEnabled: false, officeOutputFormat: null });
   }, [billingPolicyReady, officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
 
-  // A downgrade (or a stale per-conversation flag) must not leave the
-  // composer in image or video mode once the plan lacks the capability,
-  // because that send is always refused.
+  // A downgrade (or a stale per-conversation flag) must not
+  // leave the composer in image mode once the account has neither the plan
+  // capability nor a ready limited free offering, because that send is always
+  // refused. It waits for the offer read so a limited account keeps its mode.
   useEffect(() => {
-    if (!billingPolicyReady) return;
-    if (imageMode && !canUseImageGeneration) setComposerToggles({ imageMode: false });
-  }, [billingPolicyReady, imageMode, canUseImageGeneration, setComposerToggles]);
+    if (!billingPolicyReady || freeMediaOfferChecking) return;
+    if (imageMode && imageAccess.label === 'upgrade') setComposerToggles({ imageMode: false });
+  }, [
+    billingPolicyReady,
+    freeMediaOfferChecking,
+    imageMode,
+    imageAccess.label,
+    setComposerToggles,
+  ]);
 
+  // Same guarantee for video, whose plan capability is narrower still: a stale
+  // per-conversation flag must not survive a downgrade into a send that is
+  // always refused, while a ready limited free offering keeps the mode.
   useEffect(() => {
-    if (!billingPolicyReady) return;
-    if (videoMode && !canUseVideoGeneration) setComposerToggles({ videoMode: false });
-  }, [billingPolicyReady, videoMode, canUseVideoGeneration, setComposerToggles]);
+    if (!billingPolicyReady || freeMediaOfferChecking) return;
+    if (videoMode && videoAccess.label === 'upgrade') setComposerToggles({ videoMode: false });
+  }, [
+    billingPolicyReady,
+    freeMediaOfferChecking,
+    videoMode,
+    videoAccess.label,
+    setComposerToggles,
+  ]);
 
   // A deployment can lose a provider key/storage independently of the user's
   // tier. Do not leave a persisted media mode active once the no-store server
   // handshake proves that it has no executable model.
   useEffect(() => {
     if (!mediaModelsSettled) return;
-    if (imageMode && (!hostCanGenerateImage || availableImageModels.length === 0)) {
+    if (imageMode && imageAccess.label !== 'unknown' && (!hostCanGenerateImage || availableImageModels.length === 0)) {
       setComposerToggles({ imageMode: false });
     }
-    if (videoMode && (!hostCanGenerateVideo || availableVideoModels.length === 0)) {
+    if (videoMode && videoAccess.label !== 'unknown' && (!hostCanGenerateVideo || availableVideoModels.length === 0)) {
       setComposerToggles({ videoMode: false });
     }
   }, [
+    imageAccess.label,
+    videoAccess.label,
     availableImageModels.length,
     availableVideoModels.length,
     imageMode,
@@ -1922,16 +2004,32 @@ const ChatComposerNewComponent = ({
     [appendDictatedText, focusComposerEnd],
   );
 
-  const dictationSendRef = useRef(false);
+  const dictationSendRef = useRef<RequestAuthority | null>(null);
   const handleDictationSend = useCallback(
-    (text: string) => {
-      dictationSendRef.current = true;
+    (text: string, owner: RequestAuthority) => {
+      dictationSendRef.current = owner;
       appendDictatedText(text);
     },
     [appendDictatedText],
   );
 
   const dictation = useDictation({
+    scope: JSON.stringify([conversationId, newChatProjectId, composerSelectedModelId, localSelection]),
+    isAvailable: () => {
+      if (useLocalModelSelection.getState().selected !== null) return false;
+      const selectedMode = getProviderModeForModel(useModelStore.getState().selectedModelId);
+      if (selectedMode === 'Local' || selectedMode === 'DirectByok') return false;
+      if (!conversationId) return true;
+      const chat = useChatStore.getState();
+      const conversation = chat.conversations.find((entry) => entry.id === conversationId);
+      if (!conversation) return false;
+      const messages = chat.messagesByConversation[conversationId] ?? [];
+      const mode = getConversationProviderMode(conversation, messages);
+      return mode !== 'Local' && mode !== 'DirectByok' &&
+        !conversationHoldsLocalTurns(messages) &&
+        !messages.some((entry) => entry.metadata?.privacyMode === 'byok' ||
+          entry.metadata?.providerMode === 'Local' || entry.metadata?.providerMode === 'DirectByok');
+    },
     onInsert: handleDictationInsert,
     onSend: handleDictationSend,
   });
@@ -1948,7 +2046,6 @@ const ChatComposerNewComponent = ({
   const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
   const [localCommandOpen, setLocalCommandOpen] = useState(false);
   const [browserToolsOpen, setBrowserToolsOpen] = useState(false);
-  const [readingClipboard, setReadingClipboard] = useState(false);
   useEffect(() => {
     if (desktopHost === null) return undefined;
     return onLocalFolderAttachRequest(() => {
@@ -2168,31 +2265,35 @@ const ChatComposerNewComponent = ({
    * shell for it on its own, and the shell asks the user for the clipboard
    * permission the first time, so nothing is read in the background.
    */
+  const addClipboardAttachmentsRef = useRef(addChatAttachments);
+  addClipboardAttachmentsRef.current = addChatAttachments;
   const handleAttachClipboard = useCallback(async () => {
     setShowOverflowMenu(false);
-    setReadingClipboard(true);
+    const operation = beginClipboardRead();
     try {
-      const files = clipboardAttachments(await readHostClipboard(), Date.now());
+      const snapshot = await readHostClipboard();
+      if (!operation.isCurrent()) return;
+      const files = clipboardAttachments(snapshot, Date.now());
       if (files.length === 0) {
         setLocalNotice('Your clipboard is empty, so there was nothing to attach.');
         return;
       }
-      addChatAttachments(files);
+      addClipboardAttachmentsRef.current(files);
     } catch (cause) {
+      if (!operation.isCurrent()) return;
       setLocalNotice(
         cause instanceof DesktopRuntimeError
           ? `The clipboard was not attached. ${toUserMessage(cause, 'The desktop could not read it.')}`
           : 'The clipboard could not be read.',
       );
     } finally {
-      setReadingClipboard(false);
+      operation.finish();
     }
-  }, [addChatAttachments]);
+  }, [beginClipboardRead]);
 
   // A capture, a clipboard read and a picture's metadata removal land their file after an
   // await; an Enter pressed meanwhile would send without it. The send waits instead.
   const attachmentPreparing = readingClipboard || preparingAttachments;
-  const deferredSendRef = useRef(false);
 
   const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
 
@@ -2443,6 +2544,11 @@ const ChatComposerNewComponent = ({
       }
       return;
     }
+    if (imageAccess.label === 'unknown') {
+      setLocalNotice('Free image availability could not be checked. Please retry.');
+      retryPromotionalMedia();
+      return;
+    }
     if (!mediaModelsReady) {
       setLocalNotice(
         mediaAvailabilityStatus === 'error'
@@ -2461,7 +2567,15 @@ const ChatComposerNewComponent = ({
       );
       return;
     }
-    if (!canUseImageGeneration) {
+    if (imageDecision?.reason && imageDecision.reason !== 'requires_upgrade') {
+      setLocalNotice(describeCapabilityDenial(imageDecision.reason).message);
+      return;
+    }
+    if (imageAccess.label === 'upgrade') {
+      if (freeMediaOfferChecking) {
+        setLocalNotice('Checking image model availability…');
+        return;
+      }
       const reason = isFreeTrial ? null : (imageDecision?.reason ?? null);
       if (reason && reason !== 'requires_upgrade') {
         setLocalNotice(describeCapabilityDenial(reason).message);
@@ -2485,7 +2599,8 @@ const ChatComposerNewComponent = ({
     retryPromotionalMedia,
     availableImageModels,
     mediaModelsSettled,
-    canUseImageGeneration,
+    imageAccess.label,
+    freeMediaOfferChecking,
     isFreeTrial,
     imageDecision,
     onUpgradeRequest,
@@ -2502,6 +2617,11 @@ const ChatComposerNewComponent = ({
       } else {
         setLocalNotice('Checking your plan…');
       }
+      return;
+    }
+    if (videoAccess.label === 'unknown') {
+      setLocalNotice('Free video availability could not be checked. Please retry.');
+      retryPromotionalMedia();
       return;
     }
     if (!mediaModelsReady) {
@@ -2522,7 +2642,15 @@ const ChatComposerNewComponent = ({
       );
       return;
     }
-    if (!canUseVideoGeneration) {
+    if (videoDecision?.reason && videoDecision.reason !== 'requires_upgrade') {
+      setLocalNotice(describeCapabilityDenial(videoDecision.reason).message);
+      return;
+    }
+    if (videoAccess.label === 'upgrade') {
+      if (freeMediaOfferChecking) {
+        setLocalNotice('Checking video model availability…');
+        return;
+      }
       const reason = isFreeTrial ? null : (videoDecision?.reason ?? null);
       if (reason && reason !== 'requires_upgrade') {
         setLocalNotice(describeCapabilityDenial(reason).message);
@@ -2546,7 +2674,8 @@ const ChatComposerNewComponent = ({
     retryPromotionalMedia,
     availableVideoModels,
     mediaModelsSettled,
-    canUseVideoGeneration,
+    videoAccess.label,
+    freeMediaOfferChecking,
     isFreeTrial,
     videoDecision,
     onUpgradeRequest,
@@ -2563,7 +2692,7 @@ const ChatComposerNewComponent = ({
     hostCanGenerateVideo &&
     billingPolicyReady &&
     mediaModelsReady &&
-    canUseVideoGeneration &&
+    videoAccess.label === 'included' &&
     !freeQuotaMediaSelected &&
     videoChipModel !== null &&
     attachments.length > 0 &&
@@ -3052,10 +3181,15 @@ const ChatComposerNewComponent = ({
                   : 'No image model is currently available in this deployment.',
             };
           }
-          if (!canUseImageGeneration) {
+          if (imageAccess.label === 'unknown') {
+            return { status: 'unavailable', notice: 'Free image availability could not be checked. Please retry.' };
+          }
+          if (imageAccess.label === 'upgrade') {
             return {
               status: 'unavailable',
-              notice: planCapabilityEntitlementHint('image_generation'),
+              notice: freeMediaOfferChecking
+                ? 'Checking image model availability…'
+                : planCapabilityEntitlementHint('image_generation'),
             };
           }
           return { status: 'applied', content: argument, toggles: { imageMode: true } };
@@ -3090,7 +3224,8 @@ const ChatComposerNewComponent = ({
       modelSupportsSearch,
       modelSupportsThinkingCap,
       modelSupportsCodeExecution,
-      canUseImageGeneration,
+      imageAccess.label,
+      freeMediaOfferChecking,
       composerSelectedModelId,
       hostCanGenerateImage,
       mediaModelsReady,
@@ -3311,6 +3446,73 @@ const ChatComposerNewComponent = ({
     [pendingSlashCommand, resolveSlashCommand],
   );
 
+  const sendDraftScopeKey = JSON.stringify([
+    billingUserId, conversationId, composerSelectedModelId, pickerActiveProjectId,
+    mediaWorkspacePolicy.policy?.organizationId, mediaWorkspacePolicy.policy?.revision,
+  ]);
+  const sendDraftScopeRef = useRef({ key: sendDraftScopeKey });
+  if (sendDraftScopeRef.current.key !== sendDraftScopeKey) {
+    sendDraftScopeRef.current = { key: sendDraftScopeKey };
+  }
+  const queuedAdmissionRef = useRef(new Map<string, { active: boolean }>());
+  const sendDraftFilesRef = useRef(attachments);
+  sendDraftFilesRef.current = attachments;
+  useEffect(() => () => { sendDraftScopeRef.current = { key: '' }; }, []);
+  const editedQueueAdmission = useCallback(() => {
+    const id = editingQueuedIdRef.current;
+    if (!id) return undefined;
+    const previous = queuedAdmissionRef.current.get(id);
+    if (previous) previous.active = false;
+    const admission = { active: true };
+    queuedAdmissionRef.current.set(id, admission);
+    const scope = sendDraftScopeRef.current;
+    return () => admission.active && sendDraftScopeRef.current === scope &&
+      editingQueuedIdRef.current === id && queuedFollowUpsRef.current.some((item) => item.id === id);
+  }, []);
+
+  const settleComposerSend = useCallback(
+    (result: ComposerSendResult | Promise<ComposerSendResult>) => {
+      const scope = sendDraftScopeRef.current;
+      const pendingRevision = sendPendingRevision;
+      const releasePending = () => {
+        if (sendPendingRevision === pendingRevision) setSendPendingFlag(false);
+      };
+      const editedQueueId = editingQueuedIdRef.current;
+      const editedAdmission = editedQueueId ? queuedAdmissionRef.current.get(editedQueueId) : undefined;
+      const submittedText = messageRef.current;
+      const submittedFiles = sendDraftFilesRef.current;
+      const finish = (outcome: ComposerSendResult) => {
+        if (editedQueueId && queuedAdmissionRef.current.get(editedQueueId) === editedAdmission) {
+          queuedAdmissionRef.current.delete(editedQueueId);
+        }
+        if (outcome === SEND_GUARD_BLOCKED) return;
+        if (sendDraftScopeRef.current !== scope) {
+          releasePending();
+          return;
+        }
+        if (outcome === false) {
+          releasePending();
+          return;
+        }
+        if (editedQueueId && editingQueuedIdRef.current === editedQueueId) {
+          editingQueuedIdRef.current = null;
+          const remaining = queuedFollowUpsRef.current.filter((item) => item.id !== editedQueueId);
+          queuedFollowUpsRef.current = remaining;
+          setQueuedFollowUps(remaining);
+        }
+        if (messageRef.current === submittedText && sendDraftFilesRef.current === submittedFiles) {
+          clearComposerState();
+        }
+      };
+      if (result instanceof Promise) {
+        void result.then(finish, () => finish(false));
+      } else {
+        finish(result);
+      }
+    },
+    [clearComposerState],
+  );
+
   const submitMessage = useCallback(
     (invertFollowUp: boolean) => {
       if (!message.trim() && attachments.length === 0) return;
@@ -3417,20 +3619,24 @@ const ChatComposerNewComponent = ({
       }
 
       const sendPromotionalMedia = (prompt: string, modelId: string) => {
+        const decision = freeQuotaSelection(modelId)?.category === 'video' ? videoDecision : imageDecision;
+        if (decision?.reason && decision.reason !== 'requires_upgrade') {
+          setLocalNotice(describeCapabilityDenial(decision.reason).message);
+          return;
+        }
         setSendPendingFlag(true);
-        const result = onSend(prompt, undefined, undefined, {
+        const meta: ComposerSendMeta = {
           workMode: 'chat',
           projectId: pickerActiveProjectId,
           modelOverrideId: modelId,
           webSearchEnabled: false,
           codeExecutionEnabled: false,
-        });
-        if (result === SEND_GUARD_BLOCKED) return;
-        if (result === false) {
-          setSendPendingFlag(false);
-          return;
-        }
-        clearComposerState();
+        };
+        const admission = editedQueueAdmission();
+        const result = admission
+          ? onSend(prompt, undefined, undefined, meta, admission)
+          : onSend(prompt, undefined, undefined, meta);
+        settleComposerSend(result);
       };
 
       if (sendImageMode && outgoingContent.trim()) {
@@ -3460,8 +3666,8 @@ const ChatComposerNewComponent = ({
           sendPromotionalMedia(prompt, imageModelId);
           return;
         }
-        if (!canUseImageGeneration) {
-          setLocalNotice(planCapabilityEntitlementHint('image_generation'));
+        if (imageAccess.label !== 'included') {
+          setLocalNotice('No free image model is available right now. Try again in a moment.');
           return;
         }
         if (!onGenerateImage) {
@@ -3567,8 +3773,8 @@ const ChatComposerNewComponent = ({
           sendPromotionalMedia(prompt, videoModelId);
           return;
         }
-        if (!canUseVideoGeneration) {
-          setLocalNotice(planCapabilityEntitlementHint('video_generation'));
+        if (videoAccess.label !== 'included') {
+          setLocalNotice('No free video model is available right now. Try again in a moment.');
           return;
         }
         if (!onGenerateVideo) {
@@ -3701,16 +3907,18 @@ const ChatComposerNewComponent = ({
       }
 
       setSendPendingFlag(true);
-      const result = onSend(...sendArgs);
+      const admission = editedQueueAdmission();
+      const result = admission
+        ? onSend(sendArgs[0], sendArgs[1], sendArgs[2], sendArgs[3], admission)
+        : onSend(...sendArgs);
 
-      if (result === SEND_GUARD_BLOCKED) return;
-      if (result === false) {
-        setSendPendingFlag(false);
-        return;
-      }
-      clearComposerState();
+      settleComposerSend(result);
     },
     [
+      settleComposerSend,
+      editedQueueAdmission,
+      imageDecision,
+      videoDecision,
       message,
       attachments,
       refusedAttachments,
@@ -3734,8 +3942,8 @@ const ChatComposerNewComponent = ({
       attachmentPreparing,
       trialExhausted,
       freeQuotaMediaSelected,
-      canUseImageGeneration,
-      canUseVideoGeneration,
+      imageAccess.label,
+      videoAccess.label,
       onUpgradeRequest,
       imageMode,
       selectedImageIsPromotional,
@@ -3796,8 +4004,9 @@ const ChatComposerNewComponent = ({
   const handleSubmitInverted = useCallback(() => submitMessage(true), [submitMessage]);
 
   useEffect(() => {
-    if (!dictationSendRef.current) return;
-    dictationSendRef.current = false;
+    const owner = dictationSendRef.current;
+    dictationSendRef.current = null;
+    if (!owner?.isCurrent()) return;
     if (!message.trim() && attachments.length === 0) return;
     handleSubmit();
   }, [message, attachments.length, handleSubmit]);
@@ -3867,6 +4076,7 @@ const ChatComposerNewComponent = ({
    */
   useEffect(() => {
     const owner = conversationId ?? null;
+    const identity = captureDraftIdentity();
     const pendingCleanup = pendingDraftCleanupRef.current;
     if (pendingCleanup?.owner === owner) {
       pendingCleanup.cancelled = true;
@@ -3881,21 +4091,24 @@ const ChatComposerNewComponent = ({
         content: parked || readPersistedDraft(owner),
       };
     }
+    retireClipboardDraft();
     writeComposerMessage(claimedArrivalDraftRef.current.content);
     return () => {
       const outgoing = messageRef.current;
+      const draftOwner = conversationId
+        ? useChatStore.getState().draftOwnersByConversation[conversationId]
+        : undefined;
       const cleanup = { owner, cancelled: false };
       pendingDraftCleanupRef.current = cleanup;
       queueMicrotask(() => {
-        if (cleanup.cancelled || !conversationId) return;
-        if (outgoing.trim()) {
-          setDraftContent(outgoing, conversationId);
-        } else {
-          clearDraftContent(conversationId);
-        }
+        if (
+          cleanup.cancelled || !conversationId || !identity.isCurrent() ||
+          useChatStore.getState().draftOwnersByConversation[conversationId] !== draftOwner
+        ) return;
+        setDraftContent(outgoing.trim() ? outgoing : '', conversationId);
       });
     };
-  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
+  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage, retireClipboardDraft, captureDraftIdentity]);
 
   // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
   // into the local message and notify the parent it was consumed. This runs in an EFFECT,
@@ -3908,10 +4121,11 @@ const ChatComposerNewComponent = ({
       return;
     }
     consumedPrefillRef.current = prefillText;
+    retireClipboardDraft();
     writeComposerMessage(prefillText);
     onPrefillConsumed?.();
     setSendPendingFlag(false);
-  }, [prefillText, onPrefillConsumed, writeComposerMessage]);
+  }, [prefillText, onPrefillConsumed, writeComposerMessage, retireClipboardDraft]);
 
   /**
    * A draft can also be parked while this composer is on screen; a send that
@@ -3953,30 +4167,35 @@ const ChatComposerNewComponent = ({
     }
     if (messageRef.current.trim()) return;
     deferredHandbackRef.current = null;
+    retireClipboardDraft();
     writeComposerMessage(deferred.content);
     setLocalNotice(restoredDraftNotice());
     clearDraftContent(conversationId);
-  }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
+  }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage, retireClipboardDraft]);
 
   const appliedDraftReplacementRef = useRef(0);
   useEffect(() => {
     if (!draftReplacement || draftReplacement.nonce === appliedDraftReplacementRef.current) return;
     if (draftReplacement.conversationId !== conversationId) return;
+    if (!draftReplacement.isCurrent()) return;
     appliedDraftReplacementRef.current = draftReplacement.nonce;
     seenParkedDraftRef.current = draftReplacement.content;
     deferredHandbackRef.current = null;
+    retireClipboardDraft();
     writeComposerMessage(draftReplacement.content);
-    onDraftReplacementApplied?.();
-  }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage]);
+    onDraftReplacementApplied?.(draftReplacement.nonce);
+  }, [conversationId, draftReplacement, onDraftReplacementApplied, writeComposerMessage, retireClipboardDraft]);
 
   useEffect(() => {
     if (!deferredUnsentDraft || messageRef.current.trim()) return;
     setSendPendingFlag(false);
+    retireClipboardDraft();
     writeComposerMessage(deferredUnsentDraft);
     setLocalNotice(restoredDraftNotice());
     clearDeferredUnsentDraft(conversationId);
   }, [
     clearDeferredUnsentDraft,
+    retireClipboardDraft,
     conversationId,
     deferredUnsentDraft,
     message,
@@ -4024,9 +4243,10 @@ const ChatComposerNewComponent = ({
     // this send's.
     if (live) return;
     setSendPendingFlag(false);
+    retireClipboardDraft();
     writeComposerMessage(parkedSend.content);
     setLocalNotice(RESTORED_BLOCKED_SEND_NOTICE);
-  }, [clearParkedSend, conversationId, parkedSend, writeComposerMessage]);
+  }, [clearParkedSend, conversationId, parkedSend, writeComposerMessage, retireClipboardDraft]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //
@@ -4040,17 +4260,34 @@ const ChatComposerNewComponent = ({
       const deliverable = queue.filter((item) => item.conversationId === (conversationId ?? null));
       const stranded = queue.filter((item) => item.conversationId !== (conversationId ?? null));
       const next = deliverable[0];
-      const remaining = deliverable.slice(1);
-      setQueuedFollowUps(remaining);
-      queuedFollowUpsRef.current = remaining;
+      setQueuedFollowUps(deliverable);
+      queuedFollowUpsRef.current = deliverable;
       if (next) {
         const [queuedContent, queuedFiles, queuedSkill, queuedMeta] = next.args;
-        onSend(
+        const scope = sendDraftScopeRef.current;
+        const previous = queuedAdmissionRef.current.get(next.id);
+        if (previous) previous.active = false;
+        const admission = { active: true };
+        queuedAdmissionRef.current.set(next.id, admission);
+        const isCurrent = () => admission.active && sendDraftScopeRef.current === scope &&
+          queuedFollowUpsRef.current.some((item) => item.id === next.id);
+        const result = onSend(
           queuedContent,
           queuedFiles,
           queuedSkill,
           queuedMeta ? { ...queuedMeta, queuedFollowUp: true } : queuedMeta,
+          isCurrent,
         );
+        const finish = (outcome: ComposerSendResult) => {
+          const currentAdmission = isCurrent();
+          if (queuedAdmissionRef.current.get(next.id) === admission) queuedAdmissionRef.current.delete(next.id);
+          if (outcome === false || outcome === SEND_GUARD_BLOCKED || !currentAdmission) return;
+          const current = queuedFollowUpsRef.current.filter((item) => item.id !== next.id);
+          queuedFollowUpsRef.current = current;
+          setQueuedFollowUps(current);
+        };
+        if (result instanceof Promise) void result.then(finish, () => finish(false));
+        else finish(result);
       }
       for (const pending of stranded) {
         {
@@ -4091,6 +4328,8 @@ const ChatComposerNewComponent = ({
   }, [isTurnActive, onSend, conversationId, setDraftContent]);
 
   const cancelQueuedMessage = useCallback((id: string) => {
+    const admission = queuedAdmissionRef.current.get(id);
+    if (admission) admission.active = false;
     if (editingQueuedIdRef.current === id) editingQueuedIdRef.current = null;
     setQueuedFollowUps((current) => current.filter((item) => item.id !== id));
   }, []);
@@ -4179,7 +4418,10 @@ const ChatComposerNewComponent = ({
     (id: string) => {
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
       if (!target) return;
+      const admission = queuedAdmissionRef.current.get(id);
+      if (admission) admission.active = false;
       editingQueuedIdRef.current = id;
+      retireClipboardDraft();
       writeComposerMessage(target.args[0]);
       const attachmentsToRestore = target.args[1];
       if (attachmentsToRestore && attachmentsToRestore.length > 0) {
@@ -4187,7 +4429,7 @@ const ChatComposerNewComponent = ({
       }
       focusComposer();
     },
-    [addChatAttachments, writeComposerMessage, focusComposer],
+    [addChatAttachments, writeComposerMessage, focusComposer, retireClipboardDraft],
   );
 
   /**
@@ -5709,11 +5951,20 @@ const ChatComposerNewComponent = ({
                     hostCanGenerateImage={hostCanGenerateImage}
                     imageModelsAvailable={availableImageModels.length > 0}
                     canUseImageGeneration={canUseImageGeneration}
+                    imageAccess={imageAccess}
+                    imageOfferNote={
+                      limitedMedia.image ? freeMediaOfferNote(limitedMedia.image) : null
+                    }
+                    freeMediaOfferChecking={freeMediaOfferChecking}
                     imageMode={imageMode}
                     onCreateImage={handleCreateImageFromMenu}
                     hostCanGenerateVideo={hostCanGenerateVideo}
                     videoModelsAvailable={availableVideoModels.length > 0}
                     canUseVideoGeneration={canUseVideoGeneration}
+                    videoAccess={videoAccess}
+                    videoOfferNote={
+                      limitedMedia.video ? freeMediaOfferNote(limitedMedia.video) : null
+                    }
                     videoMode={videoMode}
                     onCreateVideo={handleCreateVideoFromMenu}
                     showWorkingFolderRow={!projectPicker && canUseWorkingDirectory}

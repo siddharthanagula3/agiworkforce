@@ -20,19 +20,18 @@ export interface AccountConsentRowProps {
   unavailableLabel: string;
   readGranted: (body: unknown) => boolean;
   onSaved?: (granted: boolean) => void;
+  onWithdrawalRequested?: () => void;
   grantBlockedBySignal?: boolean;
 }
 
 function readStoredDecision(body: unknown, purpose: string): boolean | null {
   if (typeof body !== 'object' || body === null) return null;
   const recorded = (body as { recorded?: unknown }).recorded;
-  if (!Array.isArray(recorded)) return null;
-  for (const record of recorded as unknown[]) {
-    if (typeof record !== 'object' || record === null) continue;
-    const { purpose: storedPurpose, granted } = record as { purpose?: unknown; granted?: unknown };
-    if (storedPurpose === purpose && typeof granted === 'boolean') return granted;
-  }
-  return null;
+  if (!Array.isArray(recorded) || recorded.length !== 1) return null;
+  const record: unknown = recorded[0];
+  if (typeof record !== 'object' || record === null) return null;
+  const { purpose: storedPurpose, granted } = record as { purpose?: unknown; granted?: unknown };
+  return storedPurpose === purpose && typeof granted === 'boolean' ? granted : null;
 }
 
 export function AccountConsentRow({
@@ -43,6 +42,7 @@ export function AccountConsentRow({
   unavailableLabel,
   readGranted,
   onSaved,
+  onWithdrawalRequested,
   grantBlockedBySignal = false,
 }: AccountConsentRowProps) {
   const [state, setState] = useState<ConsentState>({ kind: 'loading' });
@@ -77,6 +77,7 @@ export function AccountConsentRow({
     setSaving(true);
     setError(null);
     try {
+      if (!granted) onWithdrawalRequested?.();
       const response = await fetch(PRODUCT_ANALYTICS_CONSENT_PATH, {
         method: 'POST',
         headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
@@ -94,10 +95,13 @@ export function AccountConsentRow({
             : 'That change was not saved. Try again.',
         );
       } else {
-        const stored =
-          readStoredDecision(await response.json().catch(() => null), purpose) ?? granted;
-        if (granted && !stored) setGrantRefusedByServer(true);
-        onSaved?.(stored);
+        const stored = readStoredDecision(await response.json().catch(() => null), purpose);
+        if (stored === null || (!granted && stored)) {
+          setError('Could not confirm that change was saved.');
+        } else {
+          if (granted && !stored) setGrantRefusedByServer(true);
+          onSaved?.(stored);
+        }
       }
       await load();
     } catch {

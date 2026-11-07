@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({
 
 type OriginalNotificationsModule = typeof import('@/features/notifications');
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
@@ -38,6 +39,8 @@ beforeEach(() => {
     browserReplyReady: true,
     emailScheduleDone: false,
     mobilePushScheduleDone: false,
+    mobilePushAgentActivity: true,
+    newerNotificationPreference: 'preserve',
   });
   mocks.savePreferenceNamespace.mockResolvedValue(undefined);
 });
@@ -64,23 +67,37 @@ describe('NotificationsSection grouping', () => {
     expect(screen.getByRole('combobox', { name: 'Scheduled task finished' })).toBeDisabled();
   });
 
-  it('restores the saved choice after a failed write and retries the intended change', async () => {
+  it('reconciles an unconfirmed write with GET instead of replaying intent', async () => {
     mocks.savePreferenceNamespace.mockRejectedValueOnce(new Error('HTTP 503: Service unavailable'));
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
-    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), {
-      target: { value: 'off' },
-    });
-    const retry = await screen.findByRole('button', { name: 'Retry saving' });
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), { target: { value: 'off' } });
+    await screen.findByText(/Save could not be confirmed/);
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('browserReplyReady');
-    const failure = screen.getByRole('alert');
-    expect(failure).toHaveTextContent('Changes were not saved');
-    expect(failure.textContent).not.toContain('HTTP');
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Retry saving' })).toBeNull();
+    expect(mocks.fetchPreferenceNamespace).toHaveBeenCalledTimes(2);
+    expect(mocks.savePreferenceNamespace.mock.calls).toEqual([
+      ['notifications', { browserReplyReady: false }, { merge: true }],
+    ]);
+    expect(screen.queryByText('Saved')).toBeNull();
+  });
+
+  it('locks editing until a failed recovery GET is retried without another PUT', async () => {
+    mocks.fetchPreferenceNamespace.mockResolvedValueOnce({ browserReplyReady: true })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ browserReplyReady: false });
+    mocks.savePreferenceNamespace.mockRejectedValueOnce(new Error('lost response'));
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), { target: { value: 'off' } });
+    const retry = await screen.findByRole('button', { name: 'Retry loading' });
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeDisabled();
     fireEvent.click(retry);
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');
-    expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(2);
+    expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchPreferenceNamespace).toHaveBeenCalledTimes(3);
   });
 
   it('keeps channels locked after a failed read and offers a load retry', async () => {
@@ -131,13 +148,11 @@ describe('NotificationsSection grouping', () => {
     });
 
     await waitFor(() =>
-      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
-        browserReplyReady: true,
-        emailScheduleDone: true,
-        mobilePushScheduleDone: true,
-        emailSecurityAlerts: true,
-        pushUsageReset: true,
-      }),
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        { emailScheduleDone: true, mobilePushScheduleDone: true },
+        { merge: true },
+      ),
     );
   });
 
@@ -146,6 +161,8 @@ describe('NotificationsSection grouping', () => {
       browserReplyReady: true,
       emailScheduleDone: true,
       mobilePushScheduleDone: true,
+      mobilePushAgentActivity: true,
+      newerNotificationPreference: 'preserve',
     });
     render(<NotificationsSection surfaceStatus={MOBILE_RELEASED} />);
     await waitFor(() =>
@@ -159,13 +176,11 @@ describe('NotificationsSection grouping', () => {
     });
 
     await waitFor(() =>
-      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
-        browserReplyReady: true,
-        emailScheduleDone: false,
-        mobilePushScheduleDone: false,
-        emailSecurityAlerts: true,
-        pushUsageReset: true,
-      }),
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        { emailScheduleDone: false, mobilePushScheduleDone: false },
+        { merge: true },
+      ),
     );
   });
 
@@ -175,6 +190,8 @@ describe('NotificationsSection grouping', () => {
       browserReplyReady: true,
       emailScheduleDone: true,
       mobilePushScheduleDone: true,
+      mobilePushAgentActivity: true,
+      newerNotificationPreference: 'preserve',
     });
     render(<NotificationsSection />);
     const scheduleSelect = screen.getByRole('combobox', { name: 'Scheduled task finished' });
@@ -190,13 +207,11 @@ describe('NotificationsSection grouping', () => {
     fireEvent.change(scheduleSelect, { target: { value: 'off' } });
 
     await waitFor(() =>
-      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith('notifications', {
-        browserReplyReady: true,
-        emailScheduleDone: false,
-        mobilePushScheduleDone: true,
-        emailSecurityAlerts: true,
-        pushUsageReset: true,
-      }),
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        { emailScheduleDone: false },
+        { merge: true },
+      ),
     );
   });
 
@@ -209,7 +224,8 @@ describe('NotificationsSection grouping', () => {
     await waitFor(() =>
       expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
         'notifications',
-        expect.objectContaining({ pushUsageReset: false }),
+        { pushUsageReset: false },
+        { merge: true },
       ),
     );
   });
@@ -233,3 +249,20 @@ describe('NotificationsSection search index', () => {
     }
   });
 });
+
+const notificationOwner = vi.hoisted(() => ({
+  incarnation: 1,
+  isCurrent: () => true,
+  session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
+}));
+vi.mock('../hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => notificationOwner,
+}));
+vi.mock('../services/notification-preferences-client', () => ({
+  readNotificationPreferences: async () => ({ stored: await (mocks.fetchPreferenceNamespace)(), version: 'v1' }),
+  saveNotificationPreferences: async (_authority: unknown, patch: object) => {
+    await (mocks.savePreferenceNamespace)('notifications', patch, { merge: true });
+    return { stored: patch, version: 'v2' };
+  },
+}));

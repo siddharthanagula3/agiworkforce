@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
@@ -42,15 +43,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -261,6 +270,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import promotionConfig from '@/config/free-model-promotion.json';
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { useModelStore } from '@shared/stores/model-store';
@@ -321,7 +332,7 @@ describe('a Free account on the chat page once the free model promotion is over'
     expect(PROMOTED_MODEL).toBeDefined();
     useModelStore.getState().setSelectedModelId(PROMOTED_MODEL!);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     await waitFor(() => expect(useModelStore.getState().selectedModelId).toBe(FREE_TRIAL_MODEL));
     act(() => {

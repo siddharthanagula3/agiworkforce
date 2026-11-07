@@ -3,34 +3,39 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
-export const DEVICE_SIGNIN_SETTINGS_NAMESPACE = 'security';
-export const DEVICE_SIGNIN_SETTING_KEY = 'deviceCodeSignInEnabled';
+import { DEVICE_SIGNIN_SETTINGS_NAMESPACE, DEVICE_SIGNIN_SETTING_KEY } from '@/features/settings/lib/device-signin-preferences';
+export { DEVICE_SIGNIN_SETTINGS_NAMESPACE, DEVICE_SIGNIN_SETTING_KEY } from '@/features/settings/lib/device-signin-preferences';
 
-/**
- * Whether this account allows headless device-code sign-in.
- *
- * Default TRUE: the flow predates the switch, and defaulting to off would sign
- * every existing CLI and desktop install out at deploy. A read failure also
- * returns true, refusing approvals because a settings query blipped would lock
- * users out of their own devices, and the flow still requires an authenticated
- * human to approve a code they were shown.
- */
-export async function isDeviceCodeSignInEnabled(
+export type DeviceCodeSignInPolicy = 'enabled' | 'disabled' | 'unavailable';
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export async function readDeviceCodeSignInPolicy(
   db: DatabaseAdapter,
   userId: string,
-): Promise<boolean> {
+): Promise<DeviceCodeSignInPolicy> {
   try {
-    const rows = await db.query<{ settings: Record<string, unknown> | null }>(
+    const rows = await db.query<{ settings: unknown }>(
       `select settings from public.user_settings where user_id = $1 limit 1`,
       [userId],
     );
+    if (rows.length === 0) return 'enabled';
     const settings = rows[0]?.settings;
-    if (!settings || typeof settings !== 'object') return true;
-    const namespace = (settings as Record<string, unknown>)[DEVICE_SIGNIN_SETTINGS_NAMESPACE];
-    if (!namespace || typeof namespace !== 'object' || Array.isArray(namespace)) return true;
-    return (namespace as Record<string, unknown>)[DEVICE_SIGNIN_SETTING_KEY] !== false;
+    if (isObject(settings)) {
+      if (!Object.hasOwn(settings, DEVICE_SIGNIN_SETTINGS_NAMESPACE)) return 'enabled';
+      const namespace = settings[DEVICE_SIGNIN_SETTINGS_NAMESPACE];
+      if (isObject(namespace)) {
+        if (!Object.hasOwn(namespace, DEVICE_SIGNIN_SETTING_KEY)) return 'enabled';
+        const enabled = namespace[DEVICE_SIGNIN_SETTING_KEY];
+        if (typeof enabled === 'boolean') return enabled ? 'enabled' : 'disabled';
+      }
+    }
+    logger.warn({ userId }, 'Device sign-in policy is malformed; refusing approval');
+    return 'unavailable';
   } catch (error) {
-    logger.warn({ userId, error }, 'Device sign-in policy read failed; allowing');
-    return true;
+    logger.warn({ userId, error }, 'Device sign-in policy read failed; refusing approval');
+    return 'unavailable';
   }
 }

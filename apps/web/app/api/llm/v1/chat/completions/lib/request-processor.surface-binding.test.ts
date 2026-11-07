@@ -27,6 +27,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.scopedQuery },
     userId: 'user-pro',
+    organizationId: null,
   })),
 }));
 
@@ -59,6 +60,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { MAP_SEARCH_TOOL_NAME } from '@/lib/services/map-search-tool-service';
 import { processRequest } from './request-processor';
 import type { AuthGateSuccess } from './auth-gate';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 
 const DISABLED_POLICY = {
   enabled: false,
@@ -141,16 +143,25 @@ beforeEach(() => {
 });
 
 describe('processRequest surface binding', () => {
-  it('classifies a browser session by the surface its token is bound to and offers the web-only card', async () => {
-    const result = await processRequest(chatRequest('surface-web-1'), auth());
+  it.each([null, '33333333-3333-4333-8333-333333333333'])(
+    'binds the browser surface and forwards admitted workspace %s to attachment hydration',
+    async (organizationId) => {
+      vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+        db: { query: mocks.scopedQuery } as unknown as UserScopedDb['db'],
+        userId: 'user-pro',
+        organizationId,
+      });
+      const result = await processRequest(chatRequest('surface-web-1'), auth());
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.chatSurface).toBe('web');
-    expect(result.chatRequest.tools?.map((tool) => tool.function.name)).toContain(
-      MAP_SEARCH_TOOL_NAME,
-    );
-  });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.chatSurface).toBe('web');
+      expect(mocks.hydrate.mock.calls[0]?.[4]).toBe(organizationId);
+      expect(result.chatRequest.tools?.map((tool) => tool.function.name)).toContain(
+        MAP_SEARCH_TOOL_NAME,
+      );
+    },
+  );
 
   it('pins a trusted developer credential to a developer surface despite a spoofed header', async () => {
     const result = await processRequest(

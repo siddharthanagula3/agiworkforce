@@ -1,12 +1,6 @@
 /**
- * Account deletion is now a single implementation: useDeleteAccount
- * (features/settings/hooks/use-settings-queries.ts), consumed only by
- * AccountSection. This suite exercises the REAL hook (unlike
- * AccountSection.sessions.test.tsx / AccountSection.api-keys.test.tsx, which
- * stub useDeleteAccount because they test unrelated behavior) to pin the
- * invariant that used to only hold on this surface and not on the
- * now-removed PrivacySection copy: a successful deletion always signs the
- * user out, so a deleted account can never keep a live client session.
+ * Exercises the real useDeleteAccount hook: scheduling remains cancellable
+ * until the returned deadline, and sign-out occurs only after Continue.
  */
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -94,8 +88,10 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
       if (url === '/api/user/delete-account' && init?.method === 'DELETE') {
         return jsonResponse({
           message:
-            'Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours.',
+            'Account deletion scheduled. Cancel before the deadline to keep your account. Erasure is processed afterward and may take longer.',
           scheduledFor: '2026-08-16T12:00:00.000Z',
+          status: 'pending',
+          statusReason: 'Deletion is scheduled and has not started.',
         });
       }
       throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
@@ -109,7 +105,18 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     expect(mockAddCsrfHeaders).toHaveBeenCalled();
     // scheduledFor is surfaced as a real formatted date derived from the
     // server's ISO timestamp, not a hardcoded "within 24 hours" string.
-    expect(screen.getByText(/Your data is permanently erased on/)).toBeInTheDocument();
+    const displayedDeadline = new Date('2026-08-16T12:00:00.000Z').toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    expect(screen.getByText(/Cancellation deadline:/)).toHaveTextContent(
+      `Cancellation deadline: ${displayedDeadline}`,
+    );
+    expect(screen.getByText(/Choose Continue to sign out/)).toBeInTheDocument();
+    expect(screen.queryByText(/permanently erased on/)).not.toBeInTheDocument();
 
     // Sign-out must not fire before the user acknowledges the dialog.
     expect(mockLogout).not.toHaveBeenCalled();
@@ -138,8 +145,10 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
       }
       if (url === '/api/user/delete-account' && init?.method === 'DELETE') {
         return jsonResponse({
-          message: 'Account deleted successfully.',
-          scheduledFor: null,
+          message: 'Account deletion scheduled.',
+          scheduledFor: '2026-08-16T12:00:00.000Z',
+          status: 'pending',
+          statusReason: 'Deletion is scheduled and has not started.',
         });
       }
       throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
@@ -188,6 +197,38 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
       await screen.findByText('Account deletion could not be scheduled. Nothing was deleted.'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('delete-account-success-title')).not.toBeInTheDocument();
+    expect(mockLogout).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: 'empty body', reply: () => new Response(null, { status: 204 }) },
+    { label: 'invalid JSON', reply: () => new Response('{', { status: 200 }) },
+    { label: 'incomplete receipt', reply: () => jsonResponse({ message: 'Account deletion scheduled.' }) },
+    { label: 'contradictory receipt', reply: () => jsonResponse({
+      message: 'Account deletion scheduled.', scheduledFor: '2026-08-16T12:00:00.000Z',
+      status: 'pending', statusReason: 'Scheduled.', error: 'Nothing was scheduled.',
+    }) },
+  ])('keeps scheduling unconfirmed after a successful HTTP response with $label', async ({ reply }) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({ sessions: [], totalCount: 0 });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'GET') {
+        return jsonResponse({ pending: false, canCancel: false, requestedAt: null, scheduledFor: null });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'DELETE') return reply();
+      throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
+    });
+    renderAccountSection();
+    await openAndSubmitDelete();
+    expect(await screen.findByText(
+      'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.',
+    )).toBeInTheDocument();
+    expect(screen.queryByTestId('delete-account-success-title')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('delete-account-success-continue')).not.toBeInTheDocument();
     expect(mockLogout).not.toHaveBeenCalled();
     expect(mockSignOut).not.toHaveBeenCalled();
     expect(mockRouterReplace).not.toHaveBeenCalled();

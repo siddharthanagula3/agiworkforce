@@ -251,17 +251,18 @@ type AttachmentFetchOutcome =
 async function fetchAttachmentPayload(
   assetId: string,
   userId: string,
+  organizationId: string | null,
 ): Promise<AttachmentFetchOutcome> {
   const asset = await withSpan(
     'chat_attachment.asset_lookup',
     { domain: 'retrieval', attributes: { 'chat_attachment.asset_id': assetId } },
-    // Deliberately unconstrained: the row may belong to another account, and
-    // telling those two cases apart is what turns a wrong asset id into
-    // "not yours" rather than "deleted". The owner check is the line below.
+    // Check both owner and admitted workspace before reading any stored bytes.
     () => getMediaAssetById(assetId, getNeonDb()),
   );
 
-  if (asset && asset.userId !== userId) return { kind: 'foreign' };
+  if (asset && (asset.userId !== userId || asset.organizationId !== organizationId)) {
+    return { kind: 'foreign' };
+  }
 
   if (!asset || asset.deletedAt || !asset.storagePathname) {
     return {
@@ -310,6 +311,7 @@ export async function hydrateChatAttachments(
   userId: string,
   onTruncated: ((filename: string) => void) | undefined,
   maxAttachments: number,
+  organizationId: string | null,
 ): Promise<TurnAttachment[]> {
   const turnAttachments: TurnAttachment[] = [];
   const slots = collectAttachmentSlots(messages);
@@ -361,7 +363,7 @@ export async function hydrateChatAttachments(
    * first.
    */
   const outcomes = await mapWithConcurrency(pending, MAX_PARALLEL_ATTACHMENT_FETCHES, (slot) =>
-    fetchAttachmentPayload(slot.assetId, userId),
+    fetchAttachmentPayload(slot.assetId, userId, organizationId),
   );
 
   for (let index = 0; index < pending.length; index += 1) {

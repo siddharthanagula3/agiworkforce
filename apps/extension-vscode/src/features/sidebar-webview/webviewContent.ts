@@ -3158,6 +3158,14 @@ export function getWebviewContent(
 
     const vscodeHost = acquireVsCodeApi();
     const sessionBinding = { origin: '${bindingOrigin}', epoch: ${bindingEpoch} };
+    const composerBinding = { instance: '${nonce}', revision: 0 };
+    function composerSnapshot() {
+      return {
+        instance: composerBinding.instance,
+        revision: composerBinding.revision,
+        attachments: attachmentStrip ? attachmentStrip.children.length : 0
+      };
+    }
     const vscode = {
       postMessage: function(message) {
         return vscodeHost.postMessage(Object.assign({}, message, {
@@ -4427,7 +4435,7 @@ export function getWebviewContent(
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: 'branchAnswer', text: text, occurrence: occurrence },
+          payload: { action: 'branchAnswer', text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       row.appendChild(branch);
@@ -4466,7 +4474,7 @@ export function getWebviewContent(
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: action, text: text, occurrence: occurrence },
+          payload: { action: action, text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       return button;
@@ -5300,9 +5308,11 @@ export function getWebviewContent(
     });
 
     function saveComposerDraft() {
+      composerBinding.revision++;
       var state = vscode.getState() || {};
       state.composerDraft = userInput.value;
       vscode.setState(state);
+      vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     }
 
     userInput.addEventListener('input', function() {
@@ -6670,9 +6680,11 @@ export function getWebviewContent(
         } else if (chip.classList.contains('uploading')) {
           // No host id yet, defer the removal until attachFilesAck assigns one.
           chip.setAttribute('data-remove-requested', '1');
+          saveComposerDraft();
           return;
         }
         chip.remove();
+        saveComposerDraft();
         renderAttachmentStrip();
       });
 
@@ -6717,6 +6729,7 @@ export function getWebviewContent(
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
+      saveComposerDraft();
       renderAttachmentStrip();
 
       // Read all files in parallel, then post a single attachFiles message.
@@ -6802,6 +6815,7 @@ export function getWebviewContent(
 
       if (msg.type === 'sessionBinding') {
         sessionBinding.epoch = msg.payload.epoch;
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         return;
       }
 
@@ -7151,6 +7165,12 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'composerDraft') {
+        var expectedComposer = msg.payload.expectedComposer;
+        if (expectedComposer && (
+          expectedComposer.instance !== composerBinding.instance ||
+          expectedComposer.revision !== composerBinding.revision ||
+          expectedComposer.epoch !== sessionBinding.epoch
+        )) return;
         userInput.value = msg.payload.text || '';
         saveComposerDraft();
         syncSendState();
@@ -7164,7 +7184,9 @@ export function getWebviewContent(
         });
         autoResize();
         userInput.focus();
-        if (msg.payload.submit) sendMessage();
+        if (msg.payload.submit && (!expectedComposer || (
+          pendingAttachmentCount === 0 && Object.keys(pendingAttachmentChips).length === 0
+        ))) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
@@ -7181,6 +7203,7 @@ export function getWebviewContent(
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         renderTranscript(msg.payload);
         renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
@@ -7259,6 +7282,7 @@ export function getWebviewContent(
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'addUserMessage') {
@@ -7332,6 +7356,7 @@ export function getWebviewContent(
           pendingAttachmentCount++;
           renderAttachmentStrip();
         }
+        saveComposerDraft();
       }
 
       else if (msg.type === 'attachFilesAck') {
@@ -7383,14 +7408,17 @@ export function getWebviewContent(
           }
         }
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsConsumed') {
         consumeAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsReleased') {
         releaseAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
     });
@@ -7475,6 +7503,7 @@ export function getWebviewContent(
         token: token,
         reference: { path: file.path, range: file.range }
       });
+      saveComposerDraft();
       var newPos = mentionStart + token.length + 1;
       userInput.setSelectionRange(newPos, newPos);
       hideMentionDropdown();
@@ -8305,6 +8334,7 @@ export function getWebviewContent(
     }
 
     // ── Signal ready ──────────────────────────────────────────────────────────
+    vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>

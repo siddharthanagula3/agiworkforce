@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import type { MeDisabledFeature } from '@agiworkforce/cloud-contracts';
@@ -63,8 +65,10 @@ export interface DictationController {
 }
 
 interface UseDictationOptions {
-  onInsert: (text: string) => void;
-  onSend: (text: string) => void;
+  scope: unknown;
+  isAvailable: () => boolean;
+  onInsert: (text: string, owner: RequestAuthority) => void;
+  onSend: (text: string, owner: RequestAuthority) => void;
 }
 
 type AudioContextConstructor = new () => AudioContext;
@@ -75,119 +79,125 @@ function resolveAudioContext(): AudioContextConstructor | null {
   return vendor['AudioContext'] ?? vendor['webkitAudioContext'] ?? null;
 }
 
-export function useDictation({ onInsert, onSend }: UseDictationOptions): DictationController {
+export function useDictation(options: UseDictationOptions): DictationController {
+  const captureSession = useSessionSnapshot();
+  const latest = useRef(options);
+  const scopeGeneration = useRef(0);
+  if (latest.current.scope !== options.scope) scopeGeneration.current += 1;
+  latest.current = options;
+  const ownerRef = useRef<RequestAuthority | null>(null);
+  const mounted = useRef(true);
   const [machine, dispatch] = useReducer(dictationReducer, INITIAL_DICTATION_STATE);
   const [waveform, setWaveform] = useState(createWaveform);
   const [announcement, setAnnouncement] = useState('');
   const reducedMotion = usePrefersReducedMotion();
   const captureStream = useVoiceInputStore((state) => state.captureStream);
-  const runIdRef = useRef(0);
   const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
 
-  const start = useCallback(() => {
-    if (!useSettingsStore.getState().dictationEnabled) return;
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
-    dispatch({ type: DICTATION_EVENT.start });
-    const switchedOff = dictationSwitchedOffReason(useBillingStore.getState().disabledFeatures);
-    if (switchedOff) {
-      dispatch({ type: DICTATION_EVENT.fail, message: switchedOff });
-      return;
-    }
-    setWaveform(createWaveform());
-    setAnnouncement(ANNOUNCEMENT.recording);
-    const store = useVoiceInputStore.getState();
-    store.clearError();
-    void store.startListening().then(() => {
-      if (runIdRef.current !== runId) return;
-      const { mode, error } = useVoiceInputStore.getState();
-      if (mode === 'error') {
-        dispatch({ type: DICTATION_EVENT.fail, message: error ?? FALLBACK_CAPTURE_ERROR });
-      }
-    });
-  }, []);
-
-  const lastIntentRef = useRef<DictationIntent>(DICTATION_INTENT.insert);
-
-  const deliver = useCallback(
-    (runId: number, intent: DictationIntent) => {
-      if (runIdRef.current !== runId) return;
-      if (!useSettingsStore.getState().dictationEnabled) return;
-      const store = useVoiceInputStore.getState();
-      const { transcript, error, mode } = store;
-      store.clearTranscript();
-      if (mode === 'error') {
-        dispatch({
-          type: DICTATION_EVENT.fail,
-          message: error ?? FALLBACK_TRANSCRIBE_ERROR,
-        });
-        return;
-      }
-      const text = transcript.trim();
-      if (!text) {
-        dispatch({ type: DICTATION_EVENT.fail, message: EMPTY_TRANSCRIPT_ERROR });
-        return;
-      }
-      dispatch({ type: DICTATION_EVENT.resolve });
-      setAnnouncement(ANNOUNCEMENT.transcribed);
-      if (intent === DICTATION_INTENT.send) onSend(text);
-      else onInsert(text);
-    },
-    [onInsert, onSend],
-  );
-
-  const finish = useCallback(
-    (intent: DictationIntent) => {
-      if (!useSettingsStore.getState().dictationEnabled) return;
-      const runId = runIdRef.current;
-      lastIntentRef.current = intent;
-      dispatch({ type: DICTATION_EVENT.stop, intent });
-      setAnnouncement(ANNOUNCEMENT.stopped);
-      void useVoiceInputStore
-        .getState()
-        .stopListening()
-        .then(() => deliver(runId, intent));
-    },
-    [deliver],
-  );
-
-  const stop = useCallback(() => finish(DICTATION_INTENT.insert), [finish]);
-  const send = useCallback(() => finish(DICTATION_INTENT.send), [finish]);
+  const disabledFeatures = useBillingStore((state) => state.disabledFeatures);
+  const admitted = useCallback(() => mounted.current &&
+    useSettingsStore.getState().dictationEnabled &&
+    !dictationSwitchedOffReason(useBillingStore.getState().disabledFeatures) &&
+    latest.current.isAvailable(), []);
 
   const cancel = useCallback(() => {
-    runIdRef.current += 1;
-    const store = useVoiceInputStore.getState();
-    store.cancelListening();
-    store.clearTranscript();
+    const owner = ownerRef.current;
+    ownerRef.current = null;
+    if (owner) {
+      useVoiceInputStore.getState().cancelListening(owner);
+      owner.retire();
+    }
     dispatch({ type: DICTATION_EVENT.cancel });
     setAnnouncement(ANNOUNCEMENT.cancelled);
   }, []);
 
-  const retry = useCallback(() => {
-    const store = useVoiceInputStore.getState();
-    if (!store.canRetryTranscription) {
-      start();
+  const start = useCallback(() => {
+    if (!useSettingsStore.getState().dictationEnabled) return;
+    cancel();
+    finishing.current = false;
+    dispatch({ type: DICTATION_EVENT.start });
+    const session = captureSession();
+    if (!admitted() || !session) {
+      dispatch({ type: DICTATION_EVENT.fail, message:
+        dictationSwitchedOffReason(useBillingStore.getState().disabledFeatures) ??
+        'Cloud dictation is unavailable for this destination. Type instead.' });
       return;
     }
-    const runId = runIdRef.current + 1;
-    runIdRef.current = runId;
+    const generation = scopeGeneration.current;
+    const owner = createRequestAuthority(session, () => ownerRef.current === owner &&
+      generation === scopeGeneration.current && admitted());
+    ownerRef.current = owner;
+    owner.signal.addEventListener('abort', () => {
+      if (ownerRef.current === owner) cancel();
+    }, { once: true });
+    setWaveform(createWaveform());
+    setAnnouncement(ANNOUNCEMENT.recording);
+    void useVoiceInputStore.getState().startListening(owner).then(() => {
+      if (!owner.isCurrent()) return;
+      const { mode, error } = useVoiceInputStore.getState();
+      if (mode === 'error') dispatch({ type: DICTATION_EVENT.fail, message: error ?? FALLBACK_CAPTURE_ERROR });
+    });
+  }, [admitted, cancel, captureSession]);
+
+  const lastIntentRef = useRef<DictationIntent>(DICTATION_INTENT.insert);
+  const finishing = useRef(false);
+  const deliver = useCallback((owner: RequestAuthority, intent: DictationIntent) => {
+    if (!owner.isCurrent()) return;
+    finishing.current = false;
+    const store = useVoiceInputStore.getState();
+    const { transcript, error, mode } = store;
+    store.clearTranscript(owner);
+    if (mode === 'error') {
+      dispatch({ type: DICTATION_EVENT.fail, message: error ?? FALLBACK_TRANSCRIBE_ERROR });
+      return;
+    }
+    const text = transcript.trim();
+    if (!text) {
+      dispatch({ type: DICTATION_EVENT.fail, message: EMPTY_TRANSCRIPT_ERROR });
+      return;
+    }
+    dispatch({ type: DICTATION_EVENT.resolve });
+    setAnnouncement(ANNOUNCEMENT.transcribed);
+    if (intent === DICTATION_INTENT.send) latest.current.onSend(text, owner);
+    else latest.current.onInsert(text, owner);
+  }, []);
+
+  const finish = useCallback((intent: DictationIntent) => {
+    const owner = ownerRef.current;
+    if (!owner?.isCurrent() || finishing.current) return;
+    finishing.current = true;
+    lastIntentRef.current = intent;
+    dispatch({ type: DICTATION_EVENT.stop, intent });
+    setAnnouncement(ANNOUNCEMENT.stopped);
+    void useVoiceInputStore.getState().stopListening(owner).then(() => deliver(owner, intent));
+  }, [deliver]);
+  const stop = useCallback(() => finish(DICTATION_INTENT.insert), [finish]);
+  const send = useCallback(() => finish(DICTATION_INTENT.send), [finish]);
+  const retry = useCallback(() => {
+    const owner = ownerRef.current;
+    if (!owner) { start(); return; }
+    if (!owner.isCurrent()) return;
+    const store = useVoiceInputStore.getState();
+    if (!store.canRetryTranscription) { finishing.current = false; start(); return; }
+    if (finishing.current) return;
+    finishing.current = true;
     const intent = lastIntentRef.current;
     dispatch({ type: DICTATION_EVENT.start });
     dispatch({ type: DICTATION_EVENT.stop, intent });
     setAnnouncement(ANNOUNCEMENT.stopped);
-    void store.retryTranscription().then(() => deliver(runId, intent));
+    void store.retryTranscription(owner).then(() => deliver(owner, intent));
   }, [deliver, start]);
 
   useEffect(() => {
-    if (!dictationEnabled && isDictationActive(machine.status)) cancel();
-  }, [dictationEnabled, machine.status, cancel]);
-
-  useEffect(
-    () => () => {
-      useVoiceInputStore.getState().cancelListening();
-    },
-    [],
-  );
+    if (ownerRef.current && !ownerRef.current.isCurrent()) cancel();
+  });
+  useEffect(() => {
+    if (!dictationEnabled || dictationSwitchedOffReason(disabledFeatures)) cancel();
+  }, [dictationEnabled, disabledFeatures, cancel]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; cancel(); };
+  }, [cancel]);
 
   useEffect(() => {
     if (machine.status !== DICTATION_STATUS.recording) return undefined;

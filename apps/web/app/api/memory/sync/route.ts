@@ -137,11 +137,14 @@ async function handlePost(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
+  const bodyText = await request.text();
   let rawBody: unknown = {};
-  try {
-    rawBody = await request.json();
-  } catch {
-    rawBody = {};
+  if (bodyText !== '') {
+    try {
+      rawBody = JSON.parse(bodyText);
+    } catch {
+      throw createError.validation('Invalid JSON body');
+    }
   }
   if (!hasMemoriesKey(rawBody)) {
     try {

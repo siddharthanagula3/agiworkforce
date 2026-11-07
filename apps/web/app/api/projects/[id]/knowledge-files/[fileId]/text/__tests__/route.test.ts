@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   objectKeyFromStorageUri: vi.fn(),
   getProjectKnowledgeObject: vi.fn(),
-  findOwnedProjectKnowledgeFile: vi.fn(),
+  findReadableProjectKnowledgeFile: vi.fn(),
   fileTextPreviewKind: vi.fn(),
   renderFileTextPreview: vi.fn(),
 }));
@@ -85,7 +85,7 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: vi.fn(),
-  findOwnedProjectKnowledgeFile: mocks.findOwnedProjectKnowledgeFile,
+  findReadableProjectKnowledgeFile: mocks.findReadableProjectKnowledgeFile,
 }));
 vi.mock('@/lib/server/file-text-preview', () => ({
   fileTextPreviewKind: mocks.fileTextPreviewKind,
@@ -109,7 +109,7 @@ describe('GET /api/projects/[id]/knowledge-files/[fileId]/text', () => {
     vi.clearAllMocks();
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: 'org-1' });
-    mocks.findOwnedProjectKnowledgeFile.mockResolvedValue(file);
+    mocks.findReadableProjectKnowledgeFile.mockResolvedValue(file);
     mocks.fileTextPreviewKind.mockReturnValue('markdown');
     mocks.objectKeyFromStorageUri.mockReturnValue('k/notes.md');
     mocks.getProjectKnowledgeObject.mockResolvedValue({ data: bytes });
@@ -134,7 +134,7 @@ describe('GET /api/projects/[id]/knowledge-files/[fileId]/text', () => {
   });
 
   it('returns 404 for a file outside the caller scope', async () => {
-    mocks.findOwnedProjectKnowledgeFile.mockResolvedValue(null);
+    mocks.findReadableProjectKnowledgeFile.mockResolvedValue(null);
 
     const response = await call();
 
@@ -178,7 +178,7 @@ describe('GET /api/projects/[id]/knowledge-files/[fileId]/text', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await response.json()).toEqual(preview);
-    expect(mocks.findOwnedProjectKnowledgeFile).toHaveBeenCalledWith(
+    expect(mocks.findReadableProjectKnowledgeFile).toHaveBeenCalledWith(
       db,
       { userId: 'user-1', organizationId: 'org-1' },
       'p-1',

@@ -1,4 +1,7 @@
 import {
+  DEFAULT_WORKSPACE_CODE_CONTROLS,
+  EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+  resolveWorkspaceCodeControls,
   WORKSPACE_CODE_TOGGLE_KEYS,
   WORKSPACE_FEATURES,
   type EffectiveWorkspaceCodeControls,
@@ -51,23 +54,71 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/**
- * A server that has not shipped the Code controls yet sends nothing here, and
- * nothing means no rule rather than deny everything, so an older deployment
- * keeps behaving exactly as it did.
- */
-function parseCodeControls(value: unknown): EffectiveWorkspaceCodeControls | null {
-  if (!isRecord(value)) return null;
+function parseCodeControls(
+  value: unknown,
+  schemaVersion: unknown,
+  governed: boolean,
+  organizationId: string | null,
+): EffectiveWorkspaceCodeControls | null {
+  const current = schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION;
+  if (current && !governed && organizationId === null && value === null) return null;
+  const record = isRecord(value) ? value : {};
+  const code = resolveWorkspaceCodeControls(DEFAULT_WORKSPACE_CODE_CONTROLS, []);
   for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
-    if (typeof value[key] !== 'boolean') return null;
+    if (typeof record[key] === 'boolean') code[key] = record[key];
   }
-  for (const key of ['allowedMcpServers', 'allowedEgressHosts'] as const) {
-    const list = value[key];
-    if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string')) return null;
+  for (const [key, activeKey] of [
+    ['allowedMcpServers', 'mcpRestrictionActive'],
+    ['allowedEgressHosts', 'egressRestrictionActive'],
+  ] as const) {
+    const list = record[key];
+    const valid = Array.isArray(list) && list.every((entry) => typeof entry === 'string');
+    const known = current && valid && typeof record[activeKey] === 'boolean';
+    code[key] = known ? list : [];
+    code[activeKey] = !known || record[activeKey] === true || code[key].length > 0;
   }
-  const retention = value['sessionRetentionDays'];
-  if (retention !== null && typeof retention !== 'number') return null;
-  return value as unknown as EffectiveWorkspaceCodeControls;
+  if (
+    typeof record['allowMcpServers'] !== 'boolean' ||
+    (code.mcpRestrictionActive && code.allowedMcpServers.length === 0)
+  ) {
+    code.allowMcpServers = false;
+  }
+  const retention = record['sessionRetentionDays'];
+  if (retention === null || (typeof retention === 'number' && Number.isFinite(retention))) {
+    code.sessionRetentionDays = retention;
+  }
+  if (typeof record['revision'] === 'number') code.revision = record['revision'];
+  if (Array.isArray(record['appliedOverrideIds'])) {
+    code.appliedOverrideIds = record['appliedOverrideIds'].filter(
+      (entry): entry is string => typeof entry === 'string',
+    );
+  }
+  if (Array.isArray(record['blockingRules'])) {
+    code.blockingRules = record['blockingRules'] as EffectiveWorkspaceCodeControls['blockingRules'];
+  }
+  return code;
+}
+
+function parseCountryControls(controls: Record<string, unknown>, schemaVersion: unknown) {
+  const raw = controls['allowedCountries'];
+  const validCountries =
+    Array.isArray(raw) &&
+    raw.every((country) => typeof country === 'string' && /^[A-Za-z]{2}$/.test(country));
+  const current = schemaVersion === 2 || schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION;
+  // Legacy nonempty results may already have reopened an earlier empty intersection.
+  if (
+    !validCountries ||
+    !current ||
+    typeof controls['countryRestrictionActive'] !== 'boolean'
+  ) {
+    return { allowedCountries: [], countryRestrictionActive: true };
+  }
+  const allowedCountries = (raw as string[]).map((country) => country.toUpperCase());
+  return {
+    allowedCountries,
+    countryRestrictionActive:
+      controls['countryRestrictionActive'] === true || allowedCountries.length > 0,
+  };
 }
 
 export function parseEffectiveWorkspacePolicy(
@@ -77,16 +128,25 @@ export function parseEffectiveWorkspacePolicy(
   const { organizationId, governed, revision, controls } = value;
   if (organizationId !== null && typeof organizationId !== 'string') return null;
   if (typeof governed !== 'boolean' || typeof revision !== 'number') return null;
-  const code = parseCodeControls(value['code']);
+  const code = parseCodeControls(value['code'], value['schemaVersion'], governed, organizationId);
   if (controls === null) {
-    return governed ? null : { organizationId, governed, revision, controls: null, code };
+    return governed
+      ? null
+      : { ...(value as unknown as EffectiveWorkspacePolicyResponse), controls: null, code };
   }
   if (!isRecord(controls) || !isRecord(controls['featureAccess'])) return null;
   const featureAccess = controls['featureAccess'];
   if (!WORKSPACE_FEATURES.every((feature) => typeof featureAccess[feature] === 'boolean')) {
     return null;
   }
-  return { ...(value as unknown as EffectiveWorkspacePolicyResponse), code };
+  return {
+    ...(value as unknown as EffectiveWorkspacePolicyResponse),
+    controls: {
+      ...(controls as unknown as NonNullable<EffectiveWorkspacePolicyResponse['controls']>),
+      ...parseCountryControls(controls, value['schemaVersion']),
+    },
+    code,
+  };
 }
 
 function readCache(cache: WorkspacePolicyCache | null | undefined): CachedPolicy | null {
@@ -98,7 +158,14 @@ function readCache(cache: WorkspacePolicyCache | null | undefined): CachedPolicy
     if (!isRecord(parsed)) return null;
     const policy = parseEffectiveWorkspacePolicy(parsed['policy']);
     if (!policy) return null;
-    return { etag: typeof parsed['etag'] === 'string' ? parsed['etag'] : null, policy };
+    return {
+      etag:
+        policy.schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION &&
+        typeof parsed['etag'] === 'string'
+          ? parsed['etag']
+          : null,
+      policy,
+    };
   } catch {
     return null;
   }
@@ -170,7 +237,10 @@ export function createWorkspacePolicyPoller(
         publish({ ...snapshot, stale: true, checkedAt: now() });
         return snapshot;
       }
-      etag = response.headers.get('etag');
+      etag =
+        policy.schemaVersion === EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION
+          ? response.headers.get('etag')
+          : null;
       writeCache(options.cache, { etag, policy });
       publish({ policy, source: 'network', stale: false, checkedAt: now() });
       return snapshot;

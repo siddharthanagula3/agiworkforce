@@ -64,6 +64,23 @@ describe('routing-preferences route reads and writes under row-level security', 
     expect(await response.json()).toEqual({ us_only: true });
   });
 
+  it('GET propagates scoped read failure without falling back to the owner client', async () => {
+    scopedDb.query.mockRejectedValueOnce(new Error('scoped read unavailable'));
+
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/me/routing-preferences'),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.any(Object) }));
+    expect(scopedDb.query).toHaveBeenCalledWith(
+      'select routing_preferences from profiles where id = $1 limit 1',
+      ['user_123'],
+    );
+    expect(scopedDb.execute).not.toHaveBeenCalled();
+    expect(ownerDb).not.toHaveBeenCalled();
+  });
+
   it('PUT writes routing_preferences through the policy-scoped client', async () => {
     const response = await PUT(jsonRequest({ us_only: true }));
 

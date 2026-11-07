@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -53,6 +54,7 @@ vi.mock('@/lib/services/organization-policy-override-service', () => ({
 }));
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const CURRENT_ETAG = `"v${EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION}:${ORG}:4:o-1"`;
 
 const { GET: getEffective } = await import('../effective/route');
 const { PUT: putOverride } = await import('../overrides/route');
@@ -84,6 +86,7 @@ beforeEach(() => {
       defaultModelId: null,
       maxReasoningEffort: 'low',
       allowedCountries: [],
+      countryRestrictionActive: false,
       allowedSurfaces: null,
       appliedOverrideIds: ['o-1'],
     },
@@ -93,6 +96,8 @@ beforeEach(() => {
       allowMcpServers: false,
       allowAutomatedReview: true,
       allowedMcpServers: ['mcp.example.com'],
+      mcpRestrictionActive: true,
+      egressRestrictionActive: true,
       allowedEgressHosts: ['api.example.com'],
       sessionRetentionDays: 7,
       appliedOverrideIds: ['o-1'],
@@ -107,8 +112,10 @@ describe('GET /api/settings/organization/policy/effective', () => {
     const response = await getEffective(effectiveRequest());
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('etag')).toBe(`"${ORG}:4:o-1"`);
-    expect(await response.json()).toMatchObject({ governed: true, revision: 4 });
+    expect(response.headers.get('etag')).toBe(CURRENT_ETAG);
+    expect(await response.json()).toMatchObject({
+      governed: true, revision: 4, schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+    });
   });
 
   it('tells the client which Code connections the workspace permits', async () => {
@@ -124,9 +131,35 @@ describe('GET /api/settings/organization/policy/effective', () => {
     expect(body.code.blockingRules[0]).toMatchObject({ codeControl: 'allowMcpServers' });
   });
 
+  it('projects MCP denial for older readers without mutating canonical controls', async () => {
+    const effective = {
+      organizationId: ORG, revision: 4,
+      controls: { appliedOverrideIds: [] },
+      code: { allowMcpServers: true, allowedMcpServers: [], allowedEgressHosts: [], mcpRestrictionActive: true, egressRestrictionActive: true },
+    };
+    mocks.effective.mockResolvedValueOnce(effective);
+    const body = await (await getEffective(effectiveRequest())).json();
+    expect(body.code.allowMcpServers).toBe(false);
+    expect(body.code.mcpRestrictionActive).toBe(true);
+    expect(body.code.egressRestrictionActive).toBe(true);
+    expect(effective.code.allowMcpServers).toBe(true);
+  });
+
+  it('refreshes a v2 representation even when the tenant revision is unchanged', async () => {
+    const response = await getEffective(effectiveRequest(`"v2:${ORG}:4:o-1"`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe(CURRENT_ETAG);
+  });
+
   it('answers 304 when the client already holds this revision', async () => {
-    const response = await getEffective(effectiveRequest(`"${ORG}:4:o-1"`));
+    const response = await getEffective(effectiveRequest(CURRENT_ETAG));
     expect(response.status).toBe(304);
+  });
+
+  it('refreshes a legacy representation even when the tenant revision is unchanged', async () => {
+    const response = await getEffective(effectiveRequest(`"${ORG}:4:o-1"`));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe(CURRENT_ETAG);
   });
 
   it('answers a new body once the revision moves', async () => {
@@ -134,8 +167,9 @@ describe('GET /api/settings/organization/policy/effective', () => {
       organizationId: ORG,
       revision: 5,
       controls: { appliedOverrideIds: [] },
+      code: { allowMcpServers: true, allowedMcpServers: [], mcpRestrictionActive: false, egressRestrictionActive: false },
     });
-    const response = await getEffective(effectiveRequest(`"${ORG}:4:o-1"`));
+    const response = await getEffective(effectiveRequest(CURRENT_ETAG));
     expect(response.status).toBe(200);
   });
 

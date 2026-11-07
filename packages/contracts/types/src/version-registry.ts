@@ -21,6 +21,7 @@ export const VERSIONED_ARTIFACTS = [
   'model-registry',
   'prompt-registry',
   'policy-schema',
+  'effective-policy-schema',
   'entitlement-schema',
   'artifact-runtime',
   'plugin-manifest',

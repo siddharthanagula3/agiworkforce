@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { createManagedToolInventoryMessage } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { describe, expect, it } from 'vitest';
 
@@ -591,5 +592,24 @@ describe('cloud agent workflow input', () => {
 
     expect(input.processed.llmRequest.promptCacheScope).toEqual(promptCacheScope);
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
+});
+
+
+describe('context policy snapshot durable transport', () => {
+  it.each(['managed', 'free_trial'] as const)('preserves the original snapshot on %s', (kind) => {
+    const processed = makeProcessed();
+    const snapshot = contextPolicySnapshotFixture();
+    processed.contextPolicySnapshot = snapshot;
+    if (kind === 'free_trial') {
+      delete processed.managedUsage;
+      processed.freeTrial = { kind: 'free_trial', userId: 'user-1', requestId: 'agi-work-request-1', reservedMicrousd: 10 };
+    }
+    const input = buildCloudAgentWorkflowInput({ runId: RUN_ID, userId: 'user-1', processed, mcpTools: [], approvalMode: 'auto' });
+    const transported = parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)));
+    const rehydrated = rehydrateCloudAgentWorkflowRequest(transported, {} as never);
+    expect(rehydrated.contextPolicySnapshot).toEqual(snapshot);
+    expect(processed.contextPolicySnapshot).toBe(snapshot);
+    expect(transported.billing.kind).toBe(kind);
   });
 });

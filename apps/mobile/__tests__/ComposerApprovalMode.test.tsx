@@ -26,6 +26,7 @@ jest.mock('@/services/preferences', () => ({
 }));
 
 jest.mock('@/lib/mmkv', () => ({
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store) => {
     if (store?.persist?.rehydrate) store.persist.rehydrate();
@@ -38,6 +39,11 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 import { ComposerApprovalModeControl } from '../src/features/chat/components/ComposerApprovalModeControl';
+import {
+  activateCloudAccount,
+  __resetCloudAccountSessionForTests,
+} from '../src/features/auth/services/cloudAccountSession';
+import { getToolApprovalPolicySnapshot } from '../src/features/settings/tool-approvals/toolApprovalPolicyOwner';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -47,6 +53,9 @@ const OPTION = (policy: string) => TOOL_APPROVAL_POLICY_OPTIONS.find((o) => o.po
 describe('ComposerApprovalModeControl', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('user-1');
+    useAuthStore.setState({ isClerkLoaded: true, clerkUserId: 'user-1' });
     mockAutonomyAllowed = true;
     mockFetchNamespace.mockResolvedValue({ defaultPolicy: DEFAULT_TOOL_APPROVAL_POLICY });
     mockSaveNamespace.mockResolvedValue(undefined);
@@ -95,10 +104,16 @@ describe('ComposerApprovalModeControl', () => {
       fireEvent.press(screen.getByTestId(`chat.approval-mode.${OPTION('autonomous').policy}`));
     });
 
-    expect(mockSaveNamespace).toHaveBeenCalledWith(TOOL_APPROVAL_PREFERENCE_NAMESPACE, {
-      defaultPolicy: 'autonomous',
-    });
-    expect(useSettingsStore.getState().toolApprovalPolicy).toBe('autonomous');
+    expect(mockSaveNamespace).toHaveBeenCalledWith(
+      TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+      { defaultPolicy: 'autonomous' },
+      expect.objectContaining({
+        accountEpoch: expect.objectContaining({ ownerId: 'user-1' }),
+        signal: expect.anything(),
+      }),
+    );
+    expect(getToolApprovalPolicySnapshot().policy).toBe('autonomous');
+    expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY);
   });
 
   it('restores the previous policy when the save fails', async () => {
@@ -116,8 +131,13 @@ describe('ComposerApprovalModeControl', () => {
     });
 
     await waitFor(() =>
-      expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY),
+      expect(getToolApprovalPolicySnapshot()).toMatchObject({
+        policy: DEFAULT_TOOL_APPROVAL_POLICY,
+        status: 'error',
+        ready: true,
+      }),
     );
+    expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY);
   });
 
   it('hides the autonomous option and shows Ask when the workspace forbids it', async () => {

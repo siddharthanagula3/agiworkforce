@@ -3154,6 +3154,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     const vscodeHost = acquireVsCodeApi();
     const sessionBinding = { origin: 'chat', epoch: 0 };
+    const composerBinding = { instance: 'NONCE', revision: 0 };
+    function composerSnapshot() {
+      return {
+        instance: composerBinding.instance,
+        revision: composerBinding.revision,
+        attachments: attachmentStrip ? attachmentStrip.children.length : 0
+      };
+    }
     const vscode = {
       postMessage: function(message) {
         return vscodeHost.postMessage(Object.assign({}, message, {
@@ -4423,7 +4431,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: 'branchAnswer', text: text, occurrence: occurrence },
+          payload: { action: 'branchAnswer', text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       row.appendChild(branch);
@@ -4462,7 +4470,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: action, text: text, occurrence: occurrence },
+          payload: { action: action, text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       return button;
@@ -5296,9 +5304,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     });
 
     function saveComposerDraft() {
+      composerBinding.revision++;
       var state = vscode.getState() || {};
       state.composerDraft = userInput.value;
       vscode.setState(state);
+      vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     }
 
     userInput.addEventListener('input', function() {
@@ -6666,9 +6676,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         } else if (chip.classList.contains('uploading')) {
           // No host id yet, defer the removal until attachFilesAck assigns one.
           chip.setAttribute('data-remove-requested', '1');
+          saveComposerDraft();
           return;
         }
         chip.remove();
+        saveComposerDraft();
         renderAttachmentStrip();
       });
 
@@ -6713,6 +6725,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
+      saveComposerDraft();
       renderAttachmentStrip();
 
       // Read all files in parallel, then post a single attachFiles message.
@@ -6798,6 +6811,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       if (msg.type === 'sessionBinding') {
         sessionBinding.epoch = msg.payload.epoch;
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         return;
       }
 
@@ -7147,6 +7161,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
 
       else if (msg.type === 'composerDraft') {
+        var expectedComposer = msg.payload.expectedComposer;
+        if (expectedComposer && (
+          expectedComposer.instance !== composerBinding.instance ||
+          expectedComposer.revision !== composerBinding.revision ||
+          expectedComposer.epoch !== sessionBinding.epoch
+        )) return;
         userInput.value = msg.payload.text || '';
         saveComposerDraft();
         syncSendState();
@@ -7160,7 +7180,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         });
         autoResize();
         userInput.focus();
-        if (msg.payload.submit) sendMessage();
+        if (msg.payload.submit && (!expectedComposer || (
+          pendingAttachmentCount === 0 && Object.keys(pendingAttachmentChips).length === 0
+        ))) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
@@ -7177,6 +7199,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         renderTranscript(msg.payload);
         renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
@@ -7255,6 +7278,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'addUserMessage') {
@@ -7328,6 +7352,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           pendingAttachmentCount++;
           renderAttachmentStrip();
         }
+        saveComposerDraft();
       }
 
       else if (msg.type === 'attachFilesAck') {
@@ -7379,14 +7404,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           }
         }
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsConsumed') {
         consumeAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsReleased') {
         releaseAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
     });
@@ -7471,6 +7499,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         token: token,
         reference: { path: file.path, range: file.range }
       });
+      saveComposerDraft();
       var newPos = mentionStart + token.length + 1;
       userInput.setSelectionRange(newPos, newPos);
       hideMentionDropdown();
@@ -8301,6 +8330,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     // ── Signal ready ──────────────────────────────────────────────────────────
+    vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>
@@ -11461,6 +11491,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     const vscodeHost = acquireVsCodeApi();
     const sessionBinding = { origin: 'chat', epoch: 0 };
+    const composerBinding = { instance: 'NONCE', revision: 0 };
+    function composerSnapshot() {
+      return {
+        instance: composerBinding.instance,
+        revision: composerBinding.revision,
+        attachments: attachmentStrip ? attachmentStrip.children.length : 0
+      };
+    }
     const vscode = {
       postMessage: function(message) {
         return vscodeHost.postMessage(Object.assign({}, message, {
@@ -12730,7 +12768,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: 'branchAnswer', text: text, occurrence: occurrence },
+          payload: { action: 'branchAnswer', text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       row.appendChild(branch);
@@ -12769,7 +12807,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: action, text: text, occurrence: occurrence },
+          payload: { action: action, text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       return button;
@@ -13603,9 +13641,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     });
 
     function saveComposerDraft() {
+      composerBinding.revision++;
       var state = vscode.getState() || {};
       state.composerDraft = userInput.value;
       vscode.setState(state);
+      vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     }
 
     userInput.addEventListener('input', function() {
@@ -14973,9 +15013,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         } else if (chip.classList.contains('uploading')) {
           // No host id yet, defer the removal until attachFilesAck assigns one.
           chip.setAttribute('data-remove-requested', '1');
+          saveComposerDraft();
           return;
         }
         chip.remove();
+        saveComposerDraft();
         renderAttachmentStrip();
       });
 
@@ -15020,6 +15062,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
+      saveComposerDraft();
       renderAttachmentStrip();
 
       // Read all files in parallel, then post a single attachFiles message.
@@ -15105,6 +15148,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       if (msg.type === 'sessionBinding') {
         sessionBinding.epoch = msg.payload.epoch;
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         return;
       }
 
@@ -15454,6 +15498,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
 
       else if (msg.type === 'composerDraft') {
+        var expectedComposer = msg.payload.expectedComposer;
+        if (expectedComposer && (
+          expectedComposer.instance !== composerBinding.instance ||
+          expectedComposer.revision !== composerBinding.revision ||
+          expectedComposer.epoch !== sessionBinding.epoch
+        )) return;
         userInput.value = msg.payload.text || '';
         saveComposerDraft();
         syncSendState();
@@ -15467,7 +15517,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         });
         autoResize();
         userInput.focus();
-        if (msg.payload.submit) sendMessage();
+        if (msg.payload.submit && (!expectedComposer || (
+          pendingAttachmentCount === 0 && Object.keys(pendingAttachmentChips).length === 0
+        ))) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
@@ -15484,6 +15536,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         renderTranscript(msg.payload);
         renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
@@ -15562,6 +15615,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'addUserMessage') {
@@ -15635,6 +15689,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           pendingAttachmentCount++;
           renderAttachmentStrip();
         }
+        saveComposerDraft();
       }
 
       else if (msg.type === 'attachFilesAck') {
@@ -15686,14 +15741,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           }
         }
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsConsumed') {
         consumeAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsReleased') {
         releaseAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
     });
@@ -15778,6 +15836,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         token: token,
         reference: { path: file.path, range: file.range }
       });
+      saveComposerDraft();
       var newPos = mentionStart + token.length + 1;
       userInput.setSelectionRange(newPos, newPos);
       hideMentionDropdown();
@@ -16608,6 +16667,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     // ── Signal ready ──────────────────────────────────────────────────────────
+    vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>
@@ -19768,6 +19828,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     const vscodeHost = acquireVsCodeApi();
     const sessionBinding = { origin: 'chat', epoch: 0 };
+    const composerBinding = { instance: 'NONCE', revision: 0 };
+    function composerSnapshot() {
+      return {
+        instance: composerBinding.instance,
+        revision: composerBinding.revision,
+        attachments: attachmentStrip ? attachmentStrip.children.length : 0
+      };
+    }
     const vscode = {
       postMessage: function(message) {
         return vscodeHost.postMessage(Object.assign({}, message, {
@@ -21037,7 +21105,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: 'branchAnswer', text: text, occurrence: occurrence },
+          payload: { action: 'branchAnswer', text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       row.appendChild(branch);
@@ -21076,7 +21144,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         vscode.postMessage({
           type: 'messageAction',
-          payload: { action: action, text: text, occurrence: occurrence },
+          payload: { action: action, text: text, occurrence: occurrence, composer: composerSnapshot() },
         });
       });
       return button;
@@ -21910,9 +21978,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     });
 
     function saveComposerDraft() {
+      composerBinding.revision++;
       var state = vscode.getState() || {};
       state.composerDraft = userInput.value;
       vscode.setState(state);
+      vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     }
 
     userInput.addEventListener('input', function() {
@@ -23280,9 +23350,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         } else if (chip.classList.contains('uploading')) {
           // No host id yet, defer the removal until attachFilesAck assigns one.
           chip.setAttribute('data-remove-requested', '1');
+          saveComposerDraft();
           return;
         }
         chip.remove();
+        saveComposerDraft();
         renderAttachmentStrip();
       });
 
@@ -23327,6 +23399,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
+      saveComposerDraft();
       renderAttachmentStrip();
 
       // Read all files in parallel, then post a single attachFiles message.
@@ -23412,6 +23485,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       if (msg.type === 'sessionBinding') {
         sessionBinding.epoch = msg.payload.epoch;
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         return;
       }
 
@@ -23761,6 +23835,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
 
       else if (msg.type === 'composerDraft') {
+        var expectedComposer = msg.payload.expectedComposer;
+        if (expectedComposer && (
+          expectedComposer.instance !== composerBinding.instance ||
+          expectedComposer.revision !== composerBinding.revision ||
+          expectedComposer.epoch !== sessionBinding.epoch
+        )) return;
         userInput.value = msg.payload.text || '';
         saveComposerDraft();
         syncSendState();
@@ -23774,7 +23854,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         });
         autoResize();
         userInput.focus();
-        if (msg.payload.submit) sendMessage();
+        if (msg.payload.submit && (!expectedComposer || (
+          pendingAttachmentCount === 0 && Object.keys(pendingAttachmentChips).length === 0
+        ))) sendMessage();
       }
 
       else if (msg.type === 'conversationLoaded') {
@@ -23791,6 +23873,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
         renderTranscript(msg.payload);
         renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
@@ -23869,6 +23952,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'addUserMessage') {
@@ -23942,6 +24026,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           pendingAttachmentCount++;
           renderAttachmentStrip();
         }
+        saveComposerDraft();
       }
 
       else if (msg.type === 'attachFilesAck') {
@@ -23993,14 +24078,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           }
         }
         renderAttachmentStrip();
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsConsumed') {
         consumeAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
       else if (msg.type === 'attachmentsReleased') {
         releaseAttachments(msg.payload.ids || []);
+        vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
       }
 
     });
@@ -24085,6 +24173,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         token: token,
         reference: { path: file.path, range: file.range }
       });
+      saveComposerDraft();
       var newPos = mentionStart + token.length + 1;
       userInput.setSelectionRange(newPos, newPos);
       hideMentionDropdown();
@@ -24915,6 +25004,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     // ── Signal ready ──────────────────────────────────────────────────────────
+    vscode.postMessage({ type: 'composerState', payload: composerSnapshot() });
     vscode.postMessage({ type: 'ready' });
   </script>
 </body>

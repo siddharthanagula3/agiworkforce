@@ -4,6 +4,25 @@ import { ReflectSection } from './ReflectSection';
 import { SettingsSectionNavigationProvider } from '../components/SettingsSectionLink';
 import { WEB_SETTINGS_NAV_GROUPS } from '../components/web-settings-navigation';
 
+const identity = vi.hoisted(() => ({
+  userId: 'reflect-user', sessionId: 'reflect-session', isCurrent: () => true,
+  getToken: async () => 'reflect-token',
+}));
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>(),
+  useSessionSnapshot: () => () => identity,
+}));
+vi.mock('@/features/workspaces/hooks/use-workspaces', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/features/workspaces/hooks/use-workspaces')>();
+  const { observeWorkspaceOwner, admitWorkspace } = await import('@/features/workspaces/lib/workspace-admission');
+  const data = { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null, workspaces: [] };
+  return { ...original, useAccountWorkspaces: () => {
+    const owner = observeWorkspaceOwner(identity)!;
+    admitWorkspace(owner, owner.epoch, JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]));
+    return { data, isLoading: false, requiresReload: false };
+  } };
+});
+
 const recap = {
   range: '30d',
   generatedAt: '2026-07-18T18:00:00.000Z',
@@ -83,6 +102,9 @@ describe('ReflectSection', () => {
   });
 
   it('refetches a validated range and supports an explicit refresh', async () => {
+    vi.mocked(fetch).mockImplementation((url) => response({
+      ...recap, range: new URL(String(url), 'https://example.test').searchParams.get('range'),
+    }));
     render(<ReflectSection />);
     await screen.findByText('Writing led your past 30 days');
 
@@ -92,6 +114,7 @@ describe('ReflectSection', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     expect(vi.mocked(fetch).mock.calls[1]?.[0]).toContain('range=90d');
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh recap' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Refresh recap' }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
   });

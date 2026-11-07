@@ -156,14 +156,19 @@ export interface WorkspaceControls {
   defaultModelId: string | null;
   maxReasoningEffort: WorkspaceReasoningEffort | null;
   allowedCountries: readonly string[];
+  // Derived state distinguishes a closed intersection from an unrestricted configured empty list.
+  countryRestrictionActive?: boolean;
   allowedSurfaces: readonly SourceSurface[] | null;
 }
 
-export const DEFAULT_WORKSPACE_CONTROLS: WorkspaceControls = Object.freeze({
+export const DEFAULT_WORKSPACE_CONTROLS: WorkspaceControls & {
+  countryRestrictionActive: boolean;
+} = Object.freeze({
   featureAccess: DEFAULT_WORKSPACE_FEATURE_ACCESS,
   defaultModelId: null,
   maxReasoningEffort: null,
   allowedCountries: Object.freeze([]) as readonly string[],
+  countryRestrictionActive: false,
   allowedSurfaces: null,
 });
 
@@ -172,6 +177,7 @@ export interface WorkspaceControlsLayer {
   defaultModelId?: string | null;
   maxReasoningEffort?: WorkspaceReasoningEffort | null;
   allowedCountries?: readonly string[];
+  countryRestrictionActive?: boolean;
   allowedSurfaces?: readonly SourceSurface[] | null;
   code?: WorkspaceCodeControlsLayer;
 }
@@ -199,7 +205,7 @@ export const WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS: Readonly<
 
 // The shape a stored policy layer is written against, separate from the
 // per-tenant revision that says which edit of the rules a value came from.
-export const WORKSPACE_POLICY_SCHEMA_VERSION = 1;
+export const WORKSPACE_POLICY_SCHEMA_VERSION = 2;
 export const WORKSPACE_POLICY_MIN_SCHEMA_VERSION = 1;
 
 export const WORKSPACE_POLICY_SCOPES = [
@@ -234,7 +240,23 @@ export interface WorkspacePolicyBlockingRule {
 }
 
 export interface ResolvedWorkspaceControls extends WorkspaceControls {
+  countryRestrictionActive: boolean;
   appliedOverrideIds: readonly string[];
+}
+
+export function isWorkspaceCountryRestrictionActive(
+  controls: Pick<WorkspaceControlsLayer, 'allowedCountries' | 'countryRestrictionActive'>,
+): boolean {
+  return controls.countryRestrictionActive === true || Boolean(controls.allowedCountries?.length);
+}
+
+export function isWorkspaceCountryAllowed(
+  controls: Pick<WorkspaceControls, 'allowedCountries' | 'countryRestrictionActive'>,
+  country: string | null | undefined,
+): boolean {
+  if (!isWorkspaceCountryRestrictionActive(controls)) return true;
+  const normalized = country?.trim().toUpperCase();
+  return Boolean(normalized) && controls.allowedCountries.includes(normalized as string);
 }
 
 // A resolved policy plus the rule version it came from and what narrowed it.
@@ -276,16 +298,18 @@ function narrowWithLayer(
   }
 
   let allowedCountries = base.allowedCountries;
-  const layerCountries = layer.allowedCountries;
-  if (layerCountries && layerCountries.length > 0) {
+  let countryRestrictionActive = isWorkspaceCountryRestrictionActive(base);
+  const layerCountries = layer.allowedCountries ?? [];
+  if (isWorkspaceCountryRestrictionActive(layer)) {
     const next =
-      allowedCountries.length === 0
+      !countryRestrictionActive
         ? [...layerCountries]
         : allowedCountries.filter((country) => layerCountries.includes(country));
-    if (next.length !== allowedCountries.length) {
+    if (!countryRestrictionActive || next.length !== allowedCountries.length) {
       allowedCountries = next;
       rules.push({ control: 'country', ...origin, reason: 'region_not_allowed' });
     }
+    countryRestrictionActive = true;
   }
 
   let allowedSurfaces = base.allowedSurfaces;
@@ -306,6 +330,7 @@ function narrowWithLayer(
     defaultModelId: base.defaultModelId,
     maxReasoningEffort,
     allowedCountries,
+    countryRestrictionActive,
     allowedSurfaces,
   };
 }
@@ -315,6 +340,7 @@ function baseAsLayer(base: WorkspaceControls): WorkspaceControlsLayer {
     featureAccess: base.featureAccess,
     maxReasoningEffort: base.maxReasoningEffort,
     allowedCountries: base.allowedCountries,
+    countryRestrictionActive: isWorkspaceCountryRestrictionActive(base),
     allowedSurfaces: base.allowedSurfaces,
   };
 }
@@ -366,6 +392,7 @@ export function resolveWorkspaceControls(
 
   return {
     ...resolved,
+    countryRestrictionActive: isWorkspaceCountryRestrictionActive(resolved),
     defaultModelId,
     appliedOverrideIds: overrides.map((override) => override.id).sort(),
     revision,
@@ -373,19 +400,33 @@ export function resolveWorkspaceControls(
   };
 }
 
-export interface EffectiveWorkspaceCodeControls extends WorkspaceCodeControls {
+export interface WorkspaceCodeHostRestrictions {
+  mcpRestrictionActive: boolean;
+  egressRestrictionActive: boolean;
+}
+
+type WorkspaceCodeControlsWithRestrictions = WorkspaceCodeControls &
+  Partial<WorkspaceCodeHostRestrictions>;
+
+export interface EffectiveWorkspaceCodeControls
+  extends WorkspaceCodeControls, WorkspaceCodeHostRestrictions {
   appliedOverrideIds: readonly string[];
   revision: number;
   blockingRules: readonly WorkspacePolicyBlockingRule[];
 }
 
 function narrowCodeWithLayer(
-  base: WorkspaceCodeControls,
-  layer: WorkspaceCodeControlsLayer,
+  base: WorkspaceCodeControlsWithRestrictions,
+  layer: WorkspaceCodeControlsLayer & Partial<WorkspaceCodeHostRestrictions>,
   origin: LayerOrigin,
   rules: WorkspacePolicyBlockingRule[],
-): WorkspaceCodeControls {
-  const next: WorkspaceCodeControls = { ...base };
+): WorkspaceCodeControls & WorkspaceCodeHostRestrictions {
+  const next = {
+    ...base,
+    mcpRestrictionActive: base.mcpRestrictionActive === true || base.allowedMcpServers.length > 0,
+    egressRestrictionActive:
+      base.egressRestrictionActive === true || base.allowedEgressHosts.length > 0,
+  };
 
   for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
     if (layer[key] !== false || next[key] === false) continue;
@@ -393,14 +434,18 @@ function narrowCodeWithLayer(
     rules.push({ control: 'code', ...origin, codeControl: key, reason: 'code_control_disabled' });
   }
 
-  for (const key of ['allowedMcpServers', 'allowedEgressHosts'] as const) {
-    const allowed = layer[key];
-    if (!allowed || allowed.length === 0) continue;
+  for (const [key, activeKey] of [
+    ['allowedMcpServers', 'mcpRestrictionActive'],
+    ['allowedEgressHosts', 'egressRestrictionActive'],
+  ] as const) {
+    const allowed = layer[key] ?? [];
+    if (layer[activeKey] !== true && allowed.length === 0) continue;
     const current = next[key];
-    const merged =
-      current.length === 0 ? [...allowed] : current.filter((entry) => allowed.includes(entry));
-    if (merged.length === current.length) continue;
+    const active = next[activeKey];
+    const merged = active ? current.filter((entry) => allowed.includes(entry)) : [...allowed];
+    next[activeKey] = true;
     next[key] = merged;
+    if (active && merged.length === current.length) continue;
     rules.push({ control: 'code', ...origin, codeControl: key, reason: 'code_control_narrowed' });
   }
 
@@ -424,7 +469,7 @@ function narrowCodeWithLayer(
 // Same narrow-only contract as resolveWorkspaceControls: a role, group, project,
 // device or person layer may take a Code connection away and never give one back.
 export function resolveWorkspaceCodeControls(
-  base: WorkspaceCodeControls,
+  base: WorkspaceCodeControlsWithRestrictions,
   overrides: readonly WorkspacePolicyOverride[],
   revision = 0,
 ): EffectiveWorkspaceCodeControls {
@@ -487,10 +532,12 @@ export interface WorkspaceCodePolicyResponse {
 }
 
 export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/policy/effective';
+export const EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION = 3;
 
 // A client cannot honour a control it is never told about, so the effective
 // answer carries the Code controls beside the rest of the policy.
 export interface EffectiveWorkspacePolicyResponse {
+  schemaVersion?: number;
   organizationId: string | null;
   governed: boolean;
   revision: number;
@@ -541,12 +588,10 @@ const CODE_ACT_TOGGLES: Readonly<
 });
 
 /**
- * An empty allow list is "the workspace added no rule", never deny everything,
- * which is the state every organization that has not touched these controls is
- * in. Only a control an administrator explicitly turned off refuses.
+ * Configured empty lists add no rule; an active empty effective intersection denies all.
  */
 export function evaluateWorkspaceCodeAct(
-  controls: WorkspaceCodeControls | null,
+  controls: WorkspaceCodeControlsWithRestrictions | null,
   act: WorkspaceCodeAct,
 ): WorkspaceCodeDecision {
   if (!controls) return CODE_ACT_ALLOWED;
@@ -567,8 +612,9 @@ export function evaluateWorkspaceCodeAct(
 
     case 'use_mcp_server': {
       if (!controls.allowMcpServers) return codeControlOff('allowMcpServers');
-      if (controls.allowedMcpServers.length === 0) return CODE_ACT_ALLOWED;
-      if (isCodeHostAllowed(controls.allowedMcpServers, act.server)) return CODE_ACT_ALLOWED;
+      if (controls.allowedMcpServers.length === 0) {
+        if (controls.mcpRestrictionActive !== true) return CODE_ACT_ALLOWED;
+      } else if (isCodeHostAllowed(controls.allowedMcpServers, act.server)) return CODE_ACT_ALLOWED;
       return {
         allowed: false,
         code: 'code_mcp_server_not_allowed',
@@ -579,8 +625,9 @@ export function evaluateWorkspaceCodeAct(
     }
 
     case 'reach_host': {
-      if (controls.allowedEgressHosts.length === 0) return CODE_ACT_ALLOWED;
-      if (isCodeHostAllowed(controls.allowedEgressHosts, act.host)) return CODE_ACT_ALLOWED;
+      if (controls.allowedEgressHosts.length === 0) {
+        if (controls.egressRestrictionActive !== true) return CODE_ACT_ALLOWED;
+      } else if (isCodeHostAllowed(controls.allowedEgressHosts, act.host)) return CODE_ACT_ALLOWED;
       return {
         allowed: false,
         code: 'code_host_not_allowed',

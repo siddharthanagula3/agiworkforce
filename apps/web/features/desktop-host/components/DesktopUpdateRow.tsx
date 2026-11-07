@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -67,19 +67,34 @@ export function DesktopUpdateRow() {
   const [result, setResult] = useState<HostUpdateAvailability | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installStatus, setInstallStatus] = useState<string | null>(null);
+  const requestGeneration = useRef(0);
+
+  useEffect(() => {
+    requestGeneration.current += 1;
+    setResult(null);
+    setError(null);
+    setInstallStatus(null);
+    setChecking(false);
+    return () => {
+      requestGeneration.current += 1;
+    };
+  }, [host]);
 
   const onCheck = useCallback(async () => {
     if (!host) return;
+    const generation = ++requestGeneration.current;
     setChecking(true);
     setError(null);
     setInstallStatus(null);
     try {
-      setResult(await host.checkForUpdate());
+      const update = await host.checkForUpdate();
+      if (generation === requestGeneration.current) setResult(update);
     } catch (cause) {
+      if (generation !== requestGeneration.current) return;
       setResult(null);
       setError(toUserMessage(cause, CHECK_FAILED));
     } finally {
-      setChecking(false);
+      if (generation === requestGeneration.current) setChecking(false);
     }
   }, [host]);
 
@@ -98,11 +113,10 @@ export function DesktopUpdateRow() {
   if (!host) return null;
 
   const updateAvailable = result?.available === true;
-  const readyToInstall = updateAvailable && result?.readyToInstall === true;
-  const downloading =
-    updateAvailable &&
-    !readyToInstall &&
-    (result?.downloading === true || result?.installsAutomatically === true);
+  const readyToInstall = result?.readyToInstall === true;
+  const canRestart = readyToInstall && host.restartToUpdate !== undefined;
+  const readyVersion = result?.stagedVersion === undefined ? result?.version : result.stagedVersion;
+  const downloading = !readyToInstall && result?.downloading === true;
   const lastChecked = result?.checkedAt ? formatCheckedAt(result.checkedAt) : null;
 
   return (
@@ -122,11 +136,11 @@ export function DesktopUpdateRow() {
           </p>
         ) : readyToInstall ? (
           <p role="status" style={hintStyle}>
-            {`Version ${result?.version} is ready. Restart AGI Desktop to finish updating.`}
+            {`${readyVersion ? `Version ${readyVersion}` : 'An update'} is ready. ${canRestart ? 'Restart AGI Desktop' : 'Download the installer'} to finish updating.`}
           </p>
         ) : downloading ? (
           <p role="status" style={hintStyle}>
-            {`Version ${result?.version} is downloading. You will be told when it is ready.`}
+            An update is downloading. You will be told when it is ready.
           </p>
         ) : updateAvailable ? (
           <p role="status" style={hintStyle}>
@@ -136,6 +150,9 @@ export function DesktopUpdateRow() {
           <p role="status" style={hintStyle}>
             {UP_TO_DATE}
           </p>
+        ) : null}
+        {result?.metadataError ? (
+          <p role="alert" style={errorStyle}>{result.metadataError}</p>
         ) : null}
         {lastChecked ? <p style={hintStyle}>{`Last checked ${lastChecked}`}</p> : null}
       </div>
@@ -148,13 +165,13 @@ export function DesktopUpdateRow() {
         >
           {checking ? CHECKING_LABEL : CHECK_LABEL}
         </button>
-        {updateAvailable && !downloading ? (
+        {(readyToInstall || updateAvailable) && !downloading ? (
           <button
             type="button"
             style={buttonStyle}
-            onClick={() => void onInstall(readyToInstall && host.restartToUpdate !== undefined)}
+            onClick={() => void onInstall(canRestart)}
           >
-            {readyToInstall ? RESTART_LABEL : INSTALL_LABEL}
+            {canRestart ? RESTART_LABEL : INSTALL_LABEL}
           </button>
         ) : null}
       </div>

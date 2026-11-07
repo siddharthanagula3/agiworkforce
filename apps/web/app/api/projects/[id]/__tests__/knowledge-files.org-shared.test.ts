@@ -36,6 +36,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET, POST } from '../knowledge-files/route';
+import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const SHARED_PROJECT = '33333333-3333-4333-8333-333333333333';
@@ -74,7 +75,6 @@ beforeEach(() => {
 describe('project knowledge files on an org-shared project', () => {
   it('lets a shared member read the sources the database already grants them', async () => {
     mockRlsQuery
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: SHARED_PROJECT }])
       .mockResolvedValueOnce([
         {
@@ -98,15 +98,39 @@ describe('project knowledge files on an org-shared project', () => {
     expect(body.files[0].fileName).toBe('brief.pdf');
   });
 
-  it('scopes the shared lookup to the ids the sharing service returned', async () => {
-    mockRlsQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+  it('binds the admitted workspace and current grant in both read statements', async () => {
+    mockRlsQuery.mockResolvedValueOnce([{ id: SHARED_PROJECT }]).mockResolvedValue([]);
+    mockResolveSharedProjectScope.mockResolvedValue({
+      organizationId: '22222222-2222-4222-8222-222222222222',
+      projectIds: [],
+    });
+
+    const response = await GET(listRequest(), { params });
+    expect(response.status).toBe(200);
+    expect(mockResolveSharedProjectScope).not.toHaveBeenCalled();
+    for (const call of mockRlsQuery.mock.calls.slice(0, 2)) {
+      expect(call[0]).toContain(READABLE_PROJECT_SCOPE_SQL);
+      expect(call[1]).toEqual([SHARED_PROJECT, 'member-1', ORG]);
+    }
+    expect(mockRlsQuery.mock.calls[1]?.[0]).toContain('join user_projects p');
+  });
+
+  it('returns no files when access disappears after the preliminary project read', async () => {
+    mockRlsQuery.mockResolvedValueOnce([{ id: SHARED_PROJECT }]).mockResolvedValue([]);
+
+    const response = await GET(listRequest(), { params });
+    expect(response.status).toBe(200);
+    expect((await response.json()).files).toEqual([]);
+    expect(mockRlsQuery.mock.calls[1]?.[0]).toContain(READABLE_PROJECT_SCOPE_SQL);
+  });
+
+  it('returns not found when the statement-local project read is denied', async () => {
+    mockRlsQuery.mockResolvedValue([]);
 
     const response = await GET(listRequest(), { params });
     expect(response.status).toBe(404);
-
-    const sharedLookup = mockRlsQuery.mock.calls[1] as [string, unknown[]];
-    expect(sharedLookup[0]).toMatch(/= any\(\$\d::uuid\[\]\)/i);
-    expect(sharedLookup[1]).toContain(SHARED_PROJECT);
+    expect(mockRlsQuery.mock.calls).toHaveLength(1);
+    expect(mockRlsQuery.mock.calls[0]?.[0]).toContain(READABLE_PROJECT_SCOPE_SQL);
   });
 
   it('never widens the read to a project outside the caller organization', async () => {

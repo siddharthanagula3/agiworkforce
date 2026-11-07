@@ -130,7 +130,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
           from web_messages
           where conversation_id = $1
             and deleted_at is null
-          order by created_at asc
+          order by created_at asc, id asc
           limit $2 offset $3
         `,
         [id, limit, offset],

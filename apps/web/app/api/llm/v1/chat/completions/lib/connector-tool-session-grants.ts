@@ -148,27 +148,22 @@ export async function insertConnectorToolSessionGrants(
 
 export async function revokeConnectorSessionGrants(
   db: DatabaseAdapter,
-  scope: Pick<ConnectorToolSessionScope, 'userId' | 'organizationId'>,
   connectorId: string,
   toolName: string | null,
 ): Promise<number> {
-  const removed = await db.query<{ id: string }>(
-    `delete from public.connector_tool_session_grants grant_row
-      using public.web_conversations conversation
-      where grant_row.user_id = $1 and grant_row.connector_id = $2
-        and ($4::text is null or grant_row.tool_name = $4)
-        and conversation.id = grant_row.conversation_id
-        and conversation.user_id = grant_row.user_id
-        and conversation.organization_id is not distinct from $3::uuid
-     returning grant_row.id`,
-    [
-      scope.userId,
-      connectorId,
-      scope.organizationId,
-      toolName && !isConnectorCategoryToolName(toolName) ? toolName : null,
-    ],
+  const rows = await db.query<{ removed: unknown }>(
+    'select public.revoke_connector_tool_session_grants($1, $2) as removed',
+    [connectorId, toolName !== null && !isConnectorCategoryToolName(toolName) ? toolName : null],
   );
-  return removed.length;
+  const removed = rows[0]?.removed;
+  if (
+    rows.length !== 1 ||
+    typeof removed !== 'number' ||
+    !Number.isSafeInteger(removed) ||
+    removed < 0
+  )
+    throw new Error('Connector session grant revocation could not be confirmed.');
+  return removed;
 }
 
 /**

@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
-import { pptxToSlidesMarkdown } from '@features/chat/lib/office-file-preview';
+import {
+  pptxToSlidesMarkdown,
+  PresentationPreviewLimitError,
+  PRESENTATION_PREVIEW_TOO_LARGE,
+} from '@features/chat/lib/office-file-preview';
 import { PresentationWorkspace } from './PresentationWorkspace';
 
 export const PPTX_MIME_TYPE =
@@ -60,11 +64,14 @@ export function PptxFilePreview({
             : { status: 'failed', reason: 'This presentation has no slides to show.' },
         );
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
           setState({
             status: 'failed',
-            reason: 'This presentation could not be opened for preview.',
+            reason:
+              error instanceof PresentationPreviewLimitError
+                ? PRESENTATION_PREVIEW_TOO_LARGE
+                : 'This presentation could not be opened for preview.',
           });
         }
       });

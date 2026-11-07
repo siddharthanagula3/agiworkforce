@@ -261,6 +261,65 @@ describe('GET /api/media/image/status', () => {
     expect(afterCallbacks).toHaveLength(0);
   });
 
+  it.each(['source', 'mask', 'reference'] as const)(
+    'does not re-drive an edit with an inline-only %s image',
+    async (missing) => {
+      const pending = job({
+        operation: 'edit',
+        maskImageSha256: missing === 'mask' ? 'a'.repeat(64) : null,
+        plan: {
+          ...job().plan,
+          ...(missing === 'source' ? {} : { sourceAssetId: ASSET_ID }),
+          ...(missing === 'reference' ? { referencesInline: true } : {}),
+        },
+      });
+      mocks.getJob.mockResolvedValue(pending);
+
+      const response = await GET(statusRequest(JOB_ID));
+
+      expect(response.status).toBe(200);
+      expect(afterCallbacks).toHaveLength(0);
+      expect(mocks.runAttempt).not.toHaveBeenCalled();
+      expect(mocks.finalize).not.toHaveBeenCalled();
+    },
+  );
+
+  it('re-drives a masked edit whose inputs are stored', async () => {
+    const pending = job({
+      operation: 'edit',
+      maskImageSha256: 'a'.repeat(64),
+      plan: { ...job().plan, sourceAssetId: ASSET_ID, maskAssetId: JOB_ID },
+    });
+    mocks.getJob.mockResolvedValue(pending);
+
+    const response = await GET(statusRequest(JOB_ID));
+
+    expect(response.status).toBe(200);
+    expect(afterCallbacks).toHaveLength(1);
+    await afterCallbacks[0]!();
+    expect(mocks.runAttempt).toHaveBeenCalledWith({ db: {}, job: pending });
+  });
+
+  it('reconciles cancellation even when an edit cannot be replayed', async () => {
+    const cancelling = job({
+      operation: 'edit',
+      cancelRequestedAt: new Date(Date.now() - 300_000).toISOString(),
+      claimExpiresAt: new Date(Date.now() - 120_000).toISOString(),
+    });
+    mocks.getJob.mockResolvedValue(cancelling);
+    mocks.closeCancelled.mockResolvedValue({
+      ...cancelling,
+      status: 'canceled',
+      terminalAt: new Date().toISOString(),
+    });
+
+    const response = await GET(statusRequest(JOB_ID));
+
+    expect(response.status).toBe(200);
+    expect(mocks.closeCancelled).toHaveBeenCalledOnce();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
   it('returns the delivered candidates and marks them delivered once completed', async () => {
     mocks.getJob.mockResolvedValue(
       job({ status: 'completed', terminalAt: new Date().toISOString(), actualCostMicrousd: 8000 }),

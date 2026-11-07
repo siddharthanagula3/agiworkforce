@@ -65,3 +65,63 @@ describe('claimed background user scope', () => {
     expect(serviceDb.transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('claimed scope cancellation before dispatch', () => {
+  const scope = { userId: 'user-1', organizationId: null };
+
+  it.each(['query', 'execute', 'transaction'] as const)(
+    'does not dispatch %s when cancellation arrives during claim binding',
+    async (operation) => {
+      const { serviceDb, query, execute } = harness();
+      const controller = new AbortController();
+      const reason = new Error('Stopped during claim binding');
+      query.mockImplementationOnce(async () => {
+        controller.abort(reason);
+        return [];
+      });
+      const callback = vi.fn(async () => 'receipt');
+      const scoped = createClaimedUserScopedDb(serviceDb, scope, { signal: controller.signal });
+      const result = operation === 'transaction'
+        ? scoped.transaction(callback)
+        : scoped[operation]('update user_memories set pinned = true');
+
+      await expect(result).rejects.toBe(reason);
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(callback).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an already stopped operation before acquiring a transaction', async () => {
+    const { serviceDb } = harness();
+    const controller = new AbortController();
+    controller.abort();
+    const scoped = createClaimedUserScopedDb(serviceDb, scope, { signal: controller.signal });
+    await expect(scoped.query('select 1')).rejects.toBe(controller.signal.reason);
+    expect(serviceDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps a successful receipt when cancellation arrives after query dispatch', async () => {
+    const { serviceDb, query } = harness();
+    const controller = new AbortController();
+    query.mockImplementation(async (sql) => {
+      if (sql.includes('set_config')) return [];
+      controller.abort();
+      return [{ id: 'written-row' }];
+    });
+    const scoped = createClaimedUserScopedDb(serviceDb, scope, { signal: controller.signal });
+    await expect(scoped.query('update user_memories set pinned = true returning id')).resolves.toEqual([
+      { id: 'written-row' },
+    ]);
+  });
+
+  it('retains cancellation when rebinding the organization', async () => {
+    const { serviceDb } = harness();
+    const controller = new AbortController();
+    const scoped = createClaimedUserScopedDb(serviceDb, scope, { signal: controller.signal });
+    const rebound = scoped.withOrg!(null);
+    controller.abort();
+    await expect(rebound.query('select 1')).rejects.toBe(controller.signal.reason);
+    expect(serviceDb.transaction).not.toHaveBeenCalled();
+  });
+});

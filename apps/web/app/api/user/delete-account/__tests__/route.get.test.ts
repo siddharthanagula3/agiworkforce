@@ -59,6 +59,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET } from '../route';
+import { parseAccountDeletionStatus } from '@agiworkforce/cloud-contracts';
 
 function statusRequest(url = 'http://localhost:3000/api/user/delete-account') {
   return new Request(url, {
@@ -90,6 +91,29 @@ describe('GET /api/user/delete-account', () => {
       scheduledFor: null,
       status: 'pending',
       statusReason: 'Deletion has been requested and has not started.',
+    });
+  });
+
+  it('serializes finite PostgreSQL Date values into the shared status contract', async () => {
+    const requestedAt = new Date('2020-01-01T12:00:00+01:00');
+    const scheduledFor = new Date('2020-01-02T12:00:00+01:00');
+    mockQuery.mockResolvedValue([{ deletion_requested_at: requestedAt, deletion_scheduled_for: scheduledFor }]);
+
+    const response = await GET(statusRequest());
+    expect(response.status).toBe(200);
+    expect(parseAccountDeletionStatus(await response.json())).toEqual({
+      pending: true,
+      canCancel: false,
+      requestedAt: requestedAt.toISOString(),
+      scheduledFor: scheduledFor.toISOString(),
+    });
+  });
+
+  it('preserves nullable informational request dates and offset timestamps', async () => {
+    const scheduledFor = '2020-01-02T12:00:00+01:00';
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: scheduledFor }]);
+    expect(parseAccountDeletionStatus(await (await GET(statusRequest())).json())).toEqual({
+      pending: true, canCancel: false, requestedAt: null, scheduledFor,
     });
   });
 

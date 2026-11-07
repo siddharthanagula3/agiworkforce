@@ -45,6 +45,7 @@ import { logger } from '@/lib/logger';
 import { executeWebMcpTool, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import { resolveOrganizationMembershipId } from '@/lib/services/active-workspace-service';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
   generateManagedOfficeFile,
@@ -63,6 +64,8 @@ const MESSAGE = {
   notOffered: 'That tool is not available in this voice session.',
   blocked: "The user's tool permissions block this action, so it did not run.",
   declined: 'The user declined this action, so it did not run.',
+  conversationUnavailable:
+    'This voice session no longer has access to its conversation, so the tool did not run.',
   malformed: 'The arguments for this call were not a JSON object, so it did not run.',
   workTaskGoal: 'The task needs a goal in words, so it did not start.',
   googleUserDataMayTrain:
@@ -307,7 +310,14 @@ async function offeredToolAnnotations(
   )?.annotations;
 }
 
-async function conversationIsTemporary(input: LiveVoiceToolCallInput): Promise<boolean> {
+async function conversationIsTemporary(input: LiveVoiceToolCallInput): Promise<boolean | null> {
+  if (
+    input.organizationId !== null &&
+    (await resolveOrganizationMembershipId(input.db, input.userId, input.organizationId)) !==
+      input.organizationId
+  ) {
+    return null;
+  }
   const [conversation] = await input.db.query<{ is_temporary: boolean }>(
     `select is_temporary
        from web_conversations
@@ -318,7 +328,7 @@ async function conversationIsTemporary(input: LiveVoiceToolCallInput): Promise<b
       limit 1`,
     [input.conversationId, input.userId, input.organizationId],
   );
-  return conversation?.is_temporary !== false;
+  return conversation ? conversation.is_temporary !== false : null;
 }
 
 async function auditCall(
@@ -356,6 +366,10 @@ export async function handleLiveVoiceToolCall(
     loadToolApprovalPolicy(input.db, input.userId),
     conversationIsTemporary(input),
   ]);
+  if (temporaryChat === null) {
+    await auditCall(input, 'blocked');
+    return { status: 'blocked', output: MESSAGE.conversationUnavailable };
+  }
   const savedPermissions = await loadConnectorToolPermissions(
     input.db,
     input.userId,
@@ -407,7 +421,7 @@ export async function handleLiveVoiceToolCall(
       },
     };
   }
-  if (gate.verdict === 'ask' && call.decision === 'rejected') {
+  if (call.decision === 'rejected') {
     await auditCall(input, 'blocked');
     return { status: 'declined', output: MESSAGE.declined };
   }

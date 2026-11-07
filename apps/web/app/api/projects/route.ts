@@ -45,8 +45,8 @@ async function handleGetProjects(request: NextRequest) {
   const parsedOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
-  // A cursor names the last row, so a project updated while the reader pages
-  // cannot shift the window. Offset stays for clients that still send it.
+  // A cursor avoids offset shifts, but timestamp or visibility changes can still
+  // affect later pages. Offset stays for clients that still send it.
   const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
 
   const sharedScope = await resolveSharedProjectScope(db, userId);

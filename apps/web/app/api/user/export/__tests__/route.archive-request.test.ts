@@ -70,7 +70,11 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/billing-invoice-service', () => ({
+  BILLING_INVOICE_PAGE_LIMIT: 24,
   listUserBillingInvoices: vi.fn(async () => []),
+  readUserBillingInvoicePage: vi.fn(async () => ({
+    invoices: [], available: true, hasMore: false, truncatedLineItems: [],
+  })),
 }));
 
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({

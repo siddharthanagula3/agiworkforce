@@ -30,30 +30,43 @@ async function bindClaimedScope(db: DatabaseAdapter, scope: ClaimedUserScope): P
 export function createClaimedUserScopedDb(
   serviceDb: DatabaseAdapter,
   scope: ClaimedUserScope,
+  options: { signal?: AbortSignal } = {},
 ): DatabaseAdapter {
   assertClaimedScope(scope);
 
   return {
-    query: <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
-      serviceDb.transaction(async (tx) => {
+    query: async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) => {
+      options.signal?.throwIfAborted();
+      return serviceDb.transaction(async (tx) => {
+        options.signal?.throwIfAborted();
         await bindClaimedScope(tx, scope);
+        options.signal?.throwIfAborted();
         return tx.query<T>(sql, params);
-      }),
-    execute: (sql: string, params: unknown[] = []) =>
-      serviceDb.transaction(async (tx) => {
+      });
+    },
+    execute: async (sql: string, params: unknown[] = []) => {
+      options.signal?.throwIfAborted();
+      return serviceDb.transaction(async (tx) => {
+        options.signal?.throwIfAborted();
         await bindClaimedScope(tx, scope);
+        options.signal?.throwIfAborted();
         return tx.execute(sql, params);
-      }),
-    transaction: <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-      serviceDb.transaction(async (tx) => {
+      });
+    },
+    transaction: async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) => {
+      options.signal?.throwIfAborted();
+      return serviceDb.transaction(async (tx) => {
+        options.signal?.throwIfAborted();
         await bindClaimedScope(tx, scope);
+        options.signal?.throwIfAborted();
         return callback(tx);
-      }),
+      });
+    },
     withUser: () => {
       throw new Error('Claimed background scope cannot be rebound to another user');
     },
     withOrg: (organizationId: string | null) =>
-      createClaimedUserScopedDb(serviceDb, { ...scope, organizationId }),
+      createClaimedUserScopedDb(serviceDb, { ...scope, organizationId }, options),
     dispose: async () => {},
   };
 }

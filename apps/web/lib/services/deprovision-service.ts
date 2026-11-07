@@ -3,6 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { IdentityProvider } from '@agiworkforce/identity';
 
+import { assertActiveSessionPage } from '@/lib/server/active-session-page';
+import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 import { logger } from '@/lib/logger';
 import { readRecordedActiveWorkspaceId } from '@/lib/services/active-workspace-service';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
@@ -65,16 +67,21 @@ async function revokeProviderSessions(
 ): Promise<{ revoked: number; failed: number; errors: string[] }> {
   const ids: string[] = [];
   const errors: string[] = [];
+  let listingExhausted = false;
 
   try {
     for (let page = 0; page < MAX_SESSION_PAGES; page++) {
       const response = await identity.listUserSessions(userId, {
-        status: 'active',
+        status: SESSION_STATUS_ACTIVE,
         limit: SESSION_PAGE_SIZE,
         offset: page * SESSION_PAGE_SIZE,
       });
+      assertActiveSessionPage(response.sessions, userId);
       ids.push(...response.sessions.map((session) => session.id));
-      if (response.sessions.length < SESSION_PAGE_SIZE) break;
+      if (response.sessions.length < SESSION_PAGE_SIZE) {
+        listingExhausted = true;
+        break;
+      }
     }
   } catch (error) {
     // Listing failed, so we cannot know what to revoke. Say so rather than
@@ -85,6 +92,10 @@ async function revokeProviderSessions(
       }`,
     );
     return { revoked: 0, failed: 0, errors };
+  }
+
+  if (!listingExhausted) {
+    errors.push('Session listing reached its limit; additional sessions may still be live.');
   }
 
   let revoked = 0;

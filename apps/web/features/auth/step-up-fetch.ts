@@ -1,5 +1,6 @@
 'use client';
 
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import {
@@ -18,6 +19,11 @@ export interface StepUpChallenge {
   consequence: string;
   freshnessSeconds: number;
   resourceId: string | null;
+}
+
+export interface OwnedStepUpOptions {
+  authority: RequestAuthority;
+  onStepUpRequired?: () => void;
 }
 
 export type StepUpSend = (headers: Record<string, string>) => Promise<Response>;
@@ -75,13 +81,20 @@ export async function fetchWithStepUp(
   send: StepUpSend,
   satisfy: StepUpSatisfier,
   resourceId: string | null = null,
+  owned?: OwnedStepUpOptions,
 ): Promise<Response> {
+  owned?.authority.assertCurrent();
   const first = await send({});
+  owned?.authority.assertCurrent();
   const challenge = await readStepUpChallenge(first, resourceId);
+  owned?.authority.assertCurrent();
   if (!challenge) return first;
 
+  owned?.onStepUpRequired?.();
+  owned?.authority.assertCurrent();
   const token = await satisfy(challenge);
   if (!token) throw new StepUpCancelledError();
+  owned?.authority.assertCurrent();
 
   return send({ [STEP_UP_TOKEN_HEADER]: token });
 }
@@ -103,24 +116,34 @@ function isStepUpLevel(value: unknown): value is StepUpLevel {
 export async function requestStepUpGrant(
   action: StepUpAction,
   resourceId: string | null,
-  sessionToken: string | null = null,
+  sessionToken: string | null | undefined = undefined,
+  authority?: RequestAuthority,
 ): Promise<StepUpGrantOutcome> {
-  const authToken = sessionToken ?? (await getAuthToken());
+  authority?.assertCurrent();
+  const authToken = authority
+    ? sessionToken === undefined ? await authority.getToken() : sessionToken
+    : sessionToken ?? (await getAuthToken());
+  authority?.assertCurrent();
   if (!authToken) {
     return { kind: 'failed', message: 'You are signed out. Sign in again to continue.' };
   }
 
+  const csrfToken = await getCsrfToken();
+  authority?.assertCurrent();
   const response = await fetch(STEP_UP_ENDPOINT, {
+    ...(authority ? { signal: authority.signal, credentials: 'omit' as const } : {}),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authToken}`,
-      'x-csrf-token': await getCsrfToken(),
+      'x-csrf-token': csrfToken,
     },
     body: JSON.stringify({ action, ...(resourceId ? { resourceId } : {}) }),
   });
 
+  authority?.assertCurrent();
   const body = (await response.json().catch(() => null)) as StepUpGrantBody | null;
+  authority?.assertCurrent();
   if (response.ok && typeof body?.token === 'string') {
     return { kind: 'granted', token: body.token };
   }

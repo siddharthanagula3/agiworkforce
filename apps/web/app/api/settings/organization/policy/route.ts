@@ -109,6 +109,10 @@ function mergeControls(
       patch.allowedCountries !== undefined
         ? dedupe(patch.allowedCountries.map((code) => code.toUpperCase())).sort()
         : current.allowedCountries,
+    countryRestrictionActive:
+      patch.allowedCountries !== undefined
+        ? patch.allowedCountries.length > 0
+        : current.countryRestrictionActive,
     allowedSurfaces:
       patch.allowedSurfaces !== undefined
         ? patch.allowedSurfaces && dedupe(patch.allowedSurfaces)

@@ -8,6 +8,24 @@ import { MARKETING_EMAIL_CONSENT_PURPOSE } from '@/lib/consent-purposes';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
+const fixture = vi.hoisted(() => ({
+  auth: { isLoaded: true, isSignedIn: true, userId: 'a', sessionId: 'session-a' },
+  sdk: { loaded: true, user: { id: 'a' },
+    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' } },
+  stored: { shareTelemetry: false, keepOutOfProviderTraining: false },
+}));
+vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
+vi.mock('../../services/privacy-preferences-client', async (original) => ({
+  ...await original<typeof import('../../services/privacy-preferences-client')>(),
+  readPrivacyPreferences: vi.fn(async () => ({ stored: { ...fixture.stored }, version: 'v1' })),
+  savePrivacyPreference: vi.fn(async (_authority: unknown, key: keyof typeof fixture.stored, value: boolean) => {
+    fixture.stored[key] = value;
+    return { stored: { ...fixture.stored }, version: 'v2' };
+  }),
+}));
+
+vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
 }));
@@ -20,15 +38,18 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   Switch: ({
     checked,
+    disabled,
     onCheckedChange,
     'aria-label': ariaLabel,
   }: {
     checked?: boolean;
+    disabled?: boolean;
     onCheckedChange?: (next: boolean) => void;
     'aria-label'?: string;
   }) =>
     React.createElement('button', {
       type: 'button',
+      disabled,
       role: 'switch',
       'aria-checked': Boolean(checked),
       'aria-label': ariaLabel,
@@ -54,9 +75,13 @@ vi.mock('@shared/stores/web-chat-store', () => ({
 vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   setTelemetryConsentCache: vi.fn(),
+  hasPendingTelemetryOptOut: vi.fn(() => false),
+  confirmTelemetryConsent: vi.fn(),
+  requestTelemetryOptOut: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
@@ -67,10 +92,15 @@ vi.mock('../../services/conversation-data-service', () => ({
 }));
 
 import { PrivacySection } from '../PrivacySection';
+import { observePreferenceOwner } from '@/app/settings/_lib/preferences-client';
+import { savePrivacyPreference } from '../../services/privacy-preferences-client';
 
 const fetchMock = vi.fn();
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  observePreferenceOwner(null);
+  fixture.stored = { shareTelemetry: false, keepOutOfProviderTraining: false };
   fetchMock.mockResolvedValue(Response.json({}));
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -84,7 +114,8 @@ async function waitForLoadedPrivacy() {
     expect(fetchMock).toHaveBeenCalledWith(PRODUCT_ANALYTICS_CONSENT_PATH, {
       credentials: 'same-origin',
     });
-    expect(screen.queryByText(/loading account settings/i)).toBeNull();
+    expect(screen.getByRole('switch', { name: /Share crash and error reports/i })).toBeEnabled();
+    expect(screen.queryByText(/updating account settings/i)).toBeNull();
     expect(screen.queryByText(/loading your product analytics choice/i)).toBeNull();
     expect(screen.queryByText(/loading your marketing email choice/i)).toBeNull();
   });
@@ -122,7 +153,8 @@ describe('PrivacySection row density', () => {
 
     await userEvent.click(screen.getByRole('switch', { name: /Share crash and error reports/i }));
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your privacy setting was saved.'));
+    expect(savePrivacyPreference).toHaveBeenCalledWith(expect.anything(), 'shareTelemetry', true);
   });
 
   it('says that chats started inside a project are saved even when new chats start temporary', () => {

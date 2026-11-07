@@ -1,13 +1,13 @@
 import {
   documentDirectory,
   getInfoAsync,
-  deleteAsync,
   moveAsync,
   writeAsStringAsync,
   makeDirectoryAsync,
   EncodingType,
 } from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
+import * as Crypto from 'expo-crypto';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import {
@@ -32,6 +32,18 @@ async function ensureExportsDir(): Promise<void> {
   if (!info.exists) {
     await makeDirectoryAsync(EXPORTS_DIR, { intermediates: true });
   }
+}
+
+// Keep every returned URI tied to its original export, even when titles repeat.
+// Allocation failure must not fall back to overwriting an earlier file.
+async function allocateExportPath(fileName: string): Promise<string> {
+  await ensureExportsDir();
+  const directory = `${EXPORTS_DIR}${Crypto.randomUUID()}/`;
+  if ((await getInfoAsync(directory)).exists) {
+    throw new Error('Could not allocate a new export directory. Please try again.');
+  }
+  await makeDirectoryAsync(directory, { intermediates: false });
+  return `${directory}${fileName}`;
 }
 
 export type ExportFormat = 'pdf' | 'text' | 'markdown' | 'docx' | 'source';
@@ -159,14 +171,8 @@ export async function exportToPDF(
   const html = markdownToHtml(content, title);
   const { uri } = await Print.printToFileAsync({ html });
 
-  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.pdf`;
-  const destUri = `${EXPORTS_DIR}${fileName}`;
-
-  const info = await getInfoAsync(destUri);
-  if (info.exists) {
-    await deleteAsync(destUri, { idempotent: true });
-  }
+  const destUri = await allocateExportPath(fileName);
 
   await moveAsync({ from: uri, to: destUri });
 
@@ -194,9 +200,8 @@ export async function exportToText(
   const header = `${title}\nExported: ${timestamp}\n${'─'.repeat(40)}\n\n`;
   const fullContent = header + content;
 
-  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.txt`;
-  const destUri = `${EXPORTS_DIR}${fileName}`;
+  const destUri = await allocateExportPath(fileName);
 
   await writeAsStringAsync(destUri, fullContent, {
     encoding: EncodingType.UTF8,
@@ -212,9 +217,8 @@ export async function exportSourceFile(
   lineage: Partial<FileLineage> = {},
 ): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
-  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.${extension.replace(/[^a-z0-9]/gi, '') || 'txt'}`;
-  const destUri = `${EXPORTS_DIR}${fileName}`;
+  const destUri = await allocateExportPath(fileName);
   await writeAsStringAsync(destUri, content, { encoding: EncodingType.UTF8 });
   return {
     uri: destUri,
@@ -225,8 +229,7 @@ export async function exportSourceFile(
 }
 
 export async function exportPngImage(base64Png: string, title: string): Promise<string> {
-  await ensureExportsDir();
-  const destUri = `${EXPORTS_DIR}${sanitizeFileName(title)}.png`;
+  const destUri = await allocateExportPath(`${sanitizeFileName(title)}.png`);
   await writeAsStringAsync(destUri, base64Png, { encoding: EncodingType.Base64 });
   return destUri;
 }
@@ -238,8 +241,13 @@ export async function exportPngImage(base64Png: string, title: string): Promise<
  * @param uri - The file URI to share
  * @throws {Error} If sharing is not available on the device
  */
-export async function shareFile(uri: string): Promise<void> {
+export async function shareFile(
+  uri: string,
+  options: { isCurrent?: () => boolean } = {},
+): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const available = await Sharing.isAvailableAsync();
+  if (options.isCurrent?.() === false) return;
   if (!available) {
     throw new Error('Sharing is not available on this device');
   }
@@ -275,6 +283,7 @@ export async function shareFile(uri: string): Promise<void> {
     jpeg: 'image/jpeg',
     zip: 'application/zip',
   };
+  if (options.isCurrent?.() === false) return;
   await Sharing.shareAsync(uri, {
     UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
     mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
@@ -344,11 +353,10 @@ async function fetchGeneratedFileBytes(
 }
 
 async function writeGeneratedFileBytes(fileName: string, base64: string): Promise<string> {
-  await ensureExportsDir();
   const dotIdx = fileName.lastIndexOf('.');
   const baseName = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
   const ext = dotIdx > 0 ? `.${fileName.slice(dotIdx + 1).replace(/[^a-zA-Z0-9]/g, '')}` : '';
-  const destUri = `${EXPORTS_DIR}${sanitizeFileName(baseName)}${ext}`;
+  const destUri = await allocateExportPath(`${sanitizeFileName(baseName)}${ext}`);
   await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
   return destUri;
 }
@@ -398,12 +406,10 @@ export async function prepareLocalVideoPlayer(
   background: string,
 ): Promise<LocalVideoPlayer> {
   const key = videoFileKey(url);
-  const cachedVideo = `${EXPORTS_DIR}video-${key}.mp4`;
-  const videoUri = (await getInfoAsync(cachedVideo)).exists
-    ? cachedVideo
-    : await downloadGeneratedFile(url, `video-${key}.mp4`);
+  const videoUri = await downloadGeneratedFile(url, `video-${key}.mp4`);
+  const directoryUri = videoUri.slice(0, videoUri.lastIndexOf('/') + 1);
   const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
-  const playerUri = `${EXPORTS_DIR}player-${key}.html`;
+  const playerUri = `${directoryUri}player.html`;
   await writeAsStringAsync(
     playerUri,
     [
@@ -416,7 +422,7 @@ export async function prepareLocalVideoPlayer(
     ].join(''),
     { encoding: EncodingType.UTF8 },
   );
-  return { videoUri, playerUri, directoryUri: EXPORTS_DIR };
+  return { videoUri, playerUri, directoryUri };
 }
 
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {
@@ -428,12 +434,15 @@ const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeTy
 export async function shareGeneratedImage(
   imagePath: string,
   fileName = 'generated-image',
+  options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) {
     throw new Error('Only saved AGI Cloud images can be shared.');
   }
   const downloaded = await fetchGeneratedFileBytes(url);
+  if (options.isCurrent?.() === false) return;
   const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
   if (!imageType) {
     throw new Error('The saved image format is not supported for sharing.');
@@ -444,7 +453,10 @@ export async function shareGeneratedImage(
     `${baseName}.${imageType.extension}`,
     downloaded.base64,
   );
-  if (!(await Sharing.isAvailableAsync())) {
+  if (options.isCurrent?.() === false) return;
+  const available = await Sharing.isAvailableAsync();
+  if (options.isCurrent?.() === false) return;
+  if (!available) {
     throw new Error('Sharing is not available on this device.');
   }
   await Sharing.shareAsync(localUri, {
@@ -456,20 +468,25 @@ export async function shareGeneratedImage(
 export async function saveGeneratedImageToPhotos(
   imagePath: string,
   fileName = 'generated-image',
+  options: { isCurrent?: () => boolean } = {},
 ): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) throw new Error('Only saved AGI Cloud images can be saved.');
   const permission = await requestPhotoPermissionsAsync(true);
+  if (options.isCurrent?.() === false) return;
   if (!permission.granted) {
     throw new Error('Allow AGI Workforce to add photos in Settings to save images.');
   }
   const downloaded = await fetchGeneratedFileBytes(url);
+  if (options.isCurrent?.() === false) return;
   const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
   if (!imageType) throw new Error('The saved image format cannot be added to Photos.');
   const localUri = await writeGeneratedFileBytes(
     `${fileName}.${imageType.extension}`,
     downloaded.base64,
   );
+  if (options.isCurrent?.() === false) return;
   await saveToLibraryAsync(localUri);
 }
 
@@ -481,12 +498,17 @@ export async function readGeneratedImageBase64(
   return fetchGeneratedFileBytes(url);
 }
 
-export async function copyGeneratedImage(imagePath: string): Promise<void> {
+export async function copyGeneratedImage(
+  imagePath: string,
+  options: { isCurrent?: () => boolean } = {},
+): Promise<void> {
+  if (options.isCurrent?.() === false) return;
   const url = resolveGeneratedImageUri(imagePath);
   if (!url) {
     throw new Error('Only saved AGI Cloud images can be copied.');
   }
   const downloaded = await fetchGeneratedFileBytes(url);
+  if (options.isCurrent?.() === false) return;
   if (!downloaded.contentType || !SHAREABLE_IMAGE_TYPES[downloaded.contentType]) {
     throw new Error('The saved image format cannot be copied.');
   }
@@ -500,9 +522,8 @@ export async function exportToMarkdown(
 ): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
   const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
-  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.md`;
-  const destUri = `${EXPORTS_DIR}${fileName}`;
+  const destUri = await allocateExportPath(fileName);
   await writeAsStringAsync(destUri, header + content, { encoding: EncodingType.UTF8 });
   return {
     uri: destUri,
@@ -519,9 +540,8 @@ export async function exportToDocx(
 ): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
   const base64 = await markdownToDocxBase64(content, title);
-  await ensureExportsDir();
   const fileName = `${sanitizeFileName(title)}.docx`;
-  const destUri = `${EXPORTS_DIR}${fileName}`;
+  const destUri = await allocateExportPath(fileName);
   await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
   return { uri: destUri, format: 'docx', fileName, file: exportedFile(destUri, fileName, lineage) };
 }

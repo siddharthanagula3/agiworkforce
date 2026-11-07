@@ -41,6 +41,10 @@ vi.mock('@/lib/identity/client', () => ({
   }),
 }));
 
+vi.mock('@/lib/identity/useSessionSnapshot', () => ({
+  useSessionSnapshot: () => () => null,
+}));
+
 const { PublishedArtifactView } = await import('./PublishedArtifactView');
 
 const ATTACKER_HOST = 'attacker.example';

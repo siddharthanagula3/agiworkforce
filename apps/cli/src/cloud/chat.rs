@@ -271,12 +271,10 @@ pub fn build_push(snapshot: &SessionSnapshot, state: &SyncState) -> ChatPushRequ
 
 /// Fold a push response into the device's sync state.
 ///
-/// Applied rows record the version the server assigned. A conflict means the
-/// hosted row moved on without this device, so the hosted copy wins: its
-/// version is adopted so the next push is an update of the server's row rather
-/// than a losing re-insert, and nothing local is deleted. The pull cursor is
-/// left alone: the push reply's cursor can pass rows another device wrote since
-/// the last pull, and only a pull may move it.
+/// Only applied rows advance their versions. A conflict does not replace the
+/// local content, so adopting its version would let the next push overwrite
+/// the hosted edit with that stale content. The pull cursor stays unchanged:
+/// a push reply can pass rows another device wrote since the last pull.
 pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
     for row in &response.applied.conversations {
         state.conversations.record(&row.id, &row.server_version);
@@ -284,20 +282,10 @@ pub fn apply_push_response(response: &ChatPushResponse, state: &mut SyncState) {
     for row in &response.applied.messages {
         state.messages.record(&row.id, &row.server_version);
     }
-    for conflict in &response.conflicts.conversations {
-        if let Some(current) = conflict.current.as_ref() {
-            state
-                .conversations
-                .record(&conflict.id, &current.server_version);
-        }
-    }
-    for conflict in &response.conflicts.messages {
-        if let Some(current) = conflict.current.as_ref() {
-            state.messages.record(&conflict.id, &current.server_version);
-        }
-    }
 }
 
+/// Record versions only after adopting the corresponding content into the
+/// local snapshots that will be pushed. Listing hosted rows alone is not adoption.
 pub fn apply_pull_response(response: &ChatPullResponse, state: &mut SyncState) {
     for conversation in &response.conversations {
         state
@@ -331,6 +319,8 @@ pub struct HostedMessage {
     pub server_version: String,
 }
 
+/// Nonempty versions require prior adoption of the corresponding local content.
+/// The single-conversation response rows currently supply no sync versions.
 pub fn record_hosted(conversation: &HostedConversation, state: &mut SyncState) {
     if !conversation.server_version.is_empty() {
         state
@@ -434,8 +424,8 @@ struct ConversationPage {
 
 /// One conversation read by id. Reading it out of a full pull fetched the
 /// whole account's history to open a single chat. These rows carry no server
-/// versions, so none are recorded; a first push of a row is answered as a
-/// conflict that records it.
+/// versions, so none are recorded. Any push conflict remains unresolved until
+/// local and hosted content are reconciled; it cannot supply a safe base version.
 pub async fn fetch_conversation(
     client: &CloudClient,
     conversation_id: &str,
@@ -797,42 +787,126 @@ mod tests {
     }
 
     #[test]
-    fn a_conflict_adopts_the_hosted_version_so_the_next_push_updates_it() {
+    fn repeated_conflicts_cannot_rebase_unchanged_local_content() {
+        for known_version in [None, Some("7")] {
+            for deleted_at in [None, Some("2026-09-13T00:00:00Z")] {
+                let local = snapshot();
+                let mut state = SyncState::default();
+                let request = build_push(&local, &state);
+                let conversation_id = request.conversations[0].id.clone();
+                let message_id = request.messages[0].id.clone();
+                if let Some(version) = known_version {
+                    state.conversations.record(&conversation_id, version);
+                    state.messages.record(&message_id, version);
+                }
+                state.conversations.advance("5");
+                state.messages.advance("6");
+                let before = state.clone();
+                let original_request = build_push(&local, &state);
+                let response = ChatPushResponse {
+                    applied: AppliedGroups::default(),
+                    conflicts: ConflictGroups {
+                        conversations: vec![ConversationConflict {
+                            id: conversation_id.clone(),
+                            current: Some(ConversationDelta {
+                                id: conversation_id.clone(),
+                                title: "Renamed on the web".to_string(),
+                                model: None,
+                                project_id: None,
+                                updated_at: "2026-09-13T00:00:00Z".to_string(),
+                                deleted_at: deleted_at.map(str::to_string),
+                                archived: false,
+                                server_version: "99".to_string(),
+                            }),
+                        }],
+                        messages: vec![MessageConflict {
+                            id: message_id.clone(),
+                            current: Some(MessageDelta {
+                                id: message_id.clone(),
+                                conversation_id: conversation_id.clone(),
+                                role: "user".to_string(),
+                                content: "Edited on the web".to_string(),
+                                created_at: None,
+                                deleted_at: deleted_at.map(str::to_string),
+                                server_version: "100".to_string(),
+                            }),
+                        }],
+                    },
+                    cursor: "100".to_string(),
+                };
+
+                for _ in 0..2 {
+                    apply_push_response(&response, &mut state);
+                    assert_eq!(state, before);
+                    assert_eq!(build_push(&local, &state), original_request);
+                }
+                assert_eq!(local, snapshot());
+            }
+        }
+    }
+
+    #[test]
+    fn applied_rows_advance_while_conflicted_rows_keep_their_original_bases() {
+        let local = snapshot();
         let mut state = SyncState::default();
-        let request = build_push(&snapshot(), &state);
+        let request = build_push(&local, &state);
         let conversation_id = request.conversations[0].id.clone();
+        let applied_message_id = request.messages[0].id.clone();
+        let conflicted_message_id = request.messages[1].id.clone();
+        state.messages.record(&conflicted_message_id, "4");
+        state.conversations.advance("3");
         let response = ChatPushResponse {
-            applied: AppliedGroups::default(),
-            conflicts: ConflictGroups {
-                conversations: vec![ConversationConflict {
+            applied: AppliedGroups {
+                conversations: vec![AppliedRow {
                     id: conversation_id.clone(),
-                    current: Some(ConversationDelta {
-                        id: conversation_id.clone(),
-                        title: "Renamed on the web".to_string(),
-                        model: None,
-                        project_id: None,
-                        updated_at: "2026-09-13T00:00:00Z".to_string(),
+                    server_version: "8".to_string(),
+                }],
+                messages: vec![AppliedRow {
+                    id: applied_message_id.clone(),
+                    server_version: "9".to_string(),
+                }],
+            },
+            conflicts: ConflictGroups {
+                conversations: Vec::new(),
+                messages: vec![MessageConflict {
+                    id: conflicted_message_id.clone(),
+                    current: Some(MessageDelta {
+                        id: conflicted_message_id,
+                        conversation_id,
+                        role: "assistant".to_string(),
+                        content: "Edited on another device".to_string(),
+                        created_at: None,
                         deleted_at: None,
-                        archived: false,
-                        server_version: "99".to_string(),
+                        server_version: "10".to_string(),
                     }),
                 }],
-                messages: Vec::new(),
             },
-            cursor: "99".to_string(),
+            cursor: "10".to_string(),
         };
+
         apply_push_response(&response, &mut state);
-        assert_eq!(state.conversations.base_version(&conversation_id), "99");
+        let next = build_push(&local, &state);
+        assert_eq!(next.conversations[0].base_version, "8");
+        assert_eq!(next.messages[0].base_version, "9");
+        assert_eq!(next.messages[1].base_version, "4");
+        assert_eq!(next.messages[1].content, request.messages[1].content);
+        assert_eq!(state.conversations.cursor, "3");
+        assert_eq!(state.messages.cursor, INITIAL_CURSOR);
     }
 
     #[test]
     fn a_conflict_the_server_could_not_describe_leaves_the_record_alone() {
         let mut state = SyncState::default();
+        state.conversations.record("c1", "3");
         state.messages.record("m1", "4");
+        let before = state.clone();
         let response = ChatPushResponse {
             applied: AppliedGroups::default(),
             conflicts: ConflictGroups {
-                conversations: Vec::new(),
+                conversations: vec![ConversationConflict {
+                    id: "c1".to_string(),
+                    current: None,
+                }],
                 messages: vec![MessageConflict {
                     id: "m1".to_string(),
                     current: None,
@@ -841,7 +915,7 @@ mod tests {
             cursor: INITIAL_CURSOR.to_string(),
         };
         apply_push_response(&response, &mut state);
-        assert_eq!(state.messages.base_version("m1"), "4");
+        assert_eq!(state, before);
     }
 
     #[test]

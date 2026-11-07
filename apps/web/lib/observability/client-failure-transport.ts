@@ -22,16 +22,15 @@ let pending: ClientFailureReport[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let sent = 0;
 
-// The document carries the account's answer, the mirror this session's. Either
-// saying no is a no, and an unreadable answer is a no.
+// The local mirror must grant consent; a document denial can only narrow it.
+// A stale document grant must not override a pending browser opt-out.
 function mayReport(): boolean {
-  const declared = readDocumentTelemetryConsent();
-  if (declared === false) return false;
-  return declared === true || hasTelemetryConsent();
+  return readDocumentTelemetryConsent() !== false && hasTelemetryConsent();
 }
 
 async function post(events: readonly ClientFailureReport[]): Promise<void> {
   const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  if (!mayReport()) return;
   await fetch(CLIENT_FAILURE_ENDPOINT, {
     method: 'POST',
     headers,

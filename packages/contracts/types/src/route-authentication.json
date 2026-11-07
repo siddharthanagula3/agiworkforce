@@ -73,6 +73,7 @@
     "apps/web/app/api/cron/recover-reservations/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/refresh-connector-directory/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/refresh-plugin-directory/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
+    "apps/web/app/api/models/free-quota/media-offer/route.ts": "whether the limited free image and video preview is running and the last day it is served are the same for every caller, with no account data",
     "apps/web/app/api/cron/remind-free-quota-renewal/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/remind-trials/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/renew-gmail-watches/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",

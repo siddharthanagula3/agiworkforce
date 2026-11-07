@@ -12,6 +12,9 @@ import {
   putPrivateObject,
   getObject,
   getPrivateObject,
+  getBoundedObject,
+  getBoundedPrivateObject,
+  StoredObjectTooLargeError,
   getObjectStream,
   getPrivateObjectStream,
   deleteObject,
@@ -333,11 +336,43 @@ export function authenticatedMediaUrl(mediaAssetId: string): string {
 
 export async function readStoredMedia(
   pathname: string,
+  maxBytes?: number,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 0)) {
+    throw new RangeError('The media byte limit must be a nonnegative safe integer.');
+  }
+  const readPrivate = () =>
+    maxBytes === undefined
+      ? getPrivateObject(pathname)
+      : getBoundedPrivateObject(pathname, maxBytes);
+  const readPublic = () =>
+    maxBytes === undefined ? getObject(pathname) : getBoundedObject(pathname, maxBytes);
   if (pathname.startsWith(LOCAL_MEDIA_PREFIX)) {
     const localPath = localPathForStoragePathname(pathname);
     if (!localPath) return null;
     try {
+      if (maxBytes !== undefined) {
+        const info = await stat(/* turbopackIgnore: true */ localPath);
+        if (info.size > maxBytes) {
+          throw new StoredObjectTooLargeError(pathname, maxBytes, info.size);
+        }
+        const stream = createReadStream(/* turbopackIgnore: true */ localPath);
+        const chunks: Buffer[] = [];
+        let received = 0;
+        try {
+          for await (const chunk of stream) {
+            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            received += bytes.byteLength;
+            if (received > maxBytes) {
+              throw new StoredObjectTooLargeError(pathname, maxBytes);
+            }
+            chunks.push(bytes);
+          }
+        } finally {
+          stream.destroy();
+        }
+        return { data: Buffer.concat(chunks, received), contentType: undefined };
+      }
       return {
         data: await readFile(/* turbopackIgnore: true */ localPath),
         contentType: undefined,
@@ -350,30 +385,28 @@ export async function readStoredMedia(
 
   if (pathname.startsWith(PRIVATE_VIDEO_PREFIX)) {
     if (!isPrivateVideoPathname(pathname) || !isPrivateObjectStorageConfigured()) return null;
-    return getPrivateObject(pathname);
+    return readPrivate();
   }
 
   if (pathname.startsWith(PRIVATE_IMAGE_PREFIX) || pathname.startsWith(PRIVATE_FILE_PREFIX)) {
     if (!isPrivateGeneratedMediaPathname(pathname) || !isPrivateObjectStorageConfigured()) {
       return null;
     }
-    return getPrivateObject(pathname);
+    return readPrivate();
   }
 
   if (pathname.startsWith(PRIVATE_CHAT_ATTACHMENT_PREFIX)) {
     if (!isPrivateChatAttachmentPathname(pathname) || !isPrivateObjectStorageConfigured()) {
       return null;
     }
-    const privateObject = await attemptStorageRead('private', pathname, () =>
-      getPrivateObject(pathname),
-    );
+    const privateObject = await attemptStorageRead('private', pathname, readPrivate);
     if (privateObject) return privateObject;
     if (isPrivateOnlyChatAttachmentPathname(pathname) || !isObjectStorageConfigured()) return null;
-    return attemptStorageRead('public_fallback', pathname, () => getObject(pathname));
+    return attemptStorageRead('public_fallback', pathname, readPublic);
   }
 
   if (!isObjectStorageConfigured()) return null;
-  return getObject(pathname);
+  return readPublic();
 }
 
 export async function streamStoredMedia(

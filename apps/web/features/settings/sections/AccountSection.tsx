@@ -1,7 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties } from 'react';
+import { useQueryClient, type QueryClient, type QueryState } from '@tanstack/react-query';
+import type { AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
+import { queryKeys } from '@shared/stores/query-client';
 import { useRouter } from 'next/navigation';
 import { useSignOut } from '@/lib/identity/client';
 import { ChevronLeft, ChevronRight, RefreshCw, Undo2 } from 'lucide-react';
@@ -42,6 +45,20 @@ import {
 } from '../hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+
+type DeletionStatusSnapshot = QueryState<AccountDeletionStatus, Error>;
+
+function permitsDeletionAction(
+  client: QueryClient,
+  snapshot: DeletionStatusSnapshot | null | undefined,
+  action: 'schedule' | 'cancel',
+): boolean {
+  return snapshot !== null && snapshot !== undefined &&
+    client.getQueryState(queryKeys.settings.accountDeletionStatus()) === snapshot &&
+    snapshot.status === 'success' && snapshot.fetchStatus === 'idle' &&
+    !snapshot.isInvalidated && snapshot.data !== undefined &&
+    (action === 'schedule' ? !snapshot.data.pending : snapshot.data.pending && snapshot.data.canCancel);
+}
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return 'an unknown date';
@@ -240,7 +257,7 @@ function AccountRow({
   );
 }
 
-export function AccountSection() {
+export function AccountSection({ emailEditorActive = true }: { emailEditorActive?: boolean }) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -249,9 +266,8 @@ export function AccountSection() {
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
-  const updateUser = useAuthStore((s) => s.updateUser);
   const currentEmail = user?.email ?? null;
-  const [showEmailChange, setShowEmailChange] = useState(false);
+  const [showEmailChange, setShowEmailChange] = useState<boolean | null>(null);
 
   const [showApiKeys, setShowApiKeys] = useState(false);
 
@@ -347,12 +363,16 @@ export function AccountSection() {
   // implementation in the app; PrivacySection's independent copy (which never
   // signed the user out) was collapsed onto this hook.
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const queryClient = useQueryClient();
+  const [deleteStatusSnapshot, setDeleteStatusSnapshot] = useState<DeletionStatusSnapshot | null>(null);
+  const [cancelStatusSnapshot, setCancelStatusSnapshot] = useState<DeletionStatusSnapshot | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const deleteAccountMutation = useDeleteAccount();
 
   const handleDeleteAccount = useCallback(() => {
+    if (!permitsDeletionAction(queryClient, deleteStatusSnapshot, 'schedule')) return;
     deleteAccountMutation.mutate();
-  }, [deleteAccountMutation]);
+  }, [deleteAccountMutation, deleteStatusSnapshot, queryClient]);
 
   const handleDeleteSuccessContinue = useCallback(() => {
     setShowDeleteDialog(false);
@@ -370,12 +390,25 @@ export function AccountSection() {
   const cancelDeletionMutation = useCancelAccountDeletion();
 
   const handleCancelDeletion = useCallback(() => {
+    if (!permitsDeletionAction(queryClient, cancelStatusSnapshot, 'cancel')) return;
     cancelDeletionMutation.mutate(undefined, {
       onSuccess: () => setShowCancelDialog(false),
     });
-  }, [cancelDeletionMutation]);
+  }, [cancelDeletionMutation, cancelStatusSnapshot, queryClient]);
 
-  const pendingDeletion = deletionStatus.data?.pending === true;
+  const renderedDeletionStatus = useSyncExternalStore(
+    useCallback((notify: () => void) => queryClient.getQueryCache().subscribe(notify), [queryClient]),
+    useCallback(() => queryClient.getQueryState<AccountDeletionStatus, Error>(
+      queryKeys.settings.accountDeletionStatus(),
+    ), [queryClient]),
+    useCallback(() => queryClient.getQueryState<AccountDeletionStatus, Error>(
+      queryKeys.settings.accountDeletionStatus(),
+    ), [queryClient]),
+  );
+  const canScheduleDeletion = permitsDeletionAction(queryClient, renderedDeletionStatus, 'schedule');
+  const canCancelDeletion = permitsDeletionAction(queryClient, renderedDeletionStatus, 'cancel');
+
+  const pendingDeletion = renderedDeletionStatus?.data?.pending === true;
 
   const billingInitialized = useBillingStore((s) => s.initialized);
   const livePaidPlan = livePaidPlanOf(useBillingStore((s) => s.subscription));
@@ -428,21 +461,24 @@ export function AccountSection() {
               <AccountRow
                 label="Account deletion scheduled"
                 labelTestId="pending-deletion-title"
-                hint={`Your account and all data will be permanently erased on ${formatDateTime(
-                  deletionStatus.data?.scheduledFor
-                    ? new Date(deletionStatus.data.scheduledFor)
+                hint={`Cancellation deadline: ${formatDateTime(
+                  renderedDeletionStatus?.data?.scheduledFor
+                    ? new Date(renderedDeletionStatus.data.scheduledFor)
                     : null,
                 )}. ${
-                  deletionStatus.data?.canCancel
+                  renderedDeletionStatus?.data?.canCancel
                     ? 'You can cancel any time before then.'
-                    : 'The cancellation window has closed. Erasure begins with the next daily run.'
-                }`}
+                    : 'The cancellation window has closed.'
+                } Erasure is processed after the deadline and may take longer.`}
               >
-                {deletionStatus.data?.canCancel && (
+                {renderedDeletionStatus?.data?.canCancel && (
                   <button
                     type="button"
                     data-testid="cancel-deletion-trigger"
+                    disabled={!canCancelDeletion || deletionStatus.isFetching}
                     onClick={() => {
+                      if (!permitsDeletionAction(queryClient, renderedDeletionStatus, 'cancel')) return;
+                      setCancelStatusSnapshot(renderedDeletionStatus ?? null);
                       cancelDeletionMutation.reset();
                       setShowCancelDialog(true);
                     }}
@@ -480,7 +516,7 @@ export function AccountSection() {
                       )}
                     </span>
                   ) : (
-                    'Deletion is scheduled for 24 hours later. You can cancel before erasure begins.'
+                    'Schedule permanent account deletion. You can cancel before the cancellation deadline.'
                   )
                 }
               >
@@ -489,12 +525,16 @@ export function AccountSection() {
                   data-testid="delete-account-trigger"
                   aria-describedby="delete-account-hint"
                   disabled={
+                    !canScheduleDeletion ||
+                    deletionStatus.isFetching ||
                     deletionStatus.isLoading ||
                     deletionStatus.isError ||
                     !billingInitialized ||
                     deleteBlockedByPlan
                   }
                   onClick={() => {
+                    if (!permitsDeletionAction(queryClient, renderedDeletionStatus, 'schedule')) return;
+                    setDeleteStatusSnapshot(renderedDeletionStatus ?? null);
                     setDeleteConfirmInput('');
                     deleteAccountMutation.reset();
                     setShowDeleteDialog(true);
@@ -505,9 +545,11 @@ export function AccountSection() {
                 </button>
               </AccountRow>
             )}
-            {deletionStatus.isError && (
+            {(deletionStatus.isError || renderedDeletionStatus?.isInvalidated) && (
               <p role="alert" style={{ ...errorTextStyle, padding: 'var(--space-3) 0 0' }}>
-                Could not check whether a deletion is already pending.{' '}
+                {deletionStatus.isError
+                  ? 'Could not check whether a deletion is already pending. '
+                  : 'Deletion status needs to be checked again. '}
                 <button
                   type="button"
                   onClick={() => void deletionStatus.refetch()}
@@ -840,7 +882,7 @@ export function AccountSection() {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {deleteAccountMutation.data?.message ??
-                    'Your account deletion has been scheduled. You will be signed out now.'}
+                    'Your account deletion has been scheduled. Choose Continue to sign out.'}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {deleteAccountMutation.data?.scheduledFor && (
@@ -851,9 +893,11 @@ export function AccountSection() {
                     margin: 'calc(var(--space-2) * -1) 0 0',
                   }}
                 >
-                  Your data is permanently erased on{' '}
+                  Cancellation deadline:{' '}
                   {formatDateTime(new Date(deleteAccountMutation.data.scheduledFor))}. Sign back in
                   and cancel from Settings &gt; Account any time before then to keep your account.
+                  Erasure is processed after the deadline and may take longer. Choose Continue to
+                  sign out.
                 </p>
               )}
               <AlertDialogFooter>
@@ -873,9 +917,11 @@ export function AccountSection() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This permanently deletes your account and all associated data. You are signed out
-                  now, and erasure runs 24 hours after you confirm. If you change your mind, sign
-                  back in and cancel from Settings &gt; Account any time before then.
+                  This schedules your account and Cloud chats, projects, memory and artifacts for
+                  permanent deletion. You can cancel before the deadline
+                  shown after scheduling. Erasure is processed after that deadline and may take
+                  longer. Choose Continue after scheduling to sign out. If you change your mind,
+                  sign back in and cancel from Settings &gt; Account before the cancellation deadline.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">
@@ -902,6 +948,11 @@ export function AccountSection() {
                 )}
               </div>
               <AlertDialogFooter>
+                {!deleteAccountMutation.isPending && !permitsDeletionAction(queryClient, deleteStatusSnapshot, 'schedule') && (
+                  <p role="alert" className="text-sm text-danger">
+                    Deletion status changed. Close this dialog, check the current status, and reopen the confirmation.
+                  </p>
+                )}
                 <AlertDialogCancel disabled={deleteAccountMutation.isPending}>
                   Cancel
                 </AlertDialogCancel>
@@ -911,7 +962,8 @@ export function AccountSection() {
                     e.preventDefault();
                     handleDeleteAccount();
                   }}
-                  disabled={deleteConfirmInput !== 'DELETE' || deleteAccountMutation.isPending}
+                  disabled={deleteConfirmInput !== 'DELETE' || deleteAccountMutation.isPending ||
+                    !permitsDeletionAction(queryClient, deleteStatusSnapshot, 'schedule')}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                 >
                   {deleteAccountMutation.isPending ? 'Scheduling…' : 'Schedule deletion'}
@@ -923,11 +975,16 @@ export function AccountSection() {
       </AlertDialog>
 
       {deleteAccountMutation.stepUpDialog}
-      {showEmailChange ? (
+      {showEmailChange !== null ? (
         <EmailAddressChange
+          active={emailEditorActive && showEmailChange}
+          accountId={userId}
           currentEmail={currentEmail}
-          onChanged={(email) => {
-            if (user) updateUser({ ...user, email });
+          onChanged={(email, completion) => {
+            if (!completion.isCurrent()) return;
+            const latest = useAuthStore.getState();
+            if (latest.user?.id !== completion.accountId || !completion.isCurrent()) return;
+            latest.updateUser({ ...latest.user, email });
           }}
           onClose={() => setShowEmailChange(false)}
         />
@@ -953,6 +1010,11 @@ export function AccountSection() {
             </p>
           )}
           <AlertDialogFooter>
+            {!cancelDeletionMutation.isPending && !permitsDeletionAction(queryClient, cancelStatusSnapshot, 'cancel') && (
+              <p role="alert" className="text-sm text-danger">
+                Deletion status changed. Close this dialog, check the current status, and reopen the confirmation.
+              </p>
+            )}
             <AlertDialogCancel disabled={cancelDeletionMutation.isPending}>
               Keep deletion scheduled
             </AlertDialogCancel>
@@ -962,7 +1024,8 @@ export function AccountSection() {
                 e.preventDefault();
                 handleCancelDeletion();
               }}
-              disabled={cancelDeletionMutation.isPending}
+              disabled={cancelDeletionMutation.isPending ||
+                !permitsDeletionAction(queryClient, cancelStatusSnapshot, 'cancel')}
             >
               {cancelDeletionMutation.isPending ? 'Cancelling…' : 'Cancel deletion'}
             </AlertDialogAction>

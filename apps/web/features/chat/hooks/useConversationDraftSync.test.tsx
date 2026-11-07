@@ -1,16 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
+import type { SessionAuthority } from '@/lib/identity/request-authority';
 import type { DraftSaveResult } from '../services/conversation-draft';
 
-const { mockSaveConversationDraft, mockSession, mockToastError } = vi.hoisted(() => ({
-  mockSaveConversationDraft: vi.fn(async (): Promise<DraftSaveResult> => 'saved'),
+const { mockSaveConversationDraft, mockSession, mockToastError, mockIdentity } = vi.hoisted(() => ({
+  mockIdentity: { current: null as SessionAuthority | null },
+  mockSaveConversationDraft: vi.fn<(conversationId: string, draft: string, session: SessionAuthority, canDispatch: () => boolean) => Promise<DraftSaveResult>>(async () => 'saved'),
   mockSession: { getToken: vi.fn(async () => 'token'), isLoaded: true, isSignedIn: true },
   mockToastError: vi.fn(),
 }));
 
 vi.mock('@/lib/identity/client', () => ({ useSession: () => mockSession }));
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => mockIdentity.current,
+}));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
+}));
 vi.mock('sonner', () => ({ toast: { error: mockToastError, dismiss: vi.fn() } }));
-vi.mock('../services/conversation-draft', () => ({
+vi.mock('../services/conversation-draft', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/conversation-draft')>()),
   saveConversationDraft: mockSaveConversationDraft,
   adoptConversationDraftRevision: vi.fn(),
   clearObservedConversationDraftRevisions: vi.fn(),
@@ -24,7 +35,7 @@ import {
   markPendingDraftClear,
   clearPendingDraftClear,
 } from '../lib/pending-draft-clear';
-import { useConversationDraftSync } from './use-conversation-draft-sync';
+import { useConversationDraftSync, type DraftConflictControls } from './use-conversation-draft-sync';
 
 const CONVERSATION = '11111111-1111-4111-8111-111111111111';
 
@@ -35,8 +46,10 @@ const LOCAL_MODEL: LocalModel = {
   name: 'qwen2.5:1.5b',
 };
 
+let controls: DraftConflictControls;
+
 function Harness() {
-  useConversationDraftSync();
+  controls = useConversationDraftSync();
   return null;
 }
 
@@ -59,8 +72,16 @@ beforeEach(() => {
   vi.useFakeTimers();
   mockSession.isLoaded = true;
   mockSession.isSignedIn = true;
+  const authority: SessionAuthority = {
+    userId: 'user-1', sessionId: 'session-1', getToken: mockSession.getToken,
+    isCurrent: () => mockSession.isSignedIn && mockIdentity.current === authority,
+  };
+  mockIdentity.current = authority;
+  mockSaveConversationDraft.mockReset().mockResolvedValue('saved');
+  mockSession.getToken.mockReset().mockResolvedValue('token');
   useChatStore.setState({
     draftsByConversation: {},
+    draftOwnersByConversation: {},
     conversations: [] as never,
     messagesByConversation: {},
   });
@@ -68,12 +89,17 @@ beforeEach(() => {
   clearPendingDraftClear(CONVERSATION);
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 describe('carrying a composer draft to the server', () => {
   it('saves a saved conversation’s draft once the typing settles', async () => {
     seedConversation();
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
 
     await vi.runAllTimersAsync();
@@ -91,7 +117,7 @@ describe('carrying a composer draft to the server', () => {
     seedConversation({ isTemporary: true });
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
@@ -115,7 +141,7 @@ describe('carrying a composer draft to the server', () => {
     });
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'my biopsy result says' } });
+    useChatStore.getState().setDraftContent('my biopsy result says', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
@@ -126,7 +152,7 @@ describe('carrying a composer draft to the server', () => {
     useLocalModelSelection.getState().select(LOCAL_MODEL);
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'my biopsy result says' } });
+    useChatStore.getState().setDraftContent('my biopsy result says', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
@@ -137,7 +163,7 @@ describe('carrying a composer draft to the server', () => {
     useLocalModelSelection.getState().select(LOCAL_MODEL);
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: '' } });
+    useChatStore.getState().setDraftContent('', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
@@ -147,7 +173,7 @@ describe('carrying a composer draft to the server', () => {
   it('leaves the unsaved surface’s shared slot alone, which has no row to hold it', async () => {
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { pending: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', 'pending');
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
@@ -157,9 +183,9 @@ describe('carrying a composer draft to the server', () => {
     seedConversation();
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     await vi.runAllTimersAsync();
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
@@ -178,7 +204,7 @@ describe('carrying a composer draft to the server', () => {
     expect(mockSaveConversationDraft.mock.calls[1]?.slice(0, 2)).toEqual([CONVERSATION, '']);
   });
 
-  it('serializes an in-flight text save before its later clear and acknowledges the clear', async () => {
+  it('acknowledges the later clear only when its own save finishes', async () => {
     let finishFirst!: (saved: DraftSaveResult) => void;
     mockSaveConversationDraft.mockImplementationOnce(
       () =>
@@ -186,6 +212,10 @@ describe('carrying a composer draft to the server', () => {
           finishFirst = resolve;
         }),
     );
+    let finishClear!: (saved: DraftSaveResult) => void;
+    mockSaveConversationDraft.mockImplementationOnce(() => new Promise((resolve) => {
+      finishClear = resolve;
+    }));
     seedConversation();
     render(<Harness />);
 
@@ -200,7 +230,7 @@ describe('carrying a composer draft to the server', () => {
       useChatStore.getState().clearDraftContent(CONVERSATION);
       await vi.runAllTimersAsync();
     });
-    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
     expect(hasPendingDraftClear(CONVERSATION)).toBe(true);
 
     await act(async () => {
@@ -208,6 +238,8 @@ describe('carrying a composer draft to the server', () => {
       await Promise.resolve();
     });
     expect(mockSaveConversationDraft.mock.calls[1]?.slice(0, 2)).toEqual([CONVERSATION, '']);
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(true);
+    await act(async () => { finishClear('saved'); });
     expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
   });
 
@@ -216,9 +248,9 @@ describe('carrying a composer draft to the server', () => {
     seedConversation();
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     await vi.runAllTimersAsync();
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
@@ -337,9 +369,234 @@ describe('carrying a composer draft to the server', () => {
     seedConversation();
     render(<Harness />);
 
-    useChatStore.setState({ draftsByConversation: { [CONVERSATION]: 'half a thought' } });
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).not.toHaveBeenCalled();
+  });
+});
+
+function pendingSave() {
+  let resolve!: (value: DraftSaveResult) => void;
+  mockSaveConversationDraft.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+  return (value: DraftSaveResult) => resolve(value);
+}
+
+function latestDispatchGate(): () => boolean {
+  const calls = mockSaveConversationDraft.mock.calls as unknown as Array<[string, string, SessionAuthority, () => boolean]>;
+  return calls[calls.length - 1]![3];
+}
+
+describe('draft job ownership across asynchronous work', () => {
+  it.each(['local selection', 'temporary chat', 'local turns', 'text ABA', 'deleted slot'])(
+    'rechecks %s after a save was accepted', async (change) => {
+      const finish = pendingSave();
+      seedConversation();
+      render(<Harness />);
+      await act(async () => {
+        useChatStore.getState().setDraftContent('original text', CONVERSATION);
+        await vi.runAllTimersAsync();
+      });
+      const canDispatch = latestDispatchGate();
+      expect(canDispatch()).toBe(true);
+      act(() => {
+        if (change === 'local selection') useLocalModelSelection.getState().select(LOCAL_MODEL);
+        if (change === 'temporary chat') useChatStore.getState().updateConversation(CONVERSATION, { isTemporary: true });
+        if (change === 'local turns') useChatStore.setState({ messagesByConversation: {
+          [CONVERSATION]: [{ id: 'local', role: 'assistant', content: 'local answer', model: LOCAL_MODEL.id,
+            metadata: { privacyMode: 'local' }, createdAt: '2026-01-01T00:00:01.000Z' }],
+        } as never });
+        if (change === 'text ABA') {
+          useChatStore.getState().setDraftContent('second text', CONVERSATION);
+          useChatStore.getState().setDraftContent('original text', CONVERSATION);
+        }
+        if (change === 'deleted slot') useChatStore.getState().deleteConversation(CONVERSATION);
+      });
+      expect(canDispatch()).toBe(false);
+      await act(async () => { finish('superseded'); });
+      expect(mockToastError).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps an accepted same-session clear eligible after navigation parking and hook unmount', async () => {
+    const finish = pendingSave();
+    seedConversation();
+    const view = render(<Harness />);
+    await act(async () => {
+      useChatStore.getState().clearDraftContent(CONVERSATION);
+      markPendingDraftClear(CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    const canDispatch = latestDispatchGate();
+    useChatStore.getState().setDraftContent('', CONVERSATION);
+    useChatStore.getState().setActiveConversation('another-chat');
+    view.unmount();
+    expect(canDispatch()).toBe(true);
+    await act(async () => { finish('saved'); });
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('does not let an older empty acknowledgment consume a later clear intent', async () => {
+    const finish = pendingSave();
+    seedConversation();
+    render(<Harness />);
+    await act(async () => {
+      useChatStore.getState().clearDraftContent(CONVERSATION);
+      markPendingDraftClear(CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    act(() => {
+      useChatStore.getState().setDraftContent('typed in between', CONVERSATION);
+      useChatStore.getState().clearDraftContent(CONVERSATION);
+      markPendingDraftClear(CONVERSATION);
+    });
+    await act(async () => { finish('saved'); });
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(true);
+  });
+
+  it('does not re-admit unchanged account A text under a replacement session', async () => {
+    const finish = pendingSave();
+    seedConversation();
+    const view = render(<Harness />);
+    await act(async () => {
+      useChatStore.getState().setDraftContent('account A text', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    const canDispatch = latestDispatchGate();
+    const next: SessionAuthority = {
+      userId: 'user-2', sessionId: 'session-2', getToken: vi.fn(async () => 'other-token'),
+      isCurrent: () => mockIdentity.current === next,
+    };
+    mockIdentity.current = next;
+    view.rerender(<Harness />);
+    await act(async () => { await vi.runAllTimersAsync(); });
+    expect(canDispatch()).toBe(false);
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
+    expect(useChatStore.getState().getDraftContent(CONVERSATION)).toBe('account A text');
+    await act(async () => { finish('superseded'); });
+    await act(async () => {
+      useChatStore.getState().setDraftContent('new account edit', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it('suppresses a stale conflict after the local draft changes away and back', async () => {
+    const finish = pendingSave();
+    seedConversation();
+    render(<Harness />);
+    await act(async () => {
+      useChatStore.getState().setDraftContent('original', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    act(() => {
+      useChatStore.getState().setDraftContent('newer', CONVERSATION);
+      useChatStore.getState().setDraftContent('original', CONVERSATION);
+    });
+    await act(async () => { finish({ kind: 'conflict', theirs: 'old remote text', theirsRevision: null }); });
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(controls.conflict).toBeNull();
+    expect(useChatStore.getState().getDraftContent(CONVERSATION)).toBe('original');
+  });
+});
+
+
+describe('draft transport across page lifetime', () => {
+  it('dispatches an accepted empty clear after its token resolves following same-session unmount', async () => {
+    const actual = await vi.importActual<typeof import('../services/conversation-draft')>('../services/conversation-draft');
+    actual.clearObservedConversationDraftRevisions();
+    mockSaveConversationDraft.mockImplementationOnce(actual.saveConversationDraft);
+    let finishToken!: (value: string) => void;
+    mockSession.getToken.mockReturnValueOnce(new Promise((resolve) => { finishToken = resolve; }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ saved: true, draftUpdatedAt: null }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    seedConversation();
+    const view = render(<Harness />);
+    await act(async () => {
+      useChatStore.getState().clearDraftContent(CONVERSATION);
+      markPendingDraftClear(CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    expect(mockSession.getToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    useChatStore.getState().setDraftContent('', CONVERSATION);
+    view.unmount();
+    await act(async () => {
+      finishToken('captured-token');
+      await mockSaveConversationDraft.mock.results[0]!.value;
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string).draft).toBeNull();
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+});
+
+
+function latestToastAction(): () => void {
+  const calls = mockToastError.mock.calls as unknown as Array<[string, { action: { onClick: () => void } }]>;
+  return calls[calls.length - 1]![1].action.onClick;
+}
+
+describe('retained draft controls', () => {
+  it('does not let retained Compare, Close, or Resolve controls affect a newer conflict', async () => {
+    seedConversation();
+    render(<Harness />);
+    mockSaveConversationDraft.mockResolvedValueOnce({ kind: 'conflict', theirs: 'first remote', theirsRevision: null });
+    await act(async () => {
+      useChatStore.getState().setDraftContent('first local', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    const firstCompare = latestToastAction();
+    act(() => firstCompare());
+    const firstClose = controls.closeConflict;
+    const firstResolve = controls.resolveConflict;
+    expect(controls.conflict?.theirs).toBe('first remote');
+    mockSaveConversationDraft.mockResolvedValueOnce({ kind: 'conflict', theirs: 'second remote', theirsRevision: null });
+    await act(async () => {
+      useChatStore.getState().setDraftContent('second local', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    act(() => latestToastAction()());
+    expect(controls.conflict?.theirs).toBe('second remote');
+    act(() => {
+      firstCompare();
+      firstClose();
+      firstResolve('theirs');
+    });
+    expect(controls.conflict?.theirs).toBe('second remote');
+    expect(useChatStore.getState().getDraftContent(CONVERSATION)).toBe('second local');
+  });
+
+  it('bounds retries after other draft renders and ignores an exhausted old Retry callback after a new edit', async () => {
+    seedConversation();
+    render(<Harness />);
+    mockSaveConversationDraft.mockResolvedValue('failed');
+    await act(async () => {
+      useChatStore.getState().setDraftContent('first local', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await act(async () => { await vi.runAllTimersAsync(); });
+    }
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(3);
+    const oldRetry = latestToastAction();
+    await act(async () => {
+      useChatStore.getState().setDraftContent('an unrelated unsaved draft', 'pending');
+      await vi.runAllTimersAsync();
+    });
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(3);
+    mockSaveConversationDraft.mockResolvedValue('saved');
+    await act(async () => {
+      useChatStore.getState().setDraftContent('second local', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    const completedCalls = mockSaveConversationDraft.mock.calls.length;
+    await act(async () => {
+      oldRetry();
+      await vi.runAllTimersAsync();
+    });
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(completedCalls);
   });
 });

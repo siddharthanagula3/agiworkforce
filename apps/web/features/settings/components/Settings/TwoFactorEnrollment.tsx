@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
   Alert,
@@ -13,16 +13,16 @@ import {
   CardTitle,
   Input,
   Spinner,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import { Check, Copy, Download, Printer, ShieldCheck, ShieldOff } from 'lucide-react';
-import settingsService, {
-  type TwoFactorStatus,
-} from '@features/settings/services/user-preferences';
-import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
+import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/useStepUp';
-import { toUserMessage } from '@/lib/user-error-message';
-import { queryClient } from '@shared/stores/query-client';
-import { WORKSPACE_MFA_REQUIREMENT_QUERY_KEY } from '../WorkspaceMfaNotice';
+import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { invalidateMfaReaders } from '@features/settings/hooks/use-mfa-readers';
+import { readTwoFactorStatus, sendTwoFactorMutation, readTwoFactorReceipt, type TwoFactorAction } from '../../services/two-factor-client';
 
 type Stage =
   | { name: 'idle' }
@@ -41,43 +41,6 @@ const PRINT_FRAME_CLASS = 'pointer-events-none fixed bottom-0 right-0 h-0 w-0 bo
 // needs the page's origin to reach the document and modals for the print dialog.
 const PRINT_FRAME_SANDBOX = 'allow-same-origin allow-modals';
 
-interface TwoFactorEnrollmentPanelProps {
-  onStatusChange?: (status: TwoFactorStatus) => void;
-}
-
-function describeCodeFailure(error: string | undefined, status: number | undefined): string {
-  if (status === 401) {
-    return 'That code was not accepted. Check your authenticator app is showing a current code, then try again.';
-  }
-  if (status === 429) {
-    return 'Too many attempts. Wait a few minutes before trying another code.';
-  }
-  if (status === 400) {
-    return error && !/^bad request$/i.test(error)
-      ? error
-      : 'The server rejected the request. Start the setup again to get a fresh secret.';
-  }
-  return error ?? 'The request failed.';
-}
-
-function describeSetupFailure(error: string | undefined, status: number | undefined): string {
-  if (status === 503) {
-    return 'Authenticator setup is temporarily unavailable. Try again later or contact support.';
-  }
-  return describeCodeFailure(error, status);
-}
-
-async function readRouteFailure(
-  response: Response,
-  describe: (error: string | undefined, status: number | undefined) => string = describeCodeFailure,
-): Promise<string> {
-  const body = (await response.json().catch(() => null)) as {
-    error?: string | { message?: string };
-  } | null;
-  const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
-  return describe(message, response.status);
-}
-
 async function renderQrDataUri(otpauthUrl: string): Promise<string | null> {
   try {
     const svg = await QRCode.toString(otpauthUrl, { type: 'svg', margin: 1, width: 200 });
@@ -87,7 +50,51 @@ async function renderQrDataUri(otpauthUrl: string): Promise<string | null> {
   }
 }
 
-export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollmentPanelProps) {
+const UNCERTAIN = 'We could not confirm the complete two-factor change outcome. Your authenticator or backup codes may have changed. Check your sign-in settings before another change. Missing new backup codes cannot be recovered.';
+type Owner = { session: SessionAuthority; id: number; pending: boolean; isCurrent: () => boolean };
+type Intent = { generation: object; action: TwoFactorAction; dispatched: boolean; started: boolean; request: RequestAuthority };
+
+export function TwoFactorEnrollmentPanel({ active = true }: { active?: boolean }) {
+  const capture = useSessionSnapshot();
+  const slot = useRef<Owner | null>(null);
+  const sequence = useRef(0);
+  const admission = useRef(active);
+  const uncertainty = useRef<SessionAuthority | null>(null);
+  const [, redraw] = useState(0);
+  admission.current = active;
+  if (slot.current && (!active || !slot.current.session.isCurrent())) {
+    if (slot.current.pending && slot.current.session.isCurrent()) uncertainty.current = slot.current.session;
+    slot.current = null;
+  }
+  if (uncertainty.current && !uncertainty.current.isCurrent()) uncertainty.current = null;
+  if (active && !slot.current) {
+    const session = capture();
+    if (session) {
+      const owner: Owner = { session, id: ++sequence.current, pending: false,
+        isCurrent: () => admission.current && slot.current === owner && session.isCurrent() };
+      slot.current = owner;
+    }
+  }
+  const owner = slot.current;
+  const replace = (uncertain = false) => {
+    if (!owner || slot.current !== owner) return;
+    if (uncertain && owner.session.isCurrent()) uncertainty.current = owner.session;
+    slot.current = null;
+    redraw((value) => value + 1);
+  };
+  if (!active) return null;
+  if (!owner) return <p role="status">Sign in to manage your authenticator app.</p>;
+  return <OwnedTwoFactorEnrollment key={owner.id} owner={owner} blocked={uncertainty.current !== null}
+    replace={replace} acknowledge={() => {
+      if (!owner.isCurrent()) return;
+      uncertainty.current = null;
+      replace();
+    }} />;
+}
+
+function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
+  owner: Owner; blocked: boolean; replace: (uncertain?: boolean) => void; acknowledge: () => void;
+}) {
   const [status, setStatus] = useState<TwoFactorStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>({ name: 'idle' });
@@ -99,211 +106,232 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-
+  const lane = useMemo(() => ({ active: false, generation: {} as object, intent: null as Intent | null,
+    requests: new Set<RequestAuthority>(), stage, status: null as TwoFactorStatus | null, statusRead: 0 }), []);
+  const reconcileOwner = () => {
+    if (!lane.active || owner.session.isCurrent()) return;
+    lane.active = false;
+    for (const request of lane.requests) request.retire();
+    lane.requests.clear();
+    lane.intent?.request.retire();
+    lane.intent = null;
+    lane.stage = { name: 'idle' };
+    removePrintFrame();
+    replace();
+  };
+  const current = () => {
+    if (!lane.active) return false;
+    if (owner.isCurrent()) return true;
+    reconcileOwner();
+    return false;
+  };
+  const owns = (intent: Intent) => current() && lane.intent === intent && lane.generation === intent.generation;
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
-
-  const onStatusChangeRef = useRef(onStatusChange);
-  onStatusChangeRef.current = onStatusChange;
-
-  const refreshStatus = useCallback(async () => {
-    const { data, error } = await settingsService.get2FAStatus();
-    setStatus(data);
-    setStatusError(error ?? null);
-    onStatusChangeRef.current?.(data);
-    void queryClient.invalidateQueries({ queryKey: WORKSPACE_MFA_REQUIREMENT_QUERY_KEY });
-  }, []);
-
-  useEffect(() => {
-    void refreshStatus();
-  }, [refreshStatus]);
-
-  useEffect(() => {
-    if (stage.name !== 'enrolling') {
-      setQrDataUri(null);
-      return;
-    }
-    let cancelled = false;
-    void renderQrDataUri(stage.otpauthUrl).then((uri) => {
-      if (!cancelled) setQrDataUri(uri);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [stage]);
-
-  const resetFlow = useCallback(() => {
-    setStage({ name: 'idle' });
-    setCode('');
-    setActionError(null);
-    setAcknowledged(false);
-    setCopied(null);
-    setPrintError(null);
-  }, []);
-
-  const copyText = useCallback(async (text: string, what: 'secret' | 'codes') => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(what);
-    } catch {
-      setCopied(null);
-    }
-  }, []);
-
-  const handleStartSetup = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson('/api/settings/2fa/setup', { method: 'POST', body: {} }, headers),
-      );
-      if (!response.ok) {
-        setActionError(await readRouteFailure(response, describeSetupFailure));
-        return;
-      }
-      const { secret, otpauth_url: otpauthUrl } = (await response.json()) as {
-        secret: string;
-        otpauth_url: string;
-      };
-      setCode('');
-      setStage({ name: 'enrolling', secret, otpauthUrl });
-    } catch (error) {
-      if (!isStepUpCancelled(error)) {
-        setActionError(toUserMessage(error, 'The request failed.'));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [withStepUp]);
-
-  const handleVerify = useCallback(async () => {
-    if (stage.name !== 'enrolling') return;
-    setBusy(true);
-    setActionError(null);
-    const { backupCodes, error, status: httpStatus } = await settingsService.verify2FA(code.trim());
-    setBusy(false);
-    if (!backupCodes) {
-      setActionError(describeCodeFailure(error, httpStatus));
-      return;
-    }
-    setCode('');
-    setAcknowledged(false);
-    setStage({ name: 'backup-codes', codes: backupCodes, reason: 'enabled' });
-    await refreshStatus();
-  }, [stage, code, refreshStatus]);
-
-  const handleDisable = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson('/api/settings/2fa', { method: 'DELETE' }, headers),
-      );
-      if (!response.ok) {
-        setActionError(await readRouteFailure(response));
-        return;
-      }
-      resetFlow();
-      await refreshStatus();
-    } catch (error) {
-      if (!isStepUpCancelled(error)) {
-        setActionError(toUserMessage(error, 'The request failed.'));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [refreshStatus, resetFlow, withStepUp]);
-
-  const handleRegenerate = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson('/api/settings/2fa/backup-codes', { method: 'POST' }, headers),
-      );
-      if (!response.ok) {
-        setActionError(await readRouteFailure(response));
-        return;
-      }
-      const { backup_codes: codes } = (await response.json()) as { backup_codes: string[] };
-      setCode('');
-      setAcknowledged(false);
-      setStage({ name: 'backup-codes', codes, reason: 'regenerated' });
-      await refreshStatus();
-    } catch (error) {
-      if (!isStepUpCancelled(error)) {
-        setActionError(toUserMessage(error, 'The request failed.'));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [refreshStatus, withStepUp]);
-
-  const handleDismissBackupCodes = useCallback(async () => {
-    resetFlow();
-    await refreshStatus();
-  }, [refreshStatus, resetFlow]);
-
-  const removePrintFrame = useCallback(() => {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const removePrintFrame = () => {
     printFrameRef.current?.remove();
     printFrameRef.current = null;
-  }, []);
+  };
+  const changeStage = (next: Stage) => {
+    if (!current()) return;
+    lane.stage = next;
+    removePrintFrame();
+    setQrDataUri(null);
+    setStage(next);
+    setCode('');
+    setCopied(null);
+    setPrintError(null);
+    setAcknowledged(false);
+  };
+  const refreshStatus = async () => {
+    if (!current()) return;
+    lane.status = null;
+    setStatus(null);
+    const version = ++lane.statusRead;
+    const request = createRequestAuthority(owner.session, () => current() && lane.statusRead === version);
+    lane.requests.add(request);
+    try {
+      const result = await readTwoFactorStatus(request);
+      request.assertCurrent();
+      lane.status = result;
+      setStatus(result);
+      setStatusError(null);
+    } catch {
+      if (request.isCurrent()) {
+        lane.status = null;
+        setStatus(null);
+        setStatusError('Your two-factor status could not be loaded.');
+      }
+    } finally { lane.requests.delete(request); request.retire(); reconcileOwner(); }
+  };
+  useLayoutEffect(() => {
+    lane.active = true;
+    lane.generation = {};
+    lane.stage = stage;
+    const retire = () => {
+      lane.active = false;
+      for (const request of lane.requests) request.retire();
+      lane.requests.clear();
+      lane.intent?.request.retire();
+      lane.intent = null;
+      lane.stage = { name: 'idle' };
+      removePrintFrame();
+    };
+    const stop = owner.session.subscribe?.(() => {
+      if (!owner.isCurrent()) { retire(); replace(); }
+    });
+    void refreshStatus();
+    return () => { retire(); stop?.(); };
+  }, [lane, owner]);
 
   useEffect(() => {
-    if (stage.name !== 'backup-codes') removePrintFrame();
-    return removePrintFrame;
-  }, [stage.name, removePrintFrame]);
+    if (stage.name !== 'enrolling') return;
+    let retired = false;
+    void renderQrDataUri(stage.otpauthUrl).then((uri) => {
+      if (!retired && current() && lane.stage === stage) setQrDataUri(uri);
+    });
+    return () => { retired = true; };
+  }, [stage, lane, owner]);
 
-  const printCodes = useCallback(
-    (codes: string[]) => {
-      removePrintFrame();
-      const frame = document.createElement('iframe');
+  const resetFlow = () => {
+    if (!current() || lane.intent || lane.stage !== stage) return;
+    changeStage({ name: 'idle' });
+    setActionError(null);
+  };
+  const copyText = async (text: string, what: 'secret' | 'codes') => {
+    if (!current() || lane.stage !== stage || blocked) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (current() && lane.stage === stage) setCopied(what);
+    } catch { if (current() && lane.stage === stage) setCopied(null); }
+  };
+  const release = (intent: Intent) => {
+    if (!owns(intent)) return;
+    intent.request.retire();
+    lane.intent = null;
+    owner.pending = false;
+    setBusy(false);
+  };
+  const begin = (action: TwoFactorAction) => {
+    if (!current() || blocked || lane.intent || lane.stage !== stage) return;
+    if (action === 'verify' ? stage.name !== 'enrolling' : stage.name !== 'idle') return;
+    if (!status || lane.status !== status || statusError) return;
+    if (action === 'setup' && (status.enabled || !status.enrollmentAvailable)) return;
+    if ((action === 'regenerate' || action === 'disable') && !status.enabled) return;
+    if (action === 'regenerate' && !status.enrollmentAvailable) return;
+    const draft = code.trim();
+    if (action === 'verify' && !/^\d{6}$/.test(draft)) {
+      setActionError('Enter the current 6-digit code from your authenticator app.');
+      return;
+    }
+    const intent: Intent = { generation: lane.generation, action, dispatched: false, started: false,
+      request: createRequestAuthority(owner.session, () => owns(intent), () => {
+        intent.dispatched = true; owner.pending = true;
+      }) };
+    lane.intent = intent;
+    setBusy(true);
+    setActionError(null);
+    const run = async () => {
+      if (!owns(intent) || intent.started) return;
+      intent.started = true;
+      try {
+        const send = (headers: Record<string, string>) => sendTwoFactorMutation(intent.request, action, headers, draft);
+        const response = action === 'verify' ? await send({}) : await withStepUp(send, null, {
+          authority: intent.request, onStepUpRequired: () => {
+            if (owns(intent)) { intent.dispatched = false; owner.pending = false; }
+          },
+        });
+        intent.request.assertCurrent();
+        const receipt = await readTwoFactorReceipt(intent.request, response, action);
+        intent.request.assertCurrent();
+        owner.pending = false;
+        intent.dispatched = false;
+        if ('secret' in receipt) changeStage({ name: 'enrolling', secret: receipt.secret, otpauthUrl: receipt.otpauth_url });
+        else if ('backup_codes' in receipt) changeStage({ name: 'backup-codes', codes: receipt.backup_codes,
+          reason: action === 'verify' ? 'enabled' : 'regenerated' });
+        else changeStage({ name: 'idle' });
+        if (current()) invalidateMfaReaders(owner.session);
+        release(intent);
+        if (action !== 'setup') void refreshStatus();
+      } catch (error) {
+        if (!owns(intent)) return;
+        if (intent.dispatched) {
+          intent.request.retire();
+          replace(true);
+        } else {
+          release(intent);
+          if (!isStepUpCancelled(error)) setActionError('The request could not be completed.');
+        }
+      }
+    };
+    if (action === 'disable' || action === 'regenerate' || action === 'verify') {
+      confirm({ title: action === 'verify' ? 'Enable two-factor authentication?' : action === 'disable' ? 'Turn off two-factor authentication?' : 'Replace your backup codes?',
+        description: action === 'verify'
+          ? 'Sign-in will require your authenticator or a backup code. Save the backup codes shown next; they cannot be recovered if lost. This security change may also sign out sessions and revoke linked-device credentials.'
+          : action === 'disable'
+          ? 'Your authenticator and backup codes will stop protecting sign-in. You will need a new setup to enable them again. This security change may also sign out sessions and revoke linked-device credentials.'
+          : 'Every previous backup code will stop working. The new codes are shown only once and cannot be recovered if lost. This security change may also sign out sessions and revoke linked-device credentials.',
+        confirmLabel: action === 'verify' ? 'Enable two-factor' : action === 'disable' ? 'Turn off two-factor' : 'Replace backup codes',
+        onConfirm: run, onCancel: () => { if (current() && !intent.started) release(intent); } });
+    } else void run();
+  };
+  const handleStartSetup = () => begin('setup');
+  const handleVerify = () => begin('verify');
+  const handleDisable = () => begin('disable');
+  const handleRegenerate = () => begin('regenerate');
+  const handleDismissBackupCodes = () => {
+    if (!current() || lane.stage !== stage || !acknowledged || lane.intent) return;
+    resetFlow();
+    void refreshStatus();
+  };
+  const printCodes = (codes: string[]) => {
+    if (!current() || lane.stage !== stage || stage.name !== 'backup-codes' || blocked) return;
+    removePrintFrame();
+    const frame = document.createElement('iframe');
+    const remove = () => { frame.remove(); if (printFrameRef.current === frame) printFrameRef.current = null; };
+    try {
       frame.setAttribute('sandbox', PRINT_FRAME_SANDBOX);
       frame.title = BACKUP_CODES_PRINT_TITLE;
       frame.setAttribute('aria-hidden', 'true');
       frame.tabIndex = -1;
       frame.className = PRINT_FRAME_CLASS;
       document.body.append(frame);
+      printFrameRef.current = frame;
       const doc = frame.contentDocument;
       const view = frame.contentWindow;
-      if (!doc || !view) {
-        frame.remove();
-        setPrintError(BACKUP_CODES_PRINT_FAILED);
-        return;
-      }
-      printFrameRef.current = frame;
-      setPrintError(null);
-      const heading = doc.createElement('h1');
-      heading.textContent = BACKUP_CODES_PRINT_TITLE;
-      const note = doc.createElement('p');
-      note.textContent = BACKUP_CODES_PRINT_NOTE;
+      if (!doc || !view) throw new Error('Print unavailable');
+      const heading = doc.createElement('h1'); heading.textContent = BACKUP_CODES_PRINT_TITLE;
+      const note = doc.createElement('p'); note.textContent = BACKUP_CODES_PRINT_NOTE;
       const list = doc.createElement('ul');
-      for (const code of codes) {
-        const item = doc.createElement('li');
-        item.textContent = code;
-        list.append(item);
-      }
+      for (const code of codes) { const item = doc.createElement('li'); item.textContent = code; list.append(item); }
       doc.title = BACKUP_CODES_PRINT_TITLE;
       doc.body.append(heading, note, list);
-      view.addEventListener('afterprint', removePrintFrame, { once: true });
-      view.focus();
-      view.print();
-    },
-    [removePrintFrame],
-  );
-
-  const downloadCodes = useCallback((codes: string[]) => {
-    const blob = new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'agiworkforce-backup-codes.txt';
-    link.click();
-    URL.revokeObjectURL(url);
-  }, []);
+      view.addEventListener('afterprint', remove, { once: true });
+      if (!current() || lane.stage !== stage) { remove(); return; }
+      view.focus(); view.print();
+    } catch {
+      remove();
+      if (current() && lane.stage === stage) setPrintError(BACKUP_CODES_PRINT_FAILED);
+    }
+  };
+  const downloadCodes = (codes: string[]) => {
+    if (!current() || lane.stage !== stage || stage.name !== 'backup-codes' || blocked) return;
+    let url: string | null = null;
+    try {
+      url = URL.createObjectURL(new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' }));
+      const link = document.createElement('a'); link.href = url; link.download = 'agiworkforce-backup-codes.txt';
+      if (current() && lane.stage === stage) link.click();
+    } catch { if (current()) setActionError('The codes could not be downloaded. Copy or print them instead.'); }
+    finally { if (url) URL.revokeObjectURL(url); }
+  };
 
   const enabled = status?.enabled === true;
   const enrollmentAvailable = status?.enrollmentAvailable === true;
-
+  if (!owner.isCurrent()) return null;
+  if (blocked) return <Alert variant="warning"><AlertDescription>{UNCERTAIN}</AlertDescription>
+    <Button type="button" onClick={() => { if (current()) acknowledge(); }}>I understand; allow another action</Button>
+    <p>This only clears the local warning. It does not confirm recovery or undo a change.</p>
+  </Alert>;
   return (
     <Card className="border-border bg-card">
       <CardHeader>
@@ -316,7 +344,9 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
           Authenticator app
         </CardTitle>
         <CardDescription>
-          {enabled
+          {status === null
+            ? 'Your current authenticator status has not been confirmed.'
+            : enabled
             ? 'Two-factor authentication is on. Every sign-in asks for a code from your authenticator app, and so does turning it off or replacing your backup codes.'
             : enrollmentAvailable
               ? 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'
@@ -333,7 +363,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
           </Alert>
         ) : null}
 
-        {status === null ? (
+        {status === null && !statusError ? (
           <p className="text-sm text-muted-foreground">Checking two-factor status...</p>
         ) : null}
 
@@ -366,8 +396,8 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
               aria-label="Backup codes"
               className="grid grid-cols-2 gap-2 rounded-md bg-muted p-3 font-mono text-sm text-foreground"
             >
-              {stage.codes.map((backupCode) => (
-                <li key={backupCode}>{backupCode}</li>
+              {stage.codes.map((backupCode, index) => (
+                <li key={`${index}:${backupCode}`}>{backupCode}</li>
               ))}
             </ul>
             <div className="flex flex-wrap gap-2">
@@ -412,7 +442,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
               <input
                 type="checkbox"
                 checked={acknowledged}
-                onChange={(event) => setAcknowledged(event.target.checked)}
+                onChange={(event) => { if (current() && lane.stage === stage) setAcknowledged(event.target.checked); }}
               />
               I have saved these backup codes somewhere safe
             </label>
@@ -485,7 +515,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 maxLength={6}
                 placeholder="123456"
                 value={code}
-                onChange={(event) => setCode(event.target.value)}
+                onChange={(event) => { if (current() && lane.stage === stage && !lane.intent) setCode(event.target.value); }}
                 className="max-w-[10rem] border-border bg-background font-mono text-foreground"
               />
               <p className="text-xs text-muted-foreground">
@@ -508,6 +538,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
           </div>
         ) : null}
 
+        {confirmDialog}
         {stepUpDialog}
 
         {/* ---------------------------------------------------------------- */}
@@ -561,7 +592,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                   Set up authenticator app
                 </Button>
               )}
-              {enrollmentAvailable ? null : (
+              {status === null || enrollmentAvailable ? null : (
                 <span className="self-center text-sm text-muted-foreground">
                   Temporarily unavailable
                 </span>

@@ -129,7 +129,7 @@ vi.mock('@/lib/connectors/google-drive-files', () => ({
 }));
 vi.mock('@/lib/server/project-knowledge-files', () => ({
   checkProjectKnowledgeCapacity: vi.fn(),
-  findOwnedProjectKnowledgeFile: vi.fn(),
+  findReadableProjectKnowledgeFile: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),

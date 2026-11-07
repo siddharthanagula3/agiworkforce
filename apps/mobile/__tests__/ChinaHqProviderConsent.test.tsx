@@ -1,5 +1,12 @@
 const mockStorage = new Map<string, string>();
 
+jest.mock('@/src/features/auth/store', () => {
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  return { useAuthStore: create(() => ({
+    isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null,
+  })) };
+});
+
 jest.mock('@/lib/mmkv', () => ({
   storage: {
     getString: (key: string) => mockStorage.get(key),

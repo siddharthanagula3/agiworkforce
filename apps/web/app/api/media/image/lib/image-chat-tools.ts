@@ -304,19 +304,22 @@ function imageCard(
 }
 
 async function editSource(
-  context: Pick<ImageChatToolContext, 'userId' | 'db' | 'conversationId' | 'latestAttachedImage'>,
+  context: Pick<
+    ImageChatToolContext,
+    'userId' | 'organizationId' | 'db' | 'conversationId' | 'latestAttachedImage'
+  >,
   imageAssetId: string | undefined,
 ): Promise<{ asset_id: string } | { b64_json: string } | null> {
   try {
     const attached = context.latestAttachedImage();
     if (attached) return imageAssetId ? null : { b64_json: attached };
     if (imageAssetId) {
-      if (!context.conversationId) return null;
+      if (!context.conversationId || context.organizationId === undefined) return null;
       const asset = await getActiveWorkspaceMediaAssetById(
         context.userId,
         imageAssetId,
         context.db,
-        { conversationId: context.conversationId },
+        { conversationId: context.conversationId, organizationId: context.organizationId },
       );
       return asset?.kind === 'image' ? { asset_id: imageAssetId } : null;
     }
@@ -334,7 +337,10 @@ async function editSource(
 }
 
 export async function imageChatSourceAvailable(
-  context: Pick<ImageChatToolContext, 'userId' | 'db' | 'conversationId' | 'latestAttachedImage'>,
+  context: Pick<
+    ImageChatToolContext,
+    'userId' | 'organizationId' | 'db' | 'conversationId' | 'latestAttachedImage'
+  >,
 ): Promise<boolean> {
   return (await editSource(context, undefined)) !== null;
 }

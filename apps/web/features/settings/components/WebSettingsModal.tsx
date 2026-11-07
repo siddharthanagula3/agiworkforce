@@ -247,18 +247,19 @@ export function WebSettingsModal({
       ? { plugins: <CapabilityDeniedNotice reason={pluginsDecision.reason} /> }
       : {}),
     general: <GeneralSection />,
-    account: <AccountSection />,
+    account: <AccountSection emailEditorActive={open && activeSection === 'account'} />,
     team: (
       <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
         <WorkspaceConsolePointer />
-        <TeamSection />
+        <TeamSection active={open && activeSection === 'team'} />
       </div>
     ),
-    security: <SecuritySection />,
+    security: <SecuritySection deviceSignInActive={open && activeSection === 'security'} twoFactorActive={open && activeSection === 'security'} passwordEditorActive={open} signInMethodsActive={open && activeSection === 'security'} />,
     safety: <SafetySection />,
-    privacy: <PrivacySection />,
-    archived: <ArchivedChatsSection />,
-    'deleted-chats': <DeletedChatsSection />,
+    // Retire privacy intents on close, before the dialog's exit animation ends.
+    privacy: open ? <PrivacySection /> : <></>,
+    archived: open ? <ArchivedChatsSection /> : <></>,
+    'deleted-chats': open ? <DeletedChatsSection /> : <></>,
     'shared-links': <SharedLinksSection />,
     billing: <BillingSection />,
     usage: <UsageSection />,
@@ -268,9 +269,9 @@ export function WebSettingsModal({
     notifications: <NotificationsSection />,
     voice: <VoiceSection />,
     keyboard: <KeyboardShortcutsPane shortcuts={KEYBOARD_SHORTCUT_DOCS} />,
-    reflect: <ReflectSection />,
+    reflect: <ReflectSection active={open && activeSection === 'reflect'} />,
     'time-focus': <TimeFocusSection />,
-    slack: <SlackSection />,
+    slack: <SlackSection active={open && activeSection === 'slack'} />,
     help: <HelpSection />,
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };

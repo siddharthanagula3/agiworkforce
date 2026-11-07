@@ -374,7 +374,10 @@ describe('CloudAccountControls', () => {
 
   it('requires the typed confirmation before deleting the Cloud account', async () => {
     const user = userEvent.setup();
-    mocks.requestCloudAccountDeletion.mockResolvedValue({ message: 'Deletion scheduled' });
+    mocks.requestCloudAccountDeletion.mockResolvedValue({
+      message: 'Deletion scheduled', scheduledFor: '2026-11-06T18:00:00.000Z',
+      status: 'pending', statusReason: 'Grace window pending',
+    });
 
     render(<CloudAccountControls />);
 
@@ -387,5 +390,13 @@ describe('CloudAccountControls', () => {
     await user.click(deleteButton);
     await waitFor(() => expect(mocks.requestCloudAccountDeletion).toHaveBeenCalledOnce());
     expect(await screen.findByText('Deletion scheduled')).toBeTruthy();
+    expect(screen.getByText(/after a grace period/)).toBeTruthy();
+    expect(screen.getByText(/Local Mode chats, files, and model keys stay/)).toBeTruthy();
+    mocks.requestCloudAccountDeletion.mockRejectedValueOnce(new Error('Could not confirm account deletion scheduling.'));
+    await user.type(screen.getByLabelText(/Type DELETE to confirm/i), 'DELETE');
+    await user.click(deleteButton);
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not confirm account deletion scheduling.');
+    expect(screen.queryByText('Deletion scheduled')).toBeNull();
+    expect(mocks.requestCloudAccountDeletion).toHaveBeenCalledTimes(2);
   });
 });

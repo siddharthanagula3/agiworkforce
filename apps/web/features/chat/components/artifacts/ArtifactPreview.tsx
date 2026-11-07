@@ -93,7 +93,12 @@ import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
-import { loadWorkbookSheets } from '../../lib/office-file-preview';
+import {
+  loadWorkbookSheets,
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
+import { storedOfficeArchive } from '../../lib/office-archive';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
 import { ArtifactChangesReview } from './review/ArtifactChangesReview';
@@ -641,7 +646,9 @@ export function ArtifactPreview({
           const binary = artifact.content;
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
         }
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const result = await mammoth.convertToHtml({
+          arrayBuffer: await storedOfficeArchive(arrayBuffer),
+        });
         if (!cancelled) setDocxHtml(result.value);
       } catch (err) {
         if (!cancelled) setDocxError(toUserMessage(err, 'DOCX conversion failed'));
@@ -708,52 +715,54 @@ export function ArtifactPreview({
     for (const raw of candidates) {
       if (!raw) continue;
       const value = raw.trim();
-      if (value.toLowerCase().startsWith('data:application/pdf')) return value;
+      if (/^data:application\/pdf(?:;[^,]*)?,/i.test(value)) return value;
       if (value.startsWith('blob:')) return value;
       // Same-origin http(s) URL pointing at a PDF (never an arbitrary origin).
-      if (typeof window !== 'undefined' && /^https?:\/\//i.test(value)) {
+      if (
+        typeof window !== 'undefined' &&
+        (/^https?:\/\//i.test(value) || value.startsWith('/'))
+      ) {
         try {
-          const url = new URL(value);
+          const url = new URL(value, window.location.origin);
           if (
+            (url.protocol === 'http:' || url.protocol === 'https:') &&
             url.origin === window.location.origin &&
             (url.pathname.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))
           ) {
             if (url.pathname.startsWith('/api/files/')) url.searchParams.set('preview', 'pdf');
-            return url.href;
+            return value.startsWith('/') && !url.pathname.startsWith('//')
+              ? `${url.pathname}${url.search}${url.hash}`
+              : url.href;
           }
         } catch {
           // noop
         }
-      }
-      // Relative same-origin path.
-      if (value.startsWith('/') && (value.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))) {
-        if (value.startsWith('/api/files/')) {
-          const url = new URL(value, window.location.origin);
-          url.searchParams.set('preview', 'pdf');
-          return `${url.pathname}${url.search}${url.hash}`;
-        }
-        return value;
       }
     }
     return null;
   }, [isPdf, artifact.content, generatedFileSummary.primaryUri, generatedFileSummary.mimeType]);
 
   const isBlobPdf = Boolean(pdfSrc?.startsWith('blob:'));
-  const [pdfBlobOk, setPdfBlobOk] = useState<boolean | null>(null);
+  const [pdfBlobVerification, setPdfBlobVerification] = useState<{
+    src: string;
+    allowed: boolean;
+  } | null>(null);
+  const pdfBlobOk = pdfBlobVerification?.src === pdfSrc ? pdfBlobVerification.allowed : null;
   useEffect(() => {
     if (!pdfSrc || !pdfSrc.startsWith('blob:')) {
-      setPdfBlobOk(null);
+      setPdfBlobVerification(null);
       return;
     }
     let cancelled = false;
-    setPdfBlobOk(null);
+    setPdfBlobVerification(null);
     fetch(pdfSrc)
       .then((r) => r.blob())
       .then((b) => {
-        if (!cancelled) setPdfBlobOk(b.type === 'application/pdf');
+        if (!cancelled)
+          setPdfBlobVerification({ src: pdfSrc, allowed: b.type === 'application/pdf' });
       })
       .catch(() => {
-        if (!cancelled) setPdfBlobOk(false);
+        if (!cancelled) setPdfBlobVerification({ src: pdfSrc, allowed: false });
       });
     return () => {
       cancelled = true;
@@ -1636,19 +1645,25 @@ export function ArtifactPreview({
     uri: string;
     sheets: { name: string; content: string }[];
   } | null>(null);
+  const [oversizedWorkbookUri, setOversizedWorkbookUri] = useState<string | null>(null);
   useEffect(() => {
     if (!workbookUri) return;
     let cancelled = false;
     loadWorkbookSheets(workbookUri)
       .then((sheets) => {
-        if (!cancelled)
+        if (!cancelled) {
+          setOversizedWorkbookUri(null);
           setWorkbookSheets({
             uri: workbookUri,
             sheets: sheets.map((sheet) => ({ name: sheet.name, content: sheet.csv })),
           });
+        }
       })
-      .catch(() => {
-        if (!cancelled) setWorkbookSheets(null);
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setWorkbookSheets(null);
+          setOversizedWorkbookUri(error instanceof WorkbookPreviewLimitError ? workbookUri : null);
+        }
       });
     return () => {
       cancelled = true;
@@ -1722,6 +1737,11 @@ export function ArtifactPreview({
 
   const renderSharedPreview = (containerClassName: string) => (
     <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
+      {workbookUri && oversizedWorkbookUri === workbookUri && (
+        <p role="status" className="p-3 text-sm text-muted-foreground">
+          {WORKBOOK_PREVIEW_TOO_LARGE}
+        </p>
+      )}
       {isTabular ? (
         <SpreadsheetArtifact
           artifact={sharedArtifactView}

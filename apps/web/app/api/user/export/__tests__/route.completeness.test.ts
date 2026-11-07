@@ -3,10 +3,11 @@ import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockExecute, mockGetClerkAuthUser } = vi.hoisted(() => ({
+const { mockQuery, mockExecute, mockGetClerkAuthUser, mockInvoicePage } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
+  mockInvoicePage: vi.fn(),
 }));
 
 vi.mock('@/lib/error-handler', () => ({
@@ -34,7 +35,9 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/services/billing-invoice-service', () => ({
+  BILLING_INVOICE_PAGE_LIMIT: 24,
   listUserBillingInvoices: vi.fn(async () => []),
+  readUserBillingInvoicePage: mockInvoicePage,
 }));
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: vi.fn(async () => ({})),
@@ -61,7 +64,10 @@ describe('GET /api/user/export completeness', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_export', email: 'user@example.com' });
-    mockQuery.mockResolvedValue([]);
+    mockQuery.mockReset().mockResolvedValue([]);
+    mockInvoicePage.mockReset().mockResolvedValue({
+      invoices: [], available: true, hasMore: false, truncatedLineItems: [],
+    });
   });
 
   it('says a capped section is truncated instead of calling the export complete', async () => {
@@ -103,6 +109,88 @@ describe('GET /api/user/export completeness', () => {
       status: 'complete',
       unavailable_sections: [],
       skipped_rows: [],
+    });
+  });
+
+  it.each(['json', 'download'])('reports invoice and embedded line limits in %s output', async (format) => {
+    const invoices = [
+      { id: 'in_outer', line_items: [{ id: 'line_returned' }] },
+      { id: 'in_empty', line_items: [] },
+    ];
+    mockInvoicePage.mockResolvedValue({
+      invoices,
+      available: true,
+      hasMore: true,
+      truncatedLineItems: [
+        { invoiceId: 'in_outer', returnedCount: 1 },
+        { invoiceId: 'in_empty', returnedCount: 0 },
+      ],
+    });
+
+    const response = await GET(exportRequest(
+      `https://agiworkforce.com/api/user/export${format === 'download' ? '?download=true' : ''}`,
+    ));
+    const body = await response.json();
+    const data = format === 'download' ? body : body.data;
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Export-Status')).toBe('partial');
+    expect(data.billing_invoices).toEqual(invoices);
+    expect(data.export_metadata.completeness.truncated_sections).toEqual([
+      { section: 'billing_invoices', limit: 24 },
+      { section: 'billing_invoices.in_empty.line_items', limit: 0 },
+      { section: 'billing_invoices.in_outer.line_items', limit: 1 },
+    ]);
+    expect(data.export_metadata.completeness.retry).toContain('does not retrieve the omitted rows');
+    if (format === 'json') {
+      expect(body.success).toBe(false);
+      expect(body.status).toBe('partial');
+    }
+    expect(mockInvoicePage).toHaveBeenCalledExactlyOnceWith(expect.anything(), 'user_export');
+  });
+
+  it('marks embedded lines partial even when the invoice page is complete', async () => {
+    const invoices = [{ id: 'in_partial_lines', line_items: [{ id: 'line_returned' }] }];
+    mockInvoicePage.mockResolvedValue({
+      invoices, available: true, hasMore: false,
+      truncatedLineItems: [{ invoiceId: 'in_partial_lines', returnedCount: 1 }],
+    });
+
+    const body = await (await GET(exportRequest())).json();
+
+    expect(body.success).toBe(false);
+    expect(body.data.billing_invoices).toEqual(invoices);
+    expect(body.data.export_metadata.completeness).toMatchObject({
+      status: 'partial',
+      unavailable_sections: [],
+      truncated_sections: [{ section: 'billing_invoices.in_partial_lines.line_items', limit: 1 }],
+    });
+  });
+
+  it('marks absent invoice-provider configuration unavailable instead of verified empty', async () => {
+    mockInvoicePage.mockResolvedValue({
+      invoices: [], available: false, hasMore: false, truncatedLineItems: [],
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(response.headers.get('X-Export-Status')).toBe('partial');
+    expect(body.data.billing_invoices).toEqual([]);
+    expect(body.data.export_metadata.completeness).toMatchObject({
+      status: 'partial', unavailable_sections: ['billing_invoices'], truncated_sections: [],
+    });
+  });
+
+  it.each(['provider unavailable', 'Billing invoice pagination metadata is invalid'])('marks rejected invoice reads unavailable: %s', async (message) => {
+    mockInvoicePage.mockRejectedValue(new Error(message));
+
+    const body = await (await GET(exportRequest())).json();
+
+    expect(body.success).toBe(false);
+    expect(body.data.billing_invoices).toEqual([]);
+    expect(body.data.export_metadata.completeness).toMatchObject({
+      status: 'partial', unavailable_sections: ['billing_invoices'], truncated_sections: [],
     });
   });
 

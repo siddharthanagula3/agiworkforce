@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { responseErrorMessage } from '@/shared/utils/api-error';
 
@@ -99,7 +100,7 @@ export default function WorkspaceDeletionPage() {
     void load();
   }, [load]);
 
-  const scheduleDeletion = useCallback(async () => {
+  const scheduleDeletion = useCallback(async (organizationId: string, confirmation: string) => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -108,8 +109,12 @@ export default function WorkspaceDeletionPage() {
       const response = await fetch('/api/settings/organization', {
         method: 'DELETE',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-        body: JSON.stringify({ confirm: typedConfirmation.trim() }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf,
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
+        },
+        body: JSON.stringify({ confirm: confirmation }),
       });
       if (!response.ok) {
         setError(await responseErrorMessage(response));
@@ -120,13 +125,15 @@ export default function WorkspaceDeletionPage() {
       setTypedConfirmation('');
       await load();
     } catch {
-      setError('Could not reach the workspace settings API. Nothing was scheduled.');
+      setError(
+        'Could not confirm whether workspace deletion was scheduled. Check its current status before trying again.',
+      );
     } finally {
       setBusy(false);
     }
-  }, [load, typedConfirmation]);
+  }, [load]);
 
-  const cancelDeletion = useCallback(async () => {
+  const cancelDeletion = useCallback(async (organizationId: string) => {
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -135,7 +142,11 @@ export default function WorkspaceDeletionPage() {
       const response = await fetch('/api/settings/organization/deletion/cancel', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf,
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
+        },
       });
       if (!response.ok) {
         setError(await responseErrorMessage(response));
@@ -145,7 +156,9 @@ export default function WorkspaceDeletionPage() {
       setNotice(body.message ?? 'Workspace deletion cancelled.');
       await load();
     } catch {
-      setError('Could not reach the workspace settings API. The deletion is still scheduled.');
+      setError(
+        'Could not confirm whether workspace deletion was cancelled. Check its current status before trying again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -211,13 +224,13 @@ export default function WorkspaceDeletionPage() {
                   Deletion is scheduled for {formatTimestamp(deletion.scheduledFor)}.{' '}
                   {deletion.canCancel
                     ? 'Cancel before then and nothing is lost.'
-                    : 'The cancellation window has closed and erasure is underway.'}
+                    : 'The cancellation window has closed. Deletion can no longer be cancelled here.'}
                 </p>
                 {deletion.canCancel ? (
                   <button
                     type="button"
                     disabled={busy || !isOwner}
-                    onClick={() => void cancelDeletion()}
+                    onClick={() => void cancelDeletion(workspace.id)}
                     className="self-start rounded-compact border border-border px-3 py-2 text-sm text-foreground disabled:opacity-50"
                   >
                     Cancel deletion and keep this workspace
@@ -233,7 +246,7 @@ export default function WorkspaceDeletionPage() {
                     title: `Schedule ${workspace.name} for deletion?`,
                     description: deletionConsequence(workspace),
                     confirmLabel: 'Schedule deletion',
-                    onConfirm: () => scheduleDeletion(),
+                    onConfirm: () => scheduleDeletion(workspace.id, typedConfirmation.trim()),
                   });
                 }}
               >

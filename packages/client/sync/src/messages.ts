@@ -2,6 +2,11 @@ import type { MessageWireDelta } from '@agiworkforce/cloud-contracts';
 
 export type SyncMessageRole = 'user' | 'assistant' | 'system';
 
+export interface DirtyMessageRef {
+  conversationId: string;
+  messageId: string;
+}
+
 export interface SyncMessageRecord {
   id: string;
   role: string;
@@ -34,7 +39,14 @@ export function isSyncableMessageRole(role: string): role is SyncMessageRole {
 export function applyMessageDeltas(
   port: MessageStorePort,
   deltas: ReadonlyArray<MessageWireDelta>,
+  dirtyMessages: ReadonlyArray<DirtyMessageRef> = [],
 ): void {
+  const dirtyByConversation = new Map<string, Set<string>>();
+  for (const ref of dirtyMessages) {
+    const ids = dirtyByConversation.get(ref.conversationId) ?? new Set<string>();
+    ids.add(ref.messageId);
+    dirtyByConversation.set(ref.conversationId, ids);
+  }
   const byConversation = new Map<string, MessageWireDelta[]>();
   for (const d of deltas) {
     const list = byConversation.get(d.conversation_id) ?? [];
@@ -50,15 +62,16 @@ export function applyMessageDeltas(
         merged.delete(d.id);
         continue;
       }
+      const local = merged.get(d.id);
       const {
         model: localModel,
         provider: localProvider,
         ...existing
-      }: Partial<SyncMessageRecord> = merged.get(d.id) ?? {};
+      }: Partial<SyncMessageRecord> = local ?? {};
       const askedWith = d.role === 'user' ? { model: localModel, provider: localProvider } : {};
       const model = d.model || askedWith.model;
       const provider = d.provider || askedWith.provider;
-      merged.set(d.id, {
+      const record: SyncMessageRecord = {
         ...existing,
         id: d.id,
         role: d.role,
@@ -72,7 +85,23 @@ export function applyMessageDeltas(
         metadata: d.metadata,
         deletedAt: d.deleted_at,
         serverVersion: d.server_version,
-      });
+      };
+      if (
+        !d.deleted_at &&
+        local &&
+        isSyncableMessageRole(local.role) &&
+        dirtyByConversation.get(conversationId)?.has(d.id)
+      ) {
+        const pushed = toMessagePushItem(conversationId, { ...local, role: local.role });
+        Object.assign(record, {
+          role: pushed.role,
+          content: pushed.content,
+          metadata: pushed.metadata,
+          ...(pushed.model ? { model: pushed.model } : {}),
+          ...(pushed.provider ? { provider: pushed.provider } : {}),
+        });
+      }
+      merged.set(d.id, record);
     }
     const ordered = Array.from(merged.values()).sort((a, b) => {
       const at = a.createdAt ?? '';

@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,15 +27,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -249,6 +258,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 function openConversationWithMessages(): void {
@@ -296,7 +307,7 @@ describe('WebChatPage highlightMessage query parameter (F15)', () => {
     mocks.highlightParam = FIRST_MESSAGE_ID;
     openConversationWithMessages();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() =>
       expect(
@@ -311,7 +322,7 @@ describe('WebChatPage highlightMessage query parameter (F15)', () => {
     mocks.highlightParam = '"],*{x:1},[x="';
     openConversationWithMessages();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     expect(await screen.findByTestId('message-list')).toBeTruthy();
     expect(screen.getByText('Find this later')).toBeTruthy();

@@ -21,7 +21,8 @@ import {
 import { z } from 'zod';
 import {
   MANAGED_CLOUD_APPROVAL_HISTORY_PATH,
-  type ManagedCloudWorkspaceOwnershipTransfer,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -43,15 +44,21 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
-import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './useStepUp';
-import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
+import { useSelectWorkspace, useWorkspaceSelectionMutation } from '@/features/workspaces/hooks/use-workspaces';
+import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspaces/hooks/use-workspace-query';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
   NO_PENDING_ACCOUNT_DELETION,
   parseAccountDeletionStatus,
+  parseAccountDeletionScheduleReceipt,
+  parseAccountDeletionCancellationReceipt,
   type AccountDeletionStatus,
+  type AccountDeletionScheduleReceipt,
+  type AccountDeletionCancellationReceipt,
 } from '@agiworkforce/cloud-contracts';
 
 // ============================================================================
@@ -64,6 +71,56 @@ import {
 export interface CreateAPIKeyResult {
   apiKey: APIKey;
   fullKey: string;
+}
+
+export interface APIKeyMutationScope {
+  readonly request: RequestAuthority;
+  readonly organizationId: string | null;
+  /** The first write was refused for step-up, so it did not create a key. */
+  readonly onStepUpRequired: () => void;
+}
+
+export class APIKeyMutationRejectedError extends Error {}
+
+async function sendOwnedAPIKeyRequest(
+  scope: APIKeyMutationScope,
+  path: string,
+  method: 'POST' | 'DELETE',
+  body?: string,
+  stepUpHeaders: Record<string, string> = {},
+): Promise<Response> {
+  scope.request.assertCurrent();
+  const csrfToken = await getCsrfToken();
+  scope.request.assertCurrent();
+  return scope.request.fetch(path, {
+    method,
+    headers: {
+      ...stepUpHeaders,
+      'Content-Type': 'application/json',
+      'x-csrf-token': csrfToken,
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]:
+        scope.organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    },
+    ...(body === undefined ? {} : { body }),
+  });
+}
+
+async function readOwnedAPIKeyReceipt(scope: APIKeyMutationScope, response: Response): Promise<unknown> {
+  scope.request.assertCurrent();
+  if (!response.ok) {
+    const message = await readApiError(response);
+    scope.request.assertCurrent();
+    if (response.status >= 400 && response.status < 500) throw new APIKeyMutationRejectedError(message);
+    throw new Error(message);
+  }
+  const body: unknown = await response.json();
+  scope.request.assertCurrent();
+  return body;
+}
+
+function apiKeyReceiptRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : null;
 }
 
 /**
@@ -110,55 +167,38 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
   });
 }
 
-/**
- * Fetch API keys
- *
- * @returns UseQueryResult with array of APIKey
- */
-export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
-  return useQuery<APIKey[], Error>({
-    queryKey: queryKeys.settings.apiKeys(),
-    queryFn: async ({ signal }): Promise<APIKey[]> => {
-      const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
-      const requestSignal = AbortSignal.any([signal, timeoutSignal]);
+async function readAPIKeys({ request, headers }: WorkspaceQueryScope): Promise<APIKey[]> {
+  const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
+  const requestSignal = AbortSignal.any([request.signal, timeoutSignal]);
+  try {
+    const { data, error } = await withTimeout(
+      settingsService.getAPIKeys(requestSignal, { request, headers }),
+      TimeoutPresets.FAST,
+      'API keys took too long to load.',
+    );
+    request.assertCurrent();
+    requestSignal.throwIfAborted();
+    if (error) throw new Error(error);
+    return data;
+  } catch (error) {
+    // Ownership/caller cancellation is not a failed key load, including errors
+    // flattened by the service while a token or response body was pending.
+    if (!request.isCurrent()) throw error;
+    const message = timeoutSignal.aborted
+      ? 'API keys took too long to load. Please try again.'
+      : error instanceof Error ? error.message : 'Unable to load API keys.';
+    logger.error('[SettingsQuery] API keys error:', message);
+    throw new Error(message);
+  }
+}
 
-      try {
-        const { data, error } = await withTimeout(
-          settingsService.getAPIKeys(requestSignal),
-          TimeoutPresets.FAST,
-          'API keys took too long to load.',
-        );
-        if (error) throw new Error(error);
-        return data;
-      } catch (error) {
-        // A caller abort (unmount, navigation, a new query superseding this
-        // one) is normal cancellation, not a failure, the same reasoning as
-        // the signed-out suppression above. Only a genuine timeout is an error.
-        //
-        // Read from the SIGNAL, not from the error's name. The service catches
-        // its own rejection and returns `{ error: string }`, so the branch
-        // above rebuilds it as `new Error(error)` and the DOMException's
-        // `AbortError` name is gone by the time it lands here. The name check
-        // therefore never matched, and every settings section a user clicked
-        // away from logged `[SettingsQuery] API keys error: "signal is aborted
-        // without reason"` at error level. The signal cannot be reshaped by a
-        // layer in between.
-        const aborted = signal.aborted && !timeoutSignal.aborted;
-        if (aborted) throw error;
-        const message = timeoutSignal.aborted
-          ? 'API keys took too long to load. Please try again.'
-          : error instanceof Error
-            ? error.message
-            : 'Unable to load API keys.';
-        logger.error('[SettingsQuery] API keys error:', message);
-        throw new Error(message);
-      }
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    meta: {
-      errorMessage: 'Failed to load API keys',
-    },
+/** Fetch API keys only for the currently admitted account and workspace. */
+export function useAPIKeys() {
+  return useWorkspaceQuery(queryKeys.settings.apiKeys(), readAPIKeys, {
+    staleTime: 2 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    unavailableMessage: 'API keys are unavailable until your account and workspace are ready.',
+    reloadMessage: 'Reload this page to confirm your workspace before loading API keys.',
   });
 }
 
@@ -220,38 +260,69 @@ export function useUpdateSettings(): UseMutationResult<
   });
 }
 
-export type ChangePasswordMutation = UseMutationResult<void, Error, ChangePasswordParams> & {
-  stepUpDialog: ReactElement | null;
-};
+export interface PasswordMutationScope {
+  readonly request: RequestAuthority;
+  readonly onStepUpRequired: () => void;
+}
+
+export interface ChangePasswordReceipt {
+  success: true;
+  otherSessionsEnded: number;
+  otherSessionsRemaining: 0;
+  deviceCredentialsRevoked: number;
+}
+
+export class PasswordMutationRejectedError extends Error {}
+
+export type ChangePasswordMutation = UseMutationResult<
+  ChangePasswordReceipt,
+  Error,
+  { scope: PasswordMutationScope; draft: ChangePasswordParams }
+> & { stepUpDialog: ReactElement | null };
 
 export function useChangePassword(): ChangePasswordMutation {
   const { withStepUp, dialog } = useStepUp();
 
-  const mutation = useMutation<void, Error, ChangePasswordParams>({
-    mutationFn: async ({ currentPassword, newPassword, confirmPassword }) => {
+  const mutation = useMutation<ChangePasswordReceipt, Error,
+    { scope: PasswordMutationScope; draft: ChangePasswordParams }>({
+    retry: false,
+    gcTime: 0,
+    mutationFn: async ({ scope, draft }) => {
+      scope.request.assertCurrent();
+      const { currentPassword, newPassword, confirmPassword } = draft;
       if (newPassword !== confirmPassword) {
-        throw new Error('Passwords do not match');
+        throw new PasswordMutationRejectedError('Passwords do not match');
       }
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson(
-          '/api/settings/password',
-          {
-            method: 'POST',
-            body: { newPassword, ...(currentPassword === null ? {} : { currentPassword }) },
-          },
-          headers,
-        ),
-      );
-      if (!response.ok) throw new Error(await readApiError(response));
+      const body = JSON.stringify({ newPassword, ...(currentPassword === null ? {} : { currentPassword }) });
+      const response = await withStepUp(async (headers) => {
+        scope.request.assertCurrent();
+        const csrfToken = await getCsrfToken();
+        scope.request.assertCurrent();
+        return scope.request.fetch('/api/settings/password', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body,
+        });
+      }, null, { authority: scope.request, onStepUpRequired: scope.onStepUpRequired });
+      scope.request.assertCurrent();
+      if (!response.ok) {
+        const message = await readApiError(response);
+        scope.request.assertCurrent();
+        if (response.status >= 400 && response.status < 500) throw new PasswordMutationRejectedError(message);
+        throw new Error(message);
+      }
+      const receipt: unknown = await response.json();
+      scope.request.assertCurrent();
+      const parsed = z.object({
+        success: z.literal(true),
+        otherSessionsEnded: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        otherSessionsRemaining: z.literal(0),
+        deviceCredentialsRevoked: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      }).safeParse(receipt);
+      if (!parsed.success) throw new Error('The password change receipt could not be confirmed.');
+      return parsed.data;
     },
-    onSuccess: (): void => {
-      toast.success('Password changed. Your other devices were signed out.');
-    },
-    onError: (error: Error): void => {
-      if (isStepUpCancelled(error)) return;
-      logger.error('Error changing password:', error);
-      toast.error(toUserMessage(error, 'Failed to change password'));
-    },
+    onError: () => undefined,
   });
 
   return { ...mutation, stepUpDialog: dialog };
@@ -260,7 +331,7 @@ export function useChangePassword(): ChangePasswordMutation {
 export type CreateAPIKeyMutation = UseMutationResult<
   CreateAPIKeyResult,
   Error,
-  CreateApiKeyFormData
+  { scope: APIKeyMutationScope; draft: CreateApiKeyFormData }
 > & {
   stepUpDialog: ReactElement | null;
 };
@@ -269,13 +340,13 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
   const queryClient: QueryClient = useQueryClient();
   const { withStepUp, dialog } = useStepUp();
 
-  const mutation = useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
-    mutationFn: async ({
-      name,
-      scopes,
-      expiresInDays,
-      projectId,
-    }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
+  const mutation = useMutation<CreateAPIKeyResult, Error,
+    { scope: APIKeyMutationScope; draft: CreateApiKeyFormData }>({
+    retry: false,
+    gcTime: 0,
+    mutationFn: async ({ scope, draft }): Promise<CreateAPIKeyResult> => {
+      scope.request.assertCurrent();
+      const { name, scopes, expiresInDays, projectId } = draft;
       if (!name.trim()) {
         throw new Error('Please enter a name for the API key');
       }
@@ -283,28 +354,30 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
         !expiresInDays || expiresInDays === 'never'
           ? null
           : new Date(Date.now() + Number(expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
-      const response = await withStepUp((headers) =>
-        sendAuthorizedJson(
-          '/api/settings/api-keys',
-          { method: 'POST', body: { name, scopes, expiresAt, projectId: projectId ?? null } },
-          headers,
-        ),
+      // Freeze both form values and expiry before auth waits or a proof replay.
+      const body = JSON.stringify({ name, scopes: [...scopes], expiresAt, projectId: projectId ?? null });
+      const response = await withStepUp(
+        (headers) => sendOwnedAPIKeyRequest(scope, '/api/settings/api-keys', 'POST', body, headers),
+        null,
+        { authority: scope.request, onStepUpRequired: scope.onStepUpRequired },
       );
-      if (!response.ok) throw new Error(await readApiError(response));
-      const created = (await response.json()) as { api_key: APIKey; full_key: string };
-      return { apiKey: created.api_key, fullKey: created.full_key };
+      const created = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
+      scope.request.assertCurrent();
+      const key = apiKeyReceiptRecord(created?.api_key);
+      if (typeof key?.id !== 'string' || !key.id ||
+        typeof created?.full_key !== 'string' || !created.full_key) {
+        throw new Error('The API key creation receipt could not be confirmed.');
+      }
+      return { apiKey: key as unknown as APIKey, fullKey: created.full_key };
     },
-    onSuccess: ({ apiKey }: CreateAPIKeyResult): void => {
-      queryClient.setQueryData<APIKey[]>(queryKeys.settings.apiKeys(), (old) =>
-        old ? [apiKey, ...old] : [apiKey],
-      );
-      toast.success('API key generated successfully');
+    onSuccess: (_receipt, { scope }): void => {
+      // Do not delay the once-only key receipt behind a background list reload.
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
+      }
     },
-    onError: (error: Error): void => {
-      if (isStepUpCancelled(error)) return;
-      logger.error('Error generating API key:', error);
-      toast.error(toUserMessage(error, 'Failed to generate API key'));
-    },
+    // The intent-owning UI presents errors; the shared MutationCache still logs.
+    onError: () => undefined,
   });
 
   return { ...mutation, stepUpDialog: dialog };
@@ -315,44 +388,38 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
  *
  * @returns UseMutationResult for deleting API key
  */
-export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
+export function useDeleteAPIKey(): UseMutationResult<string, Error,
+  { scope: APIKeyMutationScope; keyId: string }> {
   const queryClient: QueryClient = useQueryClient();
 
-  return useMutation<string, Error, string>({
-    mutationFn: async (keyId: string): Promise<string> => {
-      const { error } = await settingsService.deleteAPIKey(keyId);
-      if (error) {
-        throw new Error(error);
+  return useMutation<string, Error, { scope: APIKeyMutationScope; keyId: string }>({
+    retry: false,
+    mutationFn: async ({ scope, keyId }): Promise<string> => {
+      const response = await sendOwnedAPIKeyRequest(scope,
+        `/api/settings/api-keys/${encodeURIComponent(keyId)}`, 'DELETE');
+      const receipt = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
+      scope.request.assertCurrent();
+      if (typeof receipt?.message !== 'string' || !receipt.message) {
+        throw new Error('The API key revocation receipt could not be confirmed.');
       }
       return keyId;
     },
-    onSuccess: (keyId: string): void => {
-      // Remove from cache
-      queryClient.setQueryData<APIKey[]>(queryKeys.settings.apiKeys(), (old) =>
-        old?.filter((k) => k.id !== keyId),
-      );
-      toast.success('API key deleted successfully');
+    onSuccess: (_keyId, { scope }): void => {
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
+      }
     },
-    onError: (error: Error): void => {
-      logger.error('Error deleting API key:', error);
-      toast.error(toUserMessage(error, 'Failed to delete API key'));
-    },
+    onError: () => undefined,
   });
 }
 
 /** Parsed response from `DELETE /api/user/delete-account`. */
-export interface DeleteAccountResult {
-  message: string;
-  scheduledFor: string | null;
-}
+export type DeleteAccountResult = AccountDeletionScheduleReceipt;
 
-function readDeleteAccountMessage(data: unknown, fallback: string): string {
-  if (data !== null && typeof data === 'object' && 'message' in data) {
-    const message = (data as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
-}
+const DELETION_SCHEDULE_UNCONFIRMED =
+  'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.';
+const DELETION_CANCELLATION_UNCONFIRMED =
+  'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.';
 
 function readDeleteAccountError(data: unknown, fallback: string, status: number): string {
   let raw = '';
@@ -390,31 +457,29 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<DeleteAccountResult, Error, void>({
+    retry: false,
     mutationFn: async (): Promise<DeleteAccountResult> => {
       const res = await withStepUp(async (stepUpHeaders) =>
-        fetch('/api/user/delete-account', {
+        fetch(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, {
           method: 'DELETE',
           headers: {
             ...(await addCsrfHeaders({ 'Content-Type': 'application/json' })),
             ...stepUpHeaders,
           },
         }),
-      );
+      ).catch((error: unknown) => {
+        if (isStepUpCancelled(error)) throw error;
+        throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
+      });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(readDeleteAccountError(data, 'Account deletion failed.', res.status));
       }
-      const scheduledFor =
-        data !== null && typeof data === 'object' && 'scheduledFor' in data
-          ? (data as { scheduledFor?: unknown }).scheduledFor
-          : undefined;
-      return {
-        message: readDeleteAccountMessage(
-          data,
-          'Your account deletion has been scheduled. You will be signed out now.',
-        ),
-        scheduledFor: typeof scheduledFor === 'string' ? scheduledFor : null,
-      };
+      try {
+        return parseAccountDeletionScheduleReceipt(data);
+      } catch {
+        throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
+      }
     },
     onError: (error: Error): void => {
       if (isStepUpCancelled(error)) return;
@@ -431,7 +496,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
       await logout();
       await identitySignOut({ redirectUrl: destination });
     } catch (err) {
-      // The account is already deleted server-side by the time this runs
+      // Account deletion is already scheduled server-side by the time this runs
       // (it only fires after the mutation above succeeded), if
       // logout()/identitySignOut() fail here (e.g. a network blip), fall back
       // to a hard navigation instead of leaving the user stuck on a dead
@@ -489,10 +554,7 @@ export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus
   });
 }
 
-export interface CancelAccountDeletionResult {
-  message: string;
-  cancelled: boolean;
-}
+export type CancelAccountDeletionResult = AccountDeletionCancellationReceipt;
 
 /**
  * Cancels a pending account deletion inside its grace window. On success the
@@ -508,24 +570,29 @@ export function useCancelAccountDeletion(): UseMutationResult<
   const queryClient: QueryClient = useQueryClient();
 
   return useMutation<CancelAccountDeletionResult, Error, void>({
+    retry: false,
     mutationFn: async (): Promise<CancelAccountDeletionResult> => {
-      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const res = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
-        method: 'POST',
-        headers,
-      });
+      let res: Response;
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        res = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
+          method: 'POST',
+          headers,
+        });
+      } catch {
+        throw new Error(DELETION_CANCELLATION_UNCONFIRMED);
+      }
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(
           readDeleteAccountError(data, 'Could not cancel account deletion.', res.status),
         );
       }
-      const record =
-        data !== null && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-      return {
-        message: readDeleteAccountMessage(data, 'Account deletion cancelled.'),
-        cancelled: record['cancelled'] === true,
-      };
+      try {
+        return parseAccountDeletionCancellationReceipt(data);
+      } catch {
+        throw new Error(DELETION_CANCELLATION_UNCONFIRMED);
+      }
     },
     onSuccess: (): void => {
       queryClient.setQueryData<AccountDeletionStatus>(
@@ -678,30 +745,8 @@ export function useOrganizationOverview(): UseQueryResult<OrganizationOverview, 
   });
 }
 
-export function useSwitchWorkspace(): UseMutationResult<void, Error, string | null> {
-  const queryClient = useQueryClient();
-  return useMutation<void, Error, string | null>({
-    mutationFn: async (organizationId) => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-      const csrfToken = await getCsrfToken();
-      const response = await fetch('/api/settings/organization/active', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ organizationId }),
-      });
-      if (!response.ok) throw new Error(await readApiError(response));
-    },
-    onSuccess: async (_data, organizationId) => {
-      toast.success('Workspace switched');
-      await finalizeWorkspaceSwitch(queryClient, organizationId);
-    },
-    onError: (error) => toast.error(toUserMessage(error, 'Failed to switch workspace')),
-  });
+export function useSwitchWorkspace() {
+  return useSelectWorkspace('organization');
 }
 
 export interface CreateOrganizationInput {
@@ -709,48 +754,11 @@ export interface CreateOrganizationInput {
   slug: string;
 }
 
-export function useCreateOrganization(): UseMutationResult<
-  OrganizationSettings,
-  Error,
-  CreateOrganizationInput
-> {
-  const queryClient = useQueryClient();
-
-  return useMutation<OrganizationSettings, Error, CreateOrganizationInput>({
-    mutationFn: async (input) => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-      const csrfToken = await getCsrfToken();
-
-      const response = await fetch('/api/settings/organization', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify(input),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response));
-      }
-
-      const body = (await response.json()) as { organization?: OrganizationSettings };
-      if (!body.organization) throw new Error('Invalid response from server');
-      return body.organization;
-    },
-    onSuccess: async () => {
-      await queryClient.cancelQueries();
-      queryClient.clear();
-      toast.success('Workspace created');
-      window.location.reload();
-    },
-    onError: (error) => {
-      logger.error('Failed to create workspace:', error);
-      toast.error(toUserMessage(error, 'Failed to create workspace'));
-    },
-  });
+export function useCreateOrganization() {
+  return useWorkspaceSelectionMutation<CreateOrganizationInput>((input) => ({
+    url: '/api/settings/organization', method: 'POST', body: input,
+    errorMessage: 'We could not create your workspace. Try again.',
+  }));
 }
 
 /**
@@ -770,7 +778,8 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     Error,
     { organizationId: string; updates: Partial<Pick<OrganizationSettings, 'name' | 'slug'>> }
   >({
-    mutationFn: async ({ updates }): Promise<OrganizationSettings> => {
+    retry: false,
+    mutationFn: async ({ organizationId, updates }): Promise<OrganizationSettings> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
 
@@ -782,6 +791,7 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'x-csrf-token': csrfToken,
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
         },
         body: JSON.stringify(updates),
       });
@@ -1199,105 +1209,16 @@ export function useRevokeTeamInvitation(): UseMutationResult<
   });
 }
 
-export type LeaveOrganizationVariables = { organizationId: string; successorUserId?: string };
-
-export type LeaveOrganizationMutation = UseMutationResult<
-  void,
-  Error,
-  LeaveOrganizationVariables
-> & {
-  /** Handing ownership to a successor answers 403 until a fresh second factor is proven. */
-  stepUpDialog: ReactElement | null;
-};
-
-export function useLeaveOrganization(): LeaveOrganizationMutation {
-  const queryClient = useQueryClient();
-  const { withStepUp, dialog } = useStepUp();
-
-  const mutation = useMutation<void, Error, LeaveOrganizationVariables>({
-    mutationFn: async ({ organizationId, successorUserId }) => {
-      const response = await withStepUp(
-        (headers) =>
-          sendAuthorizedJson(
-            '/api/settings/organization/leave',
-            { method: 'DELETE', body: successorUserId ? { successorUserId } : {} },
-            headers,
-          ),
-        organizationId,
-      );
-      if (!response.ok) throw new Error(await readApiError(response));
-    },
-    onSuccess: async () => {
-      await queryClient.cancelQueries();
-      queryClient.clear();
-      toast.success(
-        'You left the workspace. The device tokens and API keys issued in it were revoked. If you are asked to sign in, do so to continue in your personal account.',
-      );
-      window.location.reload();
-    },
-    onError: (error: Error) => {
-      if (isStepUpCancelled(error)) return;
-      toast.error(toUserMessage(error, 'Failed to leave workspace'));
-    },
-  });
-
-  return { ...mutation, stepUpDialog: dialog };
-}
-
-/**
- * Remove team member mutation
- *
- * @returns UseMutationResult for removing a team member
- */
-export type OrganizationOwnerRoleAfterTransfer = NonNullable<
-  ManagedCloudWorkspaceOwnershipTransfer['outgoingOwnerRole']
->;
-
-export type TransferOwnershipVariables = {
-  organizationId: string;
-  toUserId: string;
-  outgoingOwnerRole: OrganizationOwnerRoleAfterTransfer;
-};
-
-export type TransferOwnershipMutation = UseMutationResult<
-  void,
-  Error,
-  TransferOwnershipVariables
-> & {
-  /** The route answers 403 until a fresh second factor is proven; render this. */
-  stepUpDialog: ReactElement | null;
-};
-
-export function useTransferOrganizationOwnership(): TransferOwnershipMutation {
-  const queryClient = useQueryClient();
-  const { withStepUp, dialog } = useStepUp();
-
-  const mutation = useMutation<void, Error, TransferOwnershipVariables>({
-    mutationFn: async ({ organizationId, toUserId, outgoingOwnerRole }) => {
-      const response = await withStepUp(
-        (headers) =>
-          sendAuthorizedJson(
-            '/api/settings/organization/transfer-ownership',
-            { method: 'POST', body: { organizationId, toUserId, outgoingOwnerRole } },
-            headers,
-          ),
-        organizationId,
-      );
-      if (!response.ok) throw new Error(await readApiError(response));
-    },
-    onSuccess: (_, { organizationId }) => {
-      queryClient.invalidateQueries({ queryKey: ['settings', 'team', organizationId] });
-      queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
-      toast.success('Ownership transferred.');
-    },
-    onError: (error: Error) => {
-      if (isStepUpCancelled(error)) return;
-      toast.error(toUserMessage(error, 'Failed to transfer ownership'));
-    },
-  });
-
-  return { ...mutation, stepUpDialog: dialog };
-}
+export {
+  useLeaveOrganization,
+  useTransferOrganizationOwnership,
+  type LeaveOrganizationVariables,
+  type LeaveOrganizationMutation,
+  type OrganizationOwnerRoleAfterTransfer,
+  type TransferOwnershipVariables,
+  type TransferOwnershipMutation,
+  type PreparedWorkspaceMembershipAction,
+} from './use-organization-membership-mutation';
 
 export function useRemoveTeamMember(): UseMutationResult<
   void,
@@ -1938,6 +1859,9 @@ export function useShareConnectorWithOrganization(): UseMutationResult<unknown, 
 // ── Workspace policy (organization_admin_policies) ─────────────────────────
 
 export type WorkspaceAdminPolicy = AdminPolicy;
+type WorkspaceAdminPolicyPatch = Partial<
+  Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt' | 'controls'>
+> & { controls?: Partial<WorkspaceAdminPolicy['controls']> };
 
 export interface WorkspacePolicyOverview {
   organizationId: string;
@@ -1985,13 +1909,13 @@ export function useWorkspacePolicy(): UseQueryResult<WorkspacePolicyOverview | n
 export function useUpdateWorkspacePolicy(): UseMutationResult<
   WorkspacePolicyOverview,
   Error,
-  Partial<Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>>
+  WorkspaceAdminPolicyPatch
 > {
   const queryClient: QueryClient = useQueryClient();
   return useMutation<
     WorkspacePolicyOverview,
     Error,
-    Partial<Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>>
+    WorkspaceAdminPolicyPatch
   >({
     mutationFn: async (patch) => {
       const token = await getAuthToken();
@@ -2005,7 +1929,16 @@ export function useUpdateWorkspacePolicy(): UseMutationResult<
           Authorization: `Bearer ${token}`,
           'x-csrf-token': csrfToken,
         },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({
+          ...patch,
+          controls: patch.controls && {
+            featureAccess: patch.controls.featureAccess,
+            defaultModelId: patch.controls.defaultModelId,
+            maxReasoningEffort: patch.controls.maxReasoningEffort,
+            allowedCountries: patch.controls.allowedCountries,
+            allowedSurfaces: patch.controls.allowedSurfaces,
+          },
+        }),
       });
 
       if (!res.ok) throw new Error(await readApiError(res));

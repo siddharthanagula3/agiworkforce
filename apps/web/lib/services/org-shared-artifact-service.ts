@@ -2,9 +2,12 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { assertOrganizationSharedViewerAdmission } from '@/lib/services/organization-shared-viewer-admission';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import {
   PUBLISHED_TOKEN_REGEX,
+  rowToPublishedArtifact,
+  type PublishedArtifactRow,
   type PublishedArtifact,
   type PublishedArtifactVisibility,
 } from '@/lib/services/published-artifact-service';
@@ -136,21 +139,6 @@ export async function unshareArtifactFromOrganization(
   return rows.length > 0;
 }
 
-interface OrgReadableArtifactRow {
-  id: string;
-  token: string;
-  user_id: string;
-  artifact_id: string;
-  conversation_id: string | null;
-  title: string;
-  kind: string;
-  language: string | null;
-  content: string;
-  visibility: string;
-  created_at: string | Date;
-  updated_at: string | Date;
-}
-
 /**
  * The workspace-only read. The adapter is RLS-scoped, so the row comes back
  * only when the caller owns it or holds a grant through
@@ -161,9 +149,10 @@ interface OrgReadableArtifactRow {
 export async function getOrgReadableArtifactByToken(
   db: DatabaseAdapter,
   token: string,
+  viewerUserId: string,
 ): Promise<PublishedArtifact | null> {
   if (!token || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
-  const rows = await db.query<OrgReadableArtifactRow>(
+  const rows = await db.query<PublishedArtifactRow>(
     `select id, token, user_id, artifact_id, conversation_id, title, kind,
             language, content, visibility, created_at, updated_at
        from public.published_artifacts
@@ -173,20 +162,14 @@ export async function getOrgReadableArtifactByToken(
   );
   const row = rows[0];
   if (!row) return null;
-  return {
-    id: row.id,
-    token: row.token,
-    userId: row.user_id,
-    artifactId: row.artifact_id,
-    conversationId: row.conversation_id,
-    title: row.title,
-    kind: row.kind as PublishedArtifact['kind'],
-    language: row.language,
-    content: row.content,
-    visibility: toVisibility(row.visibility),
-    createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at),
-  };
+  const artifact = rowToPublishedArtifact(row);
+  await assertOrganizationSharedViewerAdmission(db, viewerUserId, {
+    type: 'artifact',
+    id: artifact.id,
+    ownerUserId: artifact.userId,
+    visibility: artifact.visibility,
+  });
+  return artifact;
 }
 
 export interface ArtifactShareTarget {

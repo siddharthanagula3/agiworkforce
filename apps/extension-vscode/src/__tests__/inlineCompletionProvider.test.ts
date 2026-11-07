@@ -12,6 +12,13 @@ import { AgiInlineCompletionProvider } from '../features/inline-completions/inli
 type ScanModule0 = typeof import('../core/cloudUtilityErrorActions');
 type ScanModule1 = typeof import('../utils/api');
 
+const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs')>()),
+  realpathSync: realpath,
+}));
+
 vi.mock('../core/cloudUtilityErrorActions', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   showCloudUtilityErrorActions: vi.fn().mockResolvedValue(undefined),
@@ -75,6 +82,7 @@ async function complete(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  realpath.mockReset().mockImplementation((path) => path);
   configure({});
   vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
     () =>
@@ -92,6 +100,35 @@ afterEach(() => {
 });
 
 describe('inline completions, real provider extraction', () => {
+  it.each(['credential-target', 'unresolved'] as const)(
+    'reads and sends nothing when the file path is %s',
+    async (refusal) => {
+      if (refusal === 'credential-target') {
+        realpath.mockReturnValue('/workspace/.env');
+      } else {
+        realpath.mockImplementation(() => {
+          throw new Error('EACCES');
+        });
+      }
+      const document = documentAt('const value = ');
+      const read = vi.spyOn(document, 'getText');
+      const line = vi.spyOn(document, 'lineAt');
+      const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+
+      const items = await provider.provideInlineCompletionItems(
+        document,
+        new vscode.Position(0, 'const value = '.length),
+        {} as vscode.InlineCompletionContext,
+        token,
+      );
+
+      expect(items).toEqual([]);
+      expect(read).not.toHaveBeenCalled();
+      expect(line).not.toHaveBeenCalled();
+      expect(chatCompletion).not.toHaveBeenCalled();
+    },
+  );
+
   it('sends nothing from an untrusted workspace, even when its settings turn completions on', async () => {
     const trust = vscode.workspace as { isTrusted: boolean };
     trust.isTrusted = false;

@@ -37,7 +37,11 @@ describe('delete-account dialog matches what deletion actually does', () => {
   });
 
   it('labels the action as scheduling rather than immediate deletion', () => {
-    expect(dialog).toMatch(/Deletion is scheduled for 24 hours later/i);
+    expect(dialog).toMatch(/Schedule permanent account deletion/i);
+    expect(dialog).toMatch(/Cloud chats, projects, memory and artifacts for\s+permanent deletion/);
+    expect(dialog).toMatch(/Cancellation deadline:/);
+    expect(dialog).toMatch(/Erasure is processed after the deadline and may take longer/);
+    expect(dialog).not.toMatch(/permanently erased on|erasure runs 24 hours|before erasure begins|next daily run/i);
     expect(dialog).toMatch(/Schedule deletion/);
     expect(dialog).toMatch(/Scheduling…/);
     expect(dialog).not.toMatch(/hint="This cannot be undone\."/);

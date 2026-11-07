@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
 
 type OriginalNotificationsModule = typeof import('@/features/notifications');
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
@@ -91,3 +92,20 @@ describe('NotificationsSection row density', () => {
     expect(runRow?.textContent).not.toContain('blocked for this site');
   });
 });
+
+const notificationOwner = vi.hoisted(() => ({
+  incarnation: 1,
+  isCurrent: () => true,
+  session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
+}));
+vi.mock('../hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => notificationOwner,
+}));
+vi.mock('../services/notification-preferences-client', () => ({
+  readNotificationPreferences: async () => ({ stored: await (mocks.fetchPreferenceNamespace)(), version: 'v1' }),
+  saveNotificationPreferences: async (_authority: unknown, patch: object) => {
+    await (mocks.savePreferenceNamespace)('notifications', patch, { merge: true });
+    return { stored: patch, version: 'v2' };
+  },
+}));

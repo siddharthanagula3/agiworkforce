@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   MANAGED_CLOUD_SLACK_PATH,
@@ -16,7 +16,11 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Button, Spinner, useConfirmAction } from '@agiworkforce/ui';
 
-import { sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import {
+  useSlackSettingsRevision, useSlackSettingsView,
+  type SlackSettingsView, type SlackSettingsMutation,
+} from '@/features/slack/lib/slack-settings-owner';
 import {
   SLACK_INSTALL_PATH,
   SLACK_SETTINGS_STATUS_PARAM,
@@ -153,11 +157,11 @@ function EmptyRow({ children }: { children: ReactNode }) {
 
 function ApprovalItem({
   approval,
-  busy,
+  disabled,
   onDecide,
 }: {
   approval: ManagedCloudSlackPendingApproval;
-  busy: boolean;
+  disabled: boolean;
   onDecide: (decision: 'approved' | 'rejected') => void;
 }) {
   return (
@@ -217,7 +221,7 @@ function ApprovalItem({
           type="button"
           size="sm"
           variant="outline"
-          disabled={busy}
+          disabled={disabled}
           onClick={() => onDecide('rejected')}
         >
           Deny
@@ -225,11 +229,9 @@ function ApprovalItem({
         <Button
           type="button"
           size="sm"
-          isLoading={busy}
-          disabled={busy}
+          disabled={disabled}
           onClick={() => onDecide('approved')}
         >
-          {busy ? <Spinner size="sm" aria-hidden="true" /> : null}
           Approve
         </Button>
       </div>
@@ -237,105 +239,160 @@ function ApprovalItem({
   );
 }
 
-export function SlackSection() {
+export function SlackSection({ active = true }: { active?: boolean } = {}) {
+  const view = useSlackSettingsView(active);
+  return <SlackSettingsContent key={view.id} view={view} />;
+}
+
+function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
+  useSlackSettingsRevision(view);
   const searchParams = useSearchParams();
   const statusParam = searchParams?.get(SLACK_SETTINGS_STATUS_PARAM) ?? null;
   const installStatus = isSlackInstallStatus(statusParam) ? statusParam : null;
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [state, setState] = useState<OverviewState>({ kind: 'loading' });
-  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const overview = useRef<ManagedCloudSlackOverview | null>(null);
+  const reading = useRef<RequestAuthority | null>(null);
+  const current = useCallback(() => mounted.current && view.isCurrent(), [view]);
 
   const load = useCallback(async () => {
+    if (!view.reconcile() || !current()) return;
+    reading.current?.retire();
+    const request = view.read(() => current() && reading.current === request);
+    if (!request) return;
+    reading.current = request;
+    setState({ kind: 'loading' });
     try {
-      const response = await sendAuthorizedJson(MANAGED_CLOUD_SLACK_PATH, { method: 'GET' });
+      const response = await view.send(request, MANAGED_CLOUD_SLACK_PATH, { method: 'GET' });
+      request.assertCurrent();
       if (!response.ok) throw await readError(response, OVERVIEW_UNREADABLE);
-      setState({
-        kind: 'ready',
-        data: ManagedCloudSlackOverviewSchema.parse(await response.json()),
-      });
+      const body: unknown = await response.json();
+      request.assertCurrent();
+      const next = ManagedCloudSlackOverviewSchema.parse(body);
+      const ids = [next.installations.map((item) => item.id), next.links.map((item) => item.id),
+        next.approvals.map((item) => item.runId),
+        ...next.approvals.map((item) => item.toolCalls.map((call) => call.id))];
+      if (ids.some((values) => new Set(values).size !== values.length)) {
+        throw new Error('The Slack settings contained conflicting resource identifiers.');
+      }
+      overview.current = next;
+      setState({ kind: 'ready', data: next });
     } catch (cause) {
-      setState({ kind: 'failed', message: toUserMessage(cause, OVERVIEW_UNREADABLE) });
+      view.reconcile();
+      if (request.isCurrent()) {
+        overview.current = null;
+        setState({ kind: 'failed', message: toUserMessage(cause, OVERVIEW_UNREADABLE) });
+      }
     }
-  }, []);
+  }, [current, view]);
 
   useEffect(() => {
+    mounted.current = true;
     void load();
+    return () => {
+      mounted.current = false;
+      overview.current = null;
+      reading.current?.retire();
+    };
   }, [load]);
 
-  async function run(key: string, action: () => Promise<string>, fallback: string) {
+  const renderedRead = reading.current;
+  const ready = () => reading.current === renderedRead && current() && state.kind === 'ready' && overview.current === state.data &&
+    !!reading.current?.isCurrent();
+
+  function begin() {
+    const target = overview.current;
+    if (!view.reconcile() || !ready() || !target) return null;
+    return view.begin(() => current() && overview.current === target);
+  }
+
+  async function run(operation: SlackSettingsMutation, action: () => Promise<string>) {
+    if (!operation.start()) return;
     setError(null);
     setNotice(null);
-    setBusy(key);
     try {
-      setNotice(await action());
+      const message = await action();
+      operation.request.assertCurrent();
+      setNotice(message);
       await load();
     } catch (cause) {
-      setError(toUserMessage(cause, fallback));
+      view.reconcile();
+      if (operation.dispatched && view.isCurrent()) view.markUncertain();
+      if (operation.request.isCurrent()) {
+        if (operation.dispatched) {
+          setError('The result could not be confirmed. Check Slack before trying this action again.');
+        } else {
+          setError(toUserMessage(cause, 'The request could not be sent.'));
+        }
+      }
     } finally {
-      setBusy(null);
+      operation.finish();
     }
   }
 
-  function removeInstallation(installationId: string, teamName: string) {
-    void run(
-      `installation:${installationId}`,
-      async () => {
-        const response = await sendAuthorizedJson(
-          managedCloudSlackInstallationPath(installationId),
-          { method: 'DELETE' },
-        );
-        if (!response.ok) throw await readError(response, 'The app could not be removed.');
-        ManagedCloudSlackInstallationRemovedSchema.parse(await response.json());
-        return `AGI was removed from ${teamName}.`;
-      },
-      'The app could not be removed.',
-    );
+  function removeInstallation(operation: SlackSettingsMutation, installationId: string, teamName: string) {
+    return run(operation, async () => {
+      const response = await view.send(operation.request,
+        managedCloudSlackInstallationPath(installationId), { method: 'DELETE' });
+      operation.request.assertCurrent();
+      if (!response.ok) throw await readError(response, 'The removal result could not be confirmed.');
+      const body: unknown = await response.json();
+      operation.request.assertCurrent();
+      if (ManagedCloudSlackInstallationRemovedSchema.parse(body).removed !== installationId) {
+        throw new Error('The removal receipt did not match the Slack workspace.');
+      }
+      return `The service confirmed AGI was removed from ${teamName}.`;
+    });
   }
 
-  function unlink(linkId: string, teamName: string) {
-    void run(
-      `link:${linkId}`,
-      async () => {
-        const response = await sendAuthorizedJson(managedCloudSlackAccountLinkPath(linkId), {
-          method: 'DELETE',
-        });
-        if (!response.ok)
-          throw await readError(response, 'That Slack account could not be disconnected.');
-        ManagedCloudSlackAccountUnlinkedSchema.parse(await response.json());
-        return `Your Slack account in ${teamName} was disconnected.`;
-      },
-      'That Slack account could not be disconnected.',
-    );
+  function unlink(operation: SlackSettingsMutation, linkId: string, teamName: string) {
+    return run(operation, async () => {
+      const response = await view.send(operation.request, managedCloudSlackAccountLinkPath(linkId), {
+        method: 'DELETE',
+      });
+      operation.request.assertCurrent();
+      if (!response.ok) throw await readError(response, 'The disconnection result could not be confirmed.');
+      const body: unknown = await response.json();
+      operation.request.assertCurrent();
+      if (ManagedCloudSlackAccountUnlinkedSchema.parse(body).removed !== linkId) {
+        throw new Error('The disconnection receipt did not match the Slack account.');
+      }
+      return `The service confirmed your Slack account in ${teamName} was disconnected.`;
+    });
   }
 
   function decide(approval: ManagedCloudSlackPendingApproval, decision: 'approved' | 'rejected') {
-    void run(
-      `approval:${approval.runId}`,
-      async () => {
-        const response = await sendAuthorizedJson(
-          managedCloudSlackRunApprovalPath(approval.runId),
-          {
-            method: 'POST',
-            body: { decision, toolCallIds: approval.toolCalls.map((call) => call.id) },
-          },
-        );
-        if (!response.ok) throw await readError(response, 'Your decision could not be saved.');
-        ManagedCloudSlackRunDecisionSchema.parse(await response.json());
-        return decision === 'approved'
-          ? 'Approved. The answer continues in Slack.'
-          : 'Denied. The answer continues in Slack without that step.';
-      },
-      'Your decision could not be saved.',
-    );
+    const operation = begin();
+    if (!operation) return;
+    const runId = approval.runId;
+    const toolCallIds = approval.toolCalls.map((call) => call.id);
+    void run(operation, async () => {
+      const response = await view.send(operation.request, managedCloudSlackRunApprovalPath(runId), {
+        method: 'POST', body: { decision, toolCallIds },
+      });
+      operation.request.assertCurrent();
+      if (!response.ok) throw await readError(response, 'The decision result could not be confirmed.');
+      const body: unknown = await response.json();
+      operation.request.assertCurrent();
+      const receipt = ManagedCloudSlackRunDecisionSchema.parse(body);
+      if (receipt.runId !== runId || receipt.decision !== decision) {
+        throw new Error('The decision receipt did not match the Slack request.');
+      }
+      return decision === 'approved'
+        ? 'Approval accepted. Slack continuation was requested.'
+        : 'Denial accepted. Slack continuation without that step was requested.';
+    });
   }
 
-  const data = state.kind === 'ready' ? state.data : null;
+  const data = ready() && state.kind === 'ready' ? state.data : null;
+  const blocked = view.blocked() || !data;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      {confirmDialog}
+      {current() ? confirmDialog : null}
       <div>
         <h1
           style={{
@@ -354,7 +411,7 @@ export function SlackSection() {
         </p>
       </div>
 
-      {installStatus ? (
+      {current() && installStatus ? (
         <p
           role={installStatus === 'installed' ? 'status' : 'alert'}
           style={{
@@ -367,27 +424,31 @@ export function SlackSection() {
           {INSTALL_STATUS_MESSAGE[installStatus]}
         </p>
       ) : null}
-      {notice ? (
+      {current() && notice ? (
         <p role="status" style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
           {notice}
         </p>
       ) : null}
-      {error ? (
+      {current() && view.uncertain() && !error ? (
+        <p role="alert">A Slack action's result could not be confirmed. Check Slack before trying that action again.</p>
+      ) : null}
+      {current() && error ? (
         <p role="alert" style={{ margin: 0, fontSize: 13, ...destructiveStyle }}>
           {error}
         </p>
       ) : null}
 
-      {state.kind === 'loading' ? (
+      {!view.isCurrent() ? <p role="status">Slack settings are unavailable. Reload this page to confirm your account and workspace, and sign in again if asked.</p> : null}
+      {current() && state.kind === 'loading' ? (
         <div>
           <Spinner size="sm" aria-label="Loading Slack settings" />
         </div>
       ) : null}
 
-      {state.kind === 'failed' ? (
+      {current() && state.kind === 'failed' ? (
         <div role="alert" style={{ fontSize: 13, ...destructiveStyle }}>
           {state.message}{' '}
-          <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
+          <Button type="button" size="sm" variant="outline" disabled={view.blocked()} onClick={() => { if (view.reconcile() && !view.blocked()) void load(); }}>
             Retry
           </Button>
         </div>
@@ -422,7 +483,7 @@ export function SlackSection() {
                   <ApprovalItem
                     key={approval.runId}
                     approval={approval}
-                    busy={busy === `approval:${approval.runId}`}
+                    disabled={blocked}
                     onDecide={(decision) => decide(approval, decision)}
                   />
                 ))}
@@ -455,19 +516,21 @@ export function SlackSection() {
                       size="sm"
                       variant="outline"
                       style={destructiveStyle}
-                      disabled={busy !== null}
-                      onClick={() =>
+                      disabled={blocked}
+                      onClick={() => {
+                        const operation = begin();
+                        if (!operation) return;
                         confirm({
                           title: `Disconnect your Slack account in ${link.teamName}?`,
                           description:
                             'AGI stops answering this Slack account, and the record of its Slack answers is deleted, including any answer still waiting for your approval. Answers already posted stay in Slack, and tasks it started stay in your tasks. You can link it again by messaging the app.',
                           confirmLabel: 'Disconnect',
                           destructive: true,
-                          onConfirm: () => unlink(link.id, link.teamName),
-                        })
-                      }
+                          onConfirm: () => unlink(operation, link.id, link.teamName),
+                          onCancel: operation.cancel,
+                        });
+                      }}
                     >
-                      {busy === `link:${link.id}` ? <Spinner size="sm" aria-hidden="true" /> : null}
                       Disconnect
                     </Button>
                   </li>
@@ -483,7 +546,10 @@ export function SlackSection() {
             action={
               data.available ? (
                 <Button asChild size="sm">
-                  <a href={SLACK_INSTALL_PATH}>Add to Slack</a>
+                  <a href={blocked ? undefined : SLACK_INSTALL_PATH} aria-disabled={blocked}
+                    onClick={(event) => { if (!view.reconcile() || !ready() || view.blocked()) event.preventDefault(); }}
+                    onAuxClick={(event) => { if (!view.reconcile() || !ready() || view.blocked()) event.preventDefault(); }}
+                    onContextMenu={(event) => { if (!view.reconcile() || !ready() || view.blocked()) event.preventDefault(); }}>Add to Slack</a>
                 </Button>
               ) : null
             }
@@ -502,8 +568,10 @@ export function SlackSection() {
                         Added {formatDate(installation.installedAt)}
                       </p>
                       <SlackChannelPolicies
+                        view={view}
                         installationId={installation.id}
                         teamName={installation.teamName}
+                        expectedTeamId={installation.teamId}
                       />
                     </div>
                     <Button
@@ -511,21 +579,21 @@ export function SlackSection() {
                       size="sm"
                       variant="outline"
                       style={destructiveStyle}
-                      disabled={busy !== null}
-                      onClick={() =>
+                      disabled={blocked}
+                      onClick={() => {
+                        const operation = begin();
+                        if (!operation) return;
                         confirm({
                           title: `Remove AGI from ${installation.teamName}?`,
                           description: `The app is uninstalled from ${installation.teamName}. Everyone there stops getting answers, every linked Slack account in it is disconnected, and answers waiting for approval are dropped. This cannot be undone; you can add the app again later.`,
                           confirmLabel: 'Remove',
                           destructive: true,
                           onConfirm: () =>
-                            removeInstallation(installation.id, installation.teamName),
-                        })
-                      }
+                            removeInstallation(operation, installation.id, installation.teamName),
+                          onCancel: operation.cancel,
+                        });
+                      }}
                     >
-                      {busy === `installation:${installation.id}` ? (
-                        <Spinner size="sm" aria-hidden="true" />
-                      ) : null}
                       Remove
                     </Button>
                   </li>

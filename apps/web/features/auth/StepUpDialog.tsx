@@ -32,10 +32,12 @@ import { toUserMessage } from '@/lib/user-error-message';
 import type { StepUpAction, StepUpLevel } from '@/lib/server/step-up/actions';
 import { useAuthCopy } from './authCopy';
 import { AUTH_LOGIN_PATH } from './authRoutes';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { requestStepUpGrant } from './step-up-fetch';
 
 export interface StepUpDialogProps {
   open: boolean;
+  authority?: RequestAuthority;
   action: StepUpAction;
   consequence: string;
   resourceId?: string | null;
@@ -104,6 +106,7 @@ function signInAgainUrl(): string {
 
 export function StepUpDialog({
   open,
+  authority,
   action,
   consequence,
   resourceId = null,
@@ -111,7 +114,7 @@ export function StepUpDialog({
   onCancel,
   onSatisfied,
 }: StepUpDialogProps) {
-  const reverification = useSessionReverification();
+  const reverification = useSessionReverification(authority);
   const signOut = useSignOut();
   const copy = useAuthCopy();
   const [prompt, setPrompt] = useState<Prompt>({ kind: 'loading' });
@@ -135,23 +138,26 @@ export function StepUpDialog({
   latest.current = { action, resourceId, onSatisfied, reverification, describe };
 
   const show = useCallback((next: Prompt) => {
+    if (authority && !authority.isCurrent()) return;
     setValue('');
     setPrompt(next);
-  }, []);
+  }, [authority]);
 
   const flow = useMemo(() => {
     const giveUp = (message: string) => {
+      if (authority && !authority.isCurrent()) return;
       setError(message);
       show({ kind: 'retry' });
     };
 
     async function finish(): Promise<void> {
+      authority?.assertCurrent();
       const current = latest.current;
-      const outcome = await requestStepUpGrant(
-        current.action,
-        current.resourceId,
-        await current.reverification.freshToken(),
-      );
+      const freshToken = await current.reverification.freshToken();
+      const outcome = await (authority
+        ? requestStepUpGrant(current.action, current.resourceId, freshToken, authority)
+        : requestStepUpGrant(current.action, current.resourceId, freshToken));
+      authority?.assertCurrent();
       if (outcome.kind === 'granted') {
         await current.onSatisfied(outcome.token);
         return;
@@ -165,6 +171,7 @@ export function StepUpDialog({
     }
 
     async function advance(step: IdentityReverificationStep): Promise<void> {
+      authority?.assertCurrent();
       if (step.kind === 'complete') await finish();
       else show(promptFor(step));
     }
@@ -172,6 +179,7 @@ export function StepUpDialog({
     async function begin(requested: StepUpLevel): Promise<void> {
       show({ kind: 'loading' });
       try {
+        authority?.assertCurrent();
         await advance(await latest.current.reverification.start(requested));
       } catch (cause) {
         giveUp(latest.current.describe(cause, 'Confirmation could not start. Try again.'));
@@ -182,7 +190,11 @@ export function StepUpDialog({
       show({ kind: 'loading' });
       try {
         const { action: current, resourceId: target, onSatisfied: satisfied } = latest.current;
-        const outcome = await requestStepUpGrant(current, target);
+        authority?.assertCurrent();
+        const outcome = await (authority
+          ? requestStepUpGrant(current, target, undefined, authority)
+          : requestStepUpGrant(current, target));
+        authority?.assertCurrent();
         if (outcome.kind === 'granted') await satisfied(outcome.token);
         else if (outcome.kind === 'verify') await begin(outcome.level);
         else giveUp(outcome.message);
@@ -192,7 +204,7 @@ export function StepUpDialog({
     }
 
     return { advance, begin, attemptWithoutPrompt };
-  }, [show]);
+  }, [authority, show]);
 
   useEffect(() => {
     if (!open) {
@@ -208,18 +220,21 @@ export function StepUpDialog({
 
   const run = useCallback(
     async (work: () => Promise<IdentityReverificationStep | void>, fallback: string) => {
+      if (authority && !authority.isCurrent()) return;
       setBusy(true);
       setError(null);
       try {
+        authority?.assertCurrent();
         const step = await work();
+        authority?.assertCurrent();
         if (step) await flow.advance(step);
       } catch (cause) {
-        setError(describe(cause, fallback));
+        if (!authority || authority.isCurrent()) setError(describe(cause, fallback));
       } finally {
-        setBusy(false);
+        if (!authority || authority.isCurrent()) setBusy(false);
       }
     },
-    [describe, flow],
+    [authority, describe, flow],
   );
 
   const submit = useCallback(() => {
@@ -254,20 +269,22 @@ export function StepUpDialog({
   );
 
   const retry = useCallback(async () => {
+    if (authority && !authority.isCurrent()) return;
     setBusy(true);
     setError(null);
     restartedRef.current = false;
     try {
       await flow.attemptWithoutPrompt();
     } finally {
-      setBusy(false);
+      if (!authority || authority.isCurrent()) setBusy(false);
     }
-  }, [flow]);
+  }, [authority, flow]);
 
   const signInAgain = useCallback(() => {
+    if (authority && !authority.isCurrent()) return;
     setBusy(true);
-    void signOut({ redirectUrl: signInAgainUrl() });
-  }, [signOut]);
+    void signOut({ redirectUrl: signInAgainUrl(), ...(authority ? { sessionId: authority.session.sessionId } : {}) });
+  }, [authority, signOut]);
 
   const inputField = (
     id: string,

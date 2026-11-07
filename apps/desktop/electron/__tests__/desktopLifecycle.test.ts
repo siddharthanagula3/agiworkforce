@@ -143,6 +143,7 @@ const installDownloadedUpdate = vi.fn(() => downloadedVersion !== null);
 vi.mock('../desktopAutoUpdate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   downloadedUpdate: () => downloadedVersion,
+  autoUpdateState: () => downloadedVersion !== null ? 'ready' : 'idle',
   installDownloadedUpdate,
   startAutoUpdate: vi.fn(),
 }));
@@ -897,6 +898,59 @@ describe('the update buttons', () => {
     return { senderFrame: frame, sender: { mainFrame: frame } };
   };
 
+  it('reports the staged version independently of newer release metadata', async () => {
+    const check = ipcHandlers.get(ELECTRON_IPC_CHANNELS.checkUpdate);
+    if (!check) throw new Error('the update channel was never registered');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      version: '1.4.0', platforms: { mac: true }, architectures: { arm64: true, x64: true },
+    })));
+    downloadedVersion = '1.3.0';
+    try {
+      await expect(check(trustedCaller())).resolves.toMatchObject({
+        available: true, version: '1.3.0', stagedVersion: '1.3.0', latestVersion: '1.4.0',
+        readyToInstall: true, downloading: false, nativeUpdateState: 'ready',
+      });
+    } finally {
+      downloadedVersion = null;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(['1.3.0', ''])('keeps staged %s restartable when metadata fails', async (version) => {
+    const check = ipcHandlers.get(ELECTRON_IPC_CHANNELS.checkUpdate);
+    if (!check) throw new Error('the update channel was never registered');
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    downloadedVersion = version;
+    try {
+      await expect(check(trustedCaller())).resolves.toMatchObject({
+        available: true, version, stagedVersion: version || null,
+        readyToInstall: true, metadataError: expect.any(String),
+        downloadUrl: expect.stringContaining('/api/download?platform=mac&app=cloud&arch='),
+      });
+    } finally {
+      downloadedVersion = null;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('observes a staged update arriving while metadata is pending', async () => {
+    const check = ipcHandlers.get(ELECTRON_IPC_CHANNELS.checkUpdate);
+    if (!check) throw new Error('the update channel was never registered');
+    let finish!: (value: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { finish = resolve; })));
+    try {
+      const pending = check(trustedCaller());
+      downloadedVersion = '1.3.0';
+      finish(new Response(null, { status: 404 }));
+      await expect(pending).resolves.toMatchObject({
+        available: true, version: '1.3.0', readyToInstall: true,
+      });
+    } finally {
+      downloadedVersion = null;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('opens the installer download while no update is downloaded, and restart says not ready', async () => {
     const download = ipcHandlers.get(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
     const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
@@ -911,12 +965,29 @@ describe('the update buttons', () => {
     expect(installDownloadedUpdate).not.toHaveBeenCalled();
   });
 
-  // The shipped page restarts into a downloaded update through the installer
-  // button, so both buttons restart through the quit guard.
-  it('restarts into a downloaded update only once work a quit would stop is agreed to', async () => {
+  it('opens only the installer even when an update is already staged', async () => {
     const download = ipcHandlers.get(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
+    if (!download) throw new Error('the installer channel was never registered');
+    const openExternal = vi.mocked(electron.shell.openExternal);
+    openExternal.mockClear();
+    showMessageBox.mockReset();
+    installDownloadedUpdate.mockClear();
+    downloadedVersion = '1.3.0';
+    shellRuns = 1;
+    try {
+      await download(trustedCaller());
+      expect(openExternal).toHaveBeenCalledTimes(1);
+      expect(showMessageBox).not.toHaveBeenCalled();
+      expect(installDownloadedUpdate).not.toHaveBeenCalled();
+    } finally {
+      downloadedVersion = null;
+      shellRuns = 0;
+    }
+  });
+
+  it('restarts into a downloaded update only once work a quit would stop is agreed to', async () => {
     const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
-    if (!download || !restart) throw new Error('the update channels were never registered');
+    if (!restart) throw new Error('the update channels were never registered');
     const openExternal = vi.mocked(electron.shell.openExternal);
     openExternal.mockClear();
     showMessageBox.mockReset();
@@ -929,7 +1000,7 @@ describe('the update buttons', () => {
       expect(installDownloadedUpdate).not.toHaveBeenCalled();
 
       showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
-      await download(trustedCaller());
+      await expect(restart(trustedCaller())).resolves.toBe('restarting');
       expect(installDownloadedUpdate).toHaveBeenCalledTimes(1);
       expect(openExternal).not.toHaveBeenCalled();
       expect(beforeQuit().preventDefault).not.toHaveBeenCalled();
@@ -938,4 +1009,26 @@ describe('the update buttons', () => {
       shellRuns = 0;
     }
   });
+
+  it('restores the live-work quit guard immediately when installation throws synchronously', async () => {
+    const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
+    if (!restart) throw new Error('the restart channel was never registered');
+    const failure = new Error('native restart failed');
+    showMessageBox.mockReset();
+    installDownloadedUpdate.mockImplementationOnce(() => { throw failure; });
+    downloadedVersion = '1.3.0';
+    shellRuns = 1;
+    try {
+      showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      await expect(restart(trustedCaller())).rejects.toBe(failure);
+      // No timer advancement: a failed restart must not authorize a later quit.
+      showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+      expect(beforeQuit().preventDefault).toHaveBeenCalledOnce();
+      await settle();
+    } finally {
+      downloadedVersion = null;
+      shellRuns = 0;
+    }
+  });
+
 });

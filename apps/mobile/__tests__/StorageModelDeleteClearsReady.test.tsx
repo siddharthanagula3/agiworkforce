@@ -10,7 +10,7 @@ const INSTALLED = {
   format: 'gguf',
   size_bytes: 2_000_000_000,
   sha256: null,
-  local_path: 'file:///models/local-fixture/model.gguf',
+  local_path: 'file:///documents/models/local-fixture/model.gguf',
   installed_at: 0,
   last_used_at: null,
   capabilities: null,
@@ -32,6 +32,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///documents/',
   cacheDirectory: 'file:///cache/',
   deleteAsync: jest.fn().mockResolvedValue(undefined),
   getFreeDiskStorageAsync: jest.fn().mockResolvedValue(12 * 1024 * 1024 * 1024),
@@ -43,6 +44,7 @@ jest.mock('@/storage/installedModels', () => ({
 }));
 
 jest.mock('@/services/modelDownload', () => ({
+  modelRemovalUnsupportedReason: jest.requireActual('@/services/modelDownload').modelRemovalUnsupportedReason,
   deleteDownloadedModel: jest.fn().mockResolvedValue(undefined),
   getModelStorageBytes: jest.fn().mockResolvedValue(2_000_000_000),
   downloadModel: jest.fn(),
@@ -56,6 +58,7 @@ jest.mock('@/services/dsarExport', () => ({
 }));
 
 jest.mock('@/src/features/settings/data-controls/localDataSnapshot', () => ({
+  LocalExportAuthorityError: class LocalExportAuthorityError extends Error {},
   buildLocalDataExportSnapshot: jest.fn().mockReturnValue({}),
   resetLocalInMemoryState: jest.fn(),
 }));
@@ -68,7 +71,8 @@ jest.mock('@/src/features/settings/StorageScopeNotice', () => ({
   StorageScopeNotice: () => null,
 }));
 
-import { listInstalledModels } from '@/storage/installedModels';
+import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
+import { deleteDownloadedModel } from '@/services/modelDownload';
 import { wipeAllLocalData } from '@/services/dsarExport';
 import StorageManagerScreen from '@/app/(app)/settings/storage';
 
@@ -84,6 +88,8 @@ function pressDestructiveAlertButton() {
 
 describe('deleting a model in Storage clears its Ready state in the picker', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
+    (deleteDownloadedModel as jest.Mock).mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     (listInstalledModels as jest.Mock).mockResolvedValue([INSTALLED]);
     useModelInstallStore.setState({
@@ -100,6 +106,7 @@ describe('deleting a model in Storage clears its Ready state in the picker', () 
   });
 
   it('drops the model from the install store so the picker stops saying Ready', async () => {
+    (listInstalledModels as jest.Mock).mockResolvedValueOnce([INSTALLED]).mockResolvedValue([]);
     const { getByLabelText } = render(<StorageManagerScreen />);
     await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
 
@@ -111,6 +118,35 @@ describe('deleting a model in Storage clears its Ready state in the picker', () 
     const state = useModelInstallStore.getState();
     expect(state.installedModelIds).not.toContain(INSTALLED.id);
     expect(state.jobs[INSTALLED.id]).toBeUndefined();
+    expect(deleteDownloadedModel).toHaveBeenCalledWith(INSTALLED);
+  });
+
+  it.each([null, JSON.stringify({ managedBy: 'react-native-executorch' })])(
+    'preserves SDK-managed model state with capabilities %s',
+    async (capabilities) => {
+      (listInstalledModels as jest.Mock).mockResolvedValue([
+        { ...INSTALLED, format: 'pte', local_path: null, capabilities },
+      ]);
+      const { getByLabelText } = render(<StorageManagerScreen />);
+      await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
+      fireEvent.press(getByLabelText(`Delete ${INSTALLED.display_name}`));
+      expect(Alert.alert).toHaveBeenCalledWith('Model removal unavailable', expect.any(String));
+      expect(deleteDownloadedModel).not.toHaveBeenCalled();
+      expect(deleteInstalledModel).not.toHaveBeenCalled();
+      expect(useModelInstallStore.getState().installedModelIds).toContain(INSTALLED.id);
+      expect(useModelInstallStore.getState().jobs[INSTALLED.id]?.status).toBe('ready');
+    },
+  );
+
+  it('preserves the record and ready state when file removal fails', async () => {
+    (deleteDownloadedModel as jest.Mock).mockRejectedValueOnce(new Error('failed'));
+    const { getByLabelText } = render(<StorageManagerScreen />);
+    await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
+    fireEvent.press(getByLabelText(`Delete ${INSTALLED.display_name}`));
+    await act(async () => { await pressDestructiveAlertButton(); });
+    expect(deleteInstalledModel).not.toHaveBeenCalled();
+    expect(useModelInstallStore.getState().jobs[INSTALLED.id]?.status).toBe('ready');
+    expect(Alert.alert).toHaveBeenCalledWith('Model removal failed', expect.any(String));
   });
 });
 

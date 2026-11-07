@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     getGrant: vi.fn(),
     updateTokens: vi.fn(),
     revokeGrant: vi.fn(),
+    captureGrant: vi.fn(),
     listRevocable: vi.fn(),
     refresh: vi.fn(),
     refreshDiscovered: vi.fn(),
@@ -72,6 +73,7 @@ vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
       saveTokens: (tokens: unknown) => mocks.updateTokens(userId, connectorId, tokens, accountKey),
       revoke: () => mocks.revokeGrant(userId, connectorId, accountKey),
     }),
+  captureAndRevokeConnectorOAuthGrants: (...a: unknown[]) => mocks.captureGrant(...a),
   getConnectorOAuthGrant: (...a: unknown[]) => mocks.getGrant(...a),
   updateConnectorOAuthGrantTokens: (...a: unknown[]) => mocks.updateTokens(...a),
   revokeConnectorOAuthGrant: (...a: unknown[]) => mocks.revokeGrant(...a),
@@ -150,6 +152,11 @@ beforeEach(() => {
   mocks.getProvider.mockReturnValue(PROVIDER);
   mocks.revokeGrant.mockResolvedValue(true);
   mocks.listRevocable.mockResolvedValue([]);
+  mocks.captureGrant.mockImplementation(async (...args: unknown[]) => ({
+    disconnected: true,
+    tokens: await mocks.listRevocable(...args),
+    incomplete: false,
+  }));
   mocks.updateTokens.mockResolvedValue(undefined);
   mocks.record.mockResolvedValue({ recorded: true });
   mocks.customClient.mockResolvedValue(null);
@@ -405,6 +412,15 @@ describe('resolveConnectorAccessToken', () => {
 });
 
 describe('disconnectConnectorOAuthGrant', () => {
+  it('does not refresh when a previously observed grant is gone at lock acquisition', async () => {
+    mocks.getGrant.mockResolvedValueOnce(grant({ accessTokenExpiresAt: new Date(0) })).mockResolvedValueOnce(null);
+    await expect(resolveConnectorAccessToken('u1', 'linear')).resolves.toEqual({
+      status: 'reauthorization-required', reason: 'refresh-failed',
+    });
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.updateTokens).not.toHaveBeenCalled();
+  });
+
   it('revokes locally even when the provider exposes no revocation endpoint', async () => {
     mocks.getProvider.mockReturnValue({ ...PROVIDER, revocationUrl: undefined });
     mocks.listRevocable.mockResolvedValue([revocable()]);
@@ -418,10 +434,10 @@ describe('disconnectConnectorOAuthGrant', () => {
       },
     });
     expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+    expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
   });
 
-  it('revokes at the provider first, preferring the refresh token', async () => {
+  it('revokes the captured refresh token after local removal', async () => {
     mocks.getProvider.mockReturnValue({
       ...PROVIDER,
       revocationUrl: 'https://auth.example.com/revoke',
@@ -439,7 +455,7 @@ describe('disconnectConnectorOAuthGrant', () => {
       'live-refresh',
       'refresh_token',
     );
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+    expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
   });
 
   it('hands back every connected account credential, not only the default one', async () => {
@@ -480,21 +496,102 @@ describe('disconnectConnectorOAuthGrant', () => {
 
     expect(mocks.listRevocable).toHaveBeenCalledWith('u1', 'linear', 'work');
     expect(mocks.revokeAtProvider).toHaveBeenCalledTimes(1);
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', 'work');
+    expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'linear', 'work');
   });
 
-  it('still revokes locally when provider revocation throws', async () => {
-    mocks.getProvider.mockReturnValue({
-      ...PROVIDER,
-      revocationUrl: 'https://auth.example.com/revoke',
+  it('does not call the provider when the local transaction fails', async () => {
+    mocks.captureGrant.mockRejectedValue(new Error('commit failed'));
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).rejects.toThrow('commit failed');
+    expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
+    expect(mocks.revokeGrant).not.toHaveBeenCalled();
+  });
+
+  it('does not retry or contact the provider after an uncertain commit acknowledgement', async () => {
+    let locallyRemoved = false;
+    mocks.captureGrant.mockImplementation(async () => {
+      locallyRemoved = true;
+      throw new Error('commit acknowledgement lost');
     });
-    mocks.listRevocable.mockRejectedValue(new Error('database down'));
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).rejects.toThrow('commit acknowledgement lost');
+    expect(locallyRemoved).toBe(true);
+    expect(mocks.captureGrant).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
+    expect(mocks.revokeDiscovered).not.toHaveBeenCalled();
+    expect(mocks.revokeGrant).not.toHaveBeenCalled();
+  });
+
+  it('reports unexpected provider exceptions after completing local removal', async () => {
+    mocks.getProvider.mockReturnValue({ ...PROVIDER, revocationUrl: 'https://auth.example.com/revoke' });
+    mocks.listRevocable.mockResolvedValue([revocable()]);
+    mocks.revokeAtProvider.mockRejectedValue(new Error('unexpected provider error'));
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
+  });
+
+  it('reports unreadable or missing captured credentials as unconfirmed upstream', async () => {
+    mocks.captureGrant.mockResolvedValue({ disconnected: true, tokens: [], incomplete: true });
+    await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
+  });
+
+  it('attempts a captured access fallback but keeps unreadable refresh cleanup unconfirmed', async () => {
+    mocks.captureGrant.mockResolvedValue({
+      disconnected: true,
+      tokens: [revocable({ token: 'fallback-access', tokenTypeHint: 'access_token' })],
+      incomplete: true,
+    });
+    mocks.getProvider.mockReturnValue({ ...PROVIDER, revocationUrl: 'https://auth.example.com/revoke' });
+    mocks.revokeAtProvider.mockResolvedValue(true);
 
     await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
       disconnected: true,
       vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
     });
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+    expect(mocks.revokeAtProvider).toHaveBeenCalledOnce();
+    expect(mocks.revokeAtProvider).toHaveBeenCalledWith(
+      expect.anything(), 'fallback-access', 'access_token',
+    );
+  });
+
+  it('sends one discovered access fallback without duplicating it as a companion', async () => {
+    mocks.captureGrant.mockResolvedValue({
+      disconnected: true,
+      tokens: [revocable({
+        token: 'fallback-access', tokenTypeHint: 'access_token',
+        issuer: 'https://auth.vendor.test', mcpUrl: 'https://mcp.vendor.test/mcp',
+      })],
+      incomplete: true,
+    });
+    mocks.getProvider.mockReturnValue(null);
+    mocks.revokeDiscovered.mockResolvedValue({ status: 'revoked' });
+
+    await expect(disconnectConnectorOAuthGrant('u1', 'custom:abc')).resolves.toEqual({
+      disconnected: true,
+      vendorRevocation: { status: 'not-revoked', reason: 'failed', manageUrl: null },
+    });
+    expect(mocks.revokeDiscovered).toHaveBeenCalledOnce();
+    expect(mocks.revokeDiscovered).toHaveBeenCalledWith({
+      issuer: 'https://auth.vendor.test',
+      client: null,
+      tokens: [{ token: 'fallback-access', tokenTypeHint: 'access_token' }],
+    });
+    expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
+  });
+
+  it('waits for the capture transaction result before attempting provider revocation', async () => {
+    let finish!: (result: { disconnected: boolean; tokens: ReturnType<typeof revocable>[]; incomplete: boolean }) => void;
+    mocks.captureGrant.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    mocks.getProvider.mockReturnValue({ ...PROVIDER, revocationUrl: 'https://auth.example.com/revoke' });
+    mocks.revokeAtProvider.mockResolvedValue(true);
+    const pending = disconnectConnectorOAuthGrant('u1', 'linear');
+    expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
+    finish({ disconnected: true, tokens: [revocable({ token: 'rotated-refresh' })], incomplete: false });
+    await pending;
+    expect(mocks.revokeAtProvider).toHaveBeenCalledWith(expect.anything(), 'rotated-refresh', 'refresh_token');
   });
 
   it('reports a provider that refused the revocation', async () => {
@@ -512,14 +609,14 @@ describe('disconnectConnectorOAuthGrant', () => {
       reason: 'failed',
       manageUrl: null,
     });
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+    expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
   });
 
-  it('has nothing to report when no credential was held', async () => {
-    mocks.listRevocable.mockResolvedValue([]);
+  it('has nothing to report for an already disconnected grant', async () => {
+    mocks.captureGrant.mockResolvedValue({ disconnected: false, tokens: [], incomplete: false });
 
     await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toEqual({
-      disconnected: true,
+      disconnected: false,
       vendorRevocation: { status: 'nothing-to-revoke' },
     });
   });
@@ -537,15 +634,15 @@ describe('disconnectConnectorOAuthGrant', () => {
       mocks.listRevocable.mockResolvedValue([discovered]);
     });
 
-    it('revokes the refresh and access tokens at the issuer before deleting its own copy', async () => {
+    it('revokes captured refresh and access tokens after local removal', async () => {
       const order: string[] = [];
       mocks.revokeDiscovered.mockImplementation(async () => {
         order.push('vendor');
         return { status: 'revoked' };
       });
-      mocks.revokeGrant.mockImplementation(async () => {
+      mocks.captureGrant.mockImplementation(async () => {
         order.push('local');
-        return true;
+        return { disconnected: true, tokens: [discovered], incomplete: false };
       });
       mocks.customClient.mockResolvedValue({ clientId: 'own-client', clientSecret: 'own-secret' });
 
@@ -562,7 +659,7 @@ describe('disconnectConnectorOAuthGrant', () => {
         ],
       });
       expect(mocks.customClient).toHaveBeenCalledWith('u1', 'custom:abc');
-      expect(order).toEqual(['vendor', 'local']);
+      expect(order).toEqual(['local', 'vendor']);
       expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
     });
 
@@ -582,7 +679,7 @@ describe('disconnectConnectorOAuthGrant', () => {
           manageUrl: 'https://vendor.test/settings/apps',
         },
       });
-      expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'dir-record', undefined);
+      expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'dir-record', undefined);
       expect(vendorRevocationNotice('Vendor', outcome.vendorRevocation)).toBe(
         'Disconnected here, but access was not revoked at Vendor, so access may remain until ' +
           'you remove it at https://vendor.test/settings/apps.',
@@ -595,7 +692,7 @@ describe('disconnectConnectorOAuthGrant', () => {
       const outcome = await disconnectConnectorOAuthGrant('u1', 'dir-record');
 
       expect(outcome.disconnected).toBe(true);
-      expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'dir-record', undefined);
+      expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'dir-record', undefined);
       expect(vendorRevocationNotice('Vendor', outcome.vendorRevocation)).toBe(
         'Disconnected here, but Vendor did not confirm that it revoked access, so access may ' +
           'remain until you remove it in your Vendor account settings.',
@@ -647,6 +744,23 @@ describe('revokeAllConnectorTokensAtProviders', () => {
     });
     expect(mocks.revokeDiscovered).toHaveBeenCalledWith(
       expect.objectContaining({ issuer: 'https://auth.vendor.test' }),
+    );
+  });
+
+  it('counts a returned access fallback as one attempted account outcome, not complete grant cleanup', async () => {
+    mocks.dbQuery.mockResolvedValue([{ connector_id: 'gmail' }]);
+    mocks.getProvider.mockReturnValue(google);
+    mocks.listRevocable.mockResolvedValue([
+      revocable({ token: 'fallback-access', tokenTypeHint: 'access_token' }),
+    ]);
+    mocks.revokeAtProvider.mockResolvedValue(true);
+
+    await expect(revokeAllConnectorTokensAtProviders('u1')).resolves.toEqual({
+      attempted: 1, revoked: 1,
+    });
+    expect(mocks.revokeAtProvider).toHaveBeenCalledOnce();
+    expect(mocks.revokeAtProvider).toHaveBeenCalledWith(
+      google, 'fallback-access', 'access_token',
     );
   });
 

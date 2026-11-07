@@ -1,8 +1,18 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 const mockExpoImage = jest.fn();
 const mockShareGeneratedImage = jest.fn();
+const mockSaveGeneratedImage = jest.fn();
+const mockCopyGeneratedImage = jest.fn();
+const mockImageAreaEditor = jest.fn();
+jest.mock('../src/features/image/components/ImageAreaEditor', () => ({
+  ImageAreaEditor: (props: Record<string, unknown>) => {
+    mockImageAreaEditor(props);
+    return null;
+  },
+}));
 const mockUseGeneratedImageSource = jest.fn();
 
 jest.mock('expo-image', () => ({
@@ -18,6 +28,8 @@ jest.mock('@/src/features/image/hooks/useGeneratedImageSource', () => ({
 
 jest.mock('@/services/fileCreation', () => ({
   shareGeneratedImage: (...args: unknown[]) => mockShareGeneratedImage(...args),
+  saveGeneratedImageToPhotos: (...args: unknown[]) => mockSaveGeneratedImage(...args),
+  copyGeneratedImage: (...args: unknown[]) => mockCopyGeneratedImage(...args),
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -117,7 +129,7 @@ describe('ImageFullScreen generated-media boundary', () => {
 
     fireEvent.press(getByLabelText('Share image'));
 
-    expect(mockShareGeneratedImage).toHaveBeenCalledWith(durablePath);
+    expect(mockShareGeneratedImage).toHaveBeenCalledWith(durablePath, undefined, { isCurrent: expect.any(Function) });
   });
 });
 
@@ -202,4 +214,121 @@ describe('ImageFullScreen report', () => {
 
     expect(queryByLabelText('Report this image')).toBeNull();
   });
+});
+
+
+describe('ImageFullScreen action ownership', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseGeneratedImageSource.mockReturnValue({ status: 'ready', source: { uri: durablePath } });
+    mockShareGeneratedImage.mockResolvedValue(undefined);
+    mockSaveGeneratedImage.mockResolvedValue(undefined);
+    mockCopyGeneratedImage.mockResolvedValue(undefined);
+  });
+
+  it('retires a pending action when hidden and gives same-URL reopen a fresh owner', async () => {
+    let resolve!: () => void;
+    mockShareGeneratedImage.mockReturnValueOnce(new Promise<void>((done) => { resolve = done; }));
+    const onClose = jest.fn();
+    const view = render(<ImageFullScreen imageUrl={durablePath} visible onClose={onClose} />);
+    fireEvent.press(view.getByLabelText('Share image'));
+    fireEvent.press(view.getByLabelText('Share image'));
+    expect(mockShareGeneratedImage).toHaveBeenCalledTimes(1);
+    const oldCurrent = mockShareGeneratedImage.mock.calls[0]![2].isCurrent;
+    view.rerender(<ImageFullScreen imageUrl={durablePath} visible={false} onClose={onClose} />);
+    expect(oldCurrent()).toBe(false);
+    view.rerender(<ImageFullScreen imageUrl={durablePath} visible onClose={onClose} />);
+    fireEvent.press(view.getByLabelText('Share image'));
+    await act(async () => { resolve(); });
+    expect(mockShareGeneratedImage).toHaveBeenCalledTimes(2);
+    expect(oldCurrent()).toBe(false);
+  });
+
+  it('retires synchronously on close even before the parent hides the modal', () => {
+    mockShareGeneratedImage.mockReturnValueOnce(new Promise(() => {}));
+    const view = render(<ImageFullScreen imageUrl={durablePath} visible onClose={jest.fn()} />);
+    fireEvent.press(view.getByLabelText('Share image'));
+    const isCurrent = mockShareGeneratedImage.mock.calls[0]![2].isCurrent;
+    fireEvent.press(view.getByLabelText('Close'));
+    expect(isCurrent()).toBe(false);
+    fireEvent.press(view.getByLabelText('Share image'));
+    expect(mockShareGeneratedImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an old edit submission after cancel and reopen', () => {
+    const onEditArea = jest.fn();
+    const view = render(<ImageFullScreen imageUrl={durablePath} visible onClose={jest.fn()} onEditArea={onEditArea} />);
+    fireEvent.press(view.getByLabelText('Edit an area of this image'));
+    const oldEditor = mockImageAreaEditor.mock.calls.at(-1)![0];
+    act(() => oldEditor.onCancel());
+    fireEvent.press(view.getByLabelText('Edit an area of this image'));
+    const editor = mockImageAreaEditor.mock.calls.at(-1)![0];
+    const edit = { prompt: 'Change it', sourceBase64: 'source', maskBase64: 'mask' };
+    act(() => oldEditor.onSubmit(edit));
+    expect(onEditArea).not.toHaveBeenCalled();
+    act(() => editor.onSubmit(edit));
+    act(() => editor.onSubmit(edit));
+    expect(onEditArea).toHaveBeenCalledTimes(1);
+    expect(onEditArea).toHaveBeenCalledWith(edit);
+  });
+
+  it('clears successful feedback after its timer and clears timers on hide', async () => {
+    jest.useFakeTimers();
+    try {
+      const onClose = jest.fn();
+      const view = render(<ImageFullScreen imageUrl={durablePath} visible onClose={onClose} />);
+      await act(async () => { fireEvent.press(view.getByLabelText('Save image to Photos')); });
+      expect(view.getByLabelText('Image saved to Photos')).toBeTruthy();
+      act(() => { jest.advanceTimersByTime(2000); });
+      expect(view.getByLabelText('Save image to Photos')).toBeTruthy();
+      await act(async () => { fireEvent.press(view.getByLabelText('Copy image')); });
+      expect(view.getByLabelText('Image copied')).toBeTruthy();
+      view.rerender(<ImageFullScreen imageUrl={durablePath} visible={false} onClose={onClose} />);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+  it('suppresses a rejected old action after replacing the image', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      let reject!: (error: Error) => void;
+      mockShareGeneratedImage.mockReturnValueOnce(new Promise<void>((_, fail) => { reject = fail; }));
+      const onClose = jest.fn();
+      const view = render(<ImageFullScreen imageUrl={durablePath} visible onClose={onClose} />);
+      fireEvent.press(view.getByLabelText('Share image'));
+      view.rerender(<ImageFullScreen imageUrl="/api/files/33333333-3333-4333-8333-333333333333" visible onClose={onClose} />);
+      await act(async () => { reject(new Error('Old download failed')); });
+      expect(alert).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('rejects old delete confirmation and releases the current dialog on cancel', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      const onDelete = jest.fn();
+      const onClose = jest.fn();
+      const view = render(<ImageFullScreen imageUrl={durablePath} visible onClose={onClose} onDelete={onDelete} />);
+      fireEvent.press(view.getByLabelText('Delete image'));
+      const oldDelete = alert.mock.calls.at(-1)![2]![1]!.onPress!;
+      view.rerender(<ImageFullScreen imageUrl={durablePath} visible={false} onClose={onClose} onDelete={onDelete} />);
+      view.rerender(<ImageFullScreen imageUrl={durablePath} visible onClose={onClose} onDelete={onDelete} />);
+      act(() => oldDelete());
+      expect(onDelete).not.toHaveBeenCalled();
+      fireEvent.press(view.getByLabelText('Delete image'));
+      act(() => alert.mock.calls.at(-1)![2]![0]!.onPress!());
+      fireEvent.press(view.getByLabelText('Delete image'));
+      act(() => alert.mock.calls.at(-1)![3]!.onDismiss!());
+      fireEvent.press(view.getByLabelText('Delete image'));
+      const currentDelete = alert.mock.calls.at(-1)![2]![1]!.onPress!;
+      act(() => currentDelete());
+      act(() => currentDelete());
+      expect(onDelete).toHaveBeenCalledTimes(1);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
 });

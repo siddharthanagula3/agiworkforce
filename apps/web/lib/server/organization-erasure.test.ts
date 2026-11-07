@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => ({
   deleteStoredMediaObjects: vi.fn(),
   invalidateActiveOrganizationCache: vi.fn(async (..._args: unknown[]) => undefined),
   cancelLiveStripeSubscriptionsNow: vi.fn(),
+  resolveObjectBackupTarget: vi.fn(
+    (): { store: unknown; bucket: string; region: string; endpoint: string } | null => null,
+  ),
+  deleteBackupObject: vi.fn(async (_key: string, _options?: unknown) => 'deleted'),
+  forgetBackupReplicas: vi.fn(async (_keys: readonly string[]) => 0),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -32,6 +37,11 @@ vi.mock('@/lib/server/payments/stripe-provider', () => ({
 vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: (...args: unknown[]) =>
     mocks.invalidateActiveOrganizationCache(...args),
+}));
+vi.mock('@/lib/server/object-backup', () => ({
+  resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
+  deleteBackupObject: (key: string, options?: unknown) => mocks.deleteBackupObject(key, options),
+  forgetBackupReplicas: (keys: readonly string[]) => mocks.forgetBackupReplicas(keys),
 }));
 
 import {
@@ -95,10 +105,37 @@ interface ErasureFixture {
   legalHoldError?: Error;
   members?: Array<{ user_id: string }>;
   seatSubscriptionId?: string;
+  lockdownDefinition?: 'missing' | 'read-error' | 'insert-error';
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('public.feature_flag_definitions')) {
+      if (fixture.lockdownDefinition === 'read-error') throw new Error('flag read unavailable');
+      if (fixture.lockdownDefinition === 'insert-error' && sql.includes('insert into')) {
+        throw new Error('flag insert unavailable');
+      }
+      if (fixture.lockdownDefinition) return [];
+      return [
+        {
+          key: 'tenant.lockdown',
+          description: '',
+          kill_switch: false,
+          variants: ['on', 'off'],
+          default_variant: 'on',
+          rules: [],
+          expires_at: null,
+          maturity: null,
+          release_channel: null,
+          availability: null,
+          owner_name: null,
+          archived_at: null,
+          version: 1,
+          created_at: '2026-09-01T00:00:00.000Z',
+          updated_at: '2026-09-01T00:00:00.000Z',
+        },
+      ];
+    }
     if (sql.includes('public.legal_holds')) {
       if (fixture.legalHoldError) throw fixture.legalHoldError;
       return [{ count: fixture.activeLegalHolds ?? (fixture.underLegalHold ? 1 : 0) }];
@@ -176,6 +213,18 @@ describe('organization erasure inventory', () => {
     expect(retained.has('ediscovery_exports')).toBe(true);
   });
 
+  it('defers workspace flags, including the erasure lock, to the final organization cascade', () => {
+    expect(ORGANIZATION_SCOPED_TABLES.some(({ table }) => table === 'feature_flags')).toBe(false);
+    expect(ORGANIZATION_UNDELETED_TABLES['feature_flags']).toBeDefined();
+    const migration = readFileSync(
+      path.join(MIGRATIONS_DIR, '0211_feature_flag_targeting.sql'),
+      'utf8',
+    );
+    expect(migration).toContain(
+      'add column if not exists organization_id uuid references public.organizations(id) on delete cascade',
+    );
+  });
+
   it('keeps direct eDiscovery mutation blocked while admitting only the parent cascade', () => {
     const migration = readFileSync(
       path.join(MIGRATIONS_DIR, '0273_ediscovery_cascade_delete.sql'),
@@ -191,7 +240,247 @@ describe('organization erasure inventory', () => {
 });
 
 describe('eraseOrganizationData', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveObjectBackupTarget.mockReset().mockReturnValue(null);
+    mocks.deleteBackupObject.mockReset().mockResolvedValue('deleted');
+    mocks.forgetBackupReplicas.mockReset().mockResolvedValue(0);
+  });
+
+  it('retains failed backup pointers and the workspace until a later cleanup succeeds', async () => {
+    primeDb();
+    let rows = [
+      { id: 'a', organization_id: 'org-1', storage_pathname: 'private-media/a.png' },
+      { id: 'b', organization_id: 'org-1', storage_pathname: 'private-media/b.png' },
+      { id: 'c', organization_id: 'org-2', storage_pathname: 'private-media/c.png' },
+    ];
+    const query = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('select id, storage_pathname from public.media_assets')) {
+        return rows.filter((row) => row.organization_id === params[0]);
+      }
+      if (sql.includes('delete from public.media_assets where id = any')) {
+        const ids = params[0] as string[];
+        const removed = rows.filter((row) => ids.includes(row.id));
+        rows = rows.filter((row) => !ids.includes(row.id));
+        return removed;
+      }
+      return query(sql);
+    });
+    mocks.deleteStoredMediaObjects.mockImplementation(async (paths: string[]) => ({
+      deleted: paths.length,
+      failedPathnames: [],
+    }));
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteBackupObject.mockRejectedValueOnce(new Error('backup unavailable'));
+
+    const first = await eraseOrganizationData('org-1');
+
+    expect(first.backupObjectsFailed).toBe(1);
+    expect(first.backupObjectsDeleted).toBe(1);
+    expect(first.mediaRowsDeleted).toBe(1);
+    expect(first.complete).toBe(false);
+    expect(first.organizationRetained).toBe(true);
+    expect(first.tables['media_assets']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(rows.map(({ id }) => id)).toEqual(['a', 'c']);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.organizations')),
+    ).toBe(false);
+
+    const second = await eraseOrganizationData('org-1');
+
+    expect(second.backupObjectsFailed).toBe(0);
+    expect(second.backupObjectsDeleted).toBe(1);
+    expect(second.complete).toBe(true);
+    expect(second.organizationRetained).toBe(false);
+    expect(rows.map(({ id }) => id)).toEqual(['c']);
+    expect(mocks.deleteBackupObject.mock.calls.map(([key]) => key)).toEqual([
+      'private-media/a.png',
+      'private-media/b.png',
+      'private-media/a.png',
+    ]);
+    expect(mocks.forgetBackupReplicas).toHaveBeenNthCalledWith(1, ['private-media/b.png']);
+    expect(mocks.forgetBackupReplicas).toHaveBeenNthCalledWith(2, ['private-media/a.png']);
+  });
+
+  it('does not erase the backup while deletion of its primary failed', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({
+      deleted: 0,
+      failedPathnames: ['private-media/a.png'],
+    });
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
+    expect(report.complete).toBe(false);
+    expect(report.tables['media_assets']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('delete from public.media_assets')),
+    ).toBe(false);
+  });
+
+  it('retains the media row if backup target resolution throws after primary deletion', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    mocks.resolveObjectBackupTarget.mockImplementationOnce(() => {
+      throw new Error('invalid backup config');
+    });
+
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow('invalid backup config');
+
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('delete from public.media_assets')),
+    ).toBe(false);
+    expect(executedStatements().some((sql) => sql.startsWith('delete from'))).toBe(false);
+  });
+
+  it('does not start object or row disposal when the media inventory read fails', async () => {
+    primeDb();
+    const query = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('select id, storage_pathname from public.media_assets')) {
+        throw new Error('inventory unavailable');
+      }
+      return query(sql);
+    });
+
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow('inventory unavailable');
+
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
+    expect(executedStatements().some((sql) => sql.startsWith('delete from'))).toBe(false);
+  });
+
+  it('preserves the existing zero-count policy when no backup target is configured', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    const withoutTarget = await eraseOrganizationData('org-1');
+    expect(withoutTarget.backupObjectsDeleted).toBe(0);
+    expect(withoutTarget.backupObjectsFailed).toBe(0);
+    expect(withoutTarget.complete).toBe(true);
+  });
+
+  it('settles an absent backup even if replica metadata cleanup fails', async () => {
+    primeDb({ mediaRows: [{ id: 'a', storage_pathname: 'private-media/a.png' }] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+    mocks.deleteBackupObject.mockResolvedValueOnce('absent');
+    mocks.forgetBackupReplicas.mockRejectedValueOnce(new Error('tracking unavailable'));
+
+    const withAbsentCopy = await eraseOrganizationData('org-1');
+    expect(withAbsentCopy.backupObjectsDeleted).toBe(1);
+    expect(withAbsentCopy.backupObjectsFailed).toBe(0);
+    expect(withAbsentCopy.complete).toBe(true);
+  });
+
+  it.each([
+    ['missing', 'The lockdown switch could not be prepared. Erasure did not start.'],
+    ['read-error', 'flag read unavailable'],
+    ['insert-error', 'flag insert unavailable'],
+  ] as const)(
+    'does not erase when the lockdown definition is %s',
+    async (lockdownDefinition, message) => {
+      primeDb({ lockdownDefinition });
+
+      await expect(eraseOrganizationData('org-1')).rejects.toThrow(message);
+
+      expect(mocks.execute).not.toHaveBeenCalled();
+      expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+      expect(mocks.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+      expect(
+        mocks.query.mock.calls.some(([sql]) =>
+          /public\.(media_assets|organization_shared_connectors|organization_mcp_servers)/.test(
+            String(sql),
+          ),
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it('does not erase when writing the lockdown override fails', async () => {
+    primeDb({ failStatementMatching: 'insert into public.feature_flags' });
+
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow('deadlock detected');
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(executedStatements()[0]).toContain('insert into public.feature_flags');
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    expect(mocks.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+    expect(
+      mocks.query.mock.calls.some(([sql]) =>
+        /public\.(media_assets|organization_shared_connectors|organization_mcp_servers)/.test(
+          String(sql),
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('waits for the non-expiring workspace lock before deleting media or rows', async () => {
+    primeDb({ mediaRows: [{ id: 'm1', storage_pathname: 'orgs/org-1/m1.png' }] });
+    let finishLock!: (value: number) => void;
+    let lockStarted!: () => void;
+    const pendingLock = new Promise<number>((resolve) => {
+      finishLock = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      lockStarted = resolve;
+    });
+    mocks.execute.mockImplementation(async (sql: string) => {
+      if (sql.includes('insert into public.feature_flags')) {
+        lockStarted();
+        return pendingLock;
+      }
+      return 1;
+    });
+
+    const pendingErasure = eraseOrganizationData('org-1');
+    await started;
+    try {
+      expect(mocks.execute).toHaveBeenCalledTimes(1);
+      expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+      expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('media_assets'))).toBe(false);
+    } finally {
+      finishLock(1);
+    }
+
+    await pendingErasure;
+
+    expect(executedStatements()[0]).toContain('insert into public.feature_flags');
+    expect(mocks.execute.mock.calls[0]?.[1]).toEqual(['org-1', 'tenant.lockdown', false, 'off', null]);
+    expect(mocks.deleteStoredMediaObjects.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.execute.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('can establish the lock and complete on a later retry after an isolation failure', async () => {
+    primeDb({ lockdownDefinition: 'missing' });
+    await expect(eraseOrganizationData('org-1')).rejects.toThrow();
+
+    primeDb();
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.complete).toBe(true);
+    expect(report.organizationRetained).toBe(false);
+    expect(
+      mocks.execute.mock.calls.filter(([sql]) =>
+        String(sql).includes('insert into public.feature_flags'),
+      ),
+    ).toHaveLength(1);
+  });
 
   it('blocks the whole purge when an active legal hold exists, and touches nothing', async () => {
     primeDb({ underLegalHold: true });
@@ -201,6 +490,8 @@ describe('eraseOrganizationData', () => {
     expect(report.complete).toBe(false);
     expect(report.blockedByLegalHold).toBe(true);
     expect(report.organizationRetained).toBe(true);
+    expect(report.backupObjectsDeleted).toBe(0);
+    expect(report.backupObjectsFailed).toBe(0);
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
@@ -246,6 +537,7 @@ describe('eraseOrganizationData', () => {
       statements.some((sql) => sql.includes('delete from public.organizations where id = $1')),
     ).toBe(true);
     expect(report.tables['organization_members']).toEqual({ deleted: true });
+    expect(statements.some((sql) => sql.includes('delete from public.feature_flags'))).toBe(false);
   });
 
   it('retains the tenant audit trail, detaching only the organization reference', async () => {
@@ -288,8 +580,8 @@ describe('eraseOrganizationData', () => {
       deleted: 1,
       failedPathnames: ['orgs/org-1/m2.png'],
     });
+    const query = mocks.query.getMockImplementation()!;
     mocks.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('public.legal_holds')) return [{ held: false }];
       if (sql.includes('select id, storage_pathname from public.media_assets')) {
         return [
           { id: 'm1', storage_pathname: 'orgs/org-1/m1.png' },
@@ -299,7 +591,7 @@ describe('eraseOrganizationData', () => {
       if (sql.includes('delete from public.media_assets where id = any')) {
         return [{ id: 'm1' }];
       }
-      return [];
+      return query(sql);
     });
 
     const report = await eraseOrganizationData('org-1');
@@ -309,6 +601,44 @@ describe('eraseOrganizationData', () => {
     expect(report.mediaRowsDeleted).toBe(1);
     expect(report.complete).toBe(false);
     expect(report.organizationRetained).toBe(true);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
+  });
+
+  it.each([
+    'delete from public.sso_connections',
+    'update public.organization_usage_ledger',
+    'delete from public.organizations where id = $1',
+  ])('keeps flag cleanup deferred when %s fails', async (failStatementMatching) => {
+    primeDb({ failStatementMatching });
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.organizationRetained).toBe(true);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
+  });
+
+  it('reestablishes the lock and reaches the final cascade on a retry after a partial purge', async () => {
+    primeDb({ failStatementMatching: 'delete from public.sso_connections' });
+    const first = await eraseOrganizationData('org-1');
+    expect(first.complete).toBe(false);
+    expect(first.organizationRetained).toBe(true);
+
+    primeDb();
+    const second = await eraseOrganizationData('org-1');
+
+    expect(second.complete).toBe(true);
+    expect(second.organizationRetained).toBe(false);
+    expect(
+      executedStatements().filter((sql) => sql.includes('insert into public.feature_flags')),
+    ).toHaveLength(2);
+    expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
   });
 
   it('leaves a failing table retained for retry and keeps the organization row', async () => {
@@ -357,6 +687,9 @@ describe('eraseOrganizationData', () => {
     expect(report.complete).toBe(true);
     expect(report.organizationRetained).toBe(true);
     expect(
+      executedStatements().some((sql) => sql.includes('delete from public.feature_flags')),
+    ).toBe(false);
+    expect(
       executedStatements().some((sql) =>
         sql.includes('delete from public.organizations where id = $1'),
       ),
@@ -395,6 +728,8 @@ describe('eraseOrganizationData', () => {
     expect(report.complete).toBe(false);
     expect(report.blockedByBilling).toBe(true);
     expect(report.organizationRetained).toBe(true);
+    expect(report.backupObjectsDeleted).toBe(0);
+    expect(report.backupObjectsFailed).toBe(0);
     expect(mocks.execute).not.toHaveBeenCalled();
     expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
   });

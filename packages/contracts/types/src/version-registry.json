@@ -74,6 +74,13 @@
       "minSymbol": "WORKSPACE_POLICY_MIN_SCHEMA_VERSION",
       "negotiated": false
     },
+    "effective-policy-schema": {
+      "why": "the resolved policy representation and cache validator, independent of stored layers and tenant revisions",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+      "symbol": "EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION",
+      "negotiated": false
+    },
     "entitlement-schema": {
       "why": "what a plan carries, which a client may name and may never work out for itself",
       "kind": "constant",

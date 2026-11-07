@@ -202,7 +202,7 @@ import { managedCloudChat } from '@/services/managedCloudChat';
 import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { getProviderOffering } from '@agiworkforce/types';
 import {
-  ensureReadyFreeQuotaChatOffering,
+  ensureReadyFreeQuotaOffering,
   useFreeQuotaCatalogueStore,
 } from '@/src/features/model-picker/freeQuotaCatalogue';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -1172,7 +1172,14 @@ function ensureLocalThreadParents(conversationId: string): ChatMessage[] {
 }
 
 function setLocalActiveLeaf(conversationId: string, messageId: string): void {
-  getConversationMessageStore(conversationId).setState((state) => ({
+  const store = getConversationMessageStore(conversationId);
+  if (store === useChatCloudMessageStore) {
+    useChatCloudMessageStore.getState().patchCloudConversation(conversationId, {
+      activeLeafMessageId: messageId,
+    });
+    return;
+  }
+  store.setState((state) => ({
     conversations: state.conversations.map((candidate) =>
       candidate.id === conversationId
         ? { ...candidate, activeLeafMessageId: messageId }
@@ -1491,7 +1498,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isTurnAccountCurrent()) return false;
 
       if (isFreeQuotaChat) {
-        const freeOffering = await ensureReadyFreeQuotaChatOffering(requestedModel);
+        const freeOffering = await ensureReadyFreeQuotaOffering(requestedModel);
         if (!isTurnAccountCurrent()) return false;
         if (!freeOffering) {
           set({
@@ -2102,6 +2109,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       failureCode: null,
     });
 
+    const ownsLocalTurn = () => abortControllers.get(conversationId) === controller;
+    const hasLiveLocalAssistant = () => {
+      const state = getConversationMessageStore(conversationId).getState();
+      return (
+        ownsLocalTurn() &&
+        !controller.signal.aborted &&
+        state.conversations.some((conversation) => conversation.id === conversationId) &&
+        (state.messages[conversationId] ?? []).some(
+          (message) =>
+            message.id === assistantMessageId && message.role === 'assistant' && message.isStreaming,
+        )
+      );
+    };
+
     try {
       if (shouldUseLocalRuntime) {
         const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(
@@ -2114,6 +2135,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           })),
         );
         const localRef = await resolveLocalModelRef(requestedModel);
+        if (!hasLiveLocalAssistant()) return true;
         let localStreamingRaw = '';
         let localTokenCount = 0;
         let localFirstTokenAt = 0;
@@ -2163,7 +2185,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             requestId: assistantMessageId,
             signal: controller.signal,
             onToken: (token) => {
-              if (controller.signal.aborted) return;
+              if (!hasLiveLocalAssistant()) return;
               if (localFirstTokenAt === 0) localFirstTokenAt = Date.now();
               lastDeltaTimes.set(conversationId, Date.now());
               localTokenCount += 1;
@@ -2174,12 +2196,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         } finally {
           localPeakMemoryMB = await memorySampler.stop();
         }
-        if (controller.signal.aborted || result.aborted) {
-          abortControllers.delete(conversationId);
-          streamingConversations.delete(conversationId);
-          set({ ...streamingFlags() });
-          return true;
-        }
+        if (!hasLiveLocalAssistant() || result.aborted) return true;
         const parsedFinal = parseCurrentTurnAssistantOutput(
           result.text.trim() || localStreamingRaw.trim(),
           content,
@@ -2190,7 +2207,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         const finalReasoning = parsedFinal.hasReasoning ? parsedFinal.reasoning : undefined;
         const startedAt = thinkingStartTimes.get(conversationId);
         const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
-        thinkingStartTimes.delete(conversationId);
 
         const decodeMs = localFirstTokenAt > 0 ? Date.now() - localFirstTokenAt : 0;
         const tokensPerSecond =
@@ -2208,40 +2224,75 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           });
         }
 
-        const currentMsgStore = getConversationMessageStore(conversationId);
-        const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
-        const updatedMsgs = msgs.map((m) =>
-          m.id === assistantMessageId
-            ? {
-                ...m,
-                content: finalContent,
-                reasoning: finalReasoning,
-                isStreaming: false,
-                ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}),
-                metadata: {
-                  ...m.metadata,
-                  localRuntime: result.runtime,
-                  localMode: true,
-                  localModelId: localRef.modelId,
-                  localModelName: localRef.displayName,
-                  ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
-                },
-              }
-            : m,
-        );
-
         try {
           await markLocalModelRefUsed(localRef);
         } catch (err) {
           console.warn('[chatExecutionStore] Failed to record local model usage:', err);
         }
 
-        abortControllers.delete(conversationId);
-        streamingConversations.delete(conversationId);
+        const currentMsgStore = getConversationMessageStore(conversationId);
+        let committed = false;
+        let localConvTitle = '';
+        currentMsgStore.setState((state) => {
+          const conversation = state.conversations.find(
+            (candidate) => candidate.id === conversationId,
+          );
+          const messages = state.messages[conversationId];
+          if (
+            !ownsLocalTurn() ||
+            controller.signal.aborted ||
+            !conversation ||
+            !messages?.some(
+              (message) =>
+                message.id === assistantMessageId &&
+                message.role === 'assistant' &&
+                message.isStreaming,
+            )
+          ) {
+            return state;
+          }
+          committed = true;
+          localConvTitle = conversation.title;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: messages.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      content: finalContent,
+                      reasoning: finalReasoning,
+                      isStreaming: false,
+                      ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}),
+                      metadata: {
+                        ...message.metadata,
+                        localRuntime: result.runtime,
+                        localMode: true,
+                        localModelId: localRef.modelId,
+                        localModelName: localRef.displayName,
+                        ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
+                      },
+                    }
+                  : message,
+              ),
+            },
+            conversations: state.conversations.map((candidate) =>
+              candidate.id === conversationId
+                ? {
+                    ...candidate,
+                    lastMessage: finalContent.slice(0, 100),
+                    messageCount: (candidate.messageCount ?? 0) + turnMessageCount,
+                    updatedAt: new Date().toISOString(),
+                    model: candidate.model ?? requestedModel,
+                    provider: candidate.provider ?? provider,
+                    executionMode: candidate.executionMode ?? executionMode,
+                  }
+                : candidate,
+            ),
+          };
+        });
+        if (!committed) return true;
 
-        const localConvTitle =
-          currentMsgStore.getState().conversations.find((c) => c.id === conversationId)?.title ??
-          '';
         captureArtifactsFromMessage(
           finalContent,
           assistantMessageId,
@@ -2250,23 +2301,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           new Date().toISOString(),
           artifactProvenance,
         );
-
-        currentMsgStore.setState((s) => ({
-          messages: { ...s.messages, [conversationId]: updatedMsgs },
-          conversations: s.conversations.map((c) =>
-            c.id === conversationId
-              ? {
-                  ...c,
-                  lastMessage: finalContent.slice(0, 100),
-                  messageCount: (c.messageCount ?? 0) + turnMessageCount,
-                  updatedAt: new Date().toISOString(),
-                  model: c.model ?? requestedModel,
-                  provider: c.provider ?? provider,
-                  executionMode: c.executionMode ?? executionMode,
-                }
-              : c,
-          ),
-        }));
         set({
           ...streamingFlags(),
           streamingContent: '',
@@ -2967,6 +3001,30 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       );
       return true;
     } catch (caughtErr) {
+      if (shouldUseLocalRuntime) {
+        if (!hasLiveLocalAssistant()) return true;
+        const message = localSetupMessage(caughtErr);
+        const currentMsgStore = getConversationMessageStore(conversationId);
+        currentMsgStore.setState((state) => ({
+          messages: {
+            ...state.messages,
+            [conversationId]: (state.messages[conversationId] ?? []).map((candidate) =>
+              candidate.id === assistantMessageId
+                ? { ...candidate, content: candidate.content || message, isStreaming: false }
+                : candidate,
+            ),
+          },
+        }));
+        set({
+          ...streamingFlags(),
+          streamingContent: '',
+          streamingReasoning: '',
+          error: message,
+          paywallError: null,
+        });
+        return true;
+      }
+
       thinkingStartTimes.delete(conversationId);
       abortControllers.delete(conversationId);
       streamingConversations.delete(conversationId);
@@ -2984,23 +3042,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
       const currentContent = get().streamingContent;
 
-      if (shouldUseLocalRuntime) {
-        const message = localSetupMessage(caughtErr);
-        const updatedMsgs = msgs.map((m) =>
-          m.id === assistantMessageId ? { ...m, content: message, isStreaming: false } : m,
-        );
-        currentMsgStore.setState((s) => ({
-          messages: { ...s.messages, [conversationId]: updatedMsgs },
-        }));
-        set({
-          ...streamingFlags(),
-          streamingContent: '',
-          streamingReasoning: '',
-          error: message,
-          paywallError: null,
-        });
-        return true;
-      }
 
       if (caughtErr instanceof ApiPaywallError) {
         const updatedMsgs = msgs.map((m) =>
@@ -3082,43 +3123,59 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return true;
     } finally {
-      thinkingStartTimes.delete(conversationId);
-      thinkingEndTimes.delete(conversationId);
-      lastDeltaTimes.delete(conversationId);
-      if (abortControllers.get(conversationId) === controller) {
-        abortControllers.delete(conversationId);
-      }
-      streamingConversations.delete(conversationId);
-      cloudStreamingConversations.delete(conversationId);
-      if (isTurnAccountCurrent()) {
-        const sweepStore = getConversationMessageStore(conversationId);
-        const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
-        if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
-          const completedAtMs = Date.now();
-          const settledMessages = sweepMsgs.map((m) =>
-            m.id === assistantMessageId && m.isStreaming
-              ? settleMessageTurnState(
-                  { ...m, isStreaming: false },
-                  controller.signal.aborted ? 'cancelled' : 'failed',
-                  completedAtMs,
-                  controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
-                )
-              : m,
-          );
-          sweepStore.setState((s) => ({
-            messages: {
-              ...s.messages,
-              [conversationId]: settledMessages,
-            },
-          }));
-          if (executionMode === 'cloud') {
-            pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+      if (!shouldUseLocalRuntime || ownsLocalTurn()) {
+        thinkingStartTimes.delete(conversationId);
+        thinkingEndTimes.delete(conversationId);
+        lastDeltaTimes.delete(conversationId);
+        if (abortControllers.get(conversationId) === controller) {
+          abortControllers.delete(conversationId);
+        }
+        streamingConversations.delete(conversationId);
+        cloudStreamingConversations.delete(conversationId);
+        if (
+          isTurnAccountCurrent() &&
+          (!shouldUseLocalRuntime ||
+            getConversationMessageStore(conversationId)
+              .getState()
+              .conversations.some((conversation) => conversation.id === conversationId))
+        ) {
+          const sweepStore = getConversationMessageStore(conversationId);
+          const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+          if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+            const completedAtMs = Date.now();
+            const settledMessages = sweepMsgs.map((m) =>
+              m.id === assistantMessageId && m.isStreaming
+                ? settleMessageTurnState(
+                    { ...m, isStreaming: false },
+                    controller.signal.aborted ? 'cancelled' : 'failed',
+                    completedAtMs,
+                    controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+                  )
+                : m,
+            );
+            sweepStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: settledMessages,
+              },
+            }));
+            if (executionMode === 'cloud') {
+              pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+            }
           }
         }
+        set({ ...streamingFlags() });
+        void settlePhoneDeviceSteps(conversationId, assistantMessageId);
+        if (
+          !shouldUseLocalRuntime ||
+          (!abortControllers.has(conversationId) &&
+            getConversationMessageStore(conversationId)
+              .getState()
+              .conversations.some((conversation) => conversation.id === conversationId))
+        ) {
+          flushDeferredSend(conversationId);
+        }
       }
-      set({ ...streamingFlags() });
-      void settlePhoneDeviceSteps(conversationId, assistantMessageId);
-      flushDeferredSend(conversationId);
     }
   },
 

@@ -1,3 +1,7 @@
+import {
+  assertCloudAccountEpochCurrent,
+  captureCloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@agiworkforce/types';
 import { clearBiometricFlag } from '@/lib/biometricFlagStore';
 import { clearDeviceId } from '@/lib/deviceId';
@@ -7,7 +11,6 @@ import {
   type DsarSupplementalLocalData,
 } from '@/services/dsarExport';
 import { useArtifactStore } from '@/src/features/artifacts/store';
-import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   executionModeForConversation,
@@ -56,11 +59,36 @@ function mapMobileMessage(
   };
 }
 
+export class LocalExportAuthorityError extends Error {
+  constructor() {
+    super('Cloud data in this export could not be matched to the active account. Sign in to the account that owns it before exporting.');
+    this.name = 'LocalExportAuthorityError';
+  }
+}
+
 export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
   const chatMessages = useChatMessageStore.getState();
   const projects = useProjectStore.getState().projects;
   const deviceSettings = useSettingsStore.getState();
   const appMode = useChatAppModeStore.getState().appMode;
+  const artifacts = useArtifactStore.getState().artifacts;
+  const cloudArtifacts = artifacts.filter((artifact) => artifact.provenance?.scope === 'cloud');
+  const needsCloudAuthority = appMode === 'cloud' || cloudArtifacts.length > 0;
+  const account = needsCloudAuthority ? captureCloudAccountEpoch() : null;
+  if (needsCloudAuthority && !account) throw new LocalExportAuthorityError();
+  const assertAuthority = needsCloudAuthority
+    ? () => {
+        assertCloudAccountEpochCurrent(account);
+        if (
+          cloudArtifacts.some((artifact) =>
+            artifact.provenance?.scope === 'cloud' && artifact.provenance.ownerId !== account.ownerId
+          )
+        ) {
+          throw new LocalExportAuthorityError();
+        }
+      }
+    : undefined;
+  assertAuthority?.();
   const modeSettings =
     appMode === 'cloud' ? useCloudSettingsStore.getState() : useLocalSettingsStore.getState();
   const settings = { ...deviceSettings, ...modeSettings };
@@ -88,6 +116,7 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
   });
 
   return {
+    assertAuthority,
     conversations,
     local_projects: projects.map((project) => ({
       id: project.id,
@@ -139,12 +168,12 @@ export function buildLocalDataExportSnapshot(): DsarSupplementalLocalData {
         features: { ...chatView.features },
       },
     },
-    local_artifacts: useArtifactStore.getState().artifacts,
+    local_artifacts: artifacts,
   };
 }
 
 export async function resetLocalInMemoryState(): Promise<void> {
-  await Promise.all([clearBiometricFlag(), clearDeviceId(), useAuthStore.getState().signOut()]);
+  await Promise.all([clearBiometricFlag(), clearDeviceId()]);
 
   useChatMessageStore.setState({
     conversations: [],

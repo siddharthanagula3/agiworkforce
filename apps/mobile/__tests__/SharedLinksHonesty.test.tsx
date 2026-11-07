@@ -4,6 +4,11 @@ import { render, screen, waitFor } from '@testing-library/react-native';
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
 
+jest.mock('@/src/features/auth/store', () => {
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  return { useAuthStore: create(() => ({ clerkUserId: 'fixture-account', isClerkSignedIn: true })) };
+});
+
 jest.mock('@/services/api', () => ({
   api: {
     get: (...args: unknown[]) => mockGet(...args),
@@ -37,10 +42,16 @@ jest.mock('@/src/ui/theme', () => {
 
 import SharedLinksScreen from '../app/(app)/settings/shared-links';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 describe('Shared Links capability honesty', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('fixture-account');
     mockGet.mockResolvedValue({ shares: [] });
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
@@ -64,7 +75,9 @@ describe('Shared Links capability honesty', () => {
 
   it('reads the account own shares from the real endpoint', async () => {
     render(<SharedLinksScreen />);
-    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/share'));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/share', expect.objectContaining({
+      accountEpoch: expect.objectContaining({ ownerId: 'fixture-account' }),
+    })));
   });
 
   it('renders a published link with its revoke control', async () => {
@@ -134,6 +147,8 @@ describe('Shared Links capability honesty', () => {
 describe('Shared Links in Local Mode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('fixture-account');
     useChatAppModeStore.setState({ appMode: 'local' });
   });
 

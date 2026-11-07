@@ -84,6 +84,7 @@ const onTranscript = vi.fn();
 function renderSurface() {
   return render(
     <VoiceModeSurface
+          managed={true}
       variant={VOICE_SURFACE_VARIANT.chat}
       turnActive={false}
       conversationId="conversation-1"
@@ -146,6 +147,7 @@ describe('voice live-region announcements', () => {
       controller.current = session({ state: { ...INITIAL_VOICE_SESSION_STATE, status } });
       rerender(
         <VoiceModeSurface
+          managed={true}
           variant={VOICE_SURFACE_VARIANT.chat}
           turnActive={false}
           conversationId="conversation-1"

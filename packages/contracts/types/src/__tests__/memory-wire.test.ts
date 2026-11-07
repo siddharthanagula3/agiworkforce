@@ -19,6 +19,7 @@ import {
   parseManagedMemoryLocalContextResponse,
   parseManagedMemoryRecord,
   parseManagedMemoryRestoreResponse,
+  parseManagedMemoryStrictPageResponse,
   parseManagedMemoryWriteResponse,
   readManagedMemoryCommandRequest,
   readManagedMemoryCreateRequest,
@@ -87,6 +88,39 @@ describe('managed memory wire records', () => {
     expect(parseManagedMemoryItemResponse({ memory: record })).toEqual({ memory: record });
     expect(parseManagedMemoryItemResponse({ memory: {} })).toBeNull();
     expect(parseManagedMemoryItemResponse(null)).toBeNull();
+  });
+
+  it('reads complete pages without tightening optional record fields', () => {
+    expect(parseManagedMemoryStrictPageResponse({ memories: [], hasMore: false })).toEqual({
+      memories: [], hasMore: false,
+    });
+    expect(parseManagedMemoryStrictPageResponse({ memories: [record], hasMore: true })).toEqual({
+      memories: [record], hasMore: true,
+    });
+    const compatibleRecord = { ...record, category: 5, source: false, pinned: 'yes', projectId: [] };
+    expect(parseManagedMemoryStrictPageResponse({ memories: [compatibleRecord], hasMore: false })).toEqual({
+      memories: [{ ...record, category: null, source: null }], hasMore: false,
+    });
+  });
+
+  it.each([
+    null,
+    [],
+    {},
+    { memories: {}, hasMore: false },
+    { memories: [] },
+    { memories: [], hasMore: null },
+    { memories: [], hasMore: 'true' },
+    { memories: [], hasMore: 'false' },
+    { memories: [], hasMore: 0 },
+    { memories: [], hasMore: 1 },
+    { memories: [record, null], hasMore: false },
+    { memories: [record, { ...record, id: '' }], hasMore: true },
+    { memories: [record, { ...record, content: 1 }], hasMore: false },
+    { memories: [record, { ...record, createdAt: null }], hasMore: true },
+    { memories: [record, { ...record, updatedAt: false }], hasMore: false },
+  ].map((value) => [value]))('rejects an incomplete page receipt %#', (value) => {
+    expect(parseManagedMemoryStrictPageResponse(value)).toBeNull();
   });
 
   it('preserves valid supersession and restoration results', () => {

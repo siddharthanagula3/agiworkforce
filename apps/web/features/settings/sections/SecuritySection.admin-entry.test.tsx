@@ -45,7 +45,8 @@ vi.mock('@features/settings/components/AuditLogPanel', () => ({
   AuditLogPanel: () => <div>Security activity</div>,
 }));
 
-vi.mock('@features/settings/components/Settings/TwoFactor', () => ({
+vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
+  ...await original<typeof import('@features/settings/components/Settings/TwoFactor')>(),
   TwoFactorPanel: () => <div data-testid="security-form-2fa" />,
 }));
 

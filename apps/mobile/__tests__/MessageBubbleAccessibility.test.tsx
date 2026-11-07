@@ -7,6 +7,11 @@ import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import type { ChatMessage } from '@/types/chat';
+import type {
+  VoiceOutputHandle,
+  VoiceOutputOutcome,
+  VoiceOutputOwner,
+} from '@/src/features/voice/services/voiceOutput';
 
 const CONTENT =
   '# Readable heading\n\nA paragraph after the heading.\n\n```email\nTo: reader@example.com\nSubject: Review\n\nAn editable message.\n```';
@@ -112,5 +117,54 @@ describe('whole native message accessibility structure', () => {
     expect(user.props.accessibilityActions).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: 'edit' })]),
     );
+  });
+
+  it('bounds recycled-row speech handlers and cleanup to their exact operation', async () => {
+    const playback: Array<{
+      handle: VoiceOutputHandle;
+      resolve: (outcome: VoiceOutputOutcome) => void;
+    }> = [];
+    const start = jest.fn((_text: string): VoiceOutputHandle => {
+      let resolve!: (outcome: VoiceOutputOutcome) => void;
+      const done = new Promise<VoiceOutputOutcome>((accept) => { resolve = accept; });
+      const handle = { done, stop: jest.fn().mockResolvedValue(undefined) };
+      playback.push({ handle, resolve });
+      return handle;
+    });
+    const owner: VoiceOutputOwner = {
+      source: { scope: 'local' },
+      isCurrent: () => true,
+      start,
+      stop: jest.fn().mockResolvedValue(undefined),
+      dispose: jest.fn().mockResolvedValue(undefined),
+    };
+    const rowA = assistant({ id: 'row-a', content: 'Response A.' });
+    const rowB = assistant({ id: 'row-b', content: 'Response B.' });
+    const view = render(<MessageBubble message={rowA} speechOwner={owner} />);
+    const retainedRowAPress = screen.getByLabelText('Read aloud').props.onPress;
+    fireEvent.press(screen.getByLabelText('Read aloud'));
+    expect(start).toHaveBeenCalledTimes(1);
+
+    view.rerender(<MessageBubble message={rowB} speechOwner={owner} />);
+    expect(playback[0].handle.stop).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByLabelText('Read aloud'));
+    act(() => retainedRowAPress());
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(playback[1].handle.stop).not.toHaveBeenCalled();
+    await act(async () => { playback[0].resolve({ status: 'done' }); });
+    expect(screen.getByLabelText('Stop reading aloud')).toBeOnTheScreen();
+
+    view.rerender(<MessageBubble message={rowA} speechOwner={owner} />);
+    expect(playback[1].handle.stop).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByLabelText('Read aloud'));
+    act(() => retainedRowAPress());
+    expect(start).toHaveBeenCalledTimes(3);
+    expect(playback[2].handle.stop).not.toHaveBeenCalled();
+    expect(start.mock.calls.map(([text]) => text)).toEqual([
+      'Response A.', 'Response B.', 'Response A.',
+    ]);
+    view.unmount();
+    expect(playback[2].handle.stop).toHaveBeenCalledTimes(1);
+    expect(owner.stop).not.toHaveBeenCalled();
   });
 });

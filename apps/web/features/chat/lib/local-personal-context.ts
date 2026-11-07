@@ -6,56 +6,126 @@ import {
   parseManagedMemoryLocalContextResponse,
   type ManagedMemoryLocalContextResponse,
 } from '@agiworkforce/types';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { useLocalModelSelection } from '@features/desktop-host';
-import { queryClient } from '@shared/stores/query-client';
+import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import {
+  observeWorkspaceOwner, subscribeWorkspaceAdmission, workspaceOwnerIsCurrent,
+  type WorkspaceOwner,
+} from '@/features/workspaces/lib/workspace-admission';
 
 const LOCAL_PERSONAL_CONTEXT_STALE_MS = 60_000;
-
-function localPersonalContextKey(projectId: string | null) {
-  return ['memory', 'local-context', projectId ?? 'account'] as const;
+interface Entry {
+  data: ManagedMemoryLocalContextResponse | null;
+  refreshedAt: number | null;
+  pending: Promise<void> | null;
+  request: RequestAuthority | null;
 }
+interface ContextOwner {
+  owner: WorkspaceOwner;
+  epoch: number;
+  scopeKey: string;
+  organization: string;
+  entries: Map<string | null, Entry>;
+}
+let cached: ContextOwner | null = null;
 
-async function fetchLocalPersonalContext(
-  projectId: string | null,
-  signal: AbortSignal,
-): Promise<ManagedMemoryLocalContextResponse> {
-  const response = await fetch(managedMemoryLocalContextUrl(projectId), {
-    signal,
-    cache: 'no-store',
-  });
-  if (!response.ok) {
-    throw new Error(`Your instructions and memory could not be loaded (${response.status})`);
+function isCurrent(candidate: ContextOwner): boolean {
+  return cached === candidate && candidate.owner.phase === 'admitted' &&
+    candidate.owner.scopeKey === candidate.scopeKey &&
+    workspaceOwnerIsCurrent(candidate.owner, candidate.epoch);
+}
+function retire(candidate: ContextOwner): void {
+  for (const entry of candidate.entries.values()) entry.request?.retire();
+  candidate.entries.clear();
+  if (cached === candidate) cached = null;
+}
+subscribeWorkspaceAdmission(() => {
+  if (cached && !isCurrent(cached)) retire(cached);
+});
+
+async function refresh(candidate: ContextOwner, projectId: string | null): Promise<void> {
+  if (!isCurrent(candidate)) return;
+  let entry = candidate.entries.get(projectId);
+  if (!entry) {
+    entry = { data: null, refreshedAt: null, pending: null, request: null };
+    candidate.entries.set(projectId, entry);
   }
-  const context = parseManagedMemoryLocalContextResponse(await response.json());
-  if (!context) throw new Error('Your instructions and memory came back in an unexpected shape');
-  return context;
+  if (entry.pending) return entry.pending;
+  if (entry.refreshedAt !== null && Date.now() - entry.refreshedAt < LOCAL_PERSONAL_CONTEXT_STALE_MS) return;
+  const captured = entry;
+  const authority = createRequestAuthority(candidate.owner.session, () =>
+    isCurrent(candidate) && candidate.entries.get(projectId) === captured);
+  captured.request = authority;
+  captured.pending = (async () => {
+    try {
+      const response = await authority.fetch(managedMemoryLocalContextUrl(projectId), {
+        cache: 'no-store',
+        headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: candidate.organization },
+      });
+      authority.assertCurrent();
+      // Rejection revokes only this captured entry, even if the body is malformed.
+      if (response.status === 401 || response.status === 403) {
+        captured.data = null;
+        captured.refreshedAt = null;
+      }
+      if (!response.ok) return;
+      const parsed = parseManagedMemoryLocalContextResponse(await response.json());
+      authority.assertCurrent();
+      if (parsed) {
+        captured.data = parsed;
+        captured.refreshedAt = Date.now();
+      }
+    } catch {
+      // An offline refresh must not expire still-owned personal context.
+    } finally {
+      authority.retire();
+      captured.request = null;
+      captured.pending = null;
+    }
+  })();
+  return captured.pending;
 }
 
 export function useLocalPersonalContextPrefetch(projectId: string | null): void {
   const localModelSelected = useLocalModelSelection((state) => state.selected !== null);
-  useEffect(() => {
-    if (!localModelSelected) return;
-    const refresh = () => {
-      void queryClient.prefetchQuery({
-        queryKey: localPersonalContextKey(projectId),
-        queryFn: ({ signal }) => fetchLocalPersonalContext(projectId, signal),
-        staleTime: LOCAL_PERSONAL_CONTEXT_STALE_MS,
-        gcTime: Infinity,
-        meta: { silent: true },
-      });
+  const workspace = useAccountWorkspaces();
+  const capture = useSessionSnapshot();
+  const owner = observeWorkspaceOwner(capture());
+  const data = workspace.data;
+  const scopeKey = data ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) : null;
+  if (cached && !isCurrent(cached)) retire(cached);
+  if (owner && owner.phase === 'admitted' && data && scopeKey !== null && scopeKey === owner.scopeKey &&
+      workspaceOwnerIsCurrent(owner, owner.epoch) && !cached) {
+    cached = {
+      owner, epoch: owner.epoch, scopeKey,
+      organization: data.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+      entries: new Map(),
     };
-    refresh();
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
-  }, [localModelSelected, projectId]);
+  }
+  const candidate = cached;
+  useEffect(() => {
+    if (!localModelSelected || !candidate) return;
+    const onFocus = () => { void refresh(candidate, projectId); };
+    onFocus();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [localModelSelected, candidate, projectId]);
 }
 
 export function readLocalPersonalContext(
   projectId: string | null,
+  session: SessionAuthority | null,
 ): ManagedMemoryLocalContextResponse | null {
-  return (
-    queryClient.getQueryData<ManagedMemoryLocalContextResponse>(
-      localPersonalContextKey(projectId),
-    ) ?? null
-  );
+  const candidate = cached;
+  // A turn only reads the canonical owner; a stale turn must never replace it.
+  if (!candidate || !session?.isCurrent() || !isCurrent(candidate) ||
+      candidate.owner.session.userId !== session.userId ||
+      candidate.owner.session.sessionId !== session.sessionId) return null;
+  return candidate.entries.get(projectId)?.data ?? null;
 }

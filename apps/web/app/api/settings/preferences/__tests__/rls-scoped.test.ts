@@ -6,6 +6,8 @@ vi.mock('server-only', () => ({}));
 const h = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   query: vi.fn(),
+  txQuery: vi.fn(),
+  transaction: vi.fn(),
   invalidateActiveOrganizationCache: vi.fn(),
   resolveActiveOrganizationId: vi.fn(),
 }));
@@ -31,12 +33,26 @@ import { GET, PUT } from '../route';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.query.mockImplementation(async (sql: string) =>
-    String(sql).includes('user_settings')
-      ? [{ settings: { general: { preferredName: 'Sid' } } }]
-      : [],
+  h.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('from public.user_settings')) {
+      return [{ settings: { general: { preferredName: 'Sid' } }, version: 'v2' }];
+    }
+    if (sql.includes('organization_members')) return [];
+    throw new Error(`Unexpected outer query: ${sql}`);
+  });
+  h.txQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+    if (sql.includes('from public.user_settings') && sql.includes('for update')) {
+      return [{ settings: {}, version: 'v1' }];
+    }
+    if (sql.includes('update public.user_settings')) {
+      return [{ settings: JSON.parse(String(params[1])), version: 'v2' }];
+    }
+    throw new Error(`Unexpected transaction query: ${sql}`);
+  });
+  h.transaction.mockImplementation(async (callback: (tx: { query: typeof h.txQuery }) => Promise<unknown>) =>
+    callback({ query: h.txQuery }),
   );
-  h.getUserScopedDb.mockResolvedValue({ db: { query: h.query }, userId: 'user-1' });
+  h.getUserScopedDb.mockResolvedValue({ db: { query: h.query, transaction: h.transaction }, userId: 'user-1' });
   h.resolveActiveOrganizationId.mockResolvedValue(null);
 });
 
@@ -64,11 +80,11 @@ describe('the capabilities namespace reports the workspace memory gate', () => {
 
   it('reports the gate shut when the workspace policy has memory off', async () => {
     h.resolveActiveOrganizationId.mockResolvedValue('org-1');
-    h.query.mockImplementation(async (sql: string) =>
-      sql.includes('organization_admin_policies')
-        ? [{ allow_memory: false }]
-        : [{ settings: { capabilities: { memory: true } } }],
-    );
+    h.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('organization_admin_policies')) return [{ allow_memory: false }];
+      if (sql.includes('from public.user_settings')) return [{ settings: { capabilities: { memory: true } } }];
+      throw new Error(`Unexpected gate query: ${sql}`);
+    });
 
     const response = await GET(capabilitiesRequest());
 
@@ -77,11 +93,11 @@ describe('the capabilities namespace reports the workspace memory gate', () => {
 
   it('reports the gate open when the workspace policy allows memory', async () => {
     h.resolveActiveOrganizationId.mockResolvedValue('org-1');
-    h.query.mockImplementation(async (sql: string) =>
-      sql.includes('organization_admin_policies')
-        ? [{ allow_memory: true }]
-        : [{ settings: { capabilities: { memory: true } } }],
-    );
+    h.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('organization_admin_policies')) return [{ allow_memory: true }];
+      if (sql.includes('from public.user_settings')) return [{ settings: { capabilities: { memory: true } } }];
+      throw new Error(`Unexpected gate query: ${sql}`);
+    });
 
     const response = await GET(capabilitiesRequest());
 
@@ -155,7 +171,8 @@ describe('settings preferences reads through the RLS-scoped client', () => {
           },
         ];
       }
-      return [{ organization_id: 'org-1' }];
+      if (text.includes('organization_members')) return [{ organization_id: 'org-1' }];
+      throw new Error(`Unexpected policy query: ${sql}`);
     });
 
     const response = await GET(
@@ -181,9 +198,8 @@ describe('settings preferences reads through the RLS-scoped client', () => {
   });
 
   it('writes through the scoped client too', async () => {
-    h.query.mockResolvedValue([{ settings: { general: {} } }]);
 
-    await PUT(
+    const response = await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -191,13 +207,16 @@ describe('settings preferences reads through the RLS-scoped client', () => {
       }),
     );
 
+    expect(response.status).toBe(200);
     expect(h.getUserScopedDb).toHaveBeenCalled();
-    const insert = h.query.mock.calls.map(([sql]) => String(sql)).find((s) => s.includes('insert'));
-    expect(insert).toContain('user_settings');
+    const update = h.txQuery.mock.calls.map(([sql]) => String(sql)).find((s) => s.includes('update public.user_settings'));
+    expect(update).toContain('where user_id = $1');
+    expect(h.transaction).toHaveBeenCalledTimes(1);
+    expect(h.query).not.toHaveBeenCalled();
   });
 
   it('takes the user id from the scoped handshake, never from the request body', async () => {
-    await PUT(
+    const response = await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -209,9 +228,12 @@ describe('settings preferences reads through the RLS-scoped client', () => {
       }),
     );
 
-    for (const [, params] of h.query.mock.calls as Array<[string, unknown[]]>) {
-      expect(params?.[0]).not.toBe('someone-else');
+    expect(response.status).toBe(200);
+    expect(h.txQuery).toHaveBeenCalledTimes(2);
+    for (const [, params] of h.txQuery.mock.calls as Array<[string, unknown[]]>) {
+      expect(params?.[0]).toBe('user-1');
     }
+    expect(h.query).not.toHaveBeenCalled();
   });
 });
 
@@ -230,9 +252,8 @@ describe('the migration that backs it', () => {
 
 describe('a write that touches the workspace namespace invalidates the active-org cache', () => {
   it('invalidates when the namespace patch targets workspace', async () => {
-    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: 'org-1' } } }]);
 
-    await PUT(
+    const response = await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -240,13 +261,13 @@ describe('a write that touches the workspace namespace invalidates the active-or
       }),
     );
 
+    expect(response.status).toBe(200);
     expect(h.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
   });
 
   it('does not invalidate for an unrelated namespace', async () => {
-    h.query.mockResolvedValue([{ settings: { general: { preferredName: 'Sid' } } }]);
 
-    await PUT(
+    const response = await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -254,13 +275,13 @@ describe('a write that touches the workspace namespace invalidates the active-or
       }),
     );
 
+    expect(response.status).toBe(200);
     expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
   });
 
   it('invalidates for a whole-document patch that includes the workspace key', async () => {
-    h.query.mockResolvedValue([{ settings: { workspace: { activeOrganizationId: null } } }]);
 
-    await PUT(
+    const response = await PUT(
       new NextRequest('http://localhost:3000/api/settings/preferences', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -270,6 +291,7 @@ describe('a write that touches the workspace namespace invalidates the active-or
       }),
     );
 
+    expect(response.status).toBe(200);
     expect(h.invalidateActiveOrganizationCache).toHaveBeenCalledWith('user-1');
   });
 });

@@ -17,9 +17,13 @@ export function ChatStreamRuntimeProvider({ children }: { children: ReactNode })
 }
 
 export function useChatStreamRuntime(): UseChatStreamReturn {
-  const runtime = useContext(ChatStreamRuntimeContext);
+  const runtime = useOptionalChatStreamRuntime();
   if (!runtime) {
     throw new Error('useChatStreamRuntime must be used within ChatStreamRuntimeProvider');
   }
   return runtime;
+}
+
+export function useOptionalChatStreamRuntime(): UseChatStreamReturn | null {
+  return useContext(ChatStreamRuntimeContext);
 }

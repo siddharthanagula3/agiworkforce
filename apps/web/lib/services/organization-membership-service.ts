@@ -8,7 +8,7 @@ import {
   withSeatAccountingErrors,
   type OrganizationSeatState,
 } from '@/lib/services/organization-seat-service';
-import { persistActiveWorkspaceSelection } from '@/lib/services/active-workspace-service';
+import { clearRecordedActiveWorkspaceSelection } from '@/lib/services/active-workspace-service';
 import { resolveUserPersonalPlanTier } from '@/lib/services/org-entitlements';
 
 export interface LeaveOrganizationResult {
@@ -212,7 +212,7 @@ export async function leaveOrganization(
         throw createError.conflict('Your workspace membership changed. Refresh and try again.');
       }
 
-      await persistActiveWorkspaceSelection(tx, userId, null);
+      await clearRecordedActiveWorkspaceSelection(tx, userId, removed.organization_id);
 
       return {
         organizationId: removed.organization_id,

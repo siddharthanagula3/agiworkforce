@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 vi.mock('server-only', () => ({}));
@@ -51,7 +51,11 @@ vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
   enqueueJob: mocks.enqueueJob,
 }));
 
-import { readDataExportArchive, requestDataExportArchive } from './data-export-archive';
+import {
+  readDataExportArchive,
+  requestDataExportArchive,
+  resolveDataExportDownload,
+} from './data-export-archive';
 
 const USER_ID = 'user_export';
 
@@ -147,6 +151,82 @@ describe('requestDataExportArchive delivery', () => {
   });
 });
 
+describe('requestDataExportArchive staging order', () => {
+  it('does not stage an object when workspace discovery fails', async () => {
+    const error = new Error('workspace lookup unavailable');
+    const query = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(error);
+    const db = { query } as unknown as DatabaseAdapter;
+
+    await expect(requestWith(db)).rejects.toBe(error);
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[1]?.[0]).toContain('from organization_members');
+    expect(mocks.putPrivateObject).not.toHaveBeenCalled();
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it('collects data and discovers workspaces before staging and enqueueing', async () => {
+    const order: string[] = [];
+    const workspaceId = '00000000-0000-4000-8000-000000000001';
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('from public.background_jobs')) {
+        order.push('existing');
+        return [];
+      }
+      expect(sql).toContain('from organization_members');
+      order.push('workspaces');
+      return [{ organization_id: workspaceId }];
+    });
+    const db = { query } as unknown as DatabaseAdapter;
+    const account = { account: { id: USER_ID } };
+    mocks.putPrivateObject.mockImplementationOnce(async () => {
+      order.push('put');
+    });
+    mocks.enqueueJob.mockImplementationOnce(async () => {
+      order.push('enqueue');
+      return { id: 'job-1' };
+    });
+
+    const { archive, created } = await requestDataExportArchive({
+      db,
+      userId: USER_ID,
+      origin: 'https://agiworkforce.com',
+      collect: async () => {
+        order.push('collect');
+        return account;
+      },
+    });
+
+    expect(order).toEqual(['existing', 'collect', 'workspaces', 'put', 'enqueue']);
+    expect(created).toBe(true);
+    expect(mocks.putPrivateObject).toHaveBeenCalledOnce();
+    expect(mocks.putPrivateObject).toHaveBeenCalledWith({
+      key: `exports/${USER_ID}/${archive.id}/export.json`,
+      data: Buffer.from(JSON.stringify(account, null, 2)),
+      contentType: 'application/json',
+      contentLength: Buffer.byteLength(JSON.stringify(account, null, 2)),
+    });
+    expect(mocks.enqueueJob).toHaveBeenCalledOnce();
+    expect(enqueuedPayload()).toMatchObject({
+      exportId: archive.id,
+      workspaces: [null, workspaceId],
+      volume: 1,
+      cursor: null,
+      volumes: [],
+    });
+  });
+
+  it('does not enqueue a build when staging rejects', async () => {
+    const error = new Error('storage acknowledgment unavailable');
+    mocks.putPrivateObject.mockRejectedValueOnce(error);
+
+    await expect(requestWith(databaseWith([[], []]))).rejects.toBe(error);
+
+    expect(mocks.putPrivateObject).toHaveBeenCalledOnce();
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+});
+
 describe('readDataExportArchive delivery', () => {
   it('reads an export requested before delivery was recorded as in-app', async () => {
     const db = databaseWith([
@@ -163,6 +243,99 @@ describe('readDataExportArchive delivery', () => {
       id: 'export-0',
       status: 'preparing',
       delivery: 'in_app',
+    });
+  });
+});
+
+describe('completed archive timestamp validation', () => {
+  const now = Date.parse('2026-11-05T12:00:00.000Z');
+  const exportId = 'export-timestamps';
+  const key = `exports/${USER_ID}/${exportId}/agi-export-part-1.zip`;
+
+  function completedJob(overrides: Record<string, unknown> = {}) {
+    return {
+      status: 'succeeded',
+      payload: { exportId, requestedAt: '2026-11-05T11:00:00.000Z', workspaces: [null] },
+      result: {
+        done: true,
+        readyAt: new Date(now - 60_000).toISOString(),
+        expiresAt: new Date(now + 60_000).toISOString(),
+        volumes: [{ volume: 1, key, byteCount: 1024, fileCount: 2 }],
+        ...overrides,
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    { field: 'expiresAt', value: 'not-a-date' },
+    { field: 'readyAt', value: 'not-a-date' },
+    { field: 'expiresAt', value: '' },
+    { field: 'readyAt', value: '' },
+    { field: 'expiresAt', value: ' \t ' },
+    { field: 'readyAt', value: ' \t ' },
+    { field: 'expiresAt', value: null },
+    { field: 'readyAt', value: undefined },
+    { field: 'expiresAt', value: now + 60_000 },
+    { field: 'readyAt', value: now - 60_000 },
+  ])('rejects malformed $field metadata: $value', async ({ field, value }) => {
+    const row = completedJob({ [field]: value });
+    const db = databaseWith([[row], [row]]);
+
+    await expect(readDataExportArchive(db, USER_ID, exportId)).resolves.toMatchObject({
+      status: 'expired',
+      volumes: [],
+    });
+    await expect(resolveDataExportDownload(db, USER_ID, exportId, 1)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it.each([now - 1, now])('refuses expiry at or before now: %s', async (expiry) => {
+    const row = completedJob({ expiresAt: new Date(expiry).toISOString() });
+    const db = databaseWith([[row], [row]]);
+
+    await expect(readDataExportArchive(db, USER_ID, exportId)).resolves.toMatchObject({
+      status: 'expired',
+      volumes: [],
+    });
+    await expect(resolveDataExportDownload(db, USER_ID, exportId, 1)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  it('keeps a valid unexpired archive downloadable', async () => {
+    const row = completedJob();
+    const db = databaseWith([[row], [row]]);
+
+    await expect(readDataExportArchive(db, USER_ID, exportId)).resolves.toMatchObject({
+      status: 'ready',
+      volumes: [expect.objectContaining({ volume: 1, byteCount: 1024, fileCount: 2 })],
+    });
+    await expect(resolveDataExportDownload(db, USER_ID, exportId, 1)).resolves.toEqual({
+      key,
+      fileName: 'agi-export-2026-11-05.zip',
+    });
+  });
+
+  it.each([
+    { status: 'queued', done: true, expected: 'preparing' },
+    { status: 'running', done: true, expected: 'preparing' },
+    { status: 'failed', done: true, expected: 'failed' },
+    { status: 'succeeded', done: false, expected: 'preparing' },
+  ])('preserves $status with done=$done', async ({ status, done, expected }) => {
+    const row = { ...completedJob({ done, expiresAt: 'invalid' }), status };
+
+    await expect(readDataExportArchive(databaseWith([[row]]), USER_ID)).resolves.toMatchObject({
+      status: expected,
+      volumes: [],
     });
   });
 });

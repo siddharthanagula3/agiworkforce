@@ -11,6 +11,7 @@ import {
   ScheduleNotFoundError,
   createEventTriggeredScheduleRun,
   processClaimedScheduleRun,
+  scheduleRunPolicyRefusal,
 } from '@/lib/services/schedule-service';
 import { GOOGLE_USER_DATA_TRIGGER_SOURCES } from '@/lib/connectors/google-user-data';
 import { scheduledAgentExecutor } from '@/lib/services/scheduled-agent-executor';
@@ -119,6 +120,19 @@ export async function fireEventTriggerJob(
   }
 
   if (started.replay && started.run.status !== 'running') {
+    const refusal = scheduleRunPolicyRefusal(started.run);
+    if (refusal) {
+      await settleTriggerDelivery(db, payload.eventId, 'filtered', refusal.message, {
+        runId: started.run.id,
+      });
+      return {
+        replay: true,
+        runId: started.run.id,
+        status: started.run.status,
+        skipped: refusal.reason,
+        code: refusal.code,
+      };
+    }
     await settleTriggerDelivery(db, payload.eventId, 'fired', 'Replayed an earlier run', {
       runId: started.run.id,
     });
@@ -140,6 +154,12 @@ export async function fireEventTriggerJob(
     timeoutMs: RUN_TIMEOUT_MS,
     signal,
   });
+
+  const refusal = scheduleRunPolicyRefusal(run);
+  if (refusal) {
+    await settleTriggerDelivery(db, payload.eventId, 'filtered', refusal.message, { runId: run.id });
+    return { runId: run.id, status: run.status, skipped: refusal.reason, code: refusal.code };
+  }
 
   if (run.status === 'success' || run.status === 'awaiting_approval') {
     await settleTriggerDelivery(

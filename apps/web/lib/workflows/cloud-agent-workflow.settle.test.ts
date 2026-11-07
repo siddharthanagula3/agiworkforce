@@ -168,6 +168,40 @@ describe('durable cloud agent workflow settlement', () => {
     mocks.execute.mockResolvedValue(undefined);
   });
 
+  it.each(['managed', 'free_trial'] as const)(
+    'settles prior observed %s spend and fails the predecessor after policy refusal',
+    async (kind) => {
+      const input = makeInput();
+      input.predecessorApproval = {
+        checkpointId: '0190a000-0000-7000-8000-000000000005',
+        leaseToken: '0190a000-0000-7000-8000-000000000006',
+      };
+      if (kind === 'free_trial') {
+        input.billing = {
+          kind: 'free_trial', userId: 'user-1', requestId: 'agi.chat.desktop.turn-1', reservedMicrousd: 20_000,
+        };
+      }
+      await settleWorkflowInvocation(input, 'failed', undefined, 'context_policy_restart_required');
+      const attempt = { outcome: 'failed', errorClass: 'context_policy_restart_required' };
+      if (kind === 'managed') {
+        expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({
+          attempt,
+          usage: expect.objectContaining({ providerCalls: 2, inputTokens: 1_200, outputTokens: 340 }),
+        }));
+      } else {
+        expect(mocks.settleFreeTrial).toHaveBeenCalledWith(expect.objectContaining({
+          outcome: 'failed', attempt,
+          cost: { tokenMicrousd: 4_200, toolMicrousd: 10_000 },
+          usage: expect.objectContaining({ promptTokens: 1_200, completionTokens: 340 }),
+        }));
+      }
+      expect(mocks.completeCheckpoint).toHaveBeenCalledWith(db, {
+        userId: 'user-1', ...input.predecessorApproval, outcome: 'failed',
+      });
+      expect(mocks.transition).toHaveBeenCalledWith(db, { userId: 'user-1', runId: RUN_ID, state: 'failed' });
+    },
+  );
+
   it('persists the journalled assistant text with a reattachable run reference', async () => {
     await settleWorkflowInvocation(makeInput(), 'completed');
 

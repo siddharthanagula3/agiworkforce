@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,15 +32,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -249,6 +258,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { KEYBOARD_SHORTCUT_DOCS } from '../../hooks/use-keyboard-shortcuts';
 import { useVoiceSessionStore } from '../../stores/voice-session-store';
@@ -331,7 +342,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
   it('supplies a handler for every shortcut the dialog documents on this page', async () => {
     openConversation();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     const options = latestShortcutOptions();
@@ -350,7 +361,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
   it('copies the last assistant message when the copy shortcut fires', async () => {
     openConversation();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     await waitFor(() => {
@@ -363,7 +374,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
   });
   it('opens the model picker from the select model shortcut', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     (latestShortcutOptions()['onSelectModel'] as () => void)();
@@ -373,7 +384,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('opens the personalization instructions from the custom instructions shortcut', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     (latestShortcutOptions()['onSetCustomInstructions'] as () => void)();
@@ -383,7 +394,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('copies only the last code block of the last reply', async () => {
     openConversation(CODE_ASSISTANT_CONTENT);
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     await (latestShortcutOptions()['onCopyLastCodeBlock'] as () => Promise<void>)();
@@ -393,7 +404,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('copies nothing when no reply holds a code block', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     await (latestShortcutOptions()['onCopyLastCodeBlock'] as () => Promise<void>)();
@@ -403,7 +414,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('starts voice mode when none is running', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     (latestShortcutOptions()['onToggleVoice'] as () => void)();
@@ -414,7 +425,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('ends voice mode when it is already running', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
     useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.enter });
 
@@ -426,7 +437,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('asks before deleting the open chat and deletes only after confirming', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     (latestShortcutOptions()['onDeleteConversation'] as () => void)();
@@ -441,7 +452,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('deletes nothing when the confirmation is dismissed', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     (latestShortcutOptions()['onDeleteConversation'] as () => void)();

@@ -187,7 +187,7 @@ describe('getOrgReadableSessionByToken', () => {
   it('adds no ownership predicate of its own', async () => {
     const { db, issued } = makeDb(() => [sessionRow()]);
 
-    const session = await getOrgReadableSessionByToken(db, TOKEN);
+    const session = await getOrgReadableSessionByToken(db, TOKEN, 'user_owner');
 
     expect(issued[0]?.params).toEqual([TOKEN]);
     expect(issued[0]?.sql).not.toMatch(/owner_id\s*=/);

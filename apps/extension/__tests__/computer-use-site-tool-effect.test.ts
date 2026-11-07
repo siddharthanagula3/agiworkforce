@@ -1,6 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const tabs = vi.hoisted(() => ({ url: 'https://example.com/checkout' }));
@@ -12,60 +13,86 @@ vi.stubGlobal('chrome', {
 });
 
 import { resolveApprovalRequirement } from '../src/features/computer-use/agentLoop';
-import type { SiteToolDescriptor } from '../src/features/tools/siteToolRegistry';
-
-const READ_TOOL: SiteToolDescriptor = { name: 'search', effect: 'read', source: 'declarative' };
-const WRITE_TOOL: SiteToolDescriptor = {
-  name: 'placeOrder',
-  effect: 'write',
-  source: 'imperative',
-};
+import { getBrowserToolDefinitions } from '../src/features/computer-use/browserToolDefinitions';
+import { BrowserAgentSiteTools } from '../src/features/tools/browserAgentSiteTools';
 
 beforeEach(() => {
   tabs.url = 'https://example.com/checkout';
 });
 
-describe('a page-declared tool is gated like an action', () => {
-  it('does not ask on an ordinary page, so the run autonomy governs it', async () => {
-    const requirement = await resolveApprovalRequirement(
-      1,
-      'placeOrder',
-      {},
-      { siteTools: [WRITE_TOOL] },
-    );
+describe('browser site tools use the canonical approval path', () => {
+  it.each(['read', 'write'] as const)('passes the site-tool requirement for a declared %s tool', async (effect) => {
+    const browserSiteTools = new BrowserAgentSiteTools({
+      signal: new AbortController().signal,
+      currentTabId: () => 1,
+      navigationGeneration: () => 1,
+      assertCurrent: async () => undefined,
+      send: async () => ({ success: false }),
+    });
+    const prepare = vi.spyOn(browserSiteTools, 'prepare').mockResolvedValue({
+      tabId: 1,
+      navigationGeneration: 1,
+      binding: {
+        pageInstanceId: '00000000-0000-0000-0000-000000000001',
+        url: tabs.url,
+        descriptor: { name: 'page_action', description: 'Page action', effect, source: 'imperative' },
+      },
+      arguments: {},
+    });
+    const args = { name: 'page_action', arguments: {} };
+    const requirement = await resolveApprovalRequirement(1, 'call_site_tool', args, {
+      browserSiteTools,
+    });
 
-    expect(requirement.alwaysAsk).toBe(false);
+    expect(prepare).toHaveBeenCalledWith(args);
+    expect(requirement).toEqual({ alwaysAsk: true, reason: 'site_tool' });
   });
 
-  it('always asks on a site the approval policy flags, read or write', async () => {
-    tabs.url = 'https://chase.com/transfer';
-
-    const write = await resolveApprovalRequirement(
-      1,
-      'placeOrder',
-      {},
-      { siteTools: [WRITE_TOOL] },
-    );
-    const read = await resolveApprovalRequirement(1, 'search', {}, { siteTools: [READ_TOOL] });
-
-    expect(write.alwaysAsk).toBe(true);
-    expect(read.alwaysAsk).toBe(true);
-  });
-
-  it('leaves a tool the page did not declare on the ordinary policy path', async () => {
-    const requirement = await resolveApprovalRequirement(
-      1,
-      'download_file',
-      {},
-      { siteTools: [READ_TOOL] },
-    );
-
-    expect(requirement).toEqual({ alwaysAsk: true, reason: 'download' });
-  });
-
-  it('rejects an unknown native name even when other site tools are admitted', async () => {
+  it('rejects canonical execution when the task has no bound site-tool service', async () => {
     await expect(
-      resolveApprovalRequirement(1, 'undeclared_tool', {}, { siteTools: [READ_TOOL] }),
+      resolveApprovalRequirement(1, 'call_site_tool', { name: 'page_action', arguments: {} }),
+    ).rejects.toThrow('Site tools are unavailable for this task.');
+  });
+
+  it('rejects legacy aliases even if a caller supplies page-declared read metadata', async () => {
+    const legacyOptions = {
+      maxSteps: 1,
+      siteTools: [{ name: 'site_search', effect: 'read', source: 'imperative' }],
+      callSiteTool: vi.fn(),
+    };
+    await expect(
+      resolveApprovalRequirement(1, 'site_search', {}, legacyOptions),
     ).rejects.toThrow('Unsupported browser action');
+    expect(legacyOptions.callSiteTool).not.toHaveBeenCalled();
+  });
+
+  it('keeps native download approval independent of page declarations', async () => {
+    expect(await resolveApprovalRequirement(1, 'download_file', {})).toEqual({
+      alwaysAsk: true,
+      reason: 'download',
+    });
+  });
+
+  it('advertises canonical discovery and execution only when the service is available', () => {
+    const names = (available: boolean) =>
+      getBrowserToolDefinitions(false, available).map((tool) => tool.function.name);
+    expect(names(true)).toContain('discover_site_tools');
+    expect(names(true)).toContain('call_site_tool');
+    expect(names(false)).not.toContain('discover_site_tools');
+    expect(names(false)).not.toContain('call_site_tool');
+  });
+
+  it('does not restore automatic alias discovery or unbound browser-agent execution', () => {
+    const background = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const loop = readFileSync(
+      new URL('../src/features/computer-use/agentLoop.ts', import.meta.url),
+      'utf8',
+    );
+    expect(background).toContain('browserSiteTools: new BrowserAgentSiteTools(');
+    expect(background).not.toContain('discoverRunSiteTools');
+    expect(background).not.toContain('callRunSiteTool');
+    expect(loop).not.toContain('siteToolDefinitions');
+    expect(loop).not.toContain('options.callSiteTool');
+    expect(loop).not.toContain('options.siteTools');
   });
 });

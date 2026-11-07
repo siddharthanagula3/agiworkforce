@@ -6,6 +6,7 @@ import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { AVAILABLE_MODELS } from '@shared/stores/model-store';
 import { regenerateModelOptions } from '@features/chat/lib/regenerate-model-options';
 import {
+  MAX_FILE_TEXT_CHARS,
   getModelMetadataById,
   getModels,
   getProviderOfferings,
@@ -22,7 +23,10 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { getImageModelLabel } from '../../lib/imageGenerationOptions';
-import { clearWorkbookSheetCache } from '../../lib/office-file-preview';
+import {
+  WORKBOOK_PREVIEW_TOO_LARGE,
+  PRESENTATION_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 const IMAGE_MODEL_ID = getModels({
@@ -2034,7 +2038,6 @@ describe('MessageBubble', () => {
 
     const WORKBOOK_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     const DECK_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    beforeEach(() => clearWorkbookSheetCache());
 
     const workbookFile = genFile({
       id: 'gf-xlsx',
@@ -2128,6 +2131,68 @@ describe('MessageBubble', () => {
         expect(cardFormatLine('workshop.pptx')).not.toContain('MD');
         expect(screen.queryByTestId('deliverable-card')).toBeNull();
         expect(screen.queryByTestId('artifact-created-row')).toBeNull();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it.each([false, true])('explains an oversized workbook and retains download (saved: %s)', async (saved) => {
+      const oversized = await new JSZip()
+        .file('xl/worksheets/sheet1.xml',
+          `<worksheet><row><c r="A1"><v>${'x'.repeat(MAX_FILE_TEXT_CHARS + 1)}</v></c></row></worksheet>`)
+        .generateAsync({ type: 'arraybuffer' });
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(oversized))));
+      const messageId = `message-office-oversized-${saved}`;
+      try {
+        if (saved) saveOfficePreviewArtifacts(messageId);
+        render(<MessageBubble message={makeMessage({
+          id: messageId,
+          role: 'assistant',
+          content: 'File attached.',
+          metadata: { generatedFiles: [workbookFile] },
+        })} />);
+
+        expect(await screen.findByText(`budget.xlsx: ${WORKBOOK_PREVIEW_TOO_LARGE}`)).toBeTruthy();
+        if (saved) {
+          expect(screen.getByRole('button', { name: 'Download budget.xlsx' })).toBeTruthy();
+          expect(cardFormatLine('budget.xlsx')).toContain('Spreadsheet · XLSX');
+        } else {
+          const download = screen.getByTestId('deliverable-card');
+          expect(download.getAttribute('href')).toBe(workbookFile.uri);
+          expect(download.getAttribute('download')).toBe(workbookFile.fileName);
+          expect(screen.queryByRole('button', { name: 'Open artifact: budget.xlsx' })).toBeNull();
+        }
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it.each([false, true])('explains an oversized presentation and retains download (saved: %s)', async (saved) => {
+      const oversized = await new JSZip()
+        .file('ppt/slides/slide1.xml',
+          `<sld><sp><p><t>${'x'.repeat(MAX_FILE_TEXT_CHARS)}</t></p></sp></sld>`)
+        .generateAsync({ type: 'arraybuffer' });
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(oversized))));
+      const messageId = `message-presentation-oversized-${saved}`;
+      try {
+        if (saved) saveOfficePreviewArtifacts(messageId);
+        render(<MessageBubble message={makeMessage({
+          id: messageId,
+          role: 'assistant',
+          content: 'File attached.',
+          metadata: { generatedFiles: [deckFile] },
+        })} />);
+
+        expect(await screen.findByText(`workshop.pptx: ${PRESENTATION_PREVIEW_TOO_LARGE}`)).toBeTruthy();
+        if (saved) {
+          expect(screen.getByRole('button', { name: 'Download workshop.pptx' })).toBeTruthy();
+          expect(cardFormatLine('workshop.pptx')).toContain('Slides · PPTX');
+        } else {
+          const download = screen.getByTestId('deliverable-card');
+          expect(download.getAttribute('href')).toBe(deckFile.uri);
+          expect(download.getAttribute('download')).toBe(deckFile.fileName);
+          expect(screen.queryByRole('button', { name: 'Open artifact: workshop.pptx' })).toBeNull();
+        }
       } finally {
         vi.unstubAllGlobals();
       }

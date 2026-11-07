@@ -46,4 +46,24 @@ describe('owned media source context', () => {
     expect(query.mock.calls[0]?.[0]).not.toContain('conversation_id =');
     expect(query.mock.calls[0]?.[1]).toHaveLength(3);
   });
+
+  it.each([null, '00000000-0000-4000-8000-000000000002'])(
+    'uses the admitted workspace %s without resolving the saved selection',
+    async (organizationId) => {
+      workspace.current.mockClear();
+      await getActiveWorkspaceMediaAssetById('fixture-user', 'asset-B', db, { organizationId });
+      expect(workspace.current).not.toHaveBeenCalled();
+      expect(query.mock.calls[0]?.[1]).toEqual(['asset-B', 'fixture-user', organizationId]);
+      expect(query.mock.calls[0]?.[0]).not.toContain('conversation_id =');
+    },
+  );
+
+  it('retains conversation authority with an explicit Personal workspace', async () => {
+    await getActiveWorkspaceMediaAssetById('fixture-user', 'asset-B', db, {
+      organizationId: null,
+      conversationId: 'current-chat-A',
+    });
+    expect(query.mock.calls[0]?.[1]).toEqual(['asset-B', 'fixture-user', null, 'current-chat-A']);
+    expect(query.mock.calls[0]?.[0]).toContain('conversation_id = $4::uuid');
+  });
 });

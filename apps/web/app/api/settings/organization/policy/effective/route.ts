@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { EffectiveWorkspacePolicyResponse } from '@agiworkforce/types';
+import {
+  EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+  type EffectiveWorkspacePolicyResponse,
+} from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -20,8 +23,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const effective = await resolveEffectiveWorkspaceControls(getNeonDb(), userId, request);
 
   const etag = effective
-    ? `"${effective.organizationId}:${effective.revision}:${effective.controls.appliedOverrideIds.join(',')}"`
-    : '"unscoped"';
+    ? `"v${EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION}:${effective.organizationId}:${effective.revision}:${effective.controls.appliedOverrideIds.join(',')}"`
+    : `"v${EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION}:unscoped"`;
   const headers = { ETag: etag, 'Cache-Control': 'private, no-cache' };
 
   if (request.headers.get('if-none-match') === etag) {
@@ -30,13 +33,27 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const body: EffectiveWorkspacePolicyResponse = effective
     ? {
+        schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
         organizationId: effective.organizationId,
         governed: true,
         revision: effective.revision,
         controls: effective.controls,
-        code: effective.code,
+        code: {
+          ...effective.code,
+          // Older clients ignore the restriction discriminator but understand the MCP switch.
+          allowMcpServers:
+            effective.code.allowMcpServers &&
+            !(effective.code.mcpRestrictionActive && effective.code.allowedMcpServers.length === 0),
+        },
       }
-    : { organizationId: null, governed: false, revision: 0, controls: null, code: null };
+    : {
+        schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+        organizationId: null,
+        governed: false,
+        revision: 0,
+        controls: null,
+        code: null,
+      };
 
   return NextResponse.json(body, { headers });
 }

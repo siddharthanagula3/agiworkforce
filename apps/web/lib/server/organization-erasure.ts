@@ -5,6 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { cancelLiveStripeSubscriptionsNow } from '@/lib/server/payments/stripe-provider';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import { eraseBackupCopies } from '@/lib/server/object-backup-erasure';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { countActiveLegalHolds } from '@/lib/services/legal-hold-gate';
 import {
@@ -88,7 +89,6 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'organization_billing_invoices', column: 'organization_id' },
   { table: 'organization_commercial_agreements', column: 'organization_id' },
   { table: 'organization_subscription_state_transitions', column: 'organization_id' },
-  { table: 'feature_flags', column: 'organization_id' },
   { table: 'event_trigger_events', column: 'organization_id' },
   { table: 'event_triggers', column: 'organization_id' },
   { table: 'slack_assistant_runs', column: 'organization_id' },
@@ -141,6 +141,8 @@ export const ORGANIZATION_ANONYMIZED_COLUMNS: ReadonlyArray<{
 ];
 
 export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
+  feature_flags:
+    'organization_id is ON DELETE CASCADE (0211_feature_flag_targeting). The workspace lockdown override must survive every partial purge and retainOrganizationRow; delete these rows only with the final organizations cascade, never before erasure finishes.',
   user_projects:
     'organization_id is ON DELETE SET NULL (0053_projects_managed_cloud_contract). A member’s project demotes to Personal scope rather than being destroyed when the workspace is decommissioned; ownership stays with the member who created it.',
   video_generation_jobs:
@@ -174,6 +176,8 @@ export interface OrganizationErasureReport {
   mediaObjectsDeleted: number;
   mediaObjectsFailed: number;
   mediaRowsDeleted: number;
+  backupObjectsDeleted: number;
+  backupObjectsFailed: number;
   tables: Record<string, { deleted: boolean; retainedForRetry?: boolean; error?: string }>;
   anonymized: Record<string, { updated: boolean; error?: string }>;
   complete: boolean;
@@ -188,7 +192,16 @@ export interface EraseOrganizationDataOptions {
 
 export async function eraseOrganizationMedia(
   organizationId: string,
-): Promise<{ mediaObjectsDeleted: number; mediaObjectsFailed: number; mediaRowsDeleted: number }> {
+): Promise<
+  Pick<
+    OrganizationErasureReport,
+    | 'mediaObjectsDeleted'
+    | 'mediaObjectsFailed'
+    | 'mediaRowsDeleted'
+    | 'backupObjectsDeleted'
+    | 'backupObjectsFailed'
+  >
+> {
   const db = getNeonDb();
   const rows = await db.query<{ id: string; storage_pathname: string | null }>(
     `select id, storage_pathname from public.media_assets where organization_id = $1`,
@@ -196,15 +209,31 @@ export async function eraseOrganizationMedia(
   );
 
   if (rows.length === 0) {
-    return { mediaObjectsDeleted: 0, mediaObjectsFailed: 0, mediaRowsDeleted: 0 };
+    return {
+      mediaObjectsDeleted: 0,
+      mediaObjectsFailed: 0,
+      mediaRowsDeleted: 0,
+      backupObjectsDeleted: 0,
+      backupObjectsFailed: 0,
+    };
   }
 
   const { deleted, failedPathnames } = await deleteStoredMediaObjects(
     rows.map((row) => row.storage_pathname),
   );
   const stillStored = new Set(failedPathnames);
+  const backup = await eraseBackupCopies(
+    rows
+      .map((row) => row.storage_pathname)
+      .filter((key): key is string => key !== null && !stillStored.has(key)),
+  );
+  const backupStillStored = new Set(backup.failedKeys);
   const deletableIds = rows
-    .filter((row) => !row.storage_pathname || !stillStored.has(row.storage_pathname))
+    .filter(
+      (row) =>
+        !row.storage_pathname ||
+        (!stillStored.has(row.storage_pathname) && !backupStillStored.has(row.storage_pathname)),
+    )
     .map((row) => row.id);
 
   let mediaRowsDeleted = 0;
@@ -220,6 +249,8 @@ export async function eraseOrganizationMedia(
     mediaObjectsDeleted: deleted,
     mediaObjectsFailed: failedPathnames.length,
     mediaRowsDeleted,
+    backupObjectsDeleted: backup.deleted,
+    backupObjectsFailed: backup.failedKeys.length,
   };
 }
 
@@ -246,6 +277,8 @@ function heldReport(
     mediaObjectsDeleted: 0,
     mediaObjectsFailed: 0,
     mediaRowsDeleted: 0,
+    backupObjectsDeleted: 0,
+    backupObjectsFailed: 0,
     tables: {
       legal_holds: {
         deleted: false,
@@ -269,6 +302,8 @@ function billingRetainedReport(organizationId: string, error: string): Organizat
     mediaObjectsDeleted: 0,
     mediaObjectsFailed: 0,
     mediaRowsDeleted: 0,
+    backupObjectsDeleted: 0,
+    backupObjectsFailed: 0,
     tables: {
       organizations: {
         deleted: false,
@@ -361,11 +396,8 @@ export async function eraseOrganizationData(
     return billingRetainedReport(organizationId, billing.error);
   }
 
-  // Isolate before deleting: from here the workspace reaches no route, agent or
-  // model, so nothing is still serving it while its rows go.
-  await lockdownTenantForErasure(organizationId).catch((error: unknown) => {
-    logger.error({ organizationId, error }, 'Could not isolate the workspace before erasure');
-  });
+  // Do not start deleting if the workspace admission lock cannot be established.
+  await lockdownTenantForErasure(organizationId);
 
   const media = await eraseOrganizationMedia(organizationId);
   await eraseSharedConnectorResponseCache(db, organizationId);
@@ -374,7 +406,10 @@ export async function eraseOrganizationData(
 
   for (const { table, column } of ORGANIZATION_SCOPED_TABLES) {
     if (table === 'media_assets') {
-      tables[table] = { deleted: true };
+      tables[table] =
+        media.mediaObjectsFailed === 0 && media.backupObjectsFailed === 0
+          ? { deleted: true }
+          : { deleted: false, retainedForRetry: true };
       continue;
     }
     if (table === 'organization_members') {
@@ -416,6 +451,7 @@ export async function eraseOrganizationData(
 
   const dataDisposed =
     media.mediaObjectsFailed === 0 &&
+    media.backupObjectsFailed === 0 &&
     Object.values(tables).every((result) => result.deleted) &&
     Object.values(anonymized).every((result) => result.updated);
 

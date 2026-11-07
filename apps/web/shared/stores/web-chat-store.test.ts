@@ -498,3 +498,55 @@ describe('chatStore, per-conversation Memory opt-out', () => {
     expect(persisted.memoryDisabledByConversation).toEqual({ 'conv-a': true });
   });
 });
+
+
+describe('chatStore, draft mutation ownership', () => {
+  beforeEach(() => useChatStore.getState().reset());
+
+  it('preserves same-text ownership but retires text that changes away and back', () => {
+    const store = useChatStore.getState();
+    store.setDraftContent('first', 'conversation');
+    const original = useChatStore.getState().draftOwnersByConversation['conversation'];
+    store.setDraftContent('first', 'conversation');
+    expect(useChatStore.getState().draftOwnersByConversation['conversation']).toBe(original);
+    store.setDraftContent('second', 'conversation');
+    store.setDraftContent('first', 'conversation');
+    expect(useChatStore.getState().draftOwnersByConversation['conversation']).not.toBe(original);
+  });
+
+  it('gives repeated clear intents different owners without disturbing another chat', () => {
+    const store = useChatStore.getState();
+    store.setDraftContent('other text', 'other');
+    const other = useChatStore.getState().draftOwnersByConversation['other'];
+    store.clearDraftContent('conversation');
+    const first = useChatStore.getState().draftOwnersByConversation['conversation'];
+    store.clearDraftContent('conversation');
+    expect(useChatStore.getState().draftOwnersByConversation['conversation']).not.toBe(first);
+    expect(useChatStore.getState().draftOwnersByConversation['other']).toBe(other);
+  });
+
+  it('retires source and replaced destination owners on rename, then drops deleted ownership', () => {
+    const store = useChatStore.getState();
+    store.setDraftContent('source', 'source');
+    store.setDraftContent('destination', 'destination');
+    const before = useChatStore.getState().draftOwnersByConversation;
+    store.renameConversationId('source', 'destination');
+    const after = useChatStore.getState().draftOwnersByConversation;
+    expect(after['source']).toBeUndefined();
+    expect(after['destination']).not.toBe(before['source']);
+    expect(after['destination']).not.toBe(before['destination']);
+    store.deleteConversation('destination');
+    expect(useChatStore.getState().draftOwnersByConversation['destination']).toBeUndefined();
+  });
+
+  it('does not reuse ownership after account or workspace resets', () => {
+    const store = useChatStore.getState();
+    store.setDraftContent('same text', 'conversation');
+    const original = useChatStore.getState().draftOwnersByConversation['conversation'];
+    store.resetOnWorkspaceSwitch();
+    store.setDraftContent('same text', 'conversation');
+    expect(useChatStore.getState().draftOwnersByConversation['conversation']).not.toBe(original);
+    store.reset();
+    expect(useChatStore.getState().draftOwnersByConversation).toEqual({});
+  });
+});

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
@@ -13,6 +14,10 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/server/session-sightings', () => ({
+  noteSessionSighting: vi.fn(),
 }));
 
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
@@ -240,7 +245,14 @@ import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
-import { assertAccountActive, getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
+import {
+  assertAccountActive,
+  getClerkAuthUser,
+  getOptionalAuthUser,
+  getSuspendedAccountUser,
+} from '@/lib/api-auth';
+import { noteSessionSighting } from '@/lib/server/session-sightings';
+import { logger } from '@/lib/logger';
 import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
 import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 import {
@@ -459,7 +471,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       expect(req.headers.get('authorization')?.startsWith('Bearer ')).toBe(false);
 
       const result = await getClerkAuthUser(req);
-      expect(result).toEqual({ userId: 'clerk-session-user' });
+      expect(result).toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
     });
 
     it('a verified bearer resolves a DIFFERENT user than the cookie would have, bearer wins, cookie principal is never returned', async () => {
@@ -507,7 +522,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       const req = new NextRequest('http://localhost/api/some-route');
       const result = await getClerkAuthUser(req);
 
-      expect(result).toEqual({ userId: 'clerk-session-user' });
+      expect(result).toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
       expect(queriedApiKeysTable()).toBe(false);
     });
 
@@ -521,7 +539,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         makeBearerRequest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGVyay1qd3QtdXNlciJ9.sig'),
       );
 
-      expect(result).toEqual({ userId: 'clerk-jwt-user', email: 'user@example.com' });
+      expect(result).toEqual({
+        userId: 'clerk-jwt-user',
+        email: 'user@example.com',
+        sessionIdentity: { subject: 'clerk-jwt-user', sessionId: null },
+      });
       expect(queriedApiKeysTable()).toBe(false);
     });
 
@@ -538,7 +560,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         makeBearerRequest('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGVyay1qd3QtdXNlciJ9.sig'),
       );
 
-      expect(result).toEqual({ userId: 'clerk-jwt-user', boundSurface: bound });
+      expect(result).toEqual({
+        userId: 'clerk-jwt-user',
+        boundSurface: bound,
+        sessionIdentity: { subject: 'clerk-jwt-user', sessionId: null },
+      });
     });
 
     it('authenticates a first-party developer device token and enforces its subject', async () => {
@@ -665,8 +691,23 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   describe('organization mfa enforcement at the auth boundary', () => {
     const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
-    function bindOrgPolicy(organizationId: string | null, requireMfa: boolean) {
+    beforeEach(() => {
+      vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    function bindOrgPolicy(
+      organizationId: string | null,
+      requireMfa: boolean,
+      mappedAccountId?: string,
+    ) {
       mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        if (mappedAccountId && sql.toLowerCase().includes('left join public.identities')) {
+          return [{ identity_id: 'identity-mfa', account_id: mappedAccountId, erased: false }];
+        }
         const identityRows = identityResolutionRows(sql, params);
         if (identityRows) return identityRows;
         const s = sql.toLowerCase();
@@ -709,7 +750,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(
         getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-      ).resolves.toEqual({ userId: 'clerk-session-user' });
+      ).resolves.toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
       expect(mockClerkGetUser).not.toHaveBeenCalled();
     });
 
@@ -726,12 +770,50 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     it('lets an enrolled caller through when the organization requires mfa', async () => {
       bindOrgPolicy(ORGANIZATION_ID, true);
       mockAuth.mockResolvedValueOnce(authSession('clerk-session-user'));
-      mockClerkGetUser.mockResolvedValueOnce({ twoFactorEnabled: true });
+      mockClerkGetUser.mockResolvedValueOnce({ id: 'clerk-session-user', twoFactorEnabled: true });
 
       await expect(
         getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-      ).resolves.toEqual({ userId: 'clerk-session-user' });
+      ).resolves.toEqual({
+        userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
+      });
     });
+
+    it.each(['cookie', 'bearer'] as const)(
+      'uses the mapped account policy and native enrollment for %s auth',
+      async (transport) => {
+        bindOrgPolicy(ORGANIZATION_ID, true, 'product-mfa-account');
+        mockAuth.mockResolvedValue(authSession('native-mfa-subject'));
+        mockVerifyToken.mockResolvedValue({ sub: 'native-mfa-subject' });
+        mockClerkGetUser.mockImplementation(async (subject: string) => ({
+          id: subject,
+          twoFactorEnabled: subject === 'native-mfa-subject',
+        }));
+        const request = () =>
+          new NextRequest('http://localhost/api/some-route', {
+            headers: transport === 'bearer' ? { authorization: 'Bearer native-mfa-token' } : {},
+          });
+
+        await expect(getClerkAuthUser(request())).resolves.toMatchObject({
+          userId: 'product-mfa-account',
+          sessionIdentity: { subject: 'native-mfa-subject', sessionId: null },
+        });
+        expect(mockClerkGetUser).toHaveBeenCalledExactlyOnceWith('native-mfa-subject');
+        expect(mockNeonQuery).toHaveBeenCalledWith(
+          expect.stringContaining(') governing'),
+          ['product-mfa-account'],
+        );
+
+        mockClerkGetUser.mockClear();
+        mockClerkGetUser.mockImplementation(async (subject: string) => ({
+          id: subject,
+          twoFactorEnabled: subject === 'product-mfa-account',
+        }));
+        await expect(getClerkAuthUser(request())).rejects.toSatisfy(isMfaRequiredError);
+        expect(mockClerkGetUser).toHaveBeenCalledExactlyOnceWith('native-mfa-subject');
+      },
+    );
   });
 
   describe('organization ip allow list enforcement at the auth boundary', () => {
@@ -787,6 +869,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(getClerkAuthUser(requestFromIp('198.51.100.9'))).resolves.toEqual({
         userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
       });
     });
 
@@ -796,6 +879,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
       await expect(getClerkAuthUser(requestFromIp('203.0.113.5'))).resolves.toEqual({
         userId: 'clerk-session-user',
+        sessionIdentity: { subject: 'clerk-session-user', sessionId: null },
       });
     });
 
@@ -882,7 +966,10 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         getClerkAuthUser(new NextRequest('http://localhost/api/settings/organization/policy'), {
           mfaGateExemptForOwner: true,
         }),
-      ).resolves.toEqual({ userId: 'owner-user' });
+      ).resolves.toEqual({
+        userId: 'owner-user',
+        sessionIdentity: { subject: 'owner-user', sessionId: null },
+      });
     });
 
     it('still blocks an unenrolled owner when the caller did not opt into the exemption', async () => {
@@ -925,6 +1012,7 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
   beforeEach(() => {
     vi.clearAllMocks();
     clearIpAllowListCacheForTests();
+    resetSessionStartCache();
   });
 
   function cookieRequest(): NextRequest {
@@ -950,14 +1038,101 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
     await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
       userId: 'account-7',
       identityId: 'identity-9',
+      sessionIdentity: { subject: 'provider-subject-9', sessionId: null },
     });
+  });
+
+  it.each(['cookie', 'bearer'] as const)(
+    'keeps the verified native subject and session separate from the mapped account for %s auth',
+    async (transport) => {
+      const db = makeFakeDb();
+      db.identities.set('clerk:native-mapped-subject', {
+        identityId: 'identity-mapped-session',
+        accountId: 'product-mapped-account',
+      });
+      const sessionId = `sess_mapped_identity_${transport}`;
+      mockClerkGetSession.mockResolvedValueOnce({
+        id: sessionId,
+        userId: 'native-mapped-subject',
+        status: 'active',
+        createdAt: Date.now(),
+      });
+      const headers = {
+        'x-account-id': 'forged-product-account',
+        'x-user-id': 'forged-native-subject',
+        'x-session-id': 'forged-session',
+      };
+      if (transport === 'bearer') {
+        process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+        mockVerifyToken.mockResolvedValueOnce({
+          sub: 'native-mapped-subject',
+          sid: sessionId,
+          email: 'verified@example.com',
+        });
+      } else {
+        mockAuth.mockResolvedValueOnce(authSession('native-mapped-subject', sessionId));
+      }
+      const request = new NextRequest(
+        'http://localhost/api/settings/email?accountId=forged-product-account&subject=forged-native-subject',
+        {
+          headers: {
+            ...headers,
+            ...(transport === 'bearer' ? { authorization: 'Bearer native-session-token' } : {}),
+          },
+        },
+      );
+
+      await expect(getClerkAuthUser(request)).resolves.toEqual({
+        userId: 'product-mapped-account',
+        identityId: 'identity-mapped-session',
+        sessionIdentity: { subject: 'native-mapped-subject', sessionId },
+        ...(transport === 'bearer' ? { email: 'verified@example.com' } : {}),
+      });
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(sessionId);
+      expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(
+        'product-mapped-account',
+        'native-mapped-subject',
+        sessionId,
+        request,
+      );
+      if (transport === 'bearer') expect(mockAuth).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not admit a suspended cookie to the shared reader', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('suspended-share-reader', 'suspended');
+    mockAuth.mockResolvedValueOnce(authSession('suspended-share-reader'));
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
+  });
+
+  it('does not admit a cookie that still requires passkey verification', async () => {
+    makeFakeDb();
+    const query = mockNeonQuery.getMockImplementation()!;
+    mockNeonQuery.mockImplementation((sql: string, params: unknown[] = []) =>
+      sql.toLowerCase().includes('from public.account_security_enrollments')
+        ? Promise.resolve([{ enrolled_at: new Date(Date.now() - 86_400_000).toISOString() }])
+        : query(sql, params),
+    );
+    mockAuth.mockResolvedValueOnce(authSession('unverified-share-reader'));
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
+  });
+
+  it('does not admit an erased cookie to the shared reader', async () => {
+    const db = makeFakeDb();
+    db.erasedAccounts.add('erased-share-reader');
+    mockAuth.mockResolvedValueOnce(authSession('erased-share-reader'));
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
   });
 
   it('links an account that predates the mapping rather than failing its request', async () => {
     const db = makeFakeDb();
     mockAuth.mockResolvedValueOnce(authSession('unmapped-user'));
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'unmapped-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'unmapped-user',
+      sessionIdentity: { subject: 'unmapped-user', sessionId: null },
+    });
     expect(db.linkAttempts).toEqual(['clerk:unmapped-user:unmapped-user']);
   });
 
@@ -999,7 +1174,10 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
     db.accountStatuses.set('leaving-user', 'deletion_scheduled');
     mockAuth.mockResolvedValueOnce(authSession('leaving-user'));
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'leaving-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'leaving-user',
+      sessionIdentity: { subject: 'leaving-user', sessionId: null },
+    });
   });
 
   it('derives a scheduled deletion from the date 0071 records, and still lets it sign in', async () => {
@@ -1010,6 +1188,7 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
 
     await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
       userId: 'leaving-by-date',
+      sessionIdentity: { subject: 'leaving-by-date', sessionId: null },
     });
   });
 
@@ -1225,7 +1404,10 @@ describe('tenant lockdown at the auth boundary', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'unlocked-cookie-user' });
+    ).resolves.toEqual({
+      userId: 'unlocked-cookie-user',
+      sessionIdentity: { subject: 'unlocked-cookie-user', sessionId: null },
+    });
   });
 
   it('lets a personal workspace through, having no workspace to lock', async () => {
@@ -1235,7 +1417,10 @@ describe('tenant lockdown at the auth boundary', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'personal-user' });
+    ).resolves.toEqual({
+      userId: 'personal-user',
+      sessionIdentity: { subject: 'personal-user', sessionId: null },
+    });
   });
 
   it('does not lock anyone out when the workspace lookup itself fails', async () => {
@@ -1252,7 +1437,10 @@ describe('tenant lockdown at the auth boundary', () => {
 
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
-    ).resolves.toEqual({ userId: 'degraded-user' });
+    ).resolves.toEqual({
+      userId: 'degraded-user',
+      sessionIdentity: { subject: 'degraded-user', sessionId: null },
+    });
   });
 });
 
@@ -1353,6 +1541,7 @@ describe('getOptionalAuthUser · the gate a signed-out caller does not need', ()
     await expect(getOptionalAuthUser(request())).resolves.toEqual({
       userId: 'account-optional',
       identityId: 'identity-optional',
+      sessionIdentity: { subject: 'optional-subject', sessionId: null },
     });
   });
 
@@ -1419,12 +1608,23 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
     expect(mockClerkRevokeSession).toHaveBeenCalledWith(SESSION_ID);
   });
 
+  it('refuses an over-age cookie before constructing the shared-reader RLS scope', async () => {
+    makeFakeDb();
+    mockClerkGetSession.mockResolvedValue(providerSession(Date.now() - (30 * DAY_MS + 1000)));
+
+    await expect(getCurrentCookieUserRlsDb(cookieRequest())).resolves.toBeNull();
+    expect(mockClerkRevokeSession).toHaveBeenCalledWith(SESSION_ID);
+  });
+
   it('serves a session one second inside the limit', async () => {
     makeFakeDb();
     const insideTheLimit = Date.now() - (30 * DAY_MS - 1000);
     mockClerkGetSession.mockResolvedValue(providerSession(insideTheLimit));
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'aged-user',
+      sessionIdentity: { subject: 'aged-user', sessionId: SESSION_ID },
+    });
     expect(mockClerkRevokeSession).not.toHaveBeenCalled();
   });
 
@@ -1433,7 +1633,10 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
     mockClerkGetSession.mockRejectedValue(new Error('provider unavailable'));
     const before = unreadableSessionStartCount();
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'aged-user',
+      sessionIdentity: { subject: 'aged-user', sessionId: SESSION_ID },
+    });
     expect(unreadableSessionStartCount()).toBe(before + 1);
     expect(mockClerkRevokeSession).not.toHaveBeenCalled();
   });
@@ -1455,7 +1658,10 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
       providerSession(Date.now() - (30 * DAY_MS + 1000), 'another-user'),
     );
 
-    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({
+      userId: 'aged-user',
+      sessionIdentity: { subject: 'aged-user', sessionId: SESSION_ID },
+    });
     expect(mockClerkRevokeSession).not.toHaveBeenCalled();
   });
 
@@ -1530,6 +1736,7 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
 
     await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).resolves.toEqual({
       userId: 'phone-user',
+      sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'mobile',
     });
     expect(mockVerifyToken).toHaveBeenCalledTimes(2);
@@ -1605,6 +1812,7 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
 
     await expect(getClerkAuthUser(nativeRequest())).resolves.toEqual({
       userId: 'phone-user',
+      sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'web',
     });
     expect(mockVerifyToken).toHaveBeenCalledTimes(1);
@@ -1641,7 +1849,220 @@ describe('getClerkAuthUser: a native session token with a surface proof', () => 
     verifiedSessions.add(SESSION_ID);
     await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).resolves.toEqual({
       userId: 'phone-user',
+      sessionIdentity: { subject: 'phone-user', sessionId: SESSION_ID },
       boundSurface: 'mobile',
     });
+  });
+});
+
+describe('mapped account absolute session lifetime at canonical auth boundaries', () => {
+  const NOW = 1_800_000_000_000;
+  const HOUR_MS = 3_600_000;
+  const NATIVE = 'native-session-owner';
+  const ACCOUNT = 'product-session-account';
+  const SESSION = 'sess-mapped-lifetime';
+  type Transport = 'cookie' | 'bearer' | 'appeal';
+  let db: ReturnType<typeof makeFakeDb>;
+
+  function providerSession(overrides: Record<string, unknown> = {}) {
+    return {
+      id: SESSION,
+      userId: NATIVE,
+      status: 'active',
+      createdAt: NOW - 60_000,
+      lastActiveAt: NOW,
+      ...overrides,
+    };
+  }
+
+  function requestFor(transport: Transport): NextRequest {
+    return transport === 'bearer'
+      ? makeBearerRequest('verified-native-session-token')
+      : new NextRequest('http://localhost/api/account/suspension/appeal');
+  }
+
+  function authenticate(transport: Transport, request = requestFor(transport)) {
+    return transport === 'appeal' ? getSuspendedAccountUser(request) : getClerkAuthUser(request);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSessionStartCache();
+    clearIpAllowListCacheForTests();
+    vi.stubEnv('SESSION_ABSOLUTE_LIFETIME_HOURS', '1');
+    vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+    vi.spyOn(Date, 'now').mockReturnValue(NOW);
+    vi.mocked(getKeyValueStore).mockReturnValue(null);
+    db = makeFakeDb();
+    db.identities.set(`clerk:${NATIVE}`, {
+      identityId: 'identity-session-owner',
+      accountId: ACCOUNT,
+    });
+    mockAuth.mockResolvedValue(authSession(NATIVE, SESSION));
+    mockVerifyToken.mockResolvedValue({ sub: NATIVE, sid: SESSION });
+    mockClerkGetSession.mockResolvedValue(providerSession());
+    mockClerkRevokeSession.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  describe.each(['cookie', 'bearer', 'appeal'] as const)('%s authentication', (transport) => {
+    beforeEach(() => {
+      if (transport === 'appeal') db.accountStatuses.set(ACCOUNT, 'suspended');
+    });
+
+    it('accepts a fresh native session and keeps database and sighting identity product-scoped', async () => {
+      const request = requestFor(transport);
+      const result = await authenticate(transport, request);
+
+      expect(result).toMatchObject({ userId: ACCOUNT });
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('account_status'), [
+        ACCOUNT,
+      ]);
+      expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+      if (transport === 'appeal') {
+        expect(noteSessionSighting).not.toHaveBeenCalled();
+      } else {
+        expect(result).toMatchObject({ sessionIdentity: { subject: NATIVE, sessionId: SESSION } });
+        expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(
+          ACCOUNT,
+          NATIVE,
+          SESSION,
+          request,
+        );
+      }
+    });
+
+    it('refuses a known over-age session even when provider revocation fails', async () => {
+      const failure = new Error('revocation unavailable');
+      mockClerkGetSession.mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+      mockClerkRevokeSession.mockRejectedValueOnce(failure);
+
+      await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockClerkRevokeSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(logger.warn).toHaveBeenCalledWith(
+        { error: failure, userId: ACCOUNT },
+        '[session-age] session past its lifetime could not be revoked',
+      );
+      expect(noteSessionSighting).not.toHaveBeenCalled();
+    });
+
+    it('refuses a known over-age session when revocation succeeds', async () => {
+      mockClerkGetSession.mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+
+      await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockClerkRevokeSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(noteSessionSighting).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['missing session', null],
+      ['unknown start', providerSession({ createdAt: null })],
+      ['foreign subject', providerSession({ userId: ACCOUNT })],
+      ['foreign session', providerSession({ id: 'sess-different' })],
+      ['NaN start', providerSession({ createdAt: Number.NaN })],
+      ['infinite start', providerSession({ createdAt: Number.POSITIVE_INFINITY })],
+    ] as const)(
+      'permits an initially %s under existing policy, then denies a valid over-age retry',
+      async (_label, first) => {
+        mockClerkGetSession
+          .mockResolvedValueOnce(first)
+          .mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+
+        await expect(authenticate(transport)).resolves.toMatchObject({ userId: ACCOUNT });
+        expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+        expect(unreadableSessionStartCount()).toBe(1);
+        await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+        expect(mockClerkGetSession).toHaveBeenCalledTimes(2);
+        expect(mockClerkRevokeSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      },
+    );
+
+    it('permits a provider outage but measures a later readable session', async () => {
+      mockClerkGetSession
+        .mockRejectedValueOnce(new Error('provider unavailable'))
+        .mockResolvedValue(providerSession({ createdAt: NOW - HOUR_MS }));
+
+      await expect(authenticate(transport)).resolves.toMatchObject({ userId: ACCOUNT });
+      await expect(authenticate(transport)).rejects.toMatchObject({ statusCode: 401 });
+      expect(mockClerkGetSession).toHaveBeenCalledTimes(2);
+      expect(unreadableSessionStartCount()).toBe(1);
+    });
+
+    it('preserves accounts whose product id already equals their native subject', async () => {
+      db.identities.delete(`clerk:${NATIVE}`);
+      if (transport === 'appeal') db.accountStatuses.set(NATIVE, 'suspended');
+
+      await expect(authenticate(transport)).resolves.toMatchObject({ userId: NATIVE });
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(unreadableSessionStartCount()).toBe(0);
+    });
+  });
+
+  it.each(['cookie', 'bearer'] as const)(
+    'propagates both identities into the passkey-required sighting for %s auth',
+    async (transport) => {
+      const query = mockNeonQuery.getMockImplementation() as (
+        sql: string,
+        params?: unknown[],
+      ) => Promise<FakeRow[]>;
+      mockNeonQuery.mockImplementation((sql: string, params: unknown[] = []) => {
+        if (sql.toLowerCase().includes('from public.account_security_enrollments')) {
+          return Promise.resolve([{ enrolled_at: new Date(NOW - HOUR_MS) }]);
+        }
+        return query(sql, params);
+      });
+      const request = requestFor(transport);
+
+      await expect(authenticate(transport, request)).rejects.toSatisfy(isPasskeyRequiredError);
+      expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(
+        ACCOUNT,
+        NATIVE,
+        SESSION,
+        request,
+      );
+      expect(mockClerkGetSession).toHaveBeenCalledExactlyOnceWith(SESSION);
+      expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not invent a native session for an API credential', async () => {
+    const { ApiKeyService } = await import('@/lib/services/api-key-service');
+    const { getNeonDb } = await import('@/lib/server/neon-db');
+    const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), ACCOUNT, 'scoped', [
+      'models:read',
+    ]);
+
+    await expect(
+      getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }),
+    ).resolves.toEqual({ userId: ACCOUNT, apiKeyId: 'key-1' });
+    expect(mockClerkGetSession).not.toHaveBeenCalled();
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
+  });
+
+  it('does not invent a native session for a developer credential', async () => {
+    const token = jwt.sign(
+      { userId: ACCOUNT, sub: ACCOUNT, surface: 'developer' },
+      TEST_DEVELOPER_JWT_SECRET,
+      {
+        expiresIn: 3600,
+        issuer: 'agiworkforce-api-gateway',
+        audience: 'agiworkforce',
+        jwtid: 'mapped-device-credential',
+      },
+    );
+
+    await expect(getClerkAuthUser(makeBearerRequest(token))).resolves.toEqual({
+      userId: ACCOUNT,
+      surfaceClass: 'developer',
+    });
+    expect(mockClerkGetSession).not.toHaveBeenCalled();
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+    expect(noteSessionSighting).not.toHaveBeenCalled();
   });
 });

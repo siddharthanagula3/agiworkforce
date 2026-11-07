@@ -58,9 +58,11 @@ vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: (...args: unknown[]) => mockGetManagedUsageSummary(...args),
 }));
 
-const mockListUserBillingInvoices = vi.fn();
+const mockReadUserBillingInvoicePage = vi.fn();
 vi.mock('@/lib/services/billing-invoice-service', () => ({
-  listUserBillingInvoices: (...args: unknown[]) => mockListUserBillingInvoices(...args),
+  BILLING_INVOICE_PAGE_LIMIT: 24,
+  readUserBillingInvoicePage: (...args: unknown[]) => mockReadUserBillingInvoicePage(...args),
+  listUserBillingInvoices: vi.fn(async () => []),
 }));
 
 const mockNeonQuery = vi.fn();
@@ -129,7 +131,9 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       flagship_weekly_usage_percentage: 5,
       flagship_weekly_reset_at: '2024-01-08T00:00:00.000Z',
     });
-    mockListUserBillingInvoices.mockResolvedValue([]);
+    mockReadUserBillingInvoicePage.mockResolvedValue({
+      invoices: [], available: true, hasMore: false, truncatedLineItems: [],
+    });
     mockNeonExecute.mockResolvedValue(1);
   });
 
@@ -445,7 +449,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       const data = await response.json();
 
       expect(data.data.billing_invoices).toEqual([]);
-      expect(mockListUserBillingInvoices).toHaveBeenCalledWith(expect.anything(), mockUser.id);
+      expect(mockReadUserBillingInvoicePage).toHaveBeenCalledWith(expect.anything(), mockUser.id);
       expect(JSON.stringify(data.data.billing_invoices)).not.toMatch(
         /credits_|token_|microusd|provider_cost|usage_cost/i,
       );

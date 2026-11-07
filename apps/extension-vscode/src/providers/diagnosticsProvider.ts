@@ -118,12 +118,12 @@ export class AgiDiagnosticsProvider
   ): Promise<ReviewResult> {
     const refusal = describeOutboundRefusal(editor.document);
     if (refusal !== null) {
-      return { diagnosticCount: 0, summary: refusal };
+      return { status: 'not-reviewed', reason: refusal };
     }
 
     const selection = toCodeSelection(editor);
     if (selection.text.trim() === '') {
-      return { diagnosticCount: 0, summary: 'No code to review.' };
+      return { status: 'not-reviewed', reason: 'No code to review.' };
     }
 
     const prompt = buildCodeReviewPrompt(selection);
@@ -139,7 +139,7 @@ export class AgiDiagnosticsProvider
     this._reviewedUris.set(selection.document.path, editor.document.uri);
     this.publishDiagnostics(selection.document.path, diagnostics);
 
-    return { diagnosticCount: diagnostics.length, summary };
+    return { status: 'completed', diagnosticCount: diagnostics.length, summary };
   }
 
   clear(uri?: vscode.Uri): void {
@@ -156,7 +156,6 @@ export class AgiDiagnosticsProvider
   }
 }
 
-export interface ReviewResult {
-  diagnosticCount: number;
-  summary: string;
-}
+export type ReviewResult =
+  | { status: 'completed'; diagnosticCount: number; summary: string }
+  | { status: 'not-reviewed'; reason: string };

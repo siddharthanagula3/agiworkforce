@@ -236,3 +236,28 @@ export async function persistProvenActiveWorkspaceSelection(
 ): Promise<void> {
   await writeActiveWorkspaceSelection(db, userId, organizationId);
 }
+
+// Callers must invalidate the active-organization cache after their transaction commits.
+export async function clearRecordedActiveWorkspaceSelection(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string,
+): Promise<void> {
+  if (!UUID_RE.test(organizationId)) {
+    throw createError.validation('organizationId must be a UUID');
+  }
+
+  await db.execute(
+    `update public.user_settings
+        set settings = jsonb_set(
+          settings,
+          '{workspace,activeOrganizationId}',
+          to_jsonb($2::text),
+          false
+        ),
+        updated_at = timezone('utc'::text, now())
+      where user_id = $1
+        and settings #>> '{workspace,activeOrganizationId}' = $3`,
+    [userId, PERSONAL_WORKSPACE_KEY, organizationId],
+  );
+}

@@ -28,32 +28,18 @@ import type {
 
 interface TwoFactorPanelProps {
   securityForm: UseFormReturn<SecuritySettingsFormData>;
-  passwordForm: UseFormReturn<ChangePasswordFormData>;
   isSaving: boolean;
   isUpdateSettingsPending: boolean;
-  isChangePasswordPending: boolean;
-  hasPassword: boolean;
-  showNewPassword: boolean;
-  showConfirmPassword: boolean;
   onSaveSecurity: (data: SecuritySettingsFormData) => void;
-  onPasswordChange: (data: ChangePasswordFormData) => void;
-  onToggleShowNewPassword: () => void;
-  onToggleShowConfirmPassword: () => void;
+  passwordPanel: React.ReactNode;
 }
 
 export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
   securityForm,
-  passwordForm,
   isSaving,
   isUpdateSettingsPending,
-  isChangePasswordPending,
-  hasPassword,
-  showNewPassword,
-  showConfirmPassword,
   onSaveSecurity,
-  onPasswordChange,
-  onToggleShowNewPassword,
-  onToggleShowConfirmPassword,
+  passwordPanel,
 }) => (
   <Card className="border-border bg-card">
     <CardHeader>
@@ -63,14 +49,6 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
     <CardContent className="space-y-6">
       <Form {...securityForm}>
         <form onSubmit={securityForm.handleSubmit(onSaveSecurity)} className="space-y-6">
-          {/*
-            2FA is owned by TwoFactorEnrollmentPanel, which drives the real
-            /api/settings/2fa routes. This form still carries
-            `two_factor_enabled` so a session-timeout save writes the mirror
-            column back truthfully, but it must never present a control that
-            claims to flip 2FA, the server only flips it after POST
-            /api/settings/2fa/verify succeeds.
-          */}
           <FormField
             control={securityForm.control}
             name="session_timeout"
@@ -112,9 +90,34 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
         </form>
       </Form>
 
+      {passwordPanel}
+    </CardContent>
+  </Card>
+);
+
+interface PasswordPanelProps {
+  passwordForm: UseFormReturn<ChangePasswordFormData>;
+  isChangePasswordPending: boolean;
+  blocked: boolean;
+  hasPassword: boolean;
+  showNewPassword: boolean;
+  showConfirmPassword: boolean;
+  error: string | null;
+  notice: string | null;
+  onPasswordSubmit: React.FormEventHandler<HTMLFormElement>;
+  onReset: () => void;
+  onAcknowledge: () => void;
+  onToggleShowNewPassword: () => void;
+  onToggleShowConfirmPassword: () => void;
+}
+
+export function PasswordPanel({ passwordForm, isChangePasswordPending, blocked, hasPassword,
+  showNewPassword, showConfirmPassword, error, notice, onPasswordSubmit, onReset, onAcknowledge,
+  onToggleShowNewPassword, onToggleShowConfirmPassword }: PasswordPanelProps) {
+  return (
       <div className="border-t border-border pt-6">
         <Form {...passwordForm}>
-          <form onSubmit={passwordForm.handleSubmit(onPasswordChange)} className="space-y-4">
+          <form onSubmit={onPasswordSubmit} className="space-y-4">
             <h4 className="font-medium text-foreground">
               {hasPassword ? 'Change Password' : 'Set a password'}
             </h4>
@@ -131,6 +134,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                     <FormControl>
                       <Input
                         {...field}
+                        disabled={isChangePasswordPending || blocked}
                         type="password"
                         autoComplete="current-password"
                         className="border-border bg-background text-foreground"
@@ -157,6 +161,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                     <div className="relative">
                       <Input
                         {...field}
+                        disabled={isChangePasswordPending || blocked}
                         type={showNewPassword ? 'text' : 'password'}
                         autoComplete="new-password"
                         className="border-border bg-background pe-10 text-foreground"
@@ -164,6 +169,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       />
                       <button
                         type="button"
+                        disabled={isChangePasswordPending || blocked}
                         onClick={onToggleShowNewPassword}
                         aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
                         aria-pressed={showNewPassword}
@@ -195,6 +201,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                     <div className="relative">
                       <Input
                         {...field}
+                        disabled={isChangePasswordPending || blocked}
                         type={showConfirmPassword ? 'text' : 'password'}
                         autoComplete="new-password"
                         className="border-border bg-background pe-10 text-foreground"
@@ -202,6 +209,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       />
                       <button
                         type="button"
+                        disabled={isChangePasswordPending || blocked}
                         onClick={onToggleShowConfirmPassword}
                         aria-label={
                           showConfirmPassword
@@ -224,10 +232,12 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
               )}
             />
 
+            {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
+            {notice ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
             <Button
               type="submit"
               disabled={
-                isChangePasswordPending ||
+                blocked || isChangePasswordPending ||
                 !passwordForm.formState.isValid ||
                 !passwordForm.formState.isDirty
               }
@@ -241,9 +251,14 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
               )}
               {hasPassword ? 'Change Password' : 'Set password'}
             </Button>
+            {blocked ? <Button type="button" variant="outline" onClick={onAcknowledge}>
+              I checked my sign-in and sessions
+            </Button> : null}
+            <Button type="button" variant="ghost" onClick={onReset}>
+              {isChangePasswordPending ? 'Cancel waiting' : 'Clear password form'}
+            </Button>
           </form>
         </Form>
       </div>
-    </CardContent>
-  </Card>
-);
+  );
+}

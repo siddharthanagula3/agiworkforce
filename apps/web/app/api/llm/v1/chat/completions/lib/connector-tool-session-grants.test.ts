@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { ToolApprovalRiskTier } from '@agiworkforce/cloud-contracts';
+import {
+  connectorCategoryToolName,
+  type ToolApprovalRiskTier,
+} from '@agiworkforce/cloud-contracts';
 import {
   connectorToolPermissionsFromEntries,
   loadConnectorToolPermissions,
@@ -19,10 +22,62 @@ import {
   loadConnectorToolSessionGrants,
   NO_SESSION_GRANTS,
   planScopedToolApprovals,
+  revokeConnectorSessionGrants,
 } from './connector-tool-session-grants';
 
 const CONVERSATION_A = '0190a000-0000-7000-8000-00000000000a';
 const CONVERSATION_B = '0190a000-0000-7000-8000-00000000000b';
+
+describe('account-wide connector grant revocation receipts', () => {
+  it.each([
+    { tool: 'create_issue', expected: 'create_issue' },
+    { tool: connectorCategoryToolName('write'), expected: null },
+    { tool: null, expected: null },
+    { tool: '', expected: '' },
+  ])('binds only connector and normalized tool for $tool', async ({ tool, expected }) => {
+    const query = vi.fn().mockResolvedValue([{ removed: 3 }]);
+    expect(await revokeConnectorSessionGrants(transactionDb(query), 'github', tool)).toBe(3);
+    expect(query).toHaveBeenCalledWith(
+      'select public.revoke_connector_tool_session_grants($1, $2) as removed',
+      ['github', expected],
+    );
+  });
+
+  it.each(
+    [
+      [],
+      [{ removed: null }],
+      [{ removed: '3' }],
+      [{ removed: -1 }],
+      [{ removed: 1.5 }],
+      [{ removed: Number.NaN }],
+      [{ removed: Number.POSITIVE_INFINITY }],
+      [{ removed: Number.MAX_SAFE_INTEGER + 1 }],
+      [{ removed: 0 }, { removed: 1 }],
+      [{}],
+    ].map((receipt) => ({ receipt })),
+  )('rejects an invalid revocation receipt %j', async ({ receipt }) => {
+    const query = vi.fn().mockResolvedValue(receipt);
+    await expect(
+      revokeConnectorSessionGrants(transactionDb(query), 'github', null),
+    ).rejects.toThrow('revocation could not be confirmed');
+  });
+
+  it.each(['42883', '42501'])('propagates database failure %s without fallback', async (code) => {
+    const query = vi.fn().mockRejectedValue(
+      Object.assign(new Error('revocation unavailable'), { code }),
+    );
+    await expect(
+      revokeConnectorSessionGrants(transactionDb(query), 'github', null),
+    ).rejects.toMatchObject({ code });
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('accepts confirmed zero removals', async () => {
+    const query = vi.fn().mockResolvedValue([{ removed: 0 }]);
+    expect(await revokeConnectorSessionGrants(transactionDb(query), 'github', null)).toBe(0);
+  });
+});
 
 function grantRisks(keys: readonly string[], risk: ToolApprovalRiskTier = 'high') {
   return new Map(keys.map((key) => [key, risk]));
@@ -536,6 +591,7 @@ describe('one transaction for mixed scoped permissions', () => {
           pending.push('session');
           return [{ id: 'owned-grant' }];
         }
+        if (sql.includes('revoke_connector_tool_session_grants')) return [{ removed: 0 }];
         if (sql.includes('delete from public.connector_tool_session_grants')) return [];
         throw new Error('Unexpected scoped persistence statement');
       });

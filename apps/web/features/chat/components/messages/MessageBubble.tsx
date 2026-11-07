@@ -210,7 +210,14 @@ import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
-import { loadWorkbookSheets, pptxToSlidesMarkdown } from '../../lib/office-file-preview';
+import {
+  loadWorkbookSheets,
+  pptxToSlidesMarkdown,
+  PresentationPreviewLimitError,
+  PRESENTATION_PREVIEW_TOO_LARGE,
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
@@ -719,6 +726,7 @@ interface MessageBubbleProps {
   isReadingAloud?: boolean;
   /** Keeps an unavailable browser capability out of the action row. */
   isReadAloudSupported?: boolean;
+  readAloudUnavailableReason?: string | null;
   isLatestTurn?: boolean;
   /**
    * Why this turn failed, and what to do about it. Both ride on the run's own
@@ -780,6 +788,7 @@ const MessageBubbleComponent = function MessageBubble({
   onReadAloud,
   isReadingAloud = false,
   isReadAloudSupported = false,
+  readAloudUnavailableReason,
   isLatestTurn = false,
   turnFailureReason,
   turnFailureActions,
@@ -1565,9 +1574,9 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [generatedFiles, generatedTextContent]);
 
-  const [officePreviews, setOfficePreviews] = useState<Record<string, string | { failed: true }>>(
-    {},
-  );
+  const [officePreviews, setOfficePreviews] = useState<
+    Record<string, string | { failed: true; tooLarge: boolean }>
+  >({});
   useEffect(() => {
     const pending = generatedFiles.filter(
       (f) =>
@@ -1589,8 +1598,17 @@ const MessageBubbleComponent = function MessageBubble({
         .then((preview) => {
           if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: preview }));
         })
-        .catch(() => {
-          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: { failed: true } }));
+        .catch((error: unknown) => {
+          if (!cancelled)
+            setOfficePreviews((prev) => ({
+              ...prev,
+              [file.id]: {
+                failed: true,
+                tooLarge:
+                  error instanceof WorkbookPreviewLimitError ||
+                  error instanceof PresentationPreviewLimitError,
+              },
+            }));
         });
     }
     return () => {
@@ -3103,6 +3121,17 @@ const MessageBubbleComponent = function MessageBubble({
             </p>
           )}
 
+          {!isUser &&
+            generatedFiles.map((file) => {
+              const preview = officePreviews[file.id];
+              return typeof preview === 'object' && preview.tooLarge ? (
+                <p key={file.id} role="status" className="mt-2 text-sm text-muted-foreground">
+                  {file.fileName}:{' '}
+                  {file.kind === 'pptx' ? PRESENTATION_PREVIEW_TOO_LARGE : WORKBOOK_PREVIEW_TOO_LARGE}
+                </p>
+              ) : null;
+            })}
+
           {deliverables.length > 0 && (
             <div
               data-testid="deliverable-cards"
@@ -3901,6 +3930,7 @@ const MessageBubbleComponent = function MessageBubble({
                         {!isUser && hasReadableTurn && isReadAloudSupported && onReadAloud && (
                           <DropdownMenuCheckboxItem
                             checked={isReadingAloud}
+                            disabled={Boolean(readAloudUnavailableReason)}
                             onCheckedChange={() => onReadAloud(message.id, message.content)}
                           >
                             {isReadingAloud ? (
@@ -3908,7 +3938,7 @@ const MessageBubbleComponent = function MessageBubble({
                             ) : (
                               <Volume2 className="me-2 h-4 w-4" aria-hidden="true" />
                             )}
-                            {isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
+                            {readAloudUnavailableReason ?? (isReadingAloud ? 'Stop reading message' : 'Read message aloud')}
                           </DropdownMenuCheckboxItem>
                         )}
                         {onPin && (
@@ -4252,6 +4282,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onReact !== next.onReact) return false;
   if (prev.onBranch !== next.onBranch) return false;
   if (prev.onReadAloud !== next.onReadAloud) return false;
+  if (prev.readAloudUnavailableReason !== next.readAloudUnavailableReason) return false;
   if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;

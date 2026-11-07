@@ -1,20 +1,31 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useRef, useSyncExternalStore } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PERSONAL_WORKSPACE_SELECTOR } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_WORKSPACES_PATH,
+  ManagedCloudAccountWorkspacesSchema,
   type ManagedCloudAccountWorkspaces,
 } from '@agiworkforce/cloud-contracts';
-import { getAuthToken } from '@shared/lib/get-auth-token';
-import { identityClientReady } from '@/lib/identity/token';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { toUserMessage } from '@/lib/user-error-message';
 import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
+import {
+  admitWorkspace, beginWorkspaceSwitch, finishWorkspaceSwitch, observeWorkspaceOwner,
+  subscribeWorkspaceAdmission, workspaceAdmissionRevision, workspaceOwnerIsCurrent,
+  workspaceQueryKey,
+  failWorkspaceRead, retryWorkspaceRead,
+  type WorkspaceOwner,
+} from '../lib/workspace-admission';
 
 export const WORKSPACES_QUERY_KEY = ['workspaces'] as const;
-
 export type AccountWorkspaces = ManagedCloudAccountWorkspaces;
+
+function workspaceScopeKey(data: AccountWorkspaces): string {
+  return JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]);
+}
 
 async function readApiError(res: Response, fallback: string): Promise<Error> {
   let raw = '';
@@ -30,53 +41,148 @@ async function readApiError(res: Response, fallback: string): Promise<Error> {
   return error;
 }
 
-async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const token = await getAuthToken();
-  if (!token) {
-    if (!(await identityClientReady())) {
-      throw new Error('Sign-in is still loading. Try again in a moment.');
-    }
-    throw Object.assign(new Error('Your session has expired. Sign in again to continue.'), {
-      status: 401,
-    });
-  }
-  const method = init.method ?? 'GET';
-  const baseHeaders: Record<string, string> = { Authorization: `Bearer ${token}` };
-  if (init.body) baseHeaders['Content-Type'] = 'application/json';
-  const headers = method === 'GET' ? baseHeaders : await addCsrfHeaders(baseHeaders);
-  const res = await fetch(url, { ...init, headers });
-  if (!res.ok) {
-    throw await readApiError(
-      res,
-      method === 'GET'
-        ? 'We could not load your workspaces. Try again.'
-        : 'We could not switch workspaces. Try again.',
-    );
-  }
-  return (await res.json()) as T;
+async function readWorkspaces(authority: RequestAuthority, signal?: AbortSignal): Promise<AccountWorkspaces> {
+  const res = await authority.fetch(MANAGED_CLOUD_WORKSPACES_PATH, { signal, cache: 'no-store' });
+  if (!res.ok) throw await readApiError(res, 'We could not load your workspaces. Try again.');
+  const data = ManagedCloudAccountWorkspacesSchema.parse(await res.json());
+  authority.assertCurrent();
+  return data;
 }
 
-// Every surface reads this one endpoint, so the set a person can switch
-// between is the same everywhere they sign in.
-export function useAccountWorkspaces(): UseQueryResult<AccountWorkspaces, Error> {
-  return useQuery({
-    queryKey: WORKSPACES_QUERY_KEY,
-    queryFn: () => requestJson<AccountWorkspaces>(MANAGED_CLOUD_WORKSPACES_PATH),
+function useWorkspaceOwner() {
+  const snapshot = useSessionSnapshot();
+  useSyncExternalStore(subscribeWorkspaceAdmission, workspaceAdmissionRevision, () => 0);
+  return observeWorkspaceOwner(snapshot());
+}
+
+export function useAccountWorkspaces() {
+  const owner = useWorkspaceOwner();
+  const epoch = owner?.epoch;
+  const canRead = !!owner && (owner.phase === 'resolving' || owner.phase === 'admitted');
+  const query = useQuery({
+    queryKey: owner ? workspaceQueryKey(owner) : [...WORKSPACES_QUERY_KEY, 'unavailable'],
+    enabled: canRead,
+    queryFn: async ({ signal }) => {
+      if (!owner || epoch === undefined || !canRead) throw new Error('Workspaces are unavailable.');
+      const authority = createRequestAuthority(owner.session, () => workspaceOwnerIsCurrent(owner, epoch));
+      try {
+        const data = await readWorkspaces(authority, signal);
+        admitWorkspace(owner, epoch, workspaceScopeKey(data));
+        return data;
+      } catch (error) {
+        if (!signal.aborted) failWorkspaceRead(owner, epoch);
+        throw error;
+      } finally {
+        authority.retire();
+      }
+    },
     staleTime: 60 * 1000,
-    meta: { errorMessage: 'Failed to load workspaces' },
+    retry: false,
+    meta: { silent: true },
   });
+  const admitted = !!owner && epoch !== undefined && owner.phase === 'admitted' &&
+    workspaceOwnerIsCurrent(owner, epoch);
+  return {
+    ...query,
+    refetch: () => {
+      if (owner?.phase === 'unavailable') retryWorkspaceRead(owner);
+      else if (canRead) return query.refetch();
+    },
+    data: admitted ? query.data : undefined,
+    isLoading: canRead && query.isLoading,
+    isUnavailable: !admitted && !query.isLoading,
+    isSwitching: owner?.phase === 'switching',
+    requiresReload: owner?.phase === 'uncertain',
+  };
 }
 
-export function useSelectWorkspace() {
+export function useSelectWorkspace(kind: 'workspace' | 'organization' = 'workspace') {
+  return useWorkspaceSelectionMutation<string | null>((workspaceId) => ({
+    url: kind === 'workspace' ? MANAGED_CLOUD_WORKSPACES_PATH : '/api/settings/organization/active',
+    method: 'PUT',
+    body: kind === 'workspace'
+      ? { workspaceId: workspaceId ?? PERSONAL_WORKSPACE_SELECTOR }
+      : { organizationId: workspaceId },
+  }));
+}
+
+export function useWorkspaceSelectionMutation<Input>(
+  request: (input: Input) => { url: string; method: 'POST' | 'PUT'; body: unknown; errorMessage?: string },
+) {
+  const accountWorkspaces = useAccountWorkspaces();
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (workspaceId: string | null) =>
-      requestJson<{ activeOrganizationId: string | null }>(MANAGED_CLOUD_WORKSPACES_PATH, {
-        method: 'PUT',
-        body: JSON.stringify({ workspaceId: workspaceId ?? PERSONAL_WORKSPACE_SELECTOR }),
-      }),
-    onSuccess: async ({ activeOrganizationId }) => {
-      await finalizeWorkspaceSwitch(queryClient, activeOrganizationId);
+  const owner = useWorkspaceOwner();
+  const capturedEpoch = owner?.epoch;
+  const attempt = useRef<{ owner: WorkspaceOwner; epoch: number } | null>(null);
+  const mutation = useMutation({
+    retry: false,
+    // Errors render in the owner-bound controls, not the global mutation toast.
+    onError: () => undefined,
+    mutationFn: async ({ input, owner, expectedEpoch, request: capturedRequest }: {
+      input: Input; owner: WorkspaceOwner | null; expectedEpoch: number | undefined; request: typeof request;
+    }) => {
+      if (!owner) throw new Error('Sign in to select a workspace.');
+      if (expectedEpoch === undefined) throw new Error('Workspaces are unavailable.');
+      attempt.current = { owner, epoch: expectedEpoch };
+      const epoch = beginWorkspaceSwitch(owner, expectedEpoch);
+      attempt.current = { owner, epoch };
+      const authority = createRequestAuthority(owner.session, () => workspaceOwnerIsCurrent(owner, epoch));
+      let rejected = false;
+      try {
+        const operation = capturedRequest(input);
+        const response = await authority.fetch(
+          operation.url,
+          {
+            method: operation.method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(operation.body),
+          },
+        );
+        rejected = response.status >= 400 && response.status < 500;
+        if (!response.ok) throw await readApiError(response,
+          operation.errorMessage ?? 'We could not switch workspaces. Try again.');
+        const data = await readWorkspaces(authority);
+        authority.assertCurrent();
+        await finalizeWorkspaceSwitch(queryClient, data.activeOrganizationId, authority);
+        return data;
+      } catch (error) {
+        if (authority.isCurrent()) {
+          // A read cannot prove an interrupted PUT has stopped executing on the server.
+          const uncertain = !rejected;
+          try {
+            const data = await readWorkspaces(authority);
+            if (!uncertain) {
+              finishWorkspaceSwitch(owner, epoch, false);
+              queryClient.setQueryData(workspaceQueryKey(owner), data);
+              admitWorkspace(owner, epoch, workspaceScopeKey(data));
+            }
+          } catch {
+            // Keep admission closed when authoritative scope cannot be resolved.
+          }
+        }
+        throw error;
+      } finally {
+        if (owner.phase === 'switching') finishWorkspaceSwitch(owner, epoch, true);
+        authority.retire();
+      }
     },
   });
+  const current = attempt.current;
+  const ownsResult = !!current && current.owner === owner &&
+    workspaceOwnerIsCurrent(current.owner, current.epoch);
+  return {
+    ...mutation,
+    ownerKey: owner ? `${owner.incarnation}:${capturedEpoch}` : null,
+    accountWorkspaces: accountWorkspaces.data,
+    canMutate: !!owner && owner.phase === 'admitted',
+    mutate: (input: Input) => mutation.mutate({ input, owner, expectedEpoch: capturedEpoch, request }),
+    mutateAsync: (input: Input) => mutation.mutateAsync({ input, owner, expectedEpoch: capturedEpoch, request }),
+    variables: ownsResult ? mutation.variables?.input : undefined,
+    data: ownsResult ? mutation.data : undefined,
+    error: ownsResult ? mutation.error : null,
+    isError: ownsResult && mutation.isError,
+    isPending: ownsResult && mutation.isPending,
+    isSuccess: ownsResult && mutation.isSuccess,
+    requiresReload: owner?.phase === 'uncertain',
+  };
 }

@@ -25,6 +25,7 @@ import {
   type AiGeneratedProvenance,
 } from '@/lib/compliance/ai-act';
 import { isUuid } from '@/lib/uuid';
+import { isImageGenerationJobDrivable } from '../lib/image-job-drive-queue';
 
 /**
  * Durable image job status.
@@ -70,7 +71,7 @@ async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
     ? ((await reconcileCancelledImageGenerationJob({ db: scoped.db, job: found })) ?? found)
     : found;
 
-  if (isImageJobAttemptDue(job, Date.now())) {
+  if (isImageGenerationJobDrivable(job) && isImageJobAttemptDue(job, Date.now())) {
     after(async () => {
       try {
         await runImageGenerationJobAttempt({ db: scoped.db, job });

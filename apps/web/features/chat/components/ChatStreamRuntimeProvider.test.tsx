@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatStreamRuntimeProvider, useChatStreamRuntime } from './ChatStreamRuntimeProvider';
+import {
+  ChatStreamRuntimeProvider,
+  useChatStreamRuntime,
+  useOptionalChatStreamRuntime,
+} from './ChatStreamRuntimeProvider';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 
 vi.mock('@/lib/hooks/useChatStream', () => ({
@@ -17,11 +21,14 @@ function RuntimeProbe({ label }: { label: string }) {
 
 describe('ChatStreamRuntimeProvider', () => {
   beforeEach(() => {
+    mockedUseChatStream.mockReset();
     mockedUseChatStream.mockReturnValue({
       sendMessage: vi.fn(),
       stopGeneration: vi.fn(),
       continueGeneration: vi.fn(),
       resumeInteractiveCardTurn: vi.fn(),
+      respondToInteractiveCard: vi.fn(),
+      isInteractiveCardResponsePending: vi.fn().mockReturnValue(false),
       resolveToolApproval: vi.fn(),
       resolveToolInput: vi.fn(),
       steerActiveTurn: vi.fn(),
@@ -51,5 +58,15 @@ describe('ChatStreamRuntimeProvider', () => {
     expect(() => render(<RuntimeProbe label="orphan" />)).toThrow(
       'useChatStreamRuntime must be used within ChatStreamRuntimeProvider',
     );
+  });
+
+  it('allows a read-only renderer without creating another runtime', () => {
+    function OptionalProbe() {
+      const runtime = useOptionalChatStreamRuntime();
+      return <div>{runtime ? 'interactive' : 'read-only'}</div>;
+    }
+    render(<OptionalProbe />);
+    expect(screen.getByText('read-only')).toBeDefined();
+    expect(mockedUseChatStream).not.toHaveBeenCalled();
   });
 });

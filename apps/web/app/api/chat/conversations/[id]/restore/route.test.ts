@@ -61,7 +61,7 @@ describe('POST /api/chat/conversations/[id]/restore', () => {
     mocks.query.mockResolvedValue([restoredRow]);
   });
 
-  it('clears deleted_at for the owner', async () => {
+  it('clears deleted_at only for an owned chat still inside the recovery window', async () => {
     const response = await POST(request(), context);
 
     expect(response.status).toBe(200);
@@ -70,6 +70,7 @@ describe('POST /api/chat/conversations/[id]/restore', () => {
     expect(sql).toContain('user_id = $2');
     expect(sql).toContain('organization_id is not distinct from $3');
     expect(sql).toContain('deleted_at is not null');
+    expect(sql).toContain("deleted_at > now() - interval '30 days'");
     expect(params).toEqual([CONVERSATION_ID, 'user-1', null]);
   });
 
@@ -94,6 +95,10 @@ describe('POST /api/chat/conversations/[id]/restore', () => {
     const response = await POST(request(), context);
 
     expect(response.status).toBe(404);
+    // Eligibility is checked inside the UPDATE, not in a pre-read that can
+    // race the expiry boundary or a delayed sweep of retained rows.
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.query.mock.calls[0]![0]).toContain("deleted_at > now() - interval '30 days'");
   });
 
   it('rejects a request that fails CSRF', async () => {

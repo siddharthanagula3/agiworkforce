@@ -141,6 +141,9 @@ describe('POST /api/user/delete-account/cancel', () => {
     expect(response.status).toBe(409);
     expect(body.cancelled).toBe(false);
     expect(body.reason).toBe('grace_window_expired');
+    expect(body.error).toContain('The cancellation window has closed.');
+    expect(body.error).toContain('This does not confirm that erasure is complete.');
+    expect(body.error).not.toMatch(/already underway|Nothing was restored/);
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 

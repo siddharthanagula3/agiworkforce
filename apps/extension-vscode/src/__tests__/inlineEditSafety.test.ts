@@ -7,6 +7,13 @@ import * as analytics from '../features/analytics/productAnalytics';
 import { t } from '../l10n';
 import { ExtensionContext } from './__mocks__/vscode';
 
+const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs')>()),
+  realpathSync: realpath,
+}));
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((resolvePromise) => {
@@ -87,6 +94,7 @@ describe('inline edit ownership across asynchronous work', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    realpath.mockReset().mockImplementation((path) => path);
     buffersByUri.clear();
     progress = new vscode.CancellationTokenSource();
     vi.spyOn(Config, 'planModeActive').mockReturnValue(false);
@@ -141,6 +149,29 @@ describe('inline edit ownership across asynchronous work', () => {
 
       expect(run.completion).not.toHaveBeenCalled();
       expectNoWrite(run.target);
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['credential-target', 'unresolved'] as const)(
+    'reads and sends nothing when the file path is %s',
+    async (refusal) => {
+      if (refusal === 'credential-target') {
+        realpath.mockReturnValue('/workspace/.env');
+      } else {
+        realpath.mockImplementation(() => {
+          throw new Error('ELOOP');
+        });
+      }
+      const target = editorFixture();
+      const read = vi.spyOn(target.editor.document, 'getText');
+      const run = start(target);
+
+      await run.running;
+
+      expect(read).not.toHaveBeenCalled();
+      expect(run.completion).not.toHaveBeenCalled();
+      expectNoWrite(target);
       expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
     },
   );

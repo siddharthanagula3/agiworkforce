@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Share, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useFocusEffect } from 'expo-router';
@@ -8,19 +8,40 @@ import { Card } from '@/components/ui/Card';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useAuthStore } from '@/src/features/auth/store';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { CloudSyncBlockedBanner, SettingsScreenShell } from '@/src/features/settings/Common';
 import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
 import { translatePlural } from '@/src/i18n/plural';
 
+interface LinkSession {
+  account: CloudAccountEpoch;
+  controller: AbortController;
+  active: boolean;
+  read: { controller: AbortController } | null;
+  mutation: object | null;
+}
+
+interface OwnedLinks {
+  owner: LinkSession;
+  links: SharedLink[];
+}
+
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'ready'; links: SharedLink[] }
+  | ({ kind: 'ready' } & OwnedLinks)
   /** Local Mode: the request is refused on-device, so there is nothing to load. */
   | { kind: 'blocked' }
   | { kind: 'error' };
 
 const LOAD_FAILED_MESSAGE = 'Check your connection and try again.';
-const REVOKE_FAILED_MESSAGE = 'The link is still active. Please try again.';
+const REVOKE_FAILED_MESSAGE =
+  'Could not confirm whether the link was revoked. Refresh the list before trying again.';
 
 function formatDate(value: string): string {
   if (!value) return '';
@@ -40,58 +61,181 @@ export default function SharedLinksScreen() {
   const c = useThemeColors();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const isCloudMode = appMode === 'cloud';
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [scopeRevision, setScopeRevision] = useState(0);
+  const sessionRef = useRef<LinkSession | null>(null);
+  const linksRef = useRef<OwnedLinks | null>(null);
+  const confirmationRef = useRef<object | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const links = await fetchSharedLinks();
-      setState({ kind: 'ready', links });
-    } catch (error) {
-      setState(isEgressBlocked(error) ? { kind: 'blocked' } : { kind: 'error' });
+  const isCurrent = useCallback((owner: LinkSession): boolean => {
+    const auth = useAuthStore.getState();
+    return sessionRef.current === owner && owner.active &&
+      useChatAppModeStore.getState().appMode === 'cloud' &&
+      auth.isClerkSignedIn && auth.clerkUserId === owner.account.ownerId &&
+      isCloudAccountEpochCurrent(owner.account);
+  }, []);
+
+  const retire = useCallback(() => {
+    const owner = sessionRef.current;
+    sessionRef.current = null;
+    linksRef.current = null;
+    confirmationRef.current = null;
+    if (owner) {
+      owner.active = false;
+      owner.controller.abort();
+      owner.read?.controller.abort();
+      owner.read = null;
     }
   }, []);
 
+  const load = useCallback(async (owner: LinkSession, refresh = false) => {
+    if (!isCurrent(owner) || owner.mutation) return;
+    owner.read?.controller.abort();
+    const request = { controller: new AbortController() };
+    owner.read = request;
+    setRefreshing(refresh);
+    const ownsRead = () => isCurrent(owner) && owner.read === request;
+    try {
+      const links = await fetchSharedLinks({
+        accountEpoch: owner.account,
+        signal: request.controller.signal,
+      });
+      if (!ownsRead()) return;
+      const next = { owner, links };
+      linksRef.current = next;
+      setState({ kind: 'ready', ...next });
+    } catch (error) {
+      if (!ownsRead()) return;
+      linksRef.current = null;
+      setState(isEgressBlocked(error) ? { kind: 'blocked' } : { kind: 'error' });
+    } finally {
+      if (ownsRead()) {
+        owner.read = null;
+        setRefreshing(false);
+      }
+    }
+  }, [isCurrent]);
+
+  useEffect(() => {
+    const invalidate = () => {
+      retire();
+      setRefreshing(false);
+      setRevoking(null);
+      setState({ kind: useChatAppModeStore.getState().appMode === 'cloud' ? 'loading' : 'blocked' });
+      setScopeRevision((revision) => revision + 1);
+    };
+    const stopEpoch = subscribeCloudAccountEpochChange(invalidate);
+    const stopMode = useChatAppModeStore.subscribe((next, previous) => {
+      if (next.appMode !== previous.appMode) invalidate();
+    });
+    const stopAuth = useAuthStore.subscribe((next, previous) => {
+      if (next.clerkUserId !== previous.clerkUserId || next.isClerkSignedIn !== previous.isClerkSignedIn) {
+        invalidate();
+      }
+    });
+    return () => {
+      stopEpoch();
+      stopMode();
+      stopAuth();
+      retire();
+    };
+  }, [retire]);
+
   useFocusEffect(
     useCallback(() => {
+      retire();
+      setRefreshing(false);
+      setRevoking(null);
       if (!isCloudMode) {
         setState({ kind: 'blocked' });
         return;
       }
-      setState((current) => (current.kind === 'ready' ? current : { kind: 'loading' }));
-      void load();
-    }, [isCloudMode, load]),
+      const account = captureCloudAccountEpoch();
+      if (!account || !isClerkSignedIn || account.ownerId !== clerkUserId) {
+        setState({ kind: 'error' });
+        return;
+      }
+      const owner: LinkSession = {
+        account,
+        controller: new AbortController(),
+        active: true,
+        read: null,
+        mutation: null,
+      };
+      sessionRef.current = owner;
+      setState({ kind: 'loading' });
+      void load(owner);
+      return () => {
+        if (sessionRef.current === owner) retire();
+      };
+    }, [isCloudMode, isClerkSignedIn, clerkUserId, scopeRevision, load, retire]),
   );
 
-  const handleRefresh = useCallback(async () => {
-    if (!isCloudMode) return;
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [isCloudMode, load]);
+  const handleRefresh = useCallback(() => {
+    const owner = sessionRef.current;
+    if (owner) void load(owner, true);
+  }, [load]);
+
+  const isCurrentRow = useCallback((owner: LinkSession, link: SharedLink): boolean => {
+    const current = linksRef.current;
+    return isCurrent(owner) && current?.owner === owner &&
+      current.links.some((row) => row.token === link.token && row.shareUrl === link.shareUrl &&
+        row.expired === link.expired);
+  }, [isCurrent]);
 
   const handleRevoke = useCallback(
-    (link: SharedLink) => {
+    (owner: LinkSession, link: SharedLink) => {
+      if (!isCurrentRow(owner, link) || owner.mutation) return;
+      const intent = {};
+      confirmationRef.current = intent;
       Alert.alert(
         'Revoke this link?',
         `"${link.title}" will stop opening for anyone who has the URL.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'Cancel', style: 'cancel', onPress: () => {
+            if (confirmationRef.current === intent) confirmationRef.current = null;
+          } },
           {
             text: 'Revoke',
             style: 'destructive',
             onPress: () => {
+              if (confirmationRef.current !== intent || !isCurrent(owner) || owner.mutation) return;
+              confirmationRef.current = null;
+              const mutation = {};
+              owner.mutation = mutation;
+              owner.read?.controller.abort();
+              owner.read = null;
+              setRefreshing(false);
+              const ownsMutation = () => isCurrent(owner) && owner.mutation === mutation;
               void (async () => {
                 setRevoking(link.token);
                 try {
-                  await revokeSharedLink(link.token);
-                  await load();
+                  await revokeSharedLink(link.token, {
+                    accountEpoch: owner.account,
+                    signal: owner.controller.signal,
+                  });
+                  if (!ownsMutation()) return;
+                  const current = linksRef.current;
+                  if (current?.owner === owner) {
+                    const next = { owner, links: current.links.filter((row) => row.token !== link.token) };
+                    linksRef.current = next;
+                    setState({ kind: 'ready', ...next });
+                  }
                 } catch {
+                  if (!ownsMutation()) return;
+                  linksRef.current = null;
+                  setState({ kind: 'error' });
                   Alert.alert('Could not revoke', REVOKE_FAILED_MESSAGE);
                 } finally {
-                  setRevoking(null);
+                  if (ownsMutation()) {
+                    owner.mutation = null;
+                    setRevoking(null);
+                  }
                 }
               })();
             },
@@ -99,8 +243,20 @@ export default function SharedLinksScreen() {
         ],
       );
     },
-    [load],
+    [isCurrent, isCurrentRow],
   );
+
+  const handleShare = useCallback(async (owner: LinkSession, link: SharedLink) => {
+    if (!isCurrentRow(owner, link) || link.expired || owner.mutation) return;
+    try {
+      await Share.share({ message: link.shareUrl });
+    } catch {
+      if (isCurrentRow(owner, link)) Alert.alert('Could not share', 'Please try again.');
+    }
+  }, [isCurrentRow]);
+
+  const visibleState: LoadState = !isCloudMode ? { kind: 'blocked' }
+    : state.kind === 'ready' && !isCurrent(state.owner) ? { kind: 'loading' } : state;
 
   return (
     <SettingsScreenShell
@@ -110,17 +266,17 @@ export default function SharedLinksScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />
       }
     >
-      {state.kind === 'blocked' && (
+      {visibleState.kind === 'blocked' && (
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       )}
 
-      {state.kind === 'loading' && (
+      {visibleState.kind === 'loading' && (
         <Text style={{ color: c.textSecondary, fontSize: typeScale.footnote, paddingVertical: 24 }}>
           Loading your shared links…
         </Text>
       )}
 
-      {state.kind === 'error' && (
+      {visibleState.kind === 'error' && (
         <View
           style={{
             borderRadius: 12,
@@ -144,7 +300,7 @@ export default function SharedLinksScreen() {
             {LOAD_FAILED_MESSAGE}
           </Text>
           <Pressable
-            onPress={() => void load()}
+            onPress={handleRefresh}
             accessibilityRole="button"
             accessibilityLabel="Retry loading shared links"
             style={{ marginTop: 10, alignSelf: 'flex-start' }}
@@ -156,7 +312,7 @@ export default function SharedLinksScreen() {
         </View>
       )}
 
-      {state.kind === 'ready' && state.links.length === 0 && (
+      {visibleState.kind === 'ready' && visibleState.links.length === 0 && (
         <View testID="shared-links-empty" style={{ flex: 1, justifyContent: 'center' }}>
           <Card>
             <View className="items-center py-8 gap-3">
@@ -198,8 +354,8 @@ export default function SharedLinksScreen() {
         </View>
       )}
 
-      {state.kind === 'ready' &&
-        state.links.map((link) => (
+      {visibleState.kind === 'ready' &&
+        visibleState.links.map((link) => (
           <Card key={link.token}>
             <View style={{ padding: 14, gap: 8 }}>
               <Text
@@ -234,7 +390,8 @@ export default function SharedLinksScreen() {
                       again would hand someone a dead URL. */}
                 {!link.expired && (
                   <Pressable
-                    onPress={() => void Share.share({ message: link.shareUrl })}
+                    onPress={() => void handleShare(visibleState.owner, link)}
+                    disabled={revoking !== null}
                     accessibilityRole="button"
                     accessibilityLabel={`Share link to ${link.title}`}
                   >
@@ -246,8 +403,8 @@ export default function SharedLinksScreen() {
                   </Pressable>
                 )}
                 <Pressable
-                  onPress={() => handleRevoke(link)}
-                  disabled={revoking === link.token}
+                  onPress={() => handleRevoke(visibleState.owner, link)}
+                  disabled={revoking !== null}
                   accessibilityRole="button"
                   accessibilityLabel={`Revoke link to ${link.title}`}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}

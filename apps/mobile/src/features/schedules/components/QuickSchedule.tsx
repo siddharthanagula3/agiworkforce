@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -13,7 +13,7 @@ import { Zap, X, Plus, ArrowUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import { VoiceInputButton, type VoiceInputHandle } from '@/src/features/voice/components/VoiceInputButton';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
@@ -175,6 +175,7 @@ export function QuickSchedule({
   onDetailedCreate,
 }: QuickScheduleProps) {
   const colors = useThemeColors();
+  const voiceControlRef = useRef<VoiceInputHandle | null>(null);
   const [visible, setVisible] = useState(false);
   const [input, setInput] = useState('');
   const [prompt, setPrompt] = useState(defaultPrompt);
@@ -186,6 +187,7 @@ export function QuickSchedule({
   const parsed = input.trim() ? parseNaturalLanguage(input) : null;
 
   const handleOpen = useCallback(() => {
+    voiceControlRef.current?.cancel();
     Keyboard.dismiss();
     setError('');
     setVisible(true);
@@ -199,6 +201,7 @@ export function QuickSchedule({
   }, [prompt, handleOpen]);
 
   const handleClose = useCallback(() => {
+    voiceControlRef.current?.cancel();
     setVisible(false);
     setError('');
   }, []);
@@ -269,7 +272,7 @@ export function QuickSchedule({
         }}
       >
         <PressableBox
-          onPress={onDetailedCreate ?? handleOpen}
+          onPress={() => { voiceControlRef.current?.cancel(); (onDetailedCreate ?? handleOpen)(); }}
           className="h-11 w-11 items-center justify-center"
           accessibilityLabel="Open detailed schedule form"
           accessibilityRole="button"
@@ -290,7 +293,7 @@ export function QuickSchedule({
           onSubmitEditing={handleSend}
         />
         <View className="h-11 w-11 items-center justify-center">
-          <VoiceInputButton onTranscription={handleTranscription} onError={handleVoiceError} />
+          <VoiceInputButton controlRef={voiceControlRef} scopeKey={String(visible)} disabled={visible || loading} onTranscription={handleTranscription} onError={handleVoiceError} />
         </View>
         <PressableBox
           onPress={handleSend}

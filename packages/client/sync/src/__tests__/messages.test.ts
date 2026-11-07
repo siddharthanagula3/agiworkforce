@@ -31,6 +31,69 @@ function delta(over: Partial<MessageWireDelta> = {}): MessageWireDelta {
 }
 
 describe('applyMessageDeltas', () => {
+  it('preserves only push-owned dirty fields and rebases the next push', () => {
+    const port = createInMemoryMessagePort({
+      c1: [{
+        id: 'm1', role: 'assistant', content: 'local edit', metadata: { phase: 'local' },
+        model: 'fixture-local', provider: 'openai', createdAt: T,
+        parentId: 'old-parent', serverVersion: '7',
+      }],
+    });
+    applyMessageDeltas(port, [delta({
+      content: 'remote', metadata: { phase: 'remote' }, model: 'fixture-remote',
+      provider: 'anthropic', created_at: T2, parent_id: 'new-parent', server_version: '8',
+    })], [{ conversationId: 'c1', messageId: 'm1' }]);
+    const record = port.getMessages('c1')[0]!;
+    expect(record).toMatchObject({
+      role: 'assistant', content: 'local edit', metadata: { phase: 'local' },
+      model: 'fixture-local', provider: 'openai', createdAt: T2,
+      parentId: 'new-parent', serverVersion: '8', deletedAt: null,
+    });
+    expect(toMessagePushItem('c1', { ...record, role: 'assistant' })).toMatchObject({
+      content: 'local edit', baseVersion: '8', metadata: { phase: 'local' },
+    });
+  });
+
+  it('accepts server labels when the dirty push omits them and normalizes absent metadata', () => {
+    const port = createInMemoryMessagePort({
+      c1: [{ id: 'm1', role: 'assistant', content: 'local' }],
+    });
+    applyMessageDeltas(port, [delta({
+      role: 'assistant', model: 'fixture-remote', provider: 'openai', metadata: { remote: true },
+    })], [{ conversationId: 'c1', messageId: 'm1' }]);
+    expect(port.getMessages('c1')[0]).toMatchObject({
+      content: 'local', model: 'fixture-remote', provider: 'openai', metadata: null,
+    });
+  });
+
+  it('scopes dirty refs to their conversation and inserts missing dirty messages normally', () => {
+    const port = createInMemoryMessagePort({
+      c2: [{ id: 'm1', role: 'user', content: 'old' }],
+    });
+    applyMessageDeltas(port, [delta(), delta({ conversation_id: 'c2' })], [
+      { conversationId: 'c1', messageId: 'm1' },
+    ]);
+    expect(port.getMessages('c1')[0]?.content).toBe('hi');
+    expect(port.getMessages('c2')[0]?.content).toBe('hi');
+  });
+
+  it.each([false, true])('applies a remote tombstone over dirty content (retain: %s)', (retain) => {
+    const port = createInMemoryMessagePort({
+      c1: [{ id: 'm1', role: 'user', content: 'local edit' }],
+    });
+    port.retainsTombstones = retain;
+    applyMessageDeltas(port, [delta({ deleted_at: T2, server_version: '8' })], [
+      { conversationId: 'c1', messageId: 'm1' },
+    ]);
+    if (retain) {
+      expect(port.getMessages('c1')[0]).toMatchObject({
+        content: 'hi', deletedAt: T2, serverVersion: '8',
+      });
+    } else {
+      expect(port.getMessages('c1')).toEqual([]);
+    }
+  });
+
   it('inserts new messages sorted by createdAt', () => {
     const port = createInMemoryMessagePort();
     applyMessageDeltas(port, [

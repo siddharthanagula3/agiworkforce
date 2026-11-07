@@ -310,9 +310,9 @@ async function isEnterpriseCollectionReadOnly(userId: string): Promise<boolean> 
   } catch (error) {
     logger.error(
       { error, userId },
-      'Enterprise collection state read failed; entitlement decided without it',
+      'Enterprise collection state read failed; entitlement unavailable',
     );
-    return false;
+    throw error;
   }
 }
 

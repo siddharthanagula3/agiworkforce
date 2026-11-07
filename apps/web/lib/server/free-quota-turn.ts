@@ -17,6 +17,7 @@ import {
   type FreeLimitReason,
   type FreeOfferingMessage,
   type FreeOfferingRequest,
+  type FreeQuotaDailyUseKind,
 } from '@agiworkforce/cloud-contracts';
 import {
   getModelMetadataById,
@@ -56,10 +57,13 @@ import {
 import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { canUseManagedCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { estimateConservativeFreeInputTokens } from '@/lib/services/free-trial-service';
 import type { TokenUsage } from '@/lib/services/llm-cost-calculator';
 import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
   buildModelPolicyGateResponse,
   buildProviderEgressGateResponse,
 } from '@/lib/managed-compute-gate';
@@ -71,12 +75,13 @@ import { applySecretHandlingToTurnTexts } from '@/app/api/llm/v1/chat/completion
 import { loadFreePools, type FreeQuotaInventory } from '@/lib/server/free-pools';
 import {
   freeQuotaContextFor,
-  freeQuotaPlanAdmits,
+  freeQuotaPlanAdmission,
   resolveFreeQuotaAlternative,
   resolveFreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
 import { expireFreeQuotaCatalogue } from '@/lib/server/free-quota-catalogue-cache';
 import {
+  DAILY_USE_REQUEST_UNITS,
   classifyFreeQuotaRefusal,
   claimFreeQuotaTurn,
   freeQuotaDayResetsAtMs,
@@ -210,6 +215,14 @@ const FREE_LIMIT_REASON: Readonly<Partial<Record<FreeQuotaFailure, FreeLimitReas
   exhausted: 'allowance_used',
   expired: 'allowance_ended',
 };
+
+function withdrawsOffering(kind: FreeQuotaRefusal): boolean {
+  return HOLD_BY_REFUSAL[kind] !== undefined || kind === 'account_billing';
+}
+
+function generatedNothing(kind: FreeQuotaRefusal): boolean {
+  return withdrawsOffering(kind);
+}
 
 type CopyContext = FreeQuotaFailureContext;
 
@@ -691,7 +704,7 @@ export async function serveFreeQuotaTurn(
   body: FreeQuotaTurnRequest,
   freeAuto?: FreeAutoTurn,
 ): Promise<Response> {
-  const { inventory, freeChatDailyShare } = loadFreePools();
+  const { inventory, limitedMediaOffer, freeChatDailyShare } = loadFreePools();
   const baseCopy = baseCopyFor(inventory);
   if (!inventory) return refuse('unavailable', baseCopy);
   if (body.web_search === true || body.web_fetch === true) {
@@ -717,7 +730,8 @@ export async function serveFreeQuotaTurn(
   ) {
     return policyRefusal(MODEL_MAY_TRAIN_MESSAGE, 'model_may_train', 403);
   }
-  if (!freeQuotaPlanAdmits(planTier, offering.category)) return refuse('plan', baseCopy);
+  const admission = freeQuotaPlanAdmission(planTier, offering.category, limitedMediaOffer);
+  if (!admission) return refuse('plan', baseCopy);
   const latestUserIndex = body.messages.findLastIndex((message) => message.role === 'user');
   const hasAttachmentReferences = body.messages.some(
     (message) =>
@@ -828,18 +842,20 @@ export async function serveFreeQuotaTurn(
     );
     return refuse('unavailable', copy);
   }
-  const dailyLimit =
-    chatTurn && freeChatDailyShare
-      ? {
-          userId: scoped.userId,
-          category: FREE_QUOTA_CHAT_DAILY_USE_KIND,
-          cap: freeChatDailyShare.tokensPerUser,
-        }
-      : null;
+  const dailyLimit: { userId: string; category: FreeQuotaDailyUseKind; cap: number } | null =
+    admission.terms === 'limited'
+      ? { userId: scoped.userId, category: admission.category, cap: admission.dailyCap }
+      : chatTurn && freeChatDailyShare
+        ? {
+            userId: scoped.userId,
+            category: FREE_QUOTA_CHAT_DAILY_USE_KIND,
+            cap: freeChatDailyShare.tokensPerUser,
+          }
+        : null;
   const refuseDailyLimit = ({ category, cap }: NonNullable<typeof dailyLimit>) => {
     const resetsAtMs = freeQuotaDayResetsAtMs(context.nowMs);
-    const alternative = FREE_TRIAL_MODEL;
-    const alternativeName = freeModelLabel(alternative);
+    const alternative = category === FREE_QUOTA_CHAT_DAILY_USE_KIND ? FREE_TRIAL_MODEL : null;
+    const alternativeName = alternative ? freeModelLabel(alternative) : null;
     logger.info(
       { userId: scoped.userId, offering: entry.offeringKey, category },
       '[free-quota] daily free limit reached; refused before any provider request',
@@ -865,7 +881,9 @@ export async function serveFreeQuotaTurn(
       logger.error({ error, offering: entry.offeringKey }, '[free-quota] daily use unreadable');
       return refuse('unavailable', copy);
     }
-    const smallestUse = minimumTurnUnits(offering, context.policy);
+    const smallestUse = chatTurn
+      ? minimumTurnUnits(offering, context.policy)
+      : DAILY_USE_REQUEST_UNITS;
     if (usedToday + smallestUse > dailyLimit.cap) return refuseDailyLimit(dailyLimit);
   }
 
@@ -880,6 +898,25 @@ export async function serveFreeQuotaTurn(
     [body.conversation_id, scoped.userId, scoped.organizationId],
   );
   if (!conversation) return policyRefusal('Conversation not found.', 'conversation_not_found', 404);
+
+  if (!chatTurn) {
+    if (!canUseManagedCloudChatSurface(planTier, scoped.surface ?? 'unknown')) {
+      return refuse('workspace_restricted', copy);
+    }
+    const computeDescriptor = {
+      provider: offering.provider,
+      model: entry.offeringKey,
+      feature: `${offering.category}_generation`,
+      isFreeTrial: admission.terms === 'limited',
+    };
+    const computeGate = buildManagedComputeGateResponse(request, computeDescriptor);
+    if (computeGate) return computeGate;
+    const organizationGate = await buildOrganizationPolicyGateResponse(scoped.userId, request, {
+      ...computeDescriptor,
+      surface: scoped.surface ?? 'unknown',
+    });
+    if (organizationGate) return organizationGate;
+  }
 
   const privacy = await evaluateActiveWorkspacePolicy(
     scoped.db,
@@ -953,6 +990,7 @@ export async function serveFreeQuotaTurn(
         scoped.userId,
         undefined,
         getPlanMaxAttachmentsPerMessage(planTier),
+        scoped.organizationId,
       );
       const expected = body.messages.reduce(
         (count, message) =>
@@ -1121,9 +1159,13 @@ export async function serveFreeQuotaTurn(
   }
   const projectSourcesHeader = toProjectSourcesHeaderValue(projectSources);
 
+  const egressSurface = chatTurn ? 'web' : scoped.surface;
+  if (!egressSurface || egressSurface === 'unknown' || egressSurface === 'api') {
+    return refuse('workspace_restricted', copy);
+  }
   const egress = await buildProviderEgressGateResponse({
     mode: 'managed',
-    surface: 'web',
+    surface: egressSurface,
     userId: scoped.userId,
     routeKeyAttribution: 'platform-key',
     isFallback: false,
@@ -1154,6 +1196,15 @@ export async function serveFreeQuotaTurn(
   if (!claimed) return refuse('duplicate', copy);
 
   let dailyUse: DailyUseReservation | null = null;
+  if (dailyLimit && !chatTurn) {
+    try {
+      dailyUse = await reserveFreeQuotaDailyUse(store, { ...dailyLimit, nowMs: context.nowMs });
+    } catch (error) {
+      logger.error({ error, offering: entry.offeringKey }, '[free-quota] daily use unwritable');
+      return refuse('unavailable', copy);
+    }
+    if (!dailyUse) return refuseDailyLimit(dailyLimit);
+  }
   const releaseDailyUse = async () => {
     if (!dailyUse) return;
     try {
@@ -1378,12 +1429,15 @@ export async function serveFreeQuotaTurn(
               ...(result.providerCode ? { code: result.providerCode } : {}),
               ...(result.providerMessage ? { message: result.providerMessage } : {}),
             });
+      const refusedBeforeSubmission =
+        !result.taskId && Boolean(result.providerCode) && generatedNothing(kind);
       await settleTurn(ledger, {
         outcome: 'failed',
-        consumedUnits: 0,
+        consumedUnits: refusedBeforeSubmission ? 0 : null,
         usage: null,
         refusal: { kind, signal: result.providerCode ?? 'generation_failed' },
       });
+      if (refusedBeforeSubmission) await releaseDailyUse();
       return refuseTurn(REFUSAL_FAILURE[kind]);
     }
     const artifact = result.artifactUrl ? new URL(result.artifactUrl) : null;

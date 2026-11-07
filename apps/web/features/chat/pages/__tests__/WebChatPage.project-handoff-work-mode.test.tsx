@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
@@ -42,15 +43,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/chat',
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -261,6 +270,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import promotionConfig from '@/config/free-model-promotion.json';
 import {
   PROJECT_CHAT_HANDOFF_KEY,
@@ -331,7 +342,7 @@ function planRequestNeverAnswers() {
 }
 
 async function modeOfTheProjectTurn(): Promise<CloudWorkMode | undefined> {
-  render(<WebChatPage />);
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
   const [content, options] = mocks.sendMessage.mock.calls[0]!;
   expect(content).toBe(PROJECT_DRAFT);
@@ -409,7 +420,7 @@ describe('the first message sent from a project page', () => {
     useModelStore.getState().setSelectedModelId(PROMOTED_MODEL!);
     sendFromProjectPage('chat', PROMOTED_MODEL!);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     const [content, options] = mocks.sendMessage.mock.calls[0]!;
     expect(content).toBe(PROJECT_DRAFT);
@@ -431,7 +442,7 @@ describe('the first message sent from a project page', () => {
     useModelStore.getState().setSelectedModelId(snapshot!);
     sendFromProjectPage('chat', snapshot!);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(mocks.sendMessage.mock.calls[0]![1]?.model).toBe(snapshot);
   });
@@ -442,7 +453,7 @@ describe('the first message sent from a project page', () => {
     useModelStore.getState().setSelectedModelId(current!);
     sendFromProjectPage('chat', other!);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(useModelStore.getState().selectedModelId).toBe(other);
     expect(mocks.sendMessage.mock.calls[0]![1]?.model).toBe(other);
@@ -463,7 +474,7 @@ describe('the first message sent from a project page', () => {
     });
     sendFromProjectPage('chat');
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(TURN_NOT_STARTED));
     expect(mocks.composerPrefill).toHaveBeenCalledWith(PROJECT_DRAFT);
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -477,7 +488,7 @@ describe('the first message sent from a project page', () => {
     useModelStore.getState().setSelectedModelId(snapshot!);
     sendFromProjectPage('chat', snapshot!);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PROJECT_CHAT_HANDOFF_SETTLE_MS - 1);
     });
@@ -497,7 +508,7 @@ describe('the first message sent from a project page', () => {
     sendFromProjectPage('chat');
     mocks.searchParams = new URLSearchParams({ projectId: PROJECT_ID });
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(TURN_NOT_STARTED));
     expect(mocks.composerPrefill).toHaveBeenCalledWith(PROJECT_DRAFT);
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -509,11 +520,11 @@ describe('the first message sent from a project page', () => {
   it('gives the draft back instead of sending when a page it waited on is opened again', async () => {
     planRequestNeverAnswers();
     sendFromProjectPage('chat');
-    const left = render(<WebChatPage />);
+    const left = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     left.unmount();
 
     signInOnPlan(WORK_TIER);
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith(TURN_NOT_STARTED));
     expect(mocks.composerPrefill).toHaveBeenCalledWith(PROJECT_DRAFT);
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -524,7 +535,7 @@ describe('the first message sent from a project page', () => {
     planRequestNeverAnswers();
     sendFromProjectPage('chat');
 
-    const page = render(<WebChatPage />);
+    const page = render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PROJECT_CHAT_HANDOFF_SETTLE_MS / 2);
     });

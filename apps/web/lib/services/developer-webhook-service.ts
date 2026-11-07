@@ -265,33 +265,35 @@ async function recordDeliveries(
     redeliveryOf?: string | null;
   },
 ): Promise<DeveloperWebhookDelivery[]> {
-  const deliveries: DeveloperWebhookDelivery[] = [];
-  for (const endpointId of endpointIds) {
-    const [row] = await db.query<DeliveryRow>(
-      `insert into public.developer_webhook_deliveries
-         (endpoint_id, user_id, event_id, event_type, payload, redelivery_of)
-       values ($1, $2, $3, $4, $5::jsonb, $6)
-       returning ${DELIVERY_COLUMNS}`,
-      [
-        endpointId,
+  return db.transaction(async (tx) => {
+    const deliveries: DeveloperWebhookDelivery[] = [];
+    for (const endpointId of endpointIds) {
+      const [row] = await tx.query<DeliveryRow>(
+        `insert into public.developer_webhook_deliveries
+           (endpoint_id, user_id, event_id, event_type, payload, redelivery_of)
+         values ($1, $2, $3, $4, $5::jsonb, $6)
+         returning ${DELIVERY_COLUMNS}`,
+        [
+          endpointId,
+          userId,
+          event.id,
+          event.type,
+          JSON.stringify(event.payload),
+          event.redeliveryOf ?? null,
+        ],
+      );
+      if (!row) throw createError.internal('The webhook delivery could not be queued.');
+      await enqueueJob(tx, {
+        kind: DELIVERY_JOB_KIND,
         userId,
-        event.id,
-        event.type,
-        JSON.stringify(event.payload),
-        event.redeliveryOf ?? null,
-      ],
-    );
-    if (!row) continue;
-    await enqueueJob(db, {
-      kind: DELIVERY_JOB_KIND,
-      userId,
-      idempotencyKey: `developer-webhook:${row.id}`,
-      payload: { deliveryId: row.id },
-      maxAttempts: DEVELOPER_WEBHOOK_MAX_ATTEMPTS,
-    });
-    deliveries.push(toDelivery(row));
-  }
-  return deliveries;
+        idempotencyKey: `developer-webhook:${row.id}`,
+        payload: { deliveryId: row.id },
+        maxAttempts: DEVELOPER_WEBHOOK_MAX_ATTEMPTS,
+      });
+      deliveries.push(toDelivery(row));
+    }
+    return deliveries;
+  });
 }
 
 function eventEnvelope(type: string, data: Record<string, unknown>) {
@@ -414,28 +416,23 @@ async function postWebhook(
   url: string,
   headers: Record<string, string>,
   body: string,
+  signal?: AbortSignal,
 ): Promise<{ status: number | null; error: string | null }> {
+  signal?.throwIfAborted();
+  let response: Response;
   try {
     await assertResolvedPublicHostname(url);
-    const response = await pinnedPublicFetch(url, {
+    signal?.throwIfAborted();
+    const timeout = AbortSignal.timeout(DELIVERY_TIMEOUT_MS);
+    response = await pinnedPublicFetch(url, {
       method: 'POST',
       headers,
       body,
       redirect: 'manual',
-      signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
-    await response.body?.cancel().catch(() => undefined);
-    if (response.status >= 200 && response.status < 300) {
-      return { status: response.status, error: null };
-    }
-    if (response.status >= 300 && response.status < 400) {
-      return {
-        status: response.status,
-        error: `The endpoint answered ${response.status}; redirects are not followed.`,
-      };
-    }
-    return { status: response.status, error: `The endpoint answered ${response.status}.` };
   } catch (error) {
+    signal?.throwIfAborted();
     if (error instanceof EgressPolicyError) {
       return { status: null, error: 'The endpoint now resolves to a private address.' };
     }
@@ -447,6 +444,21 @@ async function postWebhook(
         : 'The endpoint could not be reached.',
     };
   }
+  try {
+    await response.body?.cancel();
+  } catch {
+    // Cleanup failure must not erase an observed response.
+  }
+  if (response.status >= 200 && response.status < 300) {
+    return { status: response.status, error: null };
+  }
+  if (response.status >= 300 && response.status < 400) {
+    return {
+      status: response.status,
+      error: `The endpoint answered ${response.status}; redirects are not followed.`,
+    };
+  }
+  return { status: response.status, error: `The endpoint answered ${response.status}.` };
 }
 
 type DeliveryAttempt =
@@ -459,7 +471,9 @@ export async function attemptDeveloperWebhookDelivery(
   userId: string,
   deliveryId: string,
   isFinalAttempt: boolean,
+  signal?: AbortSignal,
 ): Promise<DeliveryAttempt> {
+  signal?.throwIfAborted();
   const [row] = await db.query<{
     id: string;
     event_id: string;
@@ -479,6 +493,7 @@ export async function attemptDeveloperWebhookDelivery(
         and d.user_id = $2`,
     [deliveryId, userId],
   );
+  signal?.throwIfAborted();
   if (!row) return { outcome: 'skipped', reason: 'endpoint_removed' };
   if (row.status === 'delivered') return { outcome: 'skipped', reason: 'already_delivered' };
 
@@ -486,7 +501,7 @@ export async function attemptDeveloperWebhookDelivery(
     await db.query(
       `update public.developer_webhook_deliveries
           set status = 'failed', error = $3, last_attempt_at = now()
-        where id = $1 and user_id = $2`,
+        where id = $1 and user_id = $2 and status <> 'delivered'`,
       [row.id, userId, 'The endpoint was turned off before this event was sent.'],
     );
     return { outcome: 'skipped', reason: 'endpoint_disabled' };
@@ -506,8 +521,10 @@ export async function attemptDeveloperWebhookDelivery(
       body,
     }),
     body,
+    signal,
   );
   const delivered = result.error === null;
+  // Preserve the observed outcome even when cancellation arrives after the request.
   await db.query(
     `update public.developer_webhook_deliveries
         set status = $3,
@@ -526,6 +543,7 @@ export async function attemptDeveloperWebhookDelivery(
       delivered,
     ],
   );
+  signal?.throwIfAborted();
   return delivered
     ? { outcome: 'delivered', status: result.status }
     : { outcome: 'failed', error: result.error ?? 'The endpoint did not accept the event' };
@@ -545,6 +563,7 @@ export async function deliverDeveloperWebhookJob(
     userId,
     deliveryId,
     context.isFinalAttempt,
+    context.signal,
   );
   if (attempt.outcome === 'failed') throw new Error(attempt.error);
   return attempt.outcome === 'delivered'

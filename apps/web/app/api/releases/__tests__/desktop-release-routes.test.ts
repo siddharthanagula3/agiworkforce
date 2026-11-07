@@ -27,6 +27,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 vi.stubGlobal('fetch', fetchMock);
 
+import { fetchLatestDesktopRelease } from '@/lib/releases/github-desktop-releases';
+
 import { GET as getTauriUpdate } from '../[target]/[version]/route';
 import { GET as getLatestRelease } from '../latest/[platform]/route';
 import { GET as getLatestCloudRelease } from '../desktop-cloud/latest/route';
@@ -546,4 +548,63 @@ describe('desktop release routes', () => {
     expect(response.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each([404, 429, 500])('reports upstream HTTP %s as unavailable, not an absent cloud release', async (status) => {
+    fetchMock.mockImplementation(async () => new Response(null, { status }));
+    const response = await getLatestCloudRelease(makeRequest('https://agi.example/api/releases/desktop-cloud/latest'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toMatchObject({ error: { code: 'RELEASE_LOOKUP_UNAVAILABLE' } });
+    await expect(fetchLatestDesktopRelease('stable')).resolves.toBeNull();
+  });
+
+  it.each(['transport', 'json', 'schema'])('distinguishes %s lookup failure from a real absence', async (kind) => {
+    fetchMock.mockImplementation(async () => {
+      if (kind === 'transport') throw new Error('offline');
+      if (kind === 'json') return new Response('not JSON');
+      return Response.json([{ id: 'not a release' }]);
+    });
+    const response = await getLatestCloudRelease(makeRequest('https://agi.example/api/releases/desktop-cloud/latest'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    await expect(fetchLatestDesktopRelease('stable')).resolves.toBeNull();
+  });
+
+  it('refuses a malformed second page rather than returning an earlier candidate', async () => {
+    fetchMock
+      .mockImplementationOnce(async () => Response.json([cloudDesktopRelease()], { headers: { link: '<https://api.github.com/page2>; rel="next"' } }))
+      .mockImplementationOnce(async () => Response.json({ unexpected: true }));
+    const response = await getLatestCloudRelease(makeRequest('https://agi.example/api/releases/desktop-cloud/latest'));
+    expect(response.status).toBe(503);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses incomplete pagination even when an early page has a candidate', async () => {
+    fetchMock.mockImplementation(async () => Response.json([cloudDesktopRelease()], {
+      headers: { link: '<https://api.github.com/next>; rel="next"' },
+    }));
+    const response = await getLatestCloudRelease(makeRequest('https://agi.example/api/releases/desktop-cloud/latest'));
+    expect(response.status).toBe(503);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it.each([
+    ['empty', []],
+    ['no matching tag', [githubRelease(1, 'v-cli-1.2.0')]],
+    ['no installer', [githubRelease(1, 'v-cloud-desktop-1.2.0')]],
+  ])('preserves a truthful 404 for %s release metadata', async (_label, payload) => {
+    fetchMock.mockImplementation(async () => Response.json(payload));
+    const response = await getLatestCloudRelease(makeRequest('https://agi.example/api/releases/desktop-cloud/latest'));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+  });
+
+  it('keeps rate limiting before strict release lookup', async () => {
+    withRateLimitMock.mockResolvedValue(new Response(null, { status: 429 }));
+    const response = await getLatestCloudRelease(makeRequest('https://agi.example/api/releases/desktop-cloud/latest'));
+    expect(response.status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
 });

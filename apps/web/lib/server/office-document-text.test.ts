@@ -9,8 +9,11 @@ import {
   TextRun,
 } from 'docx';
 import JSZip from 'jszip';
+import mammoth from 'mammoth';
 import PptxGenJS from 'pptxgenjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { MAX_DECOMPRESSION_RATIO, declaredMemberSize } from '@/lib/security/archive-bounds';
 
 import {
   extractOfficeDocumentText,
@@ -42,6 +45,28 @@ async function buildDocx(): Promise<Buffer> {
     ],
   });
   return Packer.toBuffer(document);
+}
+
+function understateMemberSize(archive: Buffer, path: string): Buffer {
+  const result = Buffer.from(archive);
+  const end = result.length - 22;
+  expect(result.readUInt32LE(end)).toBe(0x06054b50);
+  let offset = result.readUInt32LE(end + 16);
+  while (result.readUInt32LE(offset) === 0x02014b50) {
+    const nameLength = result.readUInt16LE(offset + 28);
+    const extraLength = result.readUInt16LE(offset + 30);
+    const commentLength = result.readUInt16LE(offset + 32);
+    const name = result.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+    if (name === path) {
+      const localOffset = result.readUInt32LE(offset + 42);
+      expect(result.readUInt32LE(localOffset)).toBe(0x04034b50);
+      result.writeUInt32LE(1, offset + 24);
+      result.writeUInt32LE(1, localOffset + 22);
+      return result;
+    }
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  throw new Error(`Fixture member missing: ${path}`);
 }
 
 async function buildXlsx(): Promise<Buffer> {
@@ -109,6 +134,96 @@ describe('extractOfficeDocumentText', () => {
     expect(text).toContain('| Vendor | Region | Annual cost |');
     expect(text).toContain('| Ridgeway Labs | APAC | 13975 |');
     expect(text).toContain('GRAPE-5561-TANGO');
+  });
+
+  it('passes Mammoth a rebuilt archive containing admitted bytes and package paths', async () => {
+    const zip = await JSZip.loadAsync(await buildDocx());
+    const marker = Buffer.from('DOCX-UNUSED-PART');
+    zip.file('custom/unused.bin', marker);
+    const input = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const convert = vi.spyOn(mammoth, 'convertToHtml');
+    try {
+      const text = await extractOfficeDocumentText(input, 'brief.docx', 'docx');
+      expect(text).toContain('GRAPE-5561-TANGO');
+      expect(convert).toHaveBeenCalledOnce();
+      const passed = convert.mock.calls[0]?.[0];
+      expect(passed).toHaveProperty('buffer');
+      const buffer = (passed as { buffer: Buffer }).buffer;
+      expect(buffer).not.toBe(input);
+      const rebuilt = await JSZip.loadAsync(buffer);
+      expect(Object.keys(rebuilt.files).sort()).toEqual(Object.keys(zip.files).sort());
+      for (const entry of Object.values(rebuilt.files)) {
+        if (!entry.dir) {
+          expect(await entry.async('uint8array')).toEqual(
+            await zip.file(entry.name)!.async('uint8array'),
+          );
+        }
+      }
+      let offset = buffer.readUInt32LE(buffer.length - 6);
+      while (buffer.readUInt32LE(offset) === 0x02014b50) {
+        expect(buffer.readUInt16LE(offset + 10)).toBe(0);
+        offset +=
+          46 +
+          buffer.readUInt16LE(offset + 28) +
+          buffer.readUInt16LE(offset + 30) +
+          buffer.readUInt16LE(offset + 32);
+      }
+    } finally {
+      convert.mockRestore();
+    }
+  });
+
+  it.each([false, true])(
+    'refuses understated DOCX inflation before Mammoth (shared budget: %s)',
+    async (sharedBudget) => {
+      const zip = await JSZip.loadAsync(await buildDocx());
+      const memberBytes = sharedBudget ? 2 * 1024 * 1024 : 4 * 1024 * 1024;
+      if (sharedBudget) {
+        zip.file('custom/ballast.bin', Buffer.alloc(16 * 1024), { compression: 'STORE' });
+        zip.file('custom/first.bin', Buffer.alloc(memberBytes, 65));
+      }
+      zip.file('custom/last.bin', Buffer.alloc(memberBytes, 66));
+      const archive = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+      const input = understateMemberSize(archive, 'custom/last.bin');
+      const ceiling = input.byteLength * MAX_DECOMPRESSION_RATIO;
+      const parsed = await JSZip.loadAsync(input);
+      const declared = Object.values(parsed.files).reduce(
+        (total, entry) => total + (entry.dir ? 0 : declaredMemberSize(entry)),
+        0,
+      );
+      expect(declared).toBeLessThan(ceiling);
+      expect(memberBytes * (sharedBudget ? 2 : 1)).toBeGreaterThan(ceiling);
+      if (sharedBudget) expect(memberBytes).toBeLessThan(ceiling);
+      const convert = vi.spyOn(mammoth, 'convertToHtml');
+      try {
+        await expect(extractOfficeDocumentText(input, 'bomb.docx', 'docx')).rejects.toMatchObject({
+          name: 'OfficeDocumentUnreadableError',
+          reason: 'archive_bomb',
+        });
+        expect(convert).not.toHaveBeenCalled();
+      } finally {
+        convert.mockRestore();
+      }
+    },
+  );
+
+  it('reports a damaged member within the inflation budget as corrupt before Mammoth', async () => {
+    const zip = await JSZip.loadAsync(await buildDocx());
+    zip.file('custom/damaged.bin', Buffer.alloc(1024, 65));
+    const input = understateMemberSize(
+      await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
+      'custom/damaged.bin',
+    );
+    const convert = vi.spyOn(mammoth, 'convertToHtml');
+    try {
+      await expect(extractOfficeDocumentText(input, 'damaged.docx', 'docx')).rejects.toMatchObject({
+        name: 'OfficeDocumentUnreadableError',
+        reason: 'corrupt',
+      });
+      expect(convert).not.toHaveBeenCalled();
+    } finally {
+      convert.mockRestore();
+    }
   });
 
   it('names every sheet and keeps formulas as formulas', async () => {

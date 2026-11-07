@@ -204,13 +204,13 @@ pub fn handle_load(arg: &str, session: &mut AgentSession) {
     }
 
     match crate::runtime::session_control::resolve_managed_session_reference(arg) {
-        Ok(resolved) => match crate::runtime::session_control::load_managed_session(arg) {
+        Ok(resolved) => match crate::runtime::session::ManagedSession::load_from_path(&resolved.path) {
             Ok(managed_session) => {
                 let session_id = managed_session.session_id.clone();
                 let message_count = managed_session.messages.len();
-                match session.adopt_managed_session(managed_session.clone(), resolved.path) {
+                match session.load_managed_conversation(managed_session, resolved.path) {
                     Ok(()) => {
-                        super::load_messages_into_session(session, managed_session.messages);
+                        super::reset_loaded_session_stats(session);
                         output::print_info(&format!(
                             "Loaded managed session {} ({} messages)",
                             session_id, message_count
@@ -233,6 +233,39 @@ pub fn handle_load(arg: &str, session: &mut AgentSession) {
                 output::print_error(&format!("Failed to load: {:#}", e));
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod managed_load_tests {
+    use super::*;
+
+    #[test]
+    fn loading_an_empty_managed_path_clears_transcript_and_repl_stats() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let path = temp.path().join("empty.json");
+        let mut session = test_support::test_session(false);
+        session.messages.push(crate::models::Message::text("user", "previous conversation"));
+        session.total_input_tokens = 7;
+        session.total_output_tokens = 9;
+        session.turn_count = 1;
+        session.recent_tool_calls = vec![17];
+        session.loop_strike_count = 2;
+        let mut managed = crate::runtime::session::ManagedSession::new("empty-target", chrono::Utc::now());
+        managed.model = Some(session.model.clone());
+        managed.routing_authority = Some(session.current_routing_authority());
+        managed.save_to_path(&path).expect("save fixture");
+
+        handle_load(path.to_str().expect("fixture path"), &mut session);
+
+        assert!(session.messages.is_empty());
+        assert_eq!(session.managed_session_path.as_ref(), Some(&path));
+        assert_eq!(session.managed_session_id(), Some("empty-target"));
+        assert_eq!(session.turn_count, 0);
+        assert_eq!(session.total_input_tokens, 0);
+        assert_eq!(session.total_output_tokens, 0);
+        assert!(session.recent_tool_calls.is_empty());
+        assert_eq!(session.loop_strike_count, 0);
     }
 }
 

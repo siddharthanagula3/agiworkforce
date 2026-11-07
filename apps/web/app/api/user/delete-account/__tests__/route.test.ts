@@ -148,7 +148,8 @@ describe('DELETE /api/user/delete-account', () => {
     mockEraseUserAccountData.mockResolvedValue(completeErasure);
     mockDeleteUser.mockResolvedValue(undefined);
     mockGetSubscription.mockResolvedValue(null);
-    mockQuery.mockResolvedValue([]);
+    mockExecute.mockReset().mockResolvedValue(1);
+    mockQuery.mockReset().mockResolvedValue([]);
   });
 
   function ownsAlone(...workspaces: Array<{ id: string; name: string | null }>) {
@@ -241,11 +242,195 @@ describe('DELETE /api/user/delete-account', () => {
 
     expect(response.status).toBe(200);
     expect(body.scheduledFor).toBeTruthy();
+    expect(body.message).toContain(`Cancellation deadline: ${body.scheduledFor}.`);
+    expect(body.message).toContain('before this deadline');
+    expect(body.message).toContain('Erasure is processed after the deadline and may take longer.');
+    expect(body.message).not.toMatch(/first daily|all its data|starts 24 hours/);
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
     expect(auditDetail()).toMatchObject({
       status: 'pending',
       reason: expect.stringContaining(body.scheduledFor),
+    });
+  });
+
+  describe('existing deletion schedules', () => {
+    function requestedAuditCalls() {
+      return vi.mocked(recordAuditEvent).mock.calls.filter(
+        ([event]) => event.eventType === 'account_deletion_requested',
+      );
+    }
+
+    function modelSchedule(initialDeadline: string | Date | null) {
+      const state = {
+        requestedAt: initialDeadline === null ? null : '2026-01-01T00:00:00.000Z',
+        deadline: initialDeadline,
+        writes: 0,
+      };
+      mockExecute.mockImplementation(async (sql: unknown, params: unknown[]) => {
+        if (!String(sql).includes('update profiles')) return 0;
+        expect(String(sql)).toMatch(/and\s+deletion_scheduled_for\s+is\s+null/i);
+        expect(params[2]).toBe('user_deleting');
+        if (state.deadline !== null) return 0;
+        state.requestedAt = String(params[0]);
+        state.deadline = String(params[1]);
+        state.writes += 1;
+        return 1;
+      });
+      mockQuery.mockImplementation(async (sql: unknown, params: unknown[]) => {
+        if (!String(sql).includes('select deletion_scheduled_for')) return [];
+        expect(params).toEqual(['user_deleting']);
+        return [{
+          deletion_requested_at: state.requestedAt,
+          deletion_scheduled_for: state.deadline,
+        }];
+      });
+      return state;
+    }
+
+    it('preserves the original future deadline and complete receipt without another audit event', async () => {
+      const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const state = modelSchedule(deadline);
+      const requestedAt = state.requestedAt;
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({
+        scheduledFor: deadline,
+        status: 'pending',
+        statusReason: expect.stringContaining(deadline),
+        message: expect.stringContaining(`Cancellation deadline: ${deadline}.`),
+      });
+      expect(body.message).toContain('already scheduled');
+      expect(state).toEqual({ requestedAt, deadline, writes: 0 });
+      expect(requestedAuditCalls()).toHaveLength(0);
+    });
+
+    it.each(['expired', 'invalid'])('refuses an %s deadline without resetting it', async (kind) => {
+      const deadline =
+        kind === 'expired'
+          ? new Date(Date.now() - 60 * 60 * 1000).toISOString()
+          : 'not-a-date';
+      const state = modelSchedule(deadline);
+      const requestedAt = state.requestedAt;
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(body.error).toContain('The schedule was not changed.');
+      if (kind === 'expired') {
+        expect(body.error).toContain('cancellation window has closed');
+        expect(body.error).toContain('does not confirm that erasure is complete');
+      } else {
+        expect(body.error).toContain('could not be verified');
+      }
+      expect(body.scheduledFor).toBeUndefined();
+      expect(state).toEqual({ requestedAt, deadline, writes: 0 });
+      expect(requestedAuditCalls()).toHaveLength(0);
+      expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+      expect(mockDeleteUser).not.toHaveBeenCalled();
+    });
+
+    it.each(['future', 'expired', 'invalid'])('handles a driver Date value: %s', async (kind) => {
+      const now = Date.parse('2026-11-05T12:00:00.500Z');
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+      try {
+        const deadline = new Date(kind === 'invalid' ? NaN : now + (kind === 'future' ? 1 : -1));
+        const state = modelSchedule(deadline);
+
+        const response = await DELETE(deleteRequest());
+        const body = await response.json();
+
+        if (kind === 'future') {
+          expect(response.status).toBe(200);
+          expect(body.scheduledFor).toBe(deadline.toISOString());
+          expect(body.message).toContain(`Cancellation deadline: ${deadline.toISOString()}.`);
+          expect(body.statusReason).toContain(deadline.toISOString());
+        } else {
+          expect(response.status).toBe(409);
+          expect(body.scheduledFor).toBeUndefined();
+        }
+        expect(state.deadline).toBe(deadline);
+        expect(state.writes).toBe(0);
+        expect(requestedAuditCalls()).toHaveLength(0);
+      } finally {
+        clock.mockRestore();
+      }
+    });
+
+    it('keeps the winning schedule when two requests compete', async () => {
+      const state = modelSchedule(null);
+
+      const responses = await Promise.all([DELETE(deleteRequest()), DELETE(deleteRequest())]);
+      const receipts = await Promise.all(responses.map((response) => response.json()));
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      expect(state.writes).toBe(1);
+      expect(receipts.map((receipt) => receipt.scheduledFor)).toEqual([
+        state.deadline,
+        state.deadline,
+      ]);
+      expect(requestedAuditCalls()).toHaveLength(1);
+      expect(
+        mockExecute.mock.calls.filter(([sql]) => String(sql).includes('update profiles')),
+      ).toHaveLength(2);
+    });
+
+    it('refuses a cleared schedule after an update miss without retrying the write', async () => {
+      mockExecute.mockResolvedValue(0);
+      mockQuery.mockImplementation(async (sql: unknown) =>
+        String(sql).includes('select deletion_scheduled_for')
+          ? [{ deletion_requested_at: null, deletion_scheduled_for: null }]
+          : [],
+      );
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(body.error).toContain('state changed');
+      expect(body.scheduledFor).toBeUndefined();
+      expect(
+        mockExecute.mock.calls.filter(([sql]) => String(sql).includes('update profiles')),
+      ).toHaveLength(1);
+      expect(requestedAuditCalls()).toHaveLength(0);
+    });
+
+    it('still requires step-up before returning an existing schedule', async () => {
+      const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const state = modelSchedule(deadline);
+
+      const response = await DELETE(new Request(
+        'http://localhost:3000/api/user/delete-account',
+        { method: 'DELETE' },
+      ) as never);
+
+      expect(response.status).toBe(403);
+      expect(mockExecute).not.toHaveBeenCalled();
+      expect(state.deadline).toBe(deadline);
+      expect(state.writes).toBe(0);
+      expect(requestedAuditCalls()).toHaveLength(0);
+      expect(vi.mocked(recordAuditEvent).mock.calls.some(
+        ([event]) => event.eventType === 'step_up_challenged',
+      )).toBe(true);
+    });
+
+    it('returns a failure when the existing schedule cannot be read', async () => {
+      mockExecute.mockResolvedValue(0);
+      mockQuery.mockImplementation(async (sql: unknown) => {
+        if (String(sql).includes('select deletion_scheduled_for')) throw new Error('read failed');
+        return [];
+      });
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.scheduledFor).toBeUndefined();
+      expect(requestedAuditCalls()).toHaveLength(0);
     });
   });
 

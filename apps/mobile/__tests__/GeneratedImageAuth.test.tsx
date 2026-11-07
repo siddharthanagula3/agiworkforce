@@ -1,7 +1,11 @@
-import { render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockExpoImage = jest.fn();
 const mockGetAuthHeaders = jest.fn();
+const mockShareGeneratedImage = jest.fn();
+jest.mock('../services/fileCreation', () => ({
+  shareGeneratedImage: (...args: unknown[]) => mockShareGeneratedImage(...args),
+}));
 
 jest.mock('expo-image', () => {
   return {
@@ -61,4 +65,23 @@ describe('GeneratedImage authenticated media boundary', () => {
     expect(mockGetAuthHeaders).not.toHaveBeenCalled();
     expect(mockExpoImage).not.toHaveBeenCalled();
   });
+});
+
+
+it('retires a recycled image share and ignores its stale load error', async () => {
+  jest.clearAllMocks();
+  mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer token' });
+  let resolve!: () => void;
+  mockShareGeneratedImage.mockReturnValueOnce(new Promise<void>((done) => { resolve = done; }));
+  const view = render(<GeneratedImage imageUrl={durablePath} revisedPrompt="First image" />);
+  await waitFor(() => expect(view.getByLabelText('First image')).toBeTruthy());
+  const oldImage = mockExpoImage.mock.calls.at(-1)![0];
+  fireEvent(view.getByLabelText('First image'), 'longPress');
+  fireEvent(view.getByLabelText('First image'), 'longPress');
+  expect(mockShareGeneratedImage).toHaveBeenCalledTimes(1);
+  const isCurrent = mockShareGeneratedImage.mock.calls[0]![2].isCurrent;
+  view.rerender(<GeneratedImage imageUrl="/api/files/33333333-3333-4333-8333-333333333333" revisedPrompt="Second image" />);
+  expect(isCurrent()).toBe(false);
+  await act(async () => { oldImage.onError(); resolve(); });
+  expect(view.queryByText('Failed to load image')).toBeNull();
 });

@@ -3,23 +3,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, type InteractiveCard } from '@agiworkforce/types';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
+import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toast } from 'sonner';
 import {
   useChatStream,
-  respondToInteractiveCard,
   __resetPendingTurnsForTests,
 } from './useChatStream';
 
-const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
-
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ getToken: authMocks.getToken }),
+const authMocks = vi.hoisted(() => ({
+  getToken: vi.fn(),
+  userId: 'user-1',
+  sessionId: 'session-1',
 }));
 
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
+    getToken: authMocks.getToken,
+    userId: authMocks.userId,
+    isSignedIn: true,
+    isLoaded: true,
+    sessionId: authMocks.sessionId,
+  }));
+});
+
 vi.mock('@/lib/client/csrf', () => ({
-  addCsrfHeaders: async (headers: HeadersInit = {}) => ({
+  addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...headers,
     'x-csrf-token': 'csrf-token',
-  }),
+  })),
   getCsrfToken: async () => 'csrf-token',
 }));
 
@@ -87,8 +100,56 @@ function recognizedBody(card: InteractiveCard | undefined) {
   return card?.recognized ? card.body : undefined;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((resolveValue, rejectValue) => {
+    resolve = resolveValue;
+    reject = rejectValue;
+  });
+  return { promise, resolve, reject };
+}
+
+function seedResponseCard() {
+  const card = parseInteractiveCardDelta({ card: clone(CARD) });
+  if (!card) throw new Error('expected a valid card');
+  const messageId = 'message-restored';
+  useChatStore.getState().setActiveConversationWithMessages(TEMP_CONVERSATION.id, [{
+    id: messageId,
+    role: 'assistant',
+    content: 'A few questions',
+    createdAt: '2026-08-05T10:00:00.000Z',
+    metadata: { interactiveCards: [card] },
+  }]);
+  return { conversationId: TEMP_CONVERSATION.id, messageId, cardId: CARD.cardId };
+}
+
+function answeredCardResponse() {
+  return {
+    card: {
+      ...clone(CARD),
+      body: {
+        ...clone(CARD.body),
+        state: {
+          status: 'answered',
+          answeredAt: '2026-08-05T10:05:00.000Z',
+          answers: [{ questionId: 'q1', kind: 'options', optionIds: ['o1'], labels: ['Relaxed'] }],
+        },
+      },
+    },
+  };
+}
+
 describe('useChatStream, interactive cards', () => {
   beforeEach(() => {
+    authMocks.userId = 'user-1';
+    authMocks.sessionId = 'session-1';
+    authMocks.getToken.mockReset();
+    vi.mocked(addCsrfHeaders).mockReset();
+    vi.mocked(addCsrfHeaders).mockImplementation(async (headers: HeadersInit = {}) => ({
+      ...headers,
+      'x-csrf-token': 'csrf-token',
+    }));
     useChatStore.getState().reset();
     useFreeTrialStore.getState().clearLimitReached();
     __resetPendingTurnsForTests();
@@ -227,7 +288,7 @@ describe('useChatStream, interactive cards', () => {
 
   it('flags a card whose response the server rejected, and clears the flag on a retry that succeeds', async () => {
     mockSseStream([cardEvent(CARD)]);
-    await send();
+    const runtime = await send();
     const message = assistantMessage();
     if (!message) throw new Error('expected an assistant message');
     const binding = {
@@ -239,7 +300,7 @@ describe('useChatStream, interactive cards', () => {
 
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
     await act(async () => {
-      await respondToInteractiveCard(binding, { kind: 'answers', answers });
+      await runtime.current.respondToInteractiveCard(binding, { kind: 'answers', answers });
     });
     expect(
       assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[CARD.cardId],
@@ -261,13 +322,247 @@ describe('useChatStream, interactive cards', () => {
       }),
     );
     await act(async () => {
-      await respondToInteractiveCard(binding, { kind: 'answers', answers });
+      await runtime.current.respondToInteractiveCard(binding, { kind: 'answers', answers });
     });
     expect(
       assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[CARD.cardId],
     ).toBeUndefined();
     expect(recognizedBody(assistantMessage()?.metadata?.interactiveCards?.[0])).toMatchObject({
       state: { status: 'answered' },
+    });
+  });
+
+  it('deduplicates pending responses and sends the captured bearer without cookies', async () => {
+    const binding = seedResponseCard();
+    const response = deferred<Response>();
+    const dispatched = deferred<void>();
+    vi.mocked(fetch).mockImplementationOnce(async () => {
+      dispatched.resolve();
+      return response.promise;
+    });
+    const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    await dispatched.promise;
+    expect(result.current.isInteractiveCardResponsePending(binding)).toBe(true);
+    await act(async () => {
+      await result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+    expect(url).toBe('/api/interactive-cards/respond');
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer session-token');
+    expect(init?.credentials).toBe('omit');
+    await act(async () => {
+      response.resolve(new Response(JSON.stringify(answeredCardResponse()), { status: 200 }));
+      await pending;
+    });
+    expect(result.current.isInteractiveCardResponsePending(binding)).toBe(false);
+    expect(recognizedBody(assistantMessage()?.metadata?.interactiveCards?.[0])).toMatchObject({
+      state: { status: 'answered' },
+    });
+  });
+
+  it('drops CSRF-delayed responses after an account switch and retains retired turn evidence', async () => {
+    const binding = seedResponseCard();
+    const headers = deferred<HeadersInit>();
+    vi.mocked(addCsrfHeaders).mockImplementationOnce(() => headers.promise);
+    const notify = vi.spyOn(toast, 'error');
+    const { result, rerender } = renderHook(() => useChatStream({ followActiveConversation: false }));
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    authMocks.userId = 'user-2';
+    authMocks.sessionId = 'session-2';
+    rerender();
+    await act(async () => {
+      headers.resolve({ 'Content-Type': 'application/json' });
+      await pending;
+      await result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    expect(addCsrfHeaders).toHaveBeenCalledTimes(1);
+    expect(authMocks.getToken).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+    expect(assistantMessage()?.metadata?.interactiveCardSubmissionErrors).toBeUndefined();
+    expect(result.current.isInteractiveCardResponsePending(binding)).toBe(false);
+  });
+
+  it('drops token-delayed responses after same-account session replacement', async () => {
+    const binding = seedResponseCard();
+    const token = deferred<string>();
+    const started = deferred<void>();
+    authMocks.getToken.mockImplementationOnce(() => {
+      started.resolve();
+      return token.promise;
+    });
+    const { result, rerender } = renderHook(() => useChatStream({ followActiveConversation: false }));
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    await started.promise;
+    authMocks.sessionId = 'session-replacement';
+    rerender();
+    await act(async () => {
+      token.resolve('session-token');
+      await pending;
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(assistantMessage()?.metadata?.interactiveCardSubmissionErrors).toBeUndefined();
+  });
+
+  it.each(['account-switch', 'unmount'] as const)(
+    'ignores a response decoded after %s',
+    async (interruption) => {
+      const binding = seedResponseCard();
+      const decoded = deferred<unknown>();
+      const started = deferred<void>();
+      const response = new Response(null, { status: 200 });
+      vi.spyOn(response, 'json').mockImplementation(() => {
+        started.resolve();
+        return decoded.promise;
+      });
+      vi.mocked(fetch).mockResolvedValueOnce(response);
+      const notify = vi.spyOn(toast, 'error');
+      const { result, rerender, unmount } = renderHook(() => useChatStream({ followActiveConversation: false }));
+      let pending!: Promise<void>;
+      act(() => {
+        pending = result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+      });
+      await started.promise;
+      if (interruption === 'unmount') {
+        unmount();
+      } else {
+        authMocks.userId = 'user-2';
+        authMocks.sessionId = 'session-2';
+        rerender();
+      }
+      await act(async () => {
+        decoded.resolve(answeredCardResponse());
+        await pending;
+      });
+      expect(recognizedBody(assistantMessage()?.metadata?.interactiveCards?.[0])).toMatchObject({
+        state: { status: 'pending' },
+      });
+      expect(assistantMessage()?.metadata?.interactiveCardSubmissionErrors).toBeUndefined();
+      expect(notify).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not let an unmounted request failure clear a replacement runtime pending claim', async () => {
+    const binding = seedResponseCard();
+    const oldResponse = deferred<Response>();
+    const newResponse = deferred<Response>();
+    const oldDispatched = deferred<void>();
+    const newDispatched = deferred<void>();
+    vi.mocked(fetch)
+      .mockImplementationOnce(async () => {
+        oldDispatched.resolve();
+        return oldResponse.promise;
+      })
+      .mockImplementationOnce(async () => {
+        newDispatched.resolve();
+        return newResponse.promise;
+      });
+    const notify = vi.spyOn(toast, 'error');
+    const oldRuntime = renderHook(() => useChatStream({ followActiveConversation: false }));
+    let oldPending!: Promise<void>;
+    act(() => {
+      oldPending = oldRuntime.result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    await oldDispatched.promise;
+    oldRuntime.unmount();
+    const newRuntime = renderHook(() => useChatStream({ followActiveConversation: false }));
+    let newPending!: Promise<void>;
+    act(() => {
+      newPending = newRuntime.result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    await newDispatched.promise;
+    await act(async () => {
+      oldResponse.reject(new Error('late request failure'));
+      await oldPending;
+    });
+    expect(newRuntime.result.current.isInteractiveCardResponsePending(binding)).toBe(true);
+    expect(notify).not.toHaveBeenCalled();
+    expect(assistantMessage()?.metadata?.interactiveCardSubmissionErrors).toBeUndefined();
+    await act(async () => {
+      newResponse.resolve(new Response(JSON.stringify(answeredCardResponse()), { status: 200 }));
+      await newPending;
+    });
+    expect(newRuntime.result.current.isInteractiveCardResponsePending(binding)).toBe(false);
+  });
+
+  it('refuses a settled response for a different card', async () => {
+    const binding = seedResponseCard();
+    const response = answeredCardResponse();
+    response.card.cardId = 'different-card';
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 200 }));
+    const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+    await act(async () => {
+      await result.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    expect(recognizedBody(assistantMessage()?.metadata?.interactiveCards?.[0])).toMatchObject({
+      state: { status: 'pending' },
+    });
+    expect(assistantMessage()?.metadata?.interactiveCardSubmissionErrors?.[binding.cardId]).toBeTruthy();
+  });
+
+  it('refuses an action retained from an unmounted runtime', async () => {
+    const binding = seedResponseCard();
+    const { result, unmount } = renderHook(() => useChatStream({ followActiveConversation: false }));
+    const respond = result.current.respondToInteractiveCard;
+    unmount();
+    await respond(binding, { kind: 'dismiss' });
+    expect(addCsrfHeaders).not.toHaveBeenCalled();
+    expect(authMocks.getToken).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(assistantMessage()?.metadata?.interactiveCardSubmissionErrors).toBeUndefined();
+  });
+
+  it('does not revive a recorded turn retired by a newer same-session send', async () => {
+    mockSseStream([cardEvent(CARD)]);
+    const runtime = await send();
+    const messageId = assistantMessage()?.id;
+    if (!messageId) throw new Error('expected an assistant message');
+    const binding = { conversationId: TEMP_CONVERSATION.id, messageId, cardId: CARD.cardId };
+    mockSseStream([textEvent('A newer answer')]);
+    await act(async () => {
+      await runtime.current.sendMessage('A newer question', { conversationId: TEMP_CONVERSATION.id });
+    });
+    vi.mocked(fetch).mockClear();
+    await act(async () => {
+      await runtime.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the original binding and payload while CSRF is pending', async () => {
+    const binding = seedResponseCard();
+    const headers = deferred<HeadersInit>();
+    vi.mocked(addCsrfHeaders).mockImplementationOnce(() => headers.promise);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify(answeredCardResponse()), { status: 200 }),
+    );
+    const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+    const payload = { kind: 'dismiss' as const, text: 'Original reply' };
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.respondToInteractiveCard(binding, payload);
+    });
+    binding.cardId = 'different-card';
+    payload.text = 'Changed reply';
+    await act(async () => {
+      headers.resolve({ 'Content-Type': 'application/json' });
+      await pending;
+    });
+    const init = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      card_id: CARD.cardId,
+      response: { kind: 'dismiss', text: 'Original reply' },
     });
   });
 });

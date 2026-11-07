@@ -2,9 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 const getTokenMock = vi.fn();
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ getToken: getTokenMock }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
+    getToken: getTokenMock,
+    userId: 'user-1',
+    isSignedIn: true,
+    isLoaded: true,
+    sessionId: 'session-1',
+  }));
+});
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: async () => 'csrf-token',
   addCsrfHeaders: async (headers: Record<string, string>) => headers,

@@ -1874,6 +1874,14 @@ impl AgentSession {
             return Ok(());
         }
         let store = crate::runtime::session_control::ManagedSessionStore::user_config()?;
+        self.initialize_managed_session(&store)?;
+        self.sync_managed_session_metadata()
+    }
+
+    fn initialize_managed_session(
+        &mut self,
+        store: &crate::runtime::session_control::ManagedSessionStore,
+    ) -> Result<()> {
         let mut managed_session = ManagedSession::with_messages(
             uuid::Uuid::new_v4().to_string(),
             chrono::Utc::now(),
@@ -1884,11 +1892,16 @@ impl AgentSession {
         managed_session.memory_nonce = Some(self.memory_nonce.clone());
         managed_session.workspace_root = self.workspace_root();
         managed_session.created_by = Some("cli".to_string());
+        managed_session.plan_approved = Some(self.plan_approved);
+        managed_session.current_plan = self.current_plan.clone();
         let path = store.save(&managed_session)?;
         let carried = std::mem::take(&mut self.checkpoint_log);
+        let current_plan_path = self.current_plan_path.clone();
+        let plan_rejection_feedback = self.plan_rejection_feedback.clone();
         self.adopt_managed_session(managed_session, path.clone())?;
+        self.current_plan_path = current_plan_path;
+        self.plan_rejection_feedback = plan_rejection_feedback;
         self.checkpoint_log = carried.moved_into(std::mem::take(&mut self.checkpoint_log));
-        self.sync_managed_session_metadata()?;
         Ok(())
     }
 
@@ -1939,12 +1952,9 @@ impl AgentSession {
         if let Some(plan_mode) = managed_session.plan_mode {
             self.plan_mode = plan_mode;
         }
-        if let Some(plan_approved) = managed_session.plan_approved {
-            self.plan_approved = plan_approved;
-        }
-        if let Some(ref plan) = managed_session.current_plan {
-            self.current_plan = Some(plan.clone());
-        }
+        self.reset_plan_state();
+        self.plan_approved = managed_session.plan_approved.unwrap_or(false);
+        self.current_plan = managed_session.current_plan.clone();
         if let Some(fast_mode) = managed_session.fast_mode {
             self.fast_mode = fast_mode;
         }
@@ -2005,28 +2015,26 @@ impl AgentSession {
         managed_session: ManagedSession,
         path: PathBuf,
     ) -> Result<()> {
-        if !managed_session.messages.is_empty() {
+        let mut messages = managed_session.messages.clone();
+        if !self.memory_enabled {
             let fresh_system_message = self
                 .messages
                 .first()
                 .filter(|message| message.role == "system")
                 .cloned();
-            self.messages = managed_session.messages.clone();
-            if !self.memory_enabled {
-                if let (Some(fresh), Some(stored)) =
-                    (fresh_system_message, self.messages.first_mut())
-                {
-                    if stored.role == "system" {
-                        *stored = fresh;
-                    }
+            if let (Some(fresh), Some(stored)) = (fresh_system_message, messages.first_mut()) {
+                if stored.role == "system" {
+                    *stored = fresh;
                 }
             }
         }
+        self.adopt_managed_session(managed_session, path)?;
+        self.messages = messages;
         self.context_usage_anchor = None;
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.memory_extracted_through = self.memory_extracted_through.min(self.messages.len());
-        self.adopt_managed_session(managed_session, path)
+        Ok(())
     }
 
     /// Claim, or renew, this process's writer lease on the backing session.
@@ -2903,6 +2911,179 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         }
+    }
+
+    #[test]
+    fn rejected_managed_load_preserves_the_active_conversation() {
+        for invalid_route in ["missing-model", "missing-authority", "incompatible-authority"] {
+            let temp = tempfile::tempdir().expect("session fixture");
+            let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+            session.set_session_persistence(false);
+            session.messages.push(Message::text("user", "active conversation"));
+            session.recent_tool_calls = vec![17];
+            session.loop_strike_count = 2;
+            session.memory_extracted_through = session.messages.len();
+            session.plan_approved = true;
+            let original_messages = serde_json::to_value(&session.messages).expect("messages");
+            let original_id = session.runtime_session_id.clone();
+            let original_model = session.model.clone();
+            let original_provider = session.provider.clone();
+            let original_activity = session.session_activity.clone();
+            let original_extracted = session.memory_extracted_through;
+            let mut incoming = ManagedSession::with_messages(
+                "rejected-target",
+                chrono::Utc::now(),
+                vec![Message::text("user", "rejected transcript")],
+            );
+            incoming.model = Some(session.model.clone());
+            incoming.routing_authority = Some(session.current_routing_authority());
+            match invalid_route {
+                "missing-model" => incoming.model = None,
+                "missing-authority" => incoming.routing_authority = None,
+                _ => incoming.routing_authority.as_mut().expect("authority").privacy_mode = PrivacyMode::Byok,
+            }
+
+            assert!(session
+                .load_managed_conversation(incoming, temp.path().join("target.json"))
+                .is_err());
+            assert_eq!(serde_json::to_value(&session.messages).expect("messages"), original_messages);
+            assert_eq!(session.runtime_session_id, original_id);
+            assert_eq!(session.model, original_model);
+            assert_eq!(session.provider, original_provider);
+            assert_eq!(session.privacy_mode, PrivacyMode::Local);
+            assert!(session.managed_session.is_none());
+            assert!(session.managed_session_path.is_none());
+            assert!(std::sync::Arc::ptr_eq(&session.session_activity, &original_activity));
+            assert_eq!(session.recent_tool_calls, vec![17]);
+            assert_eq!(session.loop_strike_count, 2);
+            assert_eq!(session.memory_extracted_through, original_extracted);
+            assert!(session.plan_approved);
+        }
+    }
+
+    #[test]
+    fn an_empty_managed_load_replaces_the_previous_transcript() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.messages.push(Message::text("user", "previous conversation"));
+        session.recent_tool_calls = vec![17];
+        session.loop_strike_count = 2;
+        session.memory_extracted_through = session.messages.len();
+        let mut incoming = ManagedSession::with_messages("empty-target", chrono::Utc::now(), Vec::new());
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+
+        session
+            .load_managed_conversation(incoming, temp.path().join("target.json"))
+            .expect("load empty target");
+
+        assert!(session.messages.is_empty());
+        assert_eq!(session.managed_session_id(), Some("empty-target"));
+        assert!(session.recent_tool_calls.is_empty());
+        assert_eq!(session.loop_strike_count, 0);
+        assert_eq!(session.memory_extracted_through, 0);
+    }
+
+    #[test]
+    fn managed_load_keeps_memory_disabled_system_prompt_handling() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.memory_enabled = false;
+        session.messages = vec![
+            Message::text("system", "fresh system prompt"),
+            Message::text("user", "previous conversation"),
+        ];
+        let mut incoming = ManagedSession::with_messages(
+            "loaded-target",
+            chrono::Utc::now(),
+            vec![
+                Message::text("system", "stored system prompt"),
+                Message::text("user", "loaded conversation"),
+            ],
+        );
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+
+        session
+            .load_managed_conversation(incoming, temp.path().join("target.json"))
+            .expect("load target");
+
+        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages[0].text_content(), "fresh system prompt");
+        assert_eq!(session.messages[1].text_content(), "loaded conversation");
+    }
+
+    #[test]
+    fn managed_adoption_replaces_plan_state_without_changing_permission_defaults() {
+        for approval in [None, Some(false), Some(true)] {
+            for target_has_plan in [false, true] {
+                let temp = tempfile::tempdir().expect("session fixture");
+                let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+                session.set_session_persistence(false);
+                session.permission_mode = crate::cli_options::PermissionMode::Plan;
+                session.plan_mode = true;
+                session.plan_approved = true;
+                session.current_plan = Some(crate::plan_mode::Plan::default());
+                session.current_plan_path = Some(temp.path().join("previous-plan.md"));
+                session.plan_rejection_feedback = Some("previous feedback".to_string());
+                let mut incoming = ManagedSession::new("target", chrono::Utc::now());
+                incoming.model = Some(session.model.clone());
+                incoming.routing_authority = Some(session.current_routing_authority());
+                incoming.plan_approved = approval;
+                incoming.current_plan = target_has_plan.then(|| crate::plan_mode::Plan {
+                    steps: vec![crate::plan_mode::PlanStep {
+                        description: "target plan".to_string(),
+                        status: crate::plan_mode::StepStatus::Pending,
+                        notes: None,
+                    }],
+                });
+                let expected_plan = serde_json::to_value(&incoming.current_plan).expect("target plan");
+
+                session
+                    .adopt_managed_session(incoming, temp.path().join("target.json"))
+                    .expect("adopt target");
+
+                assert_eq!(session.plan_approved, approval.unwrap_or(false));
+                assert_eq!(serde_json::to_value(&session.current_plan).expect("plan"), expected_plan);
+                assert!(session.current_plan_path.is_none());
+                assert!(session.plan_rejection_feedback.is_none());
+                assert_eq!(session.permission_mode, crate::cli_options::PermissionMode::Plan);
+                assert!(session.plan_mode);
+            }
+        }
+    }
+
+    #[test]
+    fn initializing_persistence_preserves_the_current_plan_and_transients() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let store = crate::runtime::session_control::ManagedSessionStore::new(temp.path().to_path_buf());
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(true);
+        session.plan_approved = true;
+        session.current_plan = Some(crate::plan_mode::Plan {
+            steps: vec![crate::plan_mode::PlanStep {
+                description: "current work".to_string(),
+                status: crate::plan_mode::StepStatus::InProgress,
+                notes: None,
+            }],
+        });
+        let plan_path = temp.path().join("current-plan.md");
+        session.current_plan_path = Some(plan_path.clone());
+        session.plan_rejection_feedback = Some("current feedback".to_string());
+        let expected_plan = serde_json::to_value(&session.current_plan).expect("plan");
+
+        session.initialize_managed_session(&store).expect("initialize fixture");
+
+        assert!(session.plan_approved);
+        assert_eq!(serde_json::to_value(&session.current_plan).expect("plan"), expected_plan);
+        assert_eq!(session.current_plan_path, Some(plan_path));
+        assert_eq!(session.plan_rejection_feedback.as_deref(), Some("current feedback"));
+        let saved = ManagedSession::load_from_path(session.managed_session_path.as_ref().expect("path"))
+            .expect("read fixture");
+        assert_eq!(saved.plan_approved, Some(true));
+        assert_eq!(serde_json::to_value(&saved.current_plan).expect("saved plan"), expected_plan);
     }
 
     fn durable_local_handoff_session(

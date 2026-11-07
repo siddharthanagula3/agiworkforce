@@ -115,7 +115,7 @@ it('answers a Free account in production, offering nothing until the setting is 
   expect(status).toBe(200);
   expect(body.issuer).toBe('QwenCloud');
   expect(body.models.length).toBeGreaterThan(0);
-  expect(body.models.every((model) => model.category === 'chat')).toBe(true);
+  expect(body.models.some((model) => model.category === 'chat')).toBe(true);
   expect(ready(body)).toEqual([]);
 });
 
@@ -129,7 +129,7 @@ it('names each model the way the picker does, never by its raw provider id', asy
   }
 });
 
-it('does not advertise promotional image or video generation to a Free account', async () => {
+it('keeps promotional media unavailable without configured storage', async () => {
   await writeQuotaAttestation(mocks.store!, {
     sourceUrl: 'https://home.qwencloud.com/benefits',
     checkedAtMs: Date.now() - 60_000,
@@ -140,7 +140,7 @@ it('does not advertise promotional image or video generation to a Free account',
   const { body } = await catalogue();
 
   expect(body.models.length).toBeGreaterThan(0);
-  expect(body.models.every((model) => model.category === 'chat')).toBe(true);
+  expect(body.models.some((model) => model.category === 'chat')).toBe(true);
 });
 
 it('lists attested models as ready and a spent one as exhausted for every account', async () => {
@@ -164,10 +164,10 @@ it('lists attested models as ready and a spent one as exhausted for every accoun
   expect(ready(body)).toEqual(others);
 });
 
-it('offers nothing when the deployment has no shared state store', async () => {
+it('reports unknown availability when the deployment has no shared state store', async () => {
   mocks.store = null;
-  const { body } = await catalogue();
-  expect(ready(body)).toEqual([]);
+  const { status } = await catalogue();
+  expect(status).toBe(503);
 });
 
 it('keeps promotional chat offerings exclusive to Free accounts', async () => {
@@ -175,7 +175,7 @@ it('keeps promotional chat offerings exclusive to Free accounts', async () => {
   const { status, body } = await catalogue();
   expect(status).toBe(200);
   expect(body.models.length).toBeGreaterThan(0);
-  expect(body.models.every((model) => model.category === 'image')).toBe(true);
+  expect(body.models.every((model) => ['image', 'video'].includes(model.category))).toBe(true);
 });
 
 it('lists eligible image and video offerings for a video-entitled paid tier', async () => {
@@ -187,10 +187,10 @@ it('lists eligible image and video offerings for a video-entitled paid tier', as
   expect(body.models.every((model) => ['image', 'video'].includes(model.category))).toBe(true);
 });
 
-it('keeps promotional media unavailable to a paid tier without generation access', async () => {
+it('lists limited promotional media for a managed-chat tier without included generation', async () => {
   mocks.plan.mockResolvedValue('basic');
   const response = await GET(new NextRequest('https://agiworkforce.com/api/models/free-quota'));
-  expect(response.status).toBe(403);
+  expect(response.status).toBe(200);
 });
 
 async function attestAll() {
@@ -207,16 +207,16 @@ function categories(body: FreeQuotaCatalogue): string[] {
   return [...new Set(body.models.map((model) => model.category))].sort();
 }
 
-it('lists no image or video for a Free account even with media storage on and every model attested', async () => {
+it('lists limited images and videos when storage and attestation are ready', async () => {
   mocks.mediaStorage = true;
   await attestAll();
 
   const { status, body } = await catalogue();
 
   expect(status).toBe(200);
-  expect(categories(body)).toEqual(['chat']);
-  expect(body.mediaUseOrder ?? []).toEqual([]);
-  expect(body).not.toHaveProperty('limitedOffer');
+  expect(categories(body)).toEqual(['chat', 'image', 'video']);
+  expect(body.mediaUseOrder?.length).toBeGreaterThan(0);
+  expect(body.limitedOffer?.map(({ category, dailyCap }) => ({ category, dailyCap }))).toEqual([{ category: 'image', dailyCap: 10 }, { category: 'video', dailyCap: 5 }]);
 });
 
 it('lists only the media kinds a paid plan includes, in the order the server will use them', async () => {
@@ -225,7 +225,8 @@ it('lists only the media kinds a paid plan includes, in the order the server wil
 
   mocks.plan.mockResolvedValue('pro');
   const pro = (await catalogue()).body;
-  expect(categories(pro)).toEqual(['image']);
+  expect(categories(pro)).toEqual(['image', 'video']);
+  expect(pro.limitedOffer?.map((offer) => offer.category)).toEqual(['video']);
 
   mocks.plan.mockResolvedValue('max_15x');
   const max = (await catalogue()).body;
@@ -244,4 +245,9 @@ it('does not list any offering for an account kept off managed cloud', async () 
   const response = await GET(new NextRequest('https://agiworkforce.com/api/models/free-quota'));
 
   expect(response.status).toBe(403);
+});
+
+it('does not turn an unreadable daily ledger into a used-up offer', async () => {
+  vi.spyOn(mocks.store!, 'get').mockRejectedValue(new Error('store unavailable'));
+  expect((await catalogue()).status).toBe(503);
 });

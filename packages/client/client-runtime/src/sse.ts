@@ -162,16 +162,23 @@ export async function* readServerSentEvents(
   }
   const reader = stream.getReader();
   const text = new TextDecoder();
+  let reachedEnd = false;
   try {
     for (;;) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        reachedEnd = true;
+        break;
+      }
       options.onChunk?.();
       yield* decoder.push(text.decode(value, { stream: true }));
     }
     yield* decoder.push(text.decode());
     yield* decoder.finish({ acceptUnterminatedFrame: options.acceptUnterminatedFinalFrame }).events;
   } finally {
+    // Returning early or rejecting a frame retires the unread body. Do not let
+    // a rejecting or stalled source cancellation replace/delay the outcome.
+    if (!reachedEnd) void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

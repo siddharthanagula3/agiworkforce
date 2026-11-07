@@ -160,7 +160,9 @@ export async function lockdownTenantForErasure(organizationId: string): Promise<
   const definition = await ensureFlagDefinition(
     killSwitchDefinition(TENANT_LOCKDOWN_FLAG_KEY, LOCKDOWN_DESCRIPTION),
   );
-  if (!definition) return;
+  if (!definition) {
+    throw createError.internal('The lockdown switch could not be prepared. Erasure did not start.');
+  }
   await upsertFlagOverride(TENANT_LOCKDOWN_FLAG_KEY, {
     subject: 'workspace',
     subjectId: organizationId,

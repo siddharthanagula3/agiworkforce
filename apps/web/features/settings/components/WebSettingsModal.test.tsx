@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { WebSettingsModal } from './WebSettingsModal';
@@ -24,18 +25,50 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 }));
 
 const getTokenMock = vi.fn(async () => 'session-token');
-vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: getTokenMock }) }));
+vi.mock('@clerk/nextjs', async (original) => ({
+  ...await original<typeof import('@clerk/nextjs')>(), useAuth: () => ({ getToken: getTokenMock }),
+}));
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
+const emailAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
-  AccountSection: () => null,
+  AccountSection: ({ emailEditorActive }: { emailEditorActive?: boolean }) => {
+    emailAdmission(emailEditorActive);
+    return <div data-testid="email-editor-admission">{String(emailEditorActive)}</div>;
+  },
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));
-vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
-vi.mock('../sections/SecuritySection', () => ({ SecuritySection: () => null }));
+const membershipAdmission = vi.hoisted(() => vi.fn());
+vi.mock('../sections/TeamSection', () => ({ TeamSection: ({ active }: { active?: boolean }) => {
+  membershipAdmission(active);
+  return <div>Team settings content<span data-testid="membership-editor-admission">{String(active)}</span></div>;
+} }));
+const passwordAdmission = vi.hoisted(() => vi.fn());
+const signInAdmission = vi.hoisted(() => vi.fn());
+const twoFactorAdmission = vi.hoisted(() => vi.fn());
+const retainedSettings = vi.hoisted(() => ({ enabled: false, retainSecurity: false }));
+vi.mock('@agiworkforce/ui', async (original) => {
+  const actual = await original<typeof import('@agiworkforce/ui')>();
+  return { ...actual, SettingsModal: (props: ComponentProps<typeof actual.SettingsModal>) =>
+    retainedSettings.enabled ? <>{props.sectionContent[retainedSettings.retainSecurity ? 'security' : props.activeSection]}</> : <actual.SettingsModal {...props} /> };
+});
+
+vi.mock('../sections/SecuritySection', async (original) => ({
+  ...await original<typeof import('../sections/SecuritySection')>(),
+  SecuritySection: ({ passwordEditorActive, signInMethodsActive, twoFactorActive, deviceSignInActive }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean; deviceSignInActive?: boolean }) => {
+    passwordAdmission(passwordEditorActive);
+    signInAdmission(signInMethodsActive);
+    twoFactorAdmission(twoFactorActive);
+    return <><div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>
+      <div data-testid="sign-in-methods-admission">{String(signInMethodsActive)}</div>
+      <div data-testid="two-factor-admission">{String(twoFactorActive)}</div>
+      <div data-testid="device-sign-in-admission">{String(deviceSignInActive)}</div></>;
+  },
+}));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
 vi.mock('../sections/PrivacySection', () => ({ PrivacySection: () => null }));
 vi.mock('../sections/ArchivedChatsSection', () => ({ ArchivedChatsSection: () => null }));
+vi.mock('../sections/DeletedChatsSection', () => ({ DeletedChatsSection: () => null }));
 vi.mock('../sections/SharedLinksSection', () => ({ SharedLinksSection: () => null }));
 vi.mock('../sections/BillingSection', () => ({ BillingSection: () => null }));
 vi.mock('../sections/UsageSection', () => ({ UsageSection: () => null }));
@@ -862,4 +895,88 @@ describe('WebSettingsModal connectors while connectors are coming soon', () => {
     expect(await screen.findByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Add custom connector' })).toBeNull();
   }, 15_000);
+});
+
+it('withdraws password editor admission when Settings closes and restores it on reopening', async () => {
+  stubFetch({});
+  passwordAdmission.mockClear();
+  retainedSettings.enabled = true;
+  const props = { onClose: vi.fn(), initialSection: 'security' as const };
+  const mounted = render(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(passwordAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal {...props} open={false} />);
+  expect(passwordAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(passwordAdmission).toHaveBeenLastCalledWith(true));
+  retainedSettings.enabled = false;
+});
+
+afterEach(() => { retainedSettings.enabled = false; retainedSettings.retainSecurity = false; });
+
+it('withdraws sign-in method admission before retained Settings content unmounts', async () => {
+  stubFetch({}); signInAdmission.mockClear(); retainedSettings.enabled = true;
+  const props = { onClose: vi.fn(), initialSection: 'security' as const };
+  const mounted = render(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(signInAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal {...props} open={false} />);
+  expect(signInAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(signInAdmission).toHaveBeenLastCalledWith(true));
+});
+
+it('withdraws workspace membership admission on Settings close before retained Team content unmounts', async () => {
+  stubFetch();
+  membershipAdmission.mockClear();
+  retainedSettings.enabled = true;
+  const props = { onClose: vi.fn(), initialSection: 'team' as const };
+  const mounted = render(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(membershipAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal {...props} open={false} />);
+  expect(membershipAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('membership-editor-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal {...props} open />);
+  await waitFor(() => expect(membershipAdmission).toHaveBeenLastCalledWith(true));
+});
+
+
+it('withdraws email editor admission on Settings close before retained content unmounts', async () => {
+  emailAdmission.mockClear();
+  retainedSettings.enabled = true;
+  stubFetch();
+  const mounted = render(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
+  await waitFor(() => expect(emailAdmission).toHaveBeenLastCalledWith(true));
+  mounted.rerender(<WebSettingsModal open={false} onClose={vi.fn()} initialSection="account" />);
+  expect(emailAdmission).toHaveBeenLastCalledWith(false);
+  expect(screen.getByTestId('email-editor-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal open onClose={vi.fn()} initialSection="account" />);
+  await waitFor(() => expect(emailAdmission).toHaveBeenLastCalledWith(true));
+});
+
+
+it('composes TOTP admission from open and the selected section without changing other admission rules', async () => {
+  stubFetch();
+  retainedSettings.enabled = true;
+  retainedSettings.retainSecurity = true;
+  const onClose = vi.fn();
+  const mounted = render(<WebSettingsModal open onClose={onClose} initialSection="security" />);
+  await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
+  mounted.rerender(<WebSettingsModal open={false} onClose={onClose} initialSection="security" />);
+  expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false');
+  expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false');
+  expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('false');
+  expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="security" />);
+  await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
+  mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="general" />);
+  await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false'));
+  expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('true');
+  expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
+  mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="security" />);
+  await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
+  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
 });

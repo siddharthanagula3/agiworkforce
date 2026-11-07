@@ -122,12 +122,36 @@ describe('GET /api/me/routing-preferences', () => {
     expect(await response.json()).toEqual({});
   });
 
-  it('returns empty object on DB error (fail-open)', async () => {
+  it('returns a sanitized error instead of empty preferences when the read fails', async () => {
     mockQuery.mockRejectedValueOnce(new Error('pg connection refused'));
+
+    const response = await GET(buildSessionRequest());
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ message: 'An unexpected error occurred' }),
+      }),
+    );
+    expect(JSON.stringify(body)).not.toContain('pg connection refused');
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('returns an authoritative empty preferences object after a successful read', async () => {
+    mockQuery.mockResolvedValueOnce([{ routing_preferences: {} }]);
 
     const response = await GET(buildSessionRequest());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({});
+  });
+
+  it('returns all supported stored preferences for replacement writes', async () => {
+    const preferences = { us_only: true, geo_overlay: 'us' };
+    mockQuery.mockResolvedValueOnce([{ routing_preferences: preferences }]);
+
+    const response = await GET(buildSessionRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(preferences);
   });
 
   it('rejects unauthenticated requests with 401', async () => {
@@ -219,8 +243,25 @@ describe('PUT /api/me/routing-preferences', () => {
     expect(response.status).toBe(400);
   });
 
-  it('rejects empty body with 400 (no preferences specified is technically valid {}, but malformed JSON is not)', async () => {
+  it('accepts an empty preferences object to clear the stored replacement', async () => {
     const response = await PUT(buildPutRequest({}));
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({});
+    expect(mockExecute).toHaveBeenCalledWith(
+      'update profiles set routing_preferences = $1::jsonb, updated_at = now() where id = $2',
+      ['{}', 'user-123'],
+    );
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('replaces preferences without merging omitted fields from the stored object', async () => {
+    const response = await PUT(buildPutRequest({ us_only: false }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ us_only: false });
+    expect(mockExecute).toHaveBeenCalledWith(
+      'update profiles set routing_preferences = $1::jsonb, updated_at = now() where id = $2',
+      [JSON.stringify({ us_only: false }), 'user-123'],
+    );
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });

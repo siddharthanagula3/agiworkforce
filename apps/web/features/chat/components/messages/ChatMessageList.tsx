@@ -71,6 +71,7 @@ import { TranscriptNotice } from './TranscriptNotice';
 import { ArrowRight, ChevronDown, RefreshCw, ShieldAlert, Square } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
+import { currentReadAloudMessage, messageReadAloudUnavailable } from '@/lib/read-aloud-policy';
 import {
   isMessageContinuable,
   hasStreamError,
@@ -856,6 +857,7 @@ const MessageRow = memo(function MessageRow({
       onResumeVideo={onResumeVideo}
       onRetryVideo={onRetryVideo}
       onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
+      readAloudUnavailableReason={messageReadAloudUnavailable(message)}
       isReadingAloud={speakingMessageId === message.id}
       isReadAloudSupported={isReadAloudSupported}
       isLatestTurn={displayRole === 'assistant' && Boolean(isLastMessage)}
@@ -1229,7 +1231,7 @@ const ChatMessageListComponent = ({
   turnErrorActive = false,
 }: ChatMessageListProps) => {
   const listApiRef = useRef<ListImperativeAPI | null>(null);
-  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
+  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS(conversationId);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   const [userScrolledUp, setUserScrolledUp] = useState(false);
@@ -1775,14 +1777,22 @@ const ChatMessageListComponent = ({
   );
 
   const handleReadAloud = useCallback(
-    (messageId: string, content: string) => {
+    (messageId: string, _content: string) => {
+      const currentMessage = () => currentReadAloudMessage(
+        renderedGroupsRef.current.flatMap((group) => group.messages), messageId,
+      );
+      const message = currentMessage();
+      if (!message) {
+        stop();
+        return;
+      }
       if (isSpeaking && speakingMessageId === messageId) {
         stop();
         return;
       }
 
       setSpeakingMessageId(messageId);
-      speak(content);
+      speak(message.content, { canSpeak: () => currentMessage() !== null });
     },
     [isSpeaking, speak, speakingMessageId, stop],
   );

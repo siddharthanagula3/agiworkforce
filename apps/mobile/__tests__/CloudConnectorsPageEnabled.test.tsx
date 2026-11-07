@@ -58,6 +58,7 @@ jest.mock('@/src/features/chat/store/appModeStore', () => {
   const state = { appMode: 'cloud', setAppMode: jest.fn() };
   const store = (selector: (s: typeof state) => unknown) => selector(state);
   store.getState = () => state;
+  store.subscribe = jest.fn(() => jest.fn());
   return { useChatAppModeStore: store };
 });
 
@@ -68,13 +69,25 @@ jest.mock('@/src/features/billing/store', () => ({
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
-  useAuthStore: (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
+  useAuthStore: Object.assign(
+    (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState, subscribe: jest.fn(() => jest.fn()) },
+  ),
 }));
 
 jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
+  subscribeCloudAccountEpochChange: jest.fn(() => jest.fn()),
   captureCloudAccountEpoch: () => ({ ownerId: mockAccountOwner, epoch: mockAccountEpoch }),
   isCloudAccountEpochCurrent: (snapshot: { ownerId: string; epoch: number }) =>
     snapshot.ownerId === mockAccountOwner && snapshot.epoch === mockAccountEpoch,
+}));
+
+jest.mock('@/services/preferences', () => ({
+  fetchToolApprovalNamespace: jest.fn(async () => ({
+    settings: { defaultPolicy: 'auto_approve_read_only' },
+    autonomousToolApprovalsAllowed: true,
+  })),
+  savePreferenceNamespace: jest.fn(async () => undefined),
 }));
 
 const mockFetchDirectory = jest.fn();
@@ -163,7 +176,7 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     try {
       expect(screen.getByText('Choose when AGI asks before a connected tool acts.')).toBeTruthy();
       act(() => useSettingsStore.getState().setToolApprovalPolicy('auto_approve_read_only'));
-      fireEvent.press(screen.getByRole('button', { name: 'Action approvals. Auto' }));
+      fireEvent.press(await screen.findByRole('button', { name: 'Action approvals. Auto' }));
       expect(mockPush).toHaveBeenCalledWith('/(app)/settings/auto-approve');
       await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
     } finally {

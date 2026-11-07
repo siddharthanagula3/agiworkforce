@@ -167,7 +167,7 @@ describe('getOrgReadableArtifactByToken', () => {
       },
     ]);
 
-    const artifact = await getOrgReadableArtifactByToken(db, TOKEN);
+    const artifact = await getOrgReadableArtifactByToken(db, TOKEN, 'user_owner');
 
     expect(artifact?.visibility).toBe('organization');
     expect(issued[0]?.sql).toContain('where token = $1');
@@ -175,9 +175,21 @@ describe('getOrgReadableArtifactByToken', () => {
     expect(issued[0]?.params).toEqual([TOKEN]);
   });
 
+  it('preserves invited visibility through the canonical row mapper', async () => {
+    const { db, issued } = makeDb(() => [{
+      id: ARTIFACT, token: TOKEN, user_id: 'user_owner', artifact_id: 'artifact-1',
+      conversation_id: null, title: 'Invited', kind: 'markdown', language: null,
+      content: '# private invitation', visibility: 'invited',
+      created_at: '2026-09-13T00:00:00.000Z', updated_at: '2026-09-13T00:00:00.000Z',
+    }]);
+    const artifact = await getOrgReadableArtifactByToken(db, TOKEN, 'invited-viewer');
+    expect(artifact?.visibility).toBe('invited');
+    expect(issued).toHaveLength(1);
+  });
+
   it('refuses a malformed token without touching the database', async () => {
     const { db, issued } = makeDb(() => []);
-    await expect(getOrgReadableArtifactByToken(db, 'nope')).resolves.toBeNull();
+    await expect(getOrgReadableArtifactByToken(db, 'nope', 'user_owner')).resolves.toBeNull();
     expect(issued).toHaveLength(0);
   });
 });

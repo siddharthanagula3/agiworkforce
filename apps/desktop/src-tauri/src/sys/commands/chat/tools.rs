@@ -1461,6 +1461,18 @@ mod tests {
         }
     }
 
+    #[test]
+    fn spreadsheet_editing_is_not_registered_or_advertised() {
+        let registry = create_tool_registry_for_schema().expect("tool registry");
+        assert!(registry.get_tool("document_edit_excel").is_none());
+        let tools = build_chat_tools(Some(&registry), None);
+        assert!(!tools.iter().any(|tool| tool.name == "document_edit_excel"));
+        for name in ["document_read", "document_create_excel"] {
+            assert!(registry.get_tool(name).is_some(), "{name}");
+            assert!(tools.iter().any(|tool| tool.name == name), "{name}");
+        }
+    }
+
     // ── skills progressive disclosure ────────────────────────────────────────
     // Progressive disclosure only works if the model can actually reach the tool
     // that discloses a skill body. Before this wiring the Skill tool existed but

@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
+  usePreferenceOwner: () => null,
+}));
+
 /**
  * Web privacy settings must not advertise a model-training opt-in.
  *
@@ -14,6 +19,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
+
+vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -54,7 +61,8 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
   setTelemetryConsentCache: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));

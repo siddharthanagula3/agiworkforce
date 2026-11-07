@@ -76,14 +76,42 @@ pub fn configured_local_base_url(config: &CliConfig, provider: &str) -> String {
     }
 }
 
+pub(crate) fn local_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+}
+
 pub async fn discover_all(config: &CliConfig) -> Vec<LocalProviderProbe> {
-    let client = reqwest::Client::builder()
+    let client = local_client_builder()
         .timeout(LOCAL_MODEL_TIMEOUT)
         .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+        .context("failed to build isolated Local discovery client");
+    discover_all_with_client(config, client).await
+}
 
+async fn discover_all_with_client(
+    config: &CliConfig,
+    client: Result<reqwest::Client>,
+) -> Vec<LocalProviderProbe> {
     let ollama = configured_local_base_url(config, "ollama");
     let lmstudio = configured_local_base_url(config, "lmstudio");
+    let client = match client {
+        Ok(client) => client,
+        Err(error) => {
+            return [("ollama", ollama), ("lmstudio", lmstudio)]
+                .into_iter()
+                .map(|(provider, base_url)| {
+                    failed_probe(
+                        LocalProbeHealth::Faulty,
+                        provider,
+                        base_url,
+                        error.to_string(),
+                    )
+                })
+                .collect();
+        }
+    };
     let (ollama_probe, lmstudio_probe) = tokio::join!(
         probe_ollama(&client, &ollama),
         probe_openai_compatible_local(&client, "lmstudio", &lmstudio)
@@ -451,7 +479,86 @@ fn failed_probe(
 
 #[cfg(test)]
 mod tests {
-    use super::{ollama_capabilities_support_tools, openai_chat_completions_url};
+    use super::*;
+
+    #[tokio::test]
+    async fn discovery_client_failure_returns_no_models() {
+        let probes = discover_all_with_client(
+            &CliConfig::default(),
+            Err(anyhow::anyhow!("fixture client build failure")),
+        )
+        .await;
+        assert_eq!(probes.len(), 2);
+        for probe in probes {
+            assert_eq!(probe.health, LocalProbeHealth::Faulty);
+            assert!(!probe.running);
+            assert!(probe.models.is_empty());
+            assert_eq!(probe.error.as_deref(), Some("fixture client build failure"));
+        }
+    }
+
+    #[tokio::test]
+    async fn local_discovery_and_capability_probes_do_not_follow_redirects() {
+        use axum::{response::Redirect, routing::any, Router};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+
+        let target_hits = Arc::new(AtomicUsize::new(0));
+        let target_hits_for_route = Arc::clone(&target_hits);
+        let router = Router::new()
+            .route(
+                "/redirect-target",
+                any(move || {
+                    let target_hits = Arc::clone(&target_hits_for_route);
+                    async move {
+                        target_hits.fetch_add(1, Ordering::SeqCst);
+                        "unexpected redirect"
+                    }
+                }),
+            )
+            .fallback(|| async { Redirect::temporary("/redirect-target") });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind local redirect fixture");
+        let base_url = format!("http://{}", listener.local_addr().expect("fixture address"));
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.expect("serve fixture");
+        });
+        let mut config = CliConfig::default();
+        for provider in ["ollama", "lmstudio"] {
+            config.providers.insert(
+                provider.to_string(),
+                crate::config::ProviderConfig {
+                    api_key_env: None,
+                    base_url: Some(base_url.clone()),
+                },
+            );
+        }
+
+        let probes = discover_all(&config).await;
+        let client = local_client_builder()
+            .timeout(LOCAL_MODEL_TIMEOUT)
+            .build()
+            .expect("isolated fixture client");
+        let capability =
+            ollama_model_supports_tools(&client, &base_url, "fixture-local-model").await;
+        server.abort();
+
+        assert_eq!(probes.len(), 2);
+        for probe in probes {
+            assert_eq!(probe.health, LocalProbeHealth::Faulty);
+            assert!(!probe.running);
+            assert!(probe.models.is_empty());
+            assert!(probe.error.expect("redirect error").contains("307"));
+        }
+        assert!(capability
+            .expect_err("redirect must fail")
+            .to_string()
+            .contains("307"));
+        assert_eq!(target_hits.load(Ordering::SeqCst), 0);
+    }
 
     #[test]
     fn ollama_capabilities_detect_tool_support() {

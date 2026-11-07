@@ -53,7 +53,7 @@ describe('PUT /api/settings/preferences, lost-update fix', () => {
     vi.clearAllMocks();
     mockQuery
       .mockResolvedValueOnce([{ settings: STORED }])
-      .mockResolvedValueOnce([{ settings: { ...STORED, profile: { bio: 'new' } } }]);
+      .mockResolvedValueOnce([{ settings: { ...STORED, profile: { bio: 'new' } }, version: 'v2' }]);
   });
 
   it('merges atomically in SQL (user_settings.settings || excluded.settings)', async () => {
@@ -78,7 +78,7 @@ describe('PUT /api/settings/preferences, lost-update fix', () => {
     mockQuery.mockReset();
     mockQuery
       .mockResolvedValueOnce([{ settings: STORED }])
-      .mockResolvedValueOnce([{ settings: { ...STORED, weekly_reports: true } }]);
+      .mockResolvedValueOnce([{ settings: { ...STORED, weekly_reports: true }, version: 'v2' }]);
 
     await PUT(makeRequest({ settings: { weekly_reports: true } }));
 

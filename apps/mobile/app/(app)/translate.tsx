@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ArrowLeftRight, Check, ChevronDown, Copy, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/Text';
@@ -26,6 +26,13 @@ import {
   type TranslateResult,
   type LanguagePair,
 } from '@/services/translateService';
+
+interface TranslationOperation {
+  revision: number;
+  controller: AbortController;
+  pending: boolean;
+  result: TranslateResult | null;
+}
 
 interface TranslateState {
   isTranslating: boolean;
@@ -52,8 +59,44 @@ export default function TranslateScreen() {
   const [state, setState] = useState<TranslateState>(initialState);
   const [langPickerFor, setLangPickerFor] = useState<'source' | 'target' | null>(null);
 
-  const abortRef = useRef(false);
+  const mountedRef = useRef(false);
+  const focusedRef = useRef(false);
+  const operationRef = useRef<TranslationOperation | null>(null);
+  const draftRef = useRef({ text: '', source: DEFAULT_SOURCE_LANG, target: DEFAULT_TARGET_LANG, revision: 0 });
   const prefilledRef = useRef(false);
+
+  const retireOperation = useCallback(() => {
+    const operation = operationRef.current;
+    operationRef.current = null;
+    draftRef.current.revision += 1;
+    operation?.controller.abort();
+  }, []);
+
+  const updateDraft = useCallback((text: string, source: string, target: string) => {
+    retireOperation();
+    draftRef.current = { text, source, target, revision: draftRef.current.revision };
+    setSourceText(text);
+    setSourceLang(source);
+    setTargetLang(target);
+    setState(initialState());
+  }, [retireOperation]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      retireOperation();
+    };
+  }, [retireOperation]);
+
+  useFocusEffect(useCallback(() => {
+    focusedRef.current = true;
+    setState(initialState());
+    return () => {
+      focusedRef.current = false;
+      retireOperation();
+    };
+  }, [retireOperation]));
 
   useEffect(() => {
     if (prefilledRef.current) return;
@@ -63,61 +106,89 @@ export default function TranslateScreen() {
     if (!text && !targetLanguage) return;
 
     prefilledRef.current = true;
-    if (text) setSourceText(text);
-    if (targetLanguage) {
-      const match = SUPPORTED_LANGUAGES.find(
-        (l) => l.label.toLowerCase() === targetLanguage.toLowerCase(),
-      );
-      if (match) setTargetLang(match.code);
-    }
-  }, [params.text, params.targetLanguage]);
+    const match = SUPPORTED_LANGUAGES.find(
+      (language) => language.label.toLowerCase() === targetLanguage?.toLowerCase(),
+    );
+    const draft = draftRef.current;
+    updateDraft(text ?? draft.text, draft.source, match?.code ?? draft.target);
+  }, [params.text, params.targetLanguage, updateDraft]);
 
   const handleBack = useCallback(() => {
+    focusedRef.current = false;
+    prefilledRef.current = true;
+    retireOperation();
+    setState(initialState());
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
-  }, [router]);
+  }, [router, retireOperation]);
 
   const handleSwapLanguages = useCallback(() => {
-    setSourceLang(targetLang);
-    setTargetLang(sourceLang);
-    const prev = state.result?.translatedText ?? '';
-    setSourceText(prev);
-    setState(initialState());
-  }, [sourceLang, targetLang, state.result]);
+    prefilledRef.current = true;
+    const draft = draftRef.current;
+    const operation = operationRef.current;
+    const result = operation?.revision === draft.revision ? operation.result : null;
+    updateDraft(result?.translatedText ?? draft.text, draft.target, draft.source);
+  }, [updateDraft]);
 
   const handleClear = useCallback(() => {
-    setSourceText('');
-    setState(initialState());
-  }, []);
+    prefilledRef.current = true;
+    const draft = draftRef.current;
+    updateDraft('', draft.source, draft.target);
+  }, [updateDraft]);
+
+  const handleChangeText = useCallback((text: string) => {
+    prefilledRef.current = true;
+    const draft = draftRef.current;
+    updateDraft(text, draft.source, draft.target);
+  }, [updateDraft]);
 
   const handleTranslate = useCallback(async () => {
-    if (!sourceText.trim() || state.isTranslating) return;
+    prefilledRef.current = true;
+    const draft = draftRef.current;
+    if (!mountedRef.current || !focusedRef.current || !draft.text.trim() || operationRef.current?.pending) return;
 
-    abortRef.current = false;
-    setState({ isTranslating: true, result: null, errorMessage: null, tokensAccum: '' });
+    const operation: TranslationOperation = {
+      revision: draft.revision,
+      controller: new AbortController(),
+      pending: true,
+      result: null,
+    };
+    operationRef.current = operation;
+    const isCurrent = () => mountedRef.current && focusedRef.current &&
+      operationRef.current === operation && draftRef.current.revision === operation.revision &&
+      !operation.controller.signal.aborted;
+    setState((previous) => isCurrent()
+      ? { isTranslating: true, result: null, errorMessage: null, tokensAccum: '' }
+      : previous);
 
     try {
-      const result = await translate(sourceText, sourceLang, targetLang, {
+      const result = await translate(draft.text, draft.source, draft.target, {
+        signal: operation.controller.signal,
         onToken: (token) => {
-          if (abortRef.current) return;
-          setState((prev) => ({ ...prev, tokensAccum: prev.tokensAccum + token }));
+          if (!isCurrent() || !operation.pending) return;
+          setState((previous) => isCurrent() && operation.pending
+            ? { ...previous, tokensAccum: previous.tokensAccum + token }
+            : previous);
         },
       });
-      if (!abortRef.current) {
-        setState({ isTranslating: false, result, errorMessage: null, tokensAccum: '' });
-      }
+      if (!isCurrent()) return;
+      operation.pending = false;
+      operation.result = result;
+      setState((previous) => isCurrent()
+        ? { isTranslating: false, result, errorMessage: null, tokensAccum: '' }
+        : previous);
     } catch {
-      if (!abortRef.current) {
-        setState({
-          isTranslating: false,
-          result: null,
-          errorMessage:
-            'Translation could not finish on this device. Check your local model and try again.',
-          tokensAccum: '',
-        });
-      }
+      if (!isCurrent()) return;
+      operation.pending = false;
+      setState((previous) => isCurrent() ? {
+        isTranslating: false,
+        result: null,
+        errorMessage:
+          'Translation could not finish on this device. Check your local model and try again.',
+        tokensAccum: '',
+      } : previous);
     }
-  }, [sourceText, sourceLang, targetLang, state.isTranslating]);
+  }, []);
 
   const handleCopyResult = useCallback(() => {
     const text = state.result?.translatedText ?? state.tokensAccum;
@@ -126,21 +197,16 @@ export default function TranslateScreen() {
 
   const handleSelectLang = useCallback(
     (lang: LanguagePair) => {
+      prefilledRef.current = true;
+      const draft = draftRef.current;
       if (langPickerFor === 'source') {
-        if (lang.code === targetLang) {
-          setTargetLang(sourceLang);
-        }
-        setSourceLang(lang.code);
-      } else {
-        if (lang.code === sourceLang) {
-          setSourceLang(targetLang);
-        }
-        setTargetLang(lang.code);
+        updateDraft(draft.text, lang.code, lang.code === draft.target ? draft.source : draft.target);
+      } else if (langPickerFor === 'target') {
+        updateDraft(draft.text, lang.code === draft.source ? draft.target : draft.source, lang.code);
       }
       setLangPickerFor(null);
-      setState(initialState());
     },
-    [langPickerFor, sourceLang, targetLang],
+    [langPickerFor, updateDraft],
   );
 
   const sourceLangDef = SUPPORTED_LANGUAGES.find((l) => l.code === sourceLang);
@@ -250,10 +316,7 @@ export default function TranslateScreen() {
             </Text>
             <TextInput
               value={sourceText}
-              onChangeText={(v) => {
-                setSourceText(v);
-                if (state.result || state.errorMessage) setState(initialState());
-              }}
+              onChangeText={handleChangeText}
               multiline
               placeholder="Enter text to translate..."
               placeholderTextColor={colors.textMuted}

@@ -1,11 +1,13 @@
 import 'server-only';
 
+import { resolveAuthenticatedSurface } from '@/app/api/llm/v1/chat/completions/lib/request-surface';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { NextRequest } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { IdentityRequestAuth } from '@agiworkforce/identity';
-import { createError } from '@/lib/errors';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { createError, isAppError } from '@/lib/errors';
+import { getClerkAuthUser, getCookieSessionAuthUser, type AuthResult } from '@/lib/api-auth';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { traceDatabaseAdapter } from '@/lib/observability/database-span';
 import { setTenantScope } from '@/lib/observability/trace-context';
@@ -34,6 +36,7 @@ function getRlsCapableDb(): DatabaseAdapter {
 }
 
 export interface UserScopedDb {
+  surface?: CloudChatSurface;
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
@@ -47,7 +50,7 @@ export interface UserScopedDbOptions {
   resolveOrganization?: boolean;
 }
 
-export interface VerifiedBearerPrincipal {
+export interface VerifiedBearerPrincipal extends Pick<AuthResult, 'surfaceClass' | 'boundSurface'> {
   userId: string;
   token: string;
 }
@@ -78,6 +81,7 @@ async function scopeVerifiedBearer(
     organizationId: organizationId ?? undefined,
   });
   return {
+    surface: resolveAuthenticatedSurface(request, principal),
     db: isApiKeyToken(principal.token)
       ? createClaimedUserScopedDb(getNeonDb(), {
           userId: principal.userId,
@@ -107,8 +111,8 @@ export async function getUserScopedDb(
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    const { userId } = await getClerkAuthUser(request, options);
-    return scopeVerifiedBearer(request, { userId, token }, resolveOrganization);
+    const auth = await getClerkAuthUser(request, options);
+    return scopeVerifiedBearer(request, { ...auth, token }, resolveOrganization);
   }
 
   const { subject: userId, getToken } = await getRequestIdentity();
@@ -124,6 +128,7 @@ export async function getUserScopedDb(
         : null;
       setTenantScope({ userId, organizationId: organizationId ?? undefined });
       return {
+        surface: 'web',
         db: getRlsCapableDb().withUser(token).withOrg(organizationId),
         userId,
         organizationId,
@@ -156,4 +161,27 @@ export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
   if (!token) return null;
   setTenantScope({ userId });
   return { db: getRlsCapableDb().withUser(token), userId };
+}
+
+export async function getCurrentCookieUserRlsDb(
+  request: NextRequest,
+): Promise<CurrentUserRlsDb | null> {
+  let session: IdentityRequestAuth;
+  try {
+    session = await getRequestIdentity();
+  } catch {
+    return null;
+  }
+  if (!session.subject) return null;
+
+  let principal: AuthResult;
+  try {
+    principal = await getCookieSessionAuthUser(request, session);
+  } catch (error) {
+    if (isAppError(error) && (error.statusCode === 401 || error.statusCode === 403)) return null;
+    throw error;
+  }
+  const token = await session.getToken();
+  if (!token) return null;
+  return { db: getRlsCapableDb().withUser(token), userId: principal.userId };
 }

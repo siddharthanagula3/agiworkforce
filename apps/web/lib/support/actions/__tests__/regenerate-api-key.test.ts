@@ -122,4 +122,37 @@ describe('support actions, regenerate_api_key', () => {
 
     expect(mocks.db!.proposals).toHaveLength(0);
   });
+
+  it('keeps the existing expiry and project through a confirmed rotation', async () => {
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const projectId = '77777777-7777-4777-8777-777777777777';
+    mocks.db!.apiKeys[0]!.expires_at = expiresAt;
+    mocks.db!.apiKeys[0]!.project_id = projectId;
+    const { proposal, confirmationToken } = await proposeSupportAction({
+      db: mocks.db!.adapter,
+      userId: USER,
+      actionId: 'regenerate_api_key',
+      params: { keyId: KEY_ID },
+      surface: 'web',
+      conversationRef: null,
+    });
+
+    expect(proposal.effects).toContain('The existing expiry and project are kept.');
+    const { result } = await confirmSupportAction({
+      db: mocks.db!.adapter,
+      userId: USER,
+      proposalId: proposal.id,
+      confirmationToken,
+      surface: 'web',
+      request: withRevealProof(proposal.id),
+    });
+
+    expect(result.kind).toBe('secret_once');
+    const insert = mocks.db!.callsMatching(/insert into api_keys/iu)[0]!;
+    expect(insert.params[5]).toBe(expiresAt);
+    expect(insert.params[6]).toBe(projectId);
+    const replacement = mocks.db!.apiKeys.find((key) => key.id !== KEY_ID)!;
+    expect(replacement.expires_at).toBe(expiresAt);
+    expect(replacement.project_id).toBe(projectId);
+  });
 });

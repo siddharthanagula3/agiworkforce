@@ -25,6 +25,7 @@ import type { FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 import { capabilityKillSwitchKey } from '@/lib/feature-flags/kill-switches';
 import * as agentTurnConfig from '@/lib/agents/agent-turn-config';
 import { AGENT_ID, agentConfig } from '@/lib/agents/__tests__/agent-fixtures';
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
 type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
@@ -308,6 +309,17 @@ afterEach(() => {
 });
 
 describe('the chat system prompt version a prompt flag selects', () => {
+  it('preserves the original context policy snapshot when reprocessing a saved turn', async () => {
+    const original = contextPolicySnapshotFixture('user-pro', null);
+    const result = await processRequest(chatRequestFor('saved-context-policy'), auth(), {
+      contextPolicySnapshot: original,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.contextPolicySnapshot).toBe(original);
+  });
+
   it('keeps a captured initial inventory on a non-loop managed request after the cache boundary', async () => {
     mocks.promptFlags.mockResolvedValue(chatSystemFlag(PRECEDENCE_VERSION));
     const result = await processRequest(
@@ -611,7 +623,7 @@ describe('the identity and chat setup the flagged identity version reports', () 
     expect(joined).not.toContain('- Memory is off, so you cannot see or save memories');
   });
 
-  it('says memory could not be loaded, not that the workspace closed it, when the workspace policy read fails', async () => {
+  it('says memory could not be loaded when only the workspace memory policy read fails', async () => {
     mocks.organizationId.mockReturnValue(WORKSPACE_ID);
     mocks.loadPolicy.mockResolvedValue({
       enabled: false,
@@ -620,7 +632,12 @@ describe('the identity and chat setup the flagged identity version reports', () 
       searchPastChats: false,
     });
     mocks.scopedQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('from organization_admin_policies')) throw new Error('connection reset');
+      if (sql.includes('from organization_admin_policies')) {
+        if (sql.includes('retention_days')) throw new Error('connection reset');
+        return [
+          { allow_memory: true, allow_connector_context: true, allow_web_result_context: true },
+        ];
+      }
       return [];
     });
 
@@ -629,6 +646,26 @@ describe('the identity and chat setup the flagged identity version reports', () 
     expect(joined).toContain('- Memory could not be loaded for this message');
     expect(joined).not.toContain('workspace administrator has turned memory off');
     expect(joined).not.toContain('- Memory is off, so you cannot see or save memories');
+  });
+
+  it('requires a restart before preparing a turn when the workspace context policy is unreadable', async () => {
+    mocks.organizationId.mockReturnValue(WORKSPACE_ID);
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from organization_admin_policies')) throw new Error('connection reset');
+      return [];
+    });
+
+    const result = await processRequest(chatRequestFor('unreadable-context-policy'), auth());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(409);
+    await expect(result.response.json()).resolves.toMatchObject({
+      error: { code: 'context_policy_restart_required' },
+    });
+    expect(mocks.turnContext).not.toHaveBeenCalled();
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+    expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
   });
 
   it('says personalization could not be loaded when the custom instructions read fails', async () => {

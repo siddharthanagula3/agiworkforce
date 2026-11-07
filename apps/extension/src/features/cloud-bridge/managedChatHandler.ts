@@ -1,3 +1,4 @@
+import { ScheduledTaskTransportControl } from '../background/scheduled-task-transport';
 import type { RoutingTaskType } from '@agiworkforce/routing';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import {
@@ -582,6 +583,7 @@ export async function executeChromeManagedChat(
   try {
     access = await dependencies.getModelAccess(token, request.signal);
   } catch (error) {
+    if (error instanceof ScheduledTaskTransportControl) throw error;
     if (request.signal?.aborted) {
       return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
     }

@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn(async () => 'csrf-token'),
 }));
 
 import WorkspaceDeletionPage from './WorkspaceDeletionPage';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 const WORKSPACE = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -59,6 +61,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('fetch', fetchMock);
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('scheduling a workspace deletion', () => {
   it('will not fire the request until the workspace name has been typed', async () => {
@@ -137,6 +141,7 @@ describe('scheduling a workspace deletion', () => {
     const [url, init] = writeCalls()[0] as [string, RequestInit];
     expect(url).toBe('/api/settings/organization');
     expect(init.method).toBe('DELETE');
+    expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(WORKSPACE.id);
     expect(JSON.parse(String(init.body))).toEqual({ confirm: WORKSPACE.name });
   });
 
@@ -191,6 +196,7 @@ describe('the window between the request and the erasure', () => {
     const [url, init] = writeCalls()[0] as [string, RequestInit];
     expect(url).toBe('/api/settings/organization/deletion/cancel');
     expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(WORKSPACE.id);
   });
 
   it('stops offering the way out once the window has closed', async () => {
@@ -206,6 +212,107 @@ describe('the window between the request and the erasure', () => {
     await screen.findByRole('heading', { name: WORKSPACE.name });
 
     expect(screen.queryByRole('button', { name: /Cancel deletion/ })).toBeNull();
-    expect(screen.getByText(/erasure is underway/)).toBeVisible();
+    expect(screen.getByText(/Deletion can no longer be cancelled here/)).toBeVisible();
+    expect(screen.queryByText(/erasure is underway/)).toBeNull();
   });
+});
+
+describe('uncertain workspace deletion responses', () => {
+  it.each([
+    ['schedule', 'transport'],
+    ['schedule', 'unreadable receipt'],
+    ['cancel', 'transport'],
+    ['cancel', 'unreadable receipt'],
+  ] as const)('does not infer the outcome of %s after %s failure', async (action, failure) => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method && init.method !== 'GET') {
+        if (failure === 'transport') throw new TypeError('Failed to fetch');
+        return new Response('{', { status: 200 });
+      }
+      return jsonResponse({
+        organization: WORKSPACE,
+        deletion: action === 'schedule' ? NO_PENDING_DELETION : {
+          pending: true,
+          requestedAt: '2026-09-17T00:00:00.000Z',
+          scheduledFor: '2099-01-01T00:00:00.000Z',
+          canCancel: true,
+        },
+      });
+    });
+    render(<WorkspaceDeletionPage />);
+    await screen.findByRole('heading', { name: WORKSPACE.name });
+
+    if (action === 'schedule') {
+      typeConfirmation(WORKSPACE.name);
+      fireEvent.click(screen.getByRole('button', { name: 'Schedule deletion' }));
+      fireEvent.click(screen.getAllByRole('button', { name: 'Schedule deletion' }).at(-1) as Element);
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel deletion and keep this workspace' }));
+    }
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      `Could not confirm whether workspace deletion was ${action === 'schedule' ? 'scheduled' : 'cancelled'}.`,
+    );
+    expect(alert).not.toHaveTextContent(/Nothing was scheduled|The deletion is still scheduled/);
+    expect(writeCalls()).toHaveLength(1);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+});
+
+describe('displayed workspace mutation target', () => {
+  it.each(['schedule', 'cancel'] as const)(
+    'keeps %s bound to A while CSRF is pending and the server selection becomes B',
+    async (action) => {
+      let releaseCsrf!: (token: string) => void;
+      vi.mocked(getCsrfToken).mockReturnValueOnce(new Promise((resolve) => {
+        releaseCsrf = resolve;
+      }));
+      let selectedWorkspace = WORKSPACE;
+      fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+        if (init?.method && init.method !== 'GET') {
+          return jsonResponse({ message: 'Request completed.' });
+        }
+        return jsonResponse({
+          organization: selectedWorkspace,
+          deletion: action === 'schedule' ? NO_PENDING_DELETION : {
+            pending: true,
+            requestedAt: '2026-09-17T00:00:00.000Z',
+            scheduledFor: '2099-01-01T00:00:00.000Z',
+            canCancel: true,
+          },
+        });
+      });
+      render(<WorkspaceDeletionPage />);
+      await screen.findByRole('heading', { name: WORKSPACE.name });
+
+      if (action === 'schedule') {
+        typeConfirmation(WORKSPACE.name);
+        fireEvent.click(screen.getByRole('button', { name: 'Schedule deletion' }));
+        fireEvent.click(screen.getAllByRole('button', { name: 'Schedule deletion' }).at(-1) as Element);
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel deletion and keep this workspace' }));
+      }
+      await waitFor(() => expect(getCsrfToken).toHaveBeenCalledTimes(1));
+      expect(writeCalls()).toHaveLength(0);
+      selectedWorkspace = {
+        ...WORKSPACE,
+        id: '22222222-2222-4222-8222-222222222222',
+        name: 'Other workspace',
+        slug: 'other-workspace',
+      };
+      await act(async () => releaseCsrf('csrf-token'));
+
+      await screen.findByRole('heading', { name: 'Other workspace' });
+      expect(writeCalls()).toHaveLength(1);
+      const [url, init] = writeCalls()[0] as [string, RequestInit];
+      expect(url).toBe(action === 'schedule'
+        ? '/api/settings/organization'
+        : '/api/settings/organization/deletion/cancel');
+      expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(WORKSPACE.id);
+      if (action === 'schedule') {
+        expect(JSON.parse(String(init.body))).toEqual({ confirm: WORKSPACE.name });
+      }
+    },
+  );
 });

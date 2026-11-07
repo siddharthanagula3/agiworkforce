@@ -4665,6 +4665,7 @@ async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::V
         local_models::discover_all(config),
         models::gateway_models::discover_gateway_models(),
     );
+    let gateway = gateway.and_then(models::gateway_models::current_discovery);
     match gateway {
         Ok(catalog) => {
             for model in models::gateway_models::picker_models(&catalog) {

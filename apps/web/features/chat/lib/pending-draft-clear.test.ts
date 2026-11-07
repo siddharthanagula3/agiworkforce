@@ -3,6 +3,7 @@ import {
   clearPendingDraftClear,
   hasPendingDraftClear,
   markPendingDraftClear,
+  readPendingDraftClearToken,
 } from './pending-draft-clear';
 
 const CONVERSATION = '11111111-1111-4111-8111-111111111111';
@@ -33,5 +34,37 @@ describe('pending draft clear intent', () => {
     vi.advanceTimersByTime(24 * 60 * 60 * 1_000 + 1);
 
     expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
+  });
+});
+
+describe('clear marker acknowledgment ownership', () => {
+  it('retains valid legacy markers until their exact acknowledgment', () => {
+    window.localStorage.setItem(`agi-composer-draft-clear:v1:${CONVERSATION}`, JSON.stringify({ clearedAt: Date.now() }));
+    const token = readPendingDraftClearToken(CONVERSATION);
+    expect(token).not.toBeNull();
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(true);
+    clearPendingDraftClear(CONVERSATION, token!);
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
+  });
+
+  it('does not acknowledge a newer clear minted within the same millisecond', () => {
+    markPendingDraftClear(CONVERSATION);
+    const first = readPendingDraftClearToken(CONVERSATION)!;
+    markPendingDraftClear(CONVERSATION);
+    const second = readPendingDraftClearToken(CONVERSATION)!;
+    expect(second).not.toBe(first);
+    clearPendingDraftClear(CONVERSATION, first);
+    expect(readPendingDraftClearToken(CONVERSATION)).toBe(second);
+    clearPendingDraftClear(CONVERSATION, second);
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
+  });
+
+  it('preserves a legacy marker when a replacement cannot be minted', () => {
+    window.localStorage.setItem(`agi-composer-draft-clear:v1:${CONVERSATION}`, JSON.stringify({ clearedAt: Date.now() }));
+    const token = readPendingDraftClearToken(CONVERSATION);
+    const uuid = vi.spyOn(crypto, 'randomUUID').mockImplementation(() => { throw new Error('Unavailable'); });
+    expect(markPendingDraftClear(CONVERSATION)).toBe(false);
+    expect(readPendingDraftClearToken(CONVERSATION)).toBe(token);
+    uuid.mockRestore();
   });
 });

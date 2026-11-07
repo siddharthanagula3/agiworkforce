@@ -1,8 +1,7 @@
 /**
- * Offset pagination is unstable the moment anything is written: a row inserted
- * above the window shifts every later row down, so page two repeats a row page
- * one already showed and skips one nobody sees. A keyset cursor names the last
- * row instead of counting rows, so a concurrent write cannot move the window.
+ * A keyset cursor stores the last sort value and id, avoiding offset shifts when
+ * other rows are inserted or deleted. It does not freeze the result set: changes
+ * to sort keys or membership can still skip or repeat rows.
  *
  * The tiebreaker is not optional. `updated_at` is not unique, so ordering by it
  * alone leaves rows with equal timestamps in an order the database is free to

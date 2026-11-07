@@ -110,7 +110,7 @@ fn with_search_nudge(messages: &[Message]) -> Vec<Message> {
 /// spinner for the OS connect timeout with no diagnostic.
 const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// The one client every provider request goes through.
+/// The client for Managed and BYOK provider requests.
 ///
 /// Built once: `stream_completion` used to construct a fresh `Client` per call,
 /// which discards connection pooling and TLS session reuse on every tool-loop
@@ -127,6 +127,28 @@ fn provider_client() -> &'static Client {
             .build()
             .unwrap_or_else(|_| Client::new())
     })
+}
+
+fn local_provider_client() -> Result<&'static Client> {
+    static CLIENT: std::sync::OnceLock<std::result::Result<Client, reqwest::Error>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            crate::local_models::local_client_builder()
+                .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
+                .read_timeout(STREAM_IDLE_TIMEOUT)
+                .build()
+        })
+        .as_ref()
+        .map_err(|error| anyhow::anyhow!("failed to build isolated Local inference client: {error}"))
+}
+
+fn client_for_provider(provider: &Provider) -> Result<&'static Client> {
+    if crate::agent::provider_privacy_mode(provider) == crate::agent::PrivacyMode::Local {
+        local_provider_client()
+    } else {
+        Ok(provider_client())
+    }
 }
 
 /// Last-known Ollama tool-support result per model id, so a transient `/api/show`
@@ -943,7 +965,7 @@ pub async fn stream_completion(
     thinking_budget: Option<u32>,
     effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
-    let client = provider_client().clone();
+    let client = client_for_provider(provider)?.clone();
     let temperature = config.default.temperature;
 
     // ---- Try subscription auth first (Copilot) ----
@@ -1158,6 +1180,128 @@ pub async fn stream_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inference_client_selection_preserves_canonical_privacy_boundaries() {
+        let local = local_provider_client().expect("isolated Local client");
+        let cases = [
+            (Provider::Ollama(OllamaMode::Local), true),
+            (super::super::lmstudio_provider(), true),
+            (
+                Provider::OpenAICompatible {
+                    name: "fixture-compatible",
+                    base_url: "http://127.0.0.1:43123/v1/chat/completions",
+                    api_key_env: None,
+                },
+                true,
+            ),
+            (
+                Provider::OpenAICompatible {
+                    name: "fixture-compatible",
+                    base_url: "http://127.0.0.1:43123/v1/chat/completions",
+                    api_key_env: Some("FIXTURE_KEY"),
+                },
+                false,
+            ),
+            (
+                Provider::Custom {
+                    name: "fixture-custom".to_string(),
+                    base_url: "http://[::1]:43123/v1/chat/completions".to_string(),
+                    api_key_env: None,
+                },
+                true,
+            ),
+            (
+                Provider::Custom {
+                    name: "fixture-custom".to_string(),
+                    base_url: "http://127.0.0.1:43123/v1/chat/completions".to_string(),
+                    api_key_env: Some("FIXTURE_KEY".to_string()),
+                },
+                false,
+            ),
+            (
+                Provider::Custom {
+                    name: "fixture-custom".to_string(),
+                    base_url: "https://provider.example/v1/chat/completions".to_string(),
+                    api_key_env: None,
+                },
+                false,
+            ),
+            (Provider::Ollama(OllamaMode::Cloud), false),
+            (Provider::ManagedCloud, false),
+        ];
+        for (provider, is_local) in cases {
+            let selected = client_for_provider(&provider).expect("selected client");
+            assert_eq!(std::ptr::eq(selected, local), is_local, "{provider:?}");
+            if !is_local {
+                assert!(std::ptr::eq(selected, provider_client()), "{provider:?}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn local_inference_client_does_not_forward_redirected_prompts() {
+        let origin_hits = Arc::new(AtomicUsize::new(0));
+        let origin_hits_for_route = Arc::clone(&origin_hits);
+        let target_hits = Arc::new(AtomicUsize::new(0));
+        let target_hits_for_route = Arc::clone(&target_hits);
+        let router = Router::new()
+            .route(
+                "/v1/chat/completions",
+                post(move || {
+                    let origin_hits = Arc::clone(&origin_hits_for_route);
+                    async move {
+                        origin_hits.fetch_add(1, Ordering::SeqCst);
+                        axum::response::Redirect::temporary("/redirect-target")
+                    }
+                }),
+            )
+            .route(
+                "/redirect-target",
+                axum::routing::any(move || {
+                    let target_hits = Arc::clone(&target_hits_for_route);
+                    async move {
+                        target_hits.fetch_add(1, Ordering::SeqCst);
+                        "unexpected prompt forwarding"
+                    }
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind Local inference fixture");
+        let url = format!(
+            "http://{}/v1/chat/completions",
+            listener.local_addr().expect("fixture address")
+        );
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router).await.expect("serve fixture");
+        });
+        let provider = Provider::Custom {
+            name: "fixture-custom".to_string(),
+            base_url: url.clone(),
+            api_key_env: None,
+        };
+        let client = client_for_provider(&provider).expect("isolated Local client");
+        let mut on_chunk: StreamCallback = Box::new(|_| {});
+        let result = run_spec(
+            client,
+            &openai_compat_spec("fixture-custom", &url, ""),
+            "fixture-local-model",
+            &[Message::text("user", "keep this fixture prompt local")],
+            64,
+            None,
+            None,
+            &mut on_chunk,
+            None,
+            None,
+        )
+        .await;
+        server.abort();
+
+        assert!(result.is_err());
+        assert_eq!(origin_hits.load(Ordering::SeqCst), 1);
+        assert_eq!(target_hits.load(Ordering::SeqCst), 0);
+    }
 
     #[test]
     fn ollama_cloud_sends_only_to_an_https_or_loopback_endpoint_without_credentials() {

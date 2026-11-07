@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 
@@ -6,8 +6,14 @@ import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { resolveReviewEffort, reviewDepthInstruction } from '../providers/reviewEffort';
 
 const chatCompletion = vi.hoisted(() => vi.fn());
+const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
 vi.mock('../utils/api', () => ({ chatCompletion }));
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs')>()),
+  realpathSync: realpath,
+}));
 
 function editorWith(text: string): vscode.TextEditor {
   return {
@@ -53,8 +59,14 @@ describe('review depth by effort', () => {
 
 describe('reviewing code at an effort', () => {
   beforeEach(() => {
+    vscode.workspace.isTrusted = true;
     chatCompletion.mockReset();
     chatCompletion.mockResolvedValue('Looks fine.');
+    realpath.mockReset().mockImplementation((path) => path);
+  });
+
+  afterEach(() => {
+    vscode.workspace.isTrusted = true;
   });
 
   async function userPromptAt(effort: Parameters<typeof reviewDepthInstruction>[0]) {
@@ -79,5 +91,81 @@ describe('reviewing code at an effort', () => {
     expect(medium.endsWith('```')).toBe(true);
     expect(xhigh).toContain('second pass');
     expect(xhigh).toContain('const a = 1;');
+  });
+
+  it.each(['untrusted-workspace', 'credential-target', 'unresolved'] as const)(
+    'reports no review and reads or sends nothing for %s',
+    async (refusal) => {
+      if (refusal === 'untrusted-workspace') {
+        vscode.workspace.isTrusted = false;
+      } else if (refusal === 'credential-target') {
+        realpath.mockReturnValue('/repo/.env');
+      } else {
+        realpath.mockImplementation(() => {
+          throw new Error('EACCES');
+        });
+      }
+      const editor = editorWith('const a = 1;');
+      const read = vi.spyOn(editor.document, 'getText');
+      const provider = new AgiDiagnosticsProvider();
+
+      const result = await provider.reviewCode(
+        editor,
+        {} as vscode.SecretStorage,
+        new vscode.CancellationTokenSource().token,
+        'medium',
+      );
+
+      expect(result).toEqual({
+        status: 'not-reviewed',
+        reason: expect.stringMatching(/contents are not sent/),
+      });
+      expect(read).not.toHaveBeenCalled();
+      expect(chatCompletion).not.toHaveBeenCalled();
+      expect(provider.collection.set).not.toHaveBeenCalled();
+      expect(provider.collection.delete).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reports no review for empty code without calling the model or changing diagnostics', async () => {
+    const provider = new AgiDiagnosticsProvider();
+
+    const result = await provider.reviewCode(
+      editorWith(' \n\t'),
+      {} as vscode.SecretStorage,
+      new vscode.CancellationTokenSource().token,
+      'medium',
+    );
+
+    expect(result).toEqual({ status: 'not-reviewed', reason: 'No code to review.' });
+    expect(chatCompletion).not.toHaveBeenCalled();
+    expect(provider.collection.set).not.toHaveBeenCalled();
+    expect(provider.collection.delete).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { response: 'Looks fine.', diagnosticCount: 0, summary: 'Looks fine.' },
+    {
+      response: 'ISSUE|0|error|Unchecked value\nOne issue.',
+      diagnosticCount: 1,
+      summary: 'One issue.',
+    },
+  ])('reports a completed review with $diagnosticCount findings', async (review) => {
+    chatCompletion.mockResolvedValue(review.response);
+    const provider = new AgiDiagnosticsProvider();
+
+    const result = await provider.reviewCode(
+      editorWith('const a = 1;'),
+      {} as vscode.SecretStorage,
+      new vscode.CancellationTokenSource().token,
+      'medium',
+    );
+
+    expect(result).toEqual({
+      status: 'completed',
+      diagnosticCount: review.diagnosticCount,
+      summary: review.summary,
+    });
+    expect(chatCompletion).toHaveBeenCalledOnce();
   });
 });

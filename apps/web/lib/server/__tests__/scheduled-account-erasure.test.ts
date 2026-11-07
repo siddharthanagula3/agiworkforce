@@ -217,15 +217,82 @@ describe('eraseScheduledAccount', () => {
     expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
   });
 
-  it('treats an identity that is already gone as deleted', async () => {
-    mocks.deleteUser.mockRejectedValue(new Error('Request failed with status 404'));
+  it.each([
+    Object.assign(new Error('User missing'), { status: 404 }),
+    { status: 404, message: 'User missing' },
+  ])('accepts a numeric missing-user response: %s', async (error) => {
+    mocks.deleteUser.mockRejectedValue(error);
 
     await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({ status: 'purged' });
     expect(mocks.eraseProfileRow).toHaveBeenCalledWith('user-1');
   });
+
+  it.each([
+    new Error('Provider configuration not found'),
+    new Error('Request failed with status 404'),
+    Object.assign(new Error('Request 404 timed out'), { status: 503 }),
+    Object.assign(new Error('Credential not found'), { status: 401 }),
+    Object.assign(new Error('User missing'), { status: '404' }),
+    Object.assign(new Error('User missing'), { statusCode: 404 }),
+    'Request failed with status 404',
+    null,
+    undefined,
+  ])('keeps ambiguous provider deletion failures unresolved: %s', async (error) => {
+    mocks.deleteUser.mockRejectedValue(error);
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'identity',
+      detail: error instanceof Error ? error.message : String(error),
+    });
+    expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+  });
+
+  it('retries provider deletion while the profile remains due after an ambiguous failure', async () => {
+    let profilePresent = true;
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('deletion_scheduled_for is not null')
+        ? [{ due: profilePresent }]
+        : profilePresent
+          ? [{ id: 'user-1' }]
+          : [],
+    );
+    mocks.eraseProfileRow.mockImplementation(async () => {
+      profilePresent = false;
+    });
+    mocks.deleteUser.mockRejectedValueOnce(new Error('Provider configuration not found'));
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'identity',
+    });
+    expect(profilePresent).toBe(true);
+    expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toEqual({
+      status: 'purged',
+      resurrected: false,
+    });
+    expect(mocks.deleteUser).toHaveBeenCalledTimes(2);
+    expect(mocks.eraseProfileRow).toHaveBeenCalledTimes(1);
+    expect(profilePresent).toBe(false);
+    await expect(eraseScheduledAccount('user-1')).resolves.toEqual({ status: 'not_due' });
+    expect(mocks.deleteUser).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('reEraseTombstonedAccount', () => {
+  it('retains a resurrected profile when a provider failure merely mentions not found', async () => {
+    mocks.deleteUser.mockRejectedValue(new Error('Provider configuration not found'));
+
+    await expect(reEraseTombstonedAccount('ghost-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'identity',
+    });
+    expect(mocks.deleteUser).toHaveBeenCalledWith('ghost-1');
+    expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+  });
+
   it('re-erases a resurrected account and removes its identity and profile', async () => {
     await expect(reEraseTombstonedAccount('ghost-1')).resolves.toEqual({
       status: 'purged',

@@ -127,7 +127,7 @@ describe('voiceInput service', () => {
     });
 
     expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
-    expect(VoiceService.isRecording()).toBe(false);
+    expect(VoiceInput.isCapturing()).toBe(false);
   });
 
   it('does not start when on-device speech recognition is unavailable', async () => {
@@ -140,7 +140,7 @@ describe('voiceInput service', () => {
     });
 
     expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
-    expect(VoiceService.isRecording()).toBe(false);
+    expect(VoiceInput.isCapturing()).toBe(false);
   });
 });
 
@@ -149,8 +149,9 @@ describe('voiceOutput service', () => {
     jest.clearAllMocks();
   });
 
-  it('speak resolves for short text', async () => {
-    await expect(VoiceOutput.speak('Hello')).resolves.toBeUndefined();
+  it('owned speech completes for short text', async () => {
+    const owner = VoiceOutput.createVoiceOutputOwner({ scope: 'local' });
+    await expect(owner.start('Hello').done).resolves.toEqual({ status: 'done' });
   });
 
   it('isSpeaking returns false when not speaking', async () => {
@@ -164,7 +165,8 @@ describe('voiceOutput service', () => {
   });
 
   it('stop does not throw', async () => {
-    await expect(VoiceOutput.stop()).resolves.toBeUndefined();
+    const owner = VoiceOutput.createVoiceOutputOwner({ scope: 'local' });
+    await expect(owner.stop()).resolves.toBeUndefined();
   });
 });
 

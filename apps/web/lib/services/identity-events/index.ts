@@ -5,6 +5,7 @@ import type { IdentityProvider } from '@agiworkforce/identity';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent, type AuditEventDetail } from '@/lib/security-audit';
+import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import {
   finishIntentRevocation,
@@ -29,6 +30,7 @@ export const ACCOUNT_COMPROMISE_SUPPORT_PATH = '/support';
 
 export interface IdentitySecurityEventInput {
   userId: string;
+  identitySubject?: string;
   event: IdentitySecurityEventKey;
   subjectRef?: string | null;
   noticeRef?: string | null;
@@ -120,16 +122,12 @@ export interface CompromiseResponse {
 
 export interface CompromiseResponseInput {
   userId: string;
+  identitySubject?: string;
   trigger: RiskSignal | 'reported';
   request?: Request;
   organizationId?: string | null;
 }
 
-/**
- * The guided response. Every session is ended, including the one that asked,
- * so nothing stays elevated and the account has to sign in again before it can
- * do anything; the password reset is what the person still owes afterwards.
- */
 export async function respondToAccountCompromise(
   db: DatabaseAdapter,
   identity: IdentitySessionOperations,
@@ -154,7 +152,12 @@ export async function respondToAccountCompromise(
     });
   }
 
-  const sweep = await revokeEveryOtherSession(identity, input.userId, null);
+  const sweep = await revokeEveryOtherSession(
+    identity,
+    input.userId,
+    null,
+    input.identitySubject,
+  );
   const intentRevoked = await finishIntentRevocation(sweep, input.userId);
   const sessionsRevoked = sweep.ended.length;
   const sessionsFailed = sweep.failed.length;
@@ -223,6 +226,7 @@ export async function handleIdentitySecurityEvent(
 
   const response = await respondToAccountCompromise(db, identity, {
     userId: input.userId,
+    ...(input.identitySubject !== undefined ? { identitySubject: input.identitySubject } : {}),
     trigger: assessment.signals[0] ?? 'reported',
     request: input.request,
     organizationId: input.organizationId ?? null,
@@ -299,7 +303,8 @@ type CompromiseIdentityOperations = IdentitySessionOperations &
   Pick<IdentityProvider, 'getSession'>;
 
 function epochMs(value: string | Date): number {
-  return value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (value instanceof Date) return value.getTime();
+  return typeof value === 'string' ? new Date(value).getTime() : Number.NaN;
 }
 
 /**
@@ -368,8 +373,12 @@ export async function resolveCompromiseResponse(
   const current = input.currentSessionId ? await identity.getSession(input.currentSessionId) : null;
   const reauthenticated =
     current !== null &&
+    current.id === input.currentSessionId &&
     current.userId === input.userId &&
-    current.createdAt !== null &&
+    current.status === SESSION_STATUS_ACTIVE &&
+    Number.isFinite(openedAt) &&
+    typeof current.createdAt === 'number' &&
+    Number.isFinite(current.createdAt) &&
     current.createdAt >= openedAt;
 
   if (!reauthenticated) return refuse('fresh_authentication', 0);

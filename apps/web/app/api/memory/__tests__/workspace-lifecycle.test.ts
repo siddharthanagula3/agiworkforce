@@ -91,6 +91,70 @@ beforeEach(() => {
 });
 
 describe('memory reads are bound to the active workspace in SQL', () => {
+  it.each([ORG, null])(
+    'keeps the management page order total within workspace %s',
+    async (organizationId) => {
+      mocks.organizationId = organizationId;
+      const recentPinned = row({
+        id: '0190a000-0000-7000-8000-000000000001',
+        pinned: true,
+        updated_at: '2026-09-18T00:00:00.000Z',
+      });
+      const tiedHigh = row({
+        id: '0190a000-0000-7000-8000-000000000004',
+        pinned: true,
+      });
+      const tiedMiddle = row({
+        id: '0190a000-0000-7000-8000-000000000003',
+        pinned: true,
+      });
+      const tiedLow = row({
+        id: '0190a000-0000-7000-8000-000000000002',
+        pinned: true,
+      });
+      const recentUnpinned = row({
+        id: '0190a000-0000-7000-8000-000000000009',
+        updated_at: '2026-09-19T00:00:00.000Z',
+      });
+      mocks.query.mockReset();
+      mocks.query
+        .mockResolvedValueOnce([recentPinned, tiedHigh, tiedMiddle])
+        .mockResolvedValueOnce([tiedMiddle, tiedLow, recentUnpinned])
+        .mockResolvedValueOnce([recentUnpinned]);
+
+      const pages: Array<{ memories: Array<{ id: string }>; hasMore: boolean }> = [];
+      for (const offset of [0, 2, 4]) {
+        const response = await listMemories(
+          new NextRequest(`http://localhost/api/memory?limit=2&offset=${offset}`),
+        );
+        expect(response.status).toBe(200);
+        pages.push(await response.json());
+      }
+
+      expect(mocks.query).toHaveBeenCalledTimes(3);
+      expect(memoryCalls()).toHaveLength(3);
+      for (const [index, [sql, params]] of memoryCalls().entries()) {
+        expect(sql.replace(/\s+/g, ' ').trim()).toContain(
+          'order by m.pinned desc, m.updated_at desc, m.id desc limit $2 offset $3',
+        );
+        expect(sql).toContain('m.user_id = $1');
+        expect(sql).toContain('m.is_deleted = false');
+        expect(sql).toContain('m.superseded_by is null');
+        expect(sql).toContain('(m.expires_at is null or m.expires_at > now())');
+        expect(sql).toContain('m.organization_id is not distinct from $4::uuid');
+        expect(params).toEqual(['user-1', 3, index * 2, organizationId]);
+      }
+      expect(pages.map((page) => page.memories.map((memory) => memory.id))).toEqual([
+        [recentPinned.id, tiedHigh.id],
+        [tiedMiddle.id, tiedLow.id],
+        [recentUnpinned.id],
+      ]);
+      expect(pages.map((page) => page.hasMore)).toEqual([true, true, false]);
+      const ids = pages.flatMap((page) => page.memories.map((memory) => memory.id));
+      expect(new Set(ids).size).toBe(5);
+    },
+  );
+
   it('lists only active rows of the active workspace', async () => {
     const response = await listMemories(new NextRequest('http://localhost/api/memory'));
 

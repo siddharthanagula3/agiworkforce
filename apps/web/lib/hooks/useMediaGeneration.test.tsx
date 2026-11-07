@@ -1,9 +1,10 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mediaStoreMocks = vi.hoisted(() => ({
   addJob: vi.fn(),
   updateJob: vi.fn(),
+  retireStaleJobs: vi.fn(),
 }));
 
 vi.mock('@shared/stores/media-store', () => ({
@@ -14,12 +15,32 @@ vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(async () => 'web-auth-token'),
 }));
 
+const identity = vi.hoisted(() => ({ sessionId: 'media-session', userId: 'media-user' }));
+
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const { getAuthToken } = await import('@shared/lib/get-auth-token');
+  return createClerkSessionFixture(() => ({
+    getToken: getAuthToken,
+    isLoaded: true,
+    isSignedIn: true,
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+  }));
+});
+
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { isExecutableVideoModel, modelsCatalog } from '@agiworkforce/types';
 import type { VideoInputImages } from '@features/media/services/media-api-service';
 import { IMAGE_MODELS } from '@features/chat/lib/imageGenerationOptions';
 import { IMAGE_GENERATION_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
-import { useMediaGeneration, MediaGenerationApiError } from './useMediaGeneration';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import {
+  cancelImageGenerations,
+  IMAGE_GENERATION_CANCELLED_CODE,
+  useMediaGeneration,
+  MediaGenerationApiError,
+} from './useMediaGeneration';
 
 const GOOGLE_IMAGE_MODEL = IMAGE_MODELS.find((model) => model.provider === 'google');
 if (!GOOGLE_IMAGE_MODEL) throw new Error('Catalog has no Google image model fixture');
@@ -30,6 +51,16 @@ if (VIDEO_PROVIDER !== 'google' && VIDEO_PROVIDER !== 'runway' && VIDEO_PROVIDER
   throw new Error('Catalog video model has no supported Web provider mapping');
 }
 const VIDEO_TASK_ID = '11111111-1111-4111-8111-111111111111';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
 
 describe('MediaGenerationApiError billing recovery', () => {
   it.each([
@@ -71,6 +102,61 @@ describe('useMediaGeneration', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    identity.userId = 'media-user';
+    identity.sessionId = 'media-session';
+  });
+
+  it.each(['account', 'session'] as const)('does not dispatch an image after a replacement %s during authentication', async (kind) => {
+    const token = deferred<string | null>();
+    const entered = deferred<void>();
+    vi.mocked(getAuthToken).mockImplementationOnce(() => { entered.resolve(); return token.promise; });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected dispatch'));
+    const view = renderHook(() => useMediaGeneration());
+    const settled = view.result.current.generateImage('original private image').catch((error: unknown) => error);
+    await entered.promise;
+    if (kind === 'account') identity.userId = 'replacement-user';
+    identity.sessionId = 'replacement-session';
+    view.rerender();
+    token.resolve('original-token');
+    expect(await settled).toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mediaStoreMocks.updateJob).not.toHaveBeenCalled();
+  });
+
+  it('does not publish an image whose body arrives after the session changes', async () => {
+    const body = deferred<unknown>();
+    const entered = deferred<void>();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true, json: () => { entered.resolve(); return body.promise; },
+    } as Response);
+    const view = renderHook(() => useMediaGeneration());
+    const settled = view.result.current.generateImage('original image').catch((error: unknown) => error);
+    await entered.promise;
+    identity.sessionId = 'replacement-session';
+    view.rerender();
+    body.resolve({ images: [{ url: '/original-image' }], provider: GOOGLE_IMAGE_MODEL.provider, catalog_model: GOOGLE_IMAGE_MODEL.id });
+    expect(await settled).toMatchObject({ name: 'AbortError' });
+    expect(mediaStoreMocks.updateJob).not.toHaveBeenCalled();
+  });
+
+  it('does not poll an old task after its observation sleep crosses sessions', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected poll'));
+      const view = renderHook(() => useMediaGeneration());
+      const progress = vi.fn();
+      const settled = view.result.current.watchVideoGeneration(VIDEO_TASK_ID, { onProgress: progress })
+        .catch((error: unknown) => error);
+      identity.sessionId = 'replacement-session';
+      view.rerender();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await settled).toMatchObject({ name: 'AbortError' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(progress).not.toHaveBeenCalled();
+      expect(mediaStoreMocks.updateJob).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('creates one stable managed-media identity for an image user action', async () => {
@@ -97,9 +183,10 @@ describe('useMediaGeneration', () => {
     expect(randomUuid).toHaveBeenCalledOnce();
     expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(
       expect.objectContaining({ id: operationId, type: 'image', prompt: 'draw a lighthouse' }),
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
     );
     const request = fetchMock.mock.calls[0]?.[1];
-    const key = (request?.headers as Record<string, string>)['Idempotency-Key'];
+    const key = new Headers(request?.headers).get('Idempotency-Key');
     if (!key) throw new Error('Image request did not include an Idempotency-Key');
     expect(parseManagedMediaIdempotencyKey(key)).toEqual({
       surface: 'web',
@@ -142,7 +229,10 @@ describe('useMediaGeneration', () => {
       provider: 'google',
       model: GOOGLE_IMAGE_MODEL.id,
     });
-    expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(expect.objectContaining({ size: '3:4' }));
+    expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(
+      expect.objectContaining({ size: '3:4' }),
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
+    );
   });
 
   it('serializes a mask edit of an image the caller already holds', async () => {
@@ -243,6 +333,147 @@ describe('useMediaGeneration', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  describe('generateImage cancellation admission', () => {
+    it.each(['resolve', 'reject'] as const)(
+      'Stop during authentication prevents generation when authentication later %s',
+      async (outcome) => {
+        const auth = deferred<string | null>();
+        const enteredAuth = deferred<void>();
+        vi.mocked(getAuthToken).mockImplementationOnce(() => {
+          enteredAuth.resolve();
+          return auth.promise;
+        });
+        const fetchMock = vi
+          .spyOn(globalThis, 'fetch')
+          .mockRejectedValue(new Error('Unexpected media dispatch'));
+        const { result } = renderHook(() => useMediaGeneration());
+        const pending = result.current.generateImage('cancel before dispatch', {
+          cancelScope: 'fixture-auth-scope',
+        });
+        const settled = pending.catch((error: unknown) => error);
+        await enteredAuth.promise;
+
+        expect(cancelImageGenerations('another-scope')).toBe(false);
+        expect(cancelImageGenerations('fixture-auth-scope')).toBe(true);
+        expect(cancelImageGenerations('fixture-auth-scope')).toBe(false);
+        if (outcome === 'resolve') auth.resolve('late-auth-token');
+        else auth.reject(new Error('late auth failure'));
+
+        expect(await settled).toMatchObject({ code: IMAGE_GENERATION_CANCELLED_CODE });
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(mediaStoreMocks.updateJob).toHaveBeenLastCalledWith(
+          expect.any(String),
+          expect.objectContaining({ status: 'failed', errorMessage: 'You stopped this image.' }),
+        );
+        expect(cancelImageGenerations('fixture-auth-scope')).toBe(false);
+      },
+    );
+
+    it('keeps a successful paid image body delivered after Stop in the same session', async () => {
+      const body = deferred<unknown>();
+      const reading = deferred<void>();
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+        if (input === '/api/media/image/cancel') return Promise.resolve({ status: 200 } as Response);
+        return Promise.resolve({
+          ok: true,
+          json: () => { reading.resolve(); return body.promise; },
+        } as Response);
+      });
+      const view = renderHook(() => useMediaGeneration());
+      const pending = view.result.current.generateImage('accepted image', { cancelScope: 'paid-delivery' });
+      await reading.promise;
+      expect(cancelImageGenerations('paid-delivery')).toBe(true);
+      body.resolve({ images: [{ url: '/paid-image' }], provider: GOOGLE_IMAGE_MODEL.provider, catalog_model: GOOGLE_IMAGE_MODEL.id });
+      await expect(pending).resolves.toMatchObject({ imageUrl: '/paid-image' });
+      expect(mediaStoreMocks.updateJob).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ status: 'completed' }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    });
+
+    it('does not retry durable cancellation under a replacement session', async () => {
+      vi.useFakeTimers();
+      try {
+        const dispatched = deferred<void>();
+        const cancelled = deferred<void>();
+        const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+          if (input === '/api/media/image/cancel') {
+            cancelled.resolve();
+            return Promise.resolve({ status: 404 } as Response);
+          }
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('Stopped', 'AbortError')));
+            dispatched.resolve();
+          });
+        });
+        const view = renderHook(() => useMediaGeneration());
+        const settled = view.result.current.generateImage('old image', { cancelScope: 'cancel-retry' })
+          .catch((error: unknown) => error);
+        await dispatched.promise;
+        expect(cancelImageGenerations('cancel-retry')).toBe(true);
+        await cancelled.promise;
+        expect(await settled).toMatchObject({ code: IMAGE_GENERATION_CANCELLED_CODE });
+        identity.sessionId = 'replacement-session';
+        view.rerender();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('cleans up ordinary authentication failures without issuing a media request', async () => {
+      const failure = new Error('auth unavailable');
+      vi.mocked(getAuthToken).mockRejectedValueOnce(failure);
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValue(new Error('Unexpected media dispatch'));
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await expect(
+        result.current.generateImage('auth failure', { cancelScope: 'fixture-auth-failure' }),
+      ).rejects.toBe(failure);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(cancelImageGenerations('fixture-auth-failure')).toBe(false);
+      expect(mediaStoreMocks.updateJob).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ status: 'failed', errorMessage: 'auth unavailable' }),
+      );
+    });
+
+    it('still requests durable cancellation after generation dispatch', async () => {
+      const dispatched = deferred<void>();
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        if (input === '/api/media/image/cancel') {
+          return Promise.resolve({ status: 200 } as Response);
+        }
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+          dispatched.resolve();
+        });
+      });
+      const { result } = renderHook(() => useMediaGeneration());
+      const pending = result.current.generateImage('cancel after dispatch', {
+        cancelScope: 'fixture-dispatched-scope',
+      });
+      const settled = pending.catch((error: unknown) => error);
+      await dispatched.promise;
+
+      expect(cancelImageGenerations('fixture-dispatched-scope')).toBe(true);
+      expect(await settled).toMatchObject({ code: IMAGE_GENERATION_CANCELLED_CODE });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+      const request = fetchMock.mock.calls[0]?.[1];
+      const key = new Headers(request?.headers).get('Idempotency-Key');
+      expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/media/image/cancel');
+      expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+        idempotency_key: key,
+      });
+      expect(request?.signal?.aborted).toBe(true);
+    });
   });
 
   describe('generateImage deadline', () => {
@@ -460,6 +691,7 @@ describe('useMediaGeneration', () => {
         );
         expect(mediaStoreMocks.addJob).toHaveBeenCalledWith(
           expect.objectContaining({ type: 'video', prompt: 'a cat surfing', status: 'generating' }),
+          expect.objectContaining({ isCurrent: expect.any(Function) }),
         );
         expect(mediaStoreMocks.updateJob).toHaveBeenCalledWith(
           expect.any(String),

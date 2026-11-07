@@ -603,13 +603,7 @@ function openRevocable(sealed: string, purpose: 'oauth-access-token' | 'oauth-re
   }
 }
 
-/**
- * Every live credential a disconnect has to hand back to the provider, one per
- * connected account. Reading a single grant would leave the accounts that are
- * not the default live upstream after the local rows are destroyed. A row whose
- * ciphertext no longer opens is skipped rather than failing the disconnect,
- * since a credential nobody can read is also one nobody can present.
- */
+/** Readable credentials only; this list does not establish complete upstream revocation. */
 export async function listRevocableConnectorTokens(
   userId: string,
   connectorId: string,
@@ -627,32 +621,47 @@ export async function listRevocableConnectorTokens(
       : [userId, connectorId],
   );
 
+  return decodeRevocableRows(rows, connectorId).tokens;
+}
+
+function decodeRevocableRows(rows: RevocableGrantRow[], connectorId: string) {
   const tokens: RevocableConnectorToken[] = [];
+  let incomplete = false;
   for (const row of rows) {
-    const sealed = row.refresh_token_enc ?? row.access_token_enc;
-    if (!sealed) continue;
-    const purpose = row.refresh_token_enc ? 'oauth-refresh-token' : 'oauth-access-token';
-    const token = openRevocable(sealed, purpose);
-    if (token === null) {
+    const refreshToken = row.refresh_token_enc
+      ? openRevocable(row.refresh_token_enc, 'oauth-refresh-token')
+      : null;
+    const accessToken = row.access_token_enc
+      ? openRevocable(row.access_token_enc, 'oauth-access-token')
+      : null;
+    if (
+      (row.refresh_token_enc != null && refreshToken === null) ||
+      (row.access_token_enc != null && accessToken === null)
+    ) {
+      incomplete = true;
       logger.warn(
         { connectorId },
         '[connector-oauth] a stored credential could not be decrypted for revocation',
       );
+    }
+    const token = refreshToken ?? accessToken;
+    if (token === null) {
+      incomplete = true;
       continue;
+    }
+    if (refreshToken !== null && accessToken === null) {
+      incomplete = true;
     }
     tokens.push({
       accountKey: normalizeConnectorAccountKey(row.account_key),
       token,
-      tokenTypeHint: row.refresh_token_enc ? 'refresh_token' : 'access_token',
-      companionAccessToken:
-        row.refresh_token_enc && row.access_token_enc
-          ? openRevocable(row.access_token_enc, 'oauth-access-token')
-          : null,
+      tokenTypeHint: refreshToken !== null ? 'refresh_token' : 'access_token',
+      companionAccessToken: refreshToken !== null ? accessToken : null,
       issuer: row.issuer ?? null,
       mcpUrl: row.mcp_url ?? null,
     });
   }
-  return tokens;
+  return { tokens, incomplete };
 }
 
 /**
@@ -683,6 +692,15 @@ export async function revokeConnectorOAuthGrant(
       : [userId, connectorId],
   );
   if (rows.length === 0) return false;
+  await promoteConnectorOAuthDefault(userId, connectorId, db);
+  return true;
+}
+
+async function promoteConnectorOAuthDefault(
+  userId: string,
+  connectorId: string,
+  db: DatabaseAdapter,
+): Promise<void> {
   await db.execute(
     `update public.connector_oauth_grants
         set is_default = true, updated_at = now()
@@ -699,5 +717,50 @@ export async function revokeConnectorOAuthGrant(
         )`,
     [userId, connectorId],
   );
-  return true;
+}
+
+export async function captureAndRevokeConnectorOAuthGrants(
+  userId: string,
+  connectorId: string,
+  accountKey?: string | null,
+): Promise<{ disconnected: boolean; tokens: RevocableConnectorToken[]; incomplete: boolean }> {
+  const scoped = accountKey !== undefined && accountKey !== null;
+  return getNeonDb().transaction(async (tx) => {
+    const rows = await tx.query<RevocableGrantRow & { id: string }>(
+      `select id, access_token_enc, refresh_token_enc, issuer, mcp_url, account_key
+         from public.connector_oauth_grants
+        where user_id = $1 and connector_id = $2 and revoked_at is null${
+          scoped ? ' and account_key = $3' : ''
+        }
+        order by id
+        for update`,
+      scoped
+        ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
+        : [userId, connectorId],
+    );
+    if (rows.length === 0) return { disconnected: false, tokens: [], incomplete: false };
+    const captured = decodeRevocableRows(rows, connectorId);
+    // Only erase locked rows: a concurrent new authorization was not captured.
+    const revoked = await tx.query<{ id: string }>(
+      `update public.connector_oauth_grants
+          set revoked_at = now(), access_token_enc = null, refresh_token_enc = null,
+              is_default = false, updated_at = now()
+        where user_id = $1 and connector_id = $2 and revoked_at is null
+          and id = any($3::uuid[])
+        returning id`,
+      [userId, connectorId, rows.map((row) => row.id)],
+    );
+    const capturedIds = new Set(rows.map((row) => row.id));
+    const revokedIds = new Set(revoked.map((row) => row.id));
+    if (
+      revoked.length !== rows.length ||
+      capturedIds.size !== rows.length ||
+      revokedIds.size !== capturedIds.size ||
+      revoked.some((row) => !capturedIds.has(row.id))
+    ) {
+      throw new Error('Connector grant revocation did not match the locked credentials');
+    }
+    await promoteConnectorOAuthDefault(userId, connectorId, tx);
+    return { disconnected: true, ...captured };
+  });
 }

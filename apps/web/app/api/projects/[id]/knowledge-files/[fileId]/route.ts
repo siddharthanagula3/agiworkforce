@@ -13,20 +13,20 @@ import {
 } from '@/lib/server/project-knowledge-object-storage';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
-  findOwnedProjectKnowledgeFile,
-  type OwnedProjectKnowledgeFile,
+  findReadableProjectKnowledgeFile,
+  type ReadableProjectKnowledgeFile,
 } from '@/lib/server/project-knowledge-files';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
-async function ownedKnowledgeFile(
+async function readableKnowledgeFile(
   request: NextRequest,
   context: RouteContext,
-): Promise<OwnedProjectKnowledgeFile> {
+): Promise<ReadableProjectKnowledgeFile> {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id: projectId, fileId } = await context.params;
-  const file = await findOwnedProjectKnowledgeFile(
+  const file = await findReadableProjectKnowledgeFile(
     db,
     { userId, organizationId },
     projectId,
@@ -39,7 +39,7 @@ async function ownedKnowledgeFile(
 async function handleGetKnowledgeFile(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-  const file = await ownedKnowledgeFile(request, context);
+  const file = await readableKnowledgeFile(request, context);
   const objectKey = objectKeyFromStorageUri(file.storageUri);
   if (!objectKey) throw createError.notFound('Knowledge file not found');
   const object = await getProjectKnowledgeObject(objectKey, MAX_PLAN_ATTACHMENT_BYTES);

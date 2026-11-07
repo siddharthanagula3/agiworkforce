@@ -57,6 +57,105 @@ pub fn default_api_base() -> &'static str {
     DEFAULT_API_BASE
 }
 
+#[derive(Clone)]
+pub(crate) struct ManagedRequestContext {
+    pub(crate) jwt: Option<String>,
+    pub(crate) base: String,
+    pub(crate) owner: Option<String>,
+}
+
+fn cache_owner(base: &str, jwt: Option<&str>) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let identity = match jwt {
+        None => vec!["anonymous".to_string()],
+        Some(jwt) => match crate::auth::jwt_session_identity(jwt) {
+            Some((subject, session)) => vec!["session".to_string(), subject, session],
+            None => {
+                let subject = crate::auth::jwt_subject(jwt)?;
+                vec!["legacy".to_string(), subject, crate::hex::encode(&Sha256::digest(jwt.as_bytes()))]
+            }
+        },
+    };
+    let serialized = serde_json::to_vec(&("managed-cache-v1", base, identity)).ok()?;
+    Some(crate::hex::encode(&Sha256::digest(serialized)))
+}
+
+fn optional_environment(name: &str) -> Result<Option<String>> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => anyhow::bail!("Managed configuration is not valid Unicode"),
+    }
+}
+
+impl ManagedRequestContext {
+    fn from_store(store: Result<crate::auth::AuthStore>) -> Result<Self> {
+        let jwt = match optional_environment("AGIWORKFORCE_JWT")?.filter(|jwt| !jwt.is_empty()) {
+            Some(jwt) => Some(jwt),
+            None => jwt_from_auth_store(&store?),
+        };
+        let raw = optional_environment("AGIWORKFORCE_API_BASE")?
+            .unwrap_or_else(|| DEFAULT_API_BASE.to_string());
+        let base = resolve_agi_api_base(&raw)
+            .ok_or_else(|| anyhow::anyhow!("Managed API endpoint is not trusted"))?;
+        let owner = cache_owner(&base, jwt.as_deref());
+        Ok(Self { jwt, base, owner })
+    }
+
+    pub(crate) fn capture() -> Result<Self> {
+        crate::auth::AuthStore::with_snapshot(Self::from_store)?
+    }
+
+    pub(crate) fn for_token(jwt: &str) -> Result<Self> {
+        let context = Self::capture()?;
+        anyhow::ensure!(context.jwt.as_deref() == Some(jwt), "Managed account changed; retry the request");
+        Ok(context)
+    }
+
+    // The callback holds the auth lock and must not capture or reload credentials.
+    pub(crate) fn with_current<T>(&self, read: impl FnOnce() -> T) -> Option<T> {
+        crate::auth::AuthStore::with_snapshot(|store| {
+            let current = Self::from_store(store).ok()?;
+            self.matches_current(&current).then(read)
+        }).ok().flatten()
+    }
+
+    fn with_current_token<T>(&self, read: impl FnOnce() -> T) -> Option<T> {
+        crate::auth::AuthStore::with_snapshot(|store| {
+            let current = Self::from_store(store).ok()?;
+            (self.base == current.base && self.jwt == current.jwt).then(read)
+        }).ok().flatten()
+    }
+
+    fn matches_current(&self, current: &Self) -> bool {
+        self.base == current.base && match (&self.owner, &current.owner) {
+            (Some(expected), Some(actual)) => expected == actual,
+            _ => self.jwt == current.jwt,
+        }
+    }
+
+    pub(crate) fn is_current(&self) -> bool {
+        self.with_current(|| ()).is_some()
+    }
+
+    pub(crate) fn invalidate_if_current_token(&self) {
+        if let Some(jwt) = self.jwt.as_deref() {
+            invalidate_for_request(&self.base, jwt);
+        }
+    }
+
+}
+
+pub(crate) fn invalidate_for_request(base: &str, jwt: &str) {
+    let _ = crate::auth::AuthStore::with_snapshot(|store| {
+        if let Ok(current) = ManagedRequestContext::from_store(store) {
+            if current.base == base && current.jwt.as_deref() == Some(jwt) {
+                invalidate_tier_cache();
+            }
+        }
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -154,6 +253,8 @@ impl std::fmt::Display for UserTier {
 /// (the flat subscription model has no usage metering on the CLI side).
 #[derive(Debug, Serialize, Deserialize)]
 struct TierCacheEnvelope {
+    #[serde(default)]
+    owner: Option<String>,
     /// The resolved tier string (must parse as `UserTier`).
     tier: String,
     /// Unix timestamp (seconds) when the cache was written.
@@ -226,23 +327,34 @@ fn now_secs() -> u64 {
 }
 
 fn cache_is_fresh(cached_at: u64, now: u64) -> bool {
-    now.saturating_sub(cached_at) <= TIER_CACHE_TTL.as_secs()
+    cached_at <= now && now - cached_at <= TIER_CACHE_TTL.as_secs()
 }
 
-fn read_fresh_envelope() -> Option<TierCacheEnvelope> {
+fn read_fresh_envelope(context: &ManagedRequestContext) -> Option<TierCacheEnvelope> {
+    let owner = context.owner.as_ref()?;
     let content = std::fs::read_to_string(tier_cache_path()?).ok()?;
     let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
-    cache_is_fresh(envelope.cached_at, now_secs()).then_some(envelope)
+    (envelope.owner.as_ref() == Some(owner) && cache_is_fresh(envelope.cached_at, now_secs())).then_some(envelope)
 }
 
 /// Read the cached tier from disk, returning `None` if absent or expired.
 pub fn read_tier_cache() -> Option<CachedTier> {
-    let tier = parse_tier_str(&read_fresh_envelope()?.tier)?;
-    Some(CachedTier { tier })
+    let context = ManagedRequestContext::capture().ok()?;
+    context.with_current(|| read_tier_for(&context)).flatten()
 }
 
 pub fn cached_capabilities() -> Option<CapabilityDocumentWire> {
-    read_fresh_envelope()?.capability_handshake
+    let context = ManagedRequestContext::capture().ok()?;
+    context.with_current(|| capabilities_for(&context)).flatten()
+}
+
+pub(crate) fn read_tier_for(context: &ManagedRequestContext) -> Option<CachedTier> {
+    let tier = parse_tier_str(&read_fresh_envelope(context)?.tier)?;
+    Some(CachedTier { tier })
+}
+
+pub(crate) fn capabilities_for(context: &ManagedRequestContext) -> Option<CapabilityDocumentWire> {
+    read_fresh_envelope(context)?.capability_handshake
 }
 
 pub fn capability_refusal(capability: &str, feature: &str) -> Option<String> {
@@ -269,7 +381,8 @@ pub fn capability_allowed(capability: &str) -> Option<bool> {
 
 /// Write a fresh tier to the disk cache.  Errors are silently swallowed, a
 /// failed cache write is never fatal.
-pub fn write_tier_cache(tier: &UserTier, capabilities: Option<&CapabilityDocumentWire>) {
+fn write_tier_cache(context: &ManagedRequestContext, tier: &UserTier, capabilities: Option<&CapabilityDocumentWire>) {
+    if context.owner.is_none() { return; }
     let Some(path) = tier_cache_path() else {
         return;
     };
@@ -277,6 +390,7 @@ pub fn write_tier_cache(tier: &UserTier, capabilities: Option<&CapabilityDocumen
         let _ = std::fs::create_dir_all(parent);
     }
     let envelope = TierCacheEnvelope {
+        owner: context.owner.clone(),
         tier: tier_to_str(tier),
         cached_at: now_secs(),
         capability_handshake: capabilities.cloned(),
@@ -292,6 +406,7 @@ pub fn write_tier_cache(tier: &UserTier, capabilities: Option<&CapabilityDocumen
 
 /// Drop the cached tier so the next resolve re-reads it from the server.
 pub fn invalidate_tier_cache() {
+    crate::models::gateway_models::clear_live_catalog();
     if let Some(path) = tier_cache_path() {
         let _ = std::fs::remove_file(path);
     }
@@ -306,6 +421,8 @@ fn plan_models_cache_path() -> Option<PathBuf> {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PlanModelsEnvelope {
+    #[serde(default)]
+    owner: Option<String>,
     models: Vec<String>,
     cached_at: u64,
 }
@@ -315,9 +432,15 @@ struct PlanModelsEnvelope {
 /// the models a plan lists by hand, while the list also admits every model the
 /// plan reaches through its price floor.
 pub fn read_plan_models_cache() -> Option<Vec<String>> {
+    let context = ManagedRequestContext::capture().ok()?;
+    context.with_current(|| plan_models_for(&context)).flatten()
+}
+
+pub(crate) fn plan_models_for(context: &ManagedRequestContext) -> Option<Vec<String>> {
+    let owner = context.owner.as_ref()?;
     let content = std::fs::read_to_string(plan_models_cache_path()?).ok()?;
     let envelope: PlanModelsEnvelope = toml::from_str(&content).ok()?;
-    Some(envelope.models)
+    (envelope.owner.as_ref() == Some(owner)).then_some(envelope.models)
 }
 
 /// Whether the hosted list named this model for the signed-in account.
@@ -335,7 +458,8 @@ pub fn plan_lists(models: &[String], model: &str) -> bool {
         .any(|listed| listed.eq_ignore_ascii_case(&wanted))
 }
 
-pub fn write_plan_models_cache(models: &[String]) {
+fn write_plan_models_cache(context: &ManagedRequestContext, models: &[String]) {
+    if context.owner.is_none() { return; }
     let Some(path) = plan_models_cache_path() else {
         return;
     };
@@ -343,6 +467,7 @@ pub fn write_plan_models_cache(models: &[String]) {
         let _ = std::fs::create_dir_all(parent);
     }
     let envelope = PlanModelsEnvelope {
+        owner: context.owner.clone(),
         models: models.iter().map(|id| id.to_lowercase()).collect(),
         cached_at: now_secs(),
     };
@@ -358,35 +483,35 @@ pub fn write_plan_models_cache(models: &[String]) {
 /// route is judged, so the first verdict a client asks for reads the plan
 /// rather than the bundled vendor rule.
 pub async fn ensure_plan_models_cached() {
-    if read_plan_models_cache().is_some() || load_jwt().is_none() {
+    let Ok(context) = ManagedRequestContext::capture() else { return; };
+    if context.jwt.is_none() || context.with_current(|| plan_models_for(&context)).flatten().is_some() {
         return;
     }
-    refresh_plan_models_cache().await;
+    refresh_plan_models_cache(&context).await;
 }
 
-async fn refresh_plan_models_cache() {
-    match crate::models::gateway_models::discover_gateway_models().await {
+async fn refresh_plan_models_cache(context: &ManagedRequestContext) {
+    match crate::models::gateway_models::discover_gateway_models_for(context).await {
         Ok(catalog) => {
             let ids: Vec<String> = catalog.models.into_iter().map(|model| model.id).collect();
-            write_plan_models_cache(&ids);
+            context.with_current(|| write_plan_models_cache(context, &ids));
         }
         Err(error) => tracing::debug!("[tier_cache] plan model list fetch failed: {error:#}"),
     }
 }
 
-/// Adopt the plan the authoritative usage summary reports. `/api/usage` reads
-/// the subscription itself rather than failing open to `free`, so a differing
-/// plan here is a real upgrade or downgrade and replaces the cached tier.
-pub fn adopt_server_plan(plan_tier: &str) -> bool {
-    let cached = read_tier_cache().map(|cached| cached.tier);
-    match tier_to_adopt(plan_tier, cached.as_ref()) {
-        Some(server_tier) => {
-            invalidate_tier_cache();
-            write_tier_cache(&server_tier, None);
-            true
+pub(crate) fn adopt_server_plan(context: &ManagedRequestContext, plan_tier: &str) -> bool {
+    context.with_current(|| {
+        let cached = read_tier_for(context).map(|cached| cached.tier);
+        match tier_to_adopt(plan_tier, cached.as_ref()) {
+            Some(server_tier) => {
+                invalidate_tier_cache();
+                write_tier_cache(context, &server_tier, None);
+                true
+            }
+            None => false,
         }
-        None => false,
-    }
+    }).unwrap_or(false)
 }
 
 /// The tier the cache should hold once the server states `plan_tier`, or `None`
@@ -590,121 +715,56 @@ pub async fn managed_auto_routing_tier() -> &'static str {
 }
 
 pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
-    // Fast path: return fresh cache without touching the network.
-    if let Some(cached) = read_tier_cache() {
-        if read_plan_models_cache().is_none() && jwt.is_some_and(|j| !j.is_empty()) {
-            refresh_plan_models_cache().await;
+    let Ok(context) = ManagedRequestContext::capture() else { return TierResolution::default(); };
+    if jwt != context.jwt.as_deref() { return TierResolution::default(); }
+    resolve_user_tier_for(&context).await
+}
+
+pub(crate) async fn resolve_user_tier_for(context: &ManagedRequestContext) -> TierResolution {
+    if let Some(cached) = context.with_current(|| read_tier_for(context)).flatten() {
+        if context.with_current(|| plan_models_for(context)).flatten().is_none() && context.jwt.is_some() {
+            refresh_plan_models_cache(context).await;
         }
-        return TierResolution {
-            cached: Some(cached),
-            needs_reauth: false,
-        };
+        return context.with_current(|| TierResolution { cached: Some(cached), needs_reauth: false }).unwrap_or_default();
     }
-
-    // No cache or expired, try the network if we have credentials.
-    let jwt = match jwt {
-        Some(j) if !j.is_empty() => j,
-        _ => {
-            return TierResolution {
-                cached: None,
-                needs_reauth: false,
-            }
-        }
-    };
-
-    let raw_base =
-        std::env::var("AGIWORKFORCE_API_BASE").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
-
-    let api_base = match resolve_agi_api_base(&raw_base) {
-        Some(b) => b,
-        None => {
-            return TierResolution {
-                cached: None,
-                needs_reauth: false,
-            }
-        }
-    };
-
-    let url = format!("{}/api/me", api_base);
-
+    let Some(jwt) = context.jwt.as_deref() else { return TierResolution::default(); };
+    let url = format!("{}/api/me", context.base);
     let result = tokio::time::timeout(TIER_FETCH_TIMEOUT, fetch_tier_from_api(&url, jwt)).await;
-
     match result {
         Ok(Ok(resp)) => {
-            let tier_str = match resp
-                .plan
-                .as_ref()
-                .and_then(|p| p.effective_tier.as_deref().or(p.tier.as_deref()))
-            {
-                Some(s) => s.to_string(),
-                None => {
-                    tracing::debug!("[tier_cache] /api/me returned no plan.tier");
-                    return TierResolution {
-                        cached: None,
-                        needs_reauth: false,
-                    };
-                }
+            let Some(tier_str) = resp.plan.as_ref().and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref())) else {
+                return TierResolution::default();
             };
-
-            // Fail-closed: unknown tier strings → Free (never crash, never silently grant
-            // a higher tier).
-            let fetched_tier = parse_tier_str(&tier_str);
-
-            // If fetch returns Free, prefer any valid higher-ranked cache entry
-            // (handles /api/me failing-open to 'free' on transient DB errors).
-            // Note: we just checked the cache above (fast path); if we reach here the
-            // cache was expired/absent, so no live cached tier to protect.
-            // We still run reconcile in case a stale-but-readable entry exists.
-            let existing_cache = read_tier_cache();
-            let fetched_is_resolved = |resolved: &UserTier| fetched_tier.as_ref() == Some(resolved);
-            let resolved = match (fetched_tier.clone(), existing_cache) {
-                (Some(fetched), Some(existing)) => reconcile_fetched_tier(&fetched, &existing.tier),
-                (Some(fetched), None) => fetched,
-                (None, Some(existing)) => existing.tier, // unknown string → keep cache
-                (None, None) => {
-                    // Unknown server tier string, fail-closed to Free.
-                    tracing::debug!(
-                        "[tier_cache] Unknown tier string '{}' from /api/me, defaulting to Free (fail-closed)",
-                        tier_str
-                    );
-                    UserTier::Free
-                }
-            };
-
-            let capabilities = if fetched_is_resolved(&resolved) {
-                resp.capability_handshake
-            } else {
-                cached_capabilities()
-            };
-            write_tier_cache(&resolved, capabilities.as_ref());
-            refresh_plan_models_cache().await;
-            TierResolution {
-                cached: Some(CachedTier { tier: resolved }),
-                needs_reauth: false,
-            }
+            let fetched = parse_tier_str(tier_str);
+            let resolved = context.with_current(|| {
+                let existing = read_tier_for(context);
+                let tier = match (fetched.clone(), existing) {
+                    (Some(fetched), Some(existing)) => reconcile_fetched_tier(&fetched, &existing.tier),
+                    (Some(fetched), None) => fetched,
+                    (None, Some(existing)) => existing.tier,
+                    (None, None) => UserTier::Free,
+                };
+                let capabilities = if fetched.as_ref() == Some(&tier) {
+                    resp.capability_handshake
+                } else { capabilities_for(context) };
+                write_tier_cache(context, &tier, capabilities.as_ref());
+                tier
+            });
+            let Some(tier) = resolved else { return TierResolution::default(); };
+            refresh_plan_models_cache(context).await;
+            context.with_current(|| TierResolution { cached: Some(CachedTier { tier }), needs_reauth: false }).unwrap_or_default()
         }
         Ok(Err(FetchError::Unauthorized)) => {
-            tracing::debug!("[tier_cache] /api/me returned 401, managed token expired");
-            // Do NOT write 'free' to cache on a 401; the token is expired, not the tier.
-            TierResolution {
-                cached: None,
-                needs_reauth: true,
-            }
+            context.with_current_token(|| {
+                invalidate_tier_cache();
+                TierResolution { cached: None, needs_reauth: true }
+            }).unwrap_or_default()
         }
-        Ok(Err(FetchError::Other(e))) => {
-            tracing::debug!("[tier_cache] tier fetch failed: {e}");
-            TierResolution {
-                cached: None,
-                needs_reauth: false,
-            }
+        Ok(Err(FetchError::Other(error))) => {
+            tracing::debug!("[tier_cache] tier fetch failed: {error}");
+            TierResolution::default()
         }
-        Err(_) => {
-            tracing::debug!("[tier_cache] tier fetch timed out after {TIER_FETCH_TIMEOUT:?}");
-            TierResolution {
-                cached: None,
-                needs_reauth: false,
-            }
-        }
+        Err(_) => TierResolution::default(),
     }
 }
 
@@ -819,7 +879,7 @@ fn jwt_from_auth_store(store: &crate::auth::AuthStore) -> Option<String> {
     None
 }
 
-fn jwt_from_legacy_auth_toml(content: &str) -> Option<String> {
+pub(crate) fn jwt_from_legacy_auth_toml(content: &str) -> Option<String> {
     let table: toml::Value = toml::from_str(content).ok()?;
     let entries = table.get("entries")?.as_table()?;
     for key in ["managed_cloud", "agiworkforce"] {
@@ -851,22 +911,7 @@ pub fn load_jwt() -> Option<String> {
         }
     }
 
-    // The legacy plaintext auth.toml moves into the credential store on first
-    // read and is then deleted, so the token stops living in the clear.
-    let auth_path = crate::config::CliConfig::config_dir()
-        .ok()?
-        .join("auth.toml");
-    let content = std::fs::read_to_string(&auth_path).ok()?;
-    let token = jwt_from_legacy_auth_toml(&content)?;
-    match crate::auth::AuthStore::adopt_legacy_token(&token) {
-        Ok(()) => {
-            let _ = std::fs::remove_file(&auth_path);
-        }
-        Err(error) => {
-            tracing::warn!("[tier_cache] could not move auth.toml into the store: {error}")
-        }
-    }
-    Some(token)
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -876,6 +921,61 @@ pub fn load_jwt() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cache_token(subject: Option<&str>, session: Option<&str>, generation: u8) -> String {
+        use base64::Engine;
+        let claims = serde_json::json!({"sub": subject, "sid": session, "iat": generation});
+        format!("fixture.{}.signature", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string()))
+    }
+
+    fn cache_context(base: &str, jwt: Option<String>) -> ManagedRequestContext {
+        ManagedRequestContext { owner: cache_owner(base, jwt.as_deref()), jwt, base: base.to_string() }
+    }
+
+    #[test]
+    fn cache_identity_preserves_session_renewal_but_not_account_session_or_deployment_switches() {
+        let first = cache_context(DEFAULT_API_BASE, Some(cache_token(Some("a"), Some("s1"), 1)));
+        let renewed = cache_context(DEFAULT_API_BASE, Some(cache_token(Some("a"), Some("s1"), 2)));
+        assert!(first.matches_current(&renewed));
+        assert_ne!(first.jwt, renewed.jwt);
+        for replacement in [
+            cache_context(DEFAULT_API_BASE, Some(cache_token(Some("b"), Some("s1"), 1))),
+            cache_context(DEFAULT_API_BASE, Some(cache_token(Some("a"), Some("s2"), 1))),
+            cache_context("https://api.agiworkforce.com", first.jwt.clone()),
+            cache_context(DEFAULT_API_BASE, None),
+        ] {
+            assert!(!first.matches_current(&replacement));
+        }
+    }
+
+    #[test]
+    fn legacy_cache_identity_requires_subject_and_never_persists_token() {
+        let token = cache_token(Some("legacy"), None, 1);
+        let owner = cache_owner(DEFAULT_API_BASE, Some(&token)).expect("subject-bound legacy owner");
+        assert!(!owner.contains(&token));
+        assert_ne!(Some(owner), cache_owner(DEFAULT_API_BASE, Some(&cache_token(Some("legacy"), None, 2))));
+        assert!(cache_owner(DEFAULT_API_BASE, Some("opaque-token")).is_none());
+        assert!(cache_owner(DEFAULT_API_BASE, Some(&cache_token(None, Some("s"), 1))).is_none());
+    }
+
+    #[test]
+    fn anonymous_cache_is_distinct_from_unidentified_authenticated_request() {
+        let anonymous = cache_context(DEFAULT_API_BASE, None);
+        let opaque = cache_context(DEFAULT_API_BASE, Some("opaque-token".to_string()));
+        assert!(anonymous.owner.is_some());
+        assert!(opaque.owner.is_none());
+        assert!(!anonymous.matches_current(&opaque));
+        assert!(!opaque.matches_current(&anonymous));
+    }
+
+    #[test]
+    fn legacy_envelopes_do_not_acquire_the_current_owner() {
+        let tier: TierCacheEnvelope = toml::from_str("tier = 'pro'\ncached_at = 1").expect("legacy tier");
+        let models: PlanModelsEnvelope = toml::from_str("models = []\ncached_at = 1").expect("legacy models");
+        assert!(tier.owner.is_none());
+        assert!(models.owner.is_none());
+        assert!(!cache_is_fresh(101, 100));
+    }
 
     // -- parse_tier_str tests -----------------------------------------------
 
@@ -1194,6 +1294,7 @@ mod tests {
     #[test]
     fn tier_cache_roundtrip_toml() {
         let envelope = TierCacheEnvelope {
+            owner: None,
             tier: "pro".to_string(),
             cached_at: 1_746_000_000,
             capability_handshake: None,

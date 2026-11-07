@@ -255,6 +255,11 @@ describe('scheduled managed agent executor', () => {
 
     expect(result.billingStatus).toBe('subscription_inactive');
     expect(result.text).toContain('Scheduled execution skipped');
+    expect(result.cancellation).toEqual({
+      reason: 'managed_compute_access_denied',
+      code: 'subscription_inactive',
+      message: expect.any(String),
+    });
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
     expect(buildServerProviderAdapter).not.toHaveBeenCalled();
   });

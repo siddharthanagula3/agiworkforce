@@ -196,7 +196,7 @@ impl ManagedSessionReference {
 }
 
 impl ManagedSessionSummary {
-    fn from_session(session: &ManagedSession, path: PathBuf) -> Self {
+    pub(crate) fn from_session(session: &ManagedSession, path: PathBuf) -> Self {
         Self {
             version: session.version,
             session_id: session.session_id.clone(),
@@ -755,6 +755,7 @@ mod tests {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            persistence: Default::default(),
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -793,6 +794,7 @@ mod tests {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            persistence: Default::default(),
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));

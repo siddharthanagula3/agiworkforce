@@ -823,7 +823,7 @@ describe('syncNow, push', () => {
     });
   });
 
-  it('preserves a message edit made while its CAS push is in flight', async () => {
+  it('preserves an in-flight message edit through the acknowledged push echo and rebases its retry', async () => {
     seedConversation('c1', { messageCount: 1 });
     seedMessage('c1', {
       id: 'm1',
@@ -854,6 +854,12 @@ describe('syncNow, push', () => {
         cursor: '8',
       } as never;
     });
+    mockGet.mockResolvedValueOnce({
+      ...emptyPull('8'),
+      messages: [msgDelta('m1', 'c1', '8', {
+        role: 'assistant', content: 'sent', metadata: { phase: 'sent' }, parent_id: 'remote-parent',
+      })],
+    } as never);
 
     await syncNow();
 
@@ -861,11 +867,139 @@ describe('syncNow, push', () => {
       content: 'edited later',
       metadata: { phase: 'later' },
       serverVersion: '8',
+      parentId: 'remote-parent',
     });
     expect(useCloudSyncStateStore.getState().dirtyMessages).toContainEqual({
       conversationId: 'c1',
       messageId: 'm1',
     });
+
+    await syncNow();
+
+    const [, retry] = mockPost.mock.calls[1] as [string, { messages: MessagePushItem[] }];
+    expect(retry.messages[0]).toMatchObject({
+      content: 'edited later', metadata: { phase: 'later' }, baseVersion: '8',
+    });
+    expect(useCloudSyncStateStore.getState().dirtyMessages).toEqual([]);
+  });
+
+  it('preserves a newly marked edit made during pull after a clean acknowledgement', async () => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1', role: 'assistant', content: 'sent', serverVersion: '7',
+      metadata: { phase: 'sent' },
+    });
+    markMessageForSync('c1', 'm1');
+    mockPost.mockResolvedValueOnce({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [{ id: 'm1', server_version: '8' }], artifacts: [] },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
+      cursor: '8',
+    } as never);
+    const pullStarted = deferred<string>();
+    const pullResult = deferred<PullPage>();
+    mockGet.mockImplementationOnce((async (path: string) => {
+      pullStarted.resolve(path);
+      return pullResult.promise;
+    }) as never);
+
+    const firstSync = syncNow();
+    try {
+      const firstPull = await Promise.race([
+        pullStarted.promise,
+        firstSync.then(() => { throw new Error('Sync settled before the deferred pull began'); }),
+      ]);
+      expect(firstPull).toBe('/api/chat/sync?since=0');
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      expect(useCloudSyncStateStore.getState().dirtyMessages).toEqual([]);
+      expect(useCloudSyncStateStore.getState().status).toBe('syncing');
+      const acknowledged = useChatCloudMessageStore.getState().messages.c1![0]!;
+      expect(acknowledged).toMatchObject({ content: 'sent', serverVersion: '8' });
+      useChatCloudMessageStore.getState().setCloudMessages('c1', [{
+        ...acknowledged, content: 'edited during pull', metadata: { phase: 'after acknowledgement' },
+      }]);
+      markMessageForSync('c1', 'm1');
+    } finally {
+      // Release the real sync even if an intermediate assertion fails.
+      pullResult.resolve({
+        ...emptyPull('8'),
+        messages: [msgDelta('m1', 'c1', '8', {
+          role: 'assistant', content: 'sent', metadata: { phase: 'sent' }, parent_id: 'remote-parent',
+        })],
+      });
+      await firstSync;
+    }
+
+    expect(useCloudSyncStateStore.getState().status).toBe('idle');
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      content: 'edited during pull', metadata: { phase: 'after acknowledgement' },
+      serverVersion: '8', parentId: 'remote-parent',
+    });
+    expect(useCloudSyncStateStore.getState().dirtyMessages).toEqual([
+      { conversationId: 'c1', messageId: 'm1' },
+    ]);
+    mockPost.mockResolvedValueOnce({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [{ id: 'm1', server_version: '9' }], artifacts: [] },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
+      cursor: '9',
+    } as never);
+    mockGet.mockResolvedValueOnce(emptyPull('9') as never);
+
+    await syncNow();
+
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    const [, retry] = mockPost.mock.calls[1] as [string, { messages: MessagePushItem[] }];
+    expect(retry.messages[0]).toMatchObject({
+      content: 'edited during pull', metadata: { phase: 'after acknowledgement' }, baseVersion: '8',
+    });
+    expect(useCloudSyncStateStore.getState().dirtyMessages).toEqual([]);
+    expect(useCloudSyncStateStore.getState().status).toBe('idle');
+  });
+
+  it.each([false, true])('handles an in-flight edit against a message conflict (deleted: %s)', async (deleted) => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1', role: 'assistant', content: 'sent', serverVersion: '7',
+      metadata: { phase: 'sent' },
+    });
+    markMessageForSync('c1', 'm1');
+    const current = msgDelta('m1', 'c1', '9', {
+      role: 'assistant', content: 'remote winner', metadata: { phase: 'remote' },
+      parent_id: 'remote-parent', created_at: '2026-06-20T00:00:01.000Z',
+      deleted_at: deleted ? T : null,
+    });
+    mockPost.mockImplementationOnce(async () => {
+      const message = useChatCloudMessageStore.getState().messages.c1![0]!;
+      useChatCloudMessageStore.getState().setCloudMessages('c1', [{
+        ...message, content: 'edited later', metadata: { phase: 'later' },
+      }]);
+      return {
+        protocolVersion: 2,
+        applied: { conversations: [], messages: [], artifacts: [] },
+        conflicts: { conversations: [], messages: [{ id: 'm1', current }], artifacts: [] },
+        cursor: '9',
+      } as never;
+    });
+    mockGet.mockResolvedValueOnce({ ...emptyPull('9'), messages: [current] } as never);
+
+    await syncNow();
+
+    if (deleted) {
+      expect(useChatCloudMessageStore.getState().messages.c1).toEqual([]);
+      expect(useCloudSyncStateStore.getState().dirtyMessages).toEqual([]);
+    } else {
+      expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+        content: 'edited later', metadata: { phase: 'later' }, serverVersion: '9',
+        parentId: 'remote-parent', createdAt: '2026-06-20T00:00:01.000Z',
+      });
+      expect(useCloudSyncStateStore.getState().dirtyMessages).toContainEqual({
+        conversationId: 'c1', messageId: 'm1',
+      });
+      await syncNow();
+      const [, retry] = mockPost.mock.calls[1] as [string, { messages: MessagePushItem[] }];
+      expect(retry.messages[0]).toMatchObject({ content: 'edited later', baseVersion: '9' });
+    }
   });
 
   it('adopts the deterministic server winner for a stale message CAS conflict', async () => {

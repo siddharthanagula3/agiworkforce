@@ -11,7 +11,7 @@ use crate::terminal_style as ts;
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AuthEntry {
     #[serde(rename = "oauth")]
@@ -367,10 +367,99 @@ fn save_keyring_auth(
     write_owner_only_file(path, &data)
 }
 
+fn adopt_legacy_credential(store: &mut AuthStore, content: &str) -> Result<bool> {
+    if ["managed_cloud", "agiworkforce"].iter().any(|key| {
+        store.entries.get(*key).is_some_and(|entry| match entry {
+            AuthEntry::OAuth { access, .. } => !access.is_empty(),
+            AuthEntry::ApiKey { key } => !key.is_empty(),
+        })
+    }) {
+        return Ok(false);
+    }
+    let token = crate::tier_cache::jwt_from_legacy_auth_toml(content)
+        .context("The legacy credential could not be parsed")?;
+    store.entries.insert("managed_cloud".to_string(), AuthEntry::ApiKey { key: token });
+    Ok(true)
+}
+
+fn apply_auth_transaction<T>(
+    store: &mut AuthStore,
+    change: impl FnOnce(&mut AuthStore) -> Result<T>,
+    persist: impl FnOnce(&AuthStore) -> Result<()>,
+    committed: impl FnOnce(&T),
+) -> Result<T> {
+    let before = store.entries.clone();
+    let result = change(store)?;
+    if store.entries != before {
+        persist(store)?;
+    }
+    committed(&result);
+    Ok(result)
+}
+
 impl AuthStore {
+    fn mutation_lock() -> Result<std::fs::File> {
+        let dir = crate::config::CliConfig::config_dir()?;
+        std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).truncate(false).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(dir.join("auth-mutation.lock"))
+            .context("Failed to open the credential mutation lock")?;
+        file.lock().context("Failed to lock credential mutations")?;
+        Ok(file)
+    }
+
     pub fn load() -> Result<Self> {
+        let _lock = Self::mutation_lock()?;
+        Self::load_unlocked()
+    }
+
+    // The callback holds the mutation lock and must not re-enter AuthStore.
+    pub(crate) fn with_snapshot<T>(read: impl FnOnce(Result<Self>) -> T) -> Result<T> {
+        let _lock = Self::mutation_lock()?;
+        Ok(read(Self::load_unlocked()))
+    }
+
+    pub fn transaction<T>(change: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        Self::transaction_with_commit(change, |_| {})
+    }
+
+    // Both callbacks run under the mutation lock and must not re-enter AuthStore.
+    // Keyring persistence is serialized, but its multiple writes cannot roll back.
+    pub fn transaction_with_commit<T>(
+        change: impl FnOnce(&mut Self) -> Result<T>,
+        committed: impl FnOnce(&T),
+    ) -> Result<T> {
+        let _lock = Self::mutation_lock()?;
+        let mut store = Self::load_unlocked()?;
+        apply_auth_transaction(&mut store, change, Self::save_unlocked, committed)
+    }
+
+    fn load_unlocked() -> Result<Self> {
+        let mut store = Self::load_current_unlocked()?;
+        let legacy = crate::config::CliConfig::config_dir()?.join("auth.toml");
+        if legacy.try_exists().context("Failed to inspect the legacy credential")? {
+            if !check_file_permissions_secure(&legacy) {
+                bail!("The legacy credential file is not owner-only; refusing migration");
+            }
+            let content = std::fs::read_to_string(&legacy)
+                .context("Failed to read the legacy credential")?;
+            if adopt_legacy_credential(&mut store, &content)? {
+                store.save_unlocked()?;
+            }
+            std::fs::remove_file(&legacy).context("Failed to remove the migrated credential")?;
+        }
+        Ok(store)
+    }
+
+    fn load_current_unlocked() -> Result<Self> {
         let path = auth_path()?;
-        if !path.exists() {
+        if !path.try_exists().context("Failed to inspect the credential index")? {
             return Ok(Self::default());
         }
         let data = std::fs::read_to_string(&path).context("Failed to read auth.json")?;
@@ -390,7 +479,7 @@ impl AuthStore {
             // out, not a failure that blocks signing in again.
             let store =
                 load_keyring_auth_for_root(&keyring, &OsKeyring::unscoped(), &path, index, true)?;
-            store.save()?;
+            store.save_unlocked()?;
             return Ok(store);
         }
 
@@ -406,20 +495,7 @@ impl AuthStore {
         Ok(store)
     }
 
-    /// Move a token read from the legacy plaintext auth.toml into this store.
-    /// The caller deletes the old file only once the store holds the token.
-    pub fn adopt_legacy_token(token: &str) -> Result<()> {
-        let mut store = Self::load()?;
-        store
-            .entries
-            .entry("managed_cloud".to_string())
-            .or_insert_with(|| AuthEntry::ApiKey {
-                key: token.to_string(),
-            });
-        store.save()
-    }
-
-    pub fn save(&self) -> Result<()> {
+    fn save_unlocked(&self) -> Result<()> {
         let dir = crate::config::CliConfig::config_dir()?;
         std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
         let path = auth_path()?;
@@ -508,11 +584,6 @@ fn last_credential_use(uses: &[CredentialUse], provider: &str) -> Option<i64> {
 /// Free-function wrapper for `AuthStore::load()` (used by models.rs integration).
 pub fn load_auth() -> Result<AuthStore> {
     AuthStore::load()
-}
-
-/// Free-function wrapper for `AuthStore::save()` (used by models.rs integration).
-pub fn save_auth(store: &AuthStore) -> Result<()> {
-    store.save()
 }
 
 /// Format a duration in milliseconds into a human-readable string like "expires in 2h 30m"
@@ -861,9 +932,10 @@ pub async fn resolve_auth(
 }
 
 fn save_auth_entry(key: &str, entry: AuthEntry) -> Result<()> {
-    let mut store = AuthStore::load()?;
-    store.entries.insert(key.to_string(), entry);
-    store.save()?;
+    AuthStore::transaction(|store| {
+        store.entries.insert(key.to_string(), entry);
+        Ok(())
+    })?;
     record_credential_use(key, "signed in and saved a credential");
     Ok(())
 }
@@ -1040,15 +1112,16 @@ pub fn save_api_key(provider: &str, key: &str) -> Result<()> {
 pub fn remove_api_key(provider: &str) -> Result<bool> {
     let provider = api_key_provider(provider)
         .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
-    let mut store = AuthStore::load()?;
-    if !matches!(
-        store.entries.get(provider.id),
-        Some(AuthEntry::ApiKey { .. })
-    ) {
+    let removed = AuthStore::transaction(|store| {
+        if !matches!(store.entries.get(provider.id), Some(AuthEntry::ApiKey { .. })) {
+            return Ok(false);
+        }
+        store.entries.remove(provider.id);
+        Ok(true)
+    })?;
+    if !removed {
         return Ok(false);
     }
-    store.entries.remove(provider.id);
-    store.save()?;
     record_credential_use(provider.id, "removed a saved API key");
     Ok(true)
 }
@@ -1204,6 +1277,26 @@ pub(crate) fn jwt_subject(jwt: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+// Continuity only: the server still authenticates the token. Missing claims
+// must never make two unrelated credentials look like the same session.
+pub(crate) fn jwt_session_identity(jwt: &str) -> Option<(String, String)> {
+    let mut segments = jwt.split('.');
+    let header = segments.next()?;
+    let payload = segments.next()?;
+    let signature = segments.next()?;
+    if header.is_empty() || signature.is_empty() || segments.next().is_some() {
+        return None;
+    }
+    let decoded = base64url_decode(payload).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
+    let claim = |name: &str| {
+        claims.get(name)?.as_str()
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_string)
+    };
+    Some((claim("sub")?, claim("sid")?))
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Tests
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1211,6 +1304,52 @@ pub(crate) fn jwt_subject(jwt: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_adoption_never_shadows_a_current_managed_credential() {
+        let mut store = AuthStore::default();
+        store.entries.insert("agiworkforce".to_string(), AuthEntry::ApiKey { key: "current".to_string() });
+        assert!(!adopt_legacy_credential(&mut store, "malformed legacy data").unwrap());
+        assert!(!store.entries.contains_key("managed_cloud"));
+        store.entries.clear();
+        assert!(adopt_legacy_credential(&mut store, "malformed legacy data").is_err());
+        assert!(store.entries.is_empty());
+        assert!(adopt_legacy_credential(&mut store, "[entries.agiworkforce]\ntoken = 'synthetic-legacy'\n").unwrap());
+        assert_eq!(store.entries.get("managed_cloud"), Some(&AuthEntry::ApiKey { key: "synthetic-legacy".to_string() }));
+    }
+
+    #[test]
+    fn failed_persistence_does_not_run_post_commit_cleanup() {
+        let mut store = AuthStore::default();
+        let cleaned = std::cell::Cell::new(false);
+        let result = apply_auth_transaction(
+            &mut store,
+            |store| {
+                store.entries.insert("agiworkforce".to_string(), AuthEntry::ApiKey { key: "synthetic".to_string() });
+                Ok(())
+            },
+            |_| bail!("synthetic persistence refusal"),
+            |_| cleaned.set(true),
+        );
+        assert!(result.is_err());
+        assert!(!cleaned.get());
+    }
+
+    #[test]
+    fn transaction_cleanup_follows_persistence_and_unchanged_state_needs_no_write() {
+        let mut store = AuthStore::default();
+        let persisted = std::cell::Cell::new(false);
+        apply_auth_transaction(
+            &mut store,
+            |store| {
+                store.entries.insert("agiworkforce".to_string(), AuthEntry::ApiKey { key: "synthetic".to_string() });
+                Ok(())
+            },
+            |_| { persisted.set(true); Ok(()) },
+            |_| assert!(persisted.get()),
+        ).unwrap();
+        apply_auth_transaction(&mut store, |_| Ok(()), |_| panic!("unchanged store written"), |_| {}).unwrap();
+    }
 
     #[test]
     fn default_login_provider_targets_agiworkforce() {

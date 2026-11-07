@@ -82,7 +82,7 @@ export async function saveConnectorToolPermissions(
       : isDestructiveConnectorTool(input.connectorId, toolName, annotations);
   });
   for (const toolName of toolNames)
-    await revokeConnectorSessionGrants(db, input, input.connectorId, toolName);
+    await revokeConnectorSessionGrants(db, input.connectorId, toolName);
   const rows = await db.query<{ tool_name: string }>(
     `insert into public.connector_tool_permissions
        (user_id, connector_id, tool_name, level, destructive, updated_at)

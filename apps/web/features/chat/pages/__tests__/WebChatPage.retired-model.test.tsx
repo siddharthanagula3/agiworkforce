@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,15 +23,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -231,6 +240,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
 
@@ -280,7 +291,7 @@ describe('WebChatPage retired conversation model (AI-49)', () => {
   it('tells the user the saved model was retired instead of swapping it silently', async () => {
     openConversationSavedWith(RETIRED_MODEL_ID);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const notice = await screen.findByTestId('unavailable-model-notice');
     expect(notice.getAttribute('data-requested-model')).toBe(RETIRED_MODEL_ID);
@@ -292,7 +303,7 @@ describe('WebChatPage retired conversation model (AI-49)', () => {
   it('stays quiet when the saved model is still selectable', async () => {
     openConversationSavedWith(DEFAULT_MODEL_ID);
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await screen.findByTestId('message-list');
     expect(screen.queryByTestId('unavailable-model-notice')).toBeNull();

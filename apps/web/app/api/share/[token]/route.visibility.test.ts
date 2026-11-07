@@ -23,7 +23,7 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/server/rls-db', () => ({
-  getCurrentUserRlsDb: vi.fn(),
+  getCurrentCookieUserRlsDb: vi.fn(),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.scopedQuery(...args) },
     userId: 'user-1',

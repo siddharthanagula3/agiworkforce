@@ -95,14 +95,19 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
-import { isAppError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import {
   getTenantScope,
   newSpanId,
   newTraceId,
   runWithTraceContext,
 } from '@/lib/observability/trace-context';
-import { getCurrentUserRlsDb, getUserScopedDb, getVerifiedBearerUserScopedDb } from './rls-db';
+import {
+  getCurrentCookieUserRlsDb,
+  getCurrentUserRlsDb,
+  getUserScopedDb,
+  getVerifiedBearerUserScopedDb,
+} from './rls-db';
 
 function withTrace<R>(fn: () => Promise<R>): Promise<R> {
   return runWithTraceContext({ traceId: newTraceId(), spanId: newSpanId(), sampled: true }, fn);
@@ -387,5 +392,81 @@ describe('getUserScopedDb on a cookie session', () => {
 
     expect(error).toBeInstanceOf(Error);
     expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCurrentCookieUserRlsDb', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    serviceQuery.mockImplementation(ownerConnectionAnswers);
+    mockAssertMfaPolicy.mockResolvedValue(undefined);
+    mockAssertIpAllowList.mockResolvedValue(undefined);
+    mockAuth.mockResolvedValue({ userId: 'user_cookie_share', getToken: async () => 'cookie-jwt' });
+  });
+
+  it('ignores bearer credentials and scopes only the admitted cookie without binding a workspace', async () => {
+    const request = apiKeyRequest();
+    const result = await getCurrentCookieUserRlsDb(request);
+    expect(result?.userId).toBe('user_cookie_share');
+    expect(mockVerifyKey).not.toHaveBeenCalled();
+    expect(mockVerifyToken).not.toHaveBeenCalled();
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie_share');
+    expect(mockAssertIpAllowList).toHaveBeenCalledWith('user_cookie_share', request);
+    expect(rlsWithUser).toHaveBeenCalledWith('cookie-jwt');
+    expect(rlsWithOrg).not.toHaveBeenCalled();
+  });
+
+  it('does not construct an RLS scope when an admitted cookie has no token', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_cookie_share', getToken: async () => null });
+    await expect(getCurrentCookieUserRlsDb(apiKeyRequest())).resolves.toBeNull();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('does not admit a bearer-only caller', async () => {
+    mockAuth.mockResolvedValue({ userId: null, getToken: async () => null });
+    await expect(getCurrentCookieUserRlsDb(apiKeyRequest())).resolves.toBeNull();
+    expect(mockVerifyKey).not.toHaveBeenCalled();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('returns the mapped account rather than the provider subject', async () => {
+    serviceQuery.mockImplementation(async (sql, params) =>
+      String(sql).includes('left join public.identities')
+        ? [{ identity_id: 'identity-share', account_id: 'account-share', erased: false }]
+        : ownerConnectionAnswers(sql, params),
+    );
+    await expect(getCurrentCookieUserRlsDb(apiKeyRequest())).resolves.toMatchObject({
+      userId: 'account-share',
+    });
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('account-share');
+  });
+
+  it.each(['mfa', 'ip'] as const)('does not create an RLS scope after a %s denial', async (gate) => {
+    const deny = gate === 'mfa' ? mockAssertMfaPolicy : mockAssertIpAllowList;
+    deny.mockRejectedValueOnce(createError.forbidden('denied'));
+    await expect(getCurrentCookieUserRlsDb(apiKeyRequest())).resolves.toBeNull();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('propagates unavailable admission instead of constructing an RLS scope', async () => {
+    mockAssertIpAllowList.mockRejectedValueOnce(createError.serviceUnavailable('unavailable'));
+    await expect(getCurrentCookieUserRlsDb(apiKeyRequest())).rejects.toMatchObject({ statusCode: 503 });
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('authenticated surface carried by a scoped database', () => {
+  it.each([
+    { boundSurface: 'mobile' as const, expected: 'mobile' },
+    { boundSurface: undefined, expected: 'unknown' },
+  ])('does not trust a web header over verified claims: $expected', async ({ boundSurface, expected }) => {
+    const token = 'fixture-verified-token';
+    const request = new NextRequest('https://example.test/api/models/free-quota/completions', {
+      headers: { authorization: `Bearer ${token}`, 'x-agi-surface': 'web' },
+    });
+    const scoped = await getVerifiedBearerUserScopedDb(request, {
+      userId: 'user_verified', token, ...(boundSurface ? { boundSurface } : {}),
+    });
+    expect(scoped.surface).toBe(expected);
   });
 });

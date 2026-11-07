@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
 import { FreeOfferingRequestSchema } from '@agiworkforce/cloud-contracts';
 import { extractEmbeddedProvenance } from '@agiworkforce/compliance';
 import { getProviderOfferings } from '@agiworkforce/types';
 import {
   credentialSha256,
+  readFreeQuotaDailyUse,
   readFreeQuotaState,
   reserveFreeQuotaAllowance,
   usableAllowance,
@@ -16,6 +17,7 @@ import {
   PROJECT_FILE_CITATIONS_HEADER,
   readProjectSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
+import { buildManagedComputeGateResponse, buildOrganizationPolicyGateResponse } from '@/lib/managed-compute-gate';
 import { logger } from '@/lib/logger';
 import {
   MODEL_MAY_TRAIN_MESSAGE,
@@ -88,6 +90,8 @@ vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
 }));
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
   ...(await importOriginal<ScanModule3>()),
+  buildManagedComputeGateResponse: vi.fn(() => null),
+  buildOrganizationPolicyGateResponse: vi.fn(async () => null),
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildProviderEgressGateResponse: vi.fn(async () => null),
 }));
@@ -207,6 +211,7 @@ const chatModel = servable.find(
 const scoped = {
   userId: USER_ID,
   organizationId: null,
+  surface: 'web',
   db: { query: mocks.query },
 } as unknown as UserScopedDb;
 
@@ -214,6 +219,7 @@ function send(
   model: string,
   turn: string,
   plan: string = getProviderOfferings()[model]?.category === 'chat' ? 'free' : MEDIA_PLAN,
+  scope: UserScopedDb = scoped,
 ) {
   mocks.plan.mockResolvedValue(plan);
   return serveFreeQuotaTurn(
@@ -221,7 +227,7 @@ function send(
       method: 'POST',
       headers: { 'Idempotency-Key': turn },
     }),
-    scoped,
+    scope,
     FreeOfferingRequestSchema.parse({
       model,
       conversation_id: '52d14f7e-0b3d-40c7-952d-987e841033c5',
@@ -556,14 +562,14 @@ describe('a free image or video on the Free plan', () => {
     ['an image answered at once', syncImage],
     ['an image made through a polled task', polledImage],
     ['a video', VIDEO_BY_CLIP_LENGTH[0]![1]],
-  ])('refuses %s with the plan answer before any provider request', async (_label, key) => {
+  ])('serves %s under the limited offer', async (_label, key) => {
+    generates(getProviderOfferings()[key]!.category === 'video' ? 'video/mp4' : 'image/png');
     const response = await send(key, `free-plan-${key}`, 'free');
 
-    expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe('model_not_available');
-    expect(mocks.media).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mocks.media).toHaveBeenCalledOnce();
     expect(mocks.stream).not.toHaveBeenCalled();
-    expect(mocks.persist).not.toHaveBeenCalled();
+    expect(mocks.persist).toHaveBeenCalledOnce();
   });
 
   it('still serves free chat on the Free plan', async () => {
@@ -1147,5 +1153,47 @@ describe('a study chat on a free model', () => {
     await (await send(chatModel, 'study-ended')).text();
 
     expect(systemMessages().join('\n')).not.toContain('The user is studying');
+  });
+});
+
+describe('limited media admission and uncertain consumption', () => {
+  it('stops at the managed compute kill switch before reserving or contacting a provider', async () => {
+    vi.mocked(buildManagedComputeGateResponse).mockReturnValueOnce(
+      NextResponse.json({ error: 'managed compute disabled' }, { status: 403 }),
+    );
+    expect((await send(syncImage, 'kill-switch', 'free')).status).toBe(403);
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(await meterReads(syncImage)).toBe(0);
+    expect(await readFreeQuotaDailyUse(mocks.store, { userId: USER_ID, category: 'image', nowMs: NOW })).toBe(0);
+  });
+
+  it('uses authenticated mobile scope for a workspace surface refusal', async () => {
+    vi.mocked(buildOrganizationPolicyGateResponse).mockResolvedValueOnce(
+      NextResponse.json({ error: 'surface_not_allowed' }, { status: 403 }),
+    );
+    const response = await send(syncImage, 'mobile-policy', 'free', { ...scoped, surface: 'mobile' });
+    expect(response.status).toBe(403);
+    expect(buildOrganizationPolicyGateResponse).toHaveBeenLastCalledWith(
+      USER_ID, expect.any(NextRequest), expect.objectContaining({ surface: 'mobile' }),
+    );
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(await meterReads(syncImage)).toBe(0);
+  });
+
+  it.each(['unknown', 'cli', 'vscode'] as const)('does not admit a Free media request from %s', async (surface) => {
+    expect((await send(syncImage, `surface-${surface}`, 'free', { ...scoped, surface })).status).toBe(403);
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(await meterReads(syncImage)).toBe(0);
+  });
+
+  it.each([
+    { status: 'failed', taskId: 'accepted-task', providerCode: 'AllocationQuota.FreeTierOnly' },
+    { status: 'failed' },
+    { status: 'failed', providerCode: 'provider_http_503', providerStatus: 503 },
+  ])('retains provider and daily reservations when consumption is unknown: %j', async (result) => {
+    mocks.media.mockResolvedValue(result);
+    await send(polledImage, 'uncertain-media', 'free');
+    expect(await meterReads(polledImage)).toBe(1);
+    expect(await readFreeQuotaDailyUse(mocks.store, { userId: USER_ID, category: 'image', nowMs: NOW })).toBe(1);
   });
 });

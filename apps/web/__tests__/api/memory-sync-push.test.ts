@@ -11,6 +11,7 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => undefined) })
 import { GET, POST } from '@/app/api/memory/sync/route';
 import { NextRequest } from 'next/server';
 import { answerMemoryPolicyQuery } from '@/lib/services/__tests__/memory-policy-stub';
+import { payloadCeilingBytes } from '@/lib/payload-ceiling';
 
 beforeEach(() => {
   queryMock.mockReset();
@@ -240,6 +241,128 @@ describe('POST /api/memory/sync, delta push', () => {
       String(c[0]).includes('insert into user_memories'),
     );
     expect(insertCall).toBeUndefined();
+  });
+});
+
+describe('POST /api/memory/sync, body admission', () => {
+  const path = '/api/memory/sync';
+  const url = `http://localhost${path}`;
+  const headers = { 'Content-Type': 'application/json' };
+
+  it.each([undefined, '', '{}', 'null', '[]', 'true', '1', '"legacy"', '{"other":true}'])(
+    'preserves legacy count-only behavior for body %j',
+    async (body) => {
+      queryMock.mockResolvedValueOnce([{ count: 3 }]);
+
+      const response = await POST(new NextRequest(url, { method: 'POST', headers, body }));
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ synced: 3, conflicts: 0 });
+      expect(queryMock).toHaveBeenCalledOnce();
+      expect(queryMock).toHaveBeenCalledWith(
+        expect.stringContaining('select count(*)::int as count from user_memories'),
+        ['u1', null],
+      );
+    },
+  );
+
+  it.each(['{', '{"memories":[', ' \t\r\n '])(
+    'rejects malformed nonempty JSON %j before scoped queries',
+    async (body) => {
+      const response = await POST(new NextRequest(url, { method: 'POST', headers, body }));
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' },
+      });
+      expect(queryMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('retains modern payload validation rather than falling back to the legacy count', async () => {
+    const response = await POST(postReq({ protocolVersion: 2, memories: null }));
+
+    expect(response.status).toBe(400);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed body read before scoped queries', async () => {
+    const request = new NextRequest(url, { method: 'POST', headers });
+    vi.spyOn(request, 'text').mockRejectedValueOnce(new Error('Body transport failed'));
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(500);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('propagates an undeclared stream failure after partial content before scoped queries', async () => {
+    let sent = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent) {
+          controller.error(new Error('Body transport failed'));
+          return;
+        }
+        sent = true;
+        controller.enqueue(new TextEncoder().encode('{"memories":'));
+      },
+    });
+    const init: RequestInit & { duplex: 'half' } = {
+      method: 'POST',
+      headers,
+      body,
+      duplex: 'half',
+    };
+
+    const response = await POST(new NextRequest(url, init));
+
+    expect(response.status).toBe(500);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves the streamed ceiling refusal and cancels before scoped queries', async () => {
+    const ceiling = payloadCeilingBytes(path);
+    const chunkBytes = 64 * 1024;
+    let produced = 0;
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (produced >= ceiling * 8) {
+          controller.close();
+          return;
+        }
+        produced += chunkBytes;
+        controller.enqueue(new Uint8Array(chunkBytes).fill(0x61));
+      },
+      cancel,
+    });
+    const init: RequestInit & { duplex: 'half' } = {
+      method: 'POST',
+      headers,
+      body,
+      duplex: 'half',
+    };
+
+    const response = await POST(new NextRequest(url, init));
+
+    expect(response.status).toBe(413);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(produced).toBeLessThan(ceiling * 4);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('retains declared oversize refusal before scoped queries', async () => {
+    const response = await POST(
+      new NextRequest(url, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Length': String(payloadCeilingBytes(path) + 1) },
+        body: '{}',
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(queryMock).not.toHaveBeenCalled();
   });
 });
 

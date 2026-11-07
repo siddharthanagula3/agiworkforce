@@ -44,6 +44,8 @@ pub struct RoutingProfileOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayCatalog {
+    #[serde(skip)]
+    cache_owner: Option<String>,
     pub user_tier: String,
     pub authenticated: bool,
     pub models: Vec<GatewayModel>,
@@ -166,6 +168,7 @@ async fn fetch_from_endpoint(
         .retain(|id| !id.trim().is_empty() && id.len() <= 256 && !id.chars().any(char::is_control));
     temporarily_unavailable.truncate(MAX_MODELS);
     Ok(GatewayCatalog {
+        cache_owner: None,
         user_tier: payload.x_agi_workforce.user_tier,
         authenticated: jwt.is_some_and(|token| !token.is_empty()),
         models: payload.data,
@@ -179,15 +182,20 @@ async fn fetch_from_endpoint(
 /// A configured credential is never retried anonymously after a 401/403. The
 /// trusted-host check runs before the credential can be attached.
 pub async fn discover_gateway_models() -> Result<GatewayCatalog> {
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
-    let endpoint = models_endpoint(&raw_base)?;
-    let jwt = crate::tier_cache::load_jwt();
+    let context = crate::tier_cache::ManagedRequestContext::capture()?;
+    discover_gateway_models_for(&context).await
+}
+
+pub(crate) async fn discover_gateway_models_for(context: &crate::tier_cache::ManagedRequestContext) -> Result<GatewayCatalog> {
+    let endpoint = models_endpoint(&context.base)?;
     let client = reqwest::Client::builder()
         .timeout(FETCH_TIMEOUT)
         .build()
         .context("failed to initialize managed model discovery client")?;
-    fetch_from_endpoint(&client, &endpoint, jwt.as_deref()).await
+    let mut catalog = fetch_from_endpoint(&client, &endpoint, context.jwt.as_deref()).await?;
+    catalog.cache_owner = context.owner.clone();
+    context.with_current(|| catalog)
+        .ok_or_else(|| anyhow::anyhow!("Managed account changed; retry model discovery"))
 }
 
 fn user_tier(value: &str) -> UserTier {
@@ -263,18 +271,37 @@ pub fn picker_models(catalog: &GatewayCatalog) -> Vec<Model> {
 
 static LIVE_CATALOG: Mutex<Option<GatewayCatalog>> = Mutex::new(None);
 
-pub fn store_live_catalog(catalog: GatewayCatalog) {
-    if let Ok(mut slot) = LIVE_CATALOG.lock() {
-        *slot = Some(catalog);
-    }
+pub(crate) fn clear_live_catalog() {
+    if let Ok(mut slot) = LIVE_CATALOG.lock() { *slot = None; }
 }
 
-/// A managed model switch is checked against this list, so it must be read
-/// before a turn names a model.
+pub fn current_discovery(catalog: GatewayCatalog) -> Result<GatewayCatalog> {
+    let context = crate::tier_cache::ManagedRequestContext::capture()?;
+    anyhow::ensure!(catalog.cache_owner.is_some() && catalog.cache_owner == context.owner,
+        "Managed account changed or cannot be identified; retry model discovery");
+    context.with_current(|| catalog)
+        .ok_or_else(|| anyhow::anyhow!("Managed account changed; retry model discovery"))
+}
+
+pub fn store_live_catalog(catalog: GatewayCatalog) {
+    let Ok(context) = crate::tier_cache::ManagedRequestContext::capture() else { return; };
+    if catalog.cache_owner.is_none() || catalog.cache_owner != context.owner { return; }
+    context.with_current(|| {
+        if let Ok(mut slot) = LIVE_CATALOG.lock() { *slot = Some(catalog); }
+    });
+}
+
+fn current_catalog() -> Option<GatewayCatalog> {
+    let context = crate::tier_cache::ManagedRequestContext::capture().ok()?;
+    let owner = context.owner.as_ref()?;
+    context.with_current(|| {
+        LIVE_CATALOG.lock().ok()?.as_ref()
+            .filter(|catalog| catalog.cache_owner.as_ref() == Some(owner)).cloned()
+    }).flatten()
+}
+
 pub async fn ensure_live_catalog() {
-    if LIVE_CATALOG.lock().is_ok_and(|slot| slot.is_some()) {
-        return;
-    }
+    if current_catalog().is_some() { return; }
     match discover_gateway_models().await {
         Ok(catalog) => store_live_catalog(catalog),
         Err(error) => tracing::debug!("managed model list not read: {error}"),
@@ -282,11 +309,7 @@ pub async fn ensure_live_catalog() {
 }
 
 pub fn cached_picker_models() -> Vec<Model> {
-    LIVE_CATALOG
-        .lock()
-        .ok()
-        .and_then(|slot| slot.as_ref().map(picker_models))
-        .unwrap_or_default()
+    current_catalog().as_ref().map(picker_models).unwrap_or_default()
 }
 
 pub fn catalog_user_tier(catalog: &GatewayCatalog) -> UserTier {
@@ -294,35 +317,15 @@ pub fn catalog_user_tier(catalog: &GatewayCatalog) -> UserTier {
 }
 
 pub fn cached_routing_profiles() -> Vec<RoutingProfileOption> {
-    LIVE_CATALOG
-        .lock()
-        .ok()
-        .and_then(|slot| {
-            slot.as_ref()
-                .map(|catalog| catalog.routing_profiles.clone())
-        })
-        .unwrap_or_default()
+    current_catalog().map(|catalog| catalog.routing_profiles).unwrap_or_default()
 }
 
 pub fn cached_user_tier() -> Option<UserTier> {
-    LIVE_CATALOG
-        .lock()
-        .ok()
-        .and_then(|slot| slot.as_ref().map(|catalog| user_tier(&catalog.user_tier)))
+    current_catalog().map(|catalog| user_tier(&catalog.user_tier))
 }
 
 pub fn cached_model_is_available(model_id: &str) -> bool {
-    LIVE_CATALOG
-        .lock()
-        .ok()
-        .and_then(|slot| {
-            slot.as_ref().map(|catalog| {
-                picker_models(catalog)
-                    .iter()
-                    .any(|model| model.id == model_id)
-            })
-        })
-        .unwrap_or(false)
+    cached_picker_models().iter().any(|model| model.id == model_id)
 }
 
 #[cfg(test)]
@@ -444,6 +447,7 @@ mod tests {
         };
 
         let free = GatewayCatalog {
+            cache_owner: None,
             user_tier: "free".to_string(),
             authenticated: false,
             models: vec![remote.clone()],
@@ -453,6 +457,7 @@ mod tests {
         assert!(picker_models(&free).is_empty());
 
         let pro = GatewayCatalog {
+            cache_owner: None,
             user_tier: "pro".to_string(),
             authenticated: true,
             models: vec![remote],

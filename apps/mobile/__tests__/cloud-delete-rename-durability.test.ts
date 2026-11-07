@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
@@ -33,6 +34,11 @@ import { applyConversationDeltas } from '../services/cloudSyncEngine';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { canAccessCloudModelForTier } from '../src/features/model-picker/service';
+import * as artifactStore from '../src/features/artifacts/store';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 const mockDelete = managedCloudChat.deleteConversation as jest.MockedFunction<
   typeof managedCloudChat.deleteConversation
@@ -107,6 +113,8 @@ function convDelta(id: string, title: string, deletedAt: string | null) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  invalidateCloudAccount();
+  activateCloudAccount('history-test-owner');
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {}, currentConversationId: null });
@@ -444,6 +452,280 @@ describe('cloud conversation message-load durability', () => {
     await useChatMessageStore.getState().loadMessages('c1');
 
     expect(useChatMessageStore.getState().messageLoadErrorConversationId).toBeNull();
+  });
+});
+
+describe('cloud history request and leaf ownership', () => {
+  type Detail = Awaited<ReturnType<typeof managedCloudChat.getConversation>>;
+
+  function detail(id: string, leaf: string | null = 'server-leaf', messages: Detail['messages'] = []): Detail {
+    return {
+      conversation: {
+        id, title: `Chat ${id}`, projectId: null, pinned: false, starred: false,
+        archived: false, isTemporary: false, activeLeafMessageId: leaf,
+        createdAt: T, updatedAt: T,
+      },
+      messages,
+      total: messages.length,
+      hasMore: false,
+    };
+  }
+
+  function pendingRead() {
+    let resolve!: (value: Detail) => void;
+    let reject!: (error: Error) => void;
+    mockGet.mockImplementationOnce(() => new Promise<Detail>((accept, fail) => {
+      resolve = accept;
+      reject = fail;
+    }));
+    return { resolve: (value: Detail) => resolve(value), reject: (error: Error) => reject(error) };
+  }
+
+  function leaf(id = 'c1') {
+    return useChatCloudMessageStore.getState().conversations.find((c) => c.id === id)?.activeLeafMessageId;
+  }
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it.each(['same-value', 'aba', 'different'])('preserves %s explicit leaf intent while accepting messages', async (kind) => {
+    seedCloud('c1');
+    useChatCloudMessageStore.getState().patchCloudConversation('c1', { activeLeafMessageId: 'a' });
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    if (kind === 'aba') useChatCloudMessageStore.getState().patchCloudConversation('c1', { activeLeafMessageId: 'b' });
+    const intendedLeaf = kind === 'different' ? 'b' : 'a';
+    useChatCloudMessageStore.getState().patchCloudConversation('c1', { activeLeafMessageId: intendedLeaf });
+    const message: Detail['messages'][number] = { id: 'm', conversationId: 'c1', role: 'user', content: 'Loaded', createdAt: T, inputTokens: 0, outputTokens: 0 };
+    pending.resolve(detail('c1', 'server-leaf', [message]));
+    await loading;
+    expect(leaf()).toBe(intendedLeaf);
+    expect(useChatCloudMessageStore.getState().messages['c1']).toEqual([message]);
+  });
+
+  it('adopts the remote leaf despite mark-read and an omitted-leaf list refresh', async () => {
+    seedCloud('c1');
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    useChatMessageStore.getState().markConversationRead('c1');
+    useChatCloudMessageStore.getState().setCloudConversations([
+      { id: 'c1', title: 'List title', createdAt: T, updatedAt: T, messageCount: 0, pinned: false },
+    ]);
+    pending.resolve(detail('c1'));
+    await loading;
+    expect(leaf()).toBe('server-leaf');
+    expect(convTitle('c1')).toBe('List title');
+  });
+
+  it('does not revive a removed and restored incarnation', async () => {
+    seedCloud('c1');
+    const original = useChatCloudMessageStore.getState().conversations[0]!;
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    useChatCloudMessageStore.getState().removeCloudConversation('c1');
+    useChatCloudMessageStore.getState().restoreCloudConversation({ ...original, activeLeafMessageId: 'restored' }, 0, []);
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(false);
+    pending.resolve(detail('c1'));
+    await loading;
+    expect(leaf()).toBe('restored');
+  });
+
+  it.each(['clear', 'list-remove'])('retires history on %s before a same-ID reinsert', async (kind) => {
+    seedCloud('c1');
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    if (kind === 'clear') useChatCloudMessageStore.getState().clearCloudData();
+    else useChatCloudMessageStore.getState().setCloudConversations([]);
+    seedCloud('c1', 'Replacement');
+    pending.resolve(detail('c1'));
+    await loading;
+    expect(convTitle('c1')).toBe('Replacement');
+    expect(leaf()).toBeUndefined();
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(false);
+  });
+
+  it('preserves an explicit null leaf received during pagination', async () => {
+    seedCloud('c1');
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    useChatCloudMessageStore.getState().setCloudConversations([
+      { id: 'c1', title: 'Chat c1', createdAt: T, updatedAt: T, messageCount: 0, pinned: false, activeLeafMessageId: null },
+    ]);
+    pending.resolve(detail('c1'));
+    await loading;
+    expect(leaf()).toBeNull();
+  });
+
+  it('keeps loading true across distinct conversations and ignores older same-ID errors', async () => {
+    seedCloud('c1');
+    seedCloud('c2');
+    const old = pendingRead();
+    const oldLoad = useChatMessageStore.getState().loadMessages('c1');
+    const other = pendingRead();
+    const otherLoad = useChatMessageStore.getState().loadMessages('c2');
+    const newest = pendingRead();
+    const newestLoad = useChatMessageStore.getState().loadMessages('c1');
+    old.reject(new Error('superseded'));
+    await oldLoad;
+    expect(useChatMessageStore.getState().messageLoadErrorConversationId).toBeNull();
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(true);
+    newest.resolve(detail('c1', 'newest'));
+    await newestLoad;
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(true);
+    other.resolve(detail('c2'));
+    await otherLoad;
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(false);
+    expect(leaf()).toBe('newest');
+  });
+
+  it('retires account work immediately and keeps a new account load owned', async () => {
+    seedCloud('c1');
+    const old = pendingRead();
+    const oldLoad = useChatMessageStore.getState().loadMessages('c1');
+    invalidateCloudAccount();
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(false);
+    useChatCloudMessageStore.getState().clearCloudData();
+    activateCloudAccount('other-history-owner');
+    seedCloud('c1');
+    const current = pendingRead();
+    const currentLoad = useChatMessageStore.getState().loadMessages('c1');
+    old.resolve(detail('c1', 'old-owner'));
+    await oldLoad;
+    expect(leaf()).toBeUndefined();
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(true);
+    current.resolve(detail('c1', 'current-owner'));
+    await currentLoad;
+    expect(leaf()).toBe('current-owner');
+  });
+
+  it('ignores an older same-ID success after the newer load commits', async () => {
+    seedCloud('c1');
+    const older = pendingRead();
+    const olderLoad = useChatMessageStore.getState().loadMessages('c1');
+    const newer = pendingRead();
+    const newerLoad = useChatMessageStore.getState().loadMessages('c1');
+    newer.resolve(detail('c1', 'newer-leaf'));
+    await newerLoad;
+    const staleMessage: Detail['messages'][number] = {
+      id: 'stale-message', conversationId: 'c1', role: 'user', content: 'Old history',
+      createdAt: T, inputTokens: 0, outputTokens: 0,
+    };
+    older.resolve(detail('c1', 'older-leaf', [staleMessage]));
+    await olderLoad;
+    expect(leaf()).toBe('newer-leaf');
+    expect(useChatCloudMessageStore.getState().messages['c1']).toEqual([]);
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(false);
+  });
+
+  it('loads both valid pages before committing their messages and final leaf', async () => {
+    seedCloud('c1');
+    const firstMessage: Detail['messages'][number] = {
+      id: 'm1', conversationId: 'c1', role: 'user', content: 'First page',
+      createdAt: T, inputTokens: 0, outputTokens: 0,
+    };
+    const secondMessage: Detail['messages'][number] = {
+      id: 'm2', conversationId: 'c1', role: 'assistant', content: 'Second page',
+      createdAt: T, inputTokens: 0, outputTokens: 0,
+    };
+    mockGet.mockResolvedValueOnce({ ...detail('c1', 'm1', [firstMessage]), total: 2, hasMore: true });
+    const second = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    await Promise.resolve();
+    expect(mockGet).toHaveBeenNthCalledWith(2, 'c1', { limit: 500, offset: 1 });
+    expect(useChatCloudMessageStore.getState().messages['c1']).toEqual([]);
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(true);
+    second.resolve({ ...detail('c1', 'm2', [secondMessage]), total: 2 });
+    await loading;
+    expect(useChatCloudMessageStore.getState().messages['c1']).toEqual([firstMessage, secondMessage]);
+    expect(leaf()).toBe('m2');
+    expect(useChatMessageStore.getState().isLoadingMessages).toBe(false);
+  });
+
+  it('admits an unknown remote conversation only to Cloud with Cloud artifacts', async () => {
+    const derive = jest.spyOn(artifactStore, 'deriveAndMapToMobileArtifacts').mockReturnValue([]);
+    const message: Detail['messages'][number] = { id: 'm', conversationId: 'unknown', role: 'assistant', content: 'Answer', createdAt: T, inputTokens: 0, outputTokens: 0 };
+    mockGet.mockResolvedValueOnce(detail('unknown', 'm', [message]));
+    await useChatMessageStore.getState().loadMessages('unknown');
+    const admitted = useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'unknown');
+    expect(admitted?.executionMode).toBe('cloud');
+    expect(admitted?.activeLeafMessageId).toBe('m');
+    expect(useChatCloudMessageStore.getState().messages['unknown']).toEqual([message]);
+    expect(useChatMessageStore.getState().messages['unknown']).toBeUndefined();
+    expect(derive).toHaveBeenCalledWith('Answer', 'unknown', 'm', T, 'Chat unknown', expect.anything(), {
+      scope: 'cloud', ownerId: 'history-test-owner',
+    });
+  });
+
+  it('does not admit denied or mismatched remote details', async () => {
+    mockGet.mockRejectedValueOnce(new Error('HTTP 403'));
+    await useChatMessageStore.getState().loadMessages('denied');
+    expect(convExists('denied')).toBe(false);
+    expect(useChatMessageStore.getState().messageLoadErrorConversationId).toBe('denied');
+    mockGet.mockResolvedValueOnce(detail('another-conversation'));
+    await useChatMessageStore.getState().loadMessages('requested');
+    expect(convExists('requested')).toBe(false);
+    expect(convExists('another-conversation')).toBe(false);
+  });
+
+  it('stops pagination after account invalidation rather than fetching with a new owner', async () => {
+    seedCloud('c1');
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    invalidateCloudAccount();
+    activateCloudAccount('other-history-owner');
+    const firstMessage: Detail['messages'][number] = {
+      id: 'm1', conversationId: 'c1', role: 'user', content: 'Valid first page',
+      createdAt: T, inputTokens: 0, outputTokens: 0,
+    };
+    pending.resolve({ ...detail('c1', 'm1', [firstMessage]), total: 2, hasMore: true });
+    await loading;
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(leaf()).toBeUndefined();
+  });
+
+  it('does not admit over a Local conversation created during the request', async () => {
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('collision');
+    seedLocal('collision');
+    const local = useChatMessageStore.getState().conversations[0];
+    pending.resolve(detail('collision'));
+    await loading;
+    expect(convExists('collision')).toBe(false);
+    expect(useChatMessageStore.getState().conversations[0]).toBe(local);
+    expect(useChatMessageStore.getState().messages['collision']).toEqual([]);
+  });
+
+  it('does not duplicate unknown admission when sync inserts the conversation first', async () => {
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    seedCloud('c1', 'Synced title');
+    pending.resolve(detail('c1'));
+    await loading;
+    expect(useChatCloudMessageStore.getState().conversations.filter((c) => c.id === 'c1')).toHaveLength(1);
+    expect(convTitle('c1')).toBe('Synced title');
+    expect(leaf()).toBeUndefined();
+  });
+
+  it('re-reads subscriber message changes after leaf publication and derives only committed contents', async () => {
+    seedCloud('c1');
+    const derive = jest.spyOn(artifactStore, 'deriveAndMapToMobileArtifacts').mockReturnValue([]);
+    const server: Detail['messages'][number] = { id: 'm', conversationId: 'c1', role: 'assistant', content: 'Server', createdAt: T, inputTokens: 0, outputTokens: 0 };
+    useChatCloudMessageStore.getState().setCloudMessages('c1', [server]);
+    const pending = pendingRead();
+    const loading = useChatMessageStore.getState().loadMessages('c1');
+    let changed = false;
+    const unsubscribe = useChatCloudMessageStore.subscribe((state) => {
+      if (changed || state.conversations.find((c) => c.id === 'c1')?.activeLeafMessageId !== 'server-leaf') return;
+      changed = true;
+      state.setCloudMessages('c1', [{ ...server, content: 'New local contents' }]);
+    });
+    pending.resolve(detail('c1', 'server-leaf', [server]));
+    await loading;
+    unsubscribe();
+    expect(useChatCloudMessageStore.getState().messages['c1']?.[0]?.content).toBe('New local contents');
+    expect(derive).toHaveBeenCalledWith('New local contents', 'c1', 'm', T, 'Chat c1', expect.anything(), {
+      scope: 'cloud', ownerId: 'history-test-owner',
+    });
+    expect(derive).not.toHaveBeenCalledWith('Server', expect.anything(), expect.anything(), expect.anything(), expect.anything(), expect.anything(), expect.anything());
   });
 });
 

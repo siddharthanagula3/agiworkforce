@@ -116,8 +116,8 @@ export class ApiKeyService {
     return { apiKey: rows[0], rawKey: raw };
   }
 
-  static async revokeApiKey(db: DatabaseAdapter, id: string, userId: string): Promise<void> {
-    await db.execute(
+  static async revokeApiKey(db: DatabaseAdapter, id: string, userId: string): Promise<number> {
+    return db.execute(
       'UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL',
       [id, userId],
     );

@@ -16,7 +16,7 @@ import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
-  const { settings, saving, saveError, savedAt, loadError, retry, retrySave, setBoolean } =
+  const { settings, loaded, saving, saveError, savedAt, loadError, retry, retrySave, setBoolean } =
     useCapabilitiesPreferences();
 
   const row = (title: string, description: string, control: ReactNode) => (
@@ -83,7 +83,7 @@ export function CapabilitiesSection() {
             <Switch
               aria-label="Cloud code execution and file creation"
               checked={settings.cloudCodeExecution}
-              disabled={loadError !== null}
+              disabled={!loaded || loadError !== null}
               onCheckedChange={(value) => setBoolean('cloudCodeExecution', value)}
             />,
           )}

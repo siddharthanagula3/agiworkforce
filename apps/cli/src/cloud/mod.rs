@@ -333,6 +333,14 @@ pub async fn sync_session(
 
     chat::apply_push_response(&response, &mut session.state);
     session.persist();
+    if !response.conflicts.conversations.is_empty() || !response.conflicts.messages.is_empty() {
+        crate::output::print_warn(
+            "Your local copy is preserved, but cloud sync has unresolved conflicts. \
+             Use /export markdown <path> to save a separate copy, then compare it with \
+             the conversation in your account before deciding which changes to keep. \
+             Conflicting changes are not merged automatically.",
+        );
+    }
     Ok(response.applied.messages.len())
 }
 
@@ -351,7 +359,7 @@ pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> Strin
     }
 }
 
-/// The account's conversations, newest first, with the cached cursor advanced.
+/// Listing must not advance versions for local content it does not adopt.
 pub async fn hosted_conversations(
     privacy: PrivacyMode,
 ) -> Result<Vec<chat::HostedConversation>, CloudError> {
@@ -362,8 +370,8 @@ pub async fn hosted_conversations(
 }
 
 /// One hosted conversation by id, or `None` when the account has no such
-/// conversation. Its versions are recorded, or the next push would insert the
-/// history again.
+/// conversation. Its response rows supply no sync versions, so reading it cannot
+/// advance the bases used to push existing local content.
 pub async fn hosted_conversation(
     privacy: PrivacyMode,
     conversation_id: &str,

@@ -4,6 +4,7 @@ import { SshConnectionControl } from './components/SshConnectionControl';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Code2,
@@ -51,7 +52,9 @@ import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
-import { cloudCodeApi } from './services/cloud-code-api';
+import { useNotebookWorkspace } from '@/features/notebook/hooks/useNotebookWorkspace';
+import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import {
   canonicalGitHubRepositoryBranch,
   canonicalGitHubRepositoryUrl,
@@ -186,7 +189,15 @@ export interface CloudCodePageProps {
   pane?: CodePaneControls;
 }
 
-export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCodePageProps) {
+export function CloudCodePage(props: CloudCodePageProps) {
+  const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  return <OwnedCloudCodePage key={`${isLoaded}:${isSignedIn}:${userId}:${sessionId}`} {...props} />;
+}
+
+function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePageProps) {
+  const { api, capture } = useCloudCodeAuthority(injectedApi);
+  const sessionSnapshot = useSessionSnapshot();
+  const notebookWorkspace = useNotebookWorkspace();
   const paneRef = useRef(pane);
   paneRef.current = pane;
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
@@ -194,7 +205,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const [sessions, setSessions] = useState<CloudCodeSession[]>(
     pane?.initialSession ? [pane.initialSession] : [],
   );
-  const [selectedId, setSelectedId] = useState<string | null>(sessionId ?? null);
+  const [selectedId, publishSelectedId] = useState<string | null>(sessionId ?? null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
   const [turns, setTurns] = useState<CodeTurnRecord[]>([]);
   const [approvals, setApprovals] = useState<CodeApprovalPrompt[]>([]);
@@ -213,6 +224,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const [commitNotice, setCommitNotice] = useState<string | null>(null);
   const [filters, setFilters] = useState<CodeSessionFilters>(DEFAULT_CODE_FILTERS);
   const statusFilter: CodeStatusFilter = filters.status;
+  const statusFilterRef = useRef(statusFilter);
+  statusFilterRef.current = statusFilter;
   const [changesOpen, setChangesOpen] = useState(false);
   const [changesWide, setChangesWide] = useState(false);
   const [changes, setChanges] = useState<CloudCodeChanges | null>(null);
@@ -230,7 +243,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [localEditorDirty, setLocalEditorDirty] = useState(false);
-  const [localSession, setLocalSession] = useState<LocalDeveloperSession | null>(null);
+  const [localSession, publishLocalSession] = useState<LocalDeveloperSession | null>(null);
   const [localPrompt, setLocalPrompt] = useState('');
   const [localPlacement, setLocalPlacement] = useState<LocalPlacement>('local');
   const [localDeletion, setLocalDeletion] = useState<{
@@ -240,6 +253,76 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   } | null>(null);
   const [localArchivedThread, setLocalArchivedThread] = useState<string | null>(null);
   const [localWorktreeRemovedRef, setLocalWorktreeRemovedRef] = useState<string | null>(null);
+  const submitLock = useRef<symbol | null>(null);
+  const selectionRevision = useRef(0);
+  const draftRevision = useRef(0);
+  const selectionRef = useRef<string | null>(sessionId ?? null);
+  const localSelectionRef = useRef<LocalDeveloperSession | null>(null);
+  const observedRoute = useRef(sessionId);
+  if (observedRoute.current !== sessionId) {
+    observedRoute.current = sessionId;
+    if (selectionRef.current !== (sessionId ?? null)) selectionRevision.current += 1;
+  }
+  const resetSelectionWork = useCallback(() => {
+    submitLock.current = null;
+    setBusy(false);
+    setBusySince(null);
+    setTurnRunning(false);
+    setStopping(false);
+    setRunning(false);
+    setCommitting(false);
+    setPullRequestBusy(false);
+    setChangesLoading(false);
+    setDetailLoading(false);
+    setApprovals([]);
+    setShareOpen(false);
+    setRenaming(false);
+    setEntries([]);
+  }, []);
+  const setSelectedId = useCallback((id: string | null) => {
+    if (selectionRef.current !== id) {
+      selectionRevision.current += 1;
+      selectionRef.current = id;
+      resetSelectionWork();
+    }
+    publishSelectedId(id);
+  }, [resetSelectionWork]);
+  const setLocalSession = useCallback((next: LocalDeveloperSession | null) => {
+    if (localSelectionRef.current?.rootId !== next?.rootId ||
+        localSelectionRef.current?.id !== next?.id) {
+      selectionRevision.current += 1;
+      localSelectionRef.current = next;
+      resetSelectionWork();
+    }
+    publishLocalSession(next);
+  }, [resetSelectionWork]);
+  const renderedSelectionRevision = selectionRevision.current;
+  const captureView = useCallback((includeDraft = false) => {
+    const accountCurrent = capture();
+    const routeReady = routeSessionRef.current === (sessionId ?? null);
+    let revision = renderedSelectionRevision;
+    const draftAtStart = draftRevision.current;
+    const isSelected = () => routeReady && accountCurrent() && revision === selectionRevision.current;
+    const isCurrent = () => isSelected() && (!includeDraft || draftAtStart === draftRevision.current);
+    return {
+      accountCurrent,
+      isCurrent,
+      isSelected,
+      followSelection: () => { includeDraft = false; },
+      select: (id: string) => {
+        if (!isCurrent()) return false;
+        const submission = submitLock.current;
+        setSelectedId(id);
+        submitLock.current = submission;
+        revision = selectionRevision.current;
+        return true;
+      },
+    };
+  }, [capture, renderedSelectionRevision, sessionId, setSelectedId]);
+  const captureViewRef = useRef(captureView);
+  captureViewRef.current = captureView;
+  const listRevision = useRef(0);
+  const changesRevision = useRef(0);
   const local = useLocalSessions();
   const environmentChosen = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -255,7 +338,6 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const router = useRouter();
   const routerRef = useRef(router);
   const searchParams = useSearchParams();
-  const submitLock = useRef(false);
   const githubNotice = searchParams.get('github');
   const { firstName, nameResolved } = useGreeting();
   const selectedModelId = useModelStore((state) => state.selectedModelId);
@@ -274,7 +356,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const desktopHost = useDesktopHost();
-  const firstRun = useCodeFirstRun(!pane && !sessionId && desktopHost === null, api);
+  const firstRun = useCodeFirstRun(!pane && !sessionId && desktopHost === null, api, capture);
 
   const leaveLocalEdits = useCallback(
     (proceed: () => void) => {
@@ -321,15 +403,17 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     if (routeSessionRef.current === next) return;
     routeSessionRef.current = next;
     if (next !== null) setRouteNotice(null);
+    if (selectionRef.current === next) return;
     setSelectedId(next);
     setTurns([]);
     setEntries([]);
     setChangesOpen(false);
     setChanges(null);
     setCommitNotice(null);
-  }, [sessionId]);
+  }, [sessionId, setSelectedId]);
 
-  const replaceSession = useCallback((next: CloudCodeSession) => {
+  const replaceSession = useCallback((next: CloudCodeSession, owner: ReturnType<typeof captureView>) => {
+    if (!owner.accountCurrent()) return;
     setSessions((current) => {
       const exists = current.some((session) => session.id === next.id);
       const updated = exists
@@ -337,32 +421,45 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         : [next, ...current];
       return updated.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     });
-    paneRef.current?.onSessionChange(next);
+    if (owner.isCurrent()) paneRef.current?.onSessionChange(next);
   }, []);
 
   const loadChanges = useCallback(
     async (sessionId: string, signal?: AbortSignal) => {
+      const owner = captureView();
+      if (!owner.isCurrent() || selectionRef.current !== sessionId) return;
+      const request = ++changesRevision.current;
+      const current = () => owner.isCurrent() && !signal?.aborted && request === changesRevision.current;
+      if (!current()) return;
       setChangesLoading(true);
       try {
         const body = await api.changes(sessionId, signal);
-        replaceSession(body.session);
+        replaceSession(body.session, owner);
+        if (!current()) return;
         setChanges(body);
       } catch (changesError) {
+        if (!current()) return;
         if (changesError instanceof DOMException && changesError.name === 'AbortError') return;
         setError(friendlyError(changesError));
       } finally {
-        setChangesLoading(false);
+        if (current()) setChangesLoading(false);
       }
     },
-    [api, replaceSession],
+    [api, captureView, replaceSession],
   );
 
   const loadSessions = useCallback(
-    async (status: CodeStatusFilter, signal?: AbortSignal) => {
+    async (status: CodeStatusFilter, signal?: AbortSignal, owner = captureViewRef.current()) => {
+      if (status !== statusFilterRef.current) return;
+      const accountCurrent = capture();
+      const request = ++listRevision.current;
+      const current = () => accountCurrent() && !signal?.aborted && request === listRevision.current && status === statusFilterRef.current;
+      if (!current()) return;
       setPageLoading(true);
-      setError(null);
+      if (owner.isCurrent()) setError(null);
       try {
         const body = await api.list(status, signal);
+        if (!current()) return;
         setAvailability(body.availability);
         setRuntimes(body.runtimes);
         setSessions(body.sessions);
@@ -374,13 +471,14 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
               : DEFAULT_RUNTIME_ID,
         }));
       } catch (loadError) {
+        if (!current()) return;
         if (loadError instanceof DOMException && loadError.name === 'AbortError') return;
-        setError(friendlyError(loadError));
+        if (owner.isCurrent()) setError(friendlyError(loadError));
       } finally {
-        setPageLoading(false);
+        if (current()) setPageLoading(false);
       }
     },
-    [api],
+    [api, capture],
   );
 
   useEffect(() => {
@@ -393,10 +491,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     if (environmentChosen.current) return;
     const rootId = preferredLocalRootId(local.groups);
     if (rootId === null) return;
+    draftRevision.current += 1;
     setDraft((current) => ({ ...current, environment: 'local', localRootId: rootId }));
   }, [local.groups]);
 
   const handleDraftChange = useCallback((patch: Partial<CodeDraft>) => {
+    draftRevision.current += 1;
     if (patch.environment !== undefined) environmentChosen.current = true;
     setDraft((current) => ({
       ...current,
@@ -435,12 +535,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
       return;
     }
     const controller = new AbortController();
+    const owner = captureView();
+    const current = () => owner.isCurrent() && !controller.signal.aborted;
     setDetailLoading(true);
     setError(null);
     void api
       .get(selectedId, controller.signal)
       .then((body) => {
-        replaceSession(body.session);
+        if (!current()) return;
+        replaceSession(body.session, owner);
         setEntries(body.terminalEntries);
         // Merge rather than replace: this read races the turn running in this
         // tab, and a response computed before that turn's row existed would
@@ -455,6 +558,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         });
       })
       .catch((detailError) => {
+        if (!current()) return;
         if (detailError instanceof DOMException && detailError.name === 'AbortError') return;
         if (
           detailError instanceof CloudCodeApiError &&
@@ -471,9 +575,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         }
         setError(friendlyError(detailError));
       })
-      .finally(() => setDetailLoading(false));
+      .finally(() => { if (current()) setDetailLoading(false); });
     return () => controller.abort();
-  }, [api, replaceSession, selectedId]);
+  }, [api, captureView, replaceSession, selectedId, setSelectedId]);
 
   // Approvals outlive the tab that created them (the backend persists them with a
   // 30-minute expiry), so a reload or a session switch has to re-read them or a
@@ -482,15 +586,18 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     setApprovals([]);
     if (!selectedId || !canRun) return;
     const controller = new AbortController();
+    const owner = captureView();
+    const current = () => owner.isCurrent() && !controller.signal.aborted;
     void api
       .listApprovals(selectedId, controller.signal)
-      .then(setApprovals)
+      .then((value) => { if (current()) setApprovals(value); })
       .catch((approvalsError) => {
+        if (!current()) return;
         if (approvalsError instanceof DOMException && approvalsError.name === 'AbortError') return;
         setError(friendlyError(approvalsError));
       });
     return () => controller.abort();
-  }, [api, canRun, selectedId]);
+  }, [api, canRun, captureView, selectedId]);
 
   useEffect(() => {
     if (!changesOpen || !selectedId) return;
@@ -504,11 +611,17 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     if (hiddenProbeRef.current) return;
     hiddenProbeRef.current = true;
     const controller = new AbortController();
+    const accountCurrent = capture();
     void Promise.resolve(api.list('all', controller.signal))
-      .then((body) => setHiddenSessionsExist(body.sessions.length > 0))
+      .then((body) => {
+        if (accountCurrent() && !controller.signal.aborted) setHiddenSessionsExist(body.sessions.length > 0);
+      })
       .catch(() => undefined);
-    return () => controller.abort();
-  }, [api, pageLoading, sessions.length, statusFilter]);
+    return () => {
+      controller.abort();
+      hiddenProbeRef.current = false;
+    };
+  }, [api, capture, pageLoading, sessions.length, statusFilter]);
 
   useEffect(() => {
     if (!renaming) return;
@@ -565,7 +678,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   }, []);
 
   const startTurn = useCallback(
-    async (session: CloudCodeSession, goal: string, mode: CloudCodeTurnMode) => {
+    async (session: CloudCodeSession, goal: string, mode: CloudCodeTurnMode, owner: ReturnType<typeof captureView>) => {
+      if (!owner.isCurrent()) return;
+      const taskRevision = draftRevision.current;
+      owner.followSelection();
       const ownAgent = runtimeRunsOwnAgent(session.runtimeId);
       const recordId = makeRequestId();
       setTurns((current) => [
@@ -594,9 +710,11 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           idempotencyKey: makeRequestId(),
           ...(ownAgent ? {} : { maxSteps: turnSteps, mode }),
         });
+        if (owner.accountCurrent()) void loadSessions(statusFilterRef.current, undefined, owner);
+        if (!owner.isCurrent()) return;
         applyTurn(recordId, turn, goal);
-        void loadSessions(statusFilter);
       } catch (turnError) {
+        if (!owner.isCurrent()) return;
         // The failure belongs in the transcript, next to the task that caused
         // it. The page-level notice cannot carry it: the session refresh below
         // clears that notice before it has been painted once.
@@ -612,20 +730,23 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
               : record,
           ),
         );
-        setTask(goal);
-        void loadSessions(statusFilter);
+        if (taskRevision === draftRevision.current) setTask(goal);
+        void loadSessions(statusFilterRef.current, undefined, owner);
       } finally {
-        setBusy(false);
-        setBusySince(null);
-        setTurnRunning(false);
-        setStopping(false);
+        if (owner.isSelected()) {
+          setBusy(false);
+          setBusySince(null);
+          setTurnRunning(false);
+          setStopping(false);
+        }
       }
     },
-    [agentModel, api, applyTurn, loadSessions, runtimeRunsOwnAgent, statusFilter, turnSteps],
+    [agentModel, api, applyTurn, loadSessions, runtimeRunsOwnAgent, turnSteps],
   );
 
   const createSession = useCallback(
-    async (title: string, patch: Partial<CodeDraft> = {}): Promise<CloudCodeSession | null> => {
+    async (title: string, patch: Partial<CodeDraft> = {}, owner = captureView(true)): Promise<CloudCodeSession | null> => {
+      if (!owner.isCurrent()) return null;
       const next = { ...draft, ...patch };
       if (!canCreate || busy) return null;
       if (next.networkAccess === 'full' && !next.fullNetworkAccepted) return null;
@@ -651,9 +772,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
             ? { harnessCredential: next.harnessCredential.trim() }
             : {}),
         });
+        replaceSession(body.session, owner);
+        if (!owner.select(body.session.id)) return null;
         if (next.harnessModelId) sessionModelsRef.current[body.session.id] = next.harnessModelId;
-        replaceSession(body.session);
-        setSelectedId(body.session.id);
         setEntries(body.terminalEntries);
         setTurns([]);
         setDraft((current) => ({
@@ -666,14 +787,17 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         else router.push(codeSessionPath(body.session.id));
         return body.session;
       } catch (createError) {
+        if (!owner.isCurrent()) return null;
         setError(friendlyError(createError));
         return null;
       } finally {
-        setBusy(false);
-        setBusySince(null);
+        if (owner.isSelected()) {
+          setBusy(false);
+          setBusySince(null);
+        }
       }
     },
-    [api, busy, canCreate, draft, replaceSession, router, runtimes],
+    [api, busy, canCreate, captureView, draft, replaceSession, router, runtimes],
   );
 
   useEffect(() => {
@@ -698,19 +822,19 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     }
     setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
-  }, [local.settled, local.loading, local.groups]);
+  }, [local.settled, local.loading, local.groups, setLocalSession]);
 
   const openLocalSession = useCallback((session: LocalDeveloperSession) => {
     setLocalSession(session);
     setRouteNotice(null);
     if (!paneRef.current) routerRef.current.replace(localSessionPath(session.rootId, session.id));
-  }, []);
+  }, [setLocalSession]);
 
   const closeLocalSession = useCallback(() => {
     setLocalEditorDirty(false);
     setLocalSession(null);
     if (!paneRef.current) routerRef.current.replace(CODE_ROUTES.root);
-  }, []);
+  }, [setLocalSession]);
 
   const localSessionDeleted = useCallback(
     (session: LocalDeveloperSession, outcome: ThreadDeleteResponse) => {
@@ -787,23 +911,26 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   );
 
   const waitForReady = useCallback(
-    async (initial: CloudCodeSession): Promise<CloudCodeSession> => {
+    async (initial: CloudCodeSession, owner: ReturnType<typeof captureView>): Promise<CloudCodeSession | null> => {
       let current = initial;
       for (
         let attempt = 0;
         current.state === 'provisioning' && attempt < READY_POLLS;
         attempt += 1
       ) {
+        if (!owner.isCurrent()) return null;
         if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
+        if (!owner.isCurrent()) return null;
         try {
           const detail = await api.get(current.id);
+          replaceSession(detail.session, owner);
+          if (!owner.isCurrent()) return null;
           current = detail.session;
-          replaceSession(current);
         } catch {
-          return current;
+          return owner.isCurrent() ? current : null;
         }
       }
-      return current;
+      return owner.isCurrent() ? current : null;
     },
     [api, replaceSession],
   );
@@ -815,7 +942,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
       entry: CodeRepositoryEntry | null = null,
     ) => {
       if (submitLock.current || busy) return;
-      submitLock.current = true;
+      const submission = Symbol();
+      submitLock.current = submission;
+      const owner = captureView(true);
       try {
         if (draft.environment === 'local' && !selectedSession) {
           if (draft.localRootId === null) return;
@@ -823,7 +952,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           return;
         }
 
-        if (!canCreate) return;
+        if (!canCreate || !owner.isCurrent()) return;
 
         const selection = selectionForCreate(draft, entry);
         if ('error' in selection) {
@@ -840,23 +969,26 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         ) {
           const current =
             selectedSession.state === 'provisioning'
-              ? await waitForReady(selectedSession)
+              ? await waitForReady(selectedSession, owner)
               : selectedSession;
+          if (!owner.isCurrent() || !current) return;
           if (current.state !== 'ready') {
             setError(current.lastError || CODE_COPY.environmentNotReady);
             return;
           }
           setTask('');
-          await startTurn(current, text, mode);
+          await startTurn(current, text, mode, owner);
           return;
         }
 
-        const created = await createSession(titleFromTask(text), selection.patch);
+        const created = await createSession(titleFromTask(text), selection.patch, owner);
+        if (!owner.isCurrent()) return;
         if (!created) {
           setTask(text);
           return;
         }
-        const ready = created.state === 'provisioning' ? await waitForReady(created) : created;
+        const ready = created.state === 'provisioning' ? await waitForReady(created, owner) : created;
+        if (!owner.isCurrent() || !ready) return;
         if (ready.state !== 'ready') {
           setTask(text);
           setError(
@@ -866,14 +998,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           return;
         }
         setTask('');
-        await startTurn(ready, text, mode);
+        await startTurn(ready, text, mode, owner);
       } finally {
-        submitLock.current = false;
+        if (submitLock.current === submission) submitLock.current = null;
       }
     },
     [
       busy,
       canCreate,
+      captureView,
       createSession,
       draft,
       localModelId,
@@ -892,6 +1025,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const handleApproval = useCallback(
     async (approval: CodeApprovalPrompt, decision: 'approve' | 'reject') => {
       if (!selectedSession || busy) return;
+      const owner = captureView();
+      if (!owner.isCurrent()) return;
       const recordId = makeRequestId();
       setTurns((current) => [
         ...current,
@@ -920,60 +1055,73 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           stepIndex: approval.stepIndex,
           decision,
         });
+        if (owner.accountCurrent()) void loadSessions(statusFilterRef.current, undefined, owner);
+        if (!owner.isCurrent()) return;
         applyTurn(recordId, turn, approval.goal);
-        void loadSessions(statusFilter);
       } catch (decisionError) {
+        if (!owner.isCurrent()) return;
         setTurns((current) => current.filter((record) => record.id !== recordId));
         setError(friendlyError(decisionError));
         // The approval may have expired or been decided elsewhere; re-read rather
         // than leaving a card that can no longer be acted on.
         void api
           .listApprovals(selectedSession.id)
-          .then(setApprovals)
-          .catch(() => setApprovals([]));
+          .then((value) => { if (owner.isCurrent()) setApprovals(value); })
+          .catch(() => { if (owner.isCurrent()) setApprovals([]); });
       } finally {
-        setBusy(false);
-        setBusySince(null);
-        setTurnRunning(false);
-        setStopping(false);
+        if (owner.isCurrent()) {
+          setBusy(false);
+          setBusySince(null);
+          setTurnRunning(false);
+          setStopping(false);
+        }
       }
     },
-    [api, applyTurn, busy, loadSessions, selectedSession, statusFilter],
+    [api, applyTurn, busy, captureView, loadSessions, selectedSession],
   );
 
   const handleStopTurn = useCallback(async () => {
     if (!selectedSession || !turnRunning || stopping) return;
+    const owner = captureView();
+    if (!owner.isCurrent()) return;
     setStopping(true);
     try {
       await api.cancelAgentTurn(selectedSession.id);
     } catch (stopError) {
+      if (!owner.isCurrent()) return;
       setStopping(false);
       setError(friendlyError(stopError));
     }
-  }, [api, selectedSession, stopping, turnRunning]);
+  }, [api, captureView, selectedSession, stopping, turnRunning]);
 
   const handleRunCommand = useCallback(
     async (command: string) => {
       if (!canRun || !selectedSession || running) return;
+      const owner = captureView();
+      if (!owner.isCurrent()) return;
       setRunning(true);
       setError(null);
       try {
         const body = await api.run(selectedSession.id, command);
-        replaceSession(body.session);
+        replaceSession(body.session, owner);
+        if (!owner.isCurrent()) return;
         setEntries((current) => [...current, body.terminalEntry]);
       } catch (runError) {
+        if (!owner.isCurrent()) return;
         setError(friendlyError(runError));
-        void loadSessions(statusFilter);
+        void loadSessions(statusFilterRef.current, undefined, owner);
       } finally {
-        setRunning(false);
+        if (owner.isCurrent()) setRunning(false);
       }
     },
-    [api, canRun, loadSessions, replaceSession, running, selectedSession, statusFilter],
+    [api, canRun, captureView, loadSessions, replaceSession, running, selectedSession],
   );
 
   const handleCommit = useCallback(
     async (message: string, files: string[] | null) => {
       if (!selectedSession || committing) return;
+      const owner = captureView();
+      if (!owner.isCurrent()) return;
       setCommitting(true);
       setError(null);
       setCommitNotice(null);
@@ -982,40 +1130,47 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           message,
           ...(files ? { files } : {}),
         });
-        replaceSession(result.session);
+        replaceSession(result.session, owner);
+        if (!owner.isCurrent()) return;
         setCommitNotice(result.push.ok ? CODE_COPY.commitPushed : result.push.output);
         void loadChanges(selectedSession.id);
       } catch (commitError) {
+        if (!owner.isCurrent()) return;
         setError(friendlyError(commitError));
       } finally {
-        setCommitting(false);
+        if (owner.isCurrent()) setCommitting(false);
       }
     },
-    [api, committing, loadChanges, replaceSession, selectedSession],
+    [api, captureView, committing, loadChanges, replaceSession, selectedSession],
   );
 
   const handleDiscard = useCallback(
     async (files: string[]) => {
       if (!selectedSession || committing || files.length === 0) return;
+      const owner = captureView();
+      if (!owner.isCurrent()) return;
       setCommitting(true);
       setError(null);
       setCommitNotice(null);
       try {
         const result = await api.discardChanges(selectedSession.id, files);
-        replaceSession(result.session);
+        replaceSession(result.session, owner);
+        if (!owner.isCurrent()) return;
         void loadChanges(selectedSession.id);
       } catch (discardError) {
+        if (!owner.isCurrent()) return;
         setError(friendlyError(discardError));
       } finally {
-        setCommitting(false);
+        if (owner.isCurrent()) setCommitting(false);
       }
     },
-    [api, committing, loadChanges, replaceSession, selectedSession],
+    [api, captureView, committing, loadChanges, replaceSession, selectedSession],
   );
 
   const openHome = useCallback(
     () =>
       leaveLocalEdits(() => {
+        draftRevision.current += 1;
         if (paneRef.current) {
           paneRef.current.onClose();
           return;
@@ -1031,7 +1186,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         setRailDrawerOpen(false);
         router.push(CODE_ROUTES.root);
       }),
-    [router, leaveLocalEdits],
+    [router, leaveLocalEdits, setLocalSession, setSelectedId],
   );
 
   const handleRename = useCallback(async () => {
@@ -1039,87 +1194,107 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     const next = titleDraft.trim();
     setRenaming(false);
     if (!session || !next || next === session.title) return;
+    const owner = captureView();
+    if (!owner.isCurrent()) return;
     try {
-      replaceSession(await api.rename(session.id, next));
+      replaceSession(await api.rename(session.id, next), owner);
     } catch (renameError) {
+      if (!owner.isCurrent()) return;
       setError(friendlyError(renameError));
     }
-  }, [api, replaceSession, selectedSession, titleDraft]);
+  }, [api, captureView, replaceSession, selectedSession, titleDraft]);
 
   const handleSetArchived = useCallback(
     async (archived: boolean) => {
       const session = selectedSession;
       if (!session) return;
+      const owner = captureView();
+      if (!owner.isCurrent()) return;
       try {
-        replaceSession(await api.setArchived(session.id, archived));
+        replaceSession(await api.setArchived(session.id, archived), owner);
       } catch (archiveError) {
+        if (!owner.isCurrent()) return;
         setError(friendlyError(archiveError));
       }
     },
-    [api, replaceSession, selectedSession],
+    [api, captureView, replaceSession, selectedSession],
   );
 
   const handleChangeSharing = useCallback(
     async (visibility: CloudCodeShareVisibility) => {
       const session = selectedSession;
       if (!session) return;
-      replaceSession(await api.setSharing(session.id, visibility));
+      const owner = captureView();
+      if (!owner.isCurrent()) return;
+      replaceSession(await api.setSharing(session.id, visibility), owner);
     },
-    [api, replaceSession, selectedSession],
+    [api, captureView, replaceSession, selectedSession],
   );
 
   const requestDelete = useCallback(() => {
     const session = selectedSession;
     if (!session) return;
+    const owner = captureView();
+    if (!owner.isCurrent()) return;
     confirm({
       title: CODE_COPY.deleteSessionTitle,
       description: CODE_COPY.deleteSessionDescription,
       confirmLabel: CODE_COPY.deleteSessionConfirm,
       destructive: true,
       onConfirm: async () => {
+        if (!owner.isCurrent()) return;
         try {
           await api.deleteSession(session.id);
+          if (!owner.accountCurrent()) return;
           setSessions((current) => current.filter((entry) => entry.id !== session.id));
-          openHome();
+          if (owner.isCurrent()) openHome();
         } catch (deleteError) {
+          if (!owner.isCurrent()) return;
           setError(friendlyError(deleteError));
         }
       },
     });
-  }, [api, confirm, openHome, selectedSession]);
+  }, [api, captureView, confirm, openHome, selectedSession]);
 
   const requestClose = useCallback(() => {
     const session = selectedSession;
     if (!session) return;
+    const owner = captureView();
+    if (!owner.isCurrent()) return;
     confirm({
       title: CODE_COPY.closeSessionTitle,
       description: CODE_COPY.closeSessionDescription,
       confirmLabel: CODE_COPY.closeSessionConfirm,
       destructive: true,
       onConfirm: async () => {
+        if (!owner.isCurrent()) return;
         try {
           const closed = await api.close(session.id);
-          replaceSession(closed);
+          replaceSession(closed, owner);
         } catch (closeError) {
+          if (!owner.isCurrent()) return;
           setError(friendlyError(closeError));
         }
       },
     });
-  }, [api, confirm, replaceSession, selectedSession]);
+  }, [api, captureView, confirm, replaceSession, selectedSession]);
 
   const handleCreatePullRequest = useCallback(async () => {
     if (!selectedSession || pullRequestBusy) return;
+    const owner = captureView();
+    if (!owner.isCurrent()) return;
     setPullRequestBusy(true);
     setError(null);
     try {
       const body = await api.createPullRequest(selectedSession.id);
-      replaceSession(body.session);
+      replaceSession(body.session, owner);
     } catch (pullRequestError) {
+      if (!owner.isCurrent()) return;
       setError(friendlyError(pullRequestError));
     } finally {
-      setPullRequestBusy(false);
+      if (owner.isCurrent()) setPullRequestBusy(false);
     }
-  }, [api, pullRequestBusy, replaceSession, selectedSession]);
+  }, [api, captureView, pullRequestBusy, replaceSession, selectedSession]);
 
   const openSession = useCallback(
     (openedId: string) => {
@@ -1132,7 +1307,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
       setRailDrawerOpen(false);
       router.push(codeSessionPath(openedId));
     },
-    [router],
+    [router, setSelectedId],
   );
 
   const panes = useCodePanes({
@@ -1147,8 +1322,13 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     selectedId,
     loading: pageLoading,
     filters,
-    onFiltersChange: (patch: Partial<CodeSessionFilters>) =>
-      setFilters((current) => ({ ...current, ...patch })),
+    onFiltersChange: (patch: Partial<CodeSessionFilters>) => {
+      if (patch.status !== undefined && patch.status !== statusFilterRef.current) {
+        statusFilterRef.current = patch.status;
+        listRevision.current += 1;
+      }
+      setFilters((current) => ({ ...current, ...patch }));
+    },
     onNewSession: openHome,
     onSelectSession: (id: string, options?: { split: boolean }) =>
       leaveLocalEdits(() => {
@@ -1256,6 +1436,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const closed = selectedSession?.state === 'closed';
   const archived = selectedSession?.archivedAt != null;
   const isNotebookSession = selectedSession?.runtimeId === NOTEBOOK_TEMPLATE_ID;
+  const notebookIdentity = sessionSnapshot();
+  const notebookSessionId = selectedSession?.id;
 
   const notices = (
     <>
@@ -1582,6 +1764,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                           onCloseSession={requestClose}
                         />
                         <CodeShareDialog
+                          key={renderedSelectionRevision}
                           session={selectedSession}
                           open={shareOpen}
                           onOpenChange={setShareOpen}
@@ -1623,9 +1806,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
 
                         {isNotebookSession && (
                           <NotebookPanel
+                            workspace={notebookWorkspace}
+                            selectionRevision={renderedSelectionRevision}
                             sessionId={selectedSession.id}
                             sessionReady={selectedSession.state === 'ready'}
-                            onSession={replaceSession}
+                            onSession={(next) => {
+                              if (!notebookIdentity?.isCurrent() || next.id !== notebookSessionId ||
+                                  renderedSelectionRevision !== selectionRevision.current) return;
+                              replaceSession(next, captureView());
+                            }}
                           />
                         )}
 
@@ -1727,8 +1916,13 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                     </div>
                   ) : (
                     <CodeComposer
+                      dictationDestination={selectedId ? selectedSession?.id ?? null : 'new-cloud-code'}
+                      dictationModel={selectedSession
+                        ? (runtimeRunsOwnAgent(selectedSession.runtimeId)
+                          ? sessionModelsRef.current[selectedSession.id] : undefined) ?? agentModel
+                        : (runtimeRunsOwnAgent(draft.runtimeId) ? draft.harnessModelId : '') || agentModel}
                       value={task}
-                      onChange={setTask}
+                      onChange={(value) => { draftRevision.current += 1; setTask(value); }}
                       onSubmit={(text, repository) => void handleSubmit(text, turnMode, repository)}
                       disabled={
                         isLocalDraft && !selectedSession
@@ -1768,6 +1962,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
 
                 {selectedSession && changesOpen && !localSession && (
                   <CodeChangesPanel
+                    key={renderedSelectionRevision}
                     session={selectedSession}
                     entries={entries}
                     canRun={canRun}
@@ -1796,7 +1991,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           panes.panes.map((entry) => (
             <CloudCodePage
               key={entry.key}
-              api={api}
+              api={injectedApi}
               sessionId={entry.sessionId}
               pane={{
                 focused: panes.isFocused(entry.key),
@@ -1804,7 +1999,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                 onFocus: () => panes.focus(entry.key),
                 onClose: () => panes.close(entry.key),
                 onSessionOpened: (id) => panes.replace(entry.key, id),
-                onSessionChange: replaceSession,
+                onSessionChange: (next) => replaceSession(next, captureView()),
               }}
             />
           ))}

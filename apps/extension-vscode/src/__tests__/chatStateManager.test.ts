@@ -43,6 +43,8 @@ import { getTokenCounter } from '../data/tokenCounter';
 import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import * as accountAccess from '../features/surfaces/accountAccess';
+import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
+import * as tierResolver from '../integrations/tierResolver';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -2947,7 +2949,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
-  it('offers to review and undo the files a reply changed', async () => {
+  it('refuses automatic Undo when checkpoints cannot prove reply ownership', async () => {
     const harness = makeHarness();
     const rewindThread = vi.fn().mockResolvedValue({
       restoredFiles: ['src/math.ts'],
@@ -3009,12 +3011,12 @@ describe('ChatStateManager local turn lifecycle', () => {
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
     await harness.manager.handleMessage({ type: 'undoTurn', payload: { turnId: 'turn-1' } });
 
-    expect(rewindThread).toHaveBeenCalledWith({
-      threadId: 'thread-1',
-      checkpointIndex: 1,
-      restore: 'code',
-    });
-    expect(harness.posted).toContainEqual({
+    expect(listCheckpoints).not.toHaveBeenCalled();
+    expect(rewindThread).not.toHaveBeenCalled();
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('cannot verify which checkpoint belongs to that reply'),
+    );
+    expect(harness.posted).not.toContainEqual({
       type: 'turnChangesUndone',
       payload: { turnId: 'turn-1' },
     });
@@ -3423,6 +3425,190 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: { category: 'runtime', headline: 'approval channel closed', retryable: true },
     });
     await send;
+  });
+
+  it('does not resurrect an approval after capability discovery outlives its turn', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Edit file' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    let resolveCapability!: (value: boolean) => void;
+    harness.runtime.offers.mockImplementation((capability: string) =>
+      capability === 'approvalEdits'
+        ? new Promise<boolean>((resolve) => { resolveCapability = resolve; })
+        : Promise.resolve(false),
+    );
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'late-edit',
+      kind: 'FileWrite { path: "/workspace/a.ts" }', summary: 'Edit?', detail: 'a.ts',
+      editable: true, proposedContent: 'new text',
+    });
+    await vi.waitFor(() => expect(resolveCapability).toBeDefined());
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await send;
+    resolveCapability(true);
+    await Promise.resolve();
+    await harness.manager.handleMessage({
+      type: 'respondToApproval', payload: { requestId: 'late-edit', decision: 'once' },
+    });
+    expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'late-edit' }),
+    });
+  });
+
+  it.each(['once', 'abort'] as const)('does not apply a stale %s after review cleanup', async (decision) => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Edit file' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.runtime.offers.mockResolvedValue(true);
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'edit-1',
+      kind: 'FileWrite { path: "/workspace/a.ts" }', summary: 'Edit?', detail: 'a.ts',
+      editable: true, proposedContent: 'new text',
+    });
+    await vi.waitFor(() => expect(harness.posted).toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'edit-1' }),
+    }));
+    let releaseReview!: () => void;
+    const cleanup = new Promise<undefined>((resolve) => { releaseReview = () => resolve(undefined); });
+    const review = vi.spyOn(proposedChangeReview, decision === 'once' ? 'finishProposedChange' : 'discardProposedChange')
+      .mockImplementation(() => cleanup);
+    try {
+      const response = harness.manager.handleMessage({
+        type: 'respondToApproval', payload: { requestId: 'edit-1', decision },
+      });
+      await vi.waitFor(() => expect(review).toHaveBeenCalledOnce());
+      await harness.manager.handleMessage({
+        type: 'respondToApproval', payload: { requestId: 'edit-1', decision },
+      });
+      expect(review).toHaveBeenCalledOnce();
+      harness.emit({
+        type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+        response: 'done', inputTokens: 1, outputTokens: 1,
+      });
+      await send;
+      harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+      const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Next turn' } });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+      releaseReview();
+      await response;
+      expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+      expect(harness.runtime.interruptTurn).not.toHaveBeenCalled();
+      harness.emit({
+        type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+        response: 'done', inputTokens: 1, outputTokens: 1,
+      });
+      await next;
+    } finally {
+      review.mockRestore();
+    }
+  });
+
+  it('does not show a successful approval or cache session consent after an RPC failure', async () => {
+    const harness = makeHarness({ approvalFailure: new Error('approval rejected') });
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Run command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'failed-session',
+      kind: 'Exec { command: "ls" }', summary: 'Run?', detail: 'ls',
+    });
+    await harness.manager.handleMessage({
+      type: 'respondToApproval', payload: { requestId: 'failed-session', decision: 'session' },
+    });
+    await send;
+    expect(harness.posted).not.toContainEqual({
+      type: 'approvalResolved', payload: { requestId: 'failed-session', outcome: 'session' },
+    });
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Try another command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-2', requestId: 'fresh-session',
+      kind: 'Exec { command: "pwd" }', summary: 'Run?', detail: 'pwd',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'fresh-session' }),
+    });
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await next;
+  });
+
+  it.each(['session', 'deny'] as const)('does not apply a delayed %s response to a later turn', async (decision) => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Run command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    let releaseResponse!: () => void;
+    harness.runtime.respondToApproval.mockReturnValueOnce(new Promise<void>((resolve) => { releaseResponse = resolve; }));
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-1', requestId: 'delayed-session',
+      kind: 'Exec { command: "ls" }', summary: 'Run?', detail: 'ls',
+    });
+    const response = harness.manager.handleMessage({
+      type: 'respondToApproval', payload: { requestId: 'delayed-session', decision, guidance: 'Use another approach' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await send;
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Next command' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    releaseResponse();
+    await response;
+    harness.emit({
+      type: 'approval_requested', threadId: 'thread-1', turnId: 'turn-2', requestId: 'next-session',
+      kind: 'Exec { command: "pwd" }', summary: 'Run?', detail: 'pwd',
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'approvalRequested', payload: expect.objectContaining({ requestId: 'next-session' }),
+    });
+    expect(harness.posted).not.toContainEqual({
+      type: 'approvalResolved', payload: { requestId: 'delayed-session', outcome: decision },
+    });
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+    expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2);
+    expect(harness.runtime.steerTurn).not.toHaveBeenCalled();
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await next;
+  });
+
+  it('does not publish a delayed interrupt failure into the next turn', async () => {
+    let rejectInterrupt!: (error: Error) => void;
+    const harness = makeHarness({ interruptTurn: new Promise<void>((_resolve, reject) => { rejectInterrupt = reject; }) });
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Start work' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const cancel = harness.manager.handleMessage({ type: 'cancel' });
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-1', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await send;
+    harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
+    const next = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Next work' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    rejectInterrupt(new Error('old interrupt failed'));
+    await cancel;
+    expect(harness.posted).not.toContainEqual({
+      type: 'error', payload: expect.objectContaining({ headline: 'old interrupt failed' }),
+    });
+    harness.emit({
+      type: 'turn_completed', threadId: 'thread-1', turnId: 'turn-2', status: 'completed',
+      response: 'done', inputTokens: 1, outputTokens: 1,
+    });
+    await next;
   });
 
   it('asks in the transcript rather than in a native dialog', async () => {
@@ -4462,6 +4648,303 @@ describe('ChatStateManager error classification', () => {
     expect(harness.posted).toContainEqual({
       type: 'error',
       payload: presentTurnFailure(failure),
+    });
+  });
+});
+
+describe('ChatStateManager composer-bound conversation navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(vscode.window.showWarningMessage).mockReset();
+    vi.mocked(vscode.window.showQuickPick).mockReset();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+  });
+
+  const composer = { instance: 'navigation-fixture', revision: 0, attachments: 0 };
+  const rewindOutcome = {
+    restoredFiles: [],
+    removedFiles: [],
+    skippedFiles: [],
+    conversationRestored: true,
+    prompt: 'Continue here',
+  };
+
+  async function navigationHarness(binding = true) {
+    const persisted = {
+      thread: threadSummary({ id: 'navigation-source' }),
+      messages: [
+        { role: 'user', text: 'First prompt', index: 0 },
+        { role: 'assistant', text: 'First answer', index: 1 },
+        { role: 'user', text: 'Continue here', index: 2 },
+      ],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const harness = makeHarness({ resolvedConversation: persisted });
+    vi.mocked(harness.conversationTreeProvider!.resolveThread).mockImplementation(
+      async (threadId) => ({
+        response: { ...persisted, thread: threadSummary({ id: threadId }) },
+        runtime: harness.runtime as unknown as LocalRuntimeClient,
+        cwd: '/workspace',
+      }),
+    );
+    const forkThread = vi.fn().mockResolvedValue(threadSummary({ id: 'navigation-fork' }));
+    const rewindThread = vi.fn().mockResolvedValue(rewindOutcome);
+    const listCheckpoints = vi.fn().mockResolvedValue({
+      checkpoints: [{
+        checkpointIndex: 0,
+        messageIndex: 2,
+        prompt: 'Continue here',
+        createdAt: '2026-10-18T00:00:00Z',
+        trackedFiles: 0,
+      }],
+    });
+    Object.assign(harness.runtime, { forkThread, rewindThread, listCheckpoints });
+    harness.runtime.offers.mockImplementation(async (...args: unknown[]) =>
+      args[0] === 'forkAtMessage' || args[0] === 'checkpoints',
+    );
+    await expect(harness.manager.resumeConversation('navigation-source')).resolves.toBe(true);
+    if (binding) await harness.manager.handleMessage({ type: 'composerState', payload: { ...composer } });
+    harness.runtime.resumeThread.mockClear();
+    harness.posted.length = 0;
+    return { ...harness, forkThread, rewindThread, listCheckpoints };
+  }
+
+  function navigate(harness: Awaited<ReturnType<typeof navigationHarness>>, action: 'branch' | 'resend' | 'checkpoint') {
+    if (action === 'checkpoint') {
+      vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) =>
+        (await items)[0] as never,
+      );
+      vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Rewind' as never);
+      return harness.manager.showCheckpoints();
+    }
+    if (action === 'resend') {
+      vi.mocked(vscode.window.showWarningMessage).mockImplementationOnce(async (_message, _options, item) => item as never);
+    }
+    return harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action, text: 'Continue here', occurrence: 0, composer: { ...composer } },
+    });
+  }
+
+  it.each(['branch', 'resend', 'checkpoint'] as const)(
+    'keeps a newer resume authoritative after delayed %s finishes',
+    async (action) => {
+      const harness = await navigationHarness();
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      const operation = action === 'branch' ? harness.forkThread : harness.rewindThread;
+      operation.mockImplementationOnce(async () => {
+        await pending;
+        return action === 'branch' ? threadSummary({ id: 'navigation-fork' }) : rewindOutcome;
+      });
+      const navigation = navigate(harness, action);
+      await vi.waitFor(() => expect(operation).toHaveBeenCalledOnce());
+      await expect(harness.manager.resumeConversation('newer-history')).resolves.toBe(true);
+      harness.posted.length = 0;
+      release();
+      await navigation;
+      expect(harness.manager.activeThreadId()).toBe('newer-history');
+      expect(harness.runtime.resumeThread.mock.calls).toEqual([['newer-history']]);
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+    },
+  );
+
+  it.each(['branch', 'resend', 'checkpoint'] as const)(
+    'cancels %s after the composer revision changes during the runtime operation',
+    async (action) => {
+      const harness = await navigationHarness();
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      const operation = action === 'branch' ? harness.forkThread : harness.rewindThread;
+      operation.mockImplementationOnce(async () => {
+        await pending;
+        return action === 'branch' ? threadSummary({ id: 'navigation-fork' }) : rewindOutcome;
+      });
+      const navigation = navigate(harness, action);
+      await vi.waitFor(() => expect(operation).toHaveBeenCalledOnce());
+      await harness.manager.handleMessage({ type: 'composerState', payload: { ...composer, revision: 1 } });
+      release();
+      await navigation;
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+    },
+  );
+
+  it('invalidates a pending fork when the model is reselected without changing its value', async () => {
+    const harness = await navigationHarness();
+    let release!: () => void;
+    harness.forkThread.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => { release = resolve; });
+      return threadSummary({ id: 'navigation-fork' });
+    });
+    const navigation = navigate(harness, 'branch');
+    await vi.waitFor(() => expect(harness.forkThread).toHaveBeenCalledOnce());
+    await harness.manager.handleMessage({ type: 'selectModel', payload: { modelId: 'auto' } });
+    release();
+    await navigation;
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+  });
+
+  it.each(['branch', 'resend', 'checkpoint'] as const)(
+    'restores the draft for unchanged same-owner %s',
+    async (action) => {
+      const harness = await navigationHarness();
+      await navigate(harness, action);
+      expect(harness.runtime.resumeThread).toHaveBeenCalledWith(
+        action === 'branch' ? 'navigation-fork' : 'navigation-source',
+      );
+      expect(harness.posted).toContainEqual({
+        type: 'composerDraft',
+        payload: {
+          text: 'Continue here',
+          references: [],
+          submit: action === 'resend',
+          expectedComposer: { ...composer, epoch: expect.any(Number) },
+        },
+      });
+      expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['missing', 'staged', 'pending'] as const)(
+    'refuses message actions and command checkpoints with %s composer binding or files',
+    async (state) => {
+      const harness = await navigationHarness(state !== 'missing');
+      if (state === 'staged') {
+        await harness.manager.handleMessage({ type: 'composerState', payload: { ...composer, attachments: 1 } });
+      }
+      if (state === 'pending') {
+        await harness.manager.handleMessage({
+          type: 'attachFiles',
+          payload: { files: [{ name: 'note.txt', mimeType: 'text/plain', sizeBytes: 3, dataUrl: 'data:text/plain;base64,YWJj' }] },
+        });
+        expect(harness.posted).toContainEqual(expect.objectContaining({
+          type: 'attachFilesAck',
+          payload: expect.objectContaining({ added: [expect.objectContaining({ name: 'note.txt' })] }),
+        }));
+      }
+      await navigate(harness, 'branch');
+      await navigate(harness, 'resend');
+      await harness.manager.handleMessage({
+        type: 'messageAction',
+        payload: { action: 'branch', text: 'First prompt', occurrence: 0, composer: { ...composer } },
+      });
+      await harness.manager.showCheckpoints();
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.forkThread).not.toHaveBeenCalled();
+      expect(harness.rewindThread).not.toHaveBeenCalled();
+      expect(harness.listCheckpoints).not.toHaveBeenCalled();
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(expect.stringContaining('remove staged files'));
+    },
+  );
+
+  it('refuses an action with no binding even when the host has a current composer', async () => {
+    const harness = await navigationHarness();
+    await harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action: 'branch', text: 'Continue here', occurrence: 0 },
+    });
+    expect(harness.forkThread).not.toHaveBeenCalled();
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+  });
+
+  it.each(['trustMode', 'provider', 'model'] as const)(
+    'refuses a fork whose resumed %s differs from its captured authority',
+    async (field) => {
+      const harness = await navigationHarness();
+      const changed = threadSummary({
+        id: 'navigation-fork',
+        ...(field === 'trustMode' ? { trustMode: 'local' as const } : {}),
+        ...(field === 'provider' ? { provider: 'ollama' } : {}),
+        ...(field === 'model' ? { model: requireCatalogModel('anthropic').id } : {}),
+      });
+      harness.runtime.resumeThread.mockResolvedValueOnce(changed);
+      await navigate(harness, 'branch');
+      expect(harness.forkThread).toHaveBeenCalledOnce();
+      expect(harness.runtime.resumeThread).toHaveBeenCalledWith('navigation-fork');
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+    },
+  );
+
+  it('invalidates a pending fork before model selection finishes resolving the tier', async () => {
+    const harness = await navigationHarness();
+    let releaseFork!: () => void;
+    harness.forkThread.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => { releaseFork = resolve; });
+      return threadSummary({ id: 'navigation-fork' });
+    });
+    let releaseTier!: (tier: Awaited<ReturnType<typeof tierResolver.resolveTier>>) => void;
+    const pendingTier = new Promise<Awaited<ReturnType<typeof tierResolver.resolveTier>>>(
+      (resolve) => { releaseTier = resolve; },
+    );
+    const tier = vi.spyOn(tierResolver, 'resolveTier').mockReturnValueOnce(pendingTier);
+    let selection: Promise<void> | undefined;
+    try {
+      const navigation = navigate(harness, 'branch');
+      await vi.waitFor(() => expect(harness.forkThread).toHaveBeenCalledOnce());
+      selection = harness.manager.handleMessage({ type: 'selectModel', payload: { modelId: 'auto' } });
+      expect(tier).toHaveBeenCalledWith(harness.context);
+      expect(tier.mock.results[0]?.value).toBe(pendingTier);
+      releaseFork();
+      await navigation;
+      expect(harness.manager.activeThreadId()).toBe('navigation-source');
+      expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'conversationLoaded' }));
+    } finally {
+      releaseTier('byok');
+      await selection;
+      tier.mockRestore();
+    }
+  });
+
+  it('does not restore a fork draft after model selection while committed usage is pending', async () => {
+    const harness = await navigationHarness();
+    let release!: () => void;
+    const usage = vi.spyOn(harness.manager, 'pushUsageMeter').mockImplementationOnce(
+      () => new Promise<void>((resolve) => { release = resolve; }),
+    );
+    try {
+      const navigation = navigate(harness, 'branch');
+      await vi.waitFor(() => expect(usage).toHaveBeenCalledOnce());
+      expect(harness.manager.activeThreadId()).toBe('navigation-fork');
+      await harness.manager.handleMessage({ type: 'selectModel', payload: { modelId: 'auto' } });
+      harness.posted.length = 0;
+      release();
+      await navigation;
+      expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'composerDraft' }));
+    } finally {
+      usage.mockRestore();
+    }
+  });
+
+  it('preserves the captured binding across the intentional first-message reset', async () => {
+    const harness = await navigationHarness();
+    await harness.manager.handleMessage({
+      type: 'messageAction',
+      payload: { action: 'branch', text: 'First prompt', occurrence: 0, composer: { ...composer } },
+    });
+    expect(harness.manager.activeThreadId()).toBeUndefined();
+    expect(harness.forkThread).not.toHaveBeenCalled();
+    expect(harness.runtime.resumeThread).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'composerDraft',
+      payload: {
+        text: 'First prompt', references: [], submit: false,
+        expectedComposer: { ...composer, epoch: expect.any(Number) },
+      },
     });
   });
 });

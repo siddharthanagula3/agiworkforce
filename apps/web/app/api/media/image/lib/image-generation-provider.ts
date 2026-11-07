@@ -425,6 +425,7 @@ export async function resolveImageRefBytes(
   ref: { asset_id: string } | { b64_json: string },
   userId: string,
   db?: Parameters<typeof getActiveWorkspaceMediaAssetById>[2],
+  organizationId?: string | null,
 ): Promise<Uint8Array> {
   if ('b64_json' in ref) {
     const base64 = ref.b64_json.includes(',') ? ref.b64_json.split(',').pop()! : ref.b64_json;
@@ -433,8 +434,10 @@ export async function resolveImageRefBytes(
 
   // Only an asset_id ref reaches the database, so the caller opens a scoped
   // connection only for that branch and inline bytes cost none.
-  if (!db) throw new Error('Source image could not be read');
-  const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id, db);
+  if (!db || organizationId === undefined) {
+    throw new Error('Source image workspace could not be verified. Start a new generation.');
+  }
+  const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id, db, { organizationId });
   if (
     !asset ||
     asset.deletedAt ||

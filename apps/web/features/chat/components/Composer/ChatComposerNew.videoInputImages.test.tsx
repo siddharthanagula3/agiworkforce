@@ -245,3 +245,14 @@ describe('video input images in the composer', () => {
     expect(screen.getByRole('button', { name: /how the attached image is used/i })).toBeVisible();
   });
 });
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
+});

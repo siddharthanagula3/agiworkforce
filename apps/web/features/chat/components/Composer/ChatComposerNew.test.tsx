@@ -85,6 +85,9 @@ const chatComposerMocks = vi.hoisted(() => ({
       durationSeconds?: number;
     }>,
     issuer: 'QwenCloud',
+    limited: { image: null, video: null },
+    availability: { image: 'not_offered', video: 'not_offered' },
+    refresh: vi.fn(),
     status: 'ready' as 'loading' | 'ready' | 'error',
     retry: vi.fn(),
   },
@@ -125,6 +128,10 @@ vi.mock('@features/chat/hooks/use-skills-list', () => ({
 
 vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   useMediaModelAvailability: () => chatComposerMocks.mediaAvailability,
+}));
+
+vi.mock('@shared/hooks/use-workspace-policy', () => ({
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
 }));
 
 vi.mock('@features/chat/hooks/use-promotional-media-models', () => ({
@@ -484,6 +491,30 @@ describe('ChatComposerNew', () => {
         expect.objectContaining({ workMode: 'chat', projectId: null }),
       );
     });
+  });
+
+  it('keeps the submitted draft while admission is pending and after refusal', async () => {
+    let finish!: (value: false) => void;
+    const onSend = vi.fn(() => new Promise<false>((resolve) => { finish = resolve; }));
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'draw a landscape');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(textarea).toHaveValue('draw a landscape');
+    await act(async () => { finish(false); });
+    expect(textarea).toHaveValue('draw a landscape');
+  });
+
+  it('does not clear a newer draft when asynchronous admission succeeds', async () => {
+    let finish!: () => void;
+    const onSend = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'draw a landscape');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.change(textarea, { target: { value: 'my newer draft' } });
+    await act(async () => { finish(); });
+    expect(textarea).toHaveValue('my newer draft');
   });
 
   it('does not send on plain Enter while IME composing', async () => {
@@ -2481,9 +2512,61 @@ describe('ChatComposerNew', () => {
           undefined,
           undefined,
           expect.objectContaining({ workMode: expect.anything() }),
+          expect.any(Function),
         );
       });
       expect(screen.queryByTestId('queued-followup')).not.toBeInTheDocument();
+    });
+
+    it.each(['Cancel', 'Edit'])('revokes pending queued admission on %s', async (action) => {
+      let eligible!: () => boolean;
+      let finish!: (value: false) => void;
+      const onSend = vi.fn((
+        _content: string, _files?: File[], _skill?: string, _meta?: unknown,
+        isCurrent?: () => boolean,
+      ) => {
+        eligible = isCurrent!;
+        return new Promise<false>((resolve) => { finish = resolve; });
+      });
+      const { rerender } = render(<ChatComposerNew onSend={onSend} isLoading isGenerating />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'draw a queued landscape');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      rerender(<ChatComposerNew onSend={onSend} isLoading={false} isGenerating={false} />);
+      await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+      expect(eligible()).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`${action} queued message`, 'i') }));
+      expect(eligible()).toBe(false);
+      await act(async () => { finish(false); });
+      if (action === 'Edit') expect(textarea).toHaveValue('draw a queued landscape');
+      else expect(screen.queryByTestId('queued-followup')).not.toBeInTheDocument();
+    });
+
+    it('revokes an edited queued resend when cancelled during admission', async () => {
+      let eligible!: () => boolean;
+      let finish!: (value: false) => void;
+      const onSend = vi.fn((
+        _content: string, _files?: File[], _skill?: string, _meta?: unknown,
+        isCurrent?: () => boolean,
+      ) => {
+        eligible = isCurrent!;
+        return new Promise<false>((resolve) => { finish = resolve; });
+      });
+      const { rerender } = render(<ChatComposerNew onSend={onSend} isLoading isGenerating />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'draw a queued landscape');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      rerender(<ChatComposerNew onSend={onSend} isLoading={false} isGenerating={false} />);
+      await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+      await act(async () => { finish(false); });
+      fireEvent.click(screen.getByRole('button', { name: /edit queued message/i }));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+      expect(eligible()).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: /cancel queued message/i }));
+      expect(eligible()).toBe(false);
+      await act(async () => { finish(false); });
+      expect(textarea).toHaveValue('draw a queued landscape');
     });
 
     it('cancels a queued follow-up so it is not sent when the turn finishes', async () => {
@@ -3406,4 +3489,15 @@ describe('ChatComposerNew', () => {
       );
     });
   });
+});
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
 });

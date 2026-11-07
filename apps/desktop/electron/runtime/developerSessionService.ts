@@ -200,6 +200,8 @@ interface RunningServer {
   features: DeveloperRuntimeFeatures;
   /** Set once the process is known to be gone, so nothing signals a pid that may be reused. */
   exited: boolean;
+  exitObserved: Promise<void>;
+  confirmExit: () => void;
   /** What this process said at initialize that it serves, and nothing a later one said. */
   advertised: AdvertisedCapabilities | null;
 }
@@ -606,8 +608,42 @@ function closeServer(server: RunningServer, error: Error): void {
     pending.reject(error);
   }
   server.pending.clear();
+  server.buffer = '';
+  if (servers.get(server.root.id) === server) {
+    emit(server.root.id, { type: 'runtime-stopped', message: error.message });
+  }
+}
+
+function ownsRuntime(server: RunningServer): boolean {
+  return !server.closed && servers.get(server.root.id) === server;
+}
+
+function confirmProcessExit(server: RunningServer): void {
+  server.exited = true;
+  stopping.delete(server);
   if (servers.get(server.root.id) === server) servers.delete(server.root.id);
-  emit(server.root.id, { type: 'runtime-stopped', message: error.message });
+  server.confirmExit();
+}
+
+async function waitForProcessExit(server: RunningServer): Promise<void> {
+  if (server.exited) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      server.exitObserved,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new DeveloperRuntimeUnavailableError(
+              `${server.stopReason ?? 'The AGI CLI was stopped.'} Its process has not confirmed exit. Try again after it exits.`,
+            ),
+          );
+        }, REQUEST_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /** The CLI's refusal of a grant as it left the wire, before `data` has been read. */
@@ -627,6 +663,7 @@ function writerHolder(data: unknown): string | null {
 }
 
 function acceptLine(server: RunningServer, line: string): void {
+  if (!ownsRuntime(server)) return;
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -662,6 +699,7 @@ function acceptLine(server: RunningServer, line: string): void {
 }
 
 function acceptChunk(server: RunningServer, chunk: string): void {
+  if (!ownsRuntime(server)) return;
   server.buffer += chunk;
   if (Buffer.byteLength(server.buffer, 'utf8') > MAX_FRAME_BYTES && !server.buffer.includes('\n')) {
     closeServer(server, new Error('The AGI CLI wrote an oversized protocol frame.'));
@@ -821,6 +859,7 @@ function worktreeSetupEvent(
 }
 
 function handleNotification(server: RunningServer, method: string, rawParams: unknown): void {
+  if (!ownsRuntime(server)) return;
   const params = isRecord(rawParams) ? rawParams : {};
 
   if (method === 'turn/agent_event') {
@@ -929,7 +968,7 @@ function request(
   params: unknown,
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<unknown> {
-  if (server.closed) {
+  if (!ownsRuntime(server)) {
     return Promise.reject(
       new DeveloperRuntimeUnavailableError(
         server.stopReason ?? 'The AGI CLI is no longer running.',
@@ -1127,6 +1166,11 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     protocolVersion: PROTOCOL_VERSION,
     userInput: true,
   });
+  if (!ownsRuntime(server)) {
+    throw new DeveloperRuntimeUnavailableError(
+      server.stopReason ?? 'The AGI CLI is no longer running.',
+    );
+  }
   if (!isRecord(result) || result['protocolVersion'] !== PROTOCOL_VERSION) {
     throw new DeveloperRuntimeUnavailableError(
       `The installed AGI CLI does not speak developer-session protocol ${PROTOCOL_VERSION}.`,
@@ -1198,6 +1242,8 @@ async function ensureServer(root: WorkspaceRoot): Promise<RunningServer> {
 async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promise<RunningServer> {
   const existing = servers.get(root.id);
   if (existing && !existing.closed) return existing;
+  if (existing) await waitForProcessExit(existing);
+  if (!allowed()) throw new Error('The runtime launch was cancelled.');
 
   if (!hasSshEnvironment(root.id) && !mayRunIn(root)) {
     throw new DeveloperAgentNotAllowedError(
@@ -1254,6 +1300,10 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     throw spawnFailure(binary, error as NodeJS.ErrnoException);
   }
 
+  let confirmExit!: () => void;
+  const exitObserved = new Promise<void>((resolve) => {
+    confirmExit = resolve;
+  });
   const server: RunningServer = {
     root,
     child,
@@ -1265,6 +1315,8 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     closed: false,
     features: { maxTurns: false, memory: false },
     exited: false,
+    exitObserved,
+    confirmExit,
     advertised: null,
   };
 
@@ -1279,10 +1331,10 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
   child.once('error', (error) => {
     if (child.pid === undefined) server.exited = true;
     closeServer(server, spawnFailure(binary, error as NodeJS.ErrnoException));
+    if (child.pid === undefined) confirmProcessExit(server);
   });
   child.once('exit', (code, signal) => {
     server.exited = true;
-    stopping.delete(server);
     const detail = server.stderrTail.trim();
     closeServer(
       server,
@@ -1290,6 +1342,7 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
         `The AGI CLI exited (${signal ?? String(code ?? 'unknown')})${detail === '' ? '' : `: ${detail}`}`,
       ),
     );
+    confirmProcessExit(server);
   });
 
   server.ready = handshake(server, binary).catch((error: unknown) => {
@@ -1306,6 +1359,11 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
 async function readyServer(root: WorkspaceRoot): Promise<RunningServer> {
   const server = await ensureServer(root);
   await server.ready;
+  if (!ownsRuntime(server)) {
+    throw new DeveloperRuntimeUnavailableError(
+      server.stopReason ?? 'The AGI CLI is no longer running.',
+    );
+  }
   if (hasSshEnvironment(root.id)) {
     await assertSshAccount(server);
     verifySshWorkspace(root.id, await request(server, 'workspace/identity', {}));
@@ -1409,16 +1467,18 @@ async function rememberWorktree(
   worktree: DeveloperWorktree,
 ): Promise<WorkspaceRoot | null> {
   try {
-    return await admitWorktreeRoot(
-      parent.id,
-      worktree.id,
-      worktree.path,
-      worktreeName(parent, worktree),
-    );
+    return await admitNamedWorktree(parent, worktree);
   } catch (error) {
     if (error instanceof WorktreeRootRefused) return null;
     throw error;
   }
+}
+
+function admitNamedWorktree(
+  parent: WorkspaceRoot,
+  worktree: DeveloperWorktree,
+): Promise<WorkspaceRoot> {
+  return admitWorktreeRoot(parent.id, worktree.id, worktree.path, worktreeName(parent, worktree));
 }
 
 async function listWorktrees(parent: WorkspaceRoot): Promise<{
@@ -2049,8 +2109,7 @@ export async function readDeveloperSessionActivity(
 /**
  * Start a session in the folder, or in a new worktree of it. A worktree is
  * made by the folder's CLI, then the session starts in a CLI running inside
- * the worktree, which binds the worktree to that one session. A worktree whose
- * session could not start is removed again, so a failed start leaves nothing.
+ * the worktree, which binds the worktree to that one session.
  */
 export async function startDeveloperSession(
   rootId: string,
@@ -2085,24 +2144,32 @@ export async function startDeveloperSession(
     input.worktreeStart === 'working_tree'
       ? { kind: 'working_tree' }
       : { kind: 'ref', name: 'HEAD' };
-  const created = await request(
-    parentServer,
-    'worktree/managed/create',
-    { start },
-    SNAPSHOT_TIMEOUT_MS,
-  );
+  let created: unknown;
+  try {
+    created = await request(parentServer, 'worktree/managed/create', { start }, SNAPSHOT_TIMEOUT_MS);
+  } catch (error) {
+    const failure = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${failure} The creation outcome is unconfirmed. Refresh the worktree list and inspect it before trying again.`,
+    );
+  }
   const setupScript = isRecord(created) ? toSetupScript(created['setupScript']) : null;
   const worktree = toWorktree(
     parent.id,
     isRecord(created) ? created['worktree'] : null,
     setupScript,
   );
-  if (!worktree) throw new Error('The AGI CLI made a worktree this app could not read.');
+  if (!worktree) {
+    throw new Error(
+      'The AGI CLI returned an unreadable worktree creation receipt. The creation outcome is unknown. Refresh the worktree list and inspect it before trying again.',
+    );
+  }
   const cleanupFailures = toCleanupFailures(isRecord(created) ? created['cleanupFailures'] : null);
-  const root = await rememberWorktree(parent, worktree);
-  if (!root) {
-    await requestOrNull(parentServer, 'worktree/managed/delete', { worktreeId: worktree.id });
-    throw new Error('The AGI CLI made a worktree this app could not verify.');
+  let root: WorkspaceRoot;
+  try {
+    root = await admitNamedWorktree(parent, worktree);
+  } catch (error) {
+    throw worktreeStartFailure(worktree, error);
   }
   try {
     const server = await readyServer(root);
@@ -2114,11 +2181,28 @@ export async function startDeveloperSession(
     const session = requireSession(root.id, result);
     return cleanupFailures.length > 0 ? { ...session, cleanupFailures } : session;
   } catch (error) {
-    await stopWorktreeRuntime(root.id);
-    await requestOrNull(parentServer, 'worktree/managed/delete', { worktreeId: worktree.id });
-    forgetWorktreeRoot(root.id);
-    throw error;
+    try {
+      await stopWorktreeRuntime(root.id);
+    } catch (stopError) {
+      throw worktreeStartFailure(worktree, error, stopError);
+    }
+    throw worktreeStartFailure(worktree, error);
   }
+}
+
+function worktreeStartFailure(
+  worktree: DeveloperWorktree,
+  error: unknown,
+  stopError?: unknown,
+): Error {
+  const failure = error instanceof Error ? error.message : String(error);
+  const stopping =
+    stopError === undefined
+      ? ''
+      : ` Runtime shutdown could not be confirmed: ${stopError instanceof Error ? stopError.message : String(stopError)}.`;
+  return new Error(
+    `${failure} The CLI reported worktree ${worktree.id} at ${worktree.path}. No automatic deletion was requested. Refresh the worktree list to inspect it before retrying.${stopping}`,
+  );
 }
 
 function toCleanupFailures(raw: unknown): WorktreeCleanupFailure[] {
@@ -2131,14 +2215,14 @@ function toCleanupFailures(raw: unknown): WorktreeCleanupFailure[] {
 }
 
 /**
- * Stop the CLI serving a worktree and wait for it to let go of the worktree,
- * which it holds locked while it runs.
+ * Direct-child exit is not proof that descendants or a remote CLI have stopped.
  */
 async function stopWorktreeRuntime(rootId: string): Promise<void> {
   const server = servers.get(rootId);
-  if (!server || server.closed) return;
-  await requestOrNull(server, 'shutdown', {});
+  if (!server) return;
+  if (!server.closed) await requestOrNull(server, 'shutdown', {});
   terminate(server);
+  await waitForProcessExit(server);
 }
 
 /**
@@ -2149,15 +2233,30 @@ export async function deleteDeveloperWorktree(rootId: string): Promise<{ snapsho
   const { parent, worktreeId } = requireWorktree(rootId);
   await stopWorktreeRuntime(rootId);
   const server = await readyServer(parent);
-  const result = await request(
-    server,
-    'worktree/managed/delete',
-    { worktreeId },
-    SNAPSHOT_TIMEOUT_MS,
-  );
-  forgetWorktreeRoot(rootId);
+  let result: unknown;
+  try {
+    result = await request(server, 'worktree/managed/delete', { worktreeId }, SNAPSHOT_TIMEOUT_MS);
+  } catch (error) {
+    const failure = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${failure} The deletion outcome for worktree ${worktreeId} is unconfirmed. Inspect the worktree and archive before trying again.`,
+    );
+  }
   const snapshotRef = isRecord(result) ? readString(result, 'snapshotRef') : null;
-  if (!snapshotRef) throw new Error('The AGI CLI did not say where it kept the worktree.');
+  const snapshotCommit = isRecord(result) ? readString(result, 'snapshotCommit') : null;
+  if (
+    !isRecord(result) ||
+    readString(result, 'worktreeId') !== worktreeId ||
+    !snapshotRef ||
+    !snapshotRef.trim() ||
+    !snapshotCommit ||
+    !snapshotCommit.trim()
+  ) {
+    throw new Error(
+      `The AGI CLI did not return a complete matching archive receipt for worktree ${worktreeId}. The deletion outcome is unknown. Inspect the worktree and archive before trying again.`,
+    );
+  }
+  forgetWorktreeRoot(rootId);
   return { snapshotRef };
 }
 
@@ -2634,7 +2733,7 @@ export async function interruptOwnedDeveloperTurn(
   turnId: string,
 ): Promise<void> {
   const server = servers.get(rootId);
-  if (!server) return;
+  if (!server || server.closed) return;
   await request(server, 'turn/interrupt', { threadId, turnId });
 }
 

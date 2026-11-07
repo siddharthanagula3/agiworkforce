@@ -1,30 +1,4 @@
 import { whenMmkvReady } from '@/lib/mmkv';
-import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
-
-const DEFAULT_CLOUD_SETTINGS = {
-  themeMode: 'system',
-  accentColor: 'neutral',
-  fontPreference: 'default',
-  notificationsEnabled: true,
-  speechLanguage: SPEECH_LANGUAGE_AUTO,
-  autoListenEnabled: true,
-  referencePastChats: false,
-  generateMemoryFromHistory: true,
-  memoryPolicyInitialized: false,
-  connectorDiscoveryEnabled: true,
-  personalization: {
-    fullName: '',
-    nickname: '',
-    occupation: '',
-    instructions: '',
-    style: 'default',
-    warmth: 50,
-    enthusiasm: 50,
-    headersLists: 50,
-    emoji: 50,
-  },
-  settingsUpdatedAt: null,
-} as const;
 
 function runTeardownStep(label: string, step: () => void): void {
   try {
@@ -137,7 +111,7 @@ function clearLocalCloudAccountStateNow(): void {
 
   runTeardownStep('settings cache', () => {
     const { useCloudSettingsStore } = require('@/stores/settings/cloudSettingsStore');
-    useCloudSettingsStore.setState(DEFAULT_CLOUD_SETTINGS);
+    useCloudSettingsStore.setState(useCloudSettingsStore.getInitialState());
   });
 
   runTeardownStep('Cloud agent controls', () => {

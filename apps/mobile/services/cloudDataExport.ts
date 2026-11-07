@@ -1,11 +1,5 @@
-import {
-  cacheDirectory,
-  deleteAsync,
-  EncodingType,
-  getInfoAsync,
-  makeDirectoryAsync,
-  writeAsStringAsync,
-} from 'expo-file-system/legacy';
+import { EncodingType, writeAsStringAsync } from 'expo-file-system/legacy';
+import { withDsarTemporaryFile } from './dsarTemporaryFile';
 import * as Sharing from 'expo-sharing';
 import { api } from '@/services/api';
 import {
@@ -18,9 +12,6 @@ interface CloudUserExportResponse {
   data: unknown;
 }
 
-const EXPORT_DIR = `${cacheDirectory}dsar_exports/`;
-const EXPORT_FILE = `${EXPORT_DIR}agi_cloud_data_export.json`;
-
 function isExportDocument(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -29,6 +20,7 @@ export async function exportCloudUserData(account: CloudAccountEpoch): Promise<v
   assertCloudAccountEpochCurrent(account);
   const response = await api.get<CloudUserExportResponse>('/api/user/export', {
     timeout: 120_000,
+    accountEpoch: account,
   });
   assertCloudAccountEpochCurrent(account);
 
@@ -36,34 +28,20 @@ export async function exportCloudUserData(account: CloudAccountEpoch): Promise<v
     throw new Error('AGI Cloud returned an invalid data export.');
   }
 
-  let wroteTemporaryFile = false;
-  try {
-    const info = await getInfoAsync(EXPORT_DIR);
-    assertCloudAccountEpochCurrent(account);
-    if (!info.exists) {
-      await makeDirectoryAsync(EXPORT_DIR, { intermediates: true });
-    }
-
-    assertCloudAccountEpochCurrent(account);
-    await writeAsStringAsync(EXPORT_FILE, JSON.stringify(response.data, null, 2), {
+  const assertActive = () => assertCloudAccountEpochCurrent(account);
+  await withDsarTemporaryFile('agi_cloud_data_export.json', assertActive, async (uri) => {
+    assertActive();
+    await writeAsStringAsync(uri, JSON.stringify(response.data, null, 2), {
       encoding: EncodingType.UTF8,
     });
-    wroteTemporaryFile = true;
-
-    assertCloudAccountEpochCurrent(account);
-    if (!(await Sharing.isAvailableAsync())) {
-      throw new Error('Sharing is not available on this device.');
-    }
-
-    assertCloudAccountEpochCurrent(account);
-    await Sharing.shareAsync(EXPORT_FILE, {
+    assertActive();
+    const canShare = await Sharing.isAvailableAsync();
+    assertActive();
+    if (!canShare) throw new Error('Sharing is not available on this device.');
+    await Sharing.shareAsync(uri, {
       mimeType: 'application/json',
       dialogTitle: 'Save your AGI Cloud data export',
       UTI: 'public.json',
     });
-  } finally {
-    if (wroteTemporaryFile) {
-      await deleteAsync(EXPORT_FILE, { idempotent: true }).catch(() => {});
-    }
-  }
+  });
 }

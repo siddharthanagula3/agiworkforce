@@ -7,6 +7,10 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
   getRoutingSlotModel: () => 'catalog-voice-transcription-model',
 }));
 
+vi.mock('@/lib/identity/useSessionSnapshot', () => ({
+  useSessionSnapshot: () => () => ({ userId: 'user-a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'session-token' }),
+}));
+
 import { useDictation } from './use-dictation';
 import { clearCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore, _resetRuntimeRefs } from '@features/chat/stores/voice-input-store';
@@ -84,7 +88,7 @@ function transcribes(text: string) {
 function mount() {
   const onInsert = vi.fn();
   const onSend = vi.fn();
-  const view = renderHook(() => useDictation({ onInsert, onSend }));
+  const view = renderHook(() => useDictation({ scope: 'composer-a', isAvailable: () => true, onInsert, onSend }));
   return { ...view, onInsert, onSend };
 }
 
@@ -114,6 +118,46 @@ describe('useDictation', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+
+  it('drops an in-flight transcript when its destination changes', async () => {
+    let resolveText!: (body: unknown) => void;
+    let began!: () => void;
+    const requested = new Promise<void>((resolve) => { began = resolve; });
+    stubFetch(() => ({ ok: true, json: () => {
+      began();
+      return new Promise((resolve) => { resolveText = resolve; });
+    } }));
+    const onInsert = vi.fn();
+    const view = renderHook(({ scope }) => useDictation({
+      scope, isAvailable: () => true, onInsert, onSend: vi.fn(),
+    }), { initialProps: { scope: 'conversation-a' } });
+    await act(async () => { view.result.current.start(); });
+    await act(async () => { view.result.current.stop(); await requested; });
+    view.rerender({ scope: 'conversation-b' });
+    await act(async () => { resolveText({ text: 'old conversation speech' }); });
+    expect(onInsert).not.toHaveBeenCalled();
+    expect(useVoiceInputStore.getState().transcript).toBe('');
+  });
+
+  it('uses current draft callbacks without changing the original send intent', async () => {
+    let resolveText!: (body: unknown) => void;
+    let began!: () => void;
+    const requested = new Promise<void>((resolve) => { began = resolve; });
+    stubFetch(() => ({ ok: true, json: () => {
+      began();
+      return new Promise((resolve) => { resolveText = resolve; });
+    } }));
+    const sent: string[] = [];
+    const view = renderHook(({ draft }) => useDictation({
+      scope: 'conversation-a', isAvailable: () => true, onInsert: vi.fn(),
+      onSend: (text) => { sent.push(`${draft} ${text}`); },
+    }), { initialProps: { draft: 'before' } });
+    await act(async () => { view.result.current.start(); });
+    await act(async () => { view.result.current.send(); await requested; });
+    view.rerender({ draft: 'typed while transcribing' });
+    await act(async () => { resolveText({ text: 'speech' }); });
+    expect(sent).toEqual(['typed while transcribing speech']);
   });
 
   it('is idle and inactive before the microphone is pressed', () => {
@@ -216,7 +260,7 @@ describe('useDictation', () => {
       result.current.stop();
     });
 
-    await waitFor(() => expect(onInsert).toHaveBeenCalledWith(TRANSCRIPT));
+    await waitFor(() => expect(onInsert).toHaveBeenCalledWith(TRANSCRIPT, expect.objectContaining({ isCurrent: expect.any(Function) })));
     expect(onSend).not.toHaveBeenCalled();
     expect(result.current.status).toBe(DICTATION_STATUS.idle);
   });
@@ -231,7 +275,7 @@ describe('useDictation', () => {
       result.current.send();
     });
 
-    await waitFor(() => expect(onSend).toHaveBeenCalledWith(TRANSCRIPT));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith(TRANSCRIPT, expect.objectContaining({ isCurrent: expect.any(Function) })));
     expect(onInsert).not.toHaveBeenCalled();
   });
 

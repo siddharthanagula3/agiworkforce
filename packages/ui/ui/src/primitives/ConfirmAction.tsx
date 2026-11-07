@@ -47,6 +47,7 @@ export function useConfirmAction(): {
   const [pending, setPending] = React.useState<PendingConfirm | null>(null);
   const [busy, setBusy] = React.useState(false);
   const nextKey = React.useRef(0);
+  const pendingKeyRef = React.useRef<number | null>(null);
   const openerRef = React.useRef<HTMLElement | null>(null);
 
   // Read at the moment of the request, not when the dialog mounts. A confirm
@@ -57,21 +58,25 @@ export function useConfirmAction(): {
     const active = document.activeElement;
     openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
     nextKey.current += 1;
+    pendingKeyRef.current = nextKey.current;
+    setBusy(false);
     setPending({ ...request, key: nextKey.current });
   }, []);
 
-  const close = React.useCallback(() => {
+  const close = React.useCallback((key: number) => {
+    if (pendingKeyRef.current !== key) return;
+    pendingKeyRef.current = null;
     setPending(null);
     setBusy(false);
   }, []);
 
   const run = React.useCallback(async () => {
-    if (!pending) return;
+    if (!pending || pendingKeyRef.current !== pending.key) return;
     setBusy(true);
     try {
       await pending.onConfirm();
     } finally {
-      close();
+      close(pending.key);
     }
   }, [pending, close]);
 
@@ -84,9 +89,9 @@ export function useConfirmAction(): {
       key={pending.key}
       open
       onOpenChange={(open) => {
-        if (open || busy) return;
+        if (open || busy || pendingKeyRef.current !== pending.key) return;
         pending.onCancel?.();
-        close();
+        close(pending.key);
       }}
     >
       <AlertDialogContent opener={openerRef.current}>

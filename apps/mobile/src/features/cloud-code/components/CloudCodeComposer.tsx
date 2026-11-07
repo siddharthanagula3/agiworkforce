@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { SlidersHorizontal } from 'lucide-react-native';
 import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
@@ -52,6 +52,8 @@ export function CloudCodeComposer({
 }) {
   const colors = useThemeColors();
   const voiceAllowed = useCapability('canUseVoice');
+  const latestValue = useRef(value);
+  latestValue.current = value;
   const empty = value.trim().length === 0;
   const totals = useMemo(
     () => (changes ? cloudCodeChangeTotals(changes.files, changes.diff) : null),
@@ -65,9 +67,12 @@ export function CloudCodeComposer({
         Alert.alert(DICTATION_FAILED_TITLE, DICTATION_FAILED_BODY);
         return;
       }
-      onChangeText(value.trim() ? `${value} ${cleaned}` : cleaned);
+      const current = latestValue.current;
+      const next = current.trim() ? `${current} ${cleaned}` : cleaned;
+      latestValue.current = next;
+      onChangeText(next);
     },
-    [onChangeText, value],
+    [onChangeText],
   );
 
   const handleVoiceError = useCallback((message: string, permissionDenied?: boolean) => {

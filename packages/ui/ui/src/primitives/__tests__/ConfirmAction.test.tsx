@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { reportUncaughtConfirmError, useConfirmAction } from '../ConfirmAction';
@@ -47,6 +47,33 @@ describe('useConfirmAction', () => {
 
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('Remove it?')).toBeNull());
+  });
+
+  it('does not close a replacement confirmation when the earlier action settles', async () => {
+    let settle!: () => void;
+    const pending = new Promise<void>((resolve) => { settle = resolve; });
+    const replacement = vi.fn(async () => undefined);
+    function ReplacingHarness() {
+      const { confirm, dialog } = useConfirmAction();
+      return <>
+        <button onClick={() => confirm({
+          title: 'First action', description: 'First consequence',
+          onConfirm: () => {
+            confirm({ title: 'Second action', description: 'Second consequence', onConfirm: replacement });
+            return pending;
+          },
+        })}>Start</button>
+        {dialog}
+      </>;
+    }
+    render(<ReplacingHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+    await screen.findByText('Second action');
+    await act(async () => { settle(); await pending; });
+    expect(screen.getByText('Second action')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Confirm' })).not.toBeDisabled();
+    expect(replacement).not.toHaveBeenCalled();
   });
 
   it('lets the caller handle its own failure, and still closes', async () => {

@@ -21,6 +21,31 @@ function releaseResponse(version: string, status = 200): Response {
 }
 
 describe('desktop cloud update contract', () => {
+  it('reports actual downloading even when no newer metadata is published', () => {
+    const prompt = desktopUpdatePrompt({
+      available: false, currentVersion: '1.2.0', version: '1.2.0', downloadUrl: '',
+      downloading: true,
+    });
+    expect(prompt.message).toBe('An update for AGI Desktop is downloading.');
+    expect(prompt.downloadButton).toBeNull();
+  });
+  it('does not infer a download from automatic update capability', () => {
+    const prompt = desktopUpdatePrompt({
+      available: true, currentVersion: '1.2.0', version: '1.3.0', downloadUrl: '',
+      installsAutomatically: true,
+    });
+    expect(prompt.message).not.toContain('downloading');
+    expect(prompt.downloadButton).toBe(0);
+  });
+
+  it('keeps an unknown staged package restartable without newer metadata', () => {
+    const prompt = desktopUpdatePrompt({
+      available: false, currentVersion: '1.2.0', version: '', downloadUrl: '',
+      stagedVersion: null, readyToInstall: true,
+    });
+    expect(prompt.message).toBe('AGI Desktop update is ready to install.');
+    expect(prompt.restartButton).toBe(0);
+  });
   it('uses the published availability and signed-installer routes', async () => {
     const fetchMock = vi.fn(async () => releaseResponse('1.3.0'));
 
@@ -30,6 +55,7 @@ describe('desktop cloud update contract', () => {
       available: true,
       currentVersion: '1.2.0',
       version: '1.3.0',
+      latestVersion: '1.3.0',
       publishedAt: '2026-08-13T00:00:00.000Z',
       downloadUrl: desktopCloudInstallerDownloadUrl('x64'),
     });
@@ -86,6 +112,7 @@ describe('desktop cloud update contract', () => {
 
     expect(result.available).toBe(false);
     expect(result.currentVersion).toBe('1.2.0');
+    expect(result.latestVersion).toBeUndefined();
     expect(desktopUpdatePrompt(result).detail).toBe(
       'Installed: 1.2.0\nNo newer version is available.',
     );
