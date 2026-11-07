@@ -18,7 +18,10 @@ import { createError } from '@/lib/errors';
 import { readJsonBody } from '@/lib/read-json-body';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { logAdminDataAccess } from '@/lib/server/admin-data-access';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
@@ -91,8 +94,10 @@ const TerminateSchema = z
 const ContractActionSchema = z.discriminatedUnion('action', [ReportPaymentSchema, TerminateSchema]);
 
 async function requireContractAccess(request: NextRequest, permission: 'read' | 'manage') {
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   await requireMemberPermission(
