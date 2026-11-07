@@ -7639,3 +7639,20 @@ This is conditional malformed-success protection, not evidence of an incident,
 complete permissions, target/action binding or current remote state. Fixtures
 are UNRUN; no product checks, backend changes or migration application.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Viewer quota admission is a transaction protocol
+
+Continuation aa1d382072855715a529847cce88aeca7766ee48 moves viewer additions into one scoped transaction.
+Local ownership, exact READ COMMITTED and validated publication-ID advisory lock
+precede separate existing-email/count statements. Existing email does not consume
+capacity; new email requires valid count below 100. Insert and list use the same
+transaction adapter. Shared ownership helper, removals and route mapping remain.
+
+This protects participating current writers with pinned transactions and fresh
+post-lock statement snapshots. It is not a universal database constraint;
+old/raw writers and existing over-cap inventories remain outside remediation.
+No full linearizable add/remove result, server cancellation or automatic retry.
+
+Three source/fixture files are independently reviewed. Deterministic protocol
+and route fixtures are UNRUN, not live database/lock/RLS/rollback acceptance.
+No migration application or client change. See WEB-PUBLICATION-QUOTA-ADMISSION-01.

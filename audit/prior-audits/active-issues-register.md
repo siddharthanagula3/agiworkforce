@@ -17709,3 +17709,42 @@ No native/backend or database migration changes, additional reads, automatic rep
 or new recovery mechanism. Existing request ownership and ambient cookies remain.
 No product checks, live services, migration application, push or deployment.
 Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+### Viewer additions serialize bounded quota admission
+
+Continuation aa1d382072855715a529847cce88aeca7766ee48, 2026-11-07, addresses normal concurrent admission
+that could exceed the intended 100-viewer cap. Separate count and insert calls
+allowed two distinct authorized additions to each observe 99 and insert.
+An already-present email at the cap was also rejected before the existing
+conflict/no-op behavior. These are quota/idempotency defects, not unintended
+recipients or a demonstrated cross-tenant bypass.
+
+The add path now uses one transaction callback for local ownership validation,
+exact READ COMMITTED isolation evidence, a validated namespaced publication-ID
+advisory lock, and separate subsequent existing-email/count reads. Existing
+email succeeds without inserting; new admission requires a single valid
+nonnegative safe count below the cap. Insert and returned-list reads stay on
+the transaction adapter.
+
+The shared ownership helper remains unchanged. Local malformed ownership,
+isolation, lock, existing-email or count evidence fails closed. Parameterized
+owner predicates, conflict/no-op behavior, RLS scope and route 409 mapping
+remain; no client or migration change is introduced.
+
+The bound is a protocol for participating current service writers on the same
+database, with a pinned transaction and fresh READ COMMITTED statement snapshots.
+It is not a database aggregate constraint; old/raw/future uncooperative writers
+can bypass it. Existing over-cap data is not removed. Concurrent deletions only
+reduce cardinality and are outside a full linearizable add/remove result promise.
+
+Three independently source-reviewed source/fixture files include a deterministic
+queued/staged transaction simulation and adapted route fixture. UNRUN cases
+cover last-slot distinct additions, same-email additions, duplicates at/above
+cap, distinct publication lock inputs, malformed evidence, simulated failure
+release, missing/nonowned publication and route normalization/CSRF/audit behavior.
+The simulation models the required protocol; it is not PostgreSQL evidence.
+
+No database role, RLS, advisory permission/wait, isolation, snapshot, rollback,
+durability or deployed concurrency behavior has been exercised. No transaction
+retry, migration application, client change, live service, push or deployment.
+Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
