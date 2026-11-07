@@ -120,9 +120,8 @@ export function SiteDetailScreen() {
       const name = siteName(state.site);
       const confirmed = await confirmIrreversible({
         title: withData ? `Delete ${name} and its data?` : `Unpublish ${name}?`,
-        consequence: withData
-          ? 'The link stops working for everyone, and the data visitors saved in it is erased. This cannot be undone.'
-          : 'The link stops working for everyone, but the artifact stays in its chat.',
+        consequence:
+          'The link stops working for everyone, and all shared and personal data visitors saved in this site is permanently erased. The original artifact stays in its chat. The deleted data cannot be recovered.',
         actionLabel: withData ? 'Delete' : 'Unpublish',
       });
       if (!confirmed) return;

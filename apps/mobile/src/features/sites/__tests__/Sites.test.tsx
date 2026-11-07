@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -181,20 +181,77 @@ describe('published sites on mobile', () => {
     );
   });
 
-  it('deletes the site and the data visitors saved, after naming the consequence', async () => {
-    mockDelete.mockResolvedValue({ cleared: 1 });
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, body, buttons) => {
-      expect(body).toMatch(/cannot be undone/);
-      buttons?.find((button) => button.style === 'destructive')?.onPress?.();
+  describe.each([
+    {
+      control: 'Unpublish',
+      title: 'Unpublish Pricing calculator?',
+      action: 'Unpublish',
+      paths: ['/api/artifacts/publish/tok_1'],
+    },
+    {
+      control: 'Delete site and its data',
+      title: 'Delete Pricing calculator and its data?',
+      action: 'Delete',
+      paths: ['/api/artifacts/publish/tok_1/data', '/api/artifacts/publish/tok_1'],
+    },
+  ])('$control confirmation', ({ control, title, action, paths }) => {
+    afterEach(() => {
+      jest.restoreAllMocks();
     });
-    const { findByText } = render(<SiteDetailScreen />);
-    expect(await findByText('1 shared entry, 12 B of 1.0 MB')).toBeTruthy();
-    fireEvent.press(await findByText('Delete site and its data'));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)/sites'));
-    expect(mockDelete.mock.calls.map((call) => call[0])).toEqual([
-      '/api/artifacts/publish/tok_1/data',
-      '/api/artifacts/publish/tok_1',
-    ]);
-    alert.mockRestore();
+
+    it('discloses irreversible shared and personal data loss before dispatching', async () => {
+      mockDelete.mockResolvedValue({ cleared: 1 });
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { findByText } = render(<SiteDetailScreen />);
+      fireEvent.press(await findByText(control));
+
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(alert).toHaveBeenCalledWith(
+        title,
+        'The link stops working for everyone, and all shared and personal data visitors saved in this site is permanently erased. The original artifact stays in its chat. The deleted data cannot be recovered.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: expect.any(Function) },
+          { text: action, style: 'destructive', onPress: expect.any(Function) },
+        ],
+        { cancelable: true, onDismiss: expect.any(Function) },
+      );
+      expect(mockDelete).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+
+      const confirm = alert.mock.calls[0]?.[2]?.find(
+        (button) => button.style === 'destructive',
+      )?.onPress;
+      expect(confirm).toEqual(expect.any(Function));
+      await act(async () => {
+        confirm?.();
+      });
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)/sites'));
+      expect(mockDelete.mock.calls.map((call) => call[0])).toEqual(paths);
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+    });
+
+    it.each(['cancel', 'dismiss'] as const)('does not mutate on %s', async (choice) => {
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { findByText } = render(<SiteDetailScreen />);
+      fireEvent.press(await findByText(control));
+
+      expect(alert).toHaveBeenCalledTimes(1);
+      expect(mockDelete).not.toHaveBeenCalled();
+      const cancel =
+        choice === 'cancel'
+          ? alert.mock.calls[0]?.[2]?.find((button) => button.style === 'cancel')?.onPress
+          : alert.mock.calls[0]?.[3]?.onDismiss;
+      expect(cancel).toEqual(expect.any(Function));
+      await act(async () => {
+        cancel?.();
+      });
+
+      expect(mockDelete).not.toHaveBeenCalled();
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
   });
 });
