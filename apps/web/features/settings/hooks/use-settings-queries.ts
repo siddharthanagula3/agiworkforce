@@ -51,9 +51,7 @@ import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspac
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
-  parseAccountDeletionStatus,
   parseAccountDeletionScheduleReceipt,
-  type AccountDeletionStatus,
   type AccountDeletionScheduleReceipt,
 } from '@agiworkforce/cloud-contracts';
 
@@ -520,33 +518,7 @@ export type { AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
  * UI can show the pending state and a cancel control instead of only ever
  * offering "Delete account".
  */
-export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus, Error> {
-  return useQuery<AccountDeletionStatus, Error>({
-    queryKey: queryKeys.settings.accountDeletionStatus(),
-    queryFn: async ({ signal }): Promise<AccountDeletionStatus> => {
-      const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
-      const requestSignal = AbortSignal.any([signal, timeoutSignal]);
-      const response = await fetch(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, {
-        method: 'GET',
-        cache: 'no-store',
-        signal: requestSignal,
-      });
-      const data: unknown = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(
-          readDeleteAccountError(data, 'Unable to check account deletion status.', response.status),
-        );
-      }
-      return parseAccountDeletionStatus(data);
-    },
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    meta: {
-      errorMessage: 'Failed to check account deletion status',
-    },
-  });
-}
+export { useAccountDeletionStatus } from './use-account-deletion-status';
 
 export { useCancelAccountDeletion, type CancelAccountDeletionResult } from './use-cancel-account-deletion';
 

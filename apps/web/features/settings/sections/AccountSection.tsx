@@ -1,10 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { useQueryClient, type QueryClient, type QueryState } from '@tanstack/react-query';
-import type { AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
-import { queryKeys } from '@shared/stores/query-client';
 import { useRouter } from 'next/navigation';
 import { useSignOut } from '@/lib/identity/client';
 import { ChevronLeft, ChevronRight, RefreshCw, Undo2 } from 'lucide-react';
@@ -45,21 +42,10 @@ import {
 } from '../hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
 import type { AccountDeletionCancellationIntent } from '../hooks/use-cancel-account-deletion';
+import { permitsAccountDeletionAction as permitsDeletionAction, type OwnedAccountDeletionSnapshot } from '../hooks/use-account-deletion-status';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
-type DeletionStatusSnapshot = QueryState<AccountDeletionStatus, Error>;
-
-function permitsDeletionAction(
-  client: QueryClient,
-  snapshot: DeletionStatusSnapshot | null | undefined,
-  action: 'schedule' | 'cancel',
-): boolean {
-  return snapshot !== null && snapshot !== undefined &&
-    client.getQueryState(queryKeys.settings.accountDeletionStatus()) === snapshot &&
-    snapshot.status === 'success' && snapshot.fetchStatus === 'idle' &&
-    !snapshot.isInvalidated && snapshot.data !== undefined &&
-    (action === 'schedule' ? !snapshot.data.pending : snapshot.data.pending && snapshot.data.canCancel);
-}
+type DeletionStatusSnapshot = OwnedAccountDeletionSnapshot;
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return 'an unknown date';
@@ -258,9 +244,9 @@ function AccountRow({
   );
 }
 
-export function AccountSection({ emailEditorActive = true, cancellationActive = true }: {
+export function AccountSection({ emailEditorActive = true, deletionActionsActive = true }: {
   emailEditorActive?: boolean;
-  cancellationActive?: boolean;
+  deletionActionsActive?: boolean;
 }) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
@@ -367,15 +353,14 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
   // implementation in the app; PrivacySection's independent copy (which never
   // signed the user out) was collapsed onto this hook.
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const queryClient = useQueryClient();
   const [deleteStatusSnapshot, setDeleteStatusSnapshot] = useState<DeletionStatusSnapshot | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const deleteAccountMutation = useDeleteAccount();
 
   const handleDeleteAccount = useCallback(() => {
-    if (!permitsDeletionAction(queryClient, deleteStatusSnapshot, 'schedule')) return;
+    if (!permitsDeletionAction(deleteStatusSnapshot, 'schedule')) return;
     deleteAccountMutation.mutate();
-  }, [deleteAccountMutation, deleteStatusSnapshot, queryClient]);
+  }, [deleteAccountMutation, deleteStatusSnapshot]);
 
   const handleDeleteSuccessContinue = useCallback(() => {
     setShowDeleteDialog(false);
@@ -389,22 +374,13 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
   // (the Clerk identity itself is not deleted until the purge cron runs)
   // lands here with deletionStatus.pending true, which is what this reads.
   const [cancelIntent, setCancelIntent] = useState<AccountDeletionCancellationIntent | null>(null);
-  const deletionStatus = useAccountDeletionStatus();
-  const cancelDeletionMutation = useCancelAccountDeletion(cancellationActive);
+  const deletionStatus = useAccountDeletionStatus(deletionActionsActive);
+  const cancelDeletionMutation = useCancelAccountDeletion(deletionActionsActive);
+  const renderedDeletionStatus = deletionStatus.snapshot;
+  const canScheduleDeletion = permitsDeletionAction(renderedDeletionStatus, 'schedule');
+  const canCancelDeletion = permitsDeletionAction(renderedDeletionStatus, 'cancel');
 
-  const renderedDeletionStatus = useSyncExternalStore(
-    useCallback((notify: () => void) => queryClient.getQueryCache().subscribe(notify), [queryClient]),
-    useCallback(() => queryClient.getQueryState<AccountDeletionStatus, Error>(
-      queryKeys.settings.accountDeletionStatus(),
-    ), [queryClient]),
-    useCallback(() => queryClient.getQueryState<AccountDeletionStatus, Error>(
-      queryKeys.settings.accountDeletionStatus(),
-    ), [queryClient]),
-  );
-  const canScheduleDeletion = permitsDeletionAction(queryClient, renderedDeletionStatus, 'schedule');
-  const canCancelDeletion = permitsDeletionAction(queryClient, renderedDeletionStatus, 'cancel');
-
-  const pendingDeletion = renderedDeletionStatus?.data?.pending === true;
+  const pendingDeletion = deletionStatus.data?.pending === true;
 
   const billingInitialized = useBillingStore((s) => s.initialized);
   const livePaidPlan = livePaidPlanOf(useBillingStore((s) => s.subscription));
@@ -458,22 +434,22 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
                 label="Account deletion scheduled"
                 labelTestId="pending-deletion-title"
                 hint={`Cancellation deadline: ${formatDateTime(
-                  renderedDeletionStatus?.data?.scheduledFor
-                    ? new Date(renderedDeletionStatus.data.scheduledFor)
+                  deletionStatus.data?.scheduledFor
+                    ? new Date(deletionStatus.data.scheduledFor)
                     : null,
                 )}. ${
-                  renderedDeletionStatus?.data?.canCancel
+                  deletionStatus.data?.canCancel
                     ? 'You can cancel any time before then.'
                     : 'The cancellation window has closed.'
                 } Erasure is processed after the deadline and may take longer.`}
               >
-                {renderedDeletionStatus?.data?.canCancel && (
+                {deletionStatus.data?.canCancel && (
                   <button
                     type="button"
                     data-testid="cancel-deletion-trigger"
                     disabled={!canCancelDeletion || deletionStatus.isFetching}
                     onClick={() => {
-                      if (!permitsDeletionAction(queryClient, renderedDeletionStatus, 'cancel')) return;
+                      if (!permitsDeletionAction(renderedDeletionStatus, 'cancel')) return;
                       setCancelIntent(cancelDeletionMutation.begin(renderedDeletionStatus));
                     }}
                     style={outlineButtonStyle}
@@ -527,7 +503,7 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
                     deleteBlockedByPlan
                   }
                   onClick={() => {
-                    if (!permitsDeletionAction(queryClient, renderedDeletionStatus, 'schedule')) return;
+                    if (!permitsDeletionAction(renderedDeletionStatus, 'schedule')) return;
                     setDeleteStatusSnapshot(renderedDeletionStatus ?? null);
                     setDeleteConfirmInput('');
                     deleteAccountMutation.reset();
@@ -539,7 +515,7 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
                 </button>
               </AccountRow>
             )}
-            {(deletionStatus.isError || renderedDeletionStatus?.isInvalidated) && (
+            {(deletionStatus.isError || deletionStatus.isInvalidated) && (
               <p role="alert" style={{ ...errorTextStyle, padding: 'var(--space-3) 0 0' }}>
                 {deletionStatus.isError
                   ? 'Could not check whether a deletion is already pending. '
@@ -942,7 +918,7 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
                 )}
               </div>
               <AlertDialogFooter>
-                {!deleteAccountMutation.isPending && !permitsDeletionAction(queryClient, deleteStatusSnapshot, 'schedule') && (
+                {!deleteAccountMutation.isPending && !permitsDeletionAction(deleteStatusSnapshot, 'schedule') && (
                   <p role="alert" className="text-sm text-danger">
                     Deletion status changed. Close this dialog, check the current status, and reopen the confirmation.
                   </p>
@@ -957,7 +933,7 @@ export function AccountSection({ emailEditorActive = true, cancellationActive = 
                     handleDeleteAccount();
                   }}
                   disabled={deleteConfirmInput !== 'DELETE' || deleteAccountMutation.isPending ||
-                    !permitsDeletionAction(queryClient, deleteStatusSnapshot, 'schedule')}
+                    !permitsDeletionAction(deleteStatusSnapshot, 'schedule')}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                 >
                   {deleteAccountMutation.isPending ? 'Scheduling…' : 'Schedule deletion'}

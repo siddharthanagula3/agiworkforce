@@ -6,18 +6,27 @@ import { NO_PENDING_ACCOUNT_DELETION, type AccountDeletionStatus } from '@agiwor
 import { queryKeys } from '@shared/stores/query-client';
 import { AccountSection } from './AccountSection';
 
-const { schedule, cancel, confirmations } = vi.hoisted(() => ({
+const { schedule, cancel, confirmations, identity } = vi.hoisted(() => ({
   schedule: vi.fn(),
   cancel: vi.fn(),
   confirmations: new Map<string, () => void>(),
+  identity: { epoch: 0, subject: 'native-user-1', listeners: new Set<() => void>() },
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('@clerk/nextjs', () => ({ useClerk: () => ({ signOut: vi.fn() }) }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
-  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
-    isCurrent: () => true, getToken: async () => 'captured-token' }),
+  useSessionSnapshot: () => () => {
+    const epoch = identity.epoch;
+    return { userId: identity.subject, sessionId: `session-${epoch}`,
+      isCurrent: () => identity.epoch === epoch, getToken: async () => `captured-token-${epoch}`,
+      subscribe: (listener: () => void) => {
+        identity.listeners.add(listener);
+        return () => { identity.listeners.delete(listener); };
+      },
+    };
+  },
 }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
@@ -53,7 +62,7 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => {
   };
 });
 
-const key = queryKeys.settings.accountDeletionStatus();
+let key: readonly unknown[];
 const pending: AccountDeletionStatus = {
   pending: true, canCancel: true, requestedAt: null, scheduledFor: '2020-01-02T12:00:00+01:00',
 };
@@ -62,9 +71,9 @@ function response(body: unknown) {
   return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
 }
 
-function setup(status?: AccountDeletionStatus, responseBody: unknown = status ?? NO_PENDING_ACCOUNT_DELETION) {
+async function setup(status?: AccountDeletionStatus, responseBody: unknown = status ?? NO_PENDING_ACCOUNT_DELETION) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  if (status) client.setQueryData(key, status);
+
   const statusRead = vi.fn<() => Promise<Response>>().mockImplementation(async () => response(responseBody));
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     if (String(input) === '/api/user/delete-account') return statusRead();
@@ -75,6 +84,10 @@ function setup(status?: AccountDeletionStatus, responseBody: unknown = status ??
     return response({ sessions: [], totalCount: 0 });
   });
   render(<QueryClientProvider client={client}><AccountSection /></QueryClientProvider>);
+  await waitFor(() => expect(client.getQueryCache().findAll({ queryKey: queryKeys.settings.accountDeletionStatus() })
+    .some((query) => query.state.fetchStatus === 'idle' && query.state.status !== 'pending')).toBe(true));
+  key = client.getQueryCache().findAll({ queryKey: queryKeys.settings.accountDeletionStatus() })
+    .find((query) => query.state.status !== 'pending')!.queryKey;
   return { client, statusRead };
 }
 
@@ -95,11 +108,40 @@ beforeEach(() => {
   schedule.mockReset();
   cancel.mockReset();
   confirmations.clear();
+  identity.epoch = 0;
+  identity.subject = 'native-user-1';
+  identity.listeners.clear();
 });
 
 describe('AccountSection deletion status admission', () => {
+  it('preserves the scheduling draft but rejects its original confirmation after owner replacement (UNRUN)', async () => {
+    await setup(NO_PENDING_ACCOUNT_DELETION);
+    const retained = await openConfirmation('schedule');
+    act(() => {
+      identity.epoch += 1;
+      identity.subject = 'native-user-2';
+      for (const notify of [...identity.listeners]) notify();
+    });
+    expect(screen.getByTestId('delete-confirm-input')).toHaveValue('DELETE');
+    expect(screen.getByTestId('delete-account-confirm')).toBeDisabled();
+    await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
+    expect(screen.getByTestId('delete-account-confirm')).toBeDisabled();
+    act(() => retained());
+    expect(schedule).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('admits status from the native subject even though the mapped product account has a different ID (UNRUN)', async () => {
+    await setup(pending);
+    expect(key).toContain('native-user-1');
+    expect(key).not.toContain('user-1');
+    const retained = await openConfirmation('cancel');
+    act(() => retained());
+    await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+  });
+
   it('blocks cached pending status after a malformed refetch and admits a fresh confirmation after retry', async () => {
-    const { client, statusRead } = setup(pending);
+    const { client, statusRead } = await setup(pending);
     statusRead.mockImplementation(async () => response({ ...pending, scheduledFor: 'not-a-date' }));
     await act(async () => { await client.refetchQueries({ queryKey: key, exact: true }); });
     expect(screen.getByTestId('pending-deletion-title')).toBeInTheDocument();
@@ -115,20 +157,20 @@ describe('AccountSection deletion status admission', () => {
   });
 
   it('updates invalidation-only UI even when the cached result was already stale', async () => {
-    const { client, statusRead } = setup(pending);
-    act(() => { client.setQueryData(key, pending, { updatedAt: Date.now() - 60_000 }); });
+    const { client, statusRead } = await setup(pending);
+    act(() => { client.setQueryData(key, client.getQueryData(key), { updatedAt: Date.now() - 60_000 }); });
     expect(screen.getByTestId('cancel-deletion-trigger')).toBeEnabled();
     await act(async () => { await client.invalidateQueries({ queryKey: key, exact: true, refetchType: 'none' }); });
     expect(screen.getByTestId('cancel-deletion-trigger')).toBeDisabled();
     expect(screen.getByText(/Deletion status needs to be checked again/)).toBeInTheDocument();
-    expect(statusRead).not.toHaveBeenCalled();
+    expect(statusRead).toHaveBeenCalledTimes(1);
     statusRead.mockImplementation(async () => response(pending));
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.getByTestId('cancel-deletion-trigger')).toBeEnabled());
   });
 
   it.each(['requestedAt', 'scheduledFor'] as const)('blocks both actions on malformed %s', async (field) => {
-    setup(undefined, { ...pending, [field]: 'not-a-date' });
+    await setup(undefined, { ...pending, [field]: 'not-a-date' });
     await waitFor(() => expect(screen.getByText(/Could not check whether a deletion is already pending/)).toBeInTheDocument());
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
     expect(screen.queryByTestId('cancel-deletion-trigger')).toBeNull();
@@ -138,7 +180,7 @@ describe('AccountSection deletion status admission', () => {
 
   describe.each(['schedule', 'cancel'] as const)('%s confirmation', (action) => {
     it('admits an unchanged ready snapshot', async () => {
-      setup(action === 'schedule' ? NO_PENDING_ACCOUNT_DELETION : pending);
+      await setup(action === 'schedule' ? NO_PENDING_ACCOUNT_DELETION : pending);
       const retained = await openConfirmation(action);
       act(() => { retained(); });
       await waitFor(() => expect(action === 'schedule' ? schedule : cancel).toHaveBeenCalledTimes(1));
@@ -147,7 +189,7 @@ describe('AccountSection deletion status admission', () => {
     it.each(['invalidated', 'paused', 'fetching', 'malformed', 'recovered', 'equal-data', 'cancelled', 'replaced'] as const)
       ('rejects a retained handler after status becomes %s', async (change) => {
         const status = action === 'schedule' ? NO_PENDING_ACCOUNT_DELETION : pending;
-        const { client, statusRead } = setup(status);
+        const { client, statusRead } = await setup(status);
         const retained = await openConfirmation(action);
         const before = client.getQueryState(key);
 

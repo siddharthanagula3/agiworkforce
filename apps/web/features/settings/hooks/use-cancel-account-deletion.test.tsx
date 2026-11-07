@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NO_PENDING_ACCOUNT_DELETION, type AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import type { SessionAuthority } from '@/lib/identity/request-authority';
+import { useAccountDeletionStatus, permitsAccountDeletionAction } from './use-account-deletion-status';
 import { useCancelAccountDeletion, type AccountDeletionCancellationIntent } from './use-cancel-account-deletion';
 
 const mocks = vi.hoisted(() => ({ capture: vi.fn(), csrf: vi.fn() }));
@@ -17,7 +18,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   addCsrfHeaders: mocks.csrf,
 }));
 
-const key = queryKeys.settings.accountDeletionStatus();
+let key: readonly unknown[];
 const pending: AccountDeletionStatus = {
   pending: true, canCancel: true, requestedAt: '2026-11-07T12:00:00.000Z', scheduledFor: '2026-11-08T12:00:00.000Z',
 };
@@ -48,13 +49,20 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function setup() {
-  const hook = renderHook(({ active }) => useCancelAccountDeletion(active), {
+async function setup() {
+  const hook = renderHook(({ active }) => {
+    const reader = useAccountDeletionStatus();
+    return { ...useCancelAccountDeletion(active), reader };
+  }, {
     initialProps: { active: true }, wrapper,
   });
+  await waitFor(() => expect(permitsAccountDeletionAction(hook.result.current.reader.snapshot, 'cancel')).toBe(true));
+  key = client.getQueryCache().findAll({ queryKey: queryKeys.settings.accountDeletionStatus() })
+    .find((query) => query.state.status === 'success')!.queryKey;
+  token.mockClear();
   let intent!: AccountDeletionCancellationIntent;
   act(() => {
-    const prepared = hook.result.current.begin(client.getQueryState<AccountDeletionStatus, Error>(key));
+    const prepared = hook.result.current.begin(hook.result.current.reader.snapshot);
     if (!prepared) throw new Error('Expected a live cancellation intent');
     intent = prepared;
   });
@@ -65,9 +73,10 @@ beforeEach(() => {
   mocks.capture.mockReset();
   mocks.csrf.mockReset().mockResolvedValue({ 'x-csrf-token': 'csrf' });
   fetchMock.mockReset().mockImplementation(async () => response());
-  vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>((input, init) => init?.method === 'GET'
+    ? Promise.resolve(response(pending)) : fetchMock(input, init)));
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: 2, retryDelay: 1 } } });
-  client.setQueryData(key, pending);
+
   live = true;
   listeners = new Set();
   token = vi.fn<SessionAuthority['getToken']>().mockResolvedValue('captured-token');
@@ -86,8 +95,8 @@ afterEach(() => {
 });
 
 describe('owned cancellation source fixtures (UNRUN)', () => {
-  it('captures at open, sends one bearer request without cookies, and settles after its own cache write', async () => {
-    const { result, intent } = setup();
+  it('retains the reader owner at open, sends one bearer request without cookies, and settles after its own cache write', async () => {
+    const { result, intent } = await setup();
     expect(mocks.capture).toHaveBeenCalledTimes(1);
     act(() => { intent.confirm(); intent.confirm(); });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -97,7 +106,7 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer captured-token');
     expect(new Headers(init?.headers).get('x-csrf-token')).toBe('csrf');
     expect(init?.credentials).toBe('omit');
-    expect(client.getQueryData(key)).toEqual(NO_PENDING_ACCOUNT_DELETION);
+    expect(client.getQueryData<{ status: AccountDeletionStatus }>(key)?.status).toEqual(NO_PENDING_ACCOUNT_DELETION);
     expect(result.current.needsStatusCheck).toBe(false);
     expect(intent.isCurrent()).toBe(true);
     expect(intent.canConfirm()).toBe(false);
@@ -108,9 +117,9 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
   it.each(['csrf', 'token'] as const)('blocks dispatch after view retirement during %s', async (stage) => {
     const csrf = deferred<HeadersInit>();
     const auth = deferred<string | null>();
+    const { intent, rerender, result } = await setup();
     if (stage === 'csrf') mocks.csrf.mockReturnValue(csrf.promise);
     else token.mockReturnValue(auth.promise);
-    const { intent, rerender, result } = setup();
     act(() => intent.confirm());
     await waitFor(() => expect(stage === 'csrf' ? mocks.csrf : token).toHaveBeenCalledTimes(1));
     rerender({ active: false });
@@ -118,15 +127,15 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     expect(intent.isCurrent()).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.current.error).toBeNull();
-    expect(client.getQueryData(key)).toEqual(pending);
+    expect(client.getQueryData<{ status: AccountDeletionStatus }>(key)?.status).toEqual(pending);
   });
 
   it.each(['csrf', 'token'] as const)('blocks dispatch after synchronous session retirement during %s', async (stage) => {
     const csrf = deferred<HeadersInit>();
     const auth = deferred<string | null>();
+    const { intent, result } = await setup();
     if (stage === 'csrf') mocks.csrf.mockReturnValue(csrf.promise);
     else token.mockReturnValue(auth.promise);
-    const { intent, result } = setup();
     act(() => intent.confirm());
     await waitFor(() => expect(stage === 'csrf' ? mocks.csrf : token).toHaveBeenCalledTimes(1));
     act(() => retireSession());
@@ -139,12 +148,12 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
   it.each(['csrf', 'token'] as const)('requires a fresh confirmation when query state changes during %s', async (stage) => {
     const csrf = deferred<HeadersInit>();
     const auth = deferred<string | null>();
+    const { intent, result } = await setup();
     if (stage === 'csrf') mocks.csrf.mockReturnValue(csrf.promise);
     else token.mockReturnValue(auth.promise);
-    const { intent, result } = setup();
     act(() => intent.confirm());
     await waitFor(() => expect(stage === 'csrf' ? mocks.csrf : token).toHaveBeenCalledTimes(1));
-    act(() => client.setQueryData(key, { ...pending }, { updatedAt: 10 }));
+    act(() => client.setQueryData(key, client.getQueryData(key), { updatedAt: 10 }));
     const newer = client.getQueryState(key);
     await act(async () => { csrf.resolve({}); auth.resolve('captured-token'); });
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -161,10 +170,10 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     const body = deferred<unknown>();
     const readBody = vi.fn(() => body.promise);
     fetchMock.mockReturnValue(stage === 'response' ? reply.promise : Promise.resolve({ ok: true, json: readBody } as unknown as Response));
-    const { intent, result } = setup();
+    const { intent, result } = await setup();
     act(() => intent.confirm());
     await waitFor(() => expect(stage === 'response' ? fetchMock : readBody).toHaveBeenCalledTimes(1));
-    act(() => client.setQueryData(key, { ...pending, scheduledFor: '2026-11-09T12:00:00.000Z' }));
+    act(() => client.setQueryData(key, (old: object | undefined) => ({ ...old, status: { ...pending, scheduledFor: '2026-11-09T12:00:00.000Z' } })));
     const newer = client.getQueryState(key);
     await act(async () => { reply.resolve(response()); body.resolve(receipt); });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -181,7 +190,8 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
       const body = deferred<unknown>();
       const readBody = vi.fn(() => body.promise);
       fetchMock.mockReturnValue(stage === 'response' ? reply.promise : Promise.resolve({ ok: true, json: readBody } as unknown as Response));
-      const { intent, result, rerender, unmount } = setup();
+      const { intent, result, rerender, unmount } = await setup();
+      const originalQuery = client.getQueryCache().find({ queryKey: key, exact: true })!;
       act(() => intent.confirm());
       await waitFor(() => expect(stage === 'response' ? fetchMock : readBody).toHaveBeenCalledTimes(1));
       if (retirement === 'close') rerender({ active: false });
@@ -189,7 +199,7 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
       else act(() => retireSession());
       expect(fetchMock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
       await act(async () => { reply.resolve(response()); body.resolve(receipt); });
-      expect(client.getQueryData(key)).toEqual(pending);
+      expect((originalQuery.state.data as { status: AccountDeletionStatus }).status).toEqual(pending);
       expect(intent.isCurrent()).toBe(false);
       if (retirement !== 'unmount') {
         expect(result.current.isSuccess).toBe(false);
@@ -198,11 +208,11 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     });
   });
 
-  it('cannot confirm or dismiss a replacement with a retained handle', () => {
-    const { intent, result } = setup();
+  it('cannot confirm or dismiss a replacement with a retained handle', async () => {
+    const { intent, result } = await setup();
     let replacement!: AccountDeletionCancellationIntent;
     act(() => {
-      replacement = result.current.begin(client.getQueryState<AccountDeletionStatus, Error>(key))!;
+      replacement = result.current.begin(result.current.reader.snapshot)!;
     });
     act(() => { intent.confirm(); intent.dismiss(); });
     expect(intent.isCurrent()).toBe(false);
@@ -216,16 +226,17 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
   it.each(['live', 'retired'] as const)('checks only current status with a %s handle, without replaying cancellation', async (ownership) => {
     const reply = deferred<Response>();
     fetchMock.mockReturnValue(reply.promise);
-    const { intent, result } = setup();
+    const { intent, result } = await setup();
     act(() => intent.confirm());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    act(() => client.setQueryData(key, { ...pending }, { updatedAt: 10 }));
+    act(() => client.setQueryData(key, client.getQueryData(key), { updatedAt: 10 }));
     await act(async () => reply.resolve(response()));
     await waitFor(() => expect(result.current.needsStatusCheck).toBe(true));
-    const read = vi.fn(async () => NO_PENDING_ACCOUNT_DELETION);
+    const read = vi.fn(async () => response(NO_PENDING_ACCOUNT_DELETION));
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET' ? read() : fetchMock(input, init));
     const query = client.getQueryCache().find({ queryKey: key, exact: true });
     if (!query) throw new Error('Expected deletion status query');
-    query.setOptions({ ...query.options, queryFn: read });
+
     if (ownership === 'retired') act(() => intent.dismiss());
     await act(async () => intent.checkCurrentStatus());
     expect(read).toHaveBeenCalledTimes(ownership === 'live' ? 1 : 0);
@@ -234,24 +245,25 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
       expect(result.current.isSuccess).toBe(true);
       expect(result.current.data).toEqual(receipt);
       expect(result.current.needsStatusCheck).toBe(false);
-      expect(client.getQueryData(key)).toEqual(NO_PENDING_ACCOUNT_DELETION);
+      expect(client.getQueryData<{ status: AccountDeletionStatus }>(key)?.status).toEqual(NO_PENDING_ACCOUNT_DELETION);
     }
   });
 
   it('does not settle a replacement dialog when an older status check finishes', async () => {
     const reply = deferred<Response>();
     fetchMock.mockReturnValue(reply.promise);
-    const { intent, result } = setup();
+    const { intent, result } = await setup();
     act(() => intent.confirm());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    act(() => client.setQueryData(key, { ...pending }, { updatedAt: 10 }));
+    act(() => client.setQueryData(key, client.getQueryData(key), { updatedAt: 10 }));
     await act(async () => reply.resolve(response()));
     await waitFor(() => expect(result.current.needsStatusCheck).toBe(true));
     const status = deferred<AccountDeletionStatus>();
-    const read = vi.fn(() => status.promise);
+    const read = vi.fn(async () => response(await status.promise));
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET' ? read() : fetchMock(input, init));
     const query = client.getQueryCache().find({ queryKey: key, exact: true });
     if (!query) throw new Error('Expected deletion status query');
-    query.setOptions({ ...query.options, queryFn: read });
+
     let checking!: Promise<void>;
     act(() => { checking = intent.checkCurrentStatus(); });
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
@@ -260,7 +272,7 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
       await client.cancelQueries({ queryKey: key, exact: true });
     });
     let replacement!: AccountDeletionCancellationIntent;
-    act(() => { replacement = result.current.begin(client.getQueryState<AccountDeletionStatus, Error>(key))!; });
+    act(() => { replacement = result.current.begin(result.current.reader.snapshot)!; });
     await act(async () => { status.resolve(NO_PENDING_ACCOUNT_DELETION); await checking; });
     expect(replacement.isCurrent()).toBe(true);
     expect(result.current.isSuccess).toBe(false);
@@ -268,12 +280,13 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not let a retained A dialog capture B on confirm', () => {
-    const { intent } = setup();
+  it('does not let a retained A dialog capture B on confirm', async () => {
+    const { intent } = await setup();
     act(() => retireSession());
     mocks.capture.mockReturnValue({ ...session, sessionId: 'session-B', isCurrent: () => true });
+    const captures = mocks.capture.mock.calls.length;
     act(() => intent.confirm());
-    expect(mocks.capture).toHaveBeenCalledTimes(1);
+    expect(mocks.capture).toHaveBeenCalledTimes(captures);
     expect(token).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -282,25 +295,28 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     const body = deferred<unknown>();
     const readBody = vi.fn(() => body.promise);
     fetchMock.mockResolvedValue({ ok: false, status: 409, json: readBody } as unknown as Response);
-    const { intent, rerender, result } = setup();
+    const { intent, rerender, result } = await setup();
     act(() => intent.confirm());
     await waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
     rerender({ active: false });
     rerender({ active: true });
     let fresh!: AccountDeletionCancellationIntent;
-    act(() => { fresh = result.current.begin(client.getQueryState<AccountDeletionStatus, Error>(key))!; });
+    act(() => { fresh = result.current.begin(result.current.reader.snapshot)!; });
     await act(async () => { body.resolve({ error: 'The cancellation window has closed.' }); });
     expect(fresh.isCurrent()).toBe(true);
     expect(result.current.error).toBeNull();
     expect(result.current.isPending).toBe(false);
   });
 
-  it('creates a fresh layout generation in StrictMode instead of reviving earlier handles', () => {
+  it('creates a fresh layout generation in StrictMode instead of reviving earlier handles', async () => {
+    const status = renderHook(() => useAccountDeletionStatus(), { wrapper });
+    await waitFor(() => expect(permitsAccountDeletionAction(status.result.current.snapshot, 'cancel')).toBe(true));
+    const snapshot = status.result.current.snapshot;
     const handles: AccountDeletionCancellationIntent[] = [];
     function Harness() {
       const cancellation = useCancelAccountDeletion();
       useLayoutEffect(() => {
-        const intent = cancellation.begin(client.getQueryState<AccountDeletionStatus, Error>(key));
+        const intent = cancellation.begin(snapshot);
         if (intent) handles.push(intent);
       }, []);
       return null;
