@@ -13,7 +13,14 @@ jest.mock('@/services/api', () => ({
 }));
 
 import { managedCloudPublishedArtifactVersionPath } from '@agiworkforce/cloud-contracts';
-import { republishSiteVersion } from '../service';
+import {
+  clearSiteSharedData,
+  deleteSiteAndData,
+  listPublishedSites,
+  republishSiteVersion,
+  unpublishSite,
+  type SiteRequestAuthority,
+} from '../service';
 
 const site = { token: 'a'.repeat(24), artifactId: 'untrusted-client-artifact' };
 
@@ -37,5 +44,68 @@ describe('mobile version restore', () => {
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockPatch).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe('detail request authority', () => {
+  function authority() {
+    const controller = new AbortController();
+    const context: SiteRequestAuthority = {
+      accountEpoch: { ownerId: 'owner-1', epoch: 3 },
+      signal: controller.signal,
+      assertCurrent: jest.fn(() => {
+        if (controller.signal.aborted) throw new Error('retired view');
+      }),
+    };
+    const options = { accountEpoch: context.accountEpoch, signal: context.signal,
+      auth401Recovery: 'caller-owned' };
+    return { controller, context, options };
+  }
+
+  it('forwards captured epoch, cancellation and caller-owned 401 recovery for detail reads', async () => {
+    const { context, options } = authority();
+    mockGet.mockResolvedValue({ artifacts: [] });
+    await listPublishedSites(context.signal, context);
+    expect(mockGet).toHaveBeenCalledWith('/api/artifacts/publish', options);
+    expect(context.assertCurrent).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards authority without changing restore endpoint or supplying content', async () => {
+    const { context, options } = authority();
+    mockPost.mockResolvedValue({ token: site.token, version: 3 });
+    await republishSiteVersion(site, 3, context);
+    expect(mockPost.mock.calls).toEqual([[managedCloudPublishedArtifactVersionPath(site.token, 3), undefined, options]]);
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('keeps ambient delete calling conventions unchanged', async () => {
+    mockDelete.mockResolvedValue({ cleared: 1 });
+    await deleteSiteAndData(site.token, true);
+    expect(mockDelete.mock.calls).toEqual([
+      [`/api/artifacts/publish/${site.token}/data`],
+      [`/api/artifacts/publish/${site.token}`],
+    ]);
+  });
+
+  it('refuses retired authority before dispatch', async () => {
+    const { context, controller } = authority();
+    controller.abort();
+    await expect(unpublishSite(site.token, context)).rejects.toThrow('retired view');
+    await expect(clearSiteSharedData(site.token, context)).rejects.toThrow('retired view');
+    await expect(listPublishedSites(context.signal, context)).rejects.toThrow('retired view');
+    expect(mockDelete).not.toHaveBeenCalled();
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('rechecks ownership after a successful clear before deleting the site', async () => {
+    const { context, controller, options } = authority();
+    let finish!: (value: unknown) => void;
+    mockDelete.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const deletion = deleteSiteAndData(site.token, true, context);
+    expect(mockDelete).toHaveBeenCalledWith(`/api/artifacts/publish/${site.token}/data`, options);
+    controller.abort();
+    finish({ cleared: 1 });
+    await expect(deletion).rejects.toThrow('retired view');
+    expect(mockDelete).toHaveBeenCalledTimes(1);
   });
 });
