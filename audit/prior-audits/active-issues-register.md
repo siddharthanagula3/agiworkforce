@@ -17632,3 +17632,44 @@ guards do not establish rollback or server cancellation. No atomicity, durable
 unknown-write record, automatic retry or cross-controller ordering claim.
 No product checks, live services, migration application, push or deployment.
 Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+### Web viewer changes keep their editor request ownership
+
+Continuation c8eca8ff9c6160a94c031db4632c45069cdbd94c, 2026-11-07, addresses a permission mutation that
+could dispatch after its initiating editor retired. The editor checked activity
+before and after the service call, but the service awaited CSRF preparation
+inside an unguarded fetch. A token switch, unmount or publication-lease
+retirement during that wait did not prevent the later add/remove request.
+
+The editor now keys its session by token and publication lease, creates a fresh
+layout-effect activation and permanently retires its owned request on cleanup.
+Accepted-result identity and operation identity gate form, remove and retry
+callbacks and duplicate admission. This is not an older-email-draft freshness
+guarantee.
+
+Viewer GET/change helpers accept optional narrow request authority. They check
+before work, after CSRF, around response/body decoding and error propagation,
+and dispatch through the authority's cookie-preserving fetch with an owned
+abort signal. Component currentness rejects retired response adoption and draft
+clearing. Existing unknown-mutation state and explicit GET recovery remain.
+
+The request still names its original token and backend publisher/CSRF checks
+remain. This is obsolete UI permission dispatch, not an observed incident or
+demonstrated wrong-token or cross-account authorization bypass. Cookies remain
+ambient; local view/lease authority is not native session credential binding.
+Already-dispatched writes may complete server-side despite client retirement.
+
+Four independently source-reviewed files include 315 lines of new real-editor
+and helper fixtures for deferred add/remove CSRF, token/unmount/lease retirement,
+synchronous lease checks, delayed bodies/errors, retained callbacks, operation
+ABA, active success and fresh StrictMode lanes. All fixtures are UNRUN; no
+browser/auth/CSRF/type or deployed permission behavior has been exercised.
+The StrictMode fixture covers stale first-response suppression, not specifically
+an already-entered StrictMode JSON decode; separate body fixtures cover decoding.
+
+The canonical server response remains { viewers }, without token/action receipt
+fields. Contract-validation work is separate. Existing explicit recovery GET
+and unknown-mutation handling remain; no automatic mutation replay, rollback,
+durable recovery or cross-controller ordering guarantee. No product checks,
+live services, migrations, push or deployment. Existing recovery prerequisites,
+unapplied migrations and lost-history limits remain.

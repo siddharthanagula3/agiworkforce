@@ -7602,3 +7602,21 @@ Already-dispatched server writes cannot be recalled. No backend/shared-dialog
 change, rollback guarantee, durable uncertainty record or global ordering.
 Five source/fixture files are independently reviewed; fixtures remain UNRUN.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Viewer mutations dispatch only for their current editor
+
+Continuation c8eca8ff9c6160a94c031db4632c45069cdbd94c adds token/lease-keyed viewer sessions with fresh
+layout-effect activation, accepted-result and operation admission, and
+permanently retired owned requests. Narrow optional authority checks viewer
+GET/change helpers before work, after CSRF and around response/body settlement.
+Cookie transport remains ambient; this is not native session credential binding.
+
+Retired work cannot newly dispatch through that authority or adopt a late result.
+Already-dispatched server permission changes may still complete. Serialization,
+unknown-mutation state and explicit GET-only recovery remain; no automatic
+mutation replay or rollback guarantee. Retained callback checks bind accepted
+result/lifetime, not every older email draft.
+
+Canonical { viewers } response behavior remains unchanged; validation is separate.
+Four source/fixture files are independently reviewed, with fixtures UNRUN.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.
