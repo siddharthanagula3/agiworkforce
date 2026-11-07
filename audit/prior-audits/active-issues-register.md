@@ -17045,8 +17045,8 @@ It requires a 24-character token and an absolute HTTP(S) share link with that
 token's exact parsed path, no credentials, query or fragment. This is parsed
 URL shape, not raw-string canonicality. The link predicate is
 factored from Publish without changing Publish's validation semantics. Existing
-web/mobile Sites consumers keep their original response schema and behavior;
-they do not gain strict receipt or requested-target binding from this slice.
+web/mobile Sites consumers kept their original schema at that boundary. Web
+Sites adoption follows below; mobile Sites remains on the legacy parser.
 
 The web chat client parses the strict receipt and requires its token and audience
 to equal the requested values before resolving. It uses the returned validated
@@ -17146,3 +17146,40 @@ separate clear-then-delete partial-failure workflow remain unresolved. This
 copy correction adds no atomicity, recovery, receipt or lifecycle guarantee.
 No product checks, live service/database or migration actions, push or deploy.
 Existing fixed-base recovery dependencies and lost-history limits remain.
+
+### Web Sites updates require matching publication receipts
+
+Continuation cc90dc57b4e60a86b39ac25fb672b7835ea6daeb, 2026-11-07, adopts the existing strict update
+receipt in web Sites. The prior legacy parser accepted a different returned
+token or audience; useSiteActions then recorded the returned link/audience under
+the intended artifact ID and passed it to onUpdated under the captured token.
+Existing lease checks protect lifecycle, not receipt identity. This is a
+qualified false-acknowledgement path, not an observed disclosure.
+
+updatePublishedSite snapshots the top-level change and serialized request body
+before awaited CSRF preparation. Returned token must match the requested token,
+and returned audience must match any requested visibility. The canonical
+receipt also checks the 24-character token and matching parsed HTTP(S) link
+without credentials, query or fragment. Invalid JSON, incomplete legacy or
+mismatched successful responses reject before cache/callback success, explicitly
+warning that the update may have taken effect and should be checked.
+
+Returned title remains server-authoritative: handleUpdate applies moderation
+and outbound secret policy, which may transform the submitted title. Exact
+title equality would reject a legitimate redaction. Rename-only responses do
+not assert an unchanged audience; combined updates still bind requested
+visibility. No shared schema or backend behavior changes.
+
+Existing caller lease/view checks, UI actions, ambient cookie/CSRF transport,
+non-2xx errors and unrelated DELETE/Restore helpers remain unchanged. No new
+retry, recovery GET, account authority or durable uncertainty marker is added.
+Earlier cache/display knowledge may persist after failure. URL origin, raw URL
+canonicality, full metadata semantics and lasting remote state are not proved.
+
+Three source/fixture files are independently reviewed. Direct real-parser
+and real-helper/hook/store fixtures are authored UNRUN; existing component
+suites mock the service and are not transport/parser acceptance. Mobile Sites
+still uses legacy update receipts; web Sites Restore/DELETE receipt adoption
+and broader lifetime/reconciliation remain open. No product checks, live
+services/databases, migration application, push or deployment. Existing recovery
+dependencies, unapplied migrations and lost-history limits remain.

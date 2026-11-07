@@ -7300,7 +7300,8 @@ migration actions, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
 Continuation ecae371624f140b8cec5ef7059e542280f10f28e adds a strict update receipt beside the unchanged
 legacy update response. Publish and strict Update share the same HTTP(S),
 parsed-token-path, no-credentials/query/fragment predicate; Publish semantics are
-unchanged. Existing web/mobile Sites consumers retain their prior schema.
+unchanged. Sites consumers retained their prior schema at that boundary; web
+Sites adoption follows below, while mobile Sites remains unchanged.
 
 Web chat audience PATCH now requires parsed receipt token and visibility to
 match the requested target and audience before resolving. Panel cache and
@@ -7353,4 +7354,24 @@ This is a disclosure correction, not new storage behavior or atomicity.
 Real-screen alert and dispatch fixtures are UNRUN. Live schema/cascade behavior,
 legacy Sites request lifetime, DELETE acknowledgement, partial failure and
 recovery remain unverified; no product checks, migrations, push or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web Sites adopts strict update receipts
+
+Continuation cc90dc57b4e60a86b39ac25fb672b7835ea6daeb makes updatePublishedSite require the canonical
+strict update receipt, exact target token and any requested audience before
+useSiteActions can record returned metadata or call onUpdated. The serialized
+top-level change is captured before asynchronous CSRF work.
+
+Returned title stays authoritative because backend moderation/outbound secret
+policy may transform it. No exact title-equality or rename-only audience claim
+is added. The link check covers parsed HTTP(S) token path, not trusted origin
+or full metadata semantics. Invalid successful responses report uncertainty,
+not rollback.
+
+UI actions, lease/view guards, ambient cookie credentials, HTTP failure handling
+and DELETE/Restore remain unchanged. Earlier cache/display may persist; there
+is no new retry, recovery read or durable unknown-write record. Mobile Sites
+remains on the legacy update schema. Direct and real-helper/hook/store fixtures
+are UNRUN; no product checks, live services/migrations, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
