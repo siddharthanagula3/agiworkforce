@@ -15741,8 +15741,9 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `09073e677cf3971fc2f7c1ed929669e55158f78e`; owner-policy auth/scope continuation in
 `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`; shared-project scope continuation in
 `2a5d910157b8b82127c79917140d705426e401a2`; shared-session target/receipt continuation in
-`7bab6613db418be541428fc48e7a3b32721b9cf9`, 2026-11-07. Client intent, broader audience atomicity,
-wider identity consumers and runtime acceptance remain open.
+`7bab6613db418be541428fc48e7a3b32721b9cf9`; shared-session transaction continuation in
+`74658ddcc2d4e9e331a3dbaf986131cd991adaab`, 2026-11-07. Client intent, audience races, wider identity
+consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
 returns the authenticated request's organizationId. The affected handlers discarded
@@ -16252,8 +16253,9 @@ loss. Failure to confirm revocation refuses publication rather than bypassing
 RLS. Default auth/native-to-product identity and scoped-adapter behavior are
 unchanged.
 
-This is not atomic audience switching. Scope read, grant/delete, visibility
-update and audit remain separate. A concurrent insertion after an absent-grant
+At this earlier target/receipt checkpoint, scope read, grant/delete, visibility
+update and audit remained separate. The transaction continuation below groups
+only the current request writes. A concurrent insertion after an absent-grant
 snapshot is now skipped, whereas the previous selected-target DELETE could catch
 a same-target insertion. Replacement before deletion, reinsertion afterward and
 permission changes remain possible; concurrent removal causes conservative
@@ -16278,3 +16280,72 @@ concurrency and real audit failure behavior are not established by these fixture
 No product checks, live SQL/provider work, push or deployment; prior 0394/0395
 remain UNAPPLIED. Runtime acceptance and broader audience-transition repair remain
 open. Source review and backup integrity are not release readiness.
+
+### Shared-session grant and visibility transaction continuation
+
+Source-reviewed continuation `74658ddcc2d4e9e331a3dbaf986131cd991adaab` groups the current PATCH's
+grant/deletion and visibility write in one existing scoped database transaction.
+Previously these operations committed separately: a later visibility failure
+could leave a new grant while the link stayed public, or remove the grant while
+the row stayed organization-only. This is partial execution of the requested
+transition, not proof that public visibility plus a grant is globally invalid.
+
+updateSharedSessionAudience is the canonical transaction owner. It uses the
+callback's tx for existing grant/delete and visibility primitives, and throws
+inside the callback on missing or unconfirmed receipts. It returns updated fields
+and the actual revoked organization only after the outer transaction resolves.
+The route's owner snapshot, explicit-selector/conversation checks, captured
+non-null membership and content.share/external-sharing gates remain beforehand.
+Audit remains an independent postcommit operation. No privileged fallback,
+rebinding, nested transaction or automatic retry is introduced.
+
+Grant receipts must be one row matching organization, session, actor and owner
+before summary mapping. Visibility input now requires the resolved session ID;
+UPDATE binds that ID as well as token and owner, avoiding a replacement same-token
+row. Exactly one raw receipt must match ID, token, owner and requested visibility
+before visibility normalization. Zero rows return null to the orchestration,
+which throws inside the transaction. Token, expiry and response shape remain
+unchanged. Existing A -> organization B still conflicts rather than relocating.
+The organization-console unshare consumer remains a separate delete-only action.
+
+The real Neon/Postgres adapters retain one client and await COMMIT after callback
+success, attempting rollback on rejection. Tracing preserves delegation and the
+claimed-user adapter binds the existing role/subject/org within the same
+transaction. These are source findings, not live transaction/RLS acceptance.
+A later callback/statement error no longer leaves an independently committed
+first write from this request. COMMIT acknowledgement loss can still mean both
+writes committed despite a rejected request; rollback attempts do not prove
+absence. There is no automatic compensation or retry. Audit persistence is
+separate and best-effort, and postcommit response failures cannot roll back data.
+
+This is failure-atomic grouping, not serialized audience switching. Scope and
+policy reads remain outside; the no-grant snapshot skip, replacement/reinsertion,
+membership/policy changes, default identity mapping and old-grant RLS refusal
+remain. No owner-row lock or policy expansion is added. Grant-before-session
+write order now retains locks until commit and can contend with parent deletion
+and cascading grant deletion; deadlock/timeout aborts propagate. Older deployed
+writers still perform separate commits. The new path does not repair their
+partial effects or establish a global audience invariant.
+
+Authored UNRUN service and route fixtures use real source with mocked adapters
+and explicit transaction models. Coverage includes both successful branches,
+no observed grant, malformed/missing grant/delete/visibility receipts, exact
+session identity, first/second operation errors, modeled callback rollback,
+pending commit ordering, rejected/uncertain commit, no retries and postcommit
+audit failure. Models are assertions about caller behavior, not actual
+PostgreSQL durability, locking, deadlocks or concurrency. Existing target/gate
+cases remain and two exhaustive module mocks include the new canonical export.
+No product checks or guard execution occurred; prior 0394/0395 remain UNAPPLIED.
+No new migration, live SQL/provider action, push or deployment.
+
+A separate source-qualified client issue remains uncorrected: the web
+use-share-conversation hook sends headerless lookup/audience requests and retains
+member count without workspace identity. A real Personal conversation can remain
+loaded in one tab while another selects A before the dialog lookup and B before
+confirmation. The lookup can describe A while PATCH captures B; existing null
+conversation scope checks allow B's authorized grant. Ordinary same-tab workspace
+switching reloads and conversation navigation is keyed, so those are not the
+demonstrated paths. The next bounded correction should bind the hook's lookup,
+confirmation, cache and async mutations to admitted session/workspace lifetime
+and a pinned explicit selector, including Personal. Server transaction grouping
+does not solve that user-intent race; no runtime incident is claimed.

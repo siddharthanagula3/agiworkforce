@@ -6935,7 +6935,8 @@ do not filter visibility, and the unique grant index rules out supported
 multi-grant state. Old-grant readability/RLS can still refuse owner deletion after
 permission loss; there is no privileged retry.
 
-Scope read, deletion/grant, visibility update and audit remain separate. The new
+At the preceding target/receipt checkpoint, scope and writes remained separate.
+The transaction continuation below narrows same-request partial writes only. The
 absent-grant skip can miss a concurrent insertion the old selected-target DELETE
 would catch; replacement/reinsertion, concurrent removal, permission changes and
 post-write failure remain. Exact receipt is not final-state verification.
@@ -6952,3 +6953,42 @@ helper but mocked route infrastructure. No end-to-end authenticated selector adm
 concurrency or audit failure is proven. No new migration; prior 0394/0395 remain
 UNAPPLIED. No product checks, provider/DB actions, push or deployment. See
 WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for bounded scope and runtime acceptance limits.
+
+## Shared-session grant and visibility commit together
+
+Continuation `74658ddcc2d4e9e331a3dbaf986131cd991adaab` adds updateSharedSessionAudience as the
+canonical owner of one scoped transaction for grant/delete plus visibility.
+Existing route owner/target/conversation/permission/external-sharing gates run
+first; service primitives use only callback tx. Missing or mismatched receipts
+throw inside the callback, and audit follows resolved outer commit.
+
+Grant receipt cardinality and organization/session/actor/owner identity are
+checked before mapping. Visibility UPDATE requires resolved ID plus token and
+owner, and one matching raw ID/token/owner/requested-visibility receipt before
+normalization. This avoids another same-token row and rejects partial completion.
+Response fields, token and expiry stay unchanged. Standalone console unshare
+remains delete-only; existing A -> B grant relocation remains unsupported.
+
+Neon/Postgres, tracing and claimed-user adapters preserve one transaction and
+existing scope. No nested transaction, rebinding, retry or privilege expansion.
+COMMIT acknowledgement loss can still hide a complete committed transition; audit
+is separate best-effort persistence and cannot roll back a committed result.
+
+No row locking or snapshot/policy lease is added. Pre-transaction grant snapshots,
+no-grant skips, reinsertion/replacement, permission changes, inaccessible old
+grants and older nontransactional writers remain outside this guarantee.
+Grant-before-session locks can conflict with parent/cascade deletion and abort;
+errors propagate rather than being retried automatically. This is same-request
+failure atomicity, not a global audience invariant or serialized switching.
+
+UNRUN service/route fixtures exercise real source over mocked transaction models
+covering success, raw receipts, callback rollback, pending/rejected/uncertain
+commit and audit ordering/failure. They do not establish SQL/RLS, live durability,
+deadlock or concurrency behavior. Two full mocks declare the new export; no
+guards or product checks ran. No new migration; prior 0394/0395 stay UNAPPLIED.
+
+The web share hook's headerless lookup/confirmation can still follow a workspace
+changed by another tab for a retained Personal chat. Binding its cache, confirmation
+and async actions to admitted session/workspace plus a pinned selector is separate
+unfinished work. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for the qualified path and
+source/runtime boundaries. No live SQL/provider actions, push or deployment.
