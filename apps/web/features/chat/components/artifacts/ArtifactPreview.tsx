@@ -386,8 +386,15 @@ const MARKDOWN_SHORTCUTS: Readonly<
 };
 
 const ARTIFACT_DRAFT_STORAGE_PREFIX = 'agi.artifact-draft:';
-const ARTIFACT_DRAFT_AUTOSAVE_MS = 800;
 const CHECKLIST_COMMIT_IDLE_MS = 4_000;
+
+interface SourceDraftSession {
+  owner: { active: boolean };
+  session: number;
+  text: string;
+  origin: 'editor' | 'checklist';
+  status: 'saved' | 'unsaved' | null;
+}
 
 function readStoredDraft(key: string): string | null {
   try {
@@ -606,7 +613,68 @@ export function ArtifactPreview({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
-  const [sourceDraft, setSourceDraft] = useState<string | null>(null);
+  const draftOwner = useMemo(
+    () => ({ active: false }),
+    [artifact.id, artifact.content, versionCount],
+  );
+  useLayoutEffect(() => {
+    draftOwner.active = true;
+    return () => {
+      draftOwner.active = false;
+    };
+  }, [draftOwner]);
+  const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
+  const [draftSnapshot, setDraftSnapshot] = useState<SourceDraftSession | null>(null);
+  const liveDraft = useRef<SourceDraftSession | null>(null);
+  const draftSequence = useRef(0);
+  const draftEventEpoch = useRef(0);
+  const renderedDraftEventEpoch = draftEventEpoch.current;
+  const currentDraft = draftSnapshot?.owner === draftOwner ? draftSnapshot : null;
+  const sourceDraft = currentDraft?.text ?? null;
+  const draftOrigin = currentDraft?.origin ?? null;
+  const draftStatus = currentDraft?.status ?? null;
+  const beginSourceDraft = useCallback(
+    (
+      text: string,
+      origin: SourceDraftSession['origin'],
+      status: SourceDraftSession['status'] = null,
+    ) => {
+      if (!draftOwner.active) return;
+      draftEventEpoch.current += 1;
+      const next = { owner: draftOwner, session: ++draftSequence.current, text, origin, status };
+      liveDraft.current = next;
+      setDraftSnapshot(next);
+    },
+    [draftOwner],
+  );
+  const clearSourceDraft = useCallback(() => {
+    if (!draftOwner.active) return;
+    draftEventEpoch.current += 1;
+    if (liveDraft.current?.owner === draftOwner) liveDraft.current = null;
+    setDraftSnapshot(null);
+  }, [draftOwner]);
+  const changeSourceDraft = useCallback(
+    (text: string) => {
+      const current = liveDraft.current;
+      if (
+        !draftOwner.active ||
+        !current ||
+        current.owner !== draftOwner ||
+        current.session !== currentDraft?.session ||
+        current.text === text
+      ) {
+        return;
+      }
+      const next: SourceDraftSession = {
+        ...current,
+        text,
+        status: writeStoredDraft(draftStorageKey, text) ? 'saved' : 'unsaved',
+      };
+      liveDraft.current = next;
+      setDraftSnapshot(next);
+    },
+    [currentDraft?.session, draftOwner, draftStorageKey],
+  );
   const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [editRequestMode, setEditRequestMode] = useState(false);
   const [pickerSelection, setPickerSelection] = useState<ArtifactPickerSelection | null>(null);
@@ -848,9 +916,6 @@ export function ArtifactPreview({
     setPdfError(false);
     setImageError(false);
     setCopied(false);
-    // An unsaved draft belongs to the revision it was opened from. Carrying it
-    // across an artifact swap or a new version would overwrite other content.
-    setSourceDraft(null);
     setEditorFocusRequest(0);
     // A published URL belongs to one artifact id; keeping it after a swap
     // would offer the previous artifact's public link under this title.
@@ -944,15 +1009,25 @@ export function ArtifactPreview({
         confirmLabel: 'Restore',
         destructive: draftIsUnsaved,
         onConfirm: () => {
+          if (!draftOwner.active || draftEventEpoch.current !== renderedDraftEventEpoch) return;
           if (restoreArtifactVersion(artifact.id, index)) {
             removeStoredDraft(`${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`);
-            setSourceDraft(null);
+            clearSourceDraft();
             setViewedVersionIndex(null);
           }
         },
       });
     },
-    [artifact.id, confirmAction, restoreArtifactVersion, sourceDraft, versionHistory],
+    [
+      artifact.id,
+      clearSourceDraft,
+      confirmAction,
+      draftOwner,
+      renderedDraftEventEpoch,
+      restoreArtifactVersion,
+      sourceDraft,
+      versionHistory,
+    ],
   );
   const canEditSource =
     variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
@@ -997,58 +1072,74 @@ export function ArtifactPreview({
     stepEdit(target, redo.slice(0, -1));
   }, [activeEditTrail, canRedoEdit, stepEdit]);
 
-  const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
-  const [draftStatus, setDraftStatus] = useState<'saved' | 'unsaved' | null>(null);
-  const [draftOrigin, setDraftOrigin] = useState<'editor' | 'checklist' | null>(null);
-
   useEffect(() => {
-    if (!canEditSource) return;
+    if (!canEditSource || liveDraft.current?.owner === draftOwner) return;
     const kept = readStoredDraft(draftStorageKey);
     if (kept === null || kept === activeContent) return;
-    setSourceDraft(kept);
-    setDraftOrigin('editor');
+    beginSourceDraft(kept, 'editor', 'saved');
     setActiveTab('code');
-    setDraftStatus('saved');
     toast.message('Restored your unsaved edits to this artifact');
-  }, [activeContent, canEditSource, draftStorageKey]);
+  }, [activeContent, beginSourceDraft, canEditSource, draftOwner, draftStorageKey]);
 
   useEffect(() => {
     if (!editRequested || variant !== 'panel') return;
     setViewedVersionIndex(null);
     if (!canEditSource) return;
-    setSourceDraft((current) => current ?? activeContent);
-    setDraftOrigin('editor');
+    const current = liveDraft.current;
+    beginSourceDraft(
+      current?.owner === draftOwner ? current.text : activeContent,
+      'editor',
+      current?.owner === draftOwner ? current.status : null,
+    );
     setActiveTab('code');
     setChangesShownFor(null);
     setEditorFocusRequest((count) => count + 1);
     clearEditRequest();
-  }, [activeContent, canEditSource, clearEditRequest, editRequested, variant]);
-
-  useEffect(() => {
-    if (sourceDraft === null) return;
-    const timer = setTimeout(() => {
-      setDraftStatus(writeStoredDraft(draftStorageKey, sourceDraft) ? 'saved' : 'unsaved');
-    }, ARTIFACT_DRAFT_AUTOSAVE_MS);
-    return () => clearTimeout(timer);
-  }, [draftStorageKey, sourceDraft]);
+  }, [
+    activeContent,
+    beginSourceDraft,
+    canEditSource,
+    clearEditRequest,
+    draftOwner,
+    editRequested,
+    variant,
+  ]);
 
   const endSourceEdit = useCallback(() => {
+    if (!draftOwner.active || liveDraft.current?.session !== currentDraft?.session) return;
     removeStoredDraft(draftStorageKey);
-    setDraftStatus(null);
-    setDraftOrigin(null);
-    setSourceDraft(null);
+    clearSourceDraft();
     setEditorFocusRequest(0);
-  }, [draftStorageKey]);
+  }, [clearSourceDraft, currentDraft?.session, draftOwner, draftStorageKey]);
 
   const saveSourceEdit = useCallback(() => {
-    if (sourceDraft === null) return;
+    const current = liveDraft.current;
+    if (
+      !draftOwner.active ||
+      !current ||
+      current.owner !== draftOwner ||
+      current.session !== currentDraft?.session
+    ) {
+      return;
+    }
     const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
     if (!stored) return;
-    if (sourceDraft !== stored.content) {
-      upsertArtifact({ ...stored, content: sourceDraft, createdAt: new Date() });
+    if (current.text !== stored.content) {
+      upsertArtifact({ ...stored, content: current.text, createdAt: new Date() });
     }
-    endSourceEdit();
-  }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
+    removeStoredDraft(draftStorageKey);
+    if (liveDraft.current?.session === current.session) {
+      clearSourceDraft();
+      setEditorFocusRequest(0);
+    }
+  }, [
+    artifact.id,
+    clearSourceDraft,
+    currentDraft?.session,
+    draftOwner,
+    draftStorageKey,
+    upsertArtifact,
+  ]);
 
   const saveArtifactContent = useCallback(
     (next: string) => {
@@ -1061,10 +1152,21 @@ export function ArtifactPreview({
 
   const handleTaskToggle = useCallback(
     (index: number) => {
-      setSourceDraft((current) => toggleMarkdownTask(current ?? activeContent, index));
-      setDraftOrigin((origin) => origin ?? 'checklist');
+      if (!draftOwner.active || draftEventEpoch.current !== renderedDraftEventEpoch) return;
+      const current = liveDraft.current?.owner === draftOwner ? liveDraft.current : null;
+      const text = toggleMarkdownTask(current?.text ?? activeContent, index);
+      if (text === (current?.text ?? activeContent)) return;
+      const next: SourceDraftSession = {
+        owner: draftOwner,
+        session: current?.session ?? ++draftSequence.current,
+        text,
+        origin: current?.origin ?? 'checklist',
+        status: writeStoredDraft(draftStorageKey, text) ? 'saved' : 'unsaved',
+      };
+      liveDraft.current = next;
+      setDraftSnapshot(next);
     },
-    [activeContent],
+    [activeContent, draftOwner, draftStorageKey, renderedDraftEventEpoch],
   );
 
   useEffect(() => {
@@ -2010,10 +2112,9 @@ export function ArtifactPreview({
   );
 
   const startDocumentEdit = useCallback(() => {
-    setSourceDraft(activeContent);
-    setDraftOrigin('editor');
+    beginSourceDraft(activeContent, 'editor');
     setEditorFocusRequest((count) => count + 1);
-  }, [activeContent]);
+  }, [activeContent, beginSourceDraft]);
 
   const canRequestSelectionEdits =
     variant === 'panel' &&
@@ -2364,7 +2465,7 @@ export function ArtifactPreview({
               toast.error('That artifact could not be duplicated');
               return;
             }
-            setSourceDraft(null);
+            clearSourceDraft();
             setViewedVersionIndex(null);
             toast.success('Duplicated. Edits here no longer touch the original.');
           },
@@ -3137,8 +3238,9 @@ export function ArtifactPreview({
             isMarkdownDoc &&
             (sourceDraft !== null && draftOrigin === 'editor' ? (
               <ArtifactDocumentEditor
+                key={currentDraft?.session}
                 value={sourceDraft}
-                onChange={setSourceDraft}
+                onChange={changeSourceDraft}
                 wraps={MARKDOWN_SHORTCUTS}
               />
             ) : (
@@ -3179,8 +3281,9 @@ export function ArtifactPreview({
             !showChanges &&
             (sourceDraft !== null ? (
               <ArtifactCodeEditor
+                key={currentDraft?.session}
                 value={sourceDraft}
-                onChange={setSourceDraft}
+                onChange={changeSourceDraft}
                 language={isMarkdownDoc ? 'markdown' : (artifact.language ?? artifact.type)}
                 wraps={artifact.type === 'document' ? MARKDOWN_SHORTCUTS : undefined}
                 ariaLabel="Artifact source"
