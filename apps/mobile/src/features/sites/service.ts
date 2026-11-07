@@ -2,6 +2,7 @@ import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   ManagedCloudPublishedArtifactDataClearResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
+  ManagedCloudPublishedArtifactDetailResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactUpdateReceiptSchema,
   ManagedCloudPublishedArtifactDeleteReceiptSchema,
@@ -13,11 +14,12 @@ import {
   managedCloudPublishedArtifactVersionsPath,
   type ManagedCloudPublishedArtifact,
   type ManagedCloudPublishedArtifactDataResponse,
+  type ManagedCloudPublishedArtifactDetailResponse,
   type ManagedCloudPublishedArtifactUpdateRequest,
   type ManagedCloudPublishedArtifactUpdateResponse,
   type ManagedCloudPublishedArtifactVersion,
 } from '@agiworkforce/cloud-contracts';
-import { api } from '@/services/api';
+import { api, ApiHttpError } from '@/services/api';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export class SiteMutationUncertainError extends Error {
@@ -57,6 +59,27 @@ export async function listPublishedSites(signal?: AbortSignal, authority?: SiteR
     ),
     workspaceMemberCount: body.workspace?.memberCount ?? null,
   };
+}
+
+export async function readPublishedSite(
+  token: string,
+  signal?: AbortSignal,
+  authority?: SiteRequestAuthority,
+): Promise<{ site: ManagedCloudPublishedArtifact; workspace: ManagedCloudPublishedArtifactDetailResponse['workspace'] } | null> {
+  try {
+    const raw = await api.get<unknown>(
+      managedCloudPublishedArtifactPath(token),
+      authority ? requestOptions(authority) : { signal },
+    );
+    authority?.assertCurrent();
+    const body = ManagedCloudPublishedArtifactDetailResponseSchema.parse(raw);
+    if (body.artifact.token !== token) throw new Error('Site details were not confirmed');
+    return { site: body.artifact, workspace: body.workspace };
+  } catch (error) {
+    authority?.assertCurrent();
+    if (error instanceof ApiHttpError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export async function updatePublishedSite(

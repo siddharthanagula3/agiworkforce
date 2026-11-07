@@ -39,7 +39,7 @@ import {
   SiteMutationUncertainError,
   clearSiteSharedData,
   deleteSiteAndData,
-  listPublishedSites,
+  readPublishedSite,
   listSiteVersions,
   readSiteData,
   republishSiteVersion,
@@ -60,10 +60,10 @@ async function loadSite(view: SiteDetailLifetime): Promise<SiteState | null> {
   const { token, authority } = view;
   const { signal } = authority;
   authority.assertCurrent();
-  const list = await listPublishedSites(signal, authority);
+  const detail = await readPublishedSite(token, signal, authority);
   authority.assertCurrent();
-  const site = list.sites.find((candidate) => candidate.token === token);
-  if (!site) return null;
+  if (!detail) return null;
+  const { site, workspace } = detail;
   const [versions, data] = await Promise.all([
     listSiteVersions(token, signal, authority).catch(() => {
       authority.assertCurrent();
@@ -75,7 +75,7 @@ async function loadSite(view: SiteDetailLifetime): Promise<SiteState | null> {
     }),
   ]);
   authority.assertCurrent();
-  return { site, hasWorkspace: list.workspaceMemberCount !== null, versions, data };
+  return { site, hasWorkspace: workspace !== null, versions, data };
 }
 
 export function SiteDetailScreen() {

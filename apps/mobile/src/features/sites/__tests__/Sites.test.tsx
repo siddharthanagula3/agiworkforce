@@ -55,6 +55,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { SiteDetailScreen } from '../SiteDetailScreen';
 import { SitesScreen } from '../SitesScreen';
 import { Button } from '@/components/ui/Button';
+import { ApiHttpError } from '@/services/api';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -85,7 +86,12 @@ const SITE = {
   sandboxed: true,
 };
 
+const DETAIL_PATH = `/api/artifacts/publish/${SITE.token}`;
+
 function routeGet(path: string) {
+  if (path === DETAIL_PATH) {
+    return Promise.resolve({ artifact: SITE, workspace: { memberCount: 4 } });
+  }
   if (path === '/api/artifacts/publish') {
     return Promise.resolve({ artifacts: [SITE], workspace: { memberCount: 4 } });
   }
@@ -150,6 +156,61 @@ describe('published sites on mobile', () => {
     mockParams.token = 'aaaaaaaaaaaaaaaaaaaaaaaa';
   });
 
+  // UNRUN: detail must not depend on a capped or unavailable collection.
+  it.each([null, { memberCount: 0 }, { memberCount: 4 }])(
+    'loads exact detail with workspace %p while the collection is unavailable', async (workspace) => {
+      mockGet.mockImplementation((path: string) => {
+        if (path === '/api/artifacts/publish') return Promise.reject(new Error('Collection unavailable'));
+        if (path === DETAIL_PATH) return Promise.resolve({ artifact: SITE, workspace });
+        return routeGet(path);
+      });
+      const screen = render(<SiteDetailScreen />);
+      expect((await screen.findByLabelText('Site name')).props.value).toBe(SITE.title);
+      expect(Boolean(screen.queryByText('Only your workspace'))).toBe(workspace !== null);
+      expect(mockGet.mock.calls.map((call) => call[0])).toEqual([
+        DETAIL_PATH, `${DETAIL_PATH}/versions`, `${DETAIL_PATH}/data`,
+      ]);
+    },
+  );
+
+  it('stops at a real detail 404 without secondary reads', async () => {
+    mockGet.mockRejectedValue(new ApiHttpError('Missing', 404));
+    const screen = render(<SiteDetailScreen />);
+    expect(await screen.findByText('This site is not available')).toBeTruthy();
+    expect(screen.getByText('It was unpublished, or this account cannot manage it.')).toBeTruthy();
+    expect(mockGet.mock.calls).toEqual([[DETAIL_PATH, authorityOptions()]]);
+  });
+
+  it.each(['auth', 'rate', 'transport', 'schema', 'wrong token'] as const)(
+    'does not load secondary data after a detail %s failure', async (failure) => {
+      if (failure === 'schema') mockGet.mockResolvedValue({ artifact: null });
+      else if (failure === 'wrong token') mockGet.mockResolvedValue({ artifact: { ...SITE, token: 'b'.repeat(24) } });
+      else mockGet.mockRejectedValue(failure === 'transport' ? new Error('Transport failure')
+        : new ApiHttpError('Request refused', failure === 'auth' ? 401 : 429));
+      const screen = render(<SiteDetailScreen />);
+      expect(await screen.findByText('This site is not available')).toBeTruthy();
+      expect(screen.queryByText('It was unpublished, or this account cannot manage it.')).toBeNull();
+      expect(mockGet.mock.calls).toEqual([[DETAIL_PATH, authorityOptions()]]);
+    },
+  );
+
+  it.each(['error', '404'] as const)('ignores a retired exact detail %s', async (outcome) => {
+    const old = deferred<unknown>();
+    mockGet.mockImplementationOnce(() => old.promise);
+    const screen = render(<SiteDetailScreen />);
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    });
+    await screen.findByLabelText('Site name');
+    const reads = mockGet.mock.calls.length;
+    await act(async () => old.reject(outcome === '404'
+      ? new ApiHttpError('Missing', 404) : new Error('Retired failure')));
+    expect(screen.getByLabelText('Site name').props.value).toBe(SITE.title);
+    expect(screen.queryByText('This site is not available')).toBeNull();
+    expect(mockGet).toHaveBeenCalledTimes(reads);
+  });
+
   it('loads after StrictMode effect replay', async () => {
     const screen = render(<React.StrictMode><SiteDetailScreen /></React.StrictMode>);
     expect((await screen.findByLabelText('Site name')).props.value).toBe(SITE.title);
@@ -170,7 +231,7 @@ describe('published sites on mobile', () => {
   });
 
   it.each(['token', 'mode', 'account', 'auth'] as const)(
-    'retires deferred list reads across a %s round trip', async (transition) => {
+    'retires deferred exact detail reads across a %s round trip', async (transition) => {
       const old = deferred<unknown>();
       mockGet.mockImplementationOnce(() => old.promise);
       const screen = render(<SiteDetailScreen />);
@@ -200,7 +261,7 @@ describe('published sites on mobile', () => {
       await screen.findByLabelText('Site name');
       const requests = mockGet.mock.calls.length;
       await act(async () => {
-        old.resolve({ artifacts: [{ ...SITE, title: 'Obsolete title' }] });
+        old.resolve({ artifact: { ...SITE, title: 'Obsolete title' }, workspace: null });
       });
       expect(screen.getByLabelText('Site name').props.value).toBe(SITE.title);
       expect(mockGet).toHaveBeenCalledTimes(requests);
@@ -262,7 +323,7 @@ describe('published sites on mobile', () => {
   });
 
   it('keeps optional read failure fallbacks in a current view', async () => {
-    mockGet.mockImplementation((path: string) => path === '/api/artifacts/publish'
+    mockGet.mockImplementation((path: string) => path === DETAIL_PATH
       ? routeGet(path) : Promise.reject(new Error('optional read unavailable')));
     const screen = render(<SiteDetailScreen />);
     await screen.findByLabelText('Site name');

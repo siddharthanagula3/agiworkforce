@@ -4,6 +4,7 @@ const mockPatch = jest.fn();
 const mockDelete = jest.fn();
 
 jest.mock('@/services/api', () => ({
+  ApiHttpError: jest.requireActual('@/services/apiErrors').ApiHttpError,
   api: {
     get: (...args: unknown[]) => mockGet(...args),
     post: (...args: unknown[]) => mockPost(...args),
@@ -12,11 +13,13 @@ jest.mock('@/services/api', () => ({
   },
 }));
 
-import { managedCloudPublishedArtifactVersionPath } from '@agiworkforce/cloud-contracts';
+import { ApiHttpError } from '@/services/api';
+import { managedCloudPublishedArtifactPath, managedCloudPublishedArtifactVersionPath } from '@agiworkforce/cloud-contracts';
 import {
   clearSiteSharedData,
   deleteSiteAndData,
   listPublishedSites,
+  readPublishedSite,
   republishSiteVersion,
   unpublishSite,
   updatePublishedSite,
@@ -214,4 +217,106 @@ describe.each([false, true])('mobile mutation receipts with authority=%s', (with
       : updatePublishedSite(site.token, { visibility: 'invited' }, authority);
     await expect(result).rejects.toThrow('retired');
   });
+});
+
+// UNRUN: exact owner detail reads are independent of collection coverage.
+describe('mobile exact publication detail', () => {
+  const artifact = {
+    ...site, conversationId: null, title: 'Older publication', kind: 'html', language: 'html',
+    contentChars: 12, version: 1, visibility: 'public', createdAt: '2026-10-01',
+    updatedAt: '2026-10-01', shareUrl: `https://example.test/shared-artifact/${site.token}`,
+    sandboxed: true,
+  };
+  const path = managedCloudPublishedArtifactPath(site.token);
+
+  it.each([null, { memberCount: 0 }, { memberCount: 4 }])(
+    'reads the exact token with workspace %p without consulting the collection', async (workspace) => {
+      const signal = new AbortController().signal;
+      mockGet.mockImplementation(async (requested: string) => {
+        if (requested === path) return { artifact, workspace };
+        throw new Error('Collection unavailable');
+      });
+      await expect(readPublishedSite(site.token, signal)).resolves.toEqual({ site: artifact, workspace });
+      expect(mockGet.mock.calls).toEqual([[path, { signal }]]);
+    },
+  );
+
+  it('uses the canonical encoded path without a local token grammar', async () => {
+    const token = 'token/with?reserved#characters';
+    mockGet.mockRejectedValue(new ApiHttpError('Missing', 404));
+    await expect(readPublishedSite(token)).resolves.toBeNull();
+    expect(mockGet.mock.calls).toEqual([[managedCloudPublishedArtifactPath(token), { signal: undefined }]]);
+    expect(mockGet.mock.calls[0]?.[0]).toBe('/api/artifacts/publish/token%2Fwith%3Freserved%23characters');
+  });
+
+  it.each([{}, { artifacts: [artifact] }, { artifact: null },
+    { artifact: { ...artifact, token: 'b'.repeat(24) } },
+    { artifact: { ...artifact, contentChars: -1 } },
+    { artifact, workspace: { memberCount: -1 } }])('rejects wrong or malformed detail %p', async (raw) => {
+    mockGet.mockResolvedValue(raw);
+    await expect(readPublishedSite(site.token)).rejects.toThrow();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps only an actual HTTP 404 to absence', async () => {
+    mockGet.mockRejectedValue(new ApiHttpError('Missing', 404));
+    await expect(readPublishedSite(site.token)).resolves.toBeNull();
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    new ApiHttpError('Unauthorized', 401), new ApiHttpError('Forbidden', 403),
+    new ApiHttpError('Rate limited', 429), new ApiHttpError('Failed', 500),
+    new Error('Network unavailable'), new SyntaxError('Invalid JSON'),
+    Object.assign(new Error('Not an HTTP error'), { status: 404 }),
+  ])('preserves other failures without retry or fallback: %p', async (failure) => {
+    mockGet.mockRejectedValue(failure);
+    await expect(readPublishedSite(site.token)).rejects.toBe(failure);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  function authority() {
+    const controller = new AbortController();
+    const context: SiteRequestAuthority = {
+      accountEpoch: { ownerId: 'owner-1', epoch: 3 }, signal: controller.signal,
+      assertCurrent: jest.fn(() => {
+        if (controller.signal.aborted) throw new Error('retired exact read');
+      }),
+    };
+    return { context, controller };
+  }
+
+  it('forwards captured authority and checks a successful response', async () => {
+    const { context } = authority();
+    mockGet.mockResolvedValue({ artifact, workspace: null });
+    await expect(readPublishedSite(site.token, new AbortController().signal, context))
+      .resolves.toEqual({ site: artifact, workspace: null });
+    expect(mockGet.mock.calls).toEqual([[path, {
+      accountEpoch: context.accountEpoch, signal: context.signal, auth401Recovery: 'caller-owned',
+    }]]);
+    expect(context.assertCurrent).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses retired authority before dispatch', async () => {
+    const { context, controller } = authority();
+    controller.abort();
+    await expect(readPublishedSite(site.token, undefined, context)).rejects.toThrow('retired exact read');
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'malformed', 'error', '404'] as const)(
+    'rejects a deferred %s after authority retirement before interpreting it', async (outcome) => {
+      const { context, controller } = authority();
+      let resolve!: (value: unknown) => void;
+      let reject!: (error: unknown) => void;
+      mockGet.mockImplementation(() => new Promise((yes, no) => { resolve = yes; reject = no; }));
+      const pending = readPublishedSite(site.token, undefined, context);
+      controller.abort();
+      if (outcome === 'success') resolve({ artifact, workspace: null });
+      else if (outcome === 'malformed') resolve({});
+      else reject(outcome === '404' ? new ApiHttpError('Missing', 404) : new Error('Network failed'));
+      await expect(pending).rejects.toThrow('retired exact read');
+      expect(mockGet).toHaveBeenCalledTimes(1);
+    },
+  );
 });
