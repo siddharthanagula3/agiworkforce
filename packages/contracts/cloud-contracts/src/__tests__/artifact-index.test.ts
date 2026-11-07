@@ -5,6 +5,7 @@ import {
   ManagedCloudArtifactIndexResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
+  ManagedCloudPublishedArtifactDetailResponseSchema,
   ManagedCloudPublishedArtifactUpdateRequestSchema,
   managedCloudArtifactIndexQueryString,
   managedCloudPublishedArtifactDataPath,
@@ -169,5 +170,34 @@ describe('published site contract (apps/web/app/api/artifacts/publish/[token]/ro
         ownPersonalEntryCount: 0,
       }).success,
     ).toBe(true);
+  });
+});
+
+// UNRUN: additive owner inventory metadata contract fixtures.
+describe('published artifact pagination compatibility', () => {
+  it('keeps missing legacy metadata unknown rather than inventing exhaustion', () => {
+    expect(ManagedCloudPublishedArtifactListResponseSchema.parse({ artifacts: [] }).pageInfo)
+      .toBeUndefined();
+  });
+
+  it('distinguishes an exhausted page from one with a continuation', () => {
+    expect(ManagedCloudPublishedArtifactListResponseSchema.parse({
+      artifacts: [], pageInfo: { nextCursor: null },
+    }).pageInfo).toEqual({ nextCursor: null });
+    expect(ManagedCloudPublishedArtifactListResponseSchema.parse({
+      artifacts: [], pageInfo: { nextCursor: 'opaque-cursor' },
+    }).pageInfo).toEqual({ nextCursor: 'opaque-cursor' });
+  });
+
+  it.each([null, {}, { nextCursor: '' }, { nextCursor: 1 }, { nextCursor: 'a'.repeat(2049) }])(
+    'rejects malformed page metadata rather than treating it as exhausted', (pageInfo) => {
+      expect(ManagedCloudPublishedArtifactListResponseSchema.safeParse({ artifacts: [], pageInfo }).success)
+        .toBe(false);
+    },
+  );
+
+  it('requires a direct detail artifact instead of accepting a list response', () => {
+    expect(ManagedCloudPublishedArtifactDetailResponseSchema.safeParse({ artifacts: [], workspace: null }).success)
+      .toBe(false);
   });
 });

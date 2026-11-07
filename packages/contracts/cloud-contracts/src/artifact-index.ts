@@ -80,8 +80,24 @@ export const ManagedCloudPublishedArtifactWorkspaceSchema = z.object({
   memberCount: z.number().int().nonnegative(),
 });
 
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS = 200;
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS = 2048;
+
+export const ManagedCloudPublishedArtifactPageInfoSchema = z.object({
+  nextCursor: z.string().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS).nullable(),
+});
+
+export const ManagedCloudPublishedArtifactDetailResponseSchema = z.object({
+  artifact: ManagedCloudPublishedArtifactSchema,
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable().default(null),
+});
+export type ManagedCloudPublishedArtifactDetailResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactDetailResponseSchema
+>;
+
 export const ManagedCloudPublishedArtifactListResponseSchema = z.object({
   artifacts: z.array(ManagedCloudPublishedArtifactSchema),
+  pageInfo: ManagedCloudPublishedArtifactPageInfoSchema.optional(),
   workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable().default(null),
 });
 export type ManagedCloudPublishedArtifactListResponse = z.infer<

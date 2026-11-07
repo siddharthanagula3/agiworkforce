@@ -8,13 +8,13 @@ type ServiceModule = typeof import('../../services/sites-service');
 type CardModule = typeof import('../SiteCard');
 
 const mocks = vi.hoisted(() => ({
-  listPublishedSites: vi.fn(),
+  listPublishedSitesPage: vi.fn(),
   onUpdated: undefined as ((update: SiteUpdate) => void) | undefined,
 }));
 
 vi.mock('../../services/sites-service', async (importOriginal) => ({
   ...(await importOriginal<ServiceModule>()),
-  listPublishedSites: (...args: unknown[]) => mocks.listPublishedSites(...args),
+  listPublishedSitesPage: (...args: unknown[]) => mocks.listPublishedSitesPage(...args),
 }));
 
 // This is the consumer callback boundary, not simultaneous modal interaction.
@@ -82,7 +82,7 @@ function readRecord() {
 beforeEach(() => {
   mocks.onUpdated = undefined;
   beginPublicationCleanup()();
-  mocks.listPublishedSites.mockResolvedValue({ sites: [{ ...original }], workspace: null });
+  mocks.listPublishedSitesPage.mockResolvedValue({ sites: [{ ...original }], workspace: null, nextCursor: null });
 });
 
 afterEach(() => {
@@ -118,7 +118,7 @@ describe('SitesPage update callback boundary', () => {
   });
 
   it('does not insert a site into a ready empty list', async () => {
-    mocks.listPublishedSites.mockResolvedValue({ sites: [], workspace: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [], workspace: null, nextCursor: null });
     render(<SitesPage />);
     await screen.findByTestId('sites-empty');
     emit(rename);
@@ -126,30 +126,63 @@ describe('SitesPage update callback boundary', () => {
     expect(screen.queryByTestId('site-record')).toBeNull();
   });
 
-  it('leaves a loading refresh intact instead of restoring a removed record', async () => {
-    let finish!: (value: { sites: PublishedSite[]; workspace: null }) => void;
-    const refresh = new Promise<{ sites: PublishedSite[]; workspace: null }>((resolve) => {
+  it('retires a loading refresh when an exact current-row mutation completes', async () => {
+    let finish!: (value: { sites: PublishedSite[]; workspace: null; nextCursor: null }) => void;
+    const refresh = new Promise<{ sites: PublishedSite[]; workspace: null; nextCursor: null }>((resolve) => {
       finish = resolve;
     });
     render(<SitesPage />);
     await screen.findByTestId('site-record');
-    mocks.listPublishedSites.mockReturnValueOnce(refresh);
+    mocks.listPublishedSitesPage.mockReturnValueOnce(refresh);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh sites' }));
     expect(screen.getByRole('status')).toHaveTextContent('Loading your sites');
+    expect(readRecord()).toEqual(original);
+    const signal = mocks.listPublishedSitesPage.mock.lastCall![1] as AbortSignal;
     emit(rename);
-    expect(screen.getByRole('status')).toHaveTextContent('Loading your sites');
-    expect(screen.queryByTestId('site-record')).toBeNull();
-    await act(async () => finish({ sites: [], workspace: null }));
-    expect(screen.getByTestId('sites-empty')).toBeInTheDocument();
+    expect(signal.aborted).toBe(true);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(readRecord()).toEqual({ ...original, ...rename.changes });
+    await act(async () => finish({ sites: [], workspace: null, nextCursor: null }));
+    expect(readRecord()).toEqual({ ...original, ...rename.changes });
   });
 
   it('leaves an error state intact', async () => {
-    mocks.listPublishedSites.mockRejectedValueOnce(new Error('List unavailable'));
+    mocks.listPublishedSitesPage.mockRejectedValueOnce(new Error('List unavailable'));
     render(<SitesPage />);
     await screen.findByRole('alert');
     emit(sharing);
     expect(screen.getByRole('alert')).toHaveTextContent('List unavailable');
     expect(screen.queryByTestId('site-record')).toBeNull();
+  });
+
+  it('keeps a later-page mutation ahead of an interrupted newest refresh without accepting an off-page callback', async () => {
+    const older = { ...original, token: 'b'.repeat(24), artifactId: 'artifact-2', title: 'Older site', shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}` };
+    let finish!: (value: { sites: PublishedSite[]; workspace: null; nextCursor: string | null }) => void;
+    const refresh = new Promise<{ sites: PublishedSite[]; workspace: null; nextCursor: string | null }>((resolve) => { finish = resolve; });
+    mocks.listPublishedSitesPage
+      .mockResolvedValueOnce({ sites: [original], workspace: null, nextCursor: 'older-cursor' })
+      .mockResolvedValueOnce({ sites: [older], workspace: null, nextCursor: null })
+      .mockReturnValueOnce(refresh);
+    render(<SitesPage />);
+    await screen.findByTestId('site-record');
+    const originalPageCallback = mocks.onUpdated!;
+    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    await screen.findByText(/Older site/);
+    expect(readRecord()).toEqual(older);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh sites' }));
+    const signal = mocks.listPublishedSitesPage.mock.lastCall![1] as AbortSignal;
+    act(() => originalPageCallback(rename));
+    expect(signal.aborted).toBe(false);
+    expect(screen.getByRole('status')).toHaveTextContent('Loading your sites');
+    expect(readRecord()).toEqual(older);
+    const update = { ...rename, token: older.token, artifactId: older.artifactId };
+    emit(update);
+    expect(signal.aborted).toBe(true);
+    expect(readRecord()).toEqual({ ...older, ...rename.changes });
+    await act(async () => finish({ sites: [original], workspace: null, nextCursor: 'older-cursor' }));
+    expect(readRecord()).toEqual({ ...older, ...rename.changes });
+    expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
+    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([null, 'older-cursor', null]);
   });
 });
 

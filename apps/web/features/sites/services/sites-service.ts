@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
   ManagedCloudPublishedArtifactDataClearResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
+  ManagedCloudPublishedArtifactPageInfoSchema,
+  ManagedCloudPublishedArtifactDetailResponseSchema,
   ManagedCloudPublishedArtifactSchema,
   ManagedCloudPublishedArtifactUpdateResponseSchema,
   ManagedCloudPublishedArtifactVersionDetailSchema,
@@ -117,6 +120,59 @@ export async function listPublishedSites(
     authority?.assertCurrent();
     const body = PublishedSiteListResponseSchema.parse(raw);
     return { sites: body.artifacts, workspace: body.workspace };
+  });
+}
+
+const PublishedSitePageResponseSchema = PublishedSiteListResponseSchema.extend({
+  artifacts: z.array(PublishedSiteSchema).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS),
+  pageInfo: ManagedCloudPublishedArtifactPageInfoSchema,
+});
+const PublishedSiteDetailResponseSchema = ManagedCloudPublishedArtifactDetailResponseSchema.extend({
+  artifact: PublishedSiteSchema,
+});
+
+export interface PublishedSitePage extends PublishedSiteList {
+  nextCursor: string | null;
+}
+
+export async function listPublishedSitesPage(
+  cursor: string | null = null,
+  signal?: AbortSignal,
+  authority?: RequestAuthority,
+): Promise<PublishedSitePage> {
+  return withPublicationAuthority(authority, async () => {
+    const path = cursor === null ? MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH
+      : `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}?${new URLSearchParams({ cursor })}`;
+    const response = await (authority?.fetch ?? fetch)(path, { credentials: 'include', signal });
+    authority?.assertCurrent();
+    if (!response.ok) throw await responseError(response, 'Failed to load published artifacts');
+    const raw: unknown = await response.json();
+    authority?.assertCurrent();
+    const body = PublishedSitePageResponseSchema.parse(raw);
+    if (cursor !== null && body.pageInfo.nextCursor === cursor) {
+      throw new Error('The next publication page could not be confirmed. Refresh to try again.');
+    }
+    return { sites: body.artifacts, workspace: body.workspace, nextCursor: body.pageInfo.nextCursor };
+  });
+}
+
+export async function readPublishedSite(
+  token: string,
+  signal?: AbortSignal,
+  authority?: RequestAuthority,
+): Promise<{ site: PublishedSite; workspace: PublishedSiteList['workspace'] } | null> {
+  return withPublicationAuthority(authority, async () => {
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactPath(token), {
+      credentials: 'include', signal,
+    });
+    authority?.assertCurrent();
+    if (response.status === 404) return null;
+    if (!response.ok) throw await responseError(response, 'Failed to load this site');
+    const raw: unknown = await response.json();
+    authority?.assertCurrent();
+    const body = PublishedSiteDetailResponseSchema.parse(raw);
+    if (body.artifact.token !== token) throw new Error('Site details were not confirmed');
+    return { site: body.artifact, workspace: body.workspace };
   });
 }
 

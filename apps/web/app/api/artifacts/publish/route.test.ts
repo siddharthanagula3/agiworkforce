@@ -515,7 +515,7 @@ describe('GET /api/artifacts/publish', () => {
 
     const [sql, params] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('where user_id = $1');
-    expect(params).toEqual(['user-2', 200]);
+    expect(params).toEqual(['user-2', 201]);
   });
 
   it('answers 401 to a signed-out caller without reading anything', async () => {
@@ -721,5 +721,46 @@ describe('POST /api/artifacts/publish workspace audience', () => {
     expect(response.status).toBe(500);
     expect(transactionCompleted).toBe(true);
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+// UNRUN: owner inventory HTTP pagination fixtures.
+describe('GET published artifact page validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.scopedDb.mockResolvedValue({ db: scopedDatabase(), userId: 'user-1', organizationId: null });
+    mocks.query.mockResolvedValue([]);
+  });
+
+  it.each(['limit=0', 'limit=201', 'limit=1.5', 'limit=NaN', 'limit=1&limit=2', 'cursor=', 'cursor=x&cursor=y'])
+    ('rejects invalid page query before any publication read: %s', async (query) => {
+      const response = await GET(new NextRequest(`https://agiworkforce.com/api/artifacts/publish?${query}`));
+      expect(response.status).toBe(400);
+      expect(mocks.query).not.toHaveBeenCalled();
+    });
+
+  it('adds explicit exhaustion metadata while retaining legacy keys', async () => {
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
+    expect(await response.json()).toEqual({ artifacts: [], workspace: null, pageInfo: { nextCursor: null } });
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  });
+
+  it('returns a continuation for the last displayed row and follows it without anchor lookup', async () => {
+    const first = {
+      ...publishRow({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }),
+      content_chars: 10, cursor_created_at: '2026-11-07T12:34:56.123456Z',
+    };
+    mocks.query.mockResolvedValueOnce([first, { ...first, id: '99999999-9999-4999-8999-999999999999' }]);
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish?limit=1'));
+    const body = await response.json();
+    expect(body.artifacts).toHaveLength(1);
+    expect(body.artifacts[0]).not.toHaveProperty('content');
+    const cursor = body.pageInfo.nextCursor;
+    expect(typeof cursor).toBe('string');
+    const next = await GET(new NextRequest(`https://agiworkforce.com/api/artifacts/publish?limit=1&cursor=${cursor}`));
+    expect((await next.json()).pageInfo).toEqual({ nextCursor: null });
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+    expect(mocks.query.mock.calls[1]![1]).toEqual(['user-1', 2, first.cursor_created_at, first.id]);
   });
 });

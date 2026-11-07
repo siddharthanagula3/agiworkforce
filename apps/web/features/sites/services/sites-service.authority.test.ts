@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
-import { listPublishedArtifactVersions, listPublishedSites, republishArtifactVersion, unpublishArtifact } from './sites-service';
+import { listPublishedArtifactVersions, listPublishedSites, listPublishedSitesPage, readPublishedSite, republishArtifactVersion, unpublishArtifact } from './sites-service';
 
 vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: vi.fn() }));
 
 const transport = vi.fn<typeof fetch>();
 const artifact = { token: 'a'.repeat(24), artifactId: 'artifact-a' };
+const fullArtifact = {
+  ...artifact, conversationId: null, title: 'Owner page', kind: 'html', language: null,
+  contentChars: 10, version: 4, visibility: 'public', createdAt: '2026-11-01T00:00:00.000Z',
+  updatedAt: '2026-11-01T00:00:00.000Z', shareUrl: `https://example.test/shared-artifact/${artifact.token}`,
+  sandboxed: true,
+};
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
@@ -29,6 +35,11 @@ const operations = [
   { name: 'restore', run: (request: RequestAuthority) => republishArtifactVersion(artifact, 2, request), body: () => ({ token: artifact.token, version: 9 }) },
   { name: 'unpublish', run: (request: RequestAuthority) => unpublishArtifact(artifact.token, request), body: () => ({ success: true, token: artifact.token }) },
 ];
+const reads = [
+  { name: 'inventory page', run: (request: RequestAuthority) => listPublishedSitesPage(null, undefined, request), body: () => ({ artifacts: [], workspace: null, pageInfo: { nextCursor: null } }) },
+  { name: 'continuation', run: (request: RequestAuthority) => listPublishedSitesPage('opaque+cursor/=', undefined, request), body: () => ({ artifacts: [], workspace: null, pageInfo: { nextCursor: null } }) },
+  { name: 'owner detail', run: (request: RequestAuthority) => readPublishedSite(artifact.token, undefined, request), body: () => ({ artifact: fullArtifact, workspace: null }) },
+];
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -38,7 +49,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('published artifact service authority (UNRUN source fixtures)', () => {
-  for (const operation of operations) {
+  for (const operation of [...operations, ...reads]) {
     it(`${operation.name} uses captured credentials without cookies`, async () => {
       const captured = owner();
       transport.mockImplementation(async () => Response.json(operation.body()));

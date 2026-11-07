@@ -5,12 +5,15 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   ManagedCloudPublishedArtifactUpdateRequestSchema,
   type ManagedCloudPublishedArtifactUpdateResponse,
+  type ManagedCloudPublishedArtifactDetailResponse,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { describePublishedArtifactWorkspace } from '@/lib/services/published-artifact-workspace';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
@@ -20,6 +23,8 @@ import {
   CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
   PUBLISHED_TOKEN_REGEX,
   buildPublishedArtifactUrl,
+  getOwnedPublishedArtifactSummary,
+  requiresSandboxedRender,
   publicationUsesConnectors,
   renamePublishedArtifact,
   unpublishArtifactRecord,
@@ -29,6 +34,25 @@ import {
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ token: string }> };
+
+async function handleDetail(request: NextRequest, context: RouteContext): Promise<Response> {
+  const { token } = await context.params;
+  if (!PUBLISHED_TOKEN_REGEX.test(token)) throw createError.notFound('Published artifact not found');
+  const rateLimitResponse = await withRateLimit(request, 'share-view');
+  if (rateLimitResponse) return rateLimitResponse;
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const artifact = await getOwnedPublishedArtifactSummary(db, { userId, token });
+  if (!artifact) throw createError.notFound('Published artifact not found');
+  const body: ManagedCloudPublishedArtifactDetailResponse = {
+    artifact: {
+      ...artifact,
+      shareUrl: buildPublishedArtifactUrl(artifact.token),
+      sandboxed: requiresSandboxedRender(artifact.kind),
+    },
+    workspace: await describePublishedArtifactWorkspace(db, organizationId),
+  };
+  return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
+}
 
 async function handleUnpublish(request: NextRequest, context: RouteContext): Promise<Response> {
   const { token } = await context.params;
@@ -186,3 +210,9 @@ async function handleUpdate(request: NextRequest, context: RouteContext): Promis
 
 export const DELETE = withErrorHandler(handleUnpublish);
 export const PATCH = withErrorHandler(handleUpdate);
+
+export const GET = withCorsRoute(withErrorHandler(handleDetail));
+
+export function OPTIONS(request: NextRequest): NextResponse {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}

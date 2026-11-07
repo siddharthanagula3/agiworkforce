@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   observeActions: vi.fn(),
   push: vi.fn(),
   listPublishedSites: vi.fn(),
+  listPublishedSitesPage: vi.fn(),
+  readPublishedSite: vi.fn(),
   unpublishArtifact: vi.fn(),
   updatePublishedSite: vi.fn(),
   readPublishedSiteVersion: vi.fn(),
@@ -42,6 +44,8 @@ vi.mock('sonner', () => ({
 vi.mock('../../services/sites-service', async (importOriginal) => ({
   ...(await importOriginal<SitesServiceModule>()),
   listPublishedSites: (...args: unknown[]) => mocks.listPublishedSites(...args),
+  listPublishedSitesPage: (...args: unknown[]) => mocks.listPublishedSitesPage(...args),
+  readPublishedSite: (...args: unknown[]) => mocks.readPublishedSite(...args),
   unpublishArtifact: (...args: unknown[]) => mocks.unpublishArtifact(...args),
   updatePublishedSite: (...args: unknown[]) => mocks.updatePublishedSite(...args),
   readPublishedSiteVersion: (...args: unknown[]) => mocks.readPublishedSiteVersion(...args),
@@ -56,7 +60,7 @@ vi.mock('../../services/sites-service', async (importOriginal) => ({
 vi.mock('../SiteViewersEditor', () => ({ SiteViewersEditor: () => null }));
 
 const { SiteDetail } = await import('../SiteDetail');
-const { usePublishedSitesStore, beginPublicationCleanup } = await import('../../stores/published-sites-store');
+const { usePublishedSitesStore, beginPublicationCleanup, capturePublicationLease } = await import('../../stores/published-sites-store');
 
 type UpdateResponse = Awaited<ReturnType<SitesServiceModule['updatePublishedSite']>>;
 
@@ -133,7 +137,7 @@ async function openDataTab() {
 
 beforeEach(() => {
   beginPublicationCleanup()();
-  mocks.listPublishedSites.mockResolvedValue({ sites: [site()], workspace: null });
+  mocks.readPublishedSite.mockResolvedValue({ site: site(), workspace: null });
   mocks.readPublishedSiteVersion.mockResolvedValue({
     version: 2,
     title: 'Team scoreboard',
@@ -184,10 +188,14 @@ describe('SiteDetail', () => {
     expect(screen.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByLabelText('Site URL')).toHaveValue(site().shareUrl);
     expect(mocks.readPublishedSiteData).not.toHaveBeenCalled();
+    expect(mocks.readPublishedSite).toHaveBeenCalledWith(TOKEN, expect.any(AbortSignal));
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(1);
+    expect(mocks.listPublishedSites).not.toHaveBeenCalled();
+    expect(mocks.listPublishedSitesPage).not.toHaveBeenCalled();
   });
 
   it('says the site is unavailable when the token is not one of the account sites', async () => {
-    mocks.listPublishedSites.mockResolvedValue({ sites: [], workspace: null });
+    mocks.readPublishedSite.mockResolvedValue(null);
 
     render(<SiteDetail token={TOKEN} />);
 
@@ -223,8 +231,8 @@ describe('SiteDetail', () => {
     async (first) => {
       const rename = deferredUpdate();
       const sharing = deferredUpdate();
-      mocks.listPublishedSites.mockResolvedValue({
-        sites: [site({ visibility: 'invited' })],
+      mocks.readPublishedSite.mockResolvedValue({
+        site: site({ visibility: 'invited' }),
         workspace: null,
       });
       mocks.updatePublishedSite.mockImplementation(
@@ -284,7 +292,7 @@ describe('SiteDetail', () => {
         'href',
         '/chat/11111111-1111-4111-8111-111111111111?artifact=artifact-1',
       );
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(1);
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(1);
       expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toMatchObject({
         token: TOKEN,
         visibility: 'public',
@@ -297,8 +305,8 @@ describe('SiteDetail', () => {
     async (failed) => {
       const rename = deferredUpdate();
       const sharing = deferredUpdate();
-      mocks.listPublishedSites.mockResolvedValue({
-        sites: [site({ visibility: 'invited' })],
+      mocks.readPublishedSite.mockResolvedValue({
+        site: site({ visibility: 'invited' }),
         workspace: null,
       });
       mocks.updatePublishedSite.mockImplementation(
@@ -359,7 +367,7 @@ describe('SiteDetail', () => {
   });
 
   it('moves the site to the workspace when the account has one', async () => {
-    mocks.listPublishedSites.mockResolvedValue({ sites: [site()], workspace: { memberCount: 3 } });
+    mocks.readPublishedSite.mockResolvedValue({ site: site(), workspace: { memberCount: 3 } });
     mocks.updatePublishedSite.mockResolvedValue({
       token: TOKEN,
       shareUrl: site().shareUrl,
@@ -465,8 +473,8 @@ describe('SiteDetail', () => {
   });
 
   it('says a page that runs no script keeps no data', async () => {
-    mocks.listPublishedSites.mockResolvedValue({
-      sites: [site({ kind: 'markdown', sandboxed: false })],
+    mocks.readPublishedSite.mockResolvedValue({
+      site: site({ kind: 'markdown', sandboxed: false }),
       workspace: null,
     });
     mocks.readPublishedSiteData.mockResolvedValue(data({ supported: false }));
@@ -481,7 +489,7 @@ describe('SiteDetail', () => {
 });
 
 
-type SiteList = Awaited<ReturnType<SitesServiceModule['listPublishedSites']>>;
+type SiteDetailResponse = Awaited<ReturnType<SitesServiceModule['readPublishedSite']>>;
 
 async function restoreOlderVersion() {
   const versions = await screen.findAllByTestId('site-version');
@@ -506,48 +514,48 @@ describe('SiteDetail read ownership', () => {
     'retires the post-restore GET after sharing succeeds, ignoring its late %s',
     async (outcome) => {
       const restored = deferred<void>();
-      const oldRead = deferred<SiteList>();
-      const freshRead = deferred<SiteList>();
+      const oldRead = deferred<SiteDetailResponse>();
+      const freshRead = deferred<SiteDetailResponse>();
       const sharing = deferredUpdate();
-      mocks.listPublishedSites
-        .mockResolvedValueOnce({ sites: [site({ visibility: 'invited' })], workspace: null })
+      mocks.readPublishedSite
+        .mockResolvedValueOnce({ site: site({ visibility: 'invited' }), workspace: null })
         .mockReturnValueOnce(oldRead.promise)
         .mockReturnValueOnce(freshRead.promise);
       mocks.republishArtifactVersion.mockReturnValueOnce(restored.promise);
       mocks.updatePublishedSite.mockReturnValueOnce(sharing.promise);
       render(<SiteDetail token={TOKEN} />);
       await restoreOlderVersion();
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(1);
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(1);
       await act(async () => restored.resolve());
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
-      const oldSignal = mocks.listPublishedSites.mock.calls[1]![0] as AbortSignal;
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
+      const oldSignal = mocks.readPublishedSite.mock.calls[1]![1] as AbortSignal;
       expect(oldSignal.aborted).toBe(false);
       expect(screen.getByRole('radio', { name: /anyone with the link/i })).toBeEnabled();
       fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
       await act(async () => sharing.resolve(updateReceipt()));
       expect(oldSignal.aborted).toBe(true);
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
       expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
       await act(async () => {
         if (outcome === 'success') {
-          oldRead.resolve({ sites: [site({ visibility: 'invited' })], workspace: null });
+          oldRead.resolve({ site: site({ visibility: 'invited' }), workspace: null });
         } else oldRead.reject(new Error('Retired list failure'));
       });
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
       expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('public');
-      await act(async () => freshRead.resolve({ sites: [site()], workspace: null }));
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+      await act(async () => freshRead.resolve({ site: site(), workspace: null }));
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
       expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
     },
   );
 
   it('replaces each pending reread once for independent name and sharing receipts', async () => {
-    const reads = [deferred<SiteList>(), deferred<SiteList>(), deferred<SiteList>()];
+    const reads = [deferred<SiteDetailResponse>(), deferred<SiteDetailResponse>(), deferred<SiteDetailResponse>()];
     const rename = deferredUpdate();
     const sharing = deferredUpdate();
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site({ visibility: 'invited' })], workspace: null })
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site({ visibility: 'invited' }), workspace: null })
       .mockReturnValueOnce(reads[0]!.promise)
       .mockReturnValueOnce(reads[1]!.promise)
       .mockReturnValueOnce(reads[2]!.promise);
@@ -556,24 +564,24 @@ describe('SiteDetail read ownership', () => {
     );
     render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2));
     fireEvent.change(screen.getByLabelText('Site name'), { target: { value: 'Office league' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
     await act(async () => rename.resolve(updateReceipt({ title: 'Office league', visibility: 'invited' })));
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
     await act(async () => sharing.resolve(updateReceipt()));
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(4);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(4);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Office league');
     expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
-    expect((mocks.listPublishedSites.mock.calls[1]![0] as AbortSignal).aborted).toBe(true);
-    expect((mocks.listPublishedSites.mock.calls[2]![0] as AbortSignal).aborted).toBe(true);
+    expect((mocks.readPublishedSite.mock.calls[1]![1] as AbortSignal).aborted).toBe(true);
+    expect((mocks.readPublishedSite.mock.calls[2]![1] as AbortSignal).aborted).toBe(true);
     await act(async () => {
-      reads[0]!.resolve({ sites: [site({ visibility: 'invited' })], workspace: null });
+      reads[0]!.resolve({ site: site({ visibility: 'invited' }), workspace: null });
       reads[1]!.reject(new Error('Retired reread'));
-      reads[2]!.resolve({ sites: [site({ title: 'Office league' })], workspace: null });
+      reads[2]!.resolve({ site: site({ title: 'Office league' }), workspace: null });
     });
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(4);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(4);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Office league');
   });
@@ -581,27 +589,27 @@ describe('SiteDetail read ownership', () => {
   it.each([new Error('Current read failed'), new DOMException('Unexpected abort', 'AbortError')])(
     'exposes a current read failure without an automatic loop, then allows manual retry: %s',
     async (error) => {
-      const failed = deferred<SiteList>();
-      const retry = deferred<SiteList>();
-      mocks.listPublishedSites
+      const failed = deferred<SiteDetailResponse>();
+      const retry = deferred<SiteDetailResponse>();
+      mocks.readPublishedSite
         .mockReturnValueOnce(failed.promise)
         .mockReturnValueOnce(retry.promise);
       render(<SiteDetail token={TOKEN} />);
       await act(async () => failed.reject(error));
       expect(screen.getByRole('alert')).toBeInTheDocument();
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(1);
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(1);
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
-      expect(mocks.listPublishedSites.mock.calls[1]![0]).toBeInstanceOf(AbortSignal);
-      await act(async () => retry.resolve({ sites: [site()], workspace: null }));
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
+      expect(mocks.readPublishedSite.mock.calls[1]![1]).toBeInstanceOf(AbortSignal);
+      await act(async () => retry.resolve({ site: site(), workspace: null }));
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Team scoreboard');
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
     },
   );
 
-  it('uses the complete restored site, account list, and workspace from the replacement read', async () => {
-    const oldRead = deferred<SiteList>();
-    const freshRead = deferred<SiteList>();
+  it('uses the complete restored site and workspace without replacing unrelated cache records', async () => {
+    const oldRead = deferred<SiteDetailResponse>();
+    const freshRead = deferred<SiteDetailResponse>();
     const renewed = site({
       title: 'Restored scoreboard', version: 3, kind: 'html', language: 'html',
       contentChars: 4321, sandboxed: false,
@@ -609,17 +617,18 @@ describe('SiteDetail read ownership', () => {
       createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-10-11T00:00:00.000Z',
     });
     const other = site({ token: 'bbbbbbbbbbbbbbbbbbbbbbbb', artifactId: 'artifact-2' });
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site({ visibility: 'invited' })], workspace: null })
+    usePublishedSitesStore.getState().record(other.artifactId, other, capturePublicationLease()!);
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site({ visibility: 'invited' }), workspace: null })
       .mockReturnValueOnce(oldRead.promise)
       .mockReturnValueOnce(freshRead.promise);
     mocks.updatePublishedSite.mockResolvedValue(updateReceipt());
     render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3));
-    await act(async () => freshRead.resolve({ sites: [renewed, other], workspace: { memberCount: 7 } }));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3));
+    await act(async () => freshRead.resolve({ site: renewed, workspace: { memberCount: 7 } }));
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(renewed.title);
     expect(screen.getByRole('radio', { name: /your workspace/i })).toBeEnabled();
     expect(screen.getByRole('link', { name: /edit in chat/i })).toHaveAttribute(
@@ -628,79 +637,79 @@ describe('SiteDetail read ownership', () => {
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-2']?.token).toBe(other.token);
     await restoreOlderVersion();
     await waitFor(() => expect(mocks.republishArtifactVersion).toHaveBeenLastCalledWith(renewed, 1));
-    await act(async () => oldRead.resolve({ sites: [site({ visibility: 'invited' })], workspace: null }));
+    await act(async () => oldRead.resolve({ site: site({ visibility: 'invited' }), workspace: null }));
   });
 
   it('retires the post-restore read before navigating after successful unpublish', async () => {
-    const oldRead = deferred<SiteList>();
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site()], workspace: null })
+    const oldRead = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site(), workspace: null })
       .mockReturnValueOnce(oldRead.promise);
     mocks.push.mockImplementation(() => {
-      expect((mocks.listPublishedSites.mock.calls[1]![0] as AbortSignal).aborted).toBe(true);
+      expect((mocks.readPublishedSite.mock.calls[1]![1] as AbortSignal).aborted).toBe(true);
     });
     render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByTestId('site-unpublish'));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Unpublish' }));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/chat/sites'));
-    await act(async () => oldRead.resolve({ sites: [site()], workspace: null }));
+    await act(async () => oldRead.resolve({ site: site(), workspace: null }));
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toBeUndefined();
     expect(screen.queryByLabelText('Site name')).not.toBeInTheDocument();
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
   });
 
   it.each(['success', 'error'] as const)('ignores an initial read settled after unmount: %s', async (outcome) => {
-    const pending = deferred<SiteList>();
-    mocks.listPublishedSites.mockReturnValueOnce(pending.promise);
+    const pending = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite.mockReturnValueOnce(pending.promise);
     const view = render(<SiteDetail token={TOKEN} />);
-    const signal = mocks.listPublishedSites.mock.calls[0]![0] as AbortSignal;
+    const signal = mocks.readPublishedSite.mock.calls[0]![1] as AbortSignal;
     view.unmount();
     expect(signal.aborted).toBe(true);
     await act(async () => {
-      if (outcome === 'success') pending.resolve({ sites: [site()], workspace: null });
+      if (outcome === 'success') pending.resolve({ site: site(), workspace: null });
       else pending.reject(new Error('Unmounted read'));
     });
     expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(1);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(1);
   });
 
   it('keeps A → B → A lifetimes separate even when both older reads settle late', async () => {
-    const firstA = deferred<SiteList>();
-    const readB = deferred<SiteList>();
-    const currentA = deferred<SiteList>();
-    mocks.listPublishedSites
+    const firstA = deferred<SiteDetailResponse>();
+    const readB = deferred<SiteDetailResponse>();
+    const currentA = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite
       .mockReturnValueOnce(firstA.promise)
       .mockReturnValueOnce(readB.promise)
       .mockReturnValueOnce(currentA.promise);
     const view = render(<SiteDetail token={TOKEN} />);
     view.rerender(<SiteDetail token="bbbbbbbbbbbbbbbbbbbbbbbb" />);
     view.rerender(<SiteDetail token={TOKEN} />);
-    await act(async () => currentA.resolve({ sites: [site({ title: 'Current A' })], workspace: null }));
+    await act(async () => currentA.resolve({ site: site({ title: 'Current A' }), workspace: null }));
     await act(async () => {
-      firstA.resolve({ sites: [site({ title: 'Old A', visibility: 'invited' })], workspace: null });
+      firstA.resolve({ site: site({ title: 'Old A', visibility: 'invited' }), workspace: null });
       readB.reject(new Error('Old B'));
     });
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Current A');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('public');
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
   });
 
   it('does not start a read when an old restore POST completes after token replacement', async () => {
     const restored = deferred<void>();
     const tokenB = 'bbbbbbbbbbbbbbbbbbbbbbbb';
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site()], workspace: null })
-      .mockResolvedValueOnce({ sites: [site({ token: tokenB, title: 'Current B' })], workspace: null });
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site(), workspace: null })
+      .mockResolvedValueOnce({ site: site({ token: tokenB, title: 'Current B' }), workspace: null });
     mocks.republishArtifactVersion.mockReturnValueOnce(restored.promise);
     const view = render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
     view.rerender(<SiteDetail token={tokenB} />);
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Current B');
     await act(async () => restored.resolve());
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Current B');
   });
 });
@@ -708,22 +717,22 @@ describe('SiteDetail read ownership', () => {
 
 describe('SiteDetail callback boundary models', () => {
   it('ignores mismatched token and artifact receipts without interrupting a current refresh', async () => {
-    const pending = deferred<SiteList>();
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site()], workspace: null })
+    const pending = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site(), workspace: null })
       .mockReturnValueOnce(pending.promise);
     render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2));
     const { onUpdated } = mocks.observeActions.mock.lastCall![0] as Parameters<SiteActionsModule['useSiteActions']>[0];
     act(() => {
       onUpdated({ token: 'bbbbbbbbbbbbbbbbbbbbbbbb', artifactId: 'artifact-1', changes: { title: 'Wrong token', updatedAt: site().updatedAt } });
       onUpdated({ token: TOKEN, artifactId: 'wrong-artifact', changes: { title: 'Wrong artifact', updatedAt: site().updatedAt } });
     });
-    expect((mocks.listPublishedSites.mock.calls[1]![0] as AbortSignal).aborted).toBe(false);
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+    expect((mocks.readPublishedSite.mock.calls[1]![1] as AbortSignal).aborted).toBe(false);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Team scoreboard');
-    await act(async () => pending.resolve({ sites: [site({ title: 'Restored title' })], workspace: null }));
+    await act(async () => pending.resolve({ site: site({ title: 'Restored title' }), workspace: null }));
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Restored title');
   });
 
@@ -731,10 +740,10 @@ describe('SiteDetail callback boundary models', () => {
     const view = render(<SiteDetail token={TOKEN} />);
     await screen.findByLabelText('Site name');
     const old = mocks.observeActions.mock.lastCall![0] as Parameters<SiteActionsModule['useSiteActions']>[0];
-    mocks.listPublishedSites.mockResolvedValueOnce({ sites: [], workspace: null });
+    mocks.readPublishedSite.mockResolvedValueOnce(null);
     view.rerender(<SiteDetail token="bbbbbbbbbbbbbbbbbbbbbbbb" />);
     await screen.findByTestId('site-missing');
-    mocks.listPublishedSites.mockResolvedValueOnce({ sites: [site({ title: 'Current A' })], workspace: null });
+    mocks.readPublishedSite.mockResolvedValueOnce({ site: site({ title: 'Current A' }), workspace: null });
     view.rerender(<SiteDetail token={TOKEN} />);
     await screen.findByLabelText('Site name');
     act(() => {
@@ -743,26 +752,26 @@ describe('SiteDetail callback boundary models', () => {
     });
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Current A');
     expect(mocks.push).not.toHaveBeenCalled();
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
   });
 });
 
 describe('SiteDetail refresh recovery', () => {
   it('keeps successful sharing visible after a replacement read fails and waits for manual retry', async () => {
-    const oldRead = deferred<SiteList>();
-    const replacement = deferred<SiteList>();
-    const retry = deferred<SiteList>();
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site({ visibility: 'invited' })], workspace: null })
+    const oldRead = deferred<SiteDetailResponse>();
+    const replacement = deferred<SiteDetailResponse>();
+    const retry = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site({ visibility: 'invited' }), workspace: null })
       .mockReturnValueOnce(oldRead.promise)
       .mockReturnValueOnce(replacement.promise)
       .mockReturnValueOnce(retry.promise);
     mocks.updatePublishedSite.mockResolvedValue(updateReceipt());
     render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3));
     fireEvent.change(screen.getByLabelText('Site name'), { target: { value: 'Unsaved name draft' } });
     await act(async () => replacement.reject(new Error('Refresh unavailable')));
     expect(screen.getByLabelText('Site name')).toHaveValue('Unsaved name draft');
@@ -771,47 +780,47 @@ describe('SiteDetail refresh recovery', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/could not be refreshed/i);
     expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('public');
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(4);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(4);
     expect(screen.getByText('Loading site…')).toBeInTheDocument();
     await act(async () => {
-      oldRead.resolve({ sites: [site({ visibility: 'invited' })], workspace: null });
-      retry.resolve({ sites: [site({ version: 3 })], workspace: { memberCount: 4 } });
+      oldRead.resolve({ site: site({ visibility: 'invited' }), workspace: null });
+      retry.resolve({ site: site({ version: 3 }), workspace: { memberCount: 4 } });
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
     expect(screen.getByRole('radio', { name: /your workspace/i })).toBeEnabled();
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(4);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(4);
   });
 });
 
 
 describe('SiteDetail committed read lifetime models', () => {
   it('rejects the first StrictMode setup read after effect cleanup and replay', async () => {
-    const retired = deferred<SiteList>();
-    const current = deferred<SiteList>();
-    mocks.listPublishedSites.mockReturnValueOnce(retired.promise).mockReturnValueOnce(current.promise);
+    const retired = deferred<SiteDetailResponse>();
+    const current = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite.mockReturnValueOnce(retired.promise).mockReturnValueOnce(current.promise);
     render(<StrictMode><SiteDetail token={TOKEN} /></StrictMode>);
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
-    expect((mocks.listPublishedSites.mock.calls[0]![0] as AbortSignal).aborted).toBe(true);
-    await act(async () => current.resolve({ sites: [site({ title: 'Current setup' })], workspace: null }));
-    await act(async () => retired.resolve({ sites: [site({ title: 'Retired setup', visibility: 'invited' })], workspace: null }));
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
+    expect((mocks.readPublishedSite.mock.calls[0]![1] as AbortSignal).aborted).toBe(true);
+    await act(async () => current.resolve({ site: site({ title: 'Current setup' }), workspace: null }));
+    await act(async () => retired.resolve({ site: site({ title: 'Retired setup', visibility: 'invited' }), workspace: null }));
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Current setup');
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('public');
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2);
   });
 
   it('rechecks read ownership after a synchronous cache subscriber delivers a receipt', async () => {
-    const oldRead = deferred<SiteList>();
-    const freshRead = deferred<SiteList>();
-    mocks.listPublishedSites
-      .mockResolvedValueOnce({ sites: [site()], workspace: null })
+    const oldRead = deferred<SiteDetailResponse>();
+    const freshRead = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite
+      .mockResolvedValueOnce({ site: site(), workspace: null })
       .mockReturnValueOnce(oldRead.promise)
       .mockReturnValueOnce(freshRead.promise);
     render(<SiteDetail token={TOKEN} />);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.readPublishedSite).toHaveBeenCalledTimes(2));
     const { onUpdated } = mocks.observeActions.mock.lastCall![0] as Parameters<SiteActionsModule['useSiteActions']>[0];
     let delivered = false;
     const unsubscribe = usePublishedSitesStore.subscribe(() => {
@@ -820,50 +829,50 @@ describe('SiteDetail committed read lifetime models', () => {
       onUpdated({ token: TOKEN, artifactId: 'artifact-1', changes: { title: 'Receipt title', updatedAt: '2026-10-12T00:00:00.000Z' } });
     });
     try {
-      await act(async () => oldRead.resolve({ sites: [site({ title: 'Superseded snapshot' })], workspace: null }));
+      await act(async () => oldRead.resolve({ site: site({ title: 'Superseded snapshot' }), workspace: null }));
       expect(delivered).toBe(true);
-      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+      expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Receipt title');
     } finally {
       unsubscribe();
-      await act(async () => freshRead.resolve({ sites: [site({ title: 'Receipt title' })], workspace: null }));
+      await act(async () => freshRead.resolve({ site: site({ title: 'Receipt title' }), workspace: null }));
     }
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Receipt title');
-    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+    expect(mocks.readPublishedSite).toHaveBeenCalledTimes(3);
   });
 });
 
 describe('SiteDetail common cleanup ownership models', () => {
   it('retires a mounted initial read across cleanup and release', async () => {
-    const oldRead = deferred<SiteList>();
-    const newRead = deferred<SiteList>();
-    mocks.listPublishedSites.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    const oldRead = deferred<SiteDetailResponse>();
+    const newRead = deferred<SiteDetailResponse>();
+    mocks.readPublishedSite.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
     render(<SiteDetail token={TOKEN} />);
-    const signal = mocks.listPublishedSites.mock.calls[0]![0] as AbortSignal;
+    const signal = mocks.readPublishedSite.mock.calls[0]![1] as AbortSignal;
     let finish = () => {};
     try {
       act(() => { finish = beginPublicationCleanup(); });
       expect(signal.aborted).toBe(true);
       expect(usePublishedSitesStore.getState().lease).toBeNull();
       act(() => finish());
-      await act(async () => oldRead.resolve({ sites: [site({ title: 'Retired title' })], workspace: null }));
+      await act(async () => oldRead.resolve({ site: site({ title: 'Retired title' }), workspace: null }));
       expect(screen.queryByText('Retired title')).not.toBeInTheDocument();
       expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
-      await act(async () => newRead.resolve({ sites: [site({ title: 'Replacement title' })], workspace: null }));
+      await act(async () => newRead.resolve({ site: site({ title: 'Replacement title' }), workspace: null }));
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Replacement title');
     } finally {
       cleanup();
       finish();
       await act(async () => {
-        oldRead.resolve({ sites: [], workspace: null });
-        newRead.resolve({ sites: [], workspace: null });
+        oldRead.resolve(null);
+        newRead.resolve(null);
       });
     }
   });
 
   it.each([['name', 'success'], ['name', 'error'], ['sharing', 'success'], ['sharing', 'error']] as const)('suppresses stale %s %s receipt and feedback after cleanup', async (kind, outcome) => {
     const pending = deferredUpdate();
-    mocks.listPublishedSites.mockResolvedValue({ sites: [site({ visibility: 'invited' })], workspace: null });
+    mocks.readPublishedSite.mockResolvedValue({ site: site({ visibility: 'invited' }), workspace: null });
     mocks.updatePublishedSite.mockReturnValueOnce(pending.promise);
     render(<SiteDetail token={TOKEN} />);
     await screen.findByLabelText('Site name');

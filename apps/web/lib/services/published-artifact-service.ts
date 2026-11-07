@@ -3,6 +3,8 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
 } from '@agiworkforce/cloud-contracts';
@@ -47,12 +49,10 @@ export const MAX_CONTENT_CHARS = 1_000_000;
 const MAX_TITLE_CHARS = MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS;
 const MAX_ARTIFACT_ID_CHARS = 200;
 const MAX_LANGUAGE_CHARS = 50;
-const MAX_LIST_LIMIT = 200;
+const MAX_LIST_LIMIT = MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS;
 
 /**
- * Per-user cap on live published pages. Deliberately equal to the management
- * list cap: older pages above that limit are omitted from the publisher's
- * management list until enough newer publications are removed and it reloads.
+ * Per-user admission cap. Legacy list consumers read only the first page.
  */
 export const MAX_PUBLISHED_PER_USER = MAX_LIST_LIMIT;
 
@@ -660,6 +660,100 @@ export async function renamePublishedArtifact(
   return row ? rowToPublishedArtifact(row) : null;
 }
 
+interface PublishedArtifactPageRow extends PublishedArtifactSummaryRow {
+  id: string;
+  cursor_created_at: string;
+}
+
+type PublishedArtifactCursor = { v: 1; owner: string; createdAt: string; id: string };
+
+function validCursorTimestamp(value: string): boolean {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{6}Z$/.exec(value);
+  if (!parts) return false;
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return year >= 1 && month >= 1 && month <= 12 && day >= 1 &&
+    day <= days[month - 1]! && Number(parts[4]) <= 23 &&
+    Number(parts[5]) <= 59 && Number(parts[6]) <= 59;
+}
+
+function readPublishedArtifactCursor(value: string, userId: string): PublishedArtifactCursor {
+  const invalid = () => new PublishedArtifactValidationError('Invalid published artifact cursor');
+  if (!value || value.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS ||
+      !/^[A-Za-z0-9_-]+$/.test(value)) throw invalid();
+  const bytes = Buffer.from(value, 'base64url');
+  if (bytes.toString('base64url') !== value) throw invalid();
+  let decoded: unknown;
+  try {
+    const json = bytes.toString('utf8');
+    decoded = JSON.parse(json);
+    if (JSON.stringify(decoded) !== json || !Buffer.from(json).equals(bytes)) throw invalid();
+  } catch {
+    throw invalid();
+  }
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw invalid();
+  const cursor = decoded as Record<string, unknown>;
+  if (Object.keys(cursor).length !== 4 || cursor.v !== 1 || cursor.owner !== userId ||
+      typeof cursor.createdAt !== 'string' || !validCursorTimestamp(cursor.createdAt) ||
+      typeof cursor.id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(cursor.id)) {
+    throw invalid();
+  }
+  return { v: 1, owner: userId, createdAt: cursor.createdAt, id: cursor.id };
+}
+
+export async function listPublishedArtifactsPage(
+  db: DatabaseAdapter,
+  input: { userId: string; limit?: number; cursor?: string },
+): Promise<{ artifacts: PublishedArtifactSummary[]; nextCursor: string | null }> {
+  const userId = input.userId?.trim();
+  if (!userId) throw new PublishedArtifactValidationError('Publication owner is required');
+  const limit = input.limit ?? MAX_LIST_LIMIT;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_LIMIT) {
+    throw new PublishedArtifactValidationError('Invalid published artifact page size');
+  }
+  const cursor = input.cursor === undefined ? null : readPublishedArtifactCursor(input.cursor, userId);
+  const rows = await db.query<PublishedArtifactPageRow>(
+    `select id, token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at,
+            to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor_created_at
+       from public.published_artifacts
+      where user_id = $1${cursor ? ' and (created_at, id) < ($3::timestamptz, $4::uuid)' : ''}
+      order by created_at desc, id desc
+      limit $2`,
+    cursor ? [userId, limit + 1, cursor.createdAt, cursor.id] : [userId, limit + 1],
+  );
+  const page = rows.slice(0, limit);
+  const boundary = page.at(-1);
+  const nextCursor = rows.length > limit && boundary
+    ? Buffer.from(JSON.stringify({
+        v: 1, owner: userId, createdAt: boundary.cursor_created_at, id: boundary.id,
+      } satisfies PublishedArtifactCursor)).toString('base64url')
+    : null;
+  if (nextCursor) readPublishedArtifactCursor(nextCursor, userId);
+  return { artifacts: page.map(rowToSummary), nextCursor };
+}
+
+export async function getOwnedPublishedArtifactSummary(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string },
+): Promise<PublishedArtifactSummary | null> {
+  const userId = input.userId?.trim();
+  if (!userId || !PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
+  const [row] = await db.query<PublishedArtifactSummaryRow>(
+    `select token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at
+       from public.published_artifacts
+      where token = $1 and user_id = $2
+      limit 1`,
+    [input.token, userId],
+  );
+  return row ? rowToSummary(row) : null;
+}
+
 export async function listPublishedArtifacts(
   db: DatabaseAdapter,
   input: { userId: string; limit?: number },
@@ -673,7 +767,7 @@ export async function listPublishedArtifacts(
             length(content) as content_chars, version, visibility, created_at, updated_at
        from public.published_artifacts
       where user_id = $1
-      order by created_at desc
+      order by created_at desc, id desc
       limit $2`,
     [userId, limit],
   );

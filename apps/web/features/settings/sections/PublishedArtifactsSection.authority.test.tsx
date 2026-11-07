@@ -46,7 +46,7 @@ function artifact(token = 'a'.repeat(24), title = 'Owner A page') {
     visibility: 'public' as const, createdAt: '2026-11-01T00:00:00.000Z',
     updatedAt: '2026-11-01T00:00:00.000Z', shareUrl: `https://example.test/shared-artifact/${token}`, sandboxed: true };
 }
-function inventory(rows = [artifact()]) { return Response.json({ artifacts: rows, workspace: null }); }
+function inventory(rows = [artifact()], nextCursor: string | null = null) { return Response.json({ artifacts: rows, workspace: null, pageInfo: { nextCursor } }); }
 function history() {
   return Response.json({ versions: [
     { version: 4, title: 'Owner A page', kind: 'html', createdAt: '2026-11-01', live: true },
@@ -94,6 +94,139 @@ beforeEach(() => {
   vi.spyOn(window, 'open').mockReturnValue(null);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
+  const cursor = 'opaque+/=older';
+  const pageUrl = `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}?${new URLSearchParams({ cursor })}`;
+
+  it('replaces pages without prefetching, retires old history callbacks, and returns to newest', async () => {
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
+    await show();
+    expect(boundary.fetch).toHaveBeenCalledTimes(1);
+    const oldHistoryAction = await openHistory();
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact('b'.repeat(24), 'Older page')], 'next-older'));
+    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    await screen.findByText('Older page');
+    expect(screen.queryByText('Owner A page')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Put live' })).toBeNull();
+    expect(boundary.fetch).toHaveBeenCalledTimes(3);
+    expect(boundary.fetch.mock.lastCall![0]).toBe(pageUrl);
+    fireEvent.click(oldHistoryAction);
+    expect(writes()).toHaveLength(0);
+    expect(boundary.csrf).not.toHaveBeenCalled();
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to newest' }));
+    await screen.findByText('Owner A page');
+    expect(screen.queryByText('Older page')).toBeNull();
+    expect(boundary.fetch.mock.lastCall![0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
+    expect(boundary.fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('retains the failed page and exact retry cursor, including navigation from an empty older page', async () => {
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
+    await show();
+    const pending = deferred<Response>();
+    boundary.fetch.mockReturnValueOnce(pending.promise);
+    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    await waitFor(() => expect(boundary.fetch).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Owner A page')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Refresh', exact: true })).toBeDisabled();
+    await act(async () => pending.resolve(Response.json({ error: 'Unavailable' }, { status: 503 })));
+    expect(screen.getByRole('alert')).toHaveTextContent(/previously loaded page.*out of date/);
+    expect(screen.getByText('Owner A page')).toBeInTheDocument();
+    boundary.fetch.mockResolvedValueOnce(inventory([]));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    await screen.findByText('No artifacts on this page');
+    expect(screen.queryByText('No published artifacts')).toBeNull();
+    expect(boundary.fetch.mock.calls.map(([url]) => url)).toEqual([MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH, pageUrl, pageUrl]);
+    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
+    boundary.fetch.mockResolvedValueOnce(inventory());
+    fireEvent.click(screen.getByRole('button', { name: 'Back to newest' }));
+    await screen.findByText('Owner A page');
+    expect(boundary.fetch.mock.lastCall![0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
+  });
+
+  it.each([undefined, null, {}, { nextCursor: false }])('does not call missing or malformed metadata exhausted: %j', async (pageInfo) => {
+    boundary.fetch.mockResolvedValueOnce(Response.json({ artifacts: [], workspace: null, ...(pageInfo === undefined ? {} : { pageInfo }) }));
+    render(<PublishedArtifactsSection />);
+    await screen.findByRole('alert');
+    expect(screen.queryByText('No published artifacts')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(boundary.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks page navigation while confirmation and a mutation are pending on a later page', async () => {
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
+    await show();
+    const older = artifact('b'.repeat(24), 'Older page');
+    boundary.fetch.mockResolvedValueOnce(inventory([older], 'next-older'));
+    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    await screen.findByText('Older page');
+    const dialog = await openConfirmation();
+    for (const name of ['Older', 'Back to newest', 'Refresh']) expect(screen.getByRole('button', { name, exact: true, hidden: true })).toBeDisabled();
+    expect(boundary.fetch).toHaveBeenCalledTimes(2);
+    const pending = deferred<Response>();
+    boundary.fetch.mockReturnValueOnce(pending.promise);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish artifact' }));
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    for (const name of ['Older', 'Back to newest', 'Refresh']) expect(screen.getByRole('button', { name, exact: true, hidden: true })).toBeDisabled();
+    expect(writes()[0]![0]).toBe(managedCloudPublishedArtifactPath(older.token));
+    await act(async () => pending.resolve(Response.json({ success: true, token: older.token })));
+    await screen.findByText('No artifacts on this page');
+    expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
+    boundary.fetch.mockResolvedValueOnce(inventory());
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh', exact: true }));
+    await screen.findByText('Owner A page');
+    expect(boundary.fetch.mock.lastCall![0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
+  });
+
+  it('resets a failed Older cursor before recovering an uncertain current-page unpublish', async () => {
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
+    await show();
+    boundary.fetch.mockResolvedValueOnce(Response.json({ error: 'Older failed' }, { status: 503 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    await screen.findByRole('alert');
+    expect(boundary.fetch.mock.lastCall![0]).toBe(pageUrl);
+    boundary.fetch.mockRejectedValueOnce(new TypeError('Lost mutation receipt'));
+    await confirm();
+    await screen.findByText('Published artifacts are not confirmed. Retry above to reload the list.');
+    expect(writes()).toHaveLength(1);
+    expect(screen.queryByText('Owner A page')).toBeNull();
+    boundary.fetch.mockResolvedValueOnce(inventory());
+    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    await screen.findByText('Owner A page');
+    expect(boundary.fetch.mock.lastCall![0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
+    expect(writes()).toHaveLength(1);
+    expect(boundary.fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignores an older-page body %s after session replacement', async (outcome) => {
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
+    await show();
+    const body = deferred<unknown>();
+    const entered = deferred<void>();
+    const response = Response.json({});
+    vi.spyOn(response, 'json').mockImplementation(() => { entered.resolve(); return body.promise; });
+    boundary.fetch.mockResolvedValueOnce(response);
+    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    await entered.promise;
+    const oldSignal = boundary.fetch.mock.lastCall![1]?.signal;
+    boundary.fetch.mockResolvedValueOnce(inventory([artifact('b'.repeat(24), 'Replacement owner')]));
+    observe(session('owner-b', 'session-b'));
+    await screen.findByText('Replacement owner');
+    await act(async () => {
+      if (outcome === 'resolve') body.resolve({ artifacts: [artifact()], workspace: null, pageInfo: { nextCursor: null } });
+      else body.reject(new Error('old failure'));
+    });
+    expect(oldSignal?.aborted).toBe(true);
+    noOldFeedback();
+    expect(screen.getByText('Replacement owner')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(boundary.fetch).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
   it('does not treat an unavailable session as an empty published inventory', async () => {

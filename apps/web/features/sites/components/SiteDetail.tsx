@@ -10,7 +10,7 @@ import { mergeSiteUpdate, useSiteActions, type SiteUpdate } from '../hooks/useSi
 import { displaySiteUrl, formatSiteUpdated, siteName } from '../lib/site-format';
 import {
   SITES_PATH,
-  listPublishedSites,
+  readPublishedSite,
   siteEditPath,
   siteVisitPath,
   type PublishedSite,
@@ -128,7 +128,7 @@ function SiteDetailView({ token, lease }: { token: string; lease: PublicationLea
   const router = useRouter();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const viewRef = useRef<DetailView | null>(null);
-  const hydrateStore = usePublishedSitesStore((store) => store.hydrate);
+  const recordSite = usePublishedSitesStore((store) => store.record);
 
   const load = useCallback(
     async (showLoading = false) => {
@@ -144,14 +144,15 @@ function SiteDetailView({ token, lease }: { token: string; lease: PublicationLea
       );
       if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
       try {
-        const { sites, workspace } = await listPublishedSites(request.signal);
+        const result = await readPublishedSite(token, request.signal);
         if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
-        const site = sites.find((candidate) => candidate.token === token);
+        const site = result?.site;
         view.artifactId = site?.artifactId ?? null;
-        if (!hydrateStore(sites, lease)) return;
+        const recorded = !site || recordSite(site.artifactId, site, lease);
         if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
+        if (!recorded) throw new Error('This publication link could not be confirmed.');
         view.request = null;
-        setState(site ? { status: 'ready', site, workspace } : { status: 'missing' });
+        setState(result ? { status: 'ready', ...result } : { status: 'missing' });
       } catch (error) {
         if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
         view.request = null;
@@ -169,7 +170,7 @@ function SiteDetailView({ token, lease }: { token: string; lease: PublicationLea
         );
       }
     },
-    [token, hydrateStore, lease],
+    [token, recordSite, lease],
   );
 
   useLayoutEffect(() => {

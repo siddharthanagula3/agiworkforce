@@ -10,6 +10,8 @@ const {
   getPublishedArtifactByToken,
   isPublishableKind,
   listPublishedArtifacts,
+  listPublishedArtifactsPage,
+  getOwnedPublishedArtifactSummary,
   renamePublishedArtifact,
   mintPublishToken,
   publishArtifactRecord,
@@ -909,5 +911,114 @@ describe('Restore prepared payload', () => {
       'l'.repeat(50),
       content,
     ]);
+  });
+});
+
+// UNRUN: source-authored pagination and owner lookup fixtures.
+describe('published artifact owner pages', () => {
+  const firstId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const lastId = '99999999-9999-4999-8999-999999999999';
+  const stamp = '2026-11-07T12:34:56.123456Z';
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const boundary = { v: 1, owner: 'user-1', createdAt: stamp, id: firstId };
+  const pageRow = (id = firstId) => ({
+    ...row({ id }), content_chars: 10, version: 1, cursor_created_at: stamp,
+  });
+
+  it('probes one extra row and uses the last returned boundary, preserving microseconds', async () => {
+    const db = makeDb([pageRow(), pageRow(lastId)]);
+    const page = await listPublishedArtifactsPage(db as never, { userId: 'user-1', limit: 1 });
+    expect(page.artifacts).toHaveLength(1);
+    expect(JSON.parse(Buffer.from(page.nextCursor!, 'base64url').toString('utf8'))).toEqual(boundary);
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('order by created_at desc, id desc');
+    expect(sql).toContain('HH24:MI:SS.US');
+    expect(params).toEqual(['user-1', 2]);
+    expect(page.artifacts[0]).not.toHaveProperty('content');
+    expect(page.artifacts[0]).not.toHaveProperty('cursor_created_at');
+  });
+
+  it('uses a self-contained timestamp and UUID boundary without looking up a deleted row', async () => {
+    const db = makeDb([pageRow(lastId)]);
+    const page = await listPublishedArtifactsPage(db as never, {
+      userId: 'user-1', limit: 1, cursor: encode(boundary),
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0]![0]).toContain('where user_id = $1 and (created_at, id) < ($3::timestamptz, $4::uuid)');
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 2, stamp, firstId]);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it.each([0, 1, 200])('marks an exhausted page of %i rows explicitly', async (count) => {
+    const db = makeDb(Array.from({ length: count }, () => pageRow()));
+    const page = await listPublishedArtifactsPage(db as never, { userId: 'user-1' });
+    expect(page.artifacts).toHaveLength(count);
+    expect(page.nextCursor).toBeNull();
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 201]);
+  });
+
+  it.each([
+    '', 'not-a-cursor', 'a'.repeat(2049),
+    encode({ ...boundary, owner: 'another-user' }),
+    encode({ ...boundary, v: 2 }),
+    encode({ ...boundary, extra: true }),
+    encode({ ...boundary, id: 'not-a-uuid' }),
+    encode({ ...boundary, createdAt: '2026-02-29T12:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '1900-02-29T12:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '2026-04-31T12:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '2026-11-07T24:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '2026-11-07T12:34:56.123Z' }),
+    encode(boundary) + '=',
+    Buffer.from(' ' + JSON.stringify(boundary)).toString('base64url'),
+    Buffer.from(JSON.stringify(boundary).replace('\"v\":1', '\"v\":1,\"v\":1')).toString('base64url'),
+  ])('rejects malformed or foreign-owner cursor before querying: %s', async (cursor) => {
+    const db = makeDb();
+    await expect(listPublishedArtifactsPage(db as never, { userId: 'user-1', cursor }))
+      .rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('accepts leap-day microseconds without Date normalization', async () => {
+    const db = makeDb();
+    const createdAt = '2000-02-29T23:59:59.999999Z';
+    await listPublishedArtifactsPage(db as never, {
+      userId: 'user-1', cursor: encode({ ...boundary, createdAt }),
+    });
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 201, createdAt, firstId]);
+  });
+
+  it.each([0, -1, 201, 1.5, NaN, Infinity])('rejects invalid limit %s before querying', async (limit) => {
+    const db = makeDb();
+    await expect(listPublishedArtifactsPage(db as never, { userId: 'user-1', limit }))
+      .rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('always scopes well-formed altered positioning to the authenticated owner', async () => {
+    const db = makeDb();
+    await listPublishedArtifactsPage(db as never, {
+      userId: 'user-1', cursor: encode({ ...boundary, createdAt: '2020-01-01T00:00:00.000000Z' }),
+    });
+    expect(db.query.mock.calls[0]![0]).toContain('where user_id = $1');
+    expect(db.query.mock.calls[0]![1]?.[0]).toBe('user-1');
+  });
+
+  it('looks up summary metadata directly by token and owner with no public visibility gate', async () => {
+    const db = makeDb([pageRow()]);
+    const result = await getOwnedPublishedArtifactSummary(db as never, { userId: 'user-1', token: row().token });
+    expect(result?.artifactId).toBe('artifact-1');
+    expect(result).not.toHaveProperty('content');
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('where token = $1 and user_id = $2');
+    expect(sql).not.toContain("visibility = 'public'");
+    expect(sql).not.toMatch(/select[\s\S]*\bcontent,/);
+    expect(params).toEqual([row().token, 'user-1']);
+  });
+
+  it('returns null for an unknown or nonowned token without a fallback list', async () => {
+    const db = makeDb();
+    await expect(getOwnedPublishedArtifactSummary(db as never, { userId: 'user-1', token: row().token }))
+      .resolves.toBeNull();
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 });

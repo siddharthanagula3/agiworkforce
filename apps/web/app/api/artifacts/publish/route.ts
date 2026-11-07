@@ -2,16 +2,15 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ManagedCloudPublishedArtifactListResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { describePublishedArtifactWorkspace } from '@/lib/services/published-artifact-workspace';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
-import { organizationCanShareArtifacts } from '@/lib/services/org-entitlements';
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
@@ -19,7 +18,7 @@ import {
   PublishedArtifactQuotaError,
   PublishedArtifactValidationError,
   buildPublishedArtifactUrl,
-  listPublishedArtifacts,
+  listPublishedArtifactsPage,
   publishArtifactRecord,
   requiresSandboxedRender,
 } from '@/lib/services/published-artifact-service';
@@ -34,26 +33,6 @@ const PublishSchema = z.object({
   content: z.string().min(1).max(MAX_CONTENT_CHARS),
   conversationId: z.string().trim().uuid().optional(),
 });
-
-/**
- * The workspace the publisher could share this with, or null when they belong
- * to none or its plan does not include workspace sharing. The panel renders its audience control from this rather than
- * offering a workspace option that would answer 403.
- */
-async function describeWorkspaceAudience(
-  db: DatabaseAdapter,
-  organizationId: string | null,
-): Promise<{ memberCount: number } | null> {
-  if (!organizationId || !(await organizationCanShareArtifacts(organizationId))) return null;
-  const [row] = await db.query<{ member_count: number | string | null }>(
-    `select count(*) as member_count
-       from public.organization_members
-      where organization_id = $1`,
-    [organizationId],
-  );
-  const parsed = Number(row?.member_count ?? 0);
-  return { memberCount: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0 };
-}
 
 async function handlePublish(request: NextRequest): Promise<Response> {
   const csrfResponse = await requireCsrfToken(request);
@@ -122,7 +101,7 @@ async function handlePublish(request: NextRequest): Promise<Response> {
       title: published.title,
       sandboxed: requiresSandboxedRender(published.kind),
       visibility: published.visibility,
-      workspace: await describeWorkspaceAudience(db, organizationId),
+      workspace: await describePublishedArtifactWorkspace(db, organizationId),
     },
     { status: 201 },
   );
@@ -133,17 +112,34 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  const artifacts = await listPublishedArtifacts(db, { userId });
+  const search = request.nextUrl.searchParams;
+  const rawLimit = search.get('limit');
+  if (search.getAll('cursor').length > 1 || search.getAll('limit').length > 1 ||
+      (rawLimit !== null && !/^[1-9]\d*$/.test(rawLimit))) {
+    throw createError.validation('Invalid published artifact page request');
+  }
+  let page;
+  try {
+    page = await listPublishedArtifactsPage(db, {
+      userId,
+      ...(rawLimit === null ? {} : { limit: Number(rawLimit) }),
+      ...(search.has('cursor') ? { cursor: search.get('cursor')! } : {}),
+    });
+  } catch (error) {
+    if (error instanceof PublishedArtifactValidationError) throw createError.validation(error.message);
+    throw error;
+  }
 
   const body: ManagedCloudPublishedArtifactListResponse = {
-    artifacts: artifacts.map((artifact) => ({
+    pageInfo: { nextCursor: page.nextCursor },
+    artifacts: page.artifacts.map((artifact) => ({
       ...artifact,
       shareUrl: buildPublishedArtifactUrl(artifact.token),
       sandboxed: requiresSandboxedRender(artifact.kind),
     })),
-    workspace: await describeWorkspaceAudience(db, organizationId),
+    workspace: await describePublishedArtifactWorkspace(db, organizationId),
   };
-  return NextResponse.json(body);
+  return NextResponse.json(body, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handlePublish));

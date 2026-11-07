@@ -62,9 +62,10 @@ vi.mock('@features/sites/services/sites-service', async (importOriginal) => ({
   ...(await importOriginal<Original0>()),
   listPublishedArtifactVersions: vi.fn(async () => []),
   republishArtifactVersion: vi.fn(async () => undefined),
-  listPublishedSites: async (...args: unknown[]) => ({
+  listPublishedSitesPage: async (...args: unknown[]) => ({
     sites: await mocks.listPublished(...args),
     workspace: null,
+    nextCursor: null,
   }),
   unpublishArtifact: (...args: unknown[]) => mocks.unpublish(...args),
 }));

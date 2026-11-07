@@ -5,7 +5,7 @@ import type { ManagedCloudPublishedArtifactVersion } from '@agiworkforce/cloud-c
 import { useConfirmAction } from '@agiworkforce/ui';
 import {
   listPublishedArtifactVersions,
-  listPublishedSites,
+  listPublishedSitesPage,
   republishArtifactVersion,
   unpublishArtifact,
   type PublishedSite as PublishedArtifactSummary,
@@ -67,6 +67,9 @@ type ArtifactLane = {
 type ArtifactView = {
   lane: ArtifactLane;
   inventory: ArtifactInventory | null;
+  cursor: string | null;
+  nextCursor: string | null;
+  failedCursor: string | null;
   history: ArtifactHistory | null;
   confirmation: UnpublishIntent | null;
   loading: boolean;
@@ -112,7 +115,7 @@ export function PublishedArtifactsSection() {
   const publish = useCallback((lane: ArtifactLane, patch: Partial<ArtifactView>) => {
     if (!current(lane)) return;
     const next: ArtifactView = {
-      lane, inventory: null, history: null, confirmation: null, loading: false,
+      lane, inventory: null, cursor: null, nextCursor: null, failedCursor: null, history: null, confirmation: null, loading: false,
       busy: false, actionToken: null, error: null, notice: null,
       ...lane.view, ...patch,
     };
@@ -120,17 +123,18 @@ export function PublishedArtifactsSection() {
     setState((previous) => current(lane) && lane.view === next ? next : previous);
   }, [current]);
 
-  const load = useCallback(async (lane: ArtifactLane, notice: string | null = null) => {
+  const load = useCallback(async (lane: ArtifactLane, notice: string | null = null, cursor: string | null = null) => {
     if (!current(lane) || lane.operation || lane.view?.confirmation) return;
     const request = createRequestAuthority(lane.session, () => current(lane) && lane.operation === request);
     lane.operation = request;
-    publish(lane, { inventory: null, history: null, confirmation: null, loading: true,
-      busy: true, actionToken: null, error: null, notice });
+    publish(lane, { history: null, confirmation: null, loading: true, failedCursor: cursor,
+      busy: true, actionToken: null, error: null, notice,
+      ...(notice ? { inventory: null } : {}) });
     try {
-      const { sites } = await listPublishedSites(undefined, request);
+      const { sites, nextCursor } = await listPublishedSitesPage(cursor, undefined, request);
       request.assertCurrent();
       lane.operation = null;
-      publish(lane, { inventory: sites, loading: false, busy: false });
+      publish(lane, { inventory: sites, cursor, nextCursor, failedCursor: null, loading: false, busy: false });
     } catch (caught) {
       if (request.isCurrent()) {
         lane.operation = null;
@@ -185,7 +189,7 @@ export function PublishedArtifactsSection() {
       () => current(lane) && lane.operation === request,
       () => { dispatched = true; });
     lane.operation = request;
-    publish(lane, { busy: true, actionToken: artifact.token, error: null, notice: null });
+    publish(lane, { busy: true, actionToken: artifact.token, error: null, notice: null, failedCursor: null });
     try {
       await unpublishArtifact(artifact.token, request);
       request.assertCurrent();
@@ -223,13 +227,13 @@ export function PublishedArtifactsSection() {
     if (!rowCurrent(artifact)) return;
     const lane = view!.lane;
     if (!navigator.clipboard?.writeText) {
-      publish(lane, { notice: null,
+      publish(lane, { notice: null, failedCursor: null,
         error: 'Clipboard access is unavailable. Open the link and copy it from the address bar.' });
       return;
     }
     const request = createRequestAuthority(lane.session, () => current(lane) && lane.operation === request);
     lane.operation = request;
-    publish(lane, { busy: true, error: null, notice: null });
+    publish(lane, { busy: true, error: null, notice: null, failedCursor: null });
     try {
       request.assertCurrent();
       await navigator.clipboard.writeText(artifact.shareUrl);
@@ -259,7 +263,7 @@ export function PublishedArtifactsSection() {
     const request = createRequestAuthority(lane.session, () => current(lane) &&
       lane.operation === request && lane.view?.history === history);
     lane.operation = request;
-    publish(lane, { history, busy: true, error: null, notice: null });
+    publish(lane, { history, busy: true, error: null, notice: null, failedCursor: null });
     try {
       const versions = await listPublishedArtifactVersions(artifact.token, undefined, request);
       request.assertCurrent();
@@ -286,7 +290,7 @@ export function PublishedArtifactsSection() {
       lane.operation === request && lane.view?.history === history,
       () => { dispatched = true; });
     lane.operation = request;
-    publish(lane, { busy: true, actionToken: history.artifact.token, error: null, notice: null });
+    publish(lane, { busy: true, actionToken: history.artifact.token, error: null, notice: null, failedCursor: null });
     try {
       await republishArtifactVersion(history.artifact, entry.version, request);
       request.assertCurrent();
@@ -324,11 +328,31 @@ export function PublishedArtifactsSection() {
           is the only way to take one down.
         </p>
       </div>
+      <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>
+        One page at a time, newest publications first.
+      </p>
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <button type="button" disabled={!view || busy} style={actionButtonStyle}
+          onClick={() => { if (viewCurrent()) void load(view!.lane); }}>Refresh</button>
+        <button type="button" disabled={!view || busy || view.cursor === null} style={actionButtonStyle}
+          onClick={() => { if (viewCurrent()) void load(view!.lane); }}>Back to newest</button>
+        <button type="button" disabled={!view || busy || !view.inventory || view.nextCursor === null}
+          style={actionButtonStyle}
+          onClick={() => {
+            if (viewCurrent() && view!.inventory && view!.nextCursor !== null) {
+              void load(view!.lane, null, view!.nextCursor);
+            }
+          }}>Older</button>
+      </div>
+      {view?.loading && view.inventory ? (
+        <p role="status" style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>Loading published artifacts… The previously loaded page may be out of date.</p>
+      ) : null}
       {view?.error ? (
         <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {view.error}{' '}
+          {view.inventory ? 'The previously loaded page is still shown and may be out of date. ' : null}
           <button type="button" disabled={busy} style={actionButtonStyle}
-            onClick={() => { if (viewCurrent()) void load(view!.lane); }}>
+            onClick={() => { if (viewCurrent()) void load(view!.lane, null, view!.failedCursor); }}>
             Retry
           </button>
         </div>
@@ -338,7 +362,7 @@ export function PublishedArtifactsSection() {
       ) : null}
       <section aria-label="Published artifacts" style={{ border: '1px solid var(--settings-border)',
         borderRadius: 'var(--radius-lg)', background: 'var(--bg-elev)', overflow: 'hidden' }}>
-        {!view || view.loading ? (
+        {!view || (view.loading && !view.inventory) ? (
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             {session ? 'Loading published artifacts…' : 'Sign in to manage published artifacts.'}
           </p>
@@ -348,9 +372,9 @@ export function PublishedArtifactsSection() {
           </p>
         ) : view.inventory.length === 0 ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
-            <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>No published artifacts</div>
+            <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>{view.cursor === null && view.nextCursor === null ? 'No published artifacts' : 'No artifacts on this page'}</div>
             <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
-              Publish an artifact from the artifacts panel and it will appear here.
+              Use Older or Back to newest to browse pages, or publish an artifact from chat.
             </p>
           </div>
         ) : view.inventory.map((artifact, index) => {
@@ -383,7 +407,7 @@ export function PublishedArtifactsSection() {
                       if (!rowCurrent(artifact)) return;
                       const lane = view.lane;
                       publish(lane, { confirmation: { lane, artifact, inventory: view.inventory!, phase: 'confirming' },
-                        error: null, notice: null });
+                        error: null, notice: null, failedCursor: null });
                     }}>
                     {view.actionToken === artifact.token && view.confirmation ? 'Unpublishing…' : 'Unpublish'}
                   </button>
