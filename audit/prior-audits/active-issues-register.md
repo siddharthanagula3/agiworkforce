@@ -15745,7 +15745,8 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `74658ddcc2d4e9e331a3dbaf986131cd991adaab`; web share confirmation scope in
 `36081001d8f696c5bd5afb7a216b3ff0bc903efe`; share inventory completeness in
 `d9bf60f52b3ff692f44e2f58d3819f8656e71a41`; settings conversation-link lifetime in
-`6bcf2de7b3dad763a70177b97d75e9c14867bf04`, 2026-11-07. Wider clients, audience races,
+`6bcf2de7b3dad763a70177b97d75e9c14867bf04`; settings published-artifact lifetime in
+`2d91eb8857b34a3c4fe303e59487924d8eec03c6`, 2026-11-07. Wider clients, audience races,
 identity consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -16528,8 +16529,9 @@ not be confirmed and asks the user to reload. Pre-dispatch failures retain
 sanitized start guidance. The old row is not proof it remains live; no automatic
 DELETE retry or rollback claim is introduced. No new network deadline is added.
 
-Only conversation links are corrected. The nested PublishedArtifactsSection and
-other settings consumers are unchanged and not certified by this work. Already
+That continuation corrected only conversation links. PublishedArtifactsSection
+was outside that boundary and is addressed by the later continuation below; other
+settings consumers are not certified by either correction. Already
 copied/opened URLs or dispatched server actions cannot be recalled by retiring
 the view. Server owner checks, account-wide list semantics and v35 completeness
 remain; there is no new privilege, workspace binding, migration or server writer.
@@ -16550,3 +16552,76 @@ proof that uncooperative I/O settles. No product tests, lint, typechecks, builds
 app execution, live provider/database/migration actions, push or deployment.
 Prior 0394/0395 remain UNAPPLIED. Wider identity consumers and runtime acceptance
 remain open.
+
+### Settings published-artifact session lifetime continuation
+
+Source-reviewed continuation `2d91eb8857b34a3c4fe303e59487924d8eec03c6` binds the separately mounted
+PublishedArtifactsSection to its initiating native session. Its previous inventory,
+history, notices and unpublish confirmation could survive observed identity changes;
+old reads/writes could settle, and retained Copy/Open or history actions could use
+the previous session's rows. A service waiting for CSRF could dispatch afterward.
+This is retired client data/intent, not a demonstrated cross-owner bypass: list is
+account-wide, and token deletion/history/restore already enforce authenticated owner.
+Same-account replacement sessions qualify; workspace switching alone does not.
+Ordinary close/section replacement unmounts the manager. Actual browser/SDK delivery
+and live occurrence remain unverified.
+
+The manager supplies canonical RequestAuthority to four existing site helpers:
+listPublishedSites, listPublishedArtifactVersions, republishArtifactVersion and
+unpublishArtifact. Their optional trailing parameter preserves actual legacy Sites
+callers and legacy bodyless success behavior; those callers are not migrated or
+certified here. This manager always passes authority. Guarded requests use captured
+native-session Bearer and omitted cookies, rechecking around CSRF, credential,
+fetch and success/error JSON boundaries. Rejected or malformed body settlement
+also reasserts currentness. No workspace selector or privilege expansion is added.
+
+Guarded DELETE requires success:true and the exact token. Guarded restore requires
+the exact token and a positive safe integer version; it does not validate the
+entire POST receipt or require the returned version to equal the selected history
+version. The server may append a version or reuse an identical newest snapshot.
+Existing server transactions, policy gates and ownership predicates are unchanged.
+
+A stable session descriptor owns a fresh activation on every layout-effect setup.
+Cleanup and observed retirement permanently invalidate that activation, request,
+view and unpublish intent without poisoning a reusable descriptor. Render, queued
+state publication and row events require exact current/latest-view identity.
+History belongs to its exact inventory/row and version entries; retained callbacks
+cannot act against replacement inventory or history. List/history/clipboard/writes
+serialize under an operation identity, and old finalizers cannot release new work.
+
+Unpublish uses the shared useConfirmAction primitive with an exact intent child;
+synchronous confirming-to-writing consumption prevents repeated confirmation.
+Cancel consumes the intent, and retirement removes the dialog. Its consequence now
+discloses deletion of visitor data, supported by the existing
+published_artifact_storage foreign-key cascade in 0325. History/viewer association
+cascades already exist; no migration was added or applied. Restore remains an
+explicit single-click action for a recoverable historical snapshot, guarded by
+current history membership and synchronous operation ownership.
+
+Open is a guarded new-tab button with noopener/noreferrer instead of a retained
+href. This changes ordinary link-specific middle-click/context-menu behavior.
+Copy dispatch and later notice/error settlement are separately guarded. Neither
+retirement nor abort recalls clipboard/navigation or already-dispatched writes.
+
+A dispatched write without a matching acknowledgement clears inventory/history to
+unknown, removes mutation admission and asks for a read-only reload. Retry performs
+GET, never automatic DELETE/POST replay. Pre-dispatch failures retain sanitized
+start guidance. Acknowledged restore retires its write request before a separate
+inventory GET; failed refresh retains the success notice alongside the list error,
+not a false restore failure or rollback claim. History closes and may be reopened.
+No new network deadline, cross-tab ordering or inventory completeness guarantee.
+
+Authored component and service fixtures are UNRUN. They exercise real manager,
+service, RequestAuthority and confirmation primitive with mocked identity/CSRF,
+transport, clipboard/window boundaries. Coverage includes same-account replacement,
+other account/unavailable identity, mounted pre-notification actions, deferred
+credentials/CSRF/transport/body success/error, cancellation, one-shot writes,
+strict minimum receipts, deduplicated restoration, uncertain writes/read-only Retry,
+acknowledged write versus failed refresh, stale finalizers, StrictMode operability
+and unmount. Existing support-article source assertions are adapted to the guarded
+call without weakening their claim. Detached DOM clicks do not establish retained
+React callback invocation; these are source-reviewed models, not browser/React,
+native auth/CSRF, SQL/RLS or end-to-end acceptance. Wider Sites callers and capped
+publication inventory remain outside this correction. No product tests, lint,
+typechecks, builds, app execution, live provider/database/migration actions,
+push or deployment. Prior 0394/0395 remain UNAPPLIED.

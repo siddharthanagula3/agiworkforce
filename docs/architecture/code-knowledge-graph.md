@@ -7086,10 +7086,43 @@ DELETE. No new network deadline. v35 completeness survives per-token removal;
 server token+owner enforcement remains. Same-account workspace changes alone
 are not this defect, and account-wide semantics are deliberately preserved.
 
-The scope is only the conversation-link subsection. PublishedArtifactsSection
-and other identity consumers remain unchanged. UNRUN source fixtures use real
+That continuation covers only the conversation-link subsection. The following
+continuation covers PublishedArtifactsSection separately; wider identity consumers
+remain outside both boundaries. UNRUN source fixtures use real
 owners with mocked identity/transport/clipboard observations; detached DOM clicks
 alone do not establish retained callback execution, and StrictMode coverage is
 replay operability. No browser/SDK/React/auth/SQL runtime acceptance, product
 checks, live services/migrations, push or deployment. Prior 0394/0395 remain
+UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
+
+## Settings published artifacts own their session lifetime
+
+Continuation `2d91eb8857b34a3c4fe303e59487924d8eec03c6` binds PublishedArtifactsSection inventory/history,
+notices, row events and unpublish intent to captured native session plus a fresh
+layout-effect activation. Render/queued publication require exact latest view;
+history actions require exact inventory/row/version identity. Serialized operation
+ownership and identity-conditional finalizers reject retired settlement.
+
+The manager passes canonical RequestAuthority to four existing site helpers.
+Optional trailing authority preserves actual legacy Sites callers; this is not
+their migration. Captured Bearer/omitted cookies and currentness surround CSRF,
+credentials, fetch and JSON/error boundaries. Guarded DELETE validates success:true
+plus exact token; restore validates token plus positive safe version, not whole
+receipt or historical-version equality. Restoration may append or deduplicate.
+
+Shared useConfirmAction owns unpublish UI, with a synchronous exact-intent phase
+gate and cancellation/retirement consumption. Existing visitor-storage cascade is
+now disclosed. Guarded Open replaces an anchor, changing link-specific navigation;
+Copy has separate dispatch/settlement guards. Already-dispatched effects remain.
+
+Unknown dispatched writes clear inventory/history and require GET-only recovery.
+Acknowledged restore is distinct from its later inventory refresh: a failed GET
+does not turn the write into failure. History can be reopened after refresh.
+Account-wide semantics and server owner enforcement remain. No new deadline,
+server writer, migration, cross-tab ordering or completeness guarantee; wider
+legacy callers remain outside scope.
+
+Real-owner fixtures with mocked boundaries and adapted support-article source
+assertions are authored UNRUN. No product checks or browser/SDK/auth/SQL acceptance,
+live migration/provider/database action, push or deployment. Prior 0394/0395 remain
 UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
