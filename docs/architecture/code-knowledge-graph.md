@@ -7213,8 +7213,32 @@ does not claim privacy; exact readback is required. Its confirmation now disclos
 existing visitor-data deletion.
 
 Explicit local-to-cloud publish confirmation stays intact. Existing URL-only
-publish receipt/audience fallback, web background badges, mobile bulk refresh/Sites
-management and VS Code decoration remain separate limits. This is read-time
+publish receipt/audience fallback, web background badges, mobile Sites management
+and VS Code decoration remain separate limits. The following continuation bounds
+mobile bulk refresh without discovering publications beyond its first page. This is read-time
 knowledge and per-view ownership, not global reconciliation or rollback proof.
 Fixtures are UNRUN; no product checks, live services/migrations, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01 for scope and acceptance boundaries.
+
+## Mobile publication badges retain request-owned knowledge
+
+Continuation `4d4e94a85801da0c1d4047f80674629f5a9cee22` binds bulk refresh to a full
+cloud account epoch and the latest request identity. Account transitions clear
+the badge store and notify readers; account/mode changes and supersession retire
+and abort pending reads. Local refresh does not dispatch. The existing API
+receives captured accountEpoch and signal without a transport or egress rewrite.
+
+Request-local record/forget overlays preserve changes made after read start,
+then clear on retirement or settlement. Canonical list parsing is followed by
+duplicate-ID and page-size checks. Only an explicit validated first-page nextCursor:null
+permits omission clearing; incomplete/legacy pages merge observed rows without
+fetch-all or per-card fan-out. Null-prototype writes and own-key reads preserve
+arbitrary valid text IDs without inheriting constructor/toString values.
+
+Missing badges do not assert Private. Retained off-page positives may become
+stale, and exact interactive lookup does not reconcile the badge map. Initial
+publish still does not record a badge, URL-only receipt/audience fallback stays,
+and the Local confirmation flow is preserved without claiming egress success.
+Latest-request ownership is not global freshness or proof of cancellation.
+Fixtures remain UNRUN; no product checks, live services/migrations, push or
+deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01 for the remaining boundaries.

@@ -16846,11 +16846,11 @@ not certified by this slice. Already-dispatched effects cannot be recalled;
 error/abort is not proof of rollback. The per-view token does not serialize
 other components, tabs, devices or server writers, and no deadline is added.
 
-Web background publication-store initialization, mobile bulk audience refresh
-and Sites management, and VS Code's first-list decoration remain incomplete.
-They need their own bounded request/knowledge design; this slice does not add
-per-row fan-out or fetch-all. The earlier web management pagination and token
-detail corrections remain intact.
+At this exact-lookup slice, web background initialization, mobile bulk audience
+refresh and Sites management, and VS Code's first-list decoration remained
+incomplete. The following continuation bounds mobile badge refresh ownership
+and partial-page merging without universal discovery, per-row fan-out or fetch-all.
+The earlier web management pagination and token detail corrections remain intact.
 
 Seventeen source/fixture files were independently source-reviewed. Contract,
 service, route, web client/panel and mobile helper/component fixtures are authored
@@ -16860,3 +16860,64 @@ not live database/RLS, browser/native ordering, auth SDK or deployment acceptanc
 No product tests, lint, typechecks, builds, installs, app/module execution,
 live providers/databases, migration application, fetch, push or deployment.
 Prior 0394/0395 remain UNAPPLIED; earlier rollout and lost-history limits remain.
+
+### Mobile badge refresh keeps account and request ownership
+
+Continuation `4d4e94a85801da0c1d4047f80674629f5a9cee22`, 2026-11-07, narrows the mobile bulk-refresh boundary.
+The former service captured an account snapshot but admitted results by owner ID
+alone and replaced the entire badge map from a capped first page. Overlapping
+reads could settle out of order, and a later local audience record or unpublish
+forget could be replaced by an older response. A partial list also erased known
+off-page publications. Existing API account-generation checks already cover
+ordinary teardown paths; this is not evidence that every account change leaked
+data. Badge absence hides the chip, not a Private assertion.
+
+The refresh now supplies the full captured account epoch and a request-owned
+AbortSignal to the existing API. Only the latest active refresh may parse and
+commit a successful response. Account notifications clear badge state and notify
+store readers while retiring pending work; mode changes retire pending reads
+without erasing explicit local records. Cloud-to-Local-to-Cloud and account
+round trips cannot revive the old request identity. Local refresh is a no-op,
+and unauthenticated Cloud refresh refuses before API dispatch.
+
+A request-local Map overlays audience records and null-forgets made after that
+read starts. Retirement happens before abort, and overlay entries clear on
+supersession, account/mode invalidation or settlement. An old finalizer cannot
+release a newer active request. Retired transport failures still reject to the
+existing warning callers; successful retired responses do not parse or commit.
+Aborting is not proof that already-dispatched network work stopped.
+
+The canonical list schema is parsed before cache mutation. Oversized pages use
+the shared 200-item bound and duplicate artifact IDs are refused. An explicit
+validated first-page nextCursor:null permits replacement and omission clearing,
+subject to the newer-write overlay. Missing legacy pageInfo or a non-null cursor
+means partial knowledge and merges observed rows into retained positives. No
+extra pages, per-card requests, mutation or permission expansion is added.
+The schema's existing unknown/missing visibility-to-invited fallback remains.
+The page-size check follows parsing; it does not bound transport or parser memory.
+
+Badge writes use null-prototype dictionaries, and the reader checks own keys.
+Valid text IDs such as constructor, toString and __proto__ no longer become
+inherited positives or disappear through the prototype setter. This is a
+dictionary boundary correction, not a change to artifact-ID normalization.
+
+Incomplete merging deliberately may retain a remotely deleted or changed
+off-page badge. Exact interactive lookup does not update this map; it informs
+the current panel only. Explicit record/forget, a complete first-page refresh
+or account invalidation changes that retained knowledge. Initial publish still
+does not record a badge, and URL-only publish receipts/audience fallback remain.
+The existing Local publish confirmation source flow is untouched; actual Local
+publishing through the generic egress guard is not established by this slice.
+The overlay grows with distinct writes during its current request, and retained
+positive metadata can accumulate during an account session. No global cache-size
+cap, cross-device freshness, snapshot completeness, new deadline or durable
+reconciliation is claimed.
+
+Two source/fixture files are independently reviewed. Authored UNRUN fixtures
+cover page authority, failures/retry, newer local changes, overlap success and
+failure, full epoch/mode round trips, store notifications and prototype-key
+reads/writes. They use real activate/invalidate transitions without clearing
+the singleton account listeners through the test-only reset helper. Native
+subscription/AbortSignal/auth transport timing and all product behavior remain
+unverified. No product tests, lint, typechecks, builds, installs, app/module
+execution, live services/databases, migration application, fetch, push or deploy.
