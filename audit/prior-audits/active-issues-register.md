@@ -14485,8 +14485,9 @@ The remaining policy and response consumers still use the wrong namespace:
   mobile-intent checks are not given invented native identity. Existing positive
   cache admission and missing/error denial remain unchanged for these consumers.
   Organization-policy enablement/self-lockout preflight and second-factor
-  enrollment/cache writers also remain open. Global cookie DB scoping still
-  discards the resolved product ID; bearer scope retains native token claims.
+  enrollment/cache writers also remain open. Outside the bounded owner-policy
+  opt-in corrected below, getUserScopedDb cookie scoping still discards the
+  resolved product ID and session-token adapters retain native claims.
   The bounded session path does not certify these related flows or universal
   mapped-account email availability.
 - Legacy compromise producers still omit a native subject: other identity
@@ -14710,6 +14711,18 @@ Legacy principal/product-native mapping, stored registration validity, provider
 revoke response integrity and cross-request ownership races remain unchanged.
 Fixtures cover target substitutions, malformed evidence and retained exact-target
 and partial-effect behavior; they are source-reviewed only and unrun.
+
+The owner-policy opt-in continuation `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658` now captures the verified product
+account and one request organization through authentication and restricted DB scope.
+Cookie getUserScopedDb authenticates the same captured server session and retains
+token-required admission; bearer verifies once. The resulting internally produced
+receipt is account-matched and copied into the existing app_rls claimed adapter,
+which binds product subject and target transaction-locally. No token rewriting or
+service-role fallback is introduced. This is limited to mfaGateExemptForOwner and
+the two policy routes; default cookie/session-token adapters, product-only MFA
+preflight and other namespace consumers remain open. See
+WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for exact gates, fixtures and lifetime limits.
+All new fixtures remain UNRUN; no live SQL/RLS or provider acceptance is established.
 
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
@@ -15670,7 +15683,8 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `2b88fbf779028837dbf33864103949a5343d4e5f`; retention/audit-destination continuation in
 `31053fc862dea2a4e00637f5828414963601bc2a`; model/connector continuation in
 `d1123747532a84e34c0af1215c461e239974ea21`; billing/report continuation in
-`09073e677cf3971fc2f7c1ed929669e55158f78e`, 2026-11-07. Other request-backed settings, client
+`09073e677cf3971fc2f7c1ed929669e55158f78e`; owner-policy auth/scope continuation in
+`c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`, 2026-11-07. Other request-backed settings, client
 workspace binding and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -15959,76 +15973,99 @@ recover client intent before that resolution or make stale client views safe.
 
 The sharing hooks use a constant query key and omit a selector; the spend UI also
 omits one. Keeping the first server resolution does not reconstruct stale UI intent
-or stop a selection change before that resolution. Two other organization
-settings route files (policy and policy/code), shared-project scope and conversation-sharing target helpers
-still need separate scope review.
-Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
-were deliberately not migrated. Both policy and policy/code request the owner MFA
-exemption and require authentication-boundary review, not mechanical replacement.
+or stop a selection change before that resolution. Shared-project scope and
+conversation-sharing target helpers remain separate work. Bootstrap/layout
+saved-selection semantics are intentionally unchanged.
 
-Further source-only review leaves both policy routes and authentication unchanged.
-The owner exemption in api-auth uses saved-workspace membership, whereas lockdown
-and getUserScopedDb resolve the request selector, and policy/policy-code later
-reselect saved membership. With saved locked A and explicit Personal/unlocked B,
-lockdown can inspect Personal/B while the route acts on A under otherwise valid
-A rights. No later route-target lockdown assertion corrects that mismatch.
+A seventh bounded correction in `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658` implements the reviewed owner-policy
+auth/scope design for policy and policy/code. Before this correction, owner
+exemption used saved-workspace membership, lockdown and DB scope used the request
+selector, and the routes reselected saved membership. Saved locked A with explicit
+Personal/unlocked B could check the wrong lockdown target while acting on A under
+existing A rights. A conditional headerless interleaving could instead exempt an
+A owner before a separately admitted selection write moved later scopes to B.
+Both switch endpoints enforce ordinary MFA; another eligible session or previously
+admitted write was needed, not a fresh ungated switch by an unenrolled caller.
+No runtime exploit or actual timing schedule was demonstrated. A route-only
+replacement would have introduced a stable saved-owner-A/nonowner-B mismatch;
+this correction binds authentication and route scope together.
 
-A conditional headerless interleaving also exists: exemption is granted as owner
-of saved A, then a separately admitted selection write changes the shared
-account-keyed saved/cache selection to B before DB/route resolution. A caller
-with B policy.manage can then reach B without repeating aggregate MFA. Concrete
-paths include policy GET, Code PATCH with an existing policy, or a valid main
-policy PATCH setting requireMfa:false; a main PATCH preserving required MFA may
-instead fail its enrollment safety check. Both workspace-switch endpoints enforce
-normal MFA, so an already-unenrolled caller cannot simply issue a fresh ungated
-switch. Another eligible session or previously admitted write is required.
-No timing, cache schedule, session eligibility or runtime exploit is demonstrated.
+Only the existing mfaGateExemptForOwner opt-in captures the request organization
+once after applicable absolute-session-age and account-lifecycle gates. Required lookup uses the
+existing 2,000ms deadline and fails closed: typed application refusals propagate,
+other lookup failures/timeouts become service unavailable. Target lockdown is
+checked outside that catch, so an affirmative denial is not swallowed. Existing
+flag-store availability behavior remains unchanged. Applicable account security, exact active
+owner proof or ordinary aggregate MFA with native session evidence, IP restrictions
+and sightings retain their order. Personal is captured null, never saved fallback.
+Nonowners and Personal still undergo ordinary MFA unless the existing separate
+enrollment exemption applies. Existing broad recovery is retained only on the
+owned target, not narrowed to a dedicated disable-MFA action.
 
-Changing only the routes to select B would introduce a simpler stable saved-owner-A
-to selected-nonowner-B exemption mismatch. A future correction must bind the
-existing owner exception, target lockdown, restricted DB scope and route target
-to one authenticated account/organization snapshot, without narrowing ordinary
-aggregate MFA to the selected workspace. Preserve the existing owner-recovery
-contract only for the owned target; broader recovery redesign is separate.
+Successful opt-in authentication returns an internally produced account/organization
+receipt after applicable gates. getUserScopedDb requires that receipt to match the
+authenticated account, rejects missing/mismatched evidence and refuses the conflicting
+resolveOrganization:false option. The cookie path captures one IdentityRequestAuth,
+retains nonempty-token admission and authenticates that same server session through
+getCookieSessionAuthUser. Bearer verification is not repeated. Primitive receipt
+values are copied into the existing claimed adapter: app_rls is set transaction-locally,
+then product account and organization claims, then the query/execute/transaction body.
+The cookie token is not repurposed as product-identity proof. No fake JWT, caller-
+provided receipt proof, service-role fallback or new verified-principal input seam
+is added. Cookie surface remains web; bearer surface classification is unchanged.
 
-Cookie getUserScopedDb also discards the mapped AuthResult and returns the provider
-subject. Returning the product account alone is insufficient: both session-token
-adapter paths bind the token's subject, and current_app_user_id reads that claim
-without applying the identity bridge. Any correction must preserve verified
-authentication and the app_rls boundary while binding both logical and DB identity.
-The existing claimed-scope adapter is not authentication on its own. This namespace
-work remains under WEB-IDENTITY-POLICY-NAMESPACE-01; no JWT rewriting, raw-client
-identity proof or service-role fallback is proposed or implemented.
+All four policy GET/PATCH gates retain this organization through exact active
+membership, plan/permissions, reads, revisions, writes, overrides, cache and audit.
+Personal and lost membership refuse before route resources. No direct resolveOrgMembership call remains in the inspected organization settings
+route files; this is not a codebase-wide scope guarantee. Ordinary auth, exported assertAccountActive and
+getVerifiedBearerUserScopedDb are unchanged. API-key scope admission, device tokens,
+account lifecycle cache/retry/fail-open configuration, unknown-age degradation,
+account-security verification, passkey-required sightings and enrollment exemption
+retain existing behavior. The two policy routes do not request API-key admission.
 
-A source-reviewed future design is now bounded to an opt-in-only change in
-api-auth, rls-db and these two policy routes; it is NOT implemented here. Successful
-owner-exempt authentication would produce an account/organization receipt only
-after verified identity and all applicable gates. Required target resolution must
-occur once after session age/account lifecycle, with a fail-closed timeout/error
-distinct from the existing flag-store availability contract. Exact-target lockdown,
-account security, active owner proof or unchanged aggregate MFA, IP checks and
-session sightings retain their order. Personal is a captured null, never fallback.
+This also narrows WEB-IDENTITY-POLICY-NAMESPACE-01 for this opt-in: logical account
+and DB subject now use the verified product identity together. Non-opt-in cookie
+scoping can still discard the mapped account, and other session-token adapters
+retain native subjects. Main policy PATCH still calls product-only resolveMfaEnrolled
+for its self-lockout preflight. No global identity/RLS or provider-mapping repair
+is claimed; the claimed adapter alone is not authentication.
 
-The scoped helper would require this receipt only on the opt-in path, reject
-missing/mismatched account evidence, copy primitive scope values, and use the
-existing claimed adapter after trusted authentication. Cookie handling must capture
-one IdentityRequestAuth, keep token-required admission and authenticate that same
-session; bearer handling must verify once. Product identity and organization would
-then enter app_rls transaction-local claims together. No caller-supplied receipt
-proof, fake JWT, service-role fallback or new verified-principal API is proposed.
-Ordinary auth paths and getVerifiedBearerUserScopedDb stay unchanged; owner opt-in
-with resolveOrganization:false would refuse. All four route gates must retain the
-same target. Inspected downstream code does not need withOrg/withUser rebinding.
+The auth fixture retains real authentication, lifecycle/age, request selection and
+exact owner lookup over mocked database/provider adapters and isolated admission
+gate spies. It covers mapped/equal native identities, target owner versus saved
+owner, aggregate MFA invocation, Personal, malformed/nonmember selection, lookup
+exception/deadline, gate order, selection changes between awaits, passkey sightings,
+forged fields, API-key refusal and device admission. A mismatched owner row denies
+the exemption; the test does not invent a real selector-SQL mismatch.
 
-This design preserves existing broad owner recovery only for the exact owned target.
-It is not a membership/lockdown lease or an arbitrary-SQL tenant sandbox. Existing
-lifecycle availability exceptions, the main policy PATCH product-only MFA-enrollment
-preflight and other namespace consumers remain separate. No migration is required
-by the proposed design. Real auth-to-scope and claimed-adapter fixtures must be
-authored and source-reviewed before implementation acceptance; runtime remains unverified.
+The scoped fixture keeps real auth-to-scope and claimed-adapter code over mocked
+provider/storage/owner/lockdown boundaries. It covers one cookie identity/token,
+one target resolution, equal/mapped cookie and bearer accounts, target changes
+during awaited gates, owner recovery/Personal, lookup/MFA/IP denial and role-then-
+claims-then-operation ordering across query, execute and transaction. Narrow
+restored auth spies cover missing/mismatched receipts and mutation of receipt
+objects after scope creation; they do not replace the real integration cases.
+Three pre-existing MFA expectations were corrected to include native session
+evidence while preserving their identity assertions.
 
-Membership/permission changes after checking, post-write audit/cache/response errors
-and uncertain outcomes remain separate; no transaction or replay guarantee was
-added. Prior migrations 0394/0395 remain UNAPPLIED. Installed Next guidance and
-runtime state were unavailable. No product checks, live DB/provider action, push
-or deployment was performed.
+Both route fixtures retain real canonical membership and policy/schema logic;
+main revision checks and scoped Code layering/cache eviction are real source.
+Auth/RLS results, database effects and simulated revision triggers, plan/permissions,
+audits, override retrieval and saved-selection cache are mocked. A/B cases cover
+explicit/headerless scope, Personal/membership/gate refusals, ordinary-member GET,
+exact B reads/writes/revisions/overrides/cache/audit/payload and unchanged A, plus
+existing CSRF/rate/validation/self-lockout behavior. Code's lack of an If-Match/ETag
+protocol is preserved. All fixtures remain UNRUN, not proof of PostgreSQL/RLS,
+provider acceptance, all-organization MFA SQL, middleware or concurrency behavior.
+No additional source-shape guard was added.
+
+The 2,000ms race refuses admission but does not cancel underlying lookup/cache work.
+Owner, membership, identity and lockdown checks are not leases. Policy RLS remains
+membership/permission-based, not universal selected-organization equality; every
+consumer must retain its target. Existing main-policy revision check and write are
+separate queries/transactions, not an atomic compare-and-swap, and Code policy
+has no newly added revision protocol. Post-check changes and post-write
+audit/cache/response failures or uncertain outcomes remain. No transaction, replay
+protocol or migration is added; prior 0394/0395 remain UNAPPLIED. Installed Next
+guidance and runtime state were unavailable. No product checks, live DB/provider
+action, push or deployment was performed.

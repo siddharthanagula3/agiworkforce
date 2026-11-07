@@ -6788,31 +6788,44 @@ permission/plan, infrastructure/activity, audits and middleware. Parameter-aware
 targets and refusals are authored, all UNRUN; mocked termination is not RLS proof.
 The three GET hooks still use global query keys without explicit workspace selectors.
 
-Policy and policy/code remain unchanged pending a bound auth/scope correction.
-Their saved-owner exemption, request-target lockdown and later saved route target
-can diverge. The headerless MFA interleaving requires a separately admitted switch;
-ordinary unenrolled switching is not an ungated path, and actual exploitation is
-unverified. A route-only retarget would introduce a stable exemption mismatch.
-Preserve aggregate MFA and owned-target recovery while pinning authenticated account,
-target lockdown, app_rls identity and route scope together. Both token adapter paths
-can retain provider-subject RLS even when AuthResult names the mapped product account;
-see WEB-IDENTITY-POLICY-NAMESPACE-01. No auth/RLS change is included here.
+Continuation `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658` implements the bounded owner-policy auth/scope
+binding for policy and policy/code, rather than replacing their route lookup alone.
+The prior saved-owner exemption, request-target lockdown and reselected route target
+could differ under existing authority; the conditional headerless interleaving
+required a separately admitted switch, not an ungated unenrolled switch.
 
-The reviewed future opt-in design remains unimplemented: authenticate once, capture
-the target once with fail-closed lookup errors/deadline, keep age/lifecycle, exact
-lockdown, account security, exact owner proof or aggregate MFA, IP and sightings
-ordered, then return an internally produced account/target receipt. getUserScopedDb
-must reject missing/mismatched receipts, copy primitive scope values and bind the
-existing app_rls claimed adapter only after trusted cookie/bearer admission. The
-same captured cookie session and token-required gate are retained; no fake JWT,
-service fallback or public receipt-input seam. Default auth and verified-bearer
-helpers remain unchanged. This is not implemented auth repair, a scope lease or
-universal RLS tenant equality; main-policy product-only MFA preflight remains open.
+Only mfaGateExemptForOwner captures one target after age/lifecycle with a 2,000ms
+fail-closed lookup deadline. Exact lockdown, account security, active target-owner
+recovery or unchanged aggregate native-session MFA, IP and sightings retain order.
+Personal is a captured null. Successful admission produces an account/target receipt;
+the scoped helper rejects missing/account-mismatched receipts and resolveOrganization:false.
+It copies scope primitives into the existing app_rls transaction-local claimed
+adapter, binding the product identity as both logical user and SQL subject.
 
-Headerless clients and global query keys remain unbound to stale UI intent before
-the first server resolution. Two other organization settings files, project/session
-target helpers and MFA owner-exemption scope (both policy and policy/code) remain
-separate work. Post-check membership/policy changes, post-write errors and uncertain
-outcomes are unchanged;
-no transaction or replay guarantee is added. No new migration or product checks.
-Prior 0394/0395 migrations remain UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
+Cookie handling authenticates the same captured server session and retains token-
+required admission; bearer verification remains single. No fake JWT, caller-provided
+proof seam or service-role fallback. All four route gates retain scope through
+membership, permissions, policy/revision/override queries, cache and audit.
+Default auth, getVerifiedBearerUserScopedDb, credential admission and existing
+enrollment/account-security exceptions remain unchanged. Owner recovery is still
+broad within its exact owned target. The mapped-account correction is opt-in only;
+default cookie/token adapters and main-policy product-only MFA preflight remain
+under WEB-IDENTITY-POLICY-NAMESPACE-01.
+
+Auth fixtures retain real selection/owner/auth code with mocked adapters and gate
+spies; scoped fixtures keep real auth and claimed adapter, checking native/product
+identity and role/claims/operation ordering behind mocked external boundaries.
+Narrow receipt seams check absence/mismatch and primitive-copy isolation. Route
+fixtures retain canonical membership, policy/schema, main revision checks and
+scoped Code layering/cache source, with mocked I/O, permissions, overrides and
+simulated revision triggers. All are UNRUN, not SQL/RLS or runtime acceptance.
+Three older scoped-cookie MFA assertions now include native session evidence.
+
+No direct resolveOrgMembership calls remain in the inspected settings routes, but
+headerless clients/global query keys, project/session helpers and wider identity
+consumers remain open. Timeout does not cancel lookup/cache work; checks are not
+leases, claimed scope is not an arbitrary-SQL sandbox, and policy RLS is not
+universally selected-org equality. Main revision check/write are still separate;
+Code policy gains no revision protocol. No new transaction/replay guarantee or
+migration. Fixtures are UNRUN; prior 0394/0395 remain UNAPPLIED. See
+WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for scope and acceptance limits.
