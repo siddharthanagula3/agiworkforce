@@ -1,7 +1,72 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { act, cleanup, fireEvent, render as renderUi, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import type { SessionAuthority } from '@/lib/identity/request-authority';
+import type { AccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import {
+  admitWorkspace, beginWorkspaceSwitch, finishWorkspaceSwitch, observeWorkspaceOwner,
+  workspaceQueryKey,
+} from '@/features/workspaces/lib/workspace-admission';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ShareConversationDialog } from './ShareConversationDialog';
+
+const identity = vi.hoisted(() => ({ session: null as SessionAuthority | null, serial: 0 }));
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => identity.session,
+}));
+
+const ORGANIZATION = '11111111-1111-4111-8111-111111111111';
+const personalWorkspace: AccountWorkspaces = {
+  workspaces: [], activeWorkspaceId: null, activeOrganizationId: null, scope: 'personal',
+};
+let client: QueryClient;
+
+function replaceSession() {
+  const serial = ++identity.serial;
+  const session: SessionAuthority = {
+    userId: `dialog-account-${serial}`, sessionId: `dialog-session-${serial}`,
+    isCurrent: () => identity.session === session,
+    getToken: async () => `dialog-bearer-${serial}`,
+  };
+  identity.session = session;
+  return session;
+}
+
+function admit(scope: AccountWorkspaces = personalWorkspace) {
+  const owner = observeWorkspaceOwner(identity.session)!;
+  admitWorkspace(owner, owner.epoch, JSON.stringify([
+    scope.scope, scope.activeWorkspaceId, scope.activeOrganizationId,
+  ]));
+  client.setQueryData(workspaceQueryKey(owner), scope);
+  return owner;
+}
+
+function render(element: ReactElement) {
+  return renderUi(element, {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  replaceSession();
+  admit();
+});
+
+afterEach(() => {
+  cleanup();
+  client.clear();
+  identity.session = null;
+  observeWorkspaceOwner(null);
+});
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -442,7 +507,12 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
     ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/share?conversation_id=${SAVED_CONVERSATION_ID}`,
-      expect.objectContaining({ credentials: 'include' }),
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+    const lookupHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(lookupHeaders.get('Authorization')).toBe(`Bearer dialog-bearer-${identity.serial}`);
+    expect(lookupHeaders.get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
+      MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
     );
     expect(screen.getByRole('heading', { name: 'Public link ready' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeEnabled();
@@ -884,6 +954,157 @@ describe('ShareConversationDialog on a chat that is already shared', () => {
       ),
     );
     expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
+  });
+});
+
+describe('ShareConversationDialog confirmation ownership', () => {
+  const conversationId = '0b8e2f4a-6c1d-4e3f-9a5b-7d2c4e6f8a1b';
+  const otherConversationId = '9c4a6e2b-1d3f-4b5a-8e7c-2f4a6b8d0c3e';
+  const message = {
+    id: 'owned-message', role: 'user' as const, content: 'Owned transcript',
+    createdAt: '2026-10-01T00:00:00.000Z',
+  };
+  const response = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
+  const listing = () => response({
+    shares: [{
+      token: 'owned-token', title: 'Owned chat',
+      shareUrl: 'https://agiworkforce.com/share/owned-token',
+      modelId: null, provider: null, messageCount: 1, visibility: 'public',
+      createdAt: '2026-10-01T00:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z',
+      expired: false,
+    }],
+    workspace: { memberCount: 3 },
+  });
+  const view = (open = true, id = conversationId) => (
+    <ShareConversationDialog open={open} onOpenChange={vi.fn()} conversationId={id}
+      conversationTitle="Owned chat" />
+  );
+  const actions = ['audience', 'update', 'revoke'] as const;
+  type Action = (typeof actions)[number];
+  async function prompt(action: Action) {
+    if (action === 'audience') {
+      fireEvent.change(await screen.findByLabelText('Who can open this'), {
+        target: { value: 'organization' },
+      });
+    } else {
+      fireEvent.click(await screen.findByRole('button', {
+        name: action === 'update' ? 'Update link' : 'Revoke share',
+      }));
+    }
+    return screen.findByRole('alertdialog');
+  }
+  const confirmationLabel = (action: Action) => action === 'audience'
+    ? 'Share with workspace' : action === 'update' ? 'Update link' : 'Revoke share';
+  const writes = (fetcher: { mock: { calls: Array<[unknown, RequestInit?]> } }) => fetcher.mock.calls.filter(
+    ([, init]) => ['POST', 'PUT', 'PATCH', 'DELETE'].includes(init?.method ?? ''),
+  );
+
+  beforeEach(() => {
+    useChatStore.setState({ activeConversationId: conversationId, messages: [message], conversations: [] });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    useChatStore.setState({ activeConversationId: null, messages: [] });
+  });
+
+  for (const action of actions) {
+    it.each(['workspace', 'session', 'close/reopen', 'conversation'] as const)(
+      `retires the ${action} prompt across %s and never resurrects it`, async (change) => {
+        const fetcher = vi.spyOn(global, 'fetch').mockImplementation(async () => listing());
+        const rendered = render(view());
+        const oldPrompt = await prompt(action);
+        expect(oldPrompt).toBeInTheDocument();
+
+        act(() => {
+          if (change === 'workspace') {
+            const owner = observeWorkspaceOwner(identity.session)!;
+            const epoch = beginWorkspaceSwitch(owner, owner.epoch);
+            finishWorkspaceSwitch(owner, epoch, false);
+            admit({ ...personalWorkspace, scope: 'organization',
+              workspaces: [{ id: ORGANIZATION, organizationId: ORGANIZATION,
+                kind: 'organization', name: 'Team', slug: 'team', isPrimary: true, role: 'owner' }],
+              activeOrganizationId: ORGANIZATION, activeWorkspaceId: ORGANIZATION });
+          } else if (change === 'session') {
+            replaceSession();
+            admit();
+          } else if (change === 'conversation') {
+            useChatStore.setState({ activeConversationId: otherConversationId, messages: [message] });
+          }
+        });
+        rendered.rerender(view(change !== 'close/reopen',
+          change === 'conversation' ? otherConversationId : conversationId));
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+        expect(oldPrompt).not.toBeInTheDocument();
+        rendered.rerender(view(false));
+        rendered.rerender(view());
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+        expect(writes(fetcher)).toHaveLength(0);
+        expect(toast.success).not.toHaveBeenCalled();
+      },
+    );
+
+    it(`ignores a deferred ${action} completion after a replacement dialog opens`, async () => {
+      let resolve!: (response: Response) => void;
+      const pending = new Promise<Response>((done) => { resolve = done; });
+      const fetcher = vi.spyOn(global, 'fetch').mockImplementation(async (_input, init) =>
+        init?.method ? pending : listing());
+      const rendered = render(view());
+      const confirmation = await prompt(action);
+      fireEvent.click(within(confirmation).getByRole('button', { name: confirmationLabel(action) }));
+      await waitFor(() => expect(writes(fetcher)).toHaveLength(1));
+      rendered.rerender(view(false));
+      rendered.rerender(view());
+      await screen.findByDisplayValue('https://agiworkforce.com/share/owned-token');
+      const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+      focus.mockClear();
+      await act(async () => {
+        resolve(response(action === 'update'
+          ? { refreshed: 1, tokens: ['owned-token'], messageCount: 1 }
+          : action === 'revoke' ? { success: true, revoked: 1 }
+            : { token: 'owned-token', shareUrl: 'https://agiworkforce.com/share/owned-token',
+                visibility: 'organization', organizationId: ORGANIZATION,
+                expiresAt: '2099-01-01T00:00:00.000Z' }));
+        await pending;
+      });
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(focus).not.toHaveBeenCalled();
+      expect(screen.getByRole('textbox', { name: 'Conversation link' })).toHaveValue(
+        'https://agiworkforce.com/share/owned-token',
+      );
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+  }
+
+  it('disables creation while workspace admission is pending, then shows finite failure guidance', async () => {
+    replaceSession();
+    let resolve!: (response: Response) => void;
+    const pending = new Promise<Response>((done) => { resolve = done; });
+    const fetcher = vi.spyOn(global, 'fetch').mockReturnValue(pending);
+    render(view());
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(/workspace/i);
+    await act(async () => { resolve(new Response('{}', { status: 503 })); await pending; });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/workspace|account/i);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+    expect(writes(fetcher)).toHaveLength(0);
+    expect(fetcher.mock.calls.some(([url]) => String(url).startsWith('/api/share'))).toBe(false);
+  });
+
+  it('hides old links and offers finite reload guidance after an uncertain workspace switch', async () => {
+    const fetcher = vi.spyOn(global, 'fetch').mockImplementation(async () => listing());
+    render(view());
+    await screen.findByDisplayValue('https://agiworkforce.com/share/owned-token');
+    act(() => {
+      const owner = observeWorkspaceOwner(identity.session)!;
+      const epoch = beginWorkspaceSwitch(owner, owner.epoch);
+      finishWorkspaceSwitch(owner, epoch, true);
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/reload/i);
+    expect(screen.queryByRole('textbox', { name: 'Conversation link' })).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: /Create public link/ })).toBeDisabled();
+    expect(writes(fetcher)).toHaveLength(0);
   });
 });
 

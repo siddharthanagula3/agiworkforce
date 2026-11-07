@@ -64,8 +64,13 @@ function ShareConversationDialogImpl({
   const [copied, setCopied] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const refocusAfterRevokeRef = useRef(false);
-  const confirming = confirmDialog !== null;
+  const [confirmationView, setConfirmationView] =
+    useState<ReturnType<typeof useShareConversation>['view']>(null);
   const {
+    view,
+    isViewCurrent,
+    workspacePending,
+    workspaceUnavailable,
     share,
     updateLink,
     revoke,
@@ -78,13 +83,29 @@ function ShareConversationDialogImpl({
     error,
     cancelPending,
   } = useShareConversation(conversationTitle, modelId, conversationId, open);
+  const confirming = confirmDialog !== null && confirmationView === view && isViewCurrent();
+  const confirmForView = (request: Parameters<typeof confirm>[0]) => {
+    if (!isViewCurrent()) return;
+    setConfirmationView(view);
+    confirm({
+      ...request,
+      onConfirm: async () => {
+        if (!isViewCurrent()) return;
+        await request.onConfirm();
+      },
+    });
+  };
   const chatLoadError = loadingChat ? (conversationLoadError ?? null) : null;
-  const shownError = chatLoadError ?? error;
-  const pendingStatus = checkingShare
-    ? 'Checking whether this chat is already shared'
-    : loadingChat && !chatLoadError
-      ? 'Loading this chat'
-      : null;
+  const shownError = workspaceUnavailable ? error : chatLoadError ?? error;
+  const pendingStatus = workspacePending
+    ? 'Confirming your workspace'
+    : workspaceUnavailable
+      ? null
+      : checkingShare
+        ? 'Checking whether this chat is already shared'
+        : loadingChat && !chatLoadError
+          ? 'Loading this chat'
+          : null;
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
     [expiryDays],
@@ -97,10 +118,15 @@ function ShareConversationDialogImpl({
   });
 
   useEffect(() => {
-    if (confirming || !refocusAfterRevokeRef.current) return;
+    refocusAfterRevokeRef.current = false;
+    setCopied(false);
+  }, [view]);
+
+  useEffect(() => {
+    if (!isViewCurrent() || confirming || !refocusAfterRevokeRef.current) return;
     refocusAfterRevokeRef.current = false;
     contentRef.current?.focus();
-  }, [confirming]);
+  }, [confirming, isViewCurrent]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) cancelPending();
@@ -108,10 +134,10 @@ function ShareConversationDialogImpl({
   };
 
   const handleAudienceChange = (next: ShareAudience) => {
-    if (!activeShare || next === activeShare.audience) return;
+    if (!isViewCurrent() || !activeShare || next === activeShare.audience) return;
     const apply = async () => {
       const ok = await setAudience(next);
-      if (!ok) return;
+      if (!ok || !isViewCurrent()) return;
       toast.success(
         next === 'organization'
           ? 'Only your workspace can open this now'
@@ -119,7 +145,7 @@ function ShareConversationDialogImpl({
       );
     };
     const several = activeShare.linkCount > 1;
-    confirm(
+    confirmForView(
       next === 'organization'
         ? {
             title: several
@@ -145,7 +171,7 @@ function ShareConversationDialogImpl({
   };
 
   const handleUpdateLink = () => {
-    if (!activeShare) return;
+    if (!isViewCurrent() || !activeShare) return;
     const several = activeShare.linkCount > 1;
     const readers = several
       ? `This chat has ${activeShare.linkCount} live links, which may have gone to different people, and all of them change. Everyone who can open any of them`
@@ -161,18 +187,18 @@ function ShareConversationDialogImpl({
             { one: '{{count}} message', other: '{{count}} messages' },
           )} added since ${several ? 'they were' : 'it was'} shared`
         : '';
-    confirm({
+    confirmForView({
       title: several ? `Update all ${activeShare.linkCount} links?` : 'Update the shared link?',
       description: `${readers} will see this chat as it is now${added}. The snapshot ${several ? 'each link shows' : 'it shows'} today is replaced and cannot be restored.`,
       confirmLabel: several ? 'Update all links' : 'Update link',
       onConfirm: async () => {
-        if (await updateLink()) toast.success('Link updated');
+        if (await updateLink() && isViewCurrent()) toast.success('Link updated');
       },
     });
   };
 
   const handleRevoke = () => {
-    if (!activeShare) return;
+    if (!isViewCurrent() || !activeShare) return;
     const scope = activeShare.mayHaveUnlistedLinks
       ? {
           title: 'Revoke every link to this chat?',
@@ -194,29 +220,34 @@ function ShareConversationDialogImpl({
                 : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
             confirmLabel: 'Revoke share',
           };
-    confirm({
+    confirmForView({
       ...scope,
       onConfirm: async () => {
-        refocusAfterRevokeRef.current = await revoke();
+        const revoked = await revoke();
+        if (isViewCurrent()) refocusAfterRevokeRef.current = revoked;
       },
     });
   };
 
   const handleCopy = async () => {
-    if (!activeShare) return;
+    if (!isViewCurrent() || !activeShare) return;
     try {
       await navigator.clipboard.writeText(activeShare.url);
+      if (!isViewCurrent()) return;
       setCopied(true);
       toast.success('Link copied');
-      window.setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => {
+        if (isViewCurrent()) setCopied(false);
+      }, 2000);
     } catch {
+      if (!isViewCurrent()) return;
       toast.error('Could not copy the link. Select it and copy manually.');
     }
   };
 
   return (
     <>
-      {confirmDialog}
+      {confirming ? confirmDialog : null}
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent ref={contentRef} className="max-w-lg">
           <DialogHeader>
@@ -252,7 +283,7 @@ function ShareConversationDialogImpl({
               <Spinner size="sm" aria-hidden="true" />
               <span>{pendingStatus}</span>
             </div>
-          ) : loadingChat ? null : activeShare ? (
+          ) : workspaceUnavailable || loadingChat ? null : activeShare ? (
             <div className="space-y-4">
               <div className="flex gap-2">
                 <Input autoFocus aria-label="Conversation link" readOnly value={activeShare.url} />
@@ -387,7 +418,7 @@ function ShareConversationDialogImpl({
                 </Button>
                 <Button
                   onClick={() => void share(expiryDays)}
-                  disabled={isSharing || isTemporary || checkingShare || loadingChat}
+                  disabled={isSharing || isTemporary || checkingShare || loadingChat || !isViewCurrent()}
                 >
                   {isSharing ? 'Creating…' : `Create public link · ${expiryLabel}`}
                 </Button>

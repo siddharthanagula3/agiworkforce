@@ -152,7 +152,14 @@ vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => 
 }));
 vi.mock('../../hooks/use-artifact-cloud-sync', () => ({ useArtifactCloudSync: vi.fn() }));
 vi.mock('../../hooks/use-share-conversation', () => ({
-  useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
+  useShareConversation: () => ({
+    share: vi.fn(),
+    isSharing: false,
+    view: null,
+    isViewCurrent: () => false,
+    workspacePending: false,
+    workspaceUnavailable: false,
+  }),
 }));
 vi.mock('../../hooks/use-conversation-branches', () => ({
   useConversationBranches: () => ({
