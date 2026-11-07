@@ -13,6 +13,23 @@ import {
 } from '../services/sites-service';
 import { usePublishedSitesStore } from '../stores/published-sites-store';
 
+export type SiteUpdate = Pick<PublishedSite, 'token' | 'artifactId'> & {
+  changes:
+    | Pick<PublishedSite, 'title' | 'updatedAt'>
+    | Pick<PublishedSite, 'visibility' | 'shareUrl' | 'updatedAt'>;
+};
+
+export function mergeSiteUpdate(current: PublishedSite, update: SiteUpdate): PublishedSite {
+  if (current.token !== update.token || current.artifactId !== update.artifactId) return current;
+  const currentTime = Date.parse(current.updatedAt);
+  const updatedTime = Date.parse(update.changes.updatedAt);
+  const updatedAt =
+    Number.isFinite(currentTime) && (!Number.isFinite(updatedTime) || currentTime > updatedTime)
+      ? current.updatedAt
+      : update.changes.updatedAt;
+  return { ...current, ...update.changes, updatedAt };
+}
+
 export function unpublishConsequence(site: Pick<PublishedSite, 'title'>): string {
   return `The link to “${siteName(site)}” stops working for everyone who has it, and any data the site saved for its visitors is deleted. This cannot be undone.`;
 }
@@ -21,7 +38,7 @@ export function useSiteActions({
   onUpdated,
   onUnpublished,
 }: {
-  onUpdated: (site: PublishedSite) => void;
+  onUpdated: (update: SiteUpdate) => void;
   onUnpublished: (site: PublishedSite) => void;
 }) {
   const { confirm, dialog } = useConfirmAction();
@@ -43,24 +60,33 @@ export function useSiteActions({
 
   const rename = useCallback(
     async (site: PublishedSite, title: string) => {
-      const updated = await updatePublishedSite(site.token, { title });
-      onUpdated({ ...site, title: updated.title, updatedAt: updated.updatedAt });
+      const { token, artifactId } = site;
+      const updated = await updatePublishedSite(token, { title });
+      onUpdated({
+        token,
+        artifactId,
+        changes: { title: updated.title, updatedAt: updated.updatedAt },
+      });
     },
     [onUpdated],
   );
 
   const setVisibility = useCallback(
     async (site: PublishedSite, visibility: SiteVisibility) => {
-      const updated = await updatePublishedSite(site.token, { visibility });
-      recordPublishedSite(site.artifactId, {
+      const { token, artifactId } = site;
+      const updated = await updatePublishedSite(token, { visibility });
+      recordPublishedSite(artifactId, {
         shareUrl: updated.shareUrl,
         visibility: updated.visibility,
       });
       onUpdated({
-        ...site,
-        visibility: updated.visibility,
-        shareUrl: updated.shareUrl,
-        updatedAt: updated.updatedAt,
+        token,
+        artifactId,
+        changes: {
+          visibility: updated.visibility,
+          shareUrl: updated.shareUrl,
+          updatedAt: updated.updatedAt,
+        },
       });
     },
     [onUpdated, recordPublishedSite],

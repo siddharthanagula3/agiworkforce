@@ -6,7 +6,7 @@ import { Globe, RefreshCw } from '@agiworkforce/icons';
 import { Button, SearchInput, Spinner } from '@agiworkforce/ui';
 import { NEW_CHAT_PATH } from '@features/chat/lib/new-chat-entry';
 import { toUserMessage } from '@/lib/user-error-message';
-import { useSiteActions } from '../hooks/useSiteActions';
+import { mergeSiteUpdate, useSiteActions, type SiteUpdate } from '../hooks/useSiteActions';
 import { sortSitesByUpdated } from '../lib/site-format';
 import { listPublishedSites, type PublishedSite } from '../services/sites-service';
 import { usePublishedSitesStore } from '../stores/published-sites-store';
@@ -68,12 +68,12 @@ export function SitesPage() {
     return () => controller.abort();
   }, [load]);
 
-  const replaceSite = useCallback((next: PublishedSite) => {
+  const updateSite = useCallback((update: SiteUpdate) => {
     setState((current) =>
       current.status === 'ready'
         ? {
             ...current,
-            sites: current.sites.map((site) => (site.token === next.token ? next : site)),
+            sites: current.sites.map((site) => mergeSiteUpdate(site, update)),
           }
         : current,
     );
@@ -87,7 +87,7 @@ export function SitesPage() {
     );
   }, []);
 
-  const actions = useSiteActions({ onUpdated: replaceSite, onUnpublished: removeSite });
+  const actions = useSiteActions({ onUpdated: updateSite, onUnpublished: removeSite });
   const sites = useMemo(
     () => (state.status === 'ready' ? sortSitesByUpdated(state.sites) : []),
     [state],

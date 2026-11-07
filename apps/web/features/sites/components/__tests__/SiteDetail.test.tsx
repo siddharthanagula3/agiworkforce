@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublishedSite, SiteData } from '../../services/sites-service';
 type SitesServiceModule = typeof import('../../services/sites-service');
@@ -38,7 +38,24 @@ vi.mock('../../services/sites-service', async (importOriginal) => ({
   clearPublishedSiteSharedData: (...args: unknown[]) => mocks.clearPublishedSiteSharedData(...args),
 }));
 
+// Invited-viewer GETs are outside the rename/sharing composition boundary.
+vi.mock('../SiteViewersEditor', () => ({ SiteViewersEditor: () => null }));
+
 const { SiteDetail } = await import('../SiteDetail');
+const { usePublishedSitesStore } = await import('../../stores/published-sites-store');
+
+type UpdateResponse = Awaited<ReturnType<SitesServiceModule['updatePublishedSite']>>;
+
+function deferredUpdate() {
+  let resolve!: (value: UpdateResponse) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<UpdateResponse>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
+}
+
 
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -91,6 +108,7 @@ async function openDataTab() {
 }
 
 beforeEach(() => {
+  usePublishedSitesStore.setState({ byArtifactId: {}, status: 'idle' });
   mocks.listPublishedSites.mockResolvedValue({ sites: [site()], workspace: null });
   mocks.readPublishedSiteVersion.mockResolvedValue({
     version: 2,
@@ -170,6 +188,124 @@ describe('SiteDetail', () => {
     );
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Office league');
   });
+
+  it.each(['sharing', 'rename'] as const)(
+    'composes independent settings when %s completes first',
+    async (first) => {
+      const rename = deferredUpdate();
+      const sharing = deferredUpdate();
+      mocks.listPublishedSites.mockResolvedValue({
+        sites: [site({ visibility: 'invited' })],
+        workspace: null,
+      });
+      mocks.updatePublishedSite.mockImplementation(
+        (_token: string, change: { title?: string }) =>
+          change.title === undefined ? sharing.promise : rename.promise,
+      );
+      render(<SiteDetail token={TOKEN} />);
+
+      fireEvent.change(await screen.findByLabelText('Site name'), {
+        target: { value: 'Office league' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
+      expect(mocks.updatePublishedSite.mock.calls).toEqual([
+        [TOKEN, { title: 'Office league' }],
+        [TOKEN, { visibility: 'public' }],
+      ]);
+
+      const responses: Record<'rename' | 'sharing', UpdateResponse> = {
+        rename: {
+          token: TOKEN,
+          title: 'Office league',
+          visibility: 'invited',
+          shareUrl: site().shareUrl,
+          organizationId: null,
+          updatedAt: '2026-10-10T00:00:00.000Z',
+        },
+        sharing: {
+          token: TOKEN,
+          title: 'Office league',
+          visibility: 'public',
+          shareUrl: site().shareUrl,
+          organizationId: null,
+          updatedAt: '2026-10-10T00:00:01.000Z',
+        },
+      };
+      const pending = { rename, sharing };
+      await act(async () => pending[first].resolve(responses[first]));
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+        first === 'rename' ? 'Office league' : 'Team scoreboard',
+      );
+      expect(screen.getByRole('radio', { name: /anyone with the link/i })).toHaveAttribute(
+        'aria-checked',
+        first === 'sharing' ? 'true' : 'false',
+      );
+
+      const last = first === 'rename' ? 'sharing' : 'rename';
+      await act(async () => pending[last].resolve(responses[last]));
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Office league');
+      expect(screen.getByTestId('site-visibility')).toHaveTextContent('Public');
+      expect(screen.getByRole('radio', { name: /anyone with the link/i })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      expect(screen.getByLabelText('Site URL')).toHaveValue(site().shareUrl);
+      expect(screen.getByRole('link', { name: /edit in chat/i })).toHaveAttribute(
+        'href',
+        '/chat/11111111-1111-4111-8111-111111111111?artifact=artifact-1',
+      );
+      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toMatchObject({
+        token: TOKEN,
+        visibility: 'public',
+      });
+    },
+  );
+
+  it.each(['rename', 'sharing'] as const)(
+    'does not apply a failed %s after the other setting succeeds',
+    async (failed) => {
+      const rename = deferredUpdate();
+      const sharing = deferredUpdate();
+      mocks.listPublishedSites.mockResolvedValue({
+        sites: [site({ visibility: 'invited' })],
+        workspace: null,
+      });
+      mocks.updatePublishedSite.mockImplementation(
+        (_token: string, change: { title?: string }) =>
+          change.title === undefined ? sharing.promise : rename.promise,
+      );
+      render(<SiteDetail token={TOKEN} />);
+      fireEvent.change(await screen.findByLabelText('Site name'), {
+        target: { value: 'Office league' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
+      expect(mocks.updatePublishedSite).toHaveBeenCalledTimes(2);
+
+      const pending = { rename, sharing };
+      const succeeded = failed === 'rename' ? 'sharing' : 'rename';
+      await act(async () => pending[succeeded].resolve({
+        token: TOKEN,
+        title: succeeded === 'rename' ? 'Office league' : 'Team scoreboard',
+        visibility: succeeded === 'sharing' ? 'public' : 'invited',
+        shareUrl: site().shareUrl,
+        organizationId: null,
+        updatedAt: '2026-10-10T00:00:00.000Z',
+      }));
+      await act(async () => pending[failed].reject(new Error('Update refused')));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Update refused');
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+        failed === 'rename' ? 'Team scoreboard' : 'Office league',
+      );
+      expect(screen.getByRole('radio', { name: /anyone with the link/i })).toHaveAttribute(
+        'aria-checked',
+        failed === 'rename' ? 'true' : 'false',
+      );
+      expect(screen.getByLabelText('Site URL')).toHaveValue(site().shareUrl);
+    },
+  );
 
   it('shows the rename failure inline', async () => {
     mocks.updatePublishedSite.mockRejectedValue(new Error('That name is not allowed.'));

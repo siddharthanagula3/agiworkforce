@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, Copy, ExternalLink, Pencil } from '@agiworkforce/icons';
 import { Button, Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
-import { useSiteActions } from '../hooks/useSiteActions';
+import { mergeSiteUpdate, useSiteActions, type SiteUpdate } from '../hooks/useSiteActions';
 import { displaySiteUrl, formatSiteUpdated, siteName } from '../lib/site-format';
 import {
   SITES_PATH,
@@ -126,8 +126,12 @@ export function SiteDetail({ token }: { token: string }) {
     return () => controller.abort();
   }, [load]);
 
-  const onUpdated = useCallback((site: PublishedSite) => {
-    setState((current) => (current.status === 'ready' ? { ...current, site } : current));
+  const onUpdated = useCallback((update: SiteUpdate) => {
+    setState((current) =>
+      current.status === 'ready'
+        ? { ...current, site: mergeSiteUpdate(current.site, update) }
+        : current,
+    );
   }, []);
   const onUnpublished = useCallback(() => router.push(SITES_PATH), [router]);
   const actions = useSiteActions({ onUpdated, onUnpublished });
