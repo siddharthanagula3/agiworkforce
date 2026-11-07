@@ -7214,7 +7214,8 @@ existing visitor-data deletion.
 
 Explicit local-to-cloud publish confirmation stays intact. The later outcome
 continuation replaces mobile URL-only receipts/audience fallback. Web background
-badges, mobile Sites management and VS Code decoration remain separate limits.
+badges and VS Code decoration remain separate limits. Mobile Sites detail and
+paged management are corrected in their later continuations below.
 The following continuation bounds mobile bulk refresh without discovering
 publications beyond its first page. This is read-time
 knowledge and per-view ownership, not global reconciliation or rollback proof.
@@ -7523,5 +7524,26 @@ The detail screen keeps its existing lifetime, secondary history/data reads
 and mutation receipt guards. Workspace presence follows the nullable envelope,
 including zero-member workspaces. No backend/schema or authorization change.
 This fixes conditional off-page detail lookup, not mobile list completeness or
-the publication quota. Fixtures are UNRUN; no product checks or live acceptance.
+the publication quota. Bounded mobile paging is recorded below and does not
+establish snapshot completeness. Fixtures are UNRUN; no product checks or live acceptance.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile Sites lists replace one bounded page at a time
+
+Continuation 627e47991324028769fe1ff20aeada49b62eb202 gives the sole mobile list caller a bounded
+page service and native Older/Back navigation. First-page missing pageInfo is
+unknown completeness; continuation replies must confirm metadata. Canonical
+page/cursor limits, immediate repeated-cursor and duplicate-key rejection
+protect the accepted page. Backend creation order is retained.
+
+Accepted page metadata is atomic; pending/failed cursors are separate. Failure
+retains accepted rows and Retry uses the exact failed cursor. Cursor-bound
+controls and rows require current display/latest-read ownership. Pending
+reads retire old callbacks and disable controls; newly rendered failure
+controls can reauthorize retained rows. Refresh is deliberately view-owned
+and can supersede a same-view request.
+
+Status/counts are page-local, with terminal/unknown/error empty distinctions.
+No accumulation, automatic traversal, snapshot/global count, arbitrary-cycle
+proof or quota change. Existing lifetime, exact detail and mutation receipts
+remain. Fixtures are UNRUN; see WEB-PUBLICATION-QUOTA-ADMISSION-01.

@@ -17234,9 +17234,8 @@ platform/helper completion is lifetime-cancelled.
 
 At this detail slice, the separate Sites list lifetime remained open; its later
 correction is recorded below, as are mobile Sites receipts and exact detail
-lookup. Separate list discovery and live React/native/auth/database behavior
-remain open. No product
-checks, live services/migrations, push or deployment. Recovery dependencies,
+lookup. Bounded list paging is recorded below; live React/native/auth/database
+behavior remains open. No product checks, live services/migrations, push or deployment. Recovery dependencies,
 unapplied migrations and lost-history limitations remain.
 
 ### Mobile Sites list owns account and refresh lifetimes
@@ -17476,7 +17475,50 @@ backend, authorization policy or lifetime redesign.
 Direct service and actual-service detail fixtures are authored UNRUN, covering
 exact reads, target/envelope rejection, error classes, workspace presence,
 retired requests and existing identity/navigation lifetimes. This is not
-pagination or complete inventory discovery: the separate mobile list remains
-capped. No quota lift, public access, automatic retry or recovery write.
+pagination or complete inventory discovery. The separate mobile list paging
+correction is recorded below; snapshot completeness is not established. No quota lift, public access, automatic retry or recovery write.
 No product checks, live services, migration application, push or deployment.
 Existing recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Sites inventory traverses bounded pages
+
+Continuation 627e47991324028769fe1ff20aeada49b62eb202, 2026-11-07, replaces the mobile list's one-response
+inventory assumption with explicit one-page navigation. The former header
+claimed everything was shown although pageInfo was discarded; errors and
+legacy empty replies could also display account-wide emptiness. Over-cap
+legacy inventory remains conditional and unobserved because current creation
+and page caps are both 200.
+
+The sole production list caller now uses a page service with the canonical
+row/cursor bounds, encoded opaque cursor, continuation metadata requirement,
+immediate self-repeat rejection and unique page-local token keys. It preserves
+backend creation order rather than sorting each page by latest edit. Missing
+first-page metadata remains unknown, not terminal; no automatic traversal or
+accumulated inventory is introduced.
+
+Native Older and Back to first page replace the current page. Accepted rows,
+workspace metadata, requested cursor and completeness stay together. Pending
+and failed cursors are separate; failure retains the accepted page and Retry
+uses the exact failed target, including null. Count and empty-state copy describe
+only the accepted page and distinguish known terminal, unknown and failed reads.
+
+Existing lifetime and beginRead ownership remain. Rows and cursor-bound
+Older/Back/Retry callbacks require the current displayed state and latest read;
+new reads synchronously retire old callbacks. Pending replacement disables
+rows/page controls and labels retained data. After failure only newly rendered
+controls reauthorize retained rows. Refresh deliberately remains view-owned
+and always requests the first page, so it can supersede a same-view navigation.
+
+Four source/fixture files are independently reviewed. Fixtures cover service
+bounds/legacy replies, exact failed-page retries, empty states, ordering,
+retained callbacks, identity round trips and recovery; all are UNRUN.
+The existing StrictMode fixture wraps the screen but does not independently
+assert that effect replay occurred.
+The lifetime hook, exact detail and mutation receipt behavior remain unchanged.
+
+Bounds apply after JSON decoding; they are not a transport memory limit.
+Immediate self-repeat is not arbitrary cursor-cycle detection. Cursor pages
+are live positions, not a snapshot, global updated-time order or total count.
+No quota lift, backend/schema change, migration application, product checks,
+live service, push or deployment. Existing recovery prerequisites, unapplied
+migrations and lost-history limits remain.
