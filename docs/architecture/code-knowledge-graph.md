@@ -6353,7 +6353,7 @@ blocked by a pending mutation reconciles after settlement. Operation metadata is
 released when inactive and is not allocated during render. This is coordination
 within one mounted controller, not server revision/CAS, cross-tab serialization,
 rollback or proof of remote commit order. Started requests/clipboard writes may
-finish; independent invitation-editor same-token races remain open. Three
+finish. Invitation-editor request sequencing is corrected separately below. Three
 production files and two fixture files were independently source-reviewed. The
 parent-mocked-preview and actual-preview fixtures are unrun, not integrated
 browser verification. See WEB-ARTIFACT-PUBLICATION-OWNERSHIP-01.
@@ -6395,3 +6395,28 @@ fixtures were independently source-reviewed. Reactive-preview boundary models,
 actual CodeMirror transactions and real rich/fallback editor bindings are authored
 but unrun; integrated rich switching/reopening, streaming and browser/IME ordering
 remain unverified. See WEB-ARTIFACT-DRAFT-RETENTION-01.
+
+## Site viewer access lists have local request ownership
+
+Accepted `1d5460d7660c563f03d489751320a01c08c8469d` places SiteViewersEditor state
+in a token-keyed session. A successful list read precedes all add/remove work;
+a synchronous request/phase gate admits only one load or mutation at a time.
+Request identity rejects retired settlements and old finally blocks after
+cleanup, including StrictMode effect replay. Disabled controls are not the only
+admission guard. Both Sites settings and artifact preview use this owner.
+
+The initial-GET-overwrites-successful-invite path is removed within that session.
+Loading/changing render explicit status rather than old access claims. Failed
+loads remain unknown, and mutation failures hide the obsolete list and retain
+the input. Since server mutation precedes relisting and audit, failure copy says
+access may have changed and requires explicit read-only Retry without replay.
+Retry is a snapshot, not durable reconciliation of an uncertain earlier write.
+
+Token keys isolate state; they do not prove production reuse across Next dynamic
+routes. Passive cleanup is not commit-time invalidation, and admitted work may
+still dispatch or finish after leaving, including work awaiting CSRF. Backend
+authorization, parser behavior, upstream page ordering, cross-tab/global writers,
+server CAS and durable reconciliation are unchanged. Deferred-fetch fixtures and
+the strengthened existing keyed-caller source assertion are authored but unrun;
+no runtime or browser acceptance is implied. See
+WEB-SITE-VIEWER-REQUEST-OWNERSHIP-01.

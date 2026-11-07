@@ -15081,8 +15081,9 @@ browser proof, and none were executed.
 Already-started requests may still transmit or finish, and an initiated clipboard
 write cannot be undone. Cross-tab/other-controller/remote-writer ordering, uncertain
 server outcomes, authoritative revision/CAS recovery, pre-existing cached mapping
-repair and the invitation editor's independent same-token request races remain
-outside this correction. Existing publication privacy/refusal policy, server
+repair remain outside this correction. The invitation editor's separately
+qualified same-token race received the bounded correction in
+WEB-SITE-VIEWER-REQUEST-OWNERSHIP-01 below. Existing publication privacy/refusal policy, server
 contracts, source editing and ordinary export/save workflows are unchanged.
 No tests, lint, typechecks, builds, browser, database, push or deployment ran.
 
@@ -15161,3 +15162,57 @@ this correction. Per-edit synchronous localStorage latency is unbenchmarked.
 Canonical activeContent/copy/export semantics, other save paths and publication
 ownership are unchanged. No tests, lint, typechecks, builds, product/browser or
 live-provider execution, push or deployment ran.
+
+## WEB-SITE-VIEWER-REQUEST-OWNERSHIP-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded correction
+`1d5460d7660c563f03d489751320a01c08c8469d` is independently source-reviewed only.
+No live incident, browser reproduction or server authorization bypass is claimed.
+
+SiteViewersEditor previously started an initial GET while Add remained usable.
+A successful POST could grant access and display its new list before the earlier
+GET returned an old empty list, replacing the display with “Nobody yet” and
+hiding the newly invited person's remove control. A failed GET also displayed
+that empty-state claim. Both the Sites settings and artifact-preview callers
+reach this same-instance ordering; artifact/token keying alone cannot fix it.
+
+The shared editor now renders a token-keyed session and serializes loads and
+mutations through a synchronous request ref and phase. A successful GET is
+required before add/remove admission. Submit and mutation handlers enforce the
+gate before awaited CSRF/fetch work, not only through disabled buttons. Retry
+also has synchronous admission. Request identity rejects retired settlements
+and prevents old finally blocks from clearing a newer request. Cleanup aborts
+reads and invalidates the request; token replacement isolates drafts and state.
+
+Loading and changing have explicit Spinner/status states. “Updating access…”
+hides the previous list and empty-state claim while a mutation is pending.
+Failed reads remain unknown with an explicit Retry. The server mutates rows
+before relisting and recording the audit event, so mutation rejection does not
+prove rollback. Rejection now hides the obsolete list, preserves the input,
+states that access may have changed, and requires an explicit read-only Retry
+before further mutation. No mutation is automatically replayed. A retry returns
+a read snapshot, not a guarantee that an uncertain earlier write cannot finish
+later. Server services, authorization and response parsing are unchanged.
+
+The source-reviewed scope is SiteViewersEditor.tsx and its unrun fixture in
+apps/web/features/sites/components, plus the support-article-claims.test.ts
+assertion for the already-correct artifact/token-keyed caller. That assertion
+now requires the exact key rather than failing on the added prop. Authored
+deferred-fetch cases cover loading admission, load failure/retry, synchronous
+duplicate submit and mixed submit/remove, pending-state copy, uncertain add and
+remove failures without replay, token replacement/reuse, unmount/remount and
+retired StrictMode GET success/error after a successful mutation. They use the
+actual component and service with controlled fetch responses; none ran.
+Standalone duplicate-remove and directly retained obsolete callbacks are not
+separate fixture cases. Actual browser, Next route and server timing are unproven.
+
+This is per-session client coordination. Passive cleanup is not immediate
+commit-time invalidation; already-admitted mutations, including those awaiting
+CSRF, may dispatch or finish after leaving. No externally retained confirmation
+callback path was found here. Cross-token production instance reuse under the
+dynamic Sites route was not established and is not claimed as a separate defect.
+Cross-tab/other-controller writers, upstream SiteDetail/SitesPage ordering,
+server revision/CAS, durable uncertain-outcome reconciliation and the existing
+successful-malformed-payload-to-empty behavior remain outside the correction.
+No tests, lint, typechecks, builds, installs, product/browser or live-provider
+execution, push or deployment ran.
