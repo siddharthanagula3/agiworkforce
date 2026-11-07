@@ -6467,10 +6467,43 @@ retirement, atomic notifications, seeded positives and special IDs. They are not
 browser or server acceptance. See WEB-PUBLICATION-CACHE-LAZY-RESURRECTION-01.
 
 Explicit hydration remains an unconditional writer, not globally ordered data.
-SiteDetail restore reloads leave Settings usable and can overwrite a newer
-audience or refill the cache after unpublish. Account cleanup also omits this
-singleton and supplies no pending-read reset epoch. Those distinct open paths
-need coordinated ownership/reconciliation, not permanent deletion markers or a
-partial reset that old explicit reads can undo. See WEB-SITE-SNAPSHOT-ORDERING-01
-and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. Actual cross-account disclosure is not
-established. No backend or authentication change was made in this slice.
+The subsequent bounded SiteDetail correction is described below. SitesPage
+snapshot ownership and account cleanup remain open; the singleton has no account
+reset epoch. These need coordinated read and mutation ownership, not permanent
+deletion markers or a partial reset that old writers can undo. See
+WEB-SITE-SNAPSHOT-ORDERING-01 and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. Actual
+cross-account disclosure is not established. No backend or authentication change
+was made in this lazy-store slice.
+
+## SiteDetail reads belong to a committed view and reconcile mutation receipts
+
+Accepted `bcfe8931644a3e79e7a4cf0925ee6d6cc5ea6066` changes SiteDetail.tsx and its
+unrun fixture. A token-keyed inner view gets a new active owner in layout setup,
+including StrictMode replay. Cleanup retires/aborts its exact request. One loader
+covers initial, restore, Retry and reconciliation reads; only the current active
+request can hydrate or replace local state. Ownership is checked again after
+synchronous hydration subscribers, before releasing the request or setting state.
+
+Matching token/artifact update receipts retire a pending read, compose owned
+fields into current state, and start a replacement read only if one was interrupted.
+This keeps independent Settings controls usable while obtaining complete restored
+metadata. Unpublish retires the view before navigation. Old callbacks cannot
+navigate a new view or initiate reads. Current refresh failures retain the ready
+controls/drafts with a possibly-stale notice and Retry; manual Retry shows loading.
+Current initial errors, including unexpected AbortError, settle rather than hang.
+No recursive retry or automatic mutation replay is introduced.
+
+The fixture uses real controls/actions/store and deferred service mocks. It covers
+late read success/error, receipt overlap, metadata, draft-preserving refresh failure,
+Retry, unpublish, unmount, token reuse and StrictMode. Direct callback and synchronous
+subscriber cases are explicitly modeled. Every fixture remains UNRUN.
+
+A later GET is assumed to reflect an acknowledged mutation, not guaranteed by a
+revision/CAS or cache policy. SitesPage/global ordering, same-field mutations,
+account reset and other controllers remain outside this fence. useSiteActions
+records audience before its guarded callback, so stale global mutation receipts
+remain possible. Already-started restore or stale-confirmation DELETE can still
+finish; this correction does not change backend ordering or authorization. An
+account reset must fence all direct/lazy reads and mutation writers, including
+ArtifactsPanel. See WEB-SITE-SNAPSHOT-ORDERING-01 and
+WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. No product checks, push or deployment ran.

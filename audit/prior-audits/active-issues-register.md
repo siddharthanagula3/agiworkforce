@@ -15322,40 +15322,68 @@ rerender models the route transition; actual router/browser/server behavior was
 not executed. Fixtures retire pending closure state through hydrate, settle their
 deferred work, and then reset; raw setState is not a production reset API.
 
-Direct page GET-versus-mutation ordering, request cancellation, same-field or
-cross-controller receipt ordering and missing account cleanup remain open. See
-WEB-SITE-SNAPSHOT-ORDERING-01 and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. Neither
-SitesPage nor SiteDetail nor authentication cleanup was changed. No tests, lint,
+This lazy-store slice did not change direct page reads or authentication cleanup.
+The later bounded SiteDetail correction is recorded in
+WEB-SITE-SNAPSHOT-ORDERING-01; SitesPage, same-field/cross-controller receipt
+ordering and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 remain open. No tests, lint,
 typechecks, builds, installs, product/browser or live-provider execution, push or
 deployment ran.
 
 ## WEB-SITE-SNAPSHOT-ORDERING-01
 
-Severity: Medium. Source-confirmed open issue on 2026-11-07; not corrected by
-`b7d8791960b43f0478722df1a70ee0ca95fe6fde`. No runtime or deployed incident is claimed.
+Severity: Medium. SiteDetail read/view ownership is source-corrected in
+`bcfe8931644a3e79e7a4cf0925ee6d6cc5ea6066`, independently reviewed 2026-11-07.
+SitesPage/global snapshot ordering, account ownership and runtime acceptance
+remain open. No deployed incident or server access bypass is claimed.
 
-SiteDetail's version Restore triggers onRestored -> load without a signal and
-without putting the detail into loading state. Settings remain usable. A later
-audience PATCH can succeed and record its new audience before the earlier list
-response arrives; load then unconditionally calls hydrate and replaces detail
-state with its older snapshot. The UI and shared cache can look invite-only while
-the user-requested public backend state remains in force. A reload still pending
-through unpublish/navigation can likewise restore a stale cache entry. The lazy
-lookup correction above does not fence these explicit list writers.
+Original qualified path: version Restore triggered onRestored -> load while
+Settings remained usable. A later audience PATCH could succeed and record its
+new audience before that earlier list response unconditionally hydrated the
+store and replaced detail state. The client could look invite-only while the
+requested public backend state remained in force. A reload pending through
+unpublish/navigation could likewise refill the cache. The earlier lazy lookup
+correction did not fence these explicit list writers.
 
-Sources: features/sites/components/SiteDetail.tsx load/onRestored,
-SiteSettingsTab.tsx VersionsSetting, hooks/useSiteActions.ts, and
-stores/published-sites-store.ts hydrate. SitesPage also accepts full list snapshots;
-its ordinary initial loading hides cards, and modal actions block closing while
-saving, so an invented initial-load unpublish or simultaneous-modal sequence is
-not evidence. Its refresh/previous-action ordering still needs review.
+SiteDetail now keys its inner view by token. Layout setup creates a distinct
+active view and request owner, including StrictMode setup replay; cleanup retires
+and aborts its read. Initial, restore, manual Retry and reconciliation reads share
+one loader. Only the active view's exact current request can hydrate or replace
+local state, with a second ownership check after synchronous hydration subscribers.
+Request retirement precedes abort. Stale success/error cannot commit state.
 
-A correction needs coordinated request/view ownership, mutation ordering and a
-way to keep or reconcile current fields without dropping unrelated list/version
-information. Merely discarding a whole response can leave a loading view or
-restored metadata unresolved. Server access checks are unchanged; a Zustand
-snapshot cannot republish a deleted row or undo the backend audience. No fix or
-execution acceptance is claimed.
+Matching token/artifact name or audience receipts retire any pending read, merge
+only their owned fields into current ready state, and start one replacement read
+only when a read was interrupted. This preserves independent controls and
+reconciles complete restored version/content/title/workspace metadata rather than
+dropping the response permanently. Successful matching unpublish retires the view
+and pending read before navigation; stale callbacks cannot navigate a replacement
+view or start a new read. Current initial failures, including unexpected AbortError,
+settle into retryable error. Automatic refresh failures retain controls and drafts
+with an explicit possibly-out-of-date notice and manual Retry. Retry deliberately
+shows loading; there is no recursive retry, timer or mutation replay.
+
+Source scope is SiteDetail.tsx and its unrun fixture. The fixture retains actual
+Settings controls, useSiteActions and store with deferred service mocks that may
+ignore abort. It covers restore/read/receipt order, late success/error, multiple
+receipts, complete metadata, refresh failure/draft retention/Retry, no needless
+post-read reread, unpublish, unmount, A-to-B-to-A, late restore, initial AbortError
+and StrictMode. Direct callback mismatch/staleness and synchronous subscriber
+invalidation cases are explicitly models, not claimed user journeys. All fixtures
+remain UNRUN; no browser, transport, SQL or runtime acceptance is established.
+
+Limits: a subsequent GET is assumed to reflect the acknowledged mutation; the
+service has no client revision or cache-consistency guarantee. This is not server
+CAS, same-field ordering or global/cross-tab reconciliation. useSiteActions still
+writes audience receipts to the shared cache before onUpdated; stale mutation
+receipts from another controller/account are not fenced here. A stale confirmation
+may still execute DELETE and an already-started restore POST may finish; guarding
+callbacks does not undo either backend action. Concurrent restore/unpublish backend
+ordering is separate. SitesPage direct refresh ownership remains open; its initial
+loading hides cards and modal saving blocks close, so invented simultaneous-modal
+journeys are not evidence. Account reset must coordinate every direct/lazy read
+and mutation writer, including ArtifactsPanel receipts. Server access checks and
+authentication are unchanged; a stale cache cannot republish a deleted row.
+No product tests, lint, typechecks, builds, installs, push or deployment ran.
 
 ## WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01
 
@@ -15372,6 +15400,7 @@ reachability constrain any actual exposure and remain unverified.
 An eventual reset must invalidate pending reads as well as clear state and
 restore idle. Registering a reset that fences only ensureLoaded would still
 allow old SiteDetail/SitesPage hydrate completions to refill the cache. Coordinate
-the reset/account epoch with the direct snapshot ownership work above; raw
-setState clearing is not that contract. No authentication behavior was changed
+the reset/account epoch with all direct/lazy reads and mutation writers, including
+useSiteActions and ArtifactsPanel receipts. The bounded SiteDetail view fence
+above is not account binding, and raw setState clearing is not that contract. No authentication behavior was changed
 and no live account-switch validation occurred.
