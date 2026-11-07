@@ -15404,7 +15404,8 @@ below now fences enumerated writers across that boundary, not all account/sessio
 changes or other live controllers. A same-epoch stale confirmation may still
 execute DELETE and an already-started restore POST may finish; guards do not undo
 backend actions. Restore recreation is separately corrected in
-WEB-SITE-RESTORE-REPUBLICATION-01; history and stale feedback remain open. Loading hides
+WEB-SITE-RESTORE-REPUBLICATION-01; mixed-writer history and stale feedback remain open.
+Loading hides
 list cards and modal saving blocks close, so invented simultaneous-modal journeys
 are not evidence. Server access checks are unchanged; a stale cache cannot
 republish a deleted row. See WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 for the later
@@ -15529,9 +15530,63 @@ Old loaded web bundles and older installed Mobile versions still use generic
 Publish until refreshed/upgraded. New callers have no fallback against an old
 GET-only backend; actual routing/OPTIONS/CORS rollout is unverified and installed
 Next guidance was unavailable. No migration is needed for this correction.
-Content UPDATE and history append remain separate: deletion or history failure can
-follow a committed update, and concurrent history/version-pointer writes remain
-unordered. Policy TOCTOU, uncertain outcomes, stale "live again" feedback, broader
-identity/transport binding and ordinary Publish concurrency are not repaired.
+The later WEB-PUBLICATION-HISTORY-ATOMICITY-01 correction transaction-couples
+content, history and pointer for participating current backend writers. Mixed old
+writers, policy TOCTOU, uncertain/postcommit outcomes, stale "live again" feedback
+and broader identity/transport binding remain open.
 No product tests, lint, typechecks, builds, installs, live DB/provider actions,
 push or deployment ran.
+
+## WEB-PUBLICATION-HISTORY-ATOMICITY-01
+
+Severity: Medium. Participating current-writer correction source-reviewed in
+`96a460430f9921f7fbbd9f9fa8920119c3282724`, 2026-11-07. Mixed-backend rollout, real database
+acceptance and uncertain/postcommit outcomes remain open.
+
+The prior service committed content before separately reading/inserting history
+and updating its live pointer. Two owner-authorized requests could commit content
+A then B, record B as N+1 then A as N+2, both succeed, and leave live content B while
+history marked A live. Unique publication/version history keys do not reject that
+ordering. A collision or history/pointer failure could instead leave an error
+after durable content changes; dedup returned before repairing a stale pointer.
+Web, Mobile, CLI and multiple sessions can issue overlapping requests despite
+same-view busy controls. This is source qualification, not a deployed incident.
+Rename intentionally edits page metadata without rewriting version history.
+
+Both existing exported mutation services now own mandatory transactions on the
+already user/org-scoped adapter. Preflight, the live upsert or exact Restore UPDATE,
+history selection/dedup/append and pointer receipt use only the callback adapter.
+Policy, moderation and outbound preparation remain outside. Successful live DML
+holds the publication row before history is read; same-row participating writers
+therefore use one order through commit. Concurrent first upserts use the existing
+owner/artifact uniqueness conflict. No extra preselect or advisory lock was added.
+
+The private history helper uses persisted RETURNING title/kind/language/content,
+validates positive safe versions and the expected inserted version, and requires
+one exact owner/id/version pointer receipt. Dedup also aligns the pointer. Callback
+failure before commit rolls back the transaction; routes use the combined returned
+version only after commit. Restore retains its original four-field UPDATE predicate,
+missing-source/conflict behavior and no-create guarantee. Ordinary publication
+defaults, title retention and conversation/audience behavior are unchanged.
+
+Three production and five fixture files were independently source-reviewed.
+Compatibility fixtures retain prior validation/metadata contracts; the new stateful
+model admits concurrent preflight, acquires modeled ownership at live DML, stages
+writes and holds through commit. It covers callback rollback, receipts, dedup,
+first publishes, both mutation orders and uncertain acknowledgement without replay.
+It is not a PostgreSQL lock/RLS/isolation/trigger test. Route fixtures distinguish
+root and transaction queries, completion gating and postcommit workspace-read
+failure. All fixtures, guards and runtime acceptance remain UNRUN.
+
+This is current application-writer coordination, not a database-enforced invariant
+against old code or direct writers. Old backend publishers and in-flight requests
+must drain before deployment-wide claims; older-client generic Restore behavior
+remains separately tracked. COMMIT acknowledgement loss is uncertain, and workspace
+summary reads, response construction or delivery can fail after durable commit.
+A failed HTTP request does not prove rollback. No automatic replay is added.
+Policy TOCTOU, audience/grant atomicity, per-user quota races across distinct
+artifacts, historical backfill and arbitrary old-history repair remain open.
+A later rename may legitimately differ from the snapshot title. Applied schema,
+database isolation, real rollback/locking/deadlocks and installed Next guidance
+were not verified. No migration, product checks, live DB/provider actions, push
+or deployment is included.

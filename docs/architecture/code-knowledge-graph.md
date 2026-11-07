@@ -6588,8 +6588,8 @@ conversation and dependent grant/storage relationships are retained.
 
 Deletion before the conditional write produces no replacement row. Initial source
 absence is 404; UPDATE miss is 409 after other gates permit. Deletion after the
-write still wins. History append follows successful content UPDATE separately,
-using returned title/content; this is not atomic history/version-pointer repair.
+write still wins. The later WEB-PUBLICATION-HISTORY-ATOMICITY-01 correction
+transaction-couples content/history/pointer for participating current writers.
 The previous race created a fresh token, not restoration of the deleted link.
 
 Six production files and ten fixture/guard sources are independently source-reviewed.
@@ -6601,7 +6601,37 @@ were performed; installed Next guidance was unavailable.
 
 Older loaded web bundles and older installed Mobile clients remain a rollout gap.
 New callers fail without generic fallback on unsupported servers, but actual
-framework routing/OPTIONS/CORS behavior is unverified. Separate history failures,
-policy TOCTOU, uncertain outcomes and later-delete success feedback remain open.
+framework routing/OPTIONS/CORS behavior is unverified. Mixed old history writers,
+policy TOCTOU, uncertain/postcommit outcomes and later-delete feedback remain open.
 See WEB-SITE-RESTORE-REPUBLICATION-01; common-cleanup identity/transport limits are
 still tracked separately. No migration, push or deployment is included.
+
+## Publication content and history share a transaction
+
+Accepted `96a460430f9921f7fbbd9f9fa8920119c3282724` makes publishArtifactRecord and
+restorePublishedArtifactRecord own mandatory scoped database transactions. Their
+existing live SQL remains directly inside each exported callback. Policy preparation
+is still outside. All preflight, content, history and pointer work uses callback
+tx, preserving user/org claims rather than substituting global access.
+
+The live upsert/UPDATE precedes history lookup and provides the same-row lock order
+for participating writers. Persisted RETURNING fields feed a private history helper;
+valid positive versions and an exact owner/id/version pointer receipt are required.
+Dedup repairs the pointer too. Routes use the returned committed version, not a
+separate history call. The prior A-content/B-content/B-history/A-history schedule
+could succeed with the wrong live marker; current transaction ordering closes that
+bounded path. Restore remains original-identity UPDATE-only with no recreation.
+
+Three production and five unrun fixture files are source-reviewed. The stateful
+model permits concurrent preflight and locks at modeled DML, stages writes through
+commit, checks rollback/receipts/dedup and distinguishes apply-then-acknowledgement
+failure. Simpler existing fakes are compatibility coverage, not atomicity proof.
+Route fixtures cover service/commit completion and postcommit workspace-read errors.
+Lexical DLP discovery still sees both direct exported SQL bodies; no guard waiver.
+
+Mixed old backend writers, direct writes, actual isolation/RLS/locking/deadlocks,
+historical repair and deployment acceptance remain open. Uncertain COMMIT or later
+workspace reads/response delivery can fail after durable effects; HTTP failure is
+not rollback proof. Rename remains page metadata, and policy/audience atomicity
+and cross-artifact quotas are separate. No migration, product checks or push ran.
+See WEB-PUBLICATION-HISTORY-ATOMICITY-01 and the narrower Restore rollout limits.
