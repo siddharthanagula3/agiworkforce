@@ -253,11 +253,13 @@ export async function unpublishArtifact(token: string, authority?: RequestAuthor
     if (!response.ok) {
       throw await responseError(response, 'Failed to unpublish artifact');
     }
-    if (authority) {
-      const raw: unknown = await response.json();
-      authority.assertCurrent();
-      const receipt = PublishedArtifactDeleteReceiptSchema.parse(raw);
-      if (receipt.token !== token) throw new Error('Artifact unpublish was not confirmed');
+    const raw: unknown = await response.json().catch(() => null);
+    authority?.assertCurrent();
+    const receipt = PublishedArtifactDeleteReceiptSchema.safeParse(raw);
+    if (!receipt.success || receipt.data.token !== token) {
+      throw new Error(
+        'This unpublish could not be confirmed. It may have taken effect. Refresh to check before trying again.',
+      );
     }
   });
 }
