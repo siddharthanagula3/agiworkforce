@@ -204,14 +204,20 @@ export type ManagedCloudPublishedArtifactViewerRequest = z.input<
   typeof ManagedCloudPublishedArtifactViewerRequestSchema
 >;
 
-export interface ManagedCloudPublishedArtifactViewer {
-  email: string;
-  invitedAt: string;
-}
+export const ManagedCloudPublishedArtifactViewerSchema = z.object({
+  email: z.string(),
+  invitedAt: z.string(),
+});
+export type ManagedCloudPublishedArtifactViewer = z.infer<
+  typeof ManagedCloudPublishedArtifactViewerSchema
+>;
 
-export interface ManagedCloudPublishedArtifactViewersResponse {
-  viewers: ManagedCloudPublishedArtifactViewer[];
-}
+export const ManagedCloudPublishedArtifactViewersResponseSchema = z.object({
+  viewers: z.array(ManagedCloudPublishedArtifactViewerSchema),
+});
+export type ManagedCloudPublishedArtifactViewersResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactViewersResponseSchema
+>;
 
 export function managedCloudPublishedArtifactVersionsPath(token: string): string {
   return `${managedCloudPublishedArtifactPath(token)}/versions`;

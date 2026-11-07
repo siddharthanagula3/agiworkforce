@@ -211,3 +211,68 @@ describe('Viewer dispatch lifetime (UNRUN source fixtures)', () => {
     expect(writes()).toHaveLength(1);
   });
 });
+
+
+describe('Viewer response recovery through real helpers (UNRUN source fixtures)', () => {
+  const malformed = [
+    {}, { viewers: null }, { viewers: {} }, { viewers: [null] },
+    { viewers: [{ email: 'ana@example.com' }] },
+    { viewers: [{ email: 1, invitedAt: 'now' }] },
+  ];
+
+  function expectUnconfirmed() {
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText(/Nobody yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText('ana@example.com')).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'People this site is shared with' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Email address to share with')).toBeDisabled();
+    expect(screen.getByTestId('site-viewer-add')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Stop sharing/ })).not.toBeInTheDocument();
+  }
+
+  it.each(malformed)('rejects malformed GET %p and restores only on valid GET Retry', async (body) => {
+    fetchMock.mockResolvedValueOnce(Response.json(body));
+    render(<SiteViewersEditor token="first" />);
+    await screen.findByRole('alert');
+    expectUnconfirmed();
+    act(() => callbacks().add());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await ready();
+    expect(screen.getByText('ana@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it.each(['add', 'remove'] as const)('preserves draft and blocks %s after malformed success until GET Retry', async (action) => {
+    for (const body of malformed) {
+      const mounted = render(<SiteViewersEditor token="first" />);
+      await ready();
+      enterEmail();
+      const retained = callbacks();
+      const before = fetchMock.mock.calls.length;
+      const writesBefore = writes().length;
+      fetchMock.mockResolvedValueOnce(Response.json(body));
+      act(() => retained[action]());
+      await screen.findByRole('alert');
+      expectUnconfirmed();
+      expect(screen.getByRole('alert')).toHaveTextContent('Access may have changed');
+      expect(screen.getByLabelText('Email address to share with')).toHaveValue('new@example.com');
+      act(() => { retained.add(); retained.remove(); callbacks().add(); });
+      expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+      expect(writes()).toHaveLength(writesBefore + 1);
+      expect(writes()[writesBefore]![1]?.method).toBe(action === 'add' ? 'POST' : 'DELETE');
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await ready();
+      expect(fetchMock).toHaveBeenCalledTimes(before + 2);
+      expect(fetchMock.mock.calls.at(-1)?.[1]?.method).toBeUndefined();
+      expect(writes()).toHaveLength(writesBefore + 1);
+      expect(screen.getByText('ana@example.com')).toBeInTheDocument();
+      expect(screen.getByLabelText('Email address to share with')).toHaveValue('new@example.com');
+      expect(screen.getByTestId('site-viewer-add')).toBeEnabled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      mounted.unmount();
+    }
+  });
+});

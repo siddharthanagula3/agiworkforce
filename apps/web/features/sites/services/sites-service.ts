@@ -14,6 +14,7 @@ import {
   ManagedCloudPublishedArtifactUpdateReceiptSchema,
   ManagedCloudPublishedArtifactVersionDetailSchema,
   ManagedCloudPublishedArtifactVersionListResponseSchema,
+  ManagedCloudPublishedArtifactViewersResponseSchema,
   managedCloudPublishedArtifactDataPath,
   managedCloudPublishedArtifactPath,
   managedCloudPublishedArtifactVersionPath,
@@ -26,7 +27,6 @@ import {
   type ManagedCloudPublishedArtifactVersionDetail,
   type ManagedCloudPublishedArtifactViewer,
   type ManagedCloudPublishedArtifactViewerRequest,
-  type ManagedCloudPublishedArtifactViewersResponse,
   type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -330,8 +330,8 @@ export type SiteViewer = ManagedCloudPublishedArtifactViewer;
 
 async function readViewers(response: Response, fallback: string): Promise<SiteViewer[]> {
   if (!response.ok) throw await responseError(response, fallback);
-  const body = (await response.json()) as Partial<ManagedCloudPublishedArtifactViewersResponse>;
-  return Array.isArray(body.viewers) ? body.viewers : [];
+  const body: unknown = await response.json();
+  return ManagedCloudPublishedArtifactViewersResponseSchema.parse(body).viewers;
 }
 
 export async function listSiteViewers(

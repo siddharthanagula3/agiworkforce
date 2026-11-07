@@ -100,3 +100,48 @@ describe('Viewer helper authority (UNRUN source fixtures)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('Viewer helper response shape (UNRUN source fixtures)', () => {
+  const request = (operation: 'read' | 'add' | 'remove') => operation === 'read'
+    ? listSiteViewers(token, undefined, authority())
+    : changeSiteViewer(token, 'ana@example.com', operation, authority());
+
+  it.each(['read', 'add', 'remove'] as const)('accepts valid %s responses without string normalization', async (operation) => {
+    for (const expected of [[], viewers,
+      [{ email: 'ana@example.com', invitedAt: '2026-11-07T00:00:00.000Z' }],
+      [{ email: ' Legacy Address ', invitedAt: 'now' }, { email: '', invitedAt: '' }]]) {
+      fetchMock.mockResolvedValueOnce(Response.json({
+        viewers: expected.map((viewer) => ({ ...viewer, extra: true })), extra: true,
+      }));
+      await expect(request(operation)).resolves.toEqual(expected);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.credentials).toBe('include');
+      expect(init?.method).toBe(operation === 'read' ? undefined : operation === 'add' ? 'POST' : 'DELETE');
+    }
+  });
+
+  it.each(['read', 'add', 'remove'] as const)('rejects malformed successful %s responses without replay', async (operation) => {
+    const malformed = [null, {}, [], { viewers: null }, { viewers: {} }, { viewers: 'none' },
+      { viewers: [null] }, { viewers: [{}] }, { viewers: ['ana@example.com'] },
+      ...[undefined, null, 1, false, {}, []].flatMap((value) => [
+        { viewers: [{ email: value, invitedAt: 'now' }] },
+        { viewers: [{ email: 'ana@example.com', invitedAt: value }] },
+      ])];
+    for (const body of malformed) {
+      fetchMock.mockResolvedValueOnce(Response.json(body));
+      await expect(request(operation)).rejects.toThrow();
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(malformed.length);
+  });
+
+  it.each(['read', 'add', 'remove'] as const)('preserves %s HTTP and invalid JSON errors', async (operation) => {
+    fetchMock.mockResolvedValueOnce(Response.json({ error: 'Access refused' }, { status: 403 }));
+    await expect(request(operation)).rejects.toThrow('Access refused');
+    fetchMock.mockResolvedValueOnce(new Response('not json', { status: 200 }));
+    await expect(request(operation)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

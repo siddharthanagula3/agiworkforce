@@ -3,6 +3,7 @@ import {
   MANAGED_CLOUD_ARTIFACT_INDEX_PATH,
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   ManagedCloudArtifactIndexResponseSchema,
+  ManagedCloudPublishedArtifactViewersResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactDeleteReceiptSchema,
   ManagedCloudPublishedArtifactRestoreReceiptSchema,
@@ -316,4 +317,32 @@ describe('publication delete and restore receipts', () => {
       expect(ManagedCloudPublishedArtifactRestoreReceiptSchema.safeParse(raw).success).toBe(false);
     },
   );
+});
+
+
+describe('published viewer response shape (UNRUN source fixtures)', () => {
+  it.each([
+    { viewers: [] },
+    { viewers: [{ email: 'ana@example.com', invitedAt: '2026-11-07T00:00:00.000Z' }] },
+    { viewers: [{ email: ' Legacy Address ', invitedAt: 'now' }, { email: '', invitedAt: '' }] },
+  ])('accepts route-shaped and legacy string responses %p', (body) => {
+    expect(ManagedCloudPublishedArtifactViewersResponseSchema.parse(body)).toEqual(body);
+  });
+
+  it('allows unrelated response and row fields without changing viewer strings', () => {
+    expect(ManagedCloudPublishedArtifactViewersResponseSchema.parse({
+      extra: true, viewers: [{ email: ' ANA@example.com ', invitedAt: 'now', extra: true }],
+    })).toEqual({ viewers: [{ email: ' ANA@example.com ', invitedAt: 'now' }] });
+  });
+
+  it.each([
+    null, {}, [], { viewers: null }, { viewers: {} }, { viewers: 'none' },
+    { viewers: [null] }, { viewers: [{}] }, { viewers: ['ana@example.com'] },
+    ...[undefined, null, 1, false, {}, []].flatMap((value) => [
+      { viewers: [{ email: value, invitedAt: 'now' }] },
+      { viewers: [{ email: 'ana@example.com', invitedAt: value }] },
+    ]),
+  ])('rejects malformed response or row %p', (body) => {
+    expect(ManagedCloudPublishedArtifactViewersResponseSchema.safeParse(body).success).toBe(false);
+  });
 });
