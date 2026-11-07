@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
+  capturePostUnpublishAudienceReconciliation,
   fetchArtifactPublication,
   setPublishedArtifactAudience,
   publishArtifact,
@@ -550,5 +551,110 @@ describe('publication badge refresh authority', () => {
     expect(usePublishedArtifactAudiences.getState().byId['__proto__']).toBe('public');
     recordPublishedArtifactAudience('__proto__', null);
     expect(Object.prototype.hasOwnProperty.call(usePublishedArtifactAudiences.getState().byId, '__proto__')).toBe(false);
+  });
+});
+
+// UNRUN: bounded post-Unpublish reconciliation through the real service and store.
+describe('post-Unpublish audience reconciliation', () => {
+  beforeEach(() => {
+    jest.mocked(api.get).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    recordPublishedArtifactAudience('artifact-1', null);
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  function pendingRefresh() {
+    let resolve!: (response: unknown) => void;
+    jest.mocked(api.get).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    return { resolve, promise: refreshPublishedArtifactAudiences() };
+  }
+  const page = { artifacts: [publication()], pageInfo: { nextCursor: null }, workspace: null };
+
+  it.each(['public', 'organization', 'invited'] as const)(
+    'records a current %s observation once', (audience) => {
+      const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+      expect(reconcile(audience)).toBe(true);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': audience });
+      recordPublishedArtifactAudience('artifact-1', null);
+      expect(reconcile(audience)).toBe(false);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+      expect(api.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['newer', 'repeated-null', 'aba', 'unrelated', 'reset'] as const)(
+    'rejects after an intervening %s store write', (write) => {
+      const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+      if (write === 'reset') usePublishedArtifactAudiences.setState({ ownerId: 'owner-a', byId: {} });
+      else if (write === 'unrelated') recordPublishedArtifactAudience('other', 'invited');
+      else {
+        recordPublishedArtifactAudience('artifact-1', write === 'repeated-null' ? null : 'invited');
+        if (write === 'aba') recordPublishedArtifactAudience('artifact-1', null);
+      }
+      const state = usePublishedArtifactAudiences.getState();
+      expect(reconcile('public')).toBe(false);
+      expect(usePublishedArtifactAudiences.getState()).toBe(state);
+    },
+  );
+
+  it('refuses a snapshot of an already-present newer badge', () => {
+    recordPublishedArtifactAudience('artifact-1', 'invited');
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    expect(reconcile('public')).toBe(false);
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('invited');
+  });
+
+  it.each(['sign-out', 'other-owner', 'round-trip'] as const)(
+    'rejects a full account epoch change: %s', (transition) => {
+      const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+      if (transition === 'sign-out') invalidateCloudAccount();
+      else activateCloudAccount('owner-b');
+      if (transition === 'round-trip') activateCloudAccount('owner-a');
+      expect(reconcile('public')).toBe(false);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    },
+  );
+
+  it('preserves reconciliation through the already-pending older bulk response overlay', async () => {
+    const refresh = pendingRefresh();
+    recordPublishedArtifactAudience('artifact-1', null);
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    expect(reconcile('invited')).toBe(true);
+    refresh.resolve(page);
+    await refresh.promise;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'invited' });
+    expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects when an older pending bulk response commits before reconciliation', async () => {
+    const refresh = pendingRefresh();
+    recordPublishedArtifactAudience('artifact-1', null);
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    refresh.resolve(page);
+    await refresh.promise;
+    expect(reconcile('invited')).toBe(false);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+  });
+
+  it.each([false, true])('does not overlay a newly started refresh; older active: %p', async (olderActive) => {
+    const older = olderActive ? pendingRefresh() : null;
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    const newer = pendingRefresh();
+    expect(reconcile('invited')).toBe(false);
+    newer.resolve(page);
+    await newer.promise;
+    older?.resolve(page);
+    await older?.promise;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'organization' });
+  });
+
+  it('does not promise invalidation by a failed refresh that leaves no accepted cache write', async () => {
+    const reconcile = capturePostUnpublishAudienceReconciliation('artifact-1');
+    jest.mocked(api.get).mockRejectedValueOnce(new Error('offline'));
+    await expect(refreshPublishedArtifactAudiences()).rejects.toThrow('offline');
+    expect(reconcile('invited')).toBe(true);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'invited' });
   });
 });

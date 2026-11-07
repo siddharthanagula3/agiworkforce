@@ -35,6 +35,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import {
+  capturePostUnpublishAudienceReconciliation,
   fetchArtifactPublication,
   publishArtifact,
   publishFailureMessage,
@@ -155,6 +156,7 @@ async function confirmPublish(title: string): Promise<boolean> {
 }
 
 type ViewMode = 'source' | 'preview';
+type PublicationLookupPurpose = 'opening' | 'uncertain-publish' | 'post-unpublish';
 
 function publicationAccountKey(): string {
   const account = captureCloudAccountEpoch();
@@ -261,9 +263,13 @@ export function ArtifactFullScreen({
   );
 
   const loadPublication = useCallback(
-    async (id: string, uncertainPublish = false) => {
+    async (id: string, purpose: PublicationLookupPurpose = 'opening') => {
+      const uncertainPublish = purpose === 'uncertain-publish';
       if (!isPublicationViewCurrent() || publicationView.appMode !== 'cloud') return;
       if (uncertainPublish && uncertainRead.current?.view === publicationView) return;
+      const reconcileAudience = purpose === 'post-unpublish'
+        ? capturePostUnpublishAudienceReconciliation(id)
+        : null;
       const sequence = ++publicationSequence.current;
       if (uncertainPublish) {
         uncertainRead.current = { view: publicationView, sequence };
@@ -280,6 +286,8 @@ export function ArtifactFullScreen({
         setAbsentView(state.publication || uncertainPublish ? null : publicationView);
         if (uncertainPublish && state.publication) {
           recordPublishedArtifactAudience(id, state.publication.visibility);
+        } else if (state.publication) {
+          reconcileAudience?.(state.publication.visibility);
         }
       } catch (error) {
         if (!isPublicationViewCurrent() || sequence !== publicationSequence.current) return;
@@ -475,7 +483,7 @@ export function ArtifactFullScreen({
         const uncertain = isPublicationOutcomeUncertain(err);
         if (uncertain) {
           setUncertainPublishView(publicationView);
-          void loadPublication(artifact.id, true);
+          void loadPublication(artifact.id, 'uncertain-publish');
         }
         Alert.alert(uncertain ? 'Publish not confirmed' : 'Publish failed', publishFailureMessage(err));
       }
@@ -903,7 +911,7 @@ export function ArtifactFullScreen({
                   disabled={checkingPublication || publishing}
                   onPress={() => {
                     if (publicationMutation.current?.view !== publicationView) {
-                      void loadPublication(artifact.id, true);
+                      void loadPublication(artifact.id, 'uncertain-publish');
                     }
                   }}
                   style={{ paddingVertical: 10 }}
@@ -987,7 +995,7 @@ export function ArtifactFullScreen({
                 invalidatePublicationLookup();
                 setPublished(null);
                 recordPublishedArtifactAudience(artifact.id, null);
-                void loadPublication(artifact.id);
+                void loadPublication(artifact.id, 'post-unpublish');
               }}
             />
           ) : null}

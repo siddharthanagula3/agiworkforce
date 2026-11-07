@@ -52,7 +52,7 @@ import { ArtifactFullScreen, publishableKindFor } from '../ArtifactFullScreen';
 import { PublishedArtifactControls } from '../PublishedArtifactControls';
 import type { Artifact } from '@/types/chat';
 import { ApiHttpError } from '@/services/apiErrors';
-import { PUBLISH_FAILED_MESSAGE, usePublishedArtifactAudiences } from '../../services/artifactPublishing';
+import { PUBLISH_FAILED_MESSAGE, recordPublishedArtifactAudience, refreshPublishedArtifactAudiences, usePublishedArtifactAudiences } from '../../services/artifactPublishing';
 import { activateCloudAccount, captureCloudAccountEpoch, invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '../../store/appModeStore';
 
@@ -779,4 +779,176 @@ describe('ArtifactFullScreen publish-to-link', () => {
       expect(mockGet).toHaveBeenCalledTimes(callsBeforeCompletion);
     },
   );
+
+  // UNRUN: real exact lookup parser, controls and badge store after acknowledged Unpublish.
+  async function beginUnpublishReadback(priorReads = 0) {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    recordPublishedArtifactAudience('artifact-1', 'public');
+    const readback = deferred();
+    mockGet.mockResolvedValueOnce(lookupReply()).mockReturnValueOnce(readback.promise);
+    mockDelete.mockResolvedValueOnce(deleteReceipt);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-unpublish')).toBeTruthy());
+    fireEvent.press(view.getByTestId('artifact-unpublish'));
+    tapAlertButton('Unpublish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(priorReads + 2));
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBeUndefined();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    return { view, readback };
+  }
+
+  it.each(['public', 'organization', 'invited'] as const)(
+    'restores the link and %s badge from one current post-Unpublish exact read', async (visibility) => {
+      const { view, readback } = await beginUnpublishReadback();
+      const reply = lookupReply();
+      await act(async () => { readback.resolve({ ...reply, artifact: { ...reply.artifact, visibility } }); });
+      expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);
+      expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe(visibility);
+      expect(view.queryByText(privateLabel)).toBeNull();
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+      expect(mockCopy).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['null', 'error', 'malformed', 'mismatched'] as const)(
+    'does not invent a badge after %s post-Unpublish readback', async (result) => {
+      const { view, readback } = await beginUnpublishReadback();
+      await act(async () => {
+        if (result === 'error') readback.reject(new Error('offline'));
+        else readback.resolve(result === 'null' ? { artifact: null, workspace: null }
+          : result === 'mismatched' ? lookupReply('other') : { artifact: {} });
+      });
+      expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBeUndefined();
+      expect(view.queryByTestId('artifact-published-url')).toBeNull();
+      expect(Boolean(view.queryByText(privateLabel))).toBe(result === 'null');
+      expect(mockGet).toHaveBeenCalledTimes(2);
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['newer', 'repeated-null', 'aba', 'unrelated'] as const)(
+    'does not overwrite an intervening %s badge write even when the readback link is current', async (write) => {
+      const { view, readback } = await beginUnpublishReadback();
+      act(() => {
+        if (write === 'unrelated') recordPublishedArtifactAudience('other', 'invited');
+        else {
+          recordPublishedArtifactAudience('artifact-1', write === 'repeated-null' ? null : 'invited');
+          if (write === 'aba') recordPublishedArtifactAudience('artifact-1', null);
+        }
+      });
+      const state = usePublishedArtifactAudiences.getState();
+      await act(async () => { readback.resolve(lookupReply()); });
+      expect(view.getByTestId('artifact-published-url')).toBeTruthy();
+      expect(usePublishedArtifactAudiences.getState()).toBe(state);
+      expect(mockGet).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('does not use ordinary opening to reconcile the shared badge', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce(lookupReply());
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['artifact', 'close', 'mode', 'epoch', 'unmount', 'newer-publish'] as const)(
+    'retires post-Unpublish reconciliation after %s', async (transition) => {
+      const { view, readback } = await beginUnpublishReadback();
+      if (transition === 'artifact' || transition === 'close') {
+        view.rerender(<ArtifactFullScreen artifact={transition === 'artifact' ? { ...htmlArtifact, id: 'other' } : htmlArtifact}
+          visible={transition !== 'close'} onClose={() => undefined} />);
+        view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      } else if (transition === 'mode') {
+        act(() => useChatAppModeStore.setState({ appMode: 'local' }));
+        act(() => useChatAppModeStore.setState({ appMode: 'cloud' }));
+      } else if (transition === 'epoch') {
+        act(() => activateCloudAccount('owner-b'));
+        act(() => activateCloudAccount('owner-a'));
+      } else if (transition === 'unmount') view.unmount();
+      else {
+        mockPost.mockResolvedValueOnce({ ...publishReceipt, visibility: 'invited' });
+        fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+        tapAlertButton('Publish');
+        await waitFor(() => expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('invited'));
+      }
+      const state = usePublishedArtifactAudiences.getState();
+      const reads = mockGet.mock.calls.length;
+      await act(async () => { readback.resolve(lookupReply()); });
+      expect(usePublishedArtifactAudiences.getState()).toBe(state);
+      expect(mockGet).toHaveBeenCalledTimes(reads);
+      if (transition !== 'unmount' && transition !== 'newer-publish') {
+        expect(view.queryByTestId('artifact-published-url')).toBeNull();
+        expect(view.queryByText(privateLabel)).toBeNull();
+      }
+    },
+  );
+
+  it('preserves post-Unpublish reconciliation through an older pending bulk refresh', async () => {
+    const bulk = deferred();
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockReturnValueOnce(bulk.promise);
+    const pending = refreshPublishedArtifactAudiences();
+    const { readback } = await beginUnpublishReadback(1);
+    await act(async () => { readback.resolve(lookupReply()); });
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('public');
+    await act(async () => {
+      bulk.resolve({ artifacts: [], pageInfo: { nextCursor: null }, workspace: null });
+      await pending;
+    });
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('public');
+    expect(mockGet).toHaveBeenCalledTimes(3);
+  });
+
+
+  it('does not overlay a bulk refresh started after post-Unpublish lookup', async () => {
+    const { view, readback } = await beginUnpublishReadback();
+    const bulk = deferred();
+    mockGet.mockReturnValueOnce(bulk.promise);
+    const pending = refreshPublishedArtifactAudiences();
+    await act(async () => { readback.resolve(lookupReply()); });
+    expect(view.getByTestId('artifact-published-url')).toBeTruthy();
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBeUndefined();
+    await act(async () => {
+      bulk.resolve({ artifacts: [{ ...lookupReply().artifact, visibility: 'invited' }],
+        pageInfo: { nextCursor: null }, workspace: null });
+      await pending;
+    });
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('invited');
+    expect(mockGet).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the Publish uncertainty marker while restoring a post-Unpublish positive badge', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce(lookupReply()).mockResolvedValueOnce(lookupReply());
+    mockPost.mockRejectedValueOnce(new Error('response lost'));
+    mockDelete.mockResolvedValueOnce(deleteReceipt);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Republish artifact link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('public'));
+    const readback = deferred();
+    mockGet.mockReturnValueOnce(readback.promise);
+    fireEvent.press(view.getByTestId('artifact-unpublish'));
+    tapAlertButton('Unpublish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBeUndefined();
+    await act(async () => {
+      readback.resolve({ ...lookupReply(), artifact: { ...lookupReply().artifact, visibility: 'invited' } });
+    });
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('invited');
+    expect(view.getByTestId('artifact-published-url')).toBeTruthy();
+    expect(view.getByText(uncertainLabel)).toBeTruthy();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(mockCopy).not.toHaveBeenCalled();
+  });
+
 });

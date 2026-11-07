@@ -3,6 +3,7 @@ import { api } from '@/services/api';
 import {
   assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
   subscribeCloudAccountEpochChange,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
@@ -187,6 +188,27 @@ export function recordPublishedArtifactAudience(
   const account = captureCloudAccountEpoch();
   if (account)
     usePublishedArtifactAudiences.getState().record(account.ownerId, artifactId, audience);
+}
+
+export function capturePostUnpublishAudienceReconciliation(
+  artifactId: string,
+): (audience: PublishedArtifactAudience) => boolean {
+  const account = captureCloudAccountEpoch();
+  const state = usePublishedArtifactAudiences.getState();
+  const refresh = activeAudienceRefresh;
+  const cleared = account !== null && state.ownerId === account.ownerId &&
+    !Object.prototype.hasOwnProperty.call(state.byId, artifactId);
+  let consumed = false;
+  return (audience) => {
+    if (consumed) return false;
+    consumed = true;
+    if (!cleared || !isCloudAccountEpochCurrent(account) ||
+      usePublishedArtifactAudiences.getState() !== state || activeAudienceRefresh !== refresh) {
+      return false;
+    }
+    recordPublishedArtifactAudience(artifactId, audience);
+    return true;
+  };
 }
 
 export async function fetchArtifactPublication(
