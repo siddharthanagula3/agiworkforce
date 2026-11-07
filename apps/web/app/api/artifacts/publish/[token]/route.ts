@@ -5,38 +5,23 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   ManagedCloudPublishedArtifactUpdateRequestSchema,
   type ManagedCloudPublishedArtifactUpdateResponse,
-  type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { AppError, createError } from '@/lib/errors';
-import {
-  getWorkspaceArtifactSharingErrorMessage,
-  organizationCanShareArtifacts,
-} from '@/lib/services/org-entitlements';
-import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import {
-  requireOrganizationPermission,
-  SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
-} from '@/lib/services/organization-permission-service';
-import {
-  resolveArtifactShareTarget,
-  shareArtifactWithOrganization,
-  unshareArtifactFromOrganization,
-} from '@/lib/services/org-shared-artifact-service';
+import { updatePublishedArtifactAudience } from '@/lib/services/org-shared-artifact-service';
 import {
   CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
   PUBLISHED_TOKEN_REGEX,
   buildPublishedArtifactUrl,
   publicationUsesConnectors,
   renamePublishedArtifact,
-  setPublishedArtifactVisibility,
   unpublishArtifactRecord,
   type PublishedArtifact,
 } from '@/lib/services/published-artifact-service';
@@ -68,77 +53,26 @@ async function handleUnpublish(request: NextRequest, context: RouteContext): Pro
   return NextResponse.json({ success: true, token });
 }
 
-/**
- * The workspaces this publication's content is stored under: the conversation
- * it came from and any workspace it is shared into.
- */
-async function readPublicationOrganizationIds(
-  db: DatabaseAdapter,
-  input: { userId: string; token: string },
-): Promise<(string | null)[]> {
-  const rows = await db.query<{ organization_id: string | null }>(
-    `select conversation.organization_id
-       from public.published_artifacts publication
-       join public.web_conversations conversation
-         on conversation.id = publication.conversation_id
-        and conversation.user_id = publication.user_id
-      where publication.token = $1 and publication.user_id = $2
-     union all
-     select share.organization_id
-       from public.organization_shared_artifacts share
-       join public.published_artifacts publication
-         on publication.id = share.published_artifact_id
-      where publication.token = $1 and publication.user_id = $2`,
-    [input.token, input.userId],
-  );
-  return rows.map((row) => row.organization_id ?? null);
+class PublicationSharingGateError extends Error {
+  constructor(readonly response: NextResponse) {
+    super('Published artifact external sharing was refused');
+  }
 }
 
-/**
- * Move a published artifact between audiences.
- *
- * `organization` mints the grant row and closes the anonymous token page;
- * `public` drops any grant row and reopens it; `invited` drops any grant row and
- * leaves the page to the people on the viewer list (0372). Every write runs through the
- * RLS-scoped adapter, so 0184's policies, not this handler, decide whether the
- * caller may touch the row at all.
- */
-async function moveToAudience(
+async function readPublicationOrganizationIds(
   db: DatabaseAdapter,
-  input: { userId: string; token: string; visibility: ManagedCloudPublishedArtifactVisibility },
-): Promise<{ updated: PublishedArtifact | null; organizationId: string | null }> {
-  if (input.visibility !== 'organization') {
-    const membership = await resolveOrgMembership(db, input.userId);
-    if (membership) {
-      const target = await resolveArtifactShareTarget(db, {
-        userId: input.userId,
-        token: input.token,
-      });
-      await unshareArtifactFromOrganization(db, target.organizationId, target.publishedArtifactId);
-    }
-    return { updated: await setPublishedArtifactVisibility(db, input), organizationId: null };
-  }
-
-  const target = await resolveArtifactShareTarget(db, { userId: input.userId, token: input.token });
-  if (!(await organizationCanShareArtifacts(target.organizationId))) {
-    throw new AppError('SUBSCRIPTION_REQUIRED', getWorkspaceArtifactSharingErrorMessage(), 403);
-  }
-  await requireOrganizationPermission(
-    input.userId,
-    target.organizationId,
-    'content.share',
-    SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
+  publication: PublishedArtifact,
+  sharedOrganizationId: string | null,
+): Promise<(string | null)[]> {
+  const rows = await db.query<{ organization_id: string | null }>(
+    `select organization_id
+       from public.web_conversations
+      where id = $1 and user_id = $2`,
+    [publication.conversationId, publication.userId],
   );
-  await shareArtifactWithOrganization(db, {
-    organizationId: target.organizationId,
-    publishedArtifactId: target.publishedArtifactId,
-    actorUserId: input.userId,
-  });
-
-  return {
-    updated: await setPublishedArtifactVisibility(db, input),
-    organizationId: target.organizationId,
-  };
+  const organizationIds = rows.map((row) => row.organization_id ?? null);
+  if (sharedOrganizationId) organizationIds.push(sharedOrganizationId);
+  return organizationIds;
 }
 
 async function inspectedTitle(input: {
@@ -205,24 +139,34 @@ async function handleUpdate(request: NextRequest, context: RouteContext): Promis
 
   let updated: PublishedArtifact | null = null;
   let sharedWith: string | null = null;
-  if (visibility === 'public') {
-    if (await publicationUsesConnectors(db, { userId, token })) {
-      throw createError.conflict(CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
-    }
-    const sharingGateResponse = await buildExternalSharingGateResponse(
-      userId,
-      request,
-      await readPublicationOrganizationIds(db, { userId, token }),
-    );
-    if (sharingGateResponse) return sharingGateResponse;
-  }
   if (visibility !== undefined) {
-    const moved = await moveToAudience(db, { userId, token, visibility });
-    updated = moved.updated;
-    sharedWith = moved.organizationId;
-    if (!updated) throw createError.notFound('Published artifact not found');
-  }
-  if (nextTitle !== undefined) {
+    try {
+      const moved = await updatePublishedArtifactAudience(db, {
+        userId,
+        token,
+        visibility,
+        organizationId,
+        title: nextTitle,
+        authorize: async ({ db: tx, publication, sharedOrganizationId }) => {
+          if (visibility !== 'public') return;
+          if (await publicationUsesConnectors(tx, { userId, token: publication.token })) {
+            throw createError.conflict(CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
+          }
+          const sharingGateResponse = await buildExternalSharingGateResponse(
+            userId,
+            request,
+            await readPublicationOrganizationIds(tx, publication, sharedOrganizationId),
+          );
+          if (sharingGateResponse) throw new PublicationSharingGateError(sharingGateResponse);
+        },
+      });
+      updated = moved.updated;
+      sharedWith = moved.organizationId;
+    } catch (error) {
+      if (error instanceof PublicationSharingGateError) return error.response;
+      throw error;
+    }
+  } else if (nextTitle !== undefined) {
     updated = await renamePublishedArtifact(db, { userId, token, title: nextTitle });
   }
   if (!updated) {

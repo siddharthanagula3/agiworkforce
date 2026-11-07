@@ -557,32 +557,6 @@ export async function publishedArtifactUsesConnectors(
 }
 
 /**
- * Move one of the caller's own published artifacts between audiences.
- *
- * Only the publication's audience changes: the token, the content and the
- * conversation link are untouched, so switching back restores the same URL.
- */
-export async function setPublishedArtifactVisibility(
-  db: DatabaseAdapter,
-  input: { userId: string; token: string; visibility: PublishedArtifactVisibility },
-): Promise<PublishedArtifact | null> {
-  const userId = input.userId?.trim();
-  const token = input.token?.trim();
-  if (!userId || !token || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
-
-  const rows = await db.query<PublishedArtifactRow>(
-    `update public.published_artifacts
-        set visibility = $3, updated_at = now()
-      where token = $1 and user_id = $2
-      returning id, token, user_id, artifact_id, conversation_id, title, kind,
-                language, content, visibility, created_at, updated_at`,
-    [token, userId, input.visibility],
-  );
-  const row = rows[0];
-  return row ? rowToPublishedArtifact(row) : null;
-}
-
-/**
  * Rename one of the caller's own published artifacts. The name belongs to the
  * page rather than to any one version, which is why a republish keeps it.
  */

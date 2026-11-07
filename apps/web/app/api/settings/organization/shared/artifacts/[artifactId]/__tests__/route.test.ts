@@ -76,8 +76,6 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
 vi.mock('@/lib/services/org-shared-artifact-service', () => ({
   getOrgReadableArtifactByToken: vi.fn(),
   listSharedArtifacts: vi.fn(),
-  resolveArtifactShareTarget: vi.fn(),
-  shareArtifactWithOrganization: vi.fn(),
   unshareArtifactFromOrganization: mocks.unshareArtifactFromOrganization,
 }));
 

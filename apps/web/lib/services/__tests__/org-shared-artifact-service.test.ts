@@ -1,22 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
-
-const { mockResolveOrgMembership } = vi.hoisted(() => ({
-  mockResolveOrgMembership: vi.fn(),
-}));
-
-vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule0>()),
-  resolveOrgMembership: mockResolveOrgMembership,
-}));
 
 import {
   getOrgReadableArtifactByToken,
   listSharedArtifacts,
-  resolveArtifactShareTarget,
-  shareArtifactWithOrganization,
   unshareArtifactFromOrganization,
 } from '../org-shared-artifact-service';
 
@@ -63,7 +51,6 @@ function sharedRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockResolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'owner' });
 });
 
 describe('listSharedArtifacts', () => {
@@ -97,39 +84,17 @@ describe('listSharedArtifacts', () => {
     expect(artifact?.visibility).toBe('public');
   });
 
+  it('preserves invited visibility when a stale grant is returned by the adapter', async () => {
+    const { db } = makeDb(() => [sharedRow({ visibility: 'invited' })]);
+    const [artifact] = await listSharedArtifacts(db, ORG);
+    expect(artifact?.visibility).toBe('invited');
+  });
+
   it('surfaces a missing sharing table instead of listing nothing', async () => {
     const { db } = makeDb(() => {
       throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
     });
     await expect(listSharedArtifacts(db, ORG)).rejects.toMatchObject({ code: '42P01' });
-  });
-});
-
-describe('shareArtifactWithOrganization', () => {
-  it('upserts the grant row and returns the share', async () => {
-    const { db, issued } = makeDb(() => [sharedRow()]);
-
-    const shared = await shareArtifactWithOrganization(db, {
-      organizationId: ORG,
-      publishedArtifactId: ARTIFACT,
-      actorUserId: 'user_owner',
-    });
-
-    expect(shared.publishedArtifactId).toBe(ARTIFACT);
-    expect(issued[0]?.sql).toContain('insert into public.organization_shared_artifacts');
-    expect(issued[0]?.sql).toContain('on conflict (organization_id, published_artifact_id)');
-    expect(issued[0]?.params).toEqual([ORG, ARTIFACT, 'user_owner']);
-  });
-
-  it('reports a 404 rather than a 500 when row level security writes nothing', async () => {
-    const { db } = makeDb(() => []);
-    await expect(
-      shareArtifactWithOrganization(db, {
-        organizationId: ORG,
-        publishedArtifactId: ARTIFACT,
-        actorUserId: 'user_stranger',
-      }),
-    ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
 
@@ -191,32 +156,5 @@ describe('getOrgReadableArtifactByToken', () => {
     const { db, issued } = makeDb(() => []);
     await expect(getOrgReadableArtifactByToken(db, 'nope', 'user_owner')).resolves.toBeNull();
     expect(issued).toHaveLength(0);
-  });
-});
-
-describe('resolveArtifactShareTarget', () => {
-  it('refuses when the caller belongs to no workspace', async () => {
-    mockResolveOrgMembership.mockResolvedValue(null);
-    const { db } = makeDb(() => []);
-    await expect(
-      resolveArtifactShareTarget(db, { userId: 'user_owner', token: TOKEN }),
-    ).rejects.toMatchObject({ statusCode: 403 });
-  });
-
-  it('binds the owner into the artifact lookup', async () => {
-    const { db, issued } = makeDb(() => [{ id: ARTIFACT }]);
-
-    const target = await resolveArtifactShareTarget(db, { userId: 'user_owner', token: TOKEN });
-
-    expect(target).toEqual({ organizationId: ORG, publishedArtifactId: ARTIFACT });
-    expect(issued[0]?.sql).toContain('where token = $1 and user_id = $2');
-    expect(issued[0]?.params).toEqual([TOKEN, 'user_owner']);
-  });
-
-  it('is a 404 when the caller does not own that token', async () => {
-    const { db } = makeDb(() => []);
-    await expect(
-      resolveArtifactShareTarget(db, { userId: 'user_stranger', token: TOKEN }),
-    ).rejects.toMatchObject({ statusCode: 404 });
   });
 });
