@@ -16625,3 +16625,87 @@ native auth/CSRF, SQL/RLS or end-to-end acceptance. Wider Sites callers and capp
 publication inventory remain outside this correction. No product tests, lint,
 typechecks, builds, app execution, live provider/database/migration actions,
 push or deployment. Prior 0394/0395 remain UNAPPLIED.
+
+## WEB-PUBLICATION-QUOTA-ADMISSION-01
+
+Severity: Medium. Bounded canonical admission correction source-reviewed in
+`cd014f06accf93bc09145cc5eb314409add7c5ef`, 2026-11-07. Inventory recovery, mixed-writer rollout and
+database acceptance remain open.
+
+Source evidence: preparePublishArtifactRecord previously counted other owner
+publications before UPSERT without an owner-wide lock. With 199 rows, two
+transactions publishing distinct artifact IDs can each observe 199 and commit
+a new row under ordinary READ COMMITTED isolation, leaving 201. Token and
+(user_id, artifact_id) uniqueness do not conflict for those distinct inserts;
+distinct publication/history rows do not serialize owner quota admission.
+The existing share-create rate gate permits multiple requests and does not
+exclude this interleaving.
+
+Neon/Postgres adapters use ordinary BEGIN and transaction-local role/tenant
+binding. The claimed-user adapter and tracing wrapper preserve that transaction.
+No live database, role or session default was inspected. This is a qualified
+source path under the stated isolation, not an executed reproduction or observed
+incident. Different-account data access is not the defect.
+
+The list helper returns only the newest 200 publications without pagination or
+completeness metadata. Settings consumes that list; SiteDetail also loads it and
+finds a token locally, so navigating directly to that detail view is not a full
+recovery path. An older public URL may remain available while absent from that
+inventory, subject to normal audience/account gates. This is not permanent loss:
+owner-scoped DELETE by known token remains, and deleting a visible publication
+then reloading can reveal the omitted row. Existing over-cap accounts remain
+possible after the admission correction; no inventory expansion is included.
+
+The correction keeps input/conversation validation and canonical Publish's
+existing transaction. Admission requires exactly one isolation receipt equal to
+read committed; it does not attempt to change isolation after tenant-binding
+SELECT has potentially established a snapshot. Other isolation modes are refused
+for this path, not declared intrinsically unsafe. This intentional compatibility
+narrowing must be validated against deployment configuration.
+
+The same transaction acquires an owner-keyed pg_advisory_xact_lock using a
+namespaced hash and requires the lock statement's exact boolean receipt.
+Existing-row lookup and quota count are separate later statements, allowing fresh
+READ COMMITTED snapshots after waiting. A matching owner/artifact row is selected
+FOR UPDATE, with cardinality and identity checks, before exemption from quota.
+That row stays pinned through UPSERT/history/commit; a concurrent delete cannot
+turn the observed exemption into a fresh uncontrolled insertion. If absent,
+a strict owner count must be below MAX_PUBLISHED_PER_USER before UPSERT.
+
+Missing/multiple aggregate receipts and invalid, negative, fractional or unsafe
+counts fail closed rather than becoming zero. Ownership evidence remains required;
+known ownership refusal and genuine quota refusal retain their existing error
+categories. Publish RETURNING must contain exactly one nonempty row ID and the
+requested owner/artifact, and match the pinned ID for an existing-row exemption,
+before history writes. Restore RETURNING additionally
+must match the exact publication ID/token; zero restored rows retain the existing
+not-found outcome. These are identity receipts, not validation of every returned
+column.
+
+Restore performs UPDATE-only against exact publication/owner/artifact/token and
+cannot grow the publication inventory. It therefore retains preparation,
+conversation ownership, publication policy and history transaction but no longer
+applies new-publication quota admission. Pinned existing Publish updates and
+UPDATE-only Restore can operate above the cap without increasing its count.
+
+Lock order is owner admission lock, existing publication row, UPSERT/publication
+row, history and pointer, then commit. Restore/delete/audience paths do not acquire
+the new owner lock after locking a publication. Hash collisions can add unrelated
+waiting; the scheme is not a database-enforced row-count invariant. Old deployed
+writers, external SQL and future nonparticipating inserts remain outside its
+guarantee. Drain older publishing writers before relying on universal prevention.
+No automatic transaction retry is added. Existing policy snapshots, SQL/RLS
+behavior, deadlock/timeout errors, commit acknowledgement uncertainty and
+cross-process deployment behavior remain unverified; abort is not rollback proof.
+
+Authored/adapted service, transaction, connector and publish-route fixtures remain
+UNRUN. A deterministic admission fixture simulates owner queues, staged writes and
+rollback and asserts ordering, last-slot competition, same-artifact history,
+different-owner progress, strict receipts and over-cap existing updates.
+It does not prove PostgreSQL locks, snapshots, isolation, RLS or adapter behavior.
+Existing history/pointer and route assertions are preserved while obsolete
+restore-quota expectations are updated. No product tests, lint, typechecks,
+builds, app execution, live provider/database/migration actions, push or deployment.
+No new migration; prior 0394/0395 remain UNAPPLIED. Remaining work includes actual
+database/role/isolation acceptance and safe enumeration/recovery of existing
+over-cap publication inventories.

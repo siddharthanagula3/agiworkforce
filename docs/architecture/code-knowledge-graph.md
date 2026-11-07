@@ -7126,3 +7126,32 @@ Real-owner fixtures with mocked boundaries and adapted support-article source
 assertions are authored UNRUN. No product checks or browser/SDK/auth/SQL acceptance,
 live migration/provider/database action, push or deployment. Prior 0394/0395 remain
 UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
+
+## Publication quota admission is owner-serialized
+
+Continuation `cd014f06accf93bc09145cc5eb314409add7c5ef` keeps canonical Publish inside its existing
+transaction and adds exact READ COMMITTED qualification followed by an owner-keyed
+transaction advisory lock. Separate later existing-row/count statements obtain
+fresh snapshots after waiting. Only a validated owner/artifact row pinned
+FOR UPDATE bypasses new-row quota; absent rows require a strict count below the
+existing cap. Malformed/missing/multiple isolation, lock, count and identity
+receipts fail closed. Publish receipts bind owner/artifact and any pinned ID; Restore additionally
+binds publication ID/token before history work.
+
+UPDATE-only Restore retains input/conversation/policy/history enforcement but
+skips new-publication admission, enabling existing over-cap recovery without
+growing inventory. Lock order stays owner lock, publication row, history/pointer.
+Other isolation modes intentionally fail this admission path; no late isolation
+change or automatic retry is attempted.
+
+This is a participating-writer protocol, not a database count constraint.
+Old publishers must drain; external/future inserts and live configuration remain
+unverified. Existing newest-200 listing and detail lookup are unchanged, so
+over-cap inventory may still omit older links. Known-token deletion or deleting
+visible entries and reloading remains a recovery route, not permanent loss.
+
+Service/transaction/connector/route fixtures and a deterministic owner-queue
+simulation are authored UNRUN. Simulated ordering is not PostgreSQL lock,
+snapshot, RLS or end-to-end evidence. No product checks, live migrations/services,
+push or deployment. Prior 0394/0395 remain UNAPPLIED. See
+WEB-PUBLICATION-QUOTA-ADMISSION-01 for the source interleaving and acceptance limits.
