@@ -16762,11 +16762,11 @@ other known keys but does not establish a global snapshot or bounded store size.
 This is live traversal, not point-in-time completeness. Normal edits retain
 creation order; deletions disappear and newer inserts require refresh.
 Backdated inserts, delayed commits or external ordering-field changes can enter
-or escape a traversal. Older deployed clients, web/mobile exact-artifact
-publication detection, the initial badge-store read and VS Code's first-list
-consumers remain capped. Their absence must not be treated as proof that an
-artifact was never published. No artifact-ID lookup or global reconciliation
-protocol is added here.
+or escape a traversal. At this management-enumeration slice, deployed clients, web/mobile exact-artifact
+detection, initial badge-store reads and VS Code's first-list consumers remained
+capped. The exact-lookup continuation below corrects the interactive web/mobile
+readers. Background/list consumers remain incomplete; missing inventory is not
+proof that an artifact was never published. No global reconciliation is added.
 
 The existing (user_id, created_at DESC) index supports the ordering prefix;
 PostgreSQL can sort ties for correctness. Response size is bounded, but database
@@ -16783,3 +16783,80 @@ fixtures do not establish PostgreSQL ordering/RLS, actual browser/auth behavior
 or deployment acceptance. No product tests, lint, typechecks, builds, installs,
 app/module execution, live providers/databases, migration application, fetch,
 push or deployment. Prior 0394/0395 remain UNAPPLIED.
+
+### Exact artifact lookup and scoped mobile absence
+
+Continuation `6db8da19ad1299068331072563549e36cfc541aa` on 2026-11-07 replaces the web and mobile
+interactive artifact-publication list/find reads with an exact owner/artifact-ID
+lookup. Before this change, a publication beyond the first 200 rows looked absent
+to those helpers. This concerns historical over-cap accounts or nonparticipating
+writers, not ordinary sequential creation under current quota admission.
+Existing republish preserves the token and audience; false absence hid management
+controls and could prompt unnecessary content republish, but did not itself turn
+a private publication public.
+
+The separate static GET /api/artifacts/publish/lookup accepts one artifactId query
+value. Shared validation trims, preserves case/arbitrary text, and retains the
+existing 1–200 JavaScript-character publication-ID bound. The path helper encodes
+the query; missing, repeated, empty and oversized IDs are refused. The bound is
+shared by current publish validation rather than duplicated as another limit.
+A parameterized user_id/artifact_id query returns at most one metadata summary
+under getUserScopedDb. Existing migration 0095's unique owner/artifact key supports
+the lookup; no migration is added and no artifact content body is returned. Authentication/RLS,
+share-view rate limiting, CORS/error wrappers and workspace audience description
+are reused. Successful responses are private/no-store.
+
+The response requires artifact and workspace fields. Only a successfully parsed
+artifact:null means no owner publication at that read. HTTP errors, old-server
+404s, malformed/legacy envelopes and mismatched returned artifact IDs remain
+errors, with no capped-list fallback. Shared audience parsing retains its
+restrictive unknown-to-invited behavior instead of the web lookup's former public
+fallback. Exact lookup is not a snapshot of later changes or permanent absence.
+
+The web helper checks the normalized response identity and returns existing
+publication details independent of collection position. Production ArtifactsPanel
+and its lease/view/revision/cancellation guards are unchanged; it still silently
+handles lookup errors and adopts only positive details. This is not complete
+cache reconciliation or improved error presentation.
+
+The mobile helper captures and asserts the full cloud account epoch, passes it
+to the API boundary, validates the exact response, and does not replace or write
+the whole audience map. ArtifactFullScreen ties lookup results to selected
+artifact, visible view, account epoch and app mode, with a read generation and
+synchronous currentness checks. Its Private text now requires validated absence
+for that exact current view. Pending/failed lookup or a globally initialized
+badge map is not proof of privacy. Account round trips, changed selections,
+closing/reopening and superseded responses retire the old lookup's result.
+
+Publication and audience/unpublish controls share synchronous per-view mutation
+ownership. Admission follows actual confirmation; an overlapping admission is
+refused, and result/error/finalizer callbacks must still own the exact token.
+Admission invalidates older reads. A retired operation cannot clear a replacement
+operation's local state. Optional control callbacks preserve legacy invocation
+arity. A resolved unpublish clears local controls and triggers exact readback;
+the old bodyless mutation-success convention alone does not authorize Private.
+The unpublish prompt now names existing visitor-data deletion as well as loss of
+link access. No deletion SQL or cascade changes.
+
+Existing explicit local-to-cloud publishing confirmation is preserved, not
+silently disabled by the lookup correction. The mobile publish helper still
+returns only a URL; its existing UI audience fallback can display public until
+an exact reread replaces it. Mutation receipt validation and that fallback are
+not certified by this slice. Already-dispatched effects cannot be recalled;
+error/abort is not proof of rollback. The per-view token does not serialize
+other components, tabs, devices or server writers, and no deadline is added.
+
+Web background publication-store initialization, mobile bulk audience refresh
+and Sites management, and VS Code's first-list decoration remain incomplete.
+They need their own bounded request/knowledge design; this slice does not add
+per-row fan-out or fetch-all. The earlier web management pagination and token
+detail corrections remain intact.
+
+Seventeen source/fixture files were independently source-reviewed. Contract,
+service, route, web client/panel and mobile helper/component fixtures are authored
+or adapted UNRUN. They inspect exact selectors, schema failures, owner predicates,
+lifecycle/epoch transitions, mutation ownership, readback and preserved callbacks,
+not live database/RLS, browser/native ordering, auth SDK or deployment acceptance.
+No product tests, lint, typechecks, builds, installs, app/module execution,
+live providers/databases, migration application, fetch, push or deployment.
+Prior 0394/0395 remain UNAPPLIED; earlier rollout and lost-history limits remain.

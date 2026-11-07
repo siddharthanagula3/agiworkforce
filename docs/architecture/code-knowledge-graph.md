@@ -7183,8 +7183,38 @@ record individual store entries with currentness checks, not replacement hydrate
 
 This is live traversal, not snapshot completeness. Later/backdated/delayed writes
 and external ordering changes can affect traversal; the existing session cache
-may accumulate visited metadata. Legacy artifact-ID detection and other first-page
-clients remain incomplete. Prefix-index tie sorting, RLS, runtime/browser behavior
+may accumulate visited metadata. The exact-lookup continuation below updates
+interactive web/mobile detection; background/other first-page clients remain
+incomplete. Prefix-index tie sorting, RLS, runtime/browser behavior
 and rollout are unverified; no index migration is added. Fixtures remain UNRUN,
 with no product checks, migration application, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01 for remaining limits.
+
+## Interactive publication detection uses exact owner identity
+
+Continuation `6db8da19ad1299068331072563549e36cfc541aa` adds static owner/artifact-ID metadata lookup
+with the existing trim-only case-sensitive ID bound and unique owner/artifact key.
+The required nullable artifact/workspace envelope separates confirmed absence from
+HTTP/legacy/malformed failures. Authenticated scoped DB, explicit SQL owner,
+rate limiting, CORS and private/no-store are retained. No content body is returned;
+no list fallback, migration or permission expansion is introduced.
+
+Web/mobile interactive lookup validates exact normalized response identity and
+uses the restrictive shared audience schema. The web panel keeps its existing
+lease/view/revision guards and silent error/positive-only adoption behavior.
+Mobile binds the API call to a full captured account epoch and leaves bulk
+audience cache state untouched.
+
+Mobile FullScreen's Private copy requires validated-null knowledge for its current
+selected artifact/view/account/mode. Read generations and a shared synchronous
+per-view mutation token prevent stale results and overlapping local admissions.
+Results, errors and finalizers require exact ownership. Unpublish success alone
+does not claim privacy; exact readback is required. Its confirmation now discloses
+existing visitor-data deletion.
+
+Explicit local-to-cloud publish confirmation stays intact. Existing URL-only
+publish receipt/audience fallback, web background badges, mobile bulk refresh/Sites
+management and VS Code decoration remain separate limits. This is read-time
+knowledge and per-view ownership, not global reconciliation or rollback proof.
+Fixtures are UNRUN; no product checks, live services/migrations, push or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01 for scope and acceptance boundaries.
