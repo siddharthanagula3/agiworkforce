@@ -136,8 +136,10 @@ describe('/api/settings/security/compromise', () => {
     expect(mocks.hasEnrolledSecondFactor).not.toHaveBeenCalled();
   });
 
-  it('delivers a mocked report receipt refusal as a user-safe 503, not an accepted report', async () => {
-    const message = 'Could not confirm that the compromise response was recorded.';
+  it.each([
+    'Could not confirm that the compromise response was recorded.',
+    'Could not confirm the compromise report update. Some sessions may already have been signed out.',
+  ])('delivers a mocked report receipt refusal as a user-safe 503, not an accepted report: %s', async (message) => {
     mocks.respond.mockRejectedValueOnce(createError.serviceUnavailable(message).asUserSafe());
 
     const response = await post();

@@ -173,13 +173,32 @@ export async function respondToAccountCompromise(
   // mints a new session straight back.
   const deviceCredentialsRevoked = await revokeEveryDeviceRefreshCredential(db, input.userId);
 
-  if (responseId) {
-    await db.execute(
-      `update public.account_compromise_responses
-          set sessions_revoked = $3, sessions_failed = $4
-        where id = $1 and user_id = $2`,
-      [responseId, input.userId, sessionsRevoked, sessionsFailed],
-    );
+  const updated = await db.query(
+    `update public.account_compromise_responses
+        set sessions_revoked = $3, sessions_failed = $4
+      where id = $1 and user_id = $2
+      returning id, user_id, sessions_revoked, sessions_failed`,
+    [responseId, input.userId, sessionsRevoked, sessionsFailed],
+  );
+  const reportReceipt = singleCompromiseReceipt(updated);
+  if (
+    !reportReceipt ||
+    Array.isArray(reportReceipt) ||
+    !sameCompromiseResponseId(reportReceipt.id, responseId) ||
+    typeof reportReceipt.user_id !== 'string' ||
+    reportReceipt.user_id !== input.userId ||
+    !Number.isInteger(sessionsRevoked) ||
+    sessionsRevoked < 0 ||
+    !Number.isInteger(sessionsFailed) ||
+    sessionsFailed < 0 ||
+    reportReceipt.sessions_revoked !== sessionsRevoked ||
+    reportReceipt.sessions_failed !== sessionsFailed
+  ) {
+    throw createError
+      .serviceUnavailable(
+        'Could not confirm the compromise report update. Some sessions may already have been signed out.',
+      )
+      .asUserSafe();
   }
 
   try {
