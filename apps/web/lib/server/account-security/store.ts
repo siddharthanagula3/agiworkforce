@@ -124,6 +124,22 @@ export async function readEnrollment(
   return row ? toEnrollment(row) : null;
 }
 
+// The caller owns the transaction; a row write also rejects stale higher-isolation snapshots.
+export async function lockEnrollment(
+  tx: DatabaseAdapter,
+  userId: string,
+): Promise<EnrollmentState> {
+  const [row] = await tx.query<EnrollmentRow>(
+    `insert into public.account_security_enrollments (user_id)
+     values ($1)
+     on conflict (user_id) do update set user_id = excluded.user_id
+     returning ${ENROLLMENT_COLUMNS}`,
+    [userId],
+  );
+  if (!row) throw new Error('account security enrollment could not be locked');
+  return toEnrollment(row);
+}
+
 export async function readEnrolledAt(db: DatabaseAdapter, userId: string): Promise<number | null> {
   const [row] = await db.query<{ enrolled_at: Timestamp | null }>(
     `select enrolled_at from public.account_security_enrollments where user_id = $1`,

@@ -7,6 +7,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/server';
 import {
+  ACCOUNT_SECURITY_CREDENTIALS_PATH,
   ACCOUNT_SECURITY_ENROLLMENT_CODE_LENGTH,
   ACCOUNT_SECURITY_POLICY,
   AccountSecurityRecoveryBatchIdSchema,
@@ -37,6 +38,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import { emitIdentitySecurityEvent } from '@/lib/services/identity-events';
 import {
   sendAccountSecurityCodeEmail,
@@ -70,6 +72,7 @@ import {
   finishRecovery,
   insertCredential,
   listCredentials,
+  lockEnrollment,
   promotePendingRecoveryKeys,
   readEnrollment,
   readOrganizationControl,
@@ -322,23 +325,35 @@ export async function removeCredential(
   credentialId: string,
   request: NextRequest,
 ): Promise<void> {
-  const enrollment = await readEnrollment(caller.db, caller.userId);
-  const credentials = await listCredentials(caller.db, caller.userId);
-  const target = credentials.find((credential) => credential.id === credentialId);
-  if (!target)
-    throw createError.notFound('That passkey or security key was not found.').asUserSafe();
-
-  if (isEnrolled(enrollment)) {
-    const remaining = credentials.filter((credential) => credential.id !== credentialId);
-    if (!meetsEnrollmentRequirement(remaining)) {
-      throw createError.conflict(
-        `Keep at least ${ACCOUNT_SECURITY_POLICY.minimumSignInMethods} passkeys or security keys, including one that works across devices. Add another one before removing this one.`,
-      );
+  const { enrollment, target } = await caller.db.transaction(async (tx) => {
+    const enrollment = await lockEnrollment(tx, caller.userId);
+    if (isEnrolled(enrollment)) {
+      await requireStepUp({
+        userId: caller.userId,
+        action: 'account_security.change',
+        resourceId: credentialId,
+        request,
+        endpoint: ACCOUNT_SECURITY_CREDENTIALS_PATH,
+      });
     }
-  }
-  if (!(await deleteCredential(caller.db, caller.userId, credentialId))) {
-    throw createError.notFound('That passkey or security key was not found.').asUserSafe();
-  }
+    const credentials = await listCredentials(tx, caller.userId);
+    const target = credentials.find((credential) => credential.id === credentialId);
+    if (!target)
+      throw createError.notFound('That passkey or security key was not found.').asUserSafe();
+
+    if (isEnrolled(enrollment)) {
+      const remaining = credentials.filter((credential) => credential.id !== credentialId);
+      if (!meetsEnrollmentRequirement(remaining)) {
+        throw createError.conflict(
+          `Keep at least ${ACCOUNT_SECURITY_POLICY.minimumSignInMethods} passkeys or security keys, including one that works across devices. Add another one before removing this one.`,
+        );
+      }
+    }
+    if (!(await deleteCredential(tx, caller.userId, credentialId))) {
+      throw createError.notFound('That passkey or security key was not found.').asUserSafe();
+    }
+    return { enrollment, target };
+  });
 
   if (isEnrolled(enrollment)) {
     await emitIdentitySecurityEvent(caller.db, {
@@ -522,7 +537,7 @@ export async function enrollAccountSecurity(
 ): Promise<AccountSecurityEnrollmentResponse> {
   requireRecoveryBatchId(input.recoveryBatchId);
   await requireAvailable(caller.userId);
-  const credentials = await requireEnrollmentMethods(caller);
+  await requireEnrollmentMethods(caller);
   const address = await requireSettledAddress(caller);
   const credential = await consumeAssertion(caller, input.response, request);
   const codeAccepted = await takeEnrollmentCode(caller.db, {
@@ -547,13 +562,29 @@ export async function enrollAccountSecurity(
 
   const undoToken = newOpaqueToken();
   const enrolled = await caller.db.transaction(async (tx) => {
+    await lockEnrollment(tx, caller.userId);
+    const admittedCredentials = await listCredentials(tx, caller.userId);
+    if (!meetsEnrollmentRequirement(admittedCredentials)) {
+      throw createError.conflict(
+        `Your sign-in methods changed. Keep at least ${ACCOUNT_SECURITY_POLICY.minimumSignInMethods} passkeys or security keys, including one that works across devices, then request a new email code and confirm with your passkey again.`,
+      );
+    }
+    if (!admittedCredentials.some((current) => current.id === credential.id)) {
+      throw createError.conflict(
+        'That passkey or security key was removed. Request a new email code and confirm with a current passkey or security key again.',
+      );
+    }
     const enrolledAt = await promotePendingRecoveryKeys(tx, {
       userId: caller.userId,
       sessionId: caller.sessionId,
       mode: 'enroll',
       batchId: input.recoveryBatchId,
     });
-    if (enrolledAt === null) return null;
+    if (enrolledAt === null) {
+      throw createError.conflict(
+        'Your recovery keys were superseded, expired, were generated on another device, or Advanced Account Security is already on. Generate new keys, request a new email code and confirm with your passkey again.',
+      );
+    }
     const undoExpiresAt = await armEnrollmentUndo(tx, {
       userId: caller.userId,
       sessionId: caller.sessionId,
@@ -561,13 +592,8 @@ export async function enrollAccountSecurity(
       ttlHours: ACCOUNT_SECURITY_POLICY.undoHours,
     });
     if (undoExpiresAt === null) throw new Error('the link that turns it off was not armed');
-    return { enrolledAt, undoExpiresAt };
+    return { enrolledAt, undoExpiresAt, credentialCount: admittedCredentials.length };
   });
-  if (!enrolled) {
-    throw createError.conflict(
-      'Your recovery keys were superseded, expired, were generated on another device, or Advanced Account Security is already on. Generate new keys, request a new email code and confirm with your passkey again.',
-    );
-  }
   await rememberEnrollment(caller.userId, enrolled.enrolledAt);
 
   const devicesSignedOut = await revokeEveryDeviceRefreshCredential(ownerDb, caller.userId);
@@ -614,7 +640,7 @@ export async function enrollAccountSecurity(
     subjectRef: iso(enrolled.enrolledAt),
     request,
     detail: {
-      count: credentials.length,
+      count: enrolled.credentialCount,
       deleted: devicesSignedOut,
       changedKeys: ['sign_in', 'recovery'],
     },

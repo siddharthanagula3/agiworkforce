@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ACCOUNT_SECURITY_POLICY } from '@agiworkforce/cloud-contracts/account-security';
 
 vi.mock('server-only', () => ({}));
 
@@ -100,34 +101,41 @@ describe('DELETE /api/account-security/credentials/[credentialId]', () => {
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue(scoped);
-    mocks.accountSecurityCaller.mockImplementation(async (_request, s) => ({
-      ...s,
-      sessionId: 'sess-1',
-    }));
+    mocks.accountSecurityCaller.mockResolvedValue(caller);
     mocks.callerIsEnrolled.mockResolvedValue(false);
     mocks.removeCredential.mockResolvedValue(undefined);
     mocks.requireStepUp.mockResolvedValue({});
   });
 
   it('refuses a request without a valid CSRF token before touching the account', async () => {
-    mocks.requireCsrfToken.mockResolvedValue(
-      new Response(JSON.stringify({ code: 'CSRF_VALIDATION_FAILED' }), { status: 403 }),
-    );
+    const incoming = request();
+    const denial = new Response(JSON.stringify({ code: 'CSRF_VALIDATION_FAILED' }), { status: 403 });
+    mocks.requireCsrfToken.mockResolvedValue(denial);
 
-    const response = await DELETE(request(), context);
+    const response = await DELETE(incoming, context);
 
+    expect(response).toBe(denial);
     expect(response.status).toBe(403);
+    expect(mocks.requireCsrfToken).toHaveBeenCalledWith(incoming);
+    expect(mocks.withRateLimit).not.toHaveBeenCalled();
     expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
+    expect(mocks.accountSecurityCaller).not.toHaveBeenCalled();
     expect(mocks.removeCredential).not.toHaveBeenCalled();
   });
 
   it('returns the rate limit response when the caller is throttled', async () => {
-    mocks.withRateLimit.mockResolvedValue(new Response(null, { status: 429 }));
+    const incoming = request();
+    const denial = new Response(null, { status: 429, headers: { 'retry-after': '60' } });
+    mocks.withRateLimit.mockResolvedValue(denial);
 
-    const response = await DELETE(request(), context);
+    const response = await DELETE(incoming, context);
 
+    expect(response).toBe(denial);
     expect(response.status).toBe(429);
-    expect(mocks.withRateLimit).toHaveBeenCalledWith(expect.anything(), 'account-security-write');
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(mocks.withRateLimit).toHaveBeenCalledWith(incoming, 'account-security-write');
+    expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
+    expect(mocks.accountSecurityCaller).not.toHaveBeenCalled();
     expect(mocks.removeCredential).not.toHaveBeenCalled();
   });
 
@@ -137,6 +145,10 @@ describe('DELETE /api/account-security/credentials/[credentialId]', () => {
     const response = await DELETE(request(), context);
 
     expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+    });
+    expect(mocks.accountSecurityCaller).not.toHaveBeenCalled();
     expect(mocks.removeCredential).not.toHaveBeenCalled();
   });
 
@@ -153,46 +165,69 @@ describe('DELETE /api/account-security/credentials/[credentialId]', () => {
     expect(mocks.removeCredential).not.toHaveBeenCalled();
   });
 
-  it('removes the credential without step-up when the account is not enrolled', async () => {
-    const response = await DELETE(request(), context);
+  it.each([false, true])(
+    'delegates admission to the service without consulting route enrollment state (%s)',
+    async (enrolled) => {
+      mocks.callerIsEnrolled.mockResolvedValue(enrolled);
+      const incoming = request();
+
+      const response = await DELETE(incoming, context);
+
+      expect(response.status).toBe(204);
+      await expect(response.text()).resolves.toBe('');
+      expect(mocks.requireCsrfToken).toHaveBeenCalledWith(incoming);
+      expect(mocks.withRateLimit).toHaveBeenCalledWith(incoming, 'account-security-write');
+      expect(mocks.getUserScopedDb).toHaveBeenCalledWith(incoming, {
+        resolveOrganization: false,
+      });
+      expect(mocks.accountSecurityCaller).toHaveBeenCalledWith(incoming, scoped);
+      expect(mocks.callerIsEnrolled).not.toHaveBeenCalled();
+      expect(mocks.requireStepUp).not.toHaveBeenCalled();
+      expect(mocks.removeCredential).toHaveBeenCalledExactlyOnceWith(caller, CREDENTIAL, incoming);
+      expect(mocks.removeCredential.mock.calls[0]?.[0]).toBe(caller);
+      expect(mocks.removeCredential.mock.calls[0]?.[2]).toBe(incoming);
+    },
+  );
+
+  it('passes the resolved route credential ID without replacing it from the request URL', async () => {
+    const incoming = request();
+    const credentialId = 'cred-other';
+
+    const response = await DELETE(incoming, { params: Promise.resolve({ credentialId }) });
 
     expect(response.status).toBe(204);
-    expect(mocks.getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
-      resolveOrganization: false,
-    });
-    expect(mocks.requireStepUp).not.toHaveBeenCalled();
-    expect(mocks.removeCredential).toHaveBeenCalledWith(caller, CREDENTIAL, expect.anything());
+    expect(mocks.removeCredential).toHaveBeenCalledExactlyOnceWith(caller, credentialId, incoming);
   });
 
-  it('requires step-up for the credential when the account is enrolled', async () => {
-    mocks.callerIsEnrolled.mockResolvedValue(true);
-
-    const response = await DELETE(request(), context);
-
-    expect(response.status).toBe(204);
-    expect(mocks.requireStepUp).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-1',
-        action: 'account_security.change',
-        resourceId: CREDENTIAL,
-        endpoint: '/api/account-security/credentials',
-      }),
-    );
-  });
-
-  it('does not remove the credential when step-up is refused', async () => {
-    mocks.callerIsEnrolled.mockResolvedValue(true);
-    mocks.requireStepUp.mockRejectedValue(
-      new AppError('STEP_UP_REQUIRED' as never, 'Confirm it is you.', 403),
+  it('propagates the service step-up denial through the default error handler', async () => {
+    const incoming = request();
+    const details = {
+      reason: 'step_up_required',
+      action: 'account_security.change',
+      cause: 'missing',
+    };
+    mocks.removeCredential.mockRejectedValue(
+      new AppError(
+        'STEP_UP_REQUIRED',
+        'Confirm it is you before completing this action.',
+        403,
+        details,
+      ),
     );
 
-    const response = await DELETE(request(), context);
+    const response = await DELETE(incoming, context);
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'STEP_UP_REQUIRED' },
+      error: {
+        code: 'STEP_UP_REQUIRED',
+        message: 'Confirm it is you before completing this action.',
+        details,
+      },
     });
-    expect(mocks.removeCredential).not.toHaveBeenCalled();
+    expect(mocks.removeCredential).toHaveBeenCalledExactlyOnceWith(caller, CREDENTIAL, incoming);
+    expect(mocks.callerIsEnrolled).not.toHaveBeenCalled();
+    expect(mocks.requireStepUp).not.toHaveBeenCalled();
   });
 
   it('maps a missing credential to 404 with the service message', async () => {
@@ -209,12 +244,28 @@ describe('DELETE /api/account-security/credentials/[credentialId]', () => {
   });
 
   it('maps removing the last key while enrolled to 409', async () => {
-    mocks.removeCredential.mockRejectedValue(
-      createError.conflict('Add another passkey or security key before removing this one.'),
-    );
+    const message = `Keep at least ${ACCOUNT_SECURITY_POLICY.minimumSignInMethods} passkeys or security keys, including one that works across devices. Add another one before removing this one.`;
+    mocks.removeCredential.mockRejectedValue(createError.conflict(message));
 
     const response = await DELETE(request(), context);
 
     expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'CONFLICT',
+        message,
+      },
+    });
+  });
+
+  it('preserves the default generic response for unexpected service failures', async () => {
+    mocks.removeCredential.mockRejectedValue(new Error('private database failure'));
+
+    const response = await DELETE(request(), context);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    });
   });
 });

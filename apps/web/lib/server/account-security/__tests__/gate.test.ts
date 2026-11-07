@@ -192,6 +192,11 @@ function answer(sql: string, params: unknown[]): Record<string, unknown>[] {
   if (statement.includes('account_status')) {
     return [{ account_status: null, deletion_scheduled_for: null, erased: false }];
   }
+  if (statement.includes('insert into public.account_security_enrollments') && statement.includes('do update set user_id = excluded.user_id')) {
+    return [{ enrolled_at: state.enrolledAt, recovery_keys_remaining: 0,
+      pending_recovery_keys_expire_at: null, recovery_started_at: null,
+      recovery_unlocks_at: null, recovery_session_id: null }];
+  }
   if (statement.includes('from public.account_security_enrollments')) {
     return state.enrolledAt ? [{ enrolled_at: state.enrolledAt }] : [];
   }
