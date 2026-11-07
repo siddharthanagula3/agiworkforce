@@ -6080,8 +6080,10 @@ is render-scoped, not new live authorization. ArtifactsPanel reads only the sele
 artifact's origin message from its subscribed conversation rows and passes transient
 approval state to ArtifactPreview. Partial wording still requires interrupted
 metadata; completed and unrelated artifacts do not become partial. Panel callers
-omitting the prop retain stopped wording; default card/gallery previews continue
-without that notice. Content, titles, IDs, persistence and transport are untouched.
+omitting the prop use the non-approval notice; the later retention-preservation
+correction below qualifies both variants as saved copies that may omit later output.
+Default card/gallery previews continue without that notice. This presentation slice
+leaves content, titles, IDs, persistence and transport untouched.
 
 Interruption is nonpersisted WebSideEntry data, so rehydration and cold hooks can
 lose partial status. Same-ID retained artifacts can still hide resumed streaming
@@ -6298,3 +6300,32 @@ Only the two hundred fifty-seven accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
+
+## Stopped streams create partial artifacts without replacing known work
+
+Accepted `56d642cf52c57d137d49863420600ddde5f345d9` replaces the hook's unconditional stopped-
+snapshot upsert with a synchronous create-only operation in the canonical web
+artifact store. Raw local/cloud records including tombstones, nonempty history,
+conflicts, in-flight/rejected pushes, rename markers and side-map keys all block
+creation. Empty rejected content is still evidence; an empty history array alone
+is not. Side-map residue conservatively protects known identities after eviction.
+The guard does not clear evidence or rely on merged visibility as absence proof.
+
+Refusal changes no artifact, side metadata, version, selection or sync state.
+Canonical merged visibility determines whether exact content matches are quiet,
+different visible content gets a preservation toast, or hidden evidence gets a
+neutral unsaved-output toast. New identities follow existing creation semantics.
+The hook spends its snapshot and clears the ephemeral slot before notice delivery,
+retaining settlement, dismissal and cleanup behavior. Transcript/panel wording now
+states that a saved partial may omit later output. No new persistent lifecycle,
+shared wire field, automatic overlay, completion promotion or editor behavior exists.
+
+An older saved partial is intentionally preserved even without a detected edit.
+Newer transcript bytes may remain inaccessible through artifact rendering. Only
+currently known client evidence is protected; unseen remote state, fully cleared
+provenance, cloud races and other writers remain outside this operation. Existing
+SVG promotion, completed-fence reconciliation, same-ID resumed view suppression,
+rehydration marker loss and editor draft lifecycle remain separate open work.
+Four production and four fixture files were independently reviewed; public-action
+and explicit source-state models plus hook/copy fixtures are unrun. See
+WEB-ARTIFACT-STOP-RETENTION-OWNERSHIP-01 for evidence and acceptance limits.

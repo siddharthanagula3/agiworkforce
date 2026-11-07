@@ -14937,9 +14937,10 @@ ArtifactsPanel derives the transient prop from the selected artifact's own origi
 message in its subscribed conversation messages, not from another message's or the
 whole conversation's pending state. Missing/non-assistant origins do not borrow
 approval. ArtifactPreview requires interrupted evidence for the partial notice;
-completed artifacts are not relabeled. Panel callers omitting the prop retain the
-existing stopped wording. Default card/gallery previews have no interrupted notice
-and remain unchanged. Content, stored/user-renamed titles, IDs, transport flags,
+completed artifacts are not relabeled. Panel callers omitting the prop keep the
+non-approval notice. The later stop-retention correction below qualifies both
+notice variants as saved copies that may omit later output. Default card/gallery
+previews have no interrupted notice and remain unchanged. Content, stored/user-renamed titles, IDs, transport flags,
 approval authority and persistence are unchanged; the fallback title "Stopped
 artifact" can still be retained.
 
@@ -14959,3 +14960,64 @@ behavior and content preservation. Panel wiring uses a controlled preview stub;
 separate preview fixtures exercise the real notice. Shared-snapshot restoration is
 a model, not actual browser rehydration. Resume and closed-fence cases characterize
 unchanged gaps. No tests, lint, typechecks, builds or browser execution were run.
+
+## WEB-ARTIFACT-STOP-RETENTION-OWNERSHIP-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded preservation correction
+`56d642cf52c57d137d49863420600ddde5f345d9` is independently source-reviewed only.
+No runtime overwrite or deployment incident is claimed.
+
+useStreamingArtifactSync previously upserted an observed unclosed-fence snapshot
+whenever streaming stopped. Resuming and stopping again could replace an existing
+artifact's current content/title, including user edits or renames. Version history
+may retain earlier content, but does not preserve the user's current working content/title.
+The deterministic ID proves conversation/message/fence ordinal, not generation or
+exclusive stream ownership. The interrupted side marker survives edits/renames and
+is not permission to overwrite. Rehydration can also remove that marker.
+
+The canonical web artifact store now exposes synchronous create-only partial
+retention. Known identity evidence includes raw local records, raw cloud records
+including tombstones, nonempty version history, conflicts, in-flight/rejected push
+records, rename markers and side-map own keys. Rejected-content key presence
+includes an empty string; side-map residue is deliberately conservative even when
+its entry is empty. An empty history array alone does not block creation. The
+merged visible list alone is not sufficient absence proof because tombstones can
+hide local records. None of these records is cleared to permit retention.
+
+With known evidence, the action changes no content, title, type, versions, side
+metadata, selection or sync state. It compares incoming content exactly with the
+canonical effective visible copy: equal content is quiet despite metadata changes;
+differing visible content produces a preserved outcome; absent visible content
+produces a blocked outcome. With no known identity, existing creation semantics
+retain the observed partial. These outcomes describe only this operation, not a
+persisted artifact lifecycle or remote commit receipt.
+
+The hook consumes its watched snapshot before retention, keeps temporary-to-real
+conversation settlement and existing dismissal/cleanup behavior, and clears the
+ephemeral stream before an advisory toast. A differing visible copy reports that
+new partial output was not saved over the existing artifact; hidden/provenance-only
+refusal says only that new partial output was not saved. Ordinary stopped-effect
+replay does not repeat the notification; remounts/repeated attempts are not globally
+once-only. Both transcript and panel notice variants now identify saved partials
+that may omit later output, without promising regeneration success or newest-byte
+retention. Existing approval controls and default card/gallery behavior are unchanged.
+
+This deliberately keeps an older partial even after an unedited repeated pause.
+Newer bytes can remain in transcript data while existing artifact rendering hides
+them; no complete recovery affordance is claimed. The guard covers only currently
+known client evidence, not unseen remote records or deletion after all provenance
+has disappeared. Existing cloud arbitration, old writers, separate SVG promotion,
+completed-fence reconciliation, same-ID resumed overlay, marker persistence and
+editor lifecycle remain open. No automatic live overlay was added: unmounting the
+current viewer could discard its newest sourceDraft before debounced autosave.
+No sourceDraft handling, shared schema, canonical IDs or cloud protocol changed.
+
+Four production and four fixture files were independently source-reviewed. Unrun
+models cover first retention, repeated/edited/renamed/restored/empty artifacts,
+cloud-only and tombstone-hidden records, residual push/conflict/rename/history/side
+state, exact merged-content comparison and refusal without mutation. Most residual
+states use existing actions; standalone history injection is explicitly a source
+model, not upstream reachability evidence. Hook cases cover StrictMode/repetition,
+quiet equal content, neutral hidden-work notice, settlement/dismissal and stale
+cleanup. Copy cases use the existing actual renderers. No tests, lint, typechecks,
+builds, browser, database, push or deployment execution occurred.
