@@ -3,8 +3,11 @@ import { api } from '@/services/api';
 import {
   assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
+  subscribeCloudAccountEpochChange,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
+  ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
   managedCloudPublishedArtifactLookupPath,
@@ -74,7 +77,18 @@ interface PublishedArtifactAudiences {
   ownerId: string | null;
   byId: Record<string, PublishedArtifactAudience>;
   record: (ownerId: string, artifactId: string, audience: PublishedArtifactAudience | null) => void;
-  replace: (ownerId: string, byId: Record<string, PublishedArtifactAudience>) => void;
+}
+
+let activeAudienceRefresh: {
+  controller: AbortController;
+  changes: Map<string, PublishedArtifactAudience | null>;
+} | null = null;
+
+function invalidateAudienceRefresh(): void {
+  const refresh = activeAudienceRefresh;
+  activeAudienceRefresh = null;
+  refresh?.changes.clear();
+  refresh?.controller.abort();
 }
 
 export const usePublishedArtifactAudiences = create<PublishedArtifactAudiences>()((set) => ({
@@ -82,45 +96,81 @@ export const usePublishedArtifactAudiences = create<PublishedArtifactAudiences>(
   byId: {},
   record: (ownerId, artifactId, audience) =>
     set((state) => {
-      const byId = state.ownerId === ownerId ? { ...state.byId } : {};
+      if (captureCloudAccountEpoch()?.ownerId !== ownerId) return state;
+      activeAudienceRefresh?.changes.set(artifactId, audience);
+      const byId: Record<string, PublishedArtifactAudience> = Object.assign(
+        Object.create(null),
+        state.ownerId === ownerId ? state.byId : {},
+      );
       if (audience) byId[artifactId] = audience;
       else delete byId[artifactId];
       return { ownerId, byId };
     }),
-  replace: (ownerId, byId) => set({ ownerId, byId }),
 }));
+
+subscribeCloudAccountEpochChange(() => {
+  invalidateAudienceRefresh();
+  usePublishedArtifactAudiences.setState({ ownerId: null, byId: {} });
+});
+
+useChatAppModeStore.subscribe((state, previous) => {
+  if (state.appMode !== previous.appMode) invalidateAudienceRefresh();
+});
 
 export function usePublishedArtifactAudience(artifactId: string): PublishedArtifactAudience | null {
   return usePublishedArtifactAudiences((state) =>
-    state.ownerId !== null && state.ownerId === captureCloudAccountEpoch()?.ownerId
+    state.ownerId !== null &&
+    state.ownerId === captureCloudAccountEpoch()?.ownerId &&
+    Object.prototype.hasOwnProperty.call(state.byId, artifactId)
       ? (state.byId[artifactId] ?? null)
       : null,
   );
 }
 
-type PublishedArtifactList = {
-  artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
-  workspace?: unknown;
-};
-
-async function listPublishedArtifacts(): Promise<PublishedArtifactList> {
-  const account = captureCloudAccountEpoch();
-  const response = await api.get<PublishedArtifactList>('/api/artifacts/publish');
-  if (account && captureCloudAccountEpoch()?.ownerId === account.ownerId) {
-    const byId: Record<string, PublishedArtifactAudience> = {};
-    for (const entry of response.artifacts ?? []) {
-      if (typeof entry.artifactId === 'string' && typeof entry.shareUrl === 'string') {
-        byId[entry.artifactId] = readAudience(entry.visibility);
-      }
-    }
-    usePublishedArtifactAudiences.getState().replace(account.ownerId, byId);
-  }
-  return response;
-}
-
 export async function refreshPublishedArtifactAudiences(): Promise<void> {
   if (useChatAppModeStore.getState().appMode !== 'cloud') return;
-  await listPublishedArtifacts();
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  invalidateAudienceRefresh();
+  const refresh = {
+    controller: new AbortController(),
+    changes: new Map<string, PublishedArtifactAudience | null>(),
+  };
+  activeAudienceRefresh = refresh;
+  try {
+    const raw = await api.get<unknown>('/api/artifacts/publish', {
+      accountEpoch: account,
+      signal: refresh.controller.signal,
+    });
+    assertCloudAccountEpochCurrent(account);
+    if (activeAudienceRefresh !== refresh) return;
+    const response = ManagedCloudPublishedArtifactListResponseSchema.parse(raw);
+    if (
+      response.artifacts.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS ||
+      new Set(response.artifacts.map((entry) => entry.artifactId)).size !== response.artifacts.length
+    ) {
+      throw new Error('The publication list returned an invalid page.');
+    }
+    usePublishedArtifactAudiences.setState((state) => {
+      const byId: Record<string, PublishedArtifactAudience> = Object.assign(
+        Object.create(null),
+        response.pageInfo?.nextCursor === null || state.ownerId !== account.ownerId
+          ? {}
+          : state.byId,
+      );
+      for (const entry of response.artifacts) {
+        byId[entry.artifactId] = entry.visibility;
+      }
+      for (const [artifactId, audience] of refresh.changes) {
+        if (audience) byId[artifactId] = audience;
+        else delete byId[artifactId];
+      }
+      return { ownerId: account.ownerId, byId };
+    });
+  } finally {
+    refresh.changes.clear();
+    if (activeAudienceRefresh === refresh) activeAudienceRefresh = null;
+  }
 }
 
 export function recordPublishedArtifactAudience(
