@@ -7023,3 +7023,39 @@ multi-link partial completion and actual auth/CSRF/React/SQL acceptance remain.
 Hook/dialog fixtures and seventeen closed-page mock adaptations are source-read
 but UNRUN. No product checks, live provider/database work, push or deployment;
 prior 0394/0395 remain UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
+
+## Shared-link list completeness reaches both clients
+
+Continuation `d9bf60f52b3ff692f44e2f58d3819f8656e71a41` adds default-false complete metadata to the
+canonical conversation share list response. GET /api/share reads at most one row
+beyond the existing 200-row output cap; raw count, before expired-link filtering,
+determines whether that snapshot was fully returned. Owner/conversation filters
+and bounded output remain. No count query, pagination or migration is added.
+
+The chat hook preserves completeness with its admitted view/conversation-owned
+cache and exposes incomplete state without requiring an active share. It refuses
+update/audience actions on incomplete inventory, retains uncertainty after POST,
+requires exact current inventory identity even for retained callbacks,
+and permits confirmed bulk revoke for a valid stored conversation even when no
+live link is shown. The dialog suppresses incomplete all-link counts and qualifies per-link audience,
+keeps incomplete warnings and a revoke-every-link path, and never treats create
+as closing older links.
+
+A valid bulk DELETE receipt and inventory verification are separate. Listed links
+are cleared to unknown before rereading with the same request authority/selector.
+Refresh failure keeps uncertainty and a truthful warning, not DELETE failure or
+automatic retry. Only a complete refreshed snapshot supports the ordinary empty
+state; expired-only saturation can remain incomplete because DELETE removes live
+rows. This is not a guarantee against concurrent new links.
+
+Settings listSharedLinks returns canonical shares/complete metadata, retained by
+SharedLinksSection through per-token removal. Incomplete zero-row UI reports no
+links shown, not no links exist. Per-token actions remain valid.
+
+Older servers omit completeness and new clients fail closed for inventory-dependent
+update/audience mutations. Confirmed bulk revoke remains available. Older clients still ignore the additive field. This corrects capped
+inventory certainty, not concurrent creation, sequential partial audience
+changes, server policy snapshots, identity/RLS or runtime acceptance. Contract,
+route, hook/dialog/settings fixtures are authored and UNRUN; no product checks,
+live provider/database action, push or deployment. Prior 0394/0395 remain
+UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.

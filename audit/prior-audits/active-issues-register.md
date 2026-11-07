@@ -15743,7 +15743,8 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `2a5d910157b8b82127c79917140d705426e401a2`; shared-session target/receipt continuation in
 `7bab6613db418be541428fc48e7a3b32721b9cf9`; shared-session transaction continuation in
 `74658ddcc2d4e9e331a3dbaf986131cd991adaab`; web share confirmation scope in
-`36081001d8f696c5bd5afb7a216b3ff0bc903efe`, 2026-11-07. Wider clients, audience races,
+`36081001d8f696c5bd5afb7a216b3ff0bc903efe`; share inventory completeness in
+`d9bf60f52b3ff692f44e2f58d3819f8656e71a41`, 2026-11-07. Wider clients, audience races,
 identity consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -16406,3 +16407,71 @@ concurrency. No product tests, lint, typechecks, builds, app execution, live
 provider/database/migration actions, push or deployment. Prior 0394/0395 remain
 UNAPPLIED. Wider consumers, server snapshot/policy races, old writers and runtime
 acceptance remain open; this is not release readiness.
+
+### Shared-link inventory completeness continuation
+
+Source-reviewed continuation `d9bf60f52b3ff692f44e2f58d3819f8656e71a41` narrows a distinct deterministic
+truncation problem. The list returned the newest 200 raw rows, then the hook
+removed expired rows and treated a successful response as the complete inventory.
+For a matching organization-owned conversation with valid membership and
+content.share permission, an older live 30-day public link can be hidden behind
+199 newer expired one-day links and one newest live link. Changing that visible
+link to organization-only can succeed while the omitted older public URL remains
+readable. No workspace switch, concurrency, partial PATCH failure or observed
+incident is needed; creation rate limits do not bound a conversation's lifetime
+link count. More than 200 live links can also truncate, so filtering expired rows
+alone is insufficient.
+
+The canonical response now carries complete, defaulting to false when an older
+server omits it. Invalid types still fail parsing. The list queries at most 201
+raw rows, returns at most 200, and determines completeness before expiry
+filtering. Owner/conversation predicates and expired-row metadata remain.
+Completeness describes this listing statement, not a concurrency lease, current
+authorization guarantee or permanent absence of other links.
+
+The chat hook keeps completeness with its view/conversation-owned inventory and
+exposes incomplete state independently of a displayed live share. Create retains
+uncertainty rather than treating a new link as enumeration. Update and audience
+callbacks refuse incomplete inventory before mutation, as do their controls.
+An authoritative current inventory reference is updated synchronously before
+state publication; queued state updates must still match its exact identity and
+current view. Retained update/audience callbacks require that same complete
+inventory identity, so a formerly complete closure cannot bypass a later known
+incomplete state after revoke/failed refresh. The dialog qualifies per-link
+audience descriptions, suppresses incomplete all-link counts, warns that
+unlisted links may remain accessible, and offers confirmed conversation-wide
+revocation even when no live link is displayed. Existing create fallback remains
+with a warning that creating does not close old links.
+
+Revoke retains captured authority, valid stored-conversation guards and the
+existing deadline. A valid DELETE receipt acknowledges that statement; it clears
+listed revoked links into an unknown inventory, then rereads under the same
+authority/selector. Failed, malformed or timed-out reread does not restore stale
+links, turn the acknowledged deletion into a failure, claim rollback or retry
+DELETE. It keeps an incomplete inventory and explicit refresh guidance.
+Only a complete successful reread can support the ordinary empty state.
+Bulk DELETE removes live rows only: expired-row saturation may keep later lists
+incomplete even after successful revocation. Concurrent new links remain possible.
+
+Settings retains the same parsed completeness metadata instead of discarding it.
+Its per-token open/copy/revoke actions remain available; removing displayed rows
+preserves the flag. An incomplete empty list says no links are shown, not that no
+shared links exist. This introduces no account-wide bulk action.
+
+New clients with old servers conservatively disable complete-inventory mutations;
+old clients ignore the additive field and retain the defect. Backend-first rollout
+alone is not full correction. Current client confirmation lifetime, server
+transaction/receipt checks, sequential multi-link partial effects, snapshots,
+policy races, old writers and identity/RLS limitations remain as documented.
+No new schema migration or server mutation semantics.
+
+Authored contract, route, hook, dialog and settings fixtures remain UNRUN. They
+cover raw row boundaries, expired overflow, omitted/invalid metadata, bounded
+output, incomplete zero-live recovery, direct callback refusals, retained POST
+uncertainty, acknowledged DELETE versus refresh failures, stale views, settings
+metadata and per-token removal. Existing normal fixtures explicitly identify
+complete lists; seventeen closed page mocks declare inactive inventory state.
+Source review and mocked assertions do not establish browser/React, auth/CSRF,
+SQL/RLS, timing, concurrency or end-to-end acceptance. No product tests, lint,
+typechecks, builds, app execution, live service/database/migration actions, push or
+deployment. Prior 0394/0395 remain UNAPPLIED; release readiness remains unverified.
