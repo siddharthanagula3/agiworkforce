@@ -2,6 +2,9 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { CloudPublisher, PublishableArtifact } from '@agiworkforce/artifacts';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
+  ManagedCloudPublishedArtifactLookupQuerySchema,
+  ManagedCloudPublishedArtifactLookupResponseSchema,
+  managedCloudPublishedArtifactLookupPath,
   type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
 import type { PublishedArtifactKind } from './publishedArtifactRender';
@@ -142,18 +145,23 @@ export async function fetchArtifactPublication(
   artifactId: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<WebPublishDetails | null> {
-  const response = await fetchImpl('/api/artifacts/publish', { credentials: 'include' });
-  if (!response.ok) return null;
-  const body = (await response.json().catch(() => null)) as {
-    artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
-    workspace?: unknown;
-  } | null;
-  const published = body?.artifacts?.find((entry) => entry.artifactId === artifactId);
-  if (!published || typeof published.shareUrl !== 'string') return null;
+  const query = ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId });
+  const response = await fetchImpl(managedCloudPublishedArtifactLookupPath(query.artifactId), {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to load artifact publication'));
+  }
+  const body = ManagedCloudPublishedArtifactLookupResponseSchema.parse(await response.json());
+  const published = body.artifact;
+  if (published === null) return null;
+  if (published.artifactId !== query.artifactId) {
+    throw new Error('The publication endpoint returned a different artifact.');
+  }
   return {
     shareUrl: published.shareUrl,
-    visibility: readVisibility(published.visibility),
-    workspace: readWorkspace(body?.workspace),
+    visibility: published.visibility,
+    workspace: body.workspace,
   };
 }
 

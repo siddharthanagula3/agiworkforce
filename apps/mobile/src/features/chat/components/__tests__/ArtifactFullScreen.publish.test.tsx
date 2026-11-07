@@ -2,8 +2,16 @@ import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPost = jest.fn();
+const mockGet = jest.fn();
+const mockPatch = jest.fn();
+const mockDelete = jest.fn();
 jest.mock('@/services/api', () => ({
-  api: { post: (...args: unknown[]) => mockPost(...args) },
+  api: {
+    post: (...args: unknown[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
+  },
 }));
 
 const mockCopy = jest.fn().mockResolvedValue(true);
@@ -43,7 +51,31 @@ jest.mock('../GeneratedFileCard', () => ({ GeneratedFileCard: () => null }));
 import { ArtifactFullScreen, publishableKindFor } from '../ArtifactFullScreen';
 import type { Artifact } from '@/types/chat';
 import { ApiHttpError } from '@/services/apiErrors';
-import { PUBLISH_FAILED_MESSAGE } from '../../services/artifactPublishing';
+import { PUBLISH_FAILED_MESSAGE, usePublishedArtifactAudiences } from '../../services/artifactPublishing';
+import { activateCloudAccount, invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
+import { useChatAppModeStore } from '../../store/appModeStore';
+
+const privateLabel = 'Private. Only you can open it until you publish it.';
+const publishedUrl = `https://example.com/shared-artifact/${'a'.repeat(24)}`;
+
+function lookupReply(artifactId = 'artifact-1') {
+  return {
+    artifact: {
+      token: 'a'.repeat(24), artifactId, title: 'Landing page', kind: 'html',
+      language: 'html', contentChars: 14, visibility: 'public',
+      createdAt: '2026-11-07T00:00:00Z', updatedAt: '2026-11-07T00:00:00Z',
+      shareUrl: publishedUrl, sandboxed: true,
+    },
+    workspace: { memberCount: 7 },
+  };
+}
+
+function deferred<T = unknown>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
 
 const htmlArtifact: Artifact = {
   id: 'artifact-1',
@@ -53,9 +85,9 @@ const htmlArtifact: Artifact = {
   language: 'html',
 };
 
-function tapAlertButton(label: string) {
+function tapAlertButton(label: string, alertIndex = -1) {
   const spy = Alert.alert as unknown as jest.Mock;
-  const buttons = spy.mock.calls.at(-1)?.[2] as
+  const buttons = spy.mock.calls.at(alertIndex)?.[2] as
     Array<{ text?: string; onPress?: () => void }> | undefined;
   const button = buttons?.find((candidate) => candidate.text === label);
   if (!button) throw new Error(`No "${label}" button in the last alert`);
@@ -65,7 +97,14 @@ function tapAlertButton(label: string) {
 describe('ArtifactFullScreen publish-to-link', () => {
   beforeEach(() => {
     mockPost.mockReset();
+    mockGet.mockReset().mockImplementation(() => new Promise(() => undefined));
+    mockPatch.mockReset();
+    mockDelete.mockReset();
     mockCopy.mockClear();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    useChatAppModeStore.setState({ appMode: 'local' });
+    usePublishedArtifactAudiences.setState({ ownerId: null, byId: {} });
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
@@ -199,4 +238,247 @@ describe('ArtifactFullScreen publish-to-link', () => {
     );
     expect(publishableKindFor({ ...htmlArtifact, type: 'chart', language: undefined })).toBeNull();
   });
+
+  it('does not infer private from an unrelated populated audience cache or a failed lookup', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    usePublishedArtifactAudiences.setState({ ownerId: 'owner-a', byId: { unrelated: 'public' } });
+    const read = deferred();
+    mockGet.mockReturnValueOnce(read.promise);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    expect(view.queryByText(privateLabel)).toBeNull();
+    await act(async () => { read.reject(new Error('Lookup unavailable')); });
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(view.queryByTestId('artifact-published-url')).toBeNull();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ unrelated: 'public' });
+  });
+
+  it.each([{}, { artifacts: [] }, { artifact: null }, lookupReply('other')])(
+    'never claims private for an invalid lookup reply %p', async (reply) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      mockGet.mockResolvedValueOnce(reply);
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      await act(async () => undefined);
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(view.queryByText(privateLabel)).toBeNull();
+      expect(view.queryByTestId('artifact-published-url')).toBeNull();
+    },
+  );
+
+  it('shows private only after explicit validated absence', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const read = deferred();
+    mockGet.mockReturnValueOnce(read.promise);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    expect(view.queryByText(privateLabel)).toBeNull();
+    await act(async () => { read.resolve({ artifact: null, workspace: null }); });
+    expect(view.getByText(privateLabel)).toBeTruthy();
+  });
+
+  it.each(['artifact', 'close', 'mode', 'epoch'] as const)(
+    'ignores an old lookup across a %s round trip, even when the same artifact returns', async (transition) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      const oldRead = deferred();
+      const newRead = deferred();
+      mockGet.mockReturnValueOnce(oldRead.promise);
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      if (transition === 'artifact') {
+        view.rerender(<ArtifactFullScreen artifact={{ ...htmlArtifact, id: 'artifact-2' }} visible onClose={() => undefined} />);
+      } else if (transition === 'close') {
+        view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible={false} onClose={() => undefined} />);
+      } else if (transition === 'mode') {
+        act(() => useChatAppModeStore.setState({ appMode: 'local' }));
+      } else {
+        act(() => activateCloudAccount('owner-b'));
+      }
+      mockGet.mockReturnValueOnce(newRead.promise);
+      if (transition === 'artifact' || transition === 'close') {
+        view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      } else if (transition === 'mode') {
+        act(() => useChatAppModeStore.setState({ appMode: 'cloud' }));
+      } else {
+        act(() => activateCloudAccount('owner-a'));
+      }
+      await act(async () => { oldRead.resolve(lookupReply()); });
+      expect(view.queryByTestId('artifact-published-url')).toBeNull();
+      expect(view.queryByText(privateLabel)).toBeNull();
+      await act(async () => { newRead.resolve({ artifact: null, workspace: null }); });
+      expect(view.getByText(privateLabel)).toBeTruthy();
+    },
+  );
+
+  it('does not let a pre-publish absence overwrite a newly published link', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const read = deferred();
+    mockGet.mockReturnValueOnce(read.promise);
+    mockPost.mockResolvedValue({ shareUrl: publishedUrl });
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    await act(async () => { read.resolve({ artifact: null, workspace: null }); });
+    expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);
+    expect(view.queryByText(privateLabel)).toBeNull();
+  });
+
+  it('ignores a publish completion after closing and reopening the same artifact', async () => {
+    const mutation = deferred();
+    mockPost.mockReturnValueOnce(mutation.promise);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible={false} onClose={() => undefined} />);
+    view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await act(async () => { mutation.resolve({ shareUrl: publishedUrl }); });
+    expect(view.queryByTestId('artifact-published-url')).toBeNull();
+    expect(mockCopy).not.toHaveBeenCalled();
+  });
+
+  it('does not resurrect an unpublished link from a pre-mutation read or claim private before readback', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const oldRead = deferred();
+    const readback = deferred();
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
+    mockPost.mockResolvedValueOnce({ shareUrl: publishedUrl });
+    mockDelete.mockResolvedValueOnce(undefined);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    mockGet.mockReturnValueOnce(oldRead.promise);
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    mockGet.mockReturnValueOnce(readback.promise);
+    fireEvent.press(view.getByTestId('artifact-unpublish'));
+    tapAlertButton('Unpublish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+    expect(view.queryByText(privateLabel)).toBeNull();
+    await act(async () => { oldRead.resolve(lookupReply()); });
+    expect(view.queryByTestId('artifact-published-url')).toBeNull();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    await act(async () => { readback.resolve({ artifact: null, workspace: null }); });
+    expect(view.getByText(privateLabel)).toBeTruthy();
+  });
+
+  it('invalidates a pending publish confirmation when the artifact changes', async () => {
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    view.rerender(<ArtifactFullScreen artifact={{ ...htmlArtifact, id: 'artifact-2' }} visible onClose={() => undefined} />);
+    tapAlertButton('Publish');
+    await act(async () => undefined);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it.each(['publish', 'audience'] as const)(
+    'allows only the first confirmed %s owner when publish and audience dialogs overlap',
+    async (first) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      mockGet.mockResolvedValueOnce(lookupReply());
+      const publish = deferred();
+      const audience = deferred();
+      mockPost.mockReturnValueOnce(publish.promise);
+      mockPatch.mockReturnValueOnce(audience.promise);
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+      fireEvent.press(view.getByLabelText('Republish artifact link'));
+      fireEvent.press(view.getByTestId('artifact-audience-organization'));
+      expect(Alert.alert).toHaveBeenCalledTimes(2);
+
+      tapAlertButton(first === 'publish' ? 'Publish' : 'Share with workspace', first === 'publish' ? 0 : 1);
+      await waitFor(() => expect(first === 'publish' ? mockPost : mockPatch).toHaveBeenCalledTimes(1));
+      tapAlertButton(first === 'publish' ? 'Share with workspace' : 'Publish', first === 'publish' ? 1 : 0);
+      await act(async () => undefined);
+      expect(first === 'publish' ? mockPatch : mockPost).not.toHaveBeenCalled();
+
+      await act(async () => {
+        if (first === 'publish') publish.resolve({ shareUrl: publishedUrl });
+        else audience.resolve({ shareUrl: publishedUrl, visibility: 'organization' });
+      });
+      expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);
+      expect(view.getByTestId(`artifact-audience-${first === 'publish' ? 'public' : 'organization'}`)
+        .props.accessibilityState.checked).toBe(true);
+    },
+  );
+
+  it.each(['audience', 'unpublish'] as const)(
+    'allows only the first confirmed %s owner when both controls await confirmation',
+    async (first) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      mockGet.mockResolvedValueOnce(lookupReply());
+      const mutation = deferred();
+      mockPatch.mockReturnValueOnce(mutation.promise);
+      mockDelete.mockReturnValueOnce(mutation.promise);
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+      fireEvent.press(view.getByTestId('artifact-audience-organization'));
+      fireEvent.press(view.getByTestId('artifact-unpublish'));
+      expect(Alert.alert).toHaveBeenCalledTimes(2);
+
+      tapAlertButton(first === 'audience' ? 'Share with workspace' : 'Unpublish', first === 'audience' ? 0 : 1);
+      await waitFor(() => expect(first === 'audience' ? mockPatch : mockDelete).toHaveBeenCalledTimes(1));
+      tapAlertButton(first === 'audience' ? 'Unpublish' : 'Share with workspace', first === 'audience' ? 1 : 0);
+      await act(async () => undefined);
+      expect(first === 'audience' ? mockDelete : mockPatch).not.toHaveBeenCalled();
+
+      await act(async () => { mutation.resolve({ shareUrl: publishedUrl, visibility: 'organization' }); });
+      if (first === 'audience') {
+        expect(view.getByTestId('artifact-audience-organization').props.accessibilityState.checked).toBe(true);
+        mockDelete.mockReset().mockResolvedValueOnce(undefined);
+        fireEvent.press(view.getByTestId('artifact-unpublish'));
+        tapAlertButton('Unpublish');
+        await waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
+      }
+      expect(view.queryByText(privateLabel)).toBeNull();
+    },
+  );
+
+  it.each(['audience', 'unpublish'] as const)(
+    'suppresses a stale %s failure after the view is replaced', async (operation) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      mockGet.mockResolvedValueOnce(lookupReply());
+      const mutation = deferred();
+      mockPatch.mockReturnValueOnce(mutation.promise);
+      mockDelete.mockReturnValueOnce(mutation.promise);
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+      fireEvent.press(view.getByTestId(operation === 'audience' ? 'artifact-audience-organization' : 'artifact-unpublish'));
+      tapAlertButton(operation === 'audience' ? 'Share with workspace' : 'Unpublish');
+      await waitFor(() => expect(operation === 'audience' ? mockPatch : mockDelete).toHaveBeenCalledTimes(1));
+      view.rerender(<ArtifactFullScreen artifact={{ ...htmlArtifact, id: 'artifact-2' }} visible onClose={() => undefined} />);
+      const alertsBeforeFailure = jest.mocked(Alert.alert).mock.calls.length;
+      await act(async () => { mutation.reject(new Error('Late transport failure')); });
+      expect(Alert.alert).toHaveBeenCalledTimes(alertsBeforeFailure);
+      expect(view.queryByTestId('artifact-published-url')).toBeNull();
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    },
+  );
+
+  it.each(['audience', 'unpublish'] as const)(
+    'ignores an old %s mutation completion after an account round trip', async (operation) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      mockGet.mockResolvedValueOnce(lookupReply());
+      const mutation = deferred();
+      mockPatch.mockReturnValueOnce(mutation.promise);
+      mockDelete.mockReturnValueOnce(mutation.promise);
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+      fireEvent.press(view.getByTestId(operation === 'audience' ? 'artifact-audience-organization' : 'artifact-unpublish'));
+      if (operation === 'unpublish') {
+        expect(Alert.alert).toHaveBeenLastCalledWith(
+          'Unpublish this artifact?',
+          expect.stringContaining('visitor data will be deleted'),
+          expect.any(Array), expect.any(Object),
+        );
+      }
+      tapAlertButton(operation === 'audience' ? 'Share with workspace' : 'Unpublish');
+      await waitFor(() => expect(operation === 'audience' ? mockPatch : mockDelete).toHaveBeenCalledTimes(1));
+      act(() => activateCloudAccount('owner-b'));
+      act(() => activateCloudAccount('owner-a'));
+      const callsBeforeCompletion = mockGet.mock.calls.length;
+      await act(async () => { mutation.resolve({ shareUrl: publishedUrl, visibility: 'organization' }); });
+      expect(view.queryByTestId('artifact-published-url')).toBeNull();
+      expect(view.queryByText(privateLabel)).toBeNull();
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+      expect(mockGet).toHaveBeenCalledTimes(callsBeforeCompletion);
+    },
+  );
 });

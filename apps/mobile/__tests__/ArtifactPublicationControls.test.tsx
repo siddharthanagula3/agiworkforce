@@ -11,12 +11,36 @@ jest.mock('@/services/api', () => ({
 
 import { PublishedArtifactControls } from '@/src/features/chat/components/PublishedArtifactControls';
 import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+  invalidateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
   fetchArtifactPublication,
   readPublishedTokenFromUrl,
 } from '@/src/features/chat/services/artifactPublishing';
 
 const TOKEN = 'abcdefghijklmnopqrstuvwx';
 const SHARE_URL = `https://agiworkforce.com/shared-artifact/${TOKEN}`;
+
+function lookupReply(artifactId: string, visibility: string) {
+  return {
+    artifact: {
+      token: TOKEN,
+      artifactId,
+      title: 'Report',
+      kind: 'html',
+      language: 'html',
+      contentChars: 14,
+      visibility,
+      createdAt: '2026-11-07T00:00:00Z',
+      updatedAt: '2026-11-07T00:00:00Z',
+      shareUrl: SHARE_URL,
+      sandboxed: true,
+    },
+    workspace: { memberCount: 4 },
+  };
+}
 
 function pressConfirm() {
   jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
@@ -28,28 +52,30 @@ describe('published artifact controls', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
     jest.clearAllMocks();
+    Object.values(mockApi).forEach((method) => method.mockReset());
+    invalidateCloudAccount();
+    activateCloudAccount('publication-controls-owner');
   });
 
+  afterEach(() => invalidateCloudAccount());
+
   it('reads the publication and workspace audience for an artifact', async () => {
-    mockApi.get.mockResolvedValue({
-      artifacts: [{ artifactId: 'a1', shareUrl: SHARE_URL, visibility: 'organization' }],
-      workspace: { memberCount: 4 },
-    });
+    mockApi.get.mockResolvedValue(lookupReply('a1', 'organization'));
 
     await expect(fetchArtifactPublication('a1')).resolves.toEqual({
       publication: { shareUrl: SHARE_URL, visibility: 'organization' },
       workspaceMemberCount: 4,
     });
     expect(readPublishedTokenFromUrl(SHARE_URL)).toBe(TOKEN);
+    expect(mockApi.get).toHaveBeenCalledWith('/api/artifacts/publish/lookup?artifactId=a1', {
+      accountEpoch: captureCloudAccountEpoch(),
+    });
   });
 
   it('never calls an invite-only or unrecognised audience public', async () => {
-    mockApi.get.mockResolvedValue({
-      artifacts: [
-        { artifactId: 'a1', shareUrl: SHARE_URL, visibility: 'invited' },
-        { artifactId: 'a2', shareUrl: SHARE_URL, visibility: 'something-new' },
-      ],
-    });
+    mockApi.get
+      .mockResolvedValueOnce(lookupReply('a1', 'invited'))
+      .mockResolvedValueOnce(lookupReply('a2', 'something-new'));
 
     await expect(fetchArtifactPublication('a1')).resolves.toMatchObject({
       publication: { visibility: 'invited' },
@@ -109,6 +135,6 @@ describe('published artifact controls', () => {
       expect.any(Object),
     );
     expect(mockApi.delete).toHaveBeenCalledWith(`/api/artifacts/publish/${TOKEN}`);
-    expect(onUnpublished).toHaveBeenCalled();
+    expect(onUnpublished).toHaveBeenCalledWith();
   });
 });

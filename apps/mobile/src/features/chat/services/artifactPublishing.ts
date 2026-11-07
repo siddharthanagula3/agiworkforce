@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
-import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  assertCloudAccountEpochCurrent,
+  captureCloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
+  ManagedCloudPublishedArtifactLookupQuerySchema,
+  ManagedCloudPublishedArtifactLookupResponseSchema,
+  managedCloudPublishedArtifactLookupPath,
+} from '@agiworkforce/cloud-contracts';
 import { ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -49,12 +57,6 @@ export interface ArtifactPublicationState {
 
 function readAudience(value: unknown): PublishedArtifactAudience {
   return value === 'public' || value === 'organization' ? value : 'invited';
-}
-
-function readWorkspaceMemberCount(value: unknown): number | null {
-  if (!value || typeof value !== 'object') return null;
-  const count = (value as { memberCount?: unknown }).memberCount;
-  return typeof count === 'number' && Number.isFinite(count) ? count : null;
 }
 
 export function readPublishedTokenFromUrl(shareUrl: string): string | null {
@@ -133,15 +135,24 @@ export function recordPublishedArtifactAudience(
 export async function fetchArtifactPublication(
   artifactId: string,
 ): Promise<ArtifactPublicationState> {
-  const response = await listPublishedArtifacts();
-  const match = (response.artifacts ?? []).find(
-    (entry) => entry.artifactId === artifactId && typeof entry.shareUrl === 'string',
+  const query = ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId });
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = ManagedCloudPublishedArtifactLookupResponseSchema.parse(
+    await api.get<unknown>(managedCloudPublishedArtifactLookupPath(query.artifactId), {
+      accountEpoch: account,
+    }),
   );
+  assertCloudAccountEpochCurrent(account);
+  const match = response.artifact;
+  if (match && match.artifactId !== query.artifactId) {
+    throw new Error('The publication lookup returned a different artifact.');
+  }
   return {
     publication: match
-      ? { shareUrl: String(match.shareUrl), visibility: readAudience(match.visibility) }
+      ? { shareUrl: match.shareUrl, visibility: match.visibility }
       : null,
-    workspaceMemberCount: readWorkspaceMemberCount(response.workspace),
+    workspaceMemberCount: response.workspace?.memberCount ?? null,
   };
 }
 

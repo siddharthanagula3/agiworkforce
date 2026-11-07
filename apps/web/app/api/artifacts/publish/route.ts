@@ -2,7 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { ManagedCloudPublishedArtifactListResponse } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS,
+  type ManagedCloudPublishedArtifactListResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -26,7 +29,7 @@ import {
 export const runtime = 'nodejs';
 
 const PublishSchema = z.object({
-  artifactId: z.string().trim().min(1).max(200),
+  artifactId: z.string().trim().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS),
   title: z.string().trim().max(300).default(''),
   kind: z.enum(PUBLISHABLE_KINDS),
   language: z.string().trim().max(50).optional(),

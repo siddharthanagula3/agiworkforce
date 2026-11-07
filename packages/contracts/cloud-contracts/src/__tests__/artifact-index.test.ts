@@ -6,12 +6,40 @@ import {
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactDetailResponseSchema,
+  ManagedCloudPublishedArtifactLookupQuerySchema,
+  ManagedCloudPublishedArtifactLookupResponseSchema,
+  managedCloudPublishedArtifactLookupPath,
   ManagedCloudPublishedArtifactUpdateRequestSchema,
   managedCloudArtifactIndexQueryString,
   managedCloudPublishedArtifactDataPath,
   managedCloudPublishedArtifactPath,
   managedCloudPublishedArtifactVersionsPath,
 } from '../artifact-index';
+
+// UNRUN: source-authored exact publication lookup contract fixtures.
+describe('exact publication lookup contract', () => {
+  it('normalizes trim-only text identity and encodes reserved characters as query data', () => {
+    const artifactId = 'Artifact/Upper?x=1+#片';
+    const path = managedCloudPublishedArtifactLookupPath(` ${artifactId} `);
+    const url = new URL(path, 'https://example.test');
+    expect(url.pathname).toBe('/api/artifacts/publish/lookup');
+    expect([...url.searchParams]).toEqual([['artifactId', artifactId]]);
+    expect(ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId: 'a'.repeat(200) }))
+      .toEqual({ artifactId: 'a'.repeat(200) });
+  });
+
+  it.each(['', '  ', 'a'.repeat(201)])('rejects invalid request identity %s', (artifactId) => {
+    expect(() => managedCloudPublishedArtifactLookupPath(artifactId)).toThrow();
+  });
+
+  it('requires an explicit null and workspace for confirmed absence', () => {
+    expect(ManagedCloudPublishedArtifactLookupResponseSchema.parse({ artifact: null, workspace: null }))
+      .toEqual({ artifact: null, workspace: null });
+    for (const response of [{}, { artifacts: [] }, { workspace: null }, { artifact: null }]) {
+      expect(ManagedCloudPublishedArtifactLookupResponseSchema.safeParse(response).success).toBe(false);
+    }
+  });
+});
 
 describe('artifact index contract (apps/web/app/api/artifacts/index/route.ts)', () => {
   it('accepts the row the route emits, nulls included', () => {

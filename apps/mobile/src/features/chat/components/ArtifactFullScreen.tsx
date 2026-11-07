@@ -25,7 +25,7 @@ import {
   TriangleAlert,
   Pencil,
 } from 'lucide-react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
@@ -39,9 +39,13 @@ import {
   publishArtifact,
   publishFailureMessage,
   recordPublishedArtifactAudience,
-  usePublishedArtifactAudiences,
   type ArtifactPublication,
 } from '../services/artifactPublishing';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { shareFile, downloadGeneratedFile } from '@/services/fileCreation';
 import { artifactExportOptions, exportArtifact } from '@/src/features/chat/utils/artifactExport';
@@ -151,6 +155,11 @@ async function confirmPublish(title: string): Promise<boolean> {
 
 type ViewMode = 'source' | 'preview';
 
+function publicationAccountKey(): string {
+  const account = captureCloudAccountEpoch();
+  return JSON.stringify(account);
+}
+
 export function ArtifactFullScreen({
   artifact,
   switchable,
@@ -167,43 +176,124 @@ export function ArtifactFullScreen({
   const [downloading, setDownloading] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const accountKey = useSyncExternalStore(
+    subscribeCloudAccountEpochChange,
+    publicationAccountKey,
+    publicationAccountKey,
+  );
+  const artifactId = artifact?.id;
+  const publicationView = useMemo(
+    () => ({ artifactId, visible, appMode, accountKey, account: captureCloudAccountEpoch() }),
+    [artifactId, visible, appMode, accountKey],
+  );
+  const currentView = useRef(publicationView);
+  currentView.current = publicationView;
+  const publicationSequence = useRef(0);
+  const publicationMutation = useRef<{
+    view: typeof publicationView;
+    token: number;
+  } | null>(null);
+  const publicationMounted = useRef(true);
+  const isPublicationViewCurrent = useCallback(
+    () =>
+      publicationMounted.current &&
+      currentView.current === publicationView &&
+      publicationView.visible &&
+      useChatAppModeStore.getState().appMode === publicationView.appMode &&
+      (publicationView.account
+        ? isCloudAccountEpochCurrent(publicationView.account)
+        : captureCloudAccountEpoch() === null),
+    [publicationView],
+  );
   const [published, setPublished] = useState<{
-    artifactId: string;
+    view: typeof publicationView;
     publication: ArtifactPublication;
   } | null>(null);
+  const [absentView, setAbsentView] = useState<typeof publicationView | null>(null);
   const [workspaceMemberCount, setWorkspaceMemberCount] = useState<number | null>(null);
-  const appMode = useChatAppModeStore((s) => s.appMode);
   const { status: linkCopyStatus, copy: copyLink } = useCopyAction();
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
 
   const currentPublication =
-    published && published.artifactId === artifact?.id ? published.publication : null;
+    published?.view === publicationView && isPublicationViewCurrent()
+      ? published.publication
+      : null;
   const publishedUrl = currentPublication?.shareUrl ?? null;
-  const publicationKnown = usePublishedArtifactAudiences((s) => s.ownerId !== null);
+  const publicationKnown = absentView === publicationView && isPublicationViewCurrent();
 
-  const artifactId = artifact?.id;
+  const invalidatePublicationLookup = useCallback(() => {
+    if (!isPublicationViewCurrent()) return false;
+    publicationSequence.current += 1;
+    setAbsentView(null);
+    return true;
+  }, [isPublicationViewCurrent]);
 
-  const loadPublication = useCallback(async (id: string) => {
-    try {
-      const state = await fetchArtifactPublication(id);
-      setWorkspaceMemberCount(state.workspaceMemberCount);
-      setPublished((current) =>
-        state.publication
-          ? { artifactId: id, publication: state.publication }
-          : current?.artifactId === id
-            ? null
-            : current,
-      );
-    } catch (error) {
-      console.warn('[ArtifactFullScreen] publication lookup failed', error);
-    }
+  const beginPublicationMutation = useCallback(() => {
+    if (publicationMutation.current?.view === publicationView) return false;
+    if (!invalidatePublicationLookup()) return false;
+    const token = publicationSequence.current;
+    publicationMutation.current = { view: publicationView, token };
+    return token;
+  }, [invalidatePublicationLookup, publicationView]);
+
+  const isPublicationMutationCurrent = useCallback(
+    (token: number) =>
+      isPublicationViewCurrent() &&
+      publicationMutation.current?.view === publicationView &&
+      publicationMutation.current.token === token,
+    [isPublicationViewCurrent, publicationView],
+  );
+
+  const endPublicationMutation = useCallback(
+    (token: number) => {
+      if (!isPublicationMutationCurrent(token)) return;
+      publicationMutation.current = null;
+      setPublishing(false);
+    },
+    [isPublicationMutationCurrent],
+  );
+
+  const loadPublication = useCallback(
+    async (id: string) => {
+      if (!isPublicationViewCurrent() || publicationView.appMode !== 'cloud') return;
+      const sequence = ++publicationSequence.current;
+      setAbsentView(null);
+      try {
+        const state = await fetchArtifactPublication(id);
+        if (!isPublicationViewCurrent() || sequence !== publicationSequence.current) return;
+        setWorkspaceMemberCount(state.workspaceMemberCount);
+        setPublished(
+          state.publication ? { view: publicationView, publication: state.publication } : null,
+        );
+        setAbsentView(state.publication ? null : publicationView);
+      } catch (error) {
+        if (!isPublicationViewCurrent() || sequence !== publicationSequence.current) return;
+        console.warn('[ArtifactFullScreen] publication lookup failed', error);
+      }
+    },
+    [isPublicationViewCurrent, publicationView],
+  );
+
+  useEffect(() => {
+    publicationMounted.current = true;
+    return () => {
+      publicationMounted.current = false;
+      publicationSequence.current += 1;
+    };
   }, []);
 
   useEffect(() => {
-    if (!visible || !artifactId || appMode !== 'cloud') return;
-    void loadPublication(artifactId);
+    setPublished(null);
+    setAbsentView(null);
+    setWorkspaceMemberCount(null);
+    setPublishing(false);
+    if (visible && artifactId && appMode === 'cloud') void loadPublication(artifactId);
+    return () => {
+      publicationSequence.current += 1;
+    };
   }, [appMode, artifactId, loadPublication, visible]);
   const versionHistory = useArtifactStore((s) =>
     artifactId ? s.versionsById[artifactId] : undefined,
@@ -330,7 +420,8 @@ export function ArtifactFullScreen({
     const kind = publishableKindFor(artifact);
     if (!kind) return;
     if (!(await confirmPublish(artifact.title))) return;
-
+    const mutation = beginPublicationMutation();
+    if (mutation === false) return;
     setPublishing(true);
     try {
       const shareUrl = await publishArtifact({
@@ -341,23 +432,39 @@ export function ArtifactFullScreen({
         content: activeContent,
         ...(conversationId ? { conversationId } : {}),
       });
+      if (!isPublicationMutationCurrent(mutation)) return;
 
       setPublished((current) => ({
-        artifactId: artifact.id,
+        view: publicationView,
         publication: {
           shareUrl,
           visibility:
-            current?.artifactId === artifact.id ? current.publication.visibility : 'public',
+            current?.view === publicationView ? current.publication.visibility : 'public',
         },
       }));
       await copyLink(shareUrl);
-      void loadPublication(artifact.id);
+      if (isPublicationMutationCurrent(mutation)) {
+        void loadPublication(artifact.id);
+      }
     } catch (err) {
-      Alert.alert('Publish failed', publishFailureMessage(err));
+      if (isPublicationMutationCurrent(mutation)) {
+        Alert.alert('Publish failed', publishFailureMessage(err));
+      }
     } finally {
-      setPublishing(false);
+      endPublicationMutation(mutation);
     }
-  }, [artifact, activeContent, conversationId, copyLink, loadPublication, publishing]);
+  }, [
+    artifact,
+    activeContent,
+    conversationId,
+    copyLink,
+    loadPublication,
+    publishing,
+    beginPublicationMutation,
+    isPublicationMutationCurrent,
+    endPublicationMutation,
+    publicationView,
+  ]);
 
   const handleRestoreVersion = useCallback(() => {
     if (!artifactId) return;
@@ -812,13 +919,21 @@ export function ArtifactFullScreen({
               title={artifact.title}
               publication={currentPublication}
               workspaceMemberCount={workspaceMemberCount}
-              onChanged={(publication) => {
-                setPublished({ artifactId: artifact.id, publication });
+              onMutationStart={beginPublicationMutation}
+              isMutationCurrent={isPublicationMutationCurrent}
+              onMutationEnd={endPublicationMutation}
+              onChanged={(publication, mutation) => {
+                if (mutation === undefined || !isPublicationMutationCurrent(mutation)) return;
+                invalidatePublicationLookup();
+                setPublished({ view: publicationView, publication });
                 recordPublishedArtifactAudience(artifact.id, publication.visibility);
               }}
-              onUnpublished={() => {
+              onUnpublished={(mutation) => {
+                if (mutation === undefined || !isPublicationMutationCurrent(mutation)) return;
+                invalidatePublicationLookup();
                 setPublished(null);
                 recordPublishedArtifactAudience(artifact.id, null);
+                void loadPublication(artifact.id);
               }}
             />
           ) : null}

@@ -12,6 +12,7 @@ const {
   listPublishedArtifacts,
   listPublishedArtifactsPage,
   getOwnedPublishedArtifactSummary,
+  getOwnedPublishedArtifactSummaryByArtifactId,
   renamePublishedArtifact,
   mintPublishToken,
   publishArtifactRecord,
@@ -1020,5 +1021,53 @@ describe('published artifact owner pages', () => {
     await expect(getOwnedPublishedArtifactSummary(db as never, { userId: 'user-1', token: row().token }))
       .resolves.toBeNull();
     expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up an older publication by exact case-sensitive text ID without listing', async () => {
+    const artifactId = 'Older/Artifact?x=1+#片';
+    const db = makeDb([{ ...pageRow(), artifact_id: artifactId, visibility: 'invited' }]);
+    const result = await getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+      userId: 'user-1', artifactId: ` ${artifactId} `,
+    });
+    expect(result).toMatchObject({ artifactId, visibility: 'invited' });
+    expect(result).not.toHaveProperty('content');
+    expect(db.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('where user_id = $1 and artifact_id = $2');
+    expect(sql).toContain('limit 1');
+    expect(sql).not.toContain('order by');
+    expect(sql).not.toContain('lower(');
+    expect(sql).not.toContain("visibility = 'public'");
+    expect(sql).not.toMatch(/select[\s\S]*\bcontent,/);
+    expect(params).toEqual(['user-1', artifactId]);
+  });
+
+  it('returns null for an absent or nonowned artifact ID with one bounded query', async () => {
+    const db = makeDb();
+    await expect(getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+      userId: 'other-user', artifactId: 'artifact-1',
+    })).resolves.toBeNull();
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0]![1]).toEqual(['other-user', 'artifact-1']);
+  });
+
+  it.each(['', '   ', 'a'.repeat(201)])('rejects invalid artifact ID %s without querying', async (artifactId) => {
+    const db = makeDb();
+    await expect(getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+      userId: 'user-1', artifactId,
+    })).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty owner and propagates database failures instead of absence', async () => {
+    const db = makeDb();
+    await expect(getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+      userId: ' ', artifactId: 'artifact-1',
+    })).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(db.query).not.toHaveBeenCalled();
+    db.query.mockRejectedValue(new Error('database unavailable'));
+    await expect(getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+      userId: 'user-1', artifactId: 'artifact-1',
+    })).rejects.toThrow('database unavailable');
   });
 });

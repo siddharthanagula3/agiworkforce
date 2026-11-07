@@ -45,6 +45,20 @@ const MESSAGE_ID = 'msg-publish-test';
 const ARTIFACT_ID = 'artifact-publish-test';
 const CONTENT = '<h1>Sales dashboard</h1>';
 
+function lookupBody(shareUrl: string | null) {
+  return {
+    artifact: shareUrl === null ? null : {
+      artifactId: ARTIFACT_ID,
+      token: shareUrl.split('/').at(-1)!,
+      shareUrl,
+      title: 'Sales dashboard', kind: 'html', language: 'html', conversationId: CONVERSATION_ID,
+      contentChars: CONTENT.length, version: 1, visibility: 'public', sandboxed: true,
+      createdAt: '2026-08-05T00:00:00.000Z', updatedAt: '2026-08-05T00:00:00.000Z',
+    },
+    workspace: null,
+  };
+}
+
 // SECURITY-FIX F3 (CWE-863): publishing now refuses an artifact whose
 // originating trust boundary the app cannot establish, so a wiring test has to
 // state the boundary it is publishing from.
@@ -202,16 +216,7 @@ describe('ArtifactsPanel · publish wiring', () => {
             shareUrl: 'https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee',
             visibility: 'invited',
           })
-        : Response.json({
-            artifacts: [
-              {
-                artifactId: ARTIFACT_ID,
-                shareUrl: 'https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee',
-                visibility: 'public',
-              },
-            ],
-            workspace: null,
-          }),
+        : Response.json(lookupBody('https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee')),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -280,7 +285,7 @@ describe('ArtifactsPanel publication ownership', () => {
   it.each(['switch', 'round trip', 'close', 'unmount'])('attributes a late publish after %s only to A', async (transition) => {
     const post = deferredResponse();
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
-      init?.method === 'POST' ? post.promise : Response.json({ artifacts: [] }));
+      init?.method === 'POST' ? post.promise : Response.json(lookupBody(null)));
     vi.stubGlobal('fetch', fetchMock);
     const rendered = render(<ArtifactsPanel />);
     const oldPublish = capturedPublish!;
@@ -313,7 +318,7 @@ describe('ArtifactsPanel publication ownership', () => {
     render(<ArtifactsPanel />);
     await act(async () => { await capturedPublish!({ content: CONTENT, versionIndex: 0 }); });
     await act(async () => {
-      get.resolve(Response.json({ artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] }));
+      get.resolve(Response.json(lookupBody(OWNED_URL)));
     });
     expect(capturedAudience?.current).toBe('invited');
     expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]?.visibility).toBe('invited');
@@ -323,7 +328,7 @@ describe('ArtifactsPanel publication ownership', () => {
     const post = deferredResponse();
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
       ? post.promise
-      : Response.json({ artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] }));
+      : Response.json(lookupBody(OWNED_URL)));
     vi.stubGlobal('fetch', fetchMock);
     render(<ArtifactsPanel />);
     await waitFor(() => expect(capturedAudience).toBeDefined());
@@ -341,7 +346,7 @@ describe('ArtifactsPanel publication ownership', () => {
     const patch = deferredResponse();
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'PATCH'
       ? patch.promise
-      : Response.json({ artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] }));
+      : Response.json(lookupBody(OWNED_URL)));
     vi.stubGlobal('fetch', fetchMock);
     render(<ArtifactsPanel />);
     await waitFor(() => expect(capturedAudience).toBeDefined());
@@ -362,7 +367,7 @@ describe('ArtifactsPanel publication ownership', () => {
     let published = false;
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
       ? post.promise
-      : Response.json({ artifacts: published ? [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] : [] }));
+      : Response.json(lookupBody(published ? OWNED_URL : null)));
     vi.stubGlobal('fetch', fetchMock);
     render(<ArtifactsPanel />);
     const pending = capturedPublish!({ content: CONTENT, versionIndex: 0 });
@@ -380,7 +385,7 @@ describe('ArtifactsPanel publication ownership', () => {
   });
 
   it('refuses a captured publish start while streaming replaces the selected viewer', async () => {
-    const fetchMock = vi.fn(async () => Response.json({ artifacts: [] }));
+    const fetchMock = vi.fn(async () => Response.json(lookupBody(null)));
     vi.stubGlobal('fetch', fetchMock);
     render(<ArtifactsPanel />);
     const oldPublish = capturedPublish!;
@@ -402,9 +407,7 @@ describe('ArtifactsPanel publication ownership', () => {
       const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
         init?.method === 'POST'
           ? post.promise
-          : Response.json({
-              artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }],
-            }),
+          : Response.json(lookupBody(OWNED_URL)),
       );
       vi.stubGlobal('fetch', fetchMock);
       useChatStore.setState({ conversations: [] });
@@ -454,7 +457,7 @@ describe('ArtifactsPanel publication ownership', () => {
     const old = deferredResponse();
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       if (init?.method === 'POST' || init?.method === 'PATCH' || kind === 'lookup') return old.promise;
-      return Response.json({ artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] });
+      return Response.json(lookupBody(OWNED_URL));
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<ArtifactsPanel />);
@@ -471,7 +474,7 @@ describe('ArtifactsPanel publication ownership', () => {
       act(() => { finish = beginPublicationCleanup(); });
       await act(async () => {
         old.resolve(Response.json(kind === 'lookup'
-          ? { artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] }
+          ? lookupBody(OWNED_URL)
           : { shareUrl: OWNED_URL, visibility: 'invited' }));
         const outcomes = await settled;
         if (pending) expect(outcomes[0]?.status).toBe('rejected');
@@ -482,7 +485,7 @@ describe('ArtifactsPanel publication ownership', () => {
     } finally {
       cleanup();
       finish();
-      old.resolve(Response.json({ artifacts: [] }));
+      old.resolve(Response.json(lookupBody(null)));
       await settled;
     }
   });
@@ -493,7 +496,7 @@ describe('ArtifactsPanel publication ownership', () => {
     let posts = 0;
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
       ? (++posts === 1 ? old.promise : current.promise)
-      : Response.json({ artifacts: [] }));
+      : Response.json(lookupBody(null)));
     vi.stubGlobal('fetch', fetchMock);
     render(<ArtifactsPanel />);
     const first = capturedPublish!({ content: CONTENT, versionIndex: 0 });
@@ -533,7 +536,7 @@ describe('ArtifactsPanel publication ownership', () => {
   it('rechecks local ownership when a synchronous record subscriber begins cleanup', async () => {
     const post = deferredResponse();
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
-      ? post.promise : Response.json({ artifacts: [] })));
+      ? post.promise : Response.json(lookupBody(null))));
     render(<ArtifactsPanel />);
     let finish = () => {};
     let retired = false;

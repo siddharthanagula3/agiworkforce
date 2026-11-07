@@ -4,6 +4,8 @@ import { randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS,
+  ManagedCloudPublishedArtifactLookupQuerySchema,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
@@ -47,7 +49,7 @@ import { SITE_URL } from '@/lib/seo/site';
 
 export const MAX_CONTENT_CHARS = 1_000_000;
 const MAX_TITLE_CHARS = MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS;
-const MAX_ARTIFACT_ID_CHARS = 200;
+const MAX_ARTIFACT_ID_CHARS = MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS;
 const MAX_LANGUAGE_CHARS = 50;
 const MAX_LIST_LIMIT = MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS;
 
@@ -750,6 +752,26 @@ export async function getOwnedPublishedArtifactSummary(
       where token = $1 and user_id = $2
       limit 1`,
     [input.token, userId],
+  );
+  return row ? rowToSummary(row) : null;
+}
+
+export async function getOwnedPublishedArtifactSummaryByArtifactId(
+  db: DatabaseAdapter,
+  input: { userId: string; artifactId: string },
+): Promise<PublishedArtifactSummary | null> {
+  const userId = input.userId?.trim();
+  const parsed = ManagedCloudPublishedArtifactLookupQuerySchema.safeParse(input);
+  if (!userId || !parsed.success) {
+    throw new PublishedArtifactValidationError('Invalid published artifact lookup');
+  }
+  const [row] = await db.query<PublishedArtifactSummaryRow>(
+    `select token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at
+       from public.published_artifacts
+      where user_id = $1 and artifact_id = $2
+      limit 1`,
+    [userId, parsed.data.artifactId],
   );
   return row ? rowToSummary(row) : null;
 }

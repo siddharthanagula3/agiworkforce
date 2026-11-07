@@ -58,6 +58,11 @@ export type ManagedCloudPublishedArtifactVisibility =
   (typeof MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES)[number];
 
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS = 300;
+export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS = 200;
+
+export const ManagedCloudPublishedArtifactLookupQuerySchema = z.object({
+  artifactId: z.string().trim().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS),
+});
 
 export const ManagedCloudPublishedArtifactSchema = z.object({
   token: z.string().min(1),
@@ -79,6 +84,14 @@ export type ManagedCloudPublishedArtifact = z.infer<typeof ManagedCloudPublished
 export const ManagedCloudPublishedArtifactWorkspaceSchema = z.object({
   memberCount: z.number().int().nonnegative(),
 });
+
+export const ManagedCloudPublishedArtifactLookupResponseSchema = z.object({
+  artifact: ManagedCloudPublishedArtifactSchema.nullable(),
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable(),
+});
+export type ManagedCloudPublishedArtifactLookupResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactLookupResponseSchema
+>;
 
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS = 200;
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS = 2048;
@@ -137,6 +150,11 @@ export function managedCloudArtifactIndexQueryString(
 
 export function managedCloudPublishedArtifactPath(token: string): string {
   return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/${encodeURIComponent(token)}`;
+}
+
+export function managedCloudPublishedArtifactLookupPath(artifactId: string): string {
+  const query = ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId });
+  return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/lookup?${new URLSearchParams(query)}`;
 }
 
 export function managedCloudPublishedArtifactViewersPath(token: string): string {
