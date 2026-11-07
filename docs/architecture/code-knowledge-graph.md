@@ -7559,8 +7559,27 @@ Existing controls preserve link/badge and show uncertainty when receipt parsing
 or target matching fails. FullScreen production readback, Private gating,
 confirmation and Publish marker/lifecycle semantics are unchanged. No extra
 GET, replay/fallback, global auth rewrite or deletion guarantee. Valid-delete
-positive readback badge reconciliation remains separate.
+positive readback badge reconciliation is bounded in the continuation below.
 
 Fixtures are UNRUN and mock transport; request options do not demonstrate live
 HTTP recovery or sign-out behavior. No duplicate successful deletion or backend
 incident is established. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile chat post-Unpublish readback can restore its badge
+
+Continuation 92838c006b41a8ac93194c94c697341cecb4d71d gives the existing post-Unpublish exact
+lookup a named purpose and service-owned, single-use positive reconciliation
+guard. The full account epoch, whole cache state, active bulk refresh and
+initially absent badge must still match; component view and read-sequence
+checks remain. Accepted reconciliation uses the existing record/refresh overlay.
+
+Intervening accepted writes, repeated-null/ABA writes and completed refreshes
+reject older reconciliation. A different currently active refresh also rejects it.
+Unrelated changes may conservatively leave a missing badge; a failed refresh
+that returns the active pointer to null is not permanently remembered.
+Ordinary opening and uncertain-Publish behavior, marker and Private gating
+remain separate. Badge absence is not Private.
+
+No extra GET, retry, mutation, persistent revision map or server/global freshness
+guarantee. Four independently source-reviewed files include UNRUN fixtures.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.

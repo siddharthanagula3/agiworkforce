@@ -17554,8 +17554,41 @@ passkey and account-unavailable transport handling is unchanged; these mocks
 do not prove that every real 403 preserves the account.
 
 No extra GET, automatic replay, alternate mutation or recovery mechanism is
-added. Valid-delete positive readback can still restore a link without updating
-its audience badge; that cache-ordering issue remains separate. No lasting
+added. The subsequent bounded reconciliation continuation below addresses
+positive post-delete readback without overwriting accepted local cache changes. No lasting
 remote-state, deletion/cascade or rollback guarantee. No product checks, live
 services, migration application, push or deployment. Existing recovery
 prerequisites, unapplied migrations and lost-history limits remain.
+
+### Post-Unpublish audience readback preserves newer local cache writes
+
+Continuation 92838c006b41a8ac93194c94c697341cecb4d71d, 2026-11-07, addresses a missing publication
+indicator after acknowledged mobile chat Unpublish. The existing exact
+readback can observe a concurrent republication and restore its link, while
+the audience badge remains absent because ordinary lookups do not update
+that cache. Badge absence is not an explicit Private assertion.
+
+The post-Unpublish read now has a named purpose and a service-owned one-shot
+positive reconciliation guard. It captures the account epoch, cache identity
+and active bulk-refresh identity after the null record, and requires an initially
+absent target badge. Existing component
+view/read-sequence checks still gate the result. Comparison and recording are
+synchronous; the existing record path preserves its pending-refresh overlay.
+
+Any intervening accepted cache write or reset prevents that older read from
+overwriting newer local knowledge. A different active bulk refresh also blocks
+adoption; an older refresh already pending at capture can retain accepted
+reconciliation through its overlay. Ordinary opening and uncertain-Publish
+lookup semantics remain separate.
+
+This is deliberately conservative: unrelated cache changes may suppress a
+useful positive result and leave a missing badge. It does not prove server
+freshness, content, availability or cross-view consistency. Active refresh
+identity is not a permanent history of every attempted refresh: a newly attempted
+refresh that fails and returns the pointer to null need not invalidate the guard. No persistent
+per-artifact revision map, extra GET, replay or durable recovery marker.
+
+Focused fixtures are authored UNRUN. Existing Private readback and Publish
+uncertainty-marker semantics remain; failed/malformed readback stays unknown.
+No product checks, live calls, migrations, push or deployment. Existing
+recovery prerequisites, unapplied migrations and lost-history limits remain.
