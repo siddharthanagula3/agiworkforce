@@ -145,6 +145,12 @@ export class ApiKeyService {
        WHERE key_prefix = $1
          AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > now())
+         AND (api_keys.project_id IS NULL OR EXISTS (
+           SELECT 1 FROM public.developer_projects p
+           WHERE p.id = api_keys.project_id
+             AND p.user_id = api_keys.user_id
+             AND p.archived_at IS NULL
+         ))
        LIMIT 2`,
       [keyId],
     );

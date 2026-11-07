@@ -1,6 +1,7 @@
 import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import jwt from 'jsonwebtoken';
+import argon2 from 'argon2';
 import { NextRequest } from 'next/server';
 
 import { resetSessionStartCache, unreadableSessionStartCount } from '@/lib/auth/session-age';
@@ -92,6 +93,21 @@ vi.mock('@agiworkforce/data-layer', async (importOriginal) => {
 
 type FakeRow = Record<string, unknown>;
 
+function normalizedLookupSql(sql: string): string {
+  return sql.toLowerCase().replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+}
+
+function expectProjectAdmissionLookup() {
+  const lookups = mockNeonQuery.mock.calls.filter(([sql]) => String(sql).includes('key_prefix = $1'));
+  expect(lookups.length).toBeGreaterThan(0);
+  for (const [sql, params] of lookups) {
+    expect(normalizedLookupSql(String(sql))).toBe(
+      'select id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at from api_keys where key_prefix = $1 and revoked_at is null and (expires_at is null or expires_at > now()) and (api_keys.project_id is null or exists (select 1 from public.developer_projects p where p.id = api_keys.project_id and p.user_id = api_keys.user_id and p.archived_at is null)) limit 2',
+    );
+    expect(params).toEqual([expect.stringMatching(/^[0-9a-f]{16}$/)]);
+  }
+}
+
 /**
  * A fixture that stubs the whole query implementation must answer the bridge
  * and lifecycle reads too, or its subject never authenticates.
@@ -110,6 +126,8 @@ function identityResolutionRows(sql: string, params: unknown[]): FakeRow[] | nul
 
 function makeFakeDb() {
   const store = new Map<string, FakeRow>();
+  const projects = new Map<string, { user_id: string; archived_at: string | null }>();
+  const lookup = { error: false };
   const revokedJtis = new Set<string>();
   const identities = new Map<string, { identityId: string | null; accountId: string }>();
   const accountStatuses = new Map<string, string>();
@@ -181,7 +199,8 @@ function makeFakeDb() {
         key_prefix: keyPrefix,
         scopes,
         last_used_at: null,
-        expires_at: null,
+        expires_at: params[5] ?? null,
+        project_id: params[6] ?? null,
         revoked_at: null,
         created_at: new Date().toISOString(),
       };
@@ -190,10 +209,22 @@ function makeFakeDb() {
     }
 
     if (s.includes('key_prefix = $1')) {
+      if (lookup.error) throw new Error('project admission lookup unavailable');
       const keyPrefix = params[0] as string;
-      return [...store.values()].filter(
-        (r) => r['key_prefix'] === keyPrefix && r['revoked_at'] == null,
+      const hasProjectGate = normalizedLookupSql(s).includes(
+        'and (api_keys.project_id is null or exists (select 1 from public.developer_projects p where p.id = api_keys.project_id and p.user_id = api_keys.user_id and p.archived_at is null))',
       );
+      return [...store.values()].filter((r) => {
+        const project = projects.get(r['project_id'] as string);
+        return (
+          r['key_prefix'] === keyPrefix &&
+          (!s.includes('revoked_at is null') || r['revoked_at'] == null) &&
+          (!s.includes('(expires_at is null or expires_at > now())') ||
+            r['expires_at'] == null || Date.parse(String(r['expires_at'])) > Date.now()) &&
+          (!hasProjectGate || r['project_id'] == null ||
+            (project?.user_id === r['user_id'] && project.archived_at === null))
+        );
+      });
     }
 
     if (s.includes('from api_keys') || s.includes('from public.api_keys')) {
@@ -232,6 +263,8 @@ function makeFakeDb() {
   mockNeonExecute.mockImplementation(execute);
   return {
     store,
+    projects,
+    lookup,
     revokedJtis,
     identities,
     accountStatuses,
@@ -314,6 +347,58 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     vi.clearAllMocks();
     clearIpAllowListCacheForTests();
   });
+
+  // This predicate-sensitive model is not PostgreSQL, RLS, or concurrent archive proof.
+  it.each(['null', 'live', 'archived', 'foreign', 'missing', 'revoked', 'expired', 'lookup-error'] as const)(
+    'uses canonical project admission for a %s key',
+    async (state) => {
+      const fakeDb = makeFakeDb();
+      const { ApiKeyService } = await import('@/lib/services/api-key-service');
+      const { getNeonDb } = await import('@/lib/server/neon-db');
+      const { apiKey, rawKey } = await ApiKeyService.createApiKey(
+        getNeonDb(), 'project-key-owner', 'project admission', ['models:read'], null,
+        state === 'null' ? null : 'project-1',
+      );
+      if (state !== 'missing') {
+        fakeDb.projects.set('project-1', {
+          user_id: state === 'foreign' ? 'another-owner' : 'project-key-owner',
+          archived_at: state === 'archived' ? new Date().toISOString() : null,
+        });
+      }
+      const row = fakeDb.store.get(apiKey.id)!;
+      if (state === 'revoked') row['revoked_at'] = new Date().toISOString();
+      if (state === 'expired') row['expires_at'] = new Date(Date.now() - 60_000).toISOString();
+      fakeDb.lookup.error = state === 'lookup-error';
+      mockAuth.mockResolvedValue(authSession('cookie-must-not-rescue-key'));
+      mockNeonQuery.mockClear();
+      mockNeonExecute.mockClear();
+      const verify = vi.spyOn(argon2, 'verify');
+      try {
+        if (state === 'null' || state === 'live') {
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }))
+            .resolves.toEqual({ userId: 'project-key-owner', apiKeyId: apiKey.id });
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'inference:write' }))
+            .rejects.toMatchObject({ statusCode: 403 });
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey)))
+            .rejects.toMatchObject({ statusCode: 403 });
+          expect(verify).toHaveBeenCalled();
+          expect(mockNeonExecute).toHaveBeenCalledWith(
+            'UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [expect.any(String), apiKey.id],
+          );
+        } else {
+          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }))
+            .rejects.toMatchObject({ statusCode: 401 });
+          expect(verify).not.toHaveBeenCalled();
+          expect(mockNeonExecute.mock.calls.some(([sql]) => String(sql).includes('SET last_used_at'))).toBe(false);
+        }
+        expectProjectAdmissionLookup();
+        expect(mockAuth).not.toHaveBeenCalled();
+        expect(mockVerifyToken).not.toHaveBeenCalled();
+      } finally {
+        verify.mockRestore();
+      }
+    },
+  );
 
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
     makeFakeDb();
