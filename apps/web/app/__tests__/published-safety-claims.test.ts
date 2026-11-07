@@ -62,7 +62,37 @@ describe('the text filter the acceptable use policy describes', () => {
   });
 
   it('runs when an artifact is published', () => {
-    expect(read('app/api/artifacts/publish/route.ts')).toContain("surface: 'published-artifact'");
+    const helper = read('lib/services/published-artifact-publication-policy.ts');
+    expect(helper).toContain("import { moderateManagedPrompt } from '@/lib/moderation';");
+    const moderation = helper.slice(
+      helper.indexOf('function refuseModeratedPublication('),
+      helper.indexOf('async function readPublicationOrganizationIds('),
+    );
+    expect(moderation).toContain('moderateManagedPrompt({');
+    expect(moderation).toContain("surface: 'published-artifact'");
+    expect(moderation).toContain('if (!moderation.allowed) {');
+    expect(moderation).toContain('throw createError.validation(');
+    const preparation = helper.slice(
+      helper.indexOf('export async function preparePublishedArtifactPublication('),
+    );
+    const moderationAt = preparation.indexOf('refuseModeratedPublication(');
+    expect(moderationAt).toBeGreaterThan(-1);
+    expect(moderationAt).toBeLessThan(preparation.indexOf('inspectOutboundContent('));
+    for (const [route, write] of [
+      ['app/api/artifacts/publish/route.ts', 'publishArtifactRecord('],
+      [
+        'app/api/artifacts/publish/[token]/versions/[version]/route.ts',
+        'restorePublishedArtifactRecord(',
+      ],
+    ] as const) {
+      const source = read(route);
+      expect(source).toContain(
+        "import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';",
+      );
+      const preparationAt = source.indexOf('await preparePublishedArtifactPublication(');
+      expect(preparationAt).toBeGreaterThan(-1);
+      expect(preparationAt).toBeLessThan(source.indexOf(write));
+    }
     expect(AUP).toContain('The same filter runs when you publish an artifact.');
   });
 

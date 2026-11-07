@@ -120,18 +120,10 @@ export async function republishArtifactVersion(
   artifact: Pick<PublishedSite, 'token' | 'artifactId'>,
   version: number,
 ): Promise<void> {
-  const detail = await readPublishedSiteVersion(artifact.token, version);
-  const response = await fetch(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH, {
+  const response = await fetch(managedCloudPublishedArtifactVersionPath(artifact.token, version), {
     method: 'POST',
     credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({
-      artifactId: artifact.artifactId,
-      title: detail.title,
-      kind: detail.kind,
-      ...(detail.language ? { language: detail.language } : {}),
-      content: detail.content,
-    }),
+    headers: await addCsrfHeaders(),
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to put that version live');

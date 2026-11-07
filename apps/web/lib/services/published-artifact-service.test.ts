@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS } from '@agiworkforce/cloud-contracts';
+import type { PublishedArtifactRow } from './published-artifact-service';
 
 vi.mock('server-only', () => ({}));
 
@@ -11,6 +13,8 @@ const {
   renamePublishedArtifact,
   mintPublishToken,
   publishArtifactRecord,
+  readPublishedArtifactRestoreSource,
+  restorePublishedArtifactRecord,
   requiresSandboxedRender,
   unpublishArtifactRecord,
   unpublishArtifactsForConversations,
@@ -62,7 +66,7 @@ function makeRoutedDb(options: {
   };
 }
 
-function row(overrides: Record<string, unknown> = {}) {
+function row(overrides: Partial<PublishedArtifactRow> = {}): PublishedArtifactRow {
   return {
     id: 'row-1',
     token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
@@ -73,6 +77,7 @@ function row(overrides: Record<string, unknown> = {}) {
     kind: 'html',
     language: null,
     content: '<h1>hi</h1>',
+    visibility: 'public',
     created_at: '2026-08-01T00:00:00.000Z',
     updated_at: '2026-08-02T00:00:00.000Z',
     ...overrides,
@@ -485,5 +490,349 @@ describe('unpublishArtifactsForConversations', () => {
       }),
     ).toEqual([]);
     expect(db.query).not.toHaveBeenCalled();
+  });
+});
+
+// This adapter models predicate-bound reads/writes, not PostgreSQL locks, triggers or RLS.
+describe('Restore persistence without republication', () => {
+  const restoreInput = {
+    userId: 'user-1',
+    publishedArtifactId: 'row-1',
+    artifactId: 'artifact-1',
+    token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+    title: 'Historical title',
+    kind: 'code',
+    language: 'typescript',
+    content: 'const restored = true;',
+  };
+  const sourceInput = { userId: 'user-1', token: restoreInput.token, version: 2 };
+
+  function model(
+    options: {
+      publication?: PublishedArtifactRow | null;
+      snapshot?: Record<string, unknown> | null;
+      beforeUpdate?: () => void;
+      otherPublished?: number;
+      ownedConversations?: number;
+      updateError?: unknown;
+    } = {},
+  ) {
+    let publication =
+      options.publication === undefined ? row({ visibility: 'invited' }) : options.publication;
+    const snapshot =
+      options.snapshot === undefined
+        ? {
+            published_artifact_id: 'row-1',
+            user_id: 'user-1',
+            version: 2,
+            title: 'Historical title',
+            kind: 'code',
+            language: 'typescript',
+            content: 'const historical = true;',
+          }
+        : options.snapshot;
+    const grants = [{ publicationId: 'row-1', recipient: 'reader-1' }];
+    const storage = [{ publicationId: 'row-1', key: 'existing-storage' }];
+    const db = {
+      query: vi.fn(async (sql: string, params: unknown[]) => {
+        const normalized = sql.replace(/\s+/g, ' ').trim();
+        if (normalized.startsWith('select') && normalized.includes('as other_published')) {
+          expect(normalized).toContain('where user_id = $1 and artifact_id <> $2');
+          expect(normalized).toContain('where id = $3::uuid and user_id = $1 and deleted_at is null');
+          return [{
+            other_published: options.otherPublished ?? 0,
+            owned_conversations: options.ownedConversations ?? 1,
+          }];
+        }
+        if (
+          normalized.startsWith('select') &&
+          normalized.includes('snapshot.version as snapshot_version')
+        ) {
+          expect(normalized).toContain(
+            'join public.published_artifact_versions snapshot on ' +
+              'snapshot.published_artifact_id = publication.id and snapshot.user_id = $2',
+          );
+          expect(normalized).toContain(
+            'where publication.token = $1 and publication.user_id = $2 and snapshot.version = $3',
+          );
+          if (
+            !publication || !snapshot ||
+            publication.token !== params[0] || publication.user_id !== params[1] ||
+            snapshot['published_artifact_id'] !== publication.id ||
+            snapshot['user_id'] !== params[1] || snapshot['version'] !== params[2]
+          ) return [];
+          return [{
+            ...publication,
+            snapshot_version: String(snapshot['version']),
+            snapshot_title: snapshot['title'],
+            snapshot_kind: snapshot['kind'],
+            snapshot_language: snapshot['language'],
+            snapshot_content: snapshot['content'],
+          }];
+        }
+        if (normalized.startsWith('update public.published_artifacts')) {
+          expect(normalized).toContain(
+            'where user_id = $1 and id = $2 and artifact_id = $3 and token = $4',
+          );
+          expect(normalized.split(' where ')[0]).toBe(
+            "update public.published_artifacts set title = case when title = '' then $5 else title end, " +
+              'kind = $6, language = $7, content = $8, updated_at = now()',
+          );
+          options.beforeUpdate?.();
+          if (options.updateError) throw options.updateError;
+          if (
+            !publication || publication.user_id !== params[0] || publication.id !== params[1] ||
+            publication.artifact_id !== params[2] || publication.token !== params[3]
+          ) return [];
+          publication = {
+            ...publication,
+            title: publication.title === '' ? String(params[4]) : publication.title,
+            kind: String(params[5]),
+            language: params[6] === null ? null : String(params[6]),
+            content: String(params[7]),
+            updated_at: '2026-11-07T00:00:00.000Z',
+          };
+          return [publication];
+        }
+        throw new Error(`Unexpected Restore SQL: ${normalized}`);
+      }),
+    };
+    return {
+      db,
+      grants,
+      storage,
+      current: () => publication,
+      replace: (next: PublishedArtifactRow | null) => { publication = next; },
+    };
+  }
+
+  it('reads the current owner publication and historical snapshot through one bound join', async () => {
+    const state = model();
+    const source = await readPublishedArtifactRestoreSource(state.db as never, {
+      ...sourceInput,
+      userId: ' user-1 ',
+      token: ` ${sourceInput.token} `,
+    });
+    expect(source).toMatchObject({
+      publication: {
+        id: 'row-1', title: 'Dashboard', visibility: 'invited', content: '<h1>hi</h1>',
+      },
+      snapshot: {
+        version: 2, title: 'Historical title', kind: 'code',
+        language: 'typescript', content: 'const historical = true;',
+      },
+    });
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+    expect(state.db.query.mock.calls[0]?.[1]).toEqual([sourceInput.token, 'user-1', 2]);
+  });
+
+  it.each([
+    { userId: '' },
+    { token: 'bad' },
+    { version: 0 },
+    { version: -1 },
+    { version: 1.5 },
+    { version: NaN },
+    { version: Infinity },
+    { version: Number.MAX_SAFE_INTEGER + 1 },
+  ])('rejects invalid source identity/version without querying: %j', async (change) => {
+    const state = model();
+    expect(
+      await readPublishedArtifactRestoreSource(state.db as never, { ...sourceInput, ...change }),
+    ).toBeNull();
+    expect(state.db.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { publication: null },
+    { publication: row({ user_id: 'other-user' }) },
+    { publication: row({ token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }) },
+    { publication: row({ id: 'replacement-publication' }) },
+    { snapshot: null },
+    { snapshot: { published_artifact_id: 'row-1', user_id: 'other-user', version: 2 } },
+    { snapshot: { published_artifact_id: 'other-publication', user_id: 'user-1', version: 2 } },
+    { snapshot: { published_artifact_id: 'row-1', user_id: 'user-1', version: 3 } },
+  ])('does not join missing, replaced, foreign or wrong-version sources: %j', async (options) => {
+    const state = model(options);
+    expect(await readPublishedArtifactRestoreSource(state.db as never, sourceInput)).toBeNull();
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['public', 'organization', 'invited'])('preserves %s metadata with content-only SQL', async (visibility) => {
+    const original = row({ visibility, conversation_id: '11111111-1111-4111-8111-111111111111' });
+    const state = model({ publication: original });
+    const restored = await restorePublishedArtifactRecord(state.db as never, {
+      ...restoreInput,
+      conversationId: original.conversation_id,
+    });
+    expect(restored).toMatchObject({
+      id: original.id,
+      token: original.token,
+      userId: original.user_id,
+      artifactId: original.artifact_id,
+      conversationId: original.conversation_id,
+      title: original.title,
+      visibility,
+      createdAt: original.created_at,
+      kind: 'code',
+      language: 'typescript',
+      content: restoreInput.content,
+    });
+    expect(restored?.updatedAt).not.toBe(original.updated_at);
+    expect(state.grants).toEqual([{ publicationId: 'row-1', recipient: 'reader-1' }]);
+    expect(state.storage).toEqual([{ publicationId: 'row-1', key: 'existing-storage' }]);
+    expect(state.db.query).toHaveBeenCalledTimes(2);
+    expect(state.db.query.mock.calls[1]?.[1]).toEqual([
+      'user-1', 'row-1', 'artifact-1', restoreInput.token,
+      restoreInput.title, 'code', 'typescript', restoreInput.content,
+    ]);
+  });
+
+  it('fills an empty current title using prepared input but never overwrites conversation provenance', async () => {
+    const state = model({
+      publication: row({ title: '', conversation_id: 'original-conversation' }),
+    });
+    const result = await restorePublishedArtifactRecord(state.db as never, {
+      ...restoreInput,
+      userId: ' user-1 ',
+      artifactId: ' artifact-1 ',
+      conversationId: null,
+    });
+    expect(result).toMatchObject({
+      title: restoreInput.title,
+      conversationId: 'original-conversation',
+    });
+    expect(state.db.query.mock.calls[0]?.[1]).toEqual(['user-1', 'artifact-1', null]);
+  });
+
+  it.each([
+    null,
+    row({ id: 'replacement-publication', token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }),
+    row({ id: 'replacement-publication' }),
+    row({ user_id: 'other-user' }),
+    row({ artifact_id: 'other-artifact' }),
+    row({ token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }),
+  ])('refuses a deleted/replaced/mismatched row at write time: %j', async (replacement) => {
+    const state = model({ beforeUpdate: () => state.replace(replacement) });
+    const source = await readPublishedArtifactRestoreSource(state.db as never, sourceInput);
+    expect(source?.publication.id).toBe('row-1');
+    expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
+    expect(state.current()).toEqual(replacement);
+    expect(state.db.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns null when the publication is already absent', async () => {
+    const state = model({ publication: null });
+    expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
+    expect(state.current()).toBeNull();
+  });
+
+  it('cannot resurrect a row on retry after UPDATE followed by a modeled deletion', async () => {
+    const state = model();
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).resolves.toMatchObject({ id: 'row-1', content: restoreInput.content });
+    state.replace(null);
+    expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
+    expect(state.current()).toBeNull();
+    expect(state.db.query).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([{ publishedArtifactId: '' }, { token: 'bad' }])('rejects malformed identity: %j', async (change) => {
+    const state = model();
+    expect(
+      await restorePublishedArtifactRecord(state.db as never, { ...restoreInput, ...change }),
+    ).toBeNull();
+    expect(state.db.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { userId: '' },
+    { artifactId: '' },
+    { artifactId: 'x'.repeat(201) },
+    { kind: 'pdf' },
+    { content: '   ' },
+    { content: 'x'.repeat(1_000_001) },
+  ])('retains shared validation before touching persistence (case %#)', async (change) => {
+    const state = model();
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, { ...restoreInput, ...change }),
+    ).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(state.db.query).not.toHaveBeenCalled();
+  });
+
+  it('retains quota refusal without any mutation', async () => {
+    const state = model({ otherPublished: MAX_PUBLISHED_PER_USER });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).rejects.toBeInstanceOf(PublishedArtifactQuotaError);
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+    expect(state.current()?.content).toBe('<h1>hi</h1>');
+  });
+
+  it('excludes its own artifact from the quota at capacity', async () => {
+    const state = model({ otherPublished: MAX_PUBLISHED_PER_USER - 1 });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).resolves.toMatchObject({ id: 'row-1' });
+    expect(state.db.query.mock.calls[0]?.[1]).toEqual(['user-1', 'artifact-1', null]);
+  });
+
+  it('rejects a deleted or foreign conversation before updating', async () => {
+    const state = model({ ownedConversations: 0 });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, {
+        ...restoreInput,
+        conversationId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).rejects.toBeInstanceOf(PublishedArtifactOwnershipError);
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { code: '42501' },
+    { cause: { code: '42501' } },
+    { cause: { cause: { code: '42501' } } },
+  ])('maps an adapter RLS error to an ownership refusal: %j', async (updateError) => {
+    const state = model({ updateError });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).rejects.toBeInstanceOf(PublishedArtifactOwnershipError);
+    expect(state.current()?.content).toBe('<h1>hi</h1>');
+  });
+
+  it('preserves infrastructure errors for the route instead of reporting a successful restore', async () => {
+    const updateError = Object.assign(new Error('relation does not exist'), { code: '42P01' });
+    const state = model({ updateError });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).rejects.toBe(updateError);
+  });
+});
+
+describe('Restore prepared payload', () => {
+  it('bounds title and language while passing the prepared sanitized body unchanged', async () => {
+    const db = makeDb([row()]);
+    const content = '<h1>Sanitized historical content</h1>';
+    await restorePublishedArtifactRecord(db as never, {
+      userId: ' user-1 ',
+      artifactId: ' artifact-1 ',
+      publishedArtifactId: 'row-1',
+      token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      title: 't'.repeat(MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS + 1),
+      kind: 'html',
+      language: 'l'.repeat(51),
+      content,
+    });
+    expect(db.query.mock.calls[1]?.[1]).toEqual([
+      'user-1',
+      'row-1',
+      'artifact-1',
+      'aaaaaaaaaaaaaaaaaaaaaaaa',
+      't'.repeat(MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS),
+      'html',
+      'l'.repeat(50),
+      content,
+    ]);
   });
 });

@@ -4,7 +4,6 @@ import {
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactUpdateResponseSchema,
-  ManagedCloudPublishedArtifactVersionDetailSchema,
   ManagedCloudPublishedArtifactVersionListResponseSchema,
   managedCloudPublishedArtifactDataPath,
   managedCloudPublishedArtifactPath,
@@ -61,16 +60,7 @@ export async function republishSiteVersion(
   site: Pick<ManagedCloudPublishedArtifact, 'token' | 'artifactId'>,
   version: number,
 ): Promise<void> {
-  const detail = ManagedCloudPublishedArtifactVersionDetailSchema.parse(
-    await api.get<unknown>(managedCloudPublishedArtifactVersionPath(site.token, version)),
-  );
-  await api.post<unknown>(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH, {
-    artifactId: site.artifactId,
-    title: detail.title,
-    kind: detail.kind,
-    ...(detail.language ? { language: detail.language } : {}),
-    content: detail.content,
-  });
+  await api.post<unknown>(managedCloudPublishedArtifactVersionPath(site.token, version));
 }
 
 export async function readSiteData(

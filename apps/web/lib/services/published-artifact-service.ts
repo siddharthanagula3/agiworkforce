@@ -287,10 +287,17 @@ export function buildPublishedArtifactUrl(token: string): string {
   return `${SITE_URL}/shared-artifact/${token}`;
 }
 
-export async function publishArtifactRecord(
+async function preparePublishArtifactRecord(
   db: DatabaseAdapter,
   input: PublishArtifactRecordInput,
-): Promise<PublishedArtifact> {
+): Promise<{
+  userId: string;
+  artifactId: string;
+  conversationId: string | null;
+  title: string;
+  language: string | null;
+  content: string;
+}> {
   const userId = input.userId?.trim();
   if (!userId) throw new PublishedArtifactValidationError('userId is required');
 
@@ -348,6 +355,16 @@ export async function publishArtifactRecord(
     );
   }
 
+  return { userId, artifactId, conversationId, title, language, content };
+}
+
+export async function publishArtifactRecord(
+  db: DatabaseAdapter,
+  input: PublishArtifactRecordInput,
+): Promise<PublishedArtifact> {
+  const { userId, artifactId, conversationId, title, language, content } =
+    await preparePublishArtifactRecord(db, input);
+
   let rows: PublishedArtifactRow[];
   try {
     rows = await db.query<PublishedArtifactRow>(
@@ -399,6 +416,46 @@ export async function publishArtifactRecord(
     );
   }
   return rowToPublishedArtifact(row);
+}
+
+export async function restorePublishedArtifactRecord(
+  db: DatabaseAdapter,
+  input: PublishArtifactRecordInput & { publishedArtifactId: string; token: string },
+): Promise<PublishedArtifact | null> {
+  if (!input.publishedArtifactId || !PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
+  const { userId, artifactId, title, language, content } =
+    await preparePublishArtifactRecord(db, input);
+
+  let rows: PublishedArtifactRow[];
+  try {
+    rows = await db.query<PublishedArtifactRow>(
+      `update public.published_artifacts
+          set title = case when title = '' then $5 else title end,
+              kind = $6, language = $7, content = $8, updated_at = now()
+        where user_id = $1 and id = $2 and artifact_id = $3 and token = $4
+        returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                  language, content, visibility, created_at, updated_at`,
+      [
+        userId,
+        input.publishedArtifactId,
+        artifactId,
+        input.token,
+        title,
+        input.kind,
+        language,
+        content,
+      ],
+    );
+  } catch (error) {
+    if (isRowLevelSecurityDenial(error)) {
+      throw new PublishedArtifactOwnershipError(
+        'Row-level security refused the publish: the artifact is not yours to publish.',
+      );
+    }
+    throw error;
+  }
+  const row = rows[0];
+  return row ? rowToPublishedArtifact(row) : null;
 }
 
 export async function unpublishArtifactRecord(
@@ -721,6 +778,56 @@ export async function readPublishedArtifactVersion(
     kind: row.kind,
     language: row.language,
     content: row.content,
+  };
+}
+
+export interface PublishedArtifactRestoreSource {
+  publication: PublishedArtifact;
+  snapshot: PublishedArtifactVersionDetail;
+}
+
+export async function readPublishedArtifactRestoreSource(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string; version: number },
+): Promise<PublishedArtifactRestoreSource | null> {
+  const userId = input.userId.trim();
+  const token = input.token.trim();
+  if (!userId || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
+  if (!Number.isSafeInteger(input.version) || input.version < 1) return null;
+
+  const [row] = await db.query<
+    PublishedArtifactRow & {
+      snapshot_version: number | string;
+      snapshot_title: string;
+      snapshot_kind: string;
+      snapshot_language: string | null;
+      snapshot_content: string;
+    }
+  >(
+    `select publication.id, publication.token, publication.user_id, publication.artifact_id,
+            publication.conversation_id, publication.title, publication.kind,
+            publication.language, publication.content, publication.visibility,
+            publication.created_at, publication.updated_at,
+            snapshot.version as snapshot_version, snapshot.title as snapshot_title,
+            snapshot.kind as snapshot_kind, snapshot.language as snapshot_language,
+            snapshot.content as snapshot_content
+       from public.published_artifacts publication
+       join public.published_artifact_versions snapshot
+         on snapshot.published_artifact_id = publication.id and snapshot.user_id = $2
+      where publication.token = $1 and publication.user_id = $2 and snapshot.version = $3
+      limit 1`,
+    [token, userId, input.version],
+  );
+  if (!row) return null;
+  return {
+    publication: rowToPublishedArtifact(row),
+    snapshot: {
+      version: toVersionNumber(row.snapshot_version),
+      title: row.snapshot_title,
+      kind: row.snapshot_kind,
+      language: row.snapshot_language,
+      content: row.snapshot_content,
+    },
   };
 }
 
