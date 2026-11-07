@@ -15216,3 +15216,60 @@ server revision/CAS, durable uncertain-outcome reconciliation and the existing
 successful-malformed-payload-to-empty behavior remain outside the correction.
 No tests, lint, typechecks, builds, installs, product/browser or live-provider
 execution, push or deployment ran.
+
+## WEB-SITE-SETTINGS-FIELD-COMPOSITION-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded correction
+`53492c64edb8f5f501aa5b4bc99109cd70f60854` is independently source-reviewed only.
+This is misleading client sharing state, not an authorization bypass or observed
+live exposure. The user-requested backend audience change remains in force.
+
+SiteDetail renders Name and Sharing with independent saving flags. Previously,
+useSiteActions built each successful completion by spreading its whole captured
+site snapshot, and both SiteDetail and SitesPage replaced current records with
+that result. Starting a rename while invited, changing to public, then receiving
+the rename response last could make the header, selected audience and conditional
+invited editor look invite-only even though the server remained public. The
+reverse completion order could discard the displayed new title. Backend SQL
+updates title and visibility separately; this did not require reversing server
+write order or a response with incorrect fields. Unrelated fields in the reply
+were ignored in favor of the captured pre-request snapshot.
+
+The hook now captures token and artifactId before the request, then emits a
+SiteUpdate carrying only returned fields owned by that operation. Rename owns
+title/update metadata; sharing owns visibility/shareUrl/update metadata. Both
+consumers use functional state setters and the same mergeSiteUpdate helper to
+merge into the current matching token and artifactId. Existing version, kind,
+conversation, content-size and other fields survive an independent completion.
+Non-ready state is not replaced, missing records are not inserted, and an update
+cannot overwrite a differently identified current record. Sharing still records
+its canonical publication mapping under the captured artifactId.
+
+The helper retains a valid current updatedAt when it is later than a valid
+incoming timestamp or the incoming string is invalid. Otherwise it uses the
+incoming metadata. This never suppresses a title or audience field patch and
+does not mutate the input record. The existing response schema accepts nonempty
+strings, so finite parsing is explicit. Timestamp handling is conservative
+display metadata, not a revision, clock-consistency rule or server/CAS guarantee.
+In particular, older same-field completions are not resolved by this comparison.
+
+Source-reviewed production scope is useSiteActions.ts, SiteDetail.tsx and
+SitesPage.tsx. The existing SiteDetail.test.tsx gains deferred-service cases using
+the actual Name/Sharing components and hook, with only the invited-viewer boundary
+stubbed to prevent unrelated GETs. Both response-arrival orders use a consistent
+rename-then-sharing SQL snapshot model. Separate rejected-promise cases prove
+that no client patch is emitted on rejection, not that the backend rolled back.
+The new SitesPage.updates.test.tsx explicitly models its callback/card-prop
+boundary and covers both patch orders, complete current record preservation,
+identity mismatches, empty/loading/error state and six timestamp combinations.
+It does not claim ordinary simultaneous modal interactions: those dialogs prevent
+closing while saving. Shared store/callback state is reset, and existing configured
+mock reset and cleanup apply. Both fixture files remain unrun.
+
+Full reload/restore GET ordering, same-field concurrency, cross-tab or other
+controllers, uncertain backend outcomes, canonical publication-cache races and
+route/lifecycle ownership remain outside this correction. A late field patch can
+preserve unrelated refreshed metadata without making every refresh consistent.
+No service, backend, permission, confirmation or response-schema contract changed.
+No tests, lint, typechecks, builds, installs, product/browser or live-provider
+execution, push or deployment ran.

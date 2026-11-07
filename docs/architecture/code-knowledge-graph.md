@@ -6420,3 +6420,29 @@ server CAS and durable reconciliation are unchanged. Deferred-fetch fixtures and
 the strengthened existing keyed-caller source assertion are authored but unrun;
 no runtime or browser acceptance is implied. See
 WEB-SITE-VIEWER-REQUEST-OWNERSHIP-01.
+
+## Site settings compose operation-owned fields
+
+Accepted `53492c64edb8f5f501aa5b4bc99109cd70f60854` replaces useSiteActions' full
+captured-site completion with SiteUpdate: captured token/artifactId plus either
+returned title/update metadata or visibility/shareUrl/update metadata. Both
+SiteDetail and SitesPage merge through one local helper inside functional state
+setters. Only a current matching record is updated; non-ready states and missing
+records are preserved. Independent name/audience completions no longer replace
+each other's fields or unrelated version/content metadata. Canonical audience
+recording remains attached to the operation's captured artifactId.
+
+A finite parsed current timestamp is retained when later than the incoming value
+or when the latter is invalid. Owned fields still apply regardless of timestamp.
+This is display metadata preservation, not CAS or same-field write ordering. The
+ordinary detail-page Name/Sharing overlap is source-confirmed; list-page modal
+overlap is not claimed. Backend updates are field-specific and unchanged, so the
+fixed privacy-status regression was client presentation, not restored server privacy.
+
+Actual detail controls/hook with deferred service replies and an invited-editor
+stub, plus an explicit list callback/card boundary, are authored unrun fixtures.
+They cover both response orders, rejection without client patch, identity/no-
+insertion guards and valid/invalid timestamps. No browser or runtime acceptance
+is implied. Reload/restore ordering, same-field or cross-controller changes,
+uncertain outcomes, cache races and route/lifecycle ownership remain open. See
+WEB-SITE-SETTINGS-FIELD-COMPOSITION-01.
