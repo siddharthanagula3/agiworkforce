@@ -149,6 +149,28 @@ describe('explicit caller-owned 401 recovery', () => {
     jest.restoreAllMocks();
   });
 
+  it.each([401, 409, 500, 'network'] as const)('does not application-replay protected PUT after %s (UNRUN)', async (outcome) => {
+    activateCloudAccount('protected-cancellation-owner');
+    const accountEpoch = captureCloudAccountEpoch();
+    const body = Object.freeze({ expectedSchedule: Object.freeze({
+      requestedAt: null, scheduledFor: '2026-11-08T18:00:00.123456Z',
+    }) });
+    const fetch = jest.spyOn(globalThis, 'fetch');
+    if (outcome === 'network') fetch.mockRejectedValueOnce(new Error('Response lost'));
+    else fetch.mockResolvedValueOnce(makeResponse(outcome, { error: 'Refused', reason: 'schedule_changed' }));
+    mockRefreshAuthSession.mockResolvedValue(true);
+    await expect(api.put('/api/user/delete-account/cancel-schedule', body, {
+      accountEpoch, auth401Recovery: 'caller-owned',
+    })).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]?.[0]).toBe('https://api.test.local/api/user/delete-account/cancel-schedule');
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', body: JSON.stringify(body) });
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+  });
+
   it('preserves the raw refusal and sends the original bearer once', async () => {
     const fetch = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('original refusal', {
       status: 401, statusText: 'Unauthorized', headers: { 'x-request-id': 'original-request' },
