@@ -17023,9 +17023,53 @@ content/version bytes, and server policy may redact submitted content.
 
 Three source/fixture files are independently reviewed. Receipt rejection,
 confirmed actual metadata and existing interrupted/stale panel fixtures are
-authored/adapted UNRUN. PATCH audience acknowledgement fallback, durable unknown
-writes, ambient credential binding, cross-controller ordering and live
-browser/auth/database acceptance remain open. No product tests, lint,
+authored/adapted UNRUN. The following continuation bounds web chat PATCH
+acknowledgement fallback. Durable unknown writes, ambient credential binding,
+cross-controller ordering and live browser/auth/database acceptance remain open. No product tests, lint,
 typechecks, builds, installs, app/module execution, live services/databases,
 migration application, fetch, push or deployment. The prior recovery-chain,
 unapplied-migration and lost-history limits still apply.
+
+### Web audience changes require matching acknowledgement
+
+Continuation ecae371624f140b8cec5ef7059e542280f10f28e, 2026-11-07, narrows the web chat audience PATCH
+boundary. Previously any successful JSON response could reuse the original URL
+and requested audience when fields were missing or unknown. The response token
+was ignored. Normal resolution then updated the Sites cache and panel metadata,
+and Preview announced the requested restriction or public access. This is a
+qualified false-acknowledgement path, not proof of an actual policy bypass or
+observed disclosure.
+
+A new strict shared update receipt extends the existing update-response schema.
+It requires a 24-character token and an absolute HTTP(S) share link with that
+token's exact parsed path, no credentials, query or fragment. This is parsed
+URL shape, not raw-string canonicality. The link predicate is
+factored from Publish without changing Publish's validation semantics. Existing
+web/mobile Sites consumers keep their original response schema and behavior;
+they do not gain strict receipt or requested-target binding from this slice.
+
+The web chat client parses the strict receipt and requires its token and audience
+to equal the requested values before resolving. It uses the returned validated
+URL and audience without either fallback. Invalid JSON, incomplete legacy
+receipts, mismatched target or mismatched audience report that access may have
+changed but acknowledgement is unconfirmed. This does not prove rollback, current
+state after later writes or successful revocation of access. URL origin is not
+pinned, and other metadata is shape-checked rather than semantically certified.
+
+Panel cache adoption and Preview success already follow successful resolution,
+so those product components need no change. Their existing confirmation,
+lease/view/revision/pending-operation and stale-result guards remain. The
+client's non-2xx/transport handling, automatic lookup, CSRF/cookie credentials and
+token extraction for other consumers remain unchanged. No new retries, extra
+writes, recovery GETs, controls, durable uncertainty or permission expansion is
+introduced. After an uncertain PATCH, existing displayed/cached metadata may
+still reflect earlier knowledge; it is not certified as current by this slice.
+
+Six source/fixture files are independently reviewed. Shared receipt, direct
+client and real-client Preview rejection fixtures are authored UNRUN; panel
+success and stale/interrupted PATCH fixtures now carry complete receipts.
+Mobile chat audience acknowledgements, legacy Sites target binding, DELETE
+receipts, durable reconciliation and live browser/auth/database behavior remain
+open. No product tests, lint, typechecks, builds, installs, app/module execution,
+live services/databases, migration application, fetch, push or deployment.
+Recovery dependencies, unapplied migrations and lost-history limits remain.

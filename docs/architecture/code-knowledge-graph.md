@@ -7288,8 +7288,30 @@ adapter validation without a new lifecycle guarantee. CSRF/cookie transport,
 shared origin checks and permissions remain unchanged. Library/audience
 confirmations stay intact; chat Publish's direct invocation is not changed. The receipt
 does not pin URL origin or verify content bytes. No retries, new recovery reads or durable unknown-write record are added.
-Non-2xx/transport error handling and existing automatic lookup remain unchanged. PATCH acknowledgement fallback and
-cross-controller/ambient-credential limits remain open.
+Non-2xx/transport error handling and existing automatic lookup remain unchanged.
+Web chat PATCH acknowledgement is bounded below; cross-controller and ambient
+credential limits remain open.
 
 Fixtures are authored/adapted UNRUN. No product checks, live service/database or
+migration actions, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web audience updates adopt a strict acknowledgement
+
+Continuation ecae371624f140b8cec5ef7059e542280f10f28e adds a strict update receipt beside the unchanged
+legacy update response. Publish and strict Update share the same HTTP(S),
+parsed-token-path, no-credentials/query/fragment predicate; Publish semantics are
+unchanged. Existing web/mobile Sites consumers retain their prior schema.
+
+Web chat audience PATCH now requires parsed receipt token and visibility to
+match the requested target and audience before resolving. Panel cache and
+Preview success remain downstream of that result. Malformed, incomplete or
+mismatched acknowledgements are unconfirmed, not rollback or current-state
+proof. URL origin and full metadata semantics are not certified.
+
+Confirmation, lease/view/revision/mutation guards, non-2xx/transport handling,
+automatic lookup and ambient CSRF/cookie credentials remain unchanged. No new
+retry, recovery read, durable uncertainty or permission expansion is added.
+Earlier displayed/cache knowledge may remain after unknown PATCH. Mobile chat,
+legacy Sites binding and DELETE receipt behavior remain outside this slice.
+Fixtures are authored/adapted UNRUN; no product checks, live service/database or
 migration actions, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
