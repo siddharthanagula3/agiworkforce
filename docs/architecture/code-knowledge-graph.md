@@ -6134,9 +6134,29 @@ pre-promotion notices remain separate. Two independently reviewed files contain
 source changes and unrun route mocks, not live provider/database acceptance.
 See WEB-EMAIL-CHANGE-COMPLETION-01.
 
+## API-key authentication observes current project admission
+
+Accepted `562fb2dc0fc6a80031b58dc8c7e9727d011d74d9` adds a correlated owned-live-project
+predicate to the existing canonical owner-connected key lookup. A NULL reference
+remains the default project; non-NULL references require matching project ID and
+owner with no archive timestamp. Existing prefix/revocation/expiry/hash checks,
+projection and last-used behavior remain, without a Personal or workspace filter.
+API-auth and CSRF share this verifier. Failed key admission cannot authenticate;
+a separate valid CSRF proof can still satisfy the CSRF check, not authentication.
+
+This observes only the lookup statement snapshot. It does not synchronize key
+creation/rotation with archive, persist revocation across workspaces, emit missing
+events, cancel admitted requests or repair project spending. Old verifier versions
+still omit the predicate. Hard deletion's ON DELETE SET NULL can reclassify an
+otherwise-live key as projectless; this is not permanent archive revocation.
+The documented BYPASSRLS service-role contract and actual deployed RLS behavior
+remain distinct. One production and three fixture files were independently
+reviewed; predicate-sensitive models and exact SQL/caller assertions are unrun,
+not PostgreSQL or concurrency evidence. See WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01.
+
 ## Reconstruction boundary
 
-Only the two hundred fifty-two accepted production slices traced above are
+Only the two hundred fifty-three accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

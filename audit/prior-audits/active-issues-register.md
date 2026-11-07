@@ -12997,8 +12997,10 @@ typechecks, builds, service/runtime calls, push or deployment ran.
 
 ## WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01
 
-Severity: High. Independently source-confirmed 2026-11-05; no product correction
-or runtime reproduction in this slice.
+Severity: High. Canonical project-state request admission source-corrected on
+2026-11-07 in `562fb2dc0fc6a80031b58dc8c7e9727d011d74d9`; issuance/rotation,
+archive revocation scope and database/runtime acceptance remain open. Independently
+source-confirmed, not runtime-reproduced.
 
 Settings key creation checks `readLiveDeveloperProject` before count, step-up and
 rate-limit work, outside the canonical key insertion. `ApiKeyService.createApiKey`
@@ -13016,9 +13018,9 @@ use the workspace visibility/writability policies from 0073, 0110 and 0272.
 Settings creation and project archive use normal active-workspace resolution;
 support confirmation explicitly uses Personal scope. The same project can thus
 hold keys in several workspaces, but archive's scoped UPDATE reaches only the
-current workspace. Other existing keys can remain unrevoked. Canonical key
-verification checks hash, revocation and expiry, not project archive status;
-other account/endpoint admission gates still apply.
+current workspace. Other existing keys can remain unrevoked. Before the bounded admission
+correction below, canonical key verification checked hash, revocation and expiry,
+not project archive status. Other account/endpoint admission gates still apply.
 
 Source owners: `lib/services/developer-project-service.ts`,
 `lib/services/api-key-service.ts`, `app/api/settings/api-keys/route.ts`,
@@ -13044,6 +13046,41 @@ revocation events. Future acceptance must cover both archive interleavings,
 concurrent rotations, changed association, rollback and multi-workspace keys.
 No such database or runtime checks ran here.
 
+
+Bounded source correction, 2026-11-07: the existing owner-connected canonical
+verification query now additionally requires either a NULL project reference or
+an EXISTS row with matching project ID, matching key owner and archived_at NULL.
+The query retains its projection, prefix, revocation and expiry predicates. Hash
+verification and best-effort last-used updates remain after candidate admission;
+refused project candidates reach neither. No Personal/organization scope binding,
+new metadata, migration or project lock is introduced. The connection's unbound
+query path and documented BYPASSRLS role contract were read; actual deployed role
+privileges and FORCE RLS behavior remain unverified.
+
+Both production raw-key consumers use this verifier: API authentication refuses
+invalid/errored keys without cookie fallback; CSRF no longer grants the invalid
+key's Bearer exemption, but a separate valid CSRF proof can still pass that check
+without authenticating the key. No positive API-key/project admission cache or
+alternate sk_live verifier was found in the searched production source. Separate
+admin credentials and developer JWTs are different authentication paths.
+
+This is statement-snapshot admission, not persisted revocation. Archive can
+commit after the lookup while hashing or an admitted request continues. Old
+verifiers still omit the guard, requiring coordinated rollout for consistent
+admission. Hard project deletion uses ON DELETE SET NULL and can restore allowed
+projectless admission for an otherwise-live key; dangling non-NULL references
+instead refuse. Issuance/rotation races, cross-workspace revocation and missing
+events, in-flight termination, budget/workspace semantics and deletion history
+remain open.
+
+One production file and three fixture files were independently source-reviewed.
+Canonical and real-verifier caller fixtures use predicate-sensitive models with
+separate exact SQL assertions, including owned/foreign/archived/missing/NULL
+states, Personal/organization rows, modeled archive, expiry/revocation/hash,
+lookup errors, scope and CSRF fallback. The existing expiry fixture's unaliased
+predicates and NULL project inputs remain compatible. Fixtures are unrun, not
+PostgreSQL, RLS or concurrency proof. No product checks, live services, database
+changes, push or deployment occurred.
 
 ## WEB-DEVELOPER-MUTATION-RETRY-01
 
