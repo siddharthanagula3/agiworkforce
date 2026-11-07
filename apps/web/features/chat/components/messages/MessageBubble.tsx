@@ -198,6 +198,7 @@ import {
   isInputTurnLive,
   type ToolApprovalDecision,
 } from '@/lib/hooks/useChatStream';
+import { hasPendingMessageApproval } from '../../lib/pending-approval';
 import { ToolApprovalCard } from '../approvals/ToolApprovalCard';
 import { ConnectorInputRequestForm } from '@/features/connectors/components/ConnectorInputRequestForm';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
@@ -536,6 +537,7 @@ interface Message {
     streamError?: StoreMessageMetadata['streamError'];
     /** The run a Task feedback report is filed against. */
     cloudAgentRun?: StoreMessageMetadata['cloudAgentRun'];
+    cloudApproval?: StoreMessageMetadata['cloudApproval'];
     isPinned?: boolean;
     requestId?: string;
     tokensUsed?: number;
@@ -995,6 +997,7 @@ const MessageBubbleComponent = function MessageBubble({
   // below would render live-wired but silently no-op (Finding 1). Only
   // meaningful when a resolver context exists at all -- a standalone render
   // with no provider isn't "expired", it just never had approval wired.
+  const awaitingApproval = hasPendingMessageApproval(message);
   const approvalTurnExpired = Boolean(resolveToolApproval) && !isApprovalTurnLive(message.id);
   const handleToolDecision = useCallback(
     (toolCallId: string, decision: ToolApprovalDecision) => {
@@ -2210,7 +2213,7 @@ const MessageBubbleComponent = function MessageBubble({
    * nothing to show. Retry already lives in the action bar underneath.
    */
   const producedNoVisibleOutput = useMemo(() => {
-    if (isUser || message.isStreaming) return false;
+    if (isUser || message.isStreaming || awaitingApproval) return false;
     if (message.metadata?.finishReason === 'stopped') return false;
     // A turn holding an approval has not finished, and Regenerate is the wrong
     // instruction for it: it abandons the decision and repeats the same stop.
@@ -2248,6 +2251,7 @@ const MessageBubbleComponent = function MessageBubble({
     );
   }, [
     isUser,
+    awaitingApproval,
     asksForInput,
     message.isStreaming,
     message.metadata,
@@ -2404,11 +2408,10 @@ const MessageBubbleComponent = function MessageBubble({
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
     !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
-  // The turn's SSE connection stays open while a decision is outstanding, so
-  // `isStreaming` remains true although nothing is being written.
   const pausedForDecision =
     !isUser &&
-    (canonicalActivity?.status === 'awaiting-approval' ||
+    (awaitingApproval ||
+      canonicalActivity?.status === 'awaiting-approval' ||
       Boolean(
         message.metadata?.tools?.some(
           (tool) =>
@@ -2469,7 +2472,7 @@ const MessageBubbleComponent = function MessageBubble({
   // result on a question that was never about the web is noise with a Retry
   // attached.
   const searchNotice = useMemo<'no-results' | 'not-invoked' | 'memory-grounded' | null>(() => {
-    if (isUser || message.isStreaming) return null;
+    if (isUser || message.isStreaming || awaitingApproval) return null;
     if (message.metadata?.webSearchRequested !== true) return null;
     if (producedNoVisibleOutput) return null;
     if (rendersResearchPlan(message.metadata?.research)) return null;
@@ -2486,6 +2489,7 @@ const MessageBubbleComponent = function MessageBubble({
     return searchSources.length > 0 ? null : 'no-results';
   }, [
     isUser,
+    awaitingApproval,
     message.isStreaming,
     message.metadata,
     canonicalActivity,
@@ -3559,13 +3563,31 @@ const MessageBubbleComponent = function MessageBubble({
           )}
 
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex items-center justify-end gap-2">
+              {awaitingApproval && (
+                <span className="text-xs text-muted-foreground">Sources so far</span>
+              )}
               <SourcesControl
                 messageId={message.id}
                 cited={citedSources}
                 more={moreSources}
                 query={searchQuery}
                 memories={memoryCitations}
+              />
+            </div>
+          )}
+
+          {awaitingApproval && (
+            <div className="mt-2">
+              <TranscriptNotice
+                role="status"
+                tone="neutral"
+                icon={CircleAlert}
+                message={
+                  approvalTurnExpired
+                    ? 'This response is partial. The approval request can no longer be resumed; send a new message to try again.'
+                    : 'Waiting for approval. This response is partial; review the tool request to continue.'
+                }
               />
             </div>
           )}
@@ -3816,6 +3838,7 @@ const MessageBubbleComponent = function MessageBubble({
                     {!isUser && variantPager}
 
                     {!isUser &&
+                      !awaitingApproval &&
                       !voiceModeActive &&
                       onRegenerate &&
                       message.metadata?.toolType !== 'image-generation' &&
@@ -4193,6 +4216,7 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.thinkingSegments === next?.thinkingSegments &&
     prev?.thinkingSteps === next?.thinkingSteps &&
     prev?.agentActivity === next?.agentActivity &&
+    prev?.cloudApproval === next?.cloudApproval &&
     prev?.research === next?.research &&
     prev?.agiWorkPlan === next?.agiWorkPlan &&
     prev?.agiWorkPlanReview === next?.agiWorkPlanReview &&
