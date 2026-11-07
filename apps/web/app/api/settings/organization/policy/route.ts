@@ -18,7 +18,10 @@ import {
   withWorkspaceRevisionHeaders,
 } from '@/lib/server/workspace-revision';
 import { readJsonBody } from '@/lib/read-json-body';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
@@ -175,8 +178,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const effective = await getEffectiveOrganizationPolicy(db, membership.organizationId);
@@ -204,8 +209,10 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);

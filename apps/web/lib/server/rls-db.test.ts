@@ -59,7 +59,7 @@ async function ownerConnectionAnswers(
 }
 
 const serviceQuery = vi.fn(ownerConnectionAnswers);
-const serviceExecute = vi.fn(async () => 0);
+const serviceExecute = vi.fn(async (_sql: string, _params?: unknown[]) => 0);
 const serviceTransaction = vi.fn(async (callback: (tx: DatabaseAdapter) => Promise<unknown>) =>
   callback({ query: serviceQuery, execute: serviceExecute } as unknown as DatabaseAdapter),
 );
@@ -376,7 +376,10 @@ describe('getUserScopedDb on a cookie session', () => {
     expect(scoped.userId).toBe('user_cookie');
     // The mfa gate resolves its scope from membership, so it takes no request;
     // the ip allow list still needs one, to read the client address.
-    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie');
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie', {
+      subject: 'user_cookie',
+      sessionId: null,
+    });
     expect(mockAssertIpAllowList).toHaveBeenCalledWith('user_cookie', request);
   });
 
@@ -410,7 +413,10 @@ describe('getCurrentCookieUserRlsDb', () => {
     expect(result?.userId).toBe('user_cookie_share');
     expect(mockVerifyKey).not.toHaveBeenCalled();
     expect(mockVerifyToken).not.toHaveBeenCalled();
-    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie_share');
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie_share', {
+      subject: 'user_cookie_share',
+      sessionId: null,
+    });
     expect(mockAssertIpAllowList).toHaveBeenCalledWith('user_cookie_share', request);
     expect(rlsWithUser).toHaveBeenCalledWith('cookie-jwt');
     expect(rlsWithOrg).not.toHaveBeenCalled();
@@ -438,7 +444,10 @@ describe('getCurrentCookieUserRlsDb', () => {
     await expect(getCurrentCookieUserRlsDb(apiKeyRequest())).resolves.toMatchObject({
       userId: 'account-share',
     });
-    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('account-share');
+    expect(mockAssertMfaPolicy).toHaveBeenCalledWith('account-share', {
+      subject: 'user_cookie_share',
+      sessionId: null,
+    });
   });
 
   it.each(['mfa', 'ip'] as const)('does not create an RLS scope after a %s denial', async (gate) => {
@@ -468,5 +477,227 @@ describe('authenticated surface carried by a scoped database', () => {
       userId: 'user_verified', token, ...(boundSurface ? { boundSurface } : {}),
     });
     expect(scoped.surface).toBe(expected);
+  });
+});
+
+vi.mock('@/lib/services/org-sharing-service', () => ({
+  resolveOrgMembershipForOrganization: vi.fn(async () => null),
+}));
+
+vi.mock('@/lib/feature-flags/tenant-lockdown', () => ({
+  assertTenantNotLockedDown: vi.fn(async () => {}),
+}));
+
+async function resetPolicyBoundaries(): Promise<void> {
+  const { resolveOrgMembershipForOrganization } = await import('@/lib/services/org-sharing-service');
+  const { assertTenantNotLockedDown } = await import('@/lib/feature-flags/tenant-lockdown');
+  const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+  vi.mocked(resolveOrgMembershipForOrganization).mockReset().mockResolvedValue(null);
+  vi.mocked(assertTenantNotLockedDown).mockReset().mockResolvedValue(undefined);
+  vi.mocked(resolveActiveOrganizationId).mockReset().mockResolvedValue(null);
+  mockAssertMfaPolicy.mockReset().mockResolvedValue(undefined);
+  mockAssertIpAllowList.mockReset().mockResolvedValue(undefined);
+  mockAuth.mockReset();
+  mockVerifyToken.mockReset();
+}
+
+describe('owner-policy admission through real auth and claimed scope', () => {
+  const organizationId = '11111111-1111-4111-8111-111111111111';
+  const otherOrganizationId = '22222222-2222-4222-8222-222222222222';
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    serviceQuery.mockReset().mockImplementation(ownerConnectionAnswers);
+    await resetPolicyBoundaries();
+    mockAssertMfaPolicy.mockResolvedValue(undefined);
+    mockAssertIpAllowList.mockResolvedValue(undefined);
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+    vi.mocked(resolveActiveOrganizationId).mockResolvedValue(organizationId);
+  });
+
+  it.each([
+    { transport: 'cookie', mapped: false },
+    { transport: 'cookie', mapped: true },
+    { transport: 'bearer', mapped: false },
+    { transport: 'bearer', mapped: true },
+  ])('captures one $transport identity and target (mapped=$mapped)', async ({ transport, mapped }) => {
+    const providerSubject = 'user_policy_provider';
+    const userId = mapped ? 'account_policy_product' : providerSubject;
+    const token = 'opaque-provider-session-token';
+    const getToken = vi.fn(async () => token);
+    mockAuth.mockResolvedValue({ userId: providerSubject, getToken });
+    mockVerifyToken.mockResolvedValue({ sub: providerSubject });
+    serviceQuery.mockImplementation(async (sql, params) =>
+      String(sql).includes('left join public.identities')
+        ? [{ identity_id: mapped ? 'identity-policy' : null, account_id: userId, erased: false }]
+        : ownerConnectionAnswers(sql, params),
+    );
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+    const { assertTenantNotLockedDown } = await import('@/lib/feature-flags/tenant-lockdown');
+    const { resolveOrgMembershipForOrganization } = await import('@/lib/services/org-sharing-service');
+    vi.mocked(assertTenantNotLockedDown).mockImplementationOnce(async () => {
+      vi.mocked(resolveActiveOrganizationId).mockResolvedValue(otherOrganizationId);
+    });
+    vi.mocked(resolveOrgMembershipForOrganization).mockResolvedValue(null);
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
+    try {
+      const scoped = await getUserScopedDb(
+        new NextRequest('https://example.test/api/organizations/mfa-policy', {
+          headers: transport === 'bearer' ? { authorization: `Bearer ${token}` } : {},
+        }),
+        { mfaGateExemptForOwner: true },
+      );
+      expect(scoped).toMatchObject({ userId, organizationId });
+      expect(resolveActiveOrganizationId).toHaveBeenCalledTimes(1);
+      expect(assertTenantNotLockedDown).toHaveBeenCalledWith(organizationId);
+      expect(resolveOrgMembershipForOrganization).toHaveBeenCalledWith(expect.anything(), userId, organizationId);
+      expect(mockAssertMfaPolicy).toHaveBeenCalled();
+      expect(rlsWithUser).not.toHaveBeenCalled();
+      expect(rlsWithOrg).not.toHaveBeenCalled();
+      expect(mockAuth).toHaveBeenCalledTimes(transport === 'cookie' ? 1 : 0);
+      expect(getToken).toHaveBeenCalledTimes(transport === 'cookie' ? 1 : 0);
+      expect(mockVerifyToken).toHaveBeenCalledTimes(transport === 'bearer' ? 1 : 0);
+
+      scoped.userId = 'changed-return-value';
+      scoped.organizationId = otherOrganizationId;
+      serviceExecute.mockClear();
+      serviceQuery.mockClear();
+      await scoped.db.query('select policy_fixture');
+      await scoped.db.execute('update policy_fixture set enabled = true');
+      await scoped.db.transaction(async (tx) => {
+        await tx.query('select policy_fixture_in_transaction');
+      });
+      expect(serviceExecute).toHaveBeenCalledWith('set local role app_rls');
+      const bindings = serviceQuery.mock.calls.filter(([sql]) => String(sql).includes('set_config'));
+      expect(bindings).toHaveLength(3);
+      for (const [, params] of bindings) expect(params).toEqual([userId, organizationId]);
+      const roleOrders = serviceExecute.mock.calls.flatMap(([sql], index) =>
+        sql === 'set local role app_rls' ? [serviceExecute.mock.invocationCallOrder[index]!] : [],
+      );
+      const bindingOrders = serviceQuery.mock.calls.flatMap(([sql], index) =>
+        String(sql).includes('set_config') ? [serviceQuery.mock.invocationCallOrder[index]!] : [],
+      );
+      const bodyOrders = [
+        serviceQuery.mock.invocationCallOrder[1]!,
+        serviceExecute.mock.invocationCallOrder[2]!,
+        serviceQuery.mock.invocationCallOrder[4]!,
+      ];
+      for (let index = 0; index < 3; index++) {
+        expect(roleOrders[index]).toBeLessThan(bindingOrders[index]!);
+        expect(bindingOrders[index]).toBeLessThan(bodyOrders[index]!);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each(['lookup', 'mfa', 'ip'] as const)('does not construct a database after %s denial', async (gate) => {
+    mockAuth.mockResolvedValue({ userId: 'user_denied_policy', getToken: async () => 'opaque-token' });
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+    const denial = createError.serviceUnavailable('fixture denial');
+    if (gate === 'lookup') vi.mocked(resolveActiveOrganizationId).mockRejectedValueOnce(denial);
+    if (gate === 'mfa') mockAssertMfaPolicy.mockRejectedValueOnce(denial);
+    if (gate === 'ip') mockAssertIpAllowList.mockRejectedValueOnce(denial);
+    await expect(getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy'), {
+      mfaGateExemptForOwner: true,
+    })).rejects.toBe(denial);
+    expect(serviceTransaction).not.toHaveBeenCalled();
+    expect(serviceExecute).not.toHaveBeenCalled();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects opting out of organization resolution on the recovery path', async () => {
+    await expect(getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy'), {
+      mfaGateExemptForOwner: true,
+      resolveOrganization: false,
+    })).rejects.toBeInstanceOf(Error);
+    expect(serviceTransaction).not.toHaveBeenCalled();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('owner-policy receipt boundary', () => {
+  const organizationId = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    serviceQuery.mockReset().mockImplementation(ownerConnectionAnswers);
+    await resetPolicyBoundaries();
+  });
+
+  it.each([undefined, { userId: 'another-account', organizationId }])(
+    'refuses an absent or mismatched receipt without resolving again',
+    async (organizationScope) => {
+      const auth = await import('@/lib/api-auth');
+      const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+      const spy = vi.spyOn(auth, 'getClerkAuthUser').mockResolvedValue({
+        userId: 'account_receipt',
+        organizationScope,
+      });
+      try {
+        await expect(getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy', {
+          headers: { authorization: 'Bearer opaque-session' },
+        }), { mfaGateExemptForOwner: true })).rejects.toMatchObject({ statusCode: 401 });
+        expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
+        expect(serviceTransaction).not.toHaveBeenCalled();
+        expect(rlsWithUser).not.toHaveBeenCalled();
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it('copies receipt primitives before a caller can mutate the auth result', async () => {
+    const auth = await import('@/lib/api-auth');
+    const receipt = { userId: 'account_receipt', organizationId };
+    const result = { userId: 'account_receipt', organizationScope: receipt };
+    const spy = vi.spyOn(auth, 'getClerkAuthUser').mockResolvedValue(result);
+    try {
+      const scoped = await getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy', {
+        headers: { authorization: 'Bearer opaque-session' },
+      }), { mfaGateExemptForOwner: true });
+      receipt.userId = 'mutated-account';
+      receipt.organizationId = '22222222-2222-4222-8222-222222222222';
+      result.userId = 'mutated-principal';
+      result.organizationScope = { userId: 'replacement-account', organizationId: receipt.organizationId };
+      await scoped.db.query('select receipt_fixture');
+      expect(serviceQuery).toHaveBeenCalledWith(expect.stringContaining('set_config'), [
+        'account_receipt', organizationId,
+      ]);
+      expect(rlsWithUser).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it.each([organizationId, null])('captures exact owner recovery or Personal scope: %s', async (target) => {
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+    const { resolveOrgMembershipForOrganization } = await import('@/lib/services/org-sharing-service');
+    const { assertTenantNotLockedDown } = await import('@/lib/feature-flags/tenant-lockdown');
+    vi.mocked(resolveActiveOrganizationId).mockResolvedValue(target);
+    vi.mocked(resolveOrgMembershipForOrganization).mockResolvedValue(target ? {
+      organizationId: target,
+      role: 'owner',
+    } : null);
+    mockAuth.mockResolvedValue({ userId: 'user_owner_recovery', getToken: async () => 'opaque-cookie' });
+    mockAssertMfaPolicy.mockResolvedValue(undefined);
+    mockAssertIpAllowList.mockResolvedValue(undefined);
+    try {
+      const scoped = await getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy'), {
+        mfaGateExemptForOwner: true,
+      });
+      expect(scoped.organizationId).toBe(target);
+      expect(resolveActiveOrganizationId).toHaveBeenCalledTimes(1);
+      expect(assertTenantNotLockedDown).toHaveBeenCalledWith(target);
+      expect(resolveOrgMembershipForOrganization).toHaveBeenCalledWith(expect.anything(), 'user_owner_recovery', target);
+      expect(mockAssertMfaPolicy).toHaveBeenCalledTimes(target ? 0 : 1);
+      expect(mockAssertIpAllowList).toHaveBeenCalledTimes(1);
+      await scoped.db.query('select owner_recovery_fixture');
+      expect(serviceQuery).toHaveBeenCalledWith(expect.stringContaining('set_config'), ['user_owner_recovery', target ?? '']);
+      expect(rlsWithUser).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(resolveOrgMembershipForOrganization).mockResolvedValue(null);
+      vi.mocked(resolveActiveOrganizationId).mockResolvedValue(null);
+    }
   });
 });

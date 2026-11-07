@@ -27,7 +27,7 @@ import {
   endSessionPastAbsoluteLifetime,
   isSessionPastAbsoluteLifetime,
 } from '@/lib/auth/session-age';
-import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { resolveOrgMembershipForOrganization } from '@/lib/services/org-sharing-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getCachedAccountStatus, setCachedAccountStatus } from '@/lib/server/request-context-cache';
@@ -53,6 +53,10 @@ export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
  */
 export interface AuthResult {
   userId: string;
+  readonly organizationScope?: {
+    readonly userId: string;
+    readonly organizationId: string | null;
+  };
   identityId?: string;
   sessionIdentity?: { readonly subject: string; readonly sessionId: string | null };
   email?: string;
@@ -70,8 +74,14 @@ export interface AuthOptions {
 
 const EXEMPT_ORGANIZATION_ROLE = 'owner';
 
-async function isExemptOrganizationOwner(userId: string): Promise<boolean> {
-  const membership = await resolveOrgMembership(getNeonDb(), userId);
+async function isExemptOrganizationOwner(
+  scope: NonNullable<AuthResult['organizationScope']>,
+): Promise<boolean> {
+  const membership = await resolveOrgMembershipForOrganization(
+    getNeonDb(),
+    scope.userId,
+    scope.organizationId,
+  );
   return membership?.role === EXEMPT_ORGANIZATION_ROLE;
 }
 
@@ -86,12 +96,12 @@ async function isExemptOrganizationOwner(userId: string): Promise<boolean> {
  */
 async function assertMfaPolicyUnlessExemptOwner(
   userId: string,
-  exempt: boolean,
+  organizationScope: AuthResult['organizationScope'],
   enrollment = false,
   sessionIdentity?: AuthResult['sessionIdentity'],
 ): Promise<void> {
   if (enrollment) return;
-  if (exempt && (await isExemptOrganizationOwner(userId))) return;
+  if (organizationScope && (await isExemptOrganizationOwner(organizationScope))) return;
   await assertMfaPolicy(userId, sessionIdentity);
 }
 
@@ -194,6 +204,38 @@ async function assertAccountSecurityUnlessVerifying(
 export async function assertAccountActive(userId: string, request?: NextRequest): Promise<void> {
   await assertAccountLifecycleActive(userId);
   await assertWorkspaceNotLockedDown(userId, request);
+}
+
+async function assertAccountActiveForAuth(
+  userId: string,
+  request: NextRequest,
+  options: AuthOptions,
+): Promise<AuthResult['organizationScope']> {
+  if (!options.mfaGateExemptForOwner) {
+    await assertAccountActive(userId, request);
+    return undefined;
+  }
+
+  await assertAccountLifecycleActive(userId);
+  let organizationId: string | null;
+  try {
+    const resolved = await withDeadline(
+      resolveActiveOrganizationId(getNeonDb(), userId, request),
+      ACCOUNT_STATUS_DEADLINE_MS,
+    );
+    if (resolved === DEADLINE_EXCEEDED) {
+      throw new Error(`workspace lookup exceeded ${ACCOUNT_STATUS_DEADLINE_MS}ms`);
+    }
+    organizationId = resolved;
+  } catch (error) {
+    if (isAppError(error)) throw error;
+    logger.error({ error, userId }, 'workspace scope lookup failed; denying request');
+    throw createError.serviceUnavailable(
+      'Unable to verify workspace scope. Please try again shortly.',
+    );
+  }
+  await assertTenantNotLockedDown(organizationId);
+  return { userId, organizationId };
 }
 
 async function assertAccountLifecycleActive(userId: string): Promise<void> {
@@ -384,15 +426,19 @@ export async function getClerkAuthUser(
         if (!apiKeyHasScope(result.scopes, options.apiKeyScope)) {
           throw new ApiKeyScopeError('API key does not have the required scope');
         }
-        await assertAccountActive(result.userId, request);
+        const organizationScope = await assertAccountActiveForAuth(result.userId, request, options);
         setTenantScope({ userId: result.userId });
         await assertMfaPolicyUnlessExemptOwner(
           result.userId,
-          options.mfaGateExemptForOwner ?? false,
+          organizationScope,
           options.mfaEnrollment,
         );
         await assertIpAllowList(result.userId, request);
-        return { userId: result.userId, apiKeyId: result.apiKeyId };
+        return {
+          userId: result.userId,
+          apiKeyId: result.apiKeyId,
+          ...(organizationScope ? { organizationScope } : {}),
+        };
       }
       await logAuthFailure(request, 'invalid_api_key');
       throw createError.unauthorized();
@@ -402,12 +448,12 @@ export async function getClerkAuthUser(
     if (verified) {
       const { auth, principal } = verified;
       await assertSessionWithinAbsoluteLifetime(auth.userId, auth.sessionIdentity);
-      await assertAccountActive(auth.userId, request);
+      const organizationScope = await assertAccountActiveForAuth(auth.userId, request, options);
       await assertAccountSecurityUnlessVerifying(auth, principal, options, request);
       setTenantScope({ userId: auth.userId });
       await assertMfaPolicyUnlessExemptOwner(
         auth.userId,
-        options.mfaGateExemptForOwner ?? false,
+        organizationScope,
         options.mfaEnrollment,
         auth.sessionIdentity,
       );
@@ -420,7 +466,7 @@ export async function getClerkAuthUser(
           request,
         );
       }
-      return auth;
+      return organizationScope ? { ...auth, organizationScope } : auth;
     }
 
     throw createError.unauthorized();
@@ -440,7 +486,7 @@ export async function getCookieSessionAuthUser(
     const userId = account.accountId;
     const auth = authResultFor(account, sessionId);
     await assertSessionWithinAbsoluteLifetime(userId, auth.sessionIdentity);
-    await assertAccountActive(userId, request);
+    const organizationScope = await assertAccountActiveForAuth(userId, request, options);
     await assertAccountSecurityUnlessVerifying(
       auth,
       { kind: 'session', sessionId },
@@ -450,13 +496,13 @@ export async function getCookieSessionAuthUser(
     setTenantScope({ userId });
     await assertMfaPolicyUnlessExemptOwner(
       userId,
-      options.mfaGateExemptForOwner ?? false,
+      organizationScope,
       options.mfaEnrollment,
       auth.sessionIdentity,
     );
     await assertIpAllowList(userId, request);
     noteSessionSighting(userId, account.subject, sessionId, request);
-    return auth;
+    return organizationScope ? { ...auth, organizationScope } : auth;
   }
 
   throw createError.unauthorized();
