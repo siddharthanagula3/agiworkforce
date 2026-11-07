@@ -7675,3 +7675,23 @@ not establish the displayed status's original account or a server schedule ID.
 Backend cancel/re-schedule races, scheduling/logout, durable recovery and already
 accepted server effects remain outside this slice. Ten independently reviewed
 source/fixture files; fixtures UNRUN. See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Cancellation can require the confirmed schedule values
+
+Continuation 70637ca89c8a62d8ad85a37e1ed6550c2ea00ff7 adds a distinct required-pair
+cancellation endpoint and shared fixed-mode handler. Legacy callers keep their
+existing route. Strict parsing cannot fall back to legacy behavior. The scoped
+transaction locks the profile, compares both timestamps in SQL, and retains
+pair/ID/live deadline predicates in UPDATE; refusal classification stays in
+that transaction and audit follows commit.
+
+Status GET emits validated lossless UTC timestamps, bounded to supported AD
+years, with a snapshot-suitability marker and database-time eligibility.
+The value pair is not a unique generation. Same-value recreation, original
+status account ownership and final remote state remain unproved.
+
+Clients are not adopted in this slice. Future clients must require the marker,
+use only the new endpoint, preserve exact values and reject legacy fallback or
+redirect downgrade. Live routing and PostgreSQL behavior remain unverified.
+Ten source/fixture files are independently reviewed; all fixtures UNRUN.
+No migration application. See WEB-ACCOUNT-DELETION-INTENT-01.

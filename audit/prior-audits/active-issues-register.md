@@ -10453,6 +10453,49 @@ generation retirement; they do not establish real browser/auth/React/database
 behavior. No product tests, lint, typechecks, builds, installations, live account
 actions, migration application, push or deployment ran.
 
+Server schedule-value precondition addendum, 2026-11-07: Source-corrected in
+`70637ca89c8a62d8ad85a37e1ed6550c2ea00ff7`. A delayed cancellation based on
+schedule S1 could clear a different S2 created by another device on the same
+account. Client view/session ownership cannot observe every remote replacement.
+The new /api/user/delete-account/cancel-schedule endpoint requires a strict
+complete expectedSchedule pair; absent, malformed, incomplete or unknown fields
+never become legacy cancellation. Existing /cancel remains body-ignoring for
+old clients. Both routes use one fixed-mode server handler and the same rate,
+CSRF, authenticated scoped-database and response security gates.
+
+The callback transaction locks the authenticated profile, then compares both
+timestamps in SQL with null-safe requestedAt equality. The UPDATE independently
+retains ID, pair and live clock_timestamp() deadline predicates, avoiding stale
+transaction-start time after a lock wait. Classification stays inside the same
+transaction; a different pair returns schedule_changed, including an expired
+replacement, while missing/no pending state remains cancelled:false. Malformed
+adapter results fail closed. Audit runs only after an actual cancellation and
+successful transaction return; later audit failure cannot roll back that write.
+Success wording no longer claims the account is fully restored.
+
+Status GET projects lossless six-digit UTC text and database-time eligibility.
+Explicit SQL range checks reject BC, infinity and unsupported years before
+era-less formatting. The optional schedule-pair-v1 marker is emitted only after
+validation; it describes the snapshot values, not every serving instance.
+The strict request schema accepts valid finite UTC calendar timestamps in AD
+years 0001–9999 with at most six fractional digits, without Date normalization.
+
+Both production clients are unchanged and still use the legacy route. Adoption
+must require the marker on the exact confirmed snapshot, transmit its unchanged
+pair only to the new endpoint, reject redirects/fallback to legacy mutation,
+and require refreshed confirmation after refusal. Live edge routing is not
+verified. Identical pair recreation remains indistinguishable; this is not a
+unique generation, original-status account proof, final state or erasure guarantee.
+Global status ownership remains open. No migration was added or applied.
+
+Independent review accepted ten source/fixture files after correcting a stale
+SQL-copy fixture and restoring both wrappers to the existing CSRF coverage scan.
+Contract, malformed input, pair/clock ordering, status precision, callback scope
+and audit fixtures remain UNRUN. Source assertions and deterministic mocks do
+not establish PostgreSQL execution, RLS, locks, concurrency, browser or transport
+behavior. No product tests, lint, typechecks, builds, installations, live account
+actions, migration application or deployment ran.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
