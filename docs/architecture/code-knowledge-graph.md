@@ -7695,3 +7695,22 @@ use only the new endpoint, preserve exact values and reject legacy fallback or
 redirect downgrade. Live routing and PostgreSQL behavior remain unverified.
 Ten source/fixture files are independently reviewed; all fixtures UNRUN.
 No migration application. See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Deletion status carries its original native-session owner
+
+Continuation 2e180a6b144d19f49f4d0c4a96f0bd4bab70dfeb replaces the global ambient
+status read with a private owner-scoped reader. Stable owner incarnation and
+fresh setup generations isolate keys and permanently fence old work. GET uses
+captured Bearer/omit-cookie authority, cancellation/timeout guards and no retry.
+
+Scalar envelopes and opaque WeakMap snapshots bind display and immediate action
+admission to original read provenance plus exact QueryState. Cancellation derives
+authority from that original session, preserves newer cache, and reconciles only
+its original scoped key. Own receipt publication does not retire the intent.
+Account-section activity gates readers/actions without global cache clearing or
+erasing scheduling drafts.
+
+This does not adopt the strict cancellation endpoint or bind later scheduling,
+step-up, Continue/logout effects. No native-subject/product-account ID equality,
+unique schedule identity or final-state guarantee. Twelve independently reviewed
+source/fixture files; all fixtures UNRUN. See WEB-ACCOUNT-DELETION-INTENT-01.

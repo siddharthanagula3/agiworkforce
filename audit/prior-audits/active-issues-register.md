@@ -10496,6 +10496,46 @@ not establish PostgreSQL execution, RLS, locks, concurrency, browser or transpor
 behavior. No product tests, lint, typechecks, builds, installations, live account
 actions, migration application or deployment ran.
 
+Web status-provenance addendum, 2026-11-07: Source-corrected in
+`2e180a6b144d19f49f4d0c4a96f0bd4bab70dfeb`. The former global cookie GET/key
+could retain A's status when a document survived an SDK transition to B, then
+admit a new B cancellation from that old snapshot. Late reads and ambient
+retries lacked original-owner checks. Normal hard sign-in navigation and explicit
+workspace cancellation/cache clearing mitigate their respective flows; no live
+cross-tab incident or cross-account database mutation was established.
+
+A focused reader now retains one captured native-session owner per incarnation
+and layout setup. Private instance/incarnation/generation keys isolate observers;
+SDK retirement, inactivity and cleanup abort owned work without global cache
+clearing. Each GET uses captured Bearer authentication with cookies omitted,
+query cancellation plus the existing timeout, and currentness checks around
+response/body parsing. Retry is disabled; explicit refetch stays with its original
+owner. Scalar cache envelopes carry provenance without storing session objects.
+
+WeakMap-backed opaque snapshots bind original owner, scoped key and exact
+QueryState. Rendering and both immediate schedule/cancel admissions use this
+provenance. Cancellation derives its RequestAuthority from the original status
+session, preserving after-CSRF/token dispatch checks, one-shot consumption and
+separate lifetime/state predicates. Exact scoped compare-and-set settlement
+cannot overwrite a newer state; its own successful cache write can still settle.
+Reconciliation refetches only the original reader's key and never repeats the
+cancellation. Actual Account-section/modal activity gates both controllers.
+Stale scheduling confirmation retains its text rather than erasing drafts.
+
+This supersedes earlier global web status-reader ownership limitations for these
+consumers, not all authentication/cache machinery. Native subject is not compared
+with mapped product account ID. Strict endpoint/marker adoption is unchanged:
+clients still use legacy cancellation. Scheduling's later CSRF/step-up replay,
+ambient DELETE, response, Continue/logout/navigation effects remain outside this
+slice. No final remote-state, unique schedule-generation or erasure guarantee.
+
+Independent source review accepted five production and seven fixture files.
+UNRUN fixtures cover stable rerenders, session replacement/A→B→A, delayed work,
+StrictMode, reader isolation, retired handles, cache preservation and
+original-key reconciliation. Source reasoning is not React/SDK/browser/transport
+acceptance. No product tests, lint, typechecks, builds, installations, live account
+actions, migration application or deployment ran.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
