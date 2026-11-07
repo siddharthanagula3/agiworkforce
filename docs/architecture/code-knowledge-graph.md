@@ -6722,9 +6722,35 @@ success, A proof refusal before storage/replay, A-only resource refusals and an
 organization-aware replay map. All are UNRUN; no persisted secret, real SQL/RLS,
 transaction rollback, cache race or runtime evidence is claimed.
 
+Continuation `31053fc862dea2a4e00637f5828414963601bc2a` retains the request organization in both
+retention gates and the shared audit-destination gate, covering six handlers.
+An authorized A administrator's Personal/B request could previously update A's
+retention configuration or disable/delete A's audit stream through privileged
+storage. Retention GET requires audit.read; mutations and destination controls
+require policy.manage, with existing plan, active membership, CSRF/rate and input
+gates. Destination reads retain their older owner/admin RLS policy. No new rights
+over unrelated tenants are conferred.
+
+Retention configuration is not immediate deletion or a hold bypass. Audit
+destination PUT preserves HTTPS/public-host validation and organization-bound
+secret sealing; only its new secret is returned with no-store. Subsequent delivery
+can change, while in-flight cancellation is unproven. DB/cache/audit effects remain
+non-atomic and per-domain retention writes can partially complete. No authentication,
+MFA/IP, transaction, idempotency, schema or client-selection semantics change.
+
+Both route fixtures retain real route/member/service-query code over mocked auth,
+error wrappers, permission/plan, database and effect boundaries. Parameter-aware
+A/B state covers captured/headerless scope, Personal and membership/gate refusals,
+B payload/audit/storage targets and unchanged A. Destination crypto/egress/delivery
+boundaries are mocked. All fixtures remain UNRUN and do not prove actual header
+parsing, middleware, auth, SQL/RLS, encryption, network delivery or atomicity.
+No new structural guard was added; the earlier guard remains limited to its ten
+sharing/spend sites.
+
 Headerless clients and global query keys remain unbound to stale UI intent before
-the first server resolution. Ten other organization settings files, project/session
-target helpers and MFA owner-exemption scope remain separate work. Post-check
-membership/policy changes, post-write errors and uncertain outcomes are unchanged;
+the first server resolution. Eight other organization settings files, project/session
+target helpers and MFA owner-exemption scope (both policy and policy/code) remain
+separate work. Post-check membership/policy changes, post-write errors and uncertain
+outcomes are unchanged;
 no transaction or replay guarantee is added. No new migration or product checks.
 Prior 0394/0395 migrations remain UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.

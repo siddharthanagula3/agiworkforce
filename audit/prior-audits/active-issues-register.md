@@ -15667,7 +15667,8 @@ schema were not verified. No product checks, DB/provider actions, push or deploy
 Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `12c9a9a7c85536c373968c5e9137c1af04eade1b`; interactive caller continuation in
 `2ae29f73ae6adaa7337f1ee1783d112401406ca3`; legal-hold/admin-key continuation in
-`2b88fbf779028837dbf33864103949a5343d4e5f`, 2026-11-07. Other request-backed settings, client
+`2b88fbf779028837dbf33864103949a5343d4e5f`; retention/audit-destination continuation in
+`31053fc862dea2a4e00637f5828414963601bc2a`, 2026-11-07. Other request-backed settings, client
 workspace binding and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -15797,6 +15798,57 @@ for B. Existing assertions are preserved. These fixtures remain UNRUN; no live
 authentication, header parsing, SQL/RLS, persisted credential, transaction or
 concurrency result is established. No additional source-shape guard was added.
 
+A fourth bounded correction in `31053fc862dea2a4e00637f5828414963601bc2a` retains the captured request
+organization at both retention lookup sites and the audit-destination shared gate,
+covering retention GET/PUT and destination GET/PUT/PATCH/DELETE. Previously a valid
+A administrator could disable or remove A's audit destination despite explicit
+Personal/B selection; retention PUT could change A's per-domain windows and
+enforcement. The writes use privileged storage with the reselected A. Active A
+membership, Team/Enterprise access, policy.manage and normal authentication,
+CSRF/rate/input checks remain prerequisites; explicit B also requires upstream B
+membership. Retention GET instead requires audit.read. Destination GET uses the
+scoped adapter, whose existing owner/admin read policy is membership-based rather
+than selected-organization equality. Delegated policy.manage alone is not evidence
+that its older read policy admits that read.
+
+Retention configuration changes do not immediately delete records or bypass holds;
+later deletion depends on enforcement execution, eligibility and applicable holds.
+Destination PUT can replace A's endpoint and signing material after existing
+HTTPS/public-host checks; PATCH/DELETE can affect subsequent delivery, not prove
+cancellation of a delivery already underway. A freshly minted signing secret is
+returned only by PUT with no-store, not recovered from GET. Secret generation,
+organization-bound sealing, cache markers and egress controls are unchanged.
+The default authentication/account-security/MFA/IP path is retained; neither route
+uses the owner exemption. These are authorized wrong-target source paths, not an
+observed incident or acquisition of unrelated tenant rights.
+
+All six handlers now use exact active membership for the captured string-or-null
+organization. Personal and failed target membership stop before downstream
+entitlement/permission checks and resource effects. All subsequent storage, payload
+and audit destinations retain the captured target. No new transaction, migration,
+policy revision or replay protocol is introduced. The retention loop still writes
+each policy separately; partial writes and post-write audit/response failures
+remain possible. Destination cache/DB/audit effects are not one atomic transaction.
+
+The two route fixtures preserve the existing assertions and retain real handlers,
+canonical membership, schema/body validation and service read/write query construction.
+Authentication, error wrapping, plan/permission gates, database responses, audits and
+effectful imports are mocked. Separate parameter-sensitive scoped/privileged data
+distinguish A from B; cases cover every verb with captured B versus saved A,
+headerless captured B, Personal, missing/mismatched membership, target permission/plan
+denial and retained CSRF/rate/input guards. Retention cases check exact per-domain
+arguments, B responses/audits and unchanged A policies. Destination cases check B
+storage, audit and secret-sealing context, A-only destination refusal, egress
+validation and new-secret/no-store behavior. Saved selectors and unexpected I/O
+are guarded against. All fixtures remain UNRUN: they do not establish actual header
+parsing, auth, middleware behavior, SQL/RLS, encryption, delivery or transaction
+semantics. No additional source-shape guard was added.
+
+The retention and audit-destination hooks use global query keys and omit explicit
+workspace selectors on their direct fetches. They do not establish which headers
+an ordinary UI interaction ultimately sends. Keeping the first server resolution
+does not recover stale client intent or prevent a switch before that resolution.
+
 Current legal-hold and API-key hooks use global query keys and omit workspace
 selectors on their direct fetches; key creation separately binds its step-up flow
 to an organization. This source correction does not establish which headers an
@@ -15810,12 +15862,12 @@ recover client intent before that resolution or make stale client views safe.
 
 The sharing hooks use a constant query key and omit a selector; the spend UI also
 omits one. Keeping the first server resolution does not reconstruct stale UI intent
-or stop a selection change before that resolution. Ten other organization
+or stop a selection change before that resolution. Eight other organization
 settings route files, shared-project scope and conversation-sharing target helpers
 still need separate scope review.
 Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
-were deliberately not migrated. In particular the policy route's MFA exemption
-requires an authentication-boundary review, not a mechanical target replacement.
+were deliberately not migrated. Both policy and policy/code request the owner MFA
+exemption and require authentication-boundary review, not mechanical replacement.
 Membership/permission changes after checking, post-write audit/cache/response errors
 and uncertain outcomes remain separate; no transaction or replay guarantee was
 added. Prior migrations 0394/0395 remain UNAPPLIED. Installed Next guidance and
