@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -7,10 +7,6 @@ import type { ManagedCloudPublishedArtifact } from '@agiworkforce/cloud-contract
 
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import {
-  captureCloudAccountEpoch,
-  isCloudAccountEpochCurrent,
-} from '@/src/features/auth/services/cloudAccountSession';
 import {
   CloudFeatureGate,
   EmptyState,
@@ -25,6 +21,15 @@ import { cloudActionError } from '@/src/shared/utils/cloudActionError';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { SITE_VISIBILITY_LABELS, listPublishedSites, siteName } from './service';
+import { useSitesListLifetime, type SitesListLifetime } from './useSitesListLifetime';
+
+interface SitesListState {
+  view: SitesListLifetime;
+  sites: ManagedCloudPublishedArtifact[] | null;
+  error: string | null;
+  refreshing: boolean;
+  canOpen: () => boolean;
+}
 
 export const SITES_ROUTE = '/(app)/sites';
 
@@ -33,30 +38,48 @@ export function SitesScreen() {
   const colors = useThemeColors();
   const access = useCloudFeatureAccess();
   const goBack = useGoBack('/(app)/(tabs)/chat');
-  const [sites, setSites] = useState<ManagedCloudPublishedArtifact[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const view = useSitesListLifetime(access);
+  const [state, setState] = useState<SitesListState | null>(null);
+  const visible = state?.view === view && view.isCurrent() ? state : null;
+  const displayed = useRef<SitesListState | null>(null);
+  displayed.current = visible;
+  const sites = visible?.sites ?? null;
+  const error = visible?.error ?? null;
+  const refreshing = visible?.refreshing ?? false;
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    const account = captureCloudAccountEpoch();
-    if (!account) return;
-    setError(null);
+  const load = useCallback(async (refresh = false) => {
+    const read = view.beginRead();
+    if (!read) return;
+    setState((current) => read.isCurrent() ? {
+      view,
+      sites: current?.view === view ? current.sites : null,
+      error: null,
+      refreshing: refresh,
+      canOpen: read.isCurrent,
+    } : current);
     try {
-      const list = await listPublishedSites(signal);
-      if (isCloudAccountEpochCurrent(account)) setSites(list.sites);
+      const list = await listPublishedSites(read.authority.signal, read.authority);
+      if (!read.isCurrent()) return;
+      setState((current) => read.isCurrent()
+        ? { view, sites: list.sites, error: null, refreshing: false, canOpen: read.isCurrent }
+        : current);
     } catch (loadError) {
-      if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
-      setSites((current) => current ?? []);
-      setError(cloudActionError(loadError, 'Could not load your published sites.'));
+      if (!read.isCurrent()) return;
+      const message = cloudActionError(loadError, 'Could not load your published sites.');
+      setState((current) => read.isCurrent() ? {
+        view,
+        sites: current?.view === view ? current.sites ?? [] : [],
+        error: message,
+        refreshing: false,
+        canOpen: read.isCurrent,
+      } : current);
     }
-  }, []);
+  }, [view]);
 
   useEffect(() => {
-    if (!access.ready) return;
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [access.ready, load]);
+    void load();
+    return () => view.cancelRead();
+  }, [load, view]);
 
   if (!access.ready) {
     return (
@@ -92,12 +115,13 @@ export function SitesScreen() {
           }
           renderItem={({ item }) => (
             <PressableBox
-              onPress={() =>
+              onPress={() => {
+                if (!view.isCurrent() || displayed.current !== visible || !visible?.canOpen()) return;
                 router.push({
                   pathname: '/(app)/sites/[token]' as const,
                   params: { token: item.token },
-                })
-              }
+                });
+              }}
               accessibilityRole="button"
               accessibilityLabel={`${siteName(item)}. ${SITE_VISIBILITY_LABELS[item.visibility]}`}
               style={{
@@ -137,10 +161,7 @@ export function SitesScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                void load().finally(() => setRefreshing(false));
-              }}
+              onRefresh={() => void load(true)}
               tintColor={colors.textPrimary}
             />
           }
