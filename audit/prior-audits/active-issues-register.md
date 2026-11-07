@@ -15324,7 +15324,7 @@ deferred work, and then reset; raw setState is not a production reset API.
 
 This lazy-store slice did not change direct page reads or authentication cleanup.
 The later bounded SiteDetail correction is recorded in
-WEB-SITE-SNAPSHOT-ORDERING-01; SitesPage, same-field/cross-controller receipt
+WEB-SITE-SNAPSHOT-ORDERING-01; global same-field/cross-controller receipt
 ordering and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 remain open. No tests, lint,
 typechecks, builds, installs, product/browser or live-provider execution, push or
 deployment ran.
@@ -15333,8 +15333,10 @@ deployment ran.
 
 Severity: Medium. SiteDetail read/view ownership is source-corrected in
 `bcfe8931644a3e79e7a4cf0925ee6d6cc5ea6066`, independently reviewed 2026-11-07.
-SitesPage/global snapshot ordering, account ownership and runtime acceptance
-remain open. No deployed incident or server access bypass is claimed.
+SitesPage read lifetimes are additionally source-corrected in
+`414f2ca2dbbaccc625469ddf42ad176ec38454f5`, independently reviewed 2026-11-07.
+Global snapshot/receipt ordering, account ownership and runtime acceptance remain
+open. No deployed incident or server access bypass is claimed.
 
 Original qualified path: version Restore triggered onRestored -> load while
 Settings remained usable. A later audience PATCH could succeed and record its
@@ -15371,6 +15373,29 @@ and StrictMode. Direct callback mismatch/staleness and synchronous subscriber
 invalidation cases are explicitly models, not claimed user journeys. All fixtures
 remain UNRUN; no browser, transport, SQL or runtime acceptance is established.
 
+SitesPage follow-on: initial load was abortable, but manual Refresh/Retry had no
+signal or request/view identity. A qualified sequential route is loaded Sites ->
+Refresh -> sidebar Library -> sidebar Sites -> fresh list -> sharing or confirmed
+Unpublish -> old Refresh completion. Both sidebar routes use WebAppShell's Next
+router navigation; ordinary visible navigation items suffice. Refresh hides cards,
+so no click on a disappearing card or simultaneous dialog is assumed. The obsolete
+completion could refill global publication metadata after the newer record/forget;
+it did not directly replace the new component's local list/detail state. The fetch
+and JSON/schema parsing path had no ownership fence.
+
+SitesPage now uses one committed layout owner and current request for initial,
+Refresh and Retry. Replacement/cleanup invalidate before abort. Exact active
+request checks precede hydrate and follow synchronous subscribers before local
+state commits. StrictMode setup gets a new owner. Retired success/error is ignored;
+a current AbortError becomes explicit error/Retry rather than permanent loading.
+The existing loading UI, mutation hooks and store writer contracts are unchanged.
+Its unrun fixture preserves prior lazy-cache cases and uses actual cards, dialogs,
+actions and store after an explicit unmount/remount route model. It covers late
+success/error, sharing/unpublish, initial/Refresh/Retry abort ownership, successful
+Retry release, StrictMode and current AbortError recovery. Synchronous hydration
+effect replacement is explicitly an artificial model. No router/browser timing or
+live-service behavior was executed.
+
 Limits: a subsequent GET is assumed to reflect the acknowledged mutation; the
 service has no client revision or cache-consistency guarantee. This is not server
 CAS, same-field ordering or global/cross-tab reconciliation. useSiteActions still
@@ -15378,10 +15403,10 @@ writes audience receipts to the shared cache before onUpdated; stale mutation
 receipts from another controller/account are not fenced here. A stale confirmation
 may still execute DELETE and an already-started restore POST may finish; guarding
 callbacks does not undo either backend action. Concurrent restore/unpublish backend
-ordering is separate. SitesPage direct refresh ownership remains open; its initial
-loading hides cards and modal saving blocks close, so invented simultaneous-modal
-journeys are not evidence. Account reset must coordinate every direct/lazy read
-and mutation writer, including ArtifactsPanel receipts. Server access checks and
+ordering is separate. The page fences do not globally order live controllers or
+coordinate account cleanup. Loading hides list cards and modal saving blocks close,
+so invented simultaneous-modal journeys are not evidence. Account reset must
+coordinate every direct/lazy read and mutation writer, including ArtifactsPanel receipts. Server access checks and
 authentication are unchanged; a stale cache cannot republish a deleted row.
 No product tests, lint, typechecks, builds, installs, push or deployment ran.
 
@@ -15399,8 +15424,8 @@ reachability constrain any actual exposure and remain unverified.
 
 An eventual reset must invalidate pending reads as well as clear state and
 restore idle. Registering a reset that fences only ensureLoaded would still
-allow old SiteDetail/SitesPage hydrate completions to refill the cache. Coordinate
+allow still-mounted pre-reset SiteDetail/SitesPage reads to refill the cache. Coordinate
 the reset/account epoch with all direct/lazy reads and mutation writers, including
-useSiteActions and ArtifactsPanel receipts. The bounded SiteDetail view fence
-above is not account binding, and raw setState clearing is not that contract. No authentication behavior was changed
-and no live account-switch validation occurred.
+useSiteActions and ArtifactsPanel receipts. The bounded SiteDetail/SitesPage view
+fences above are not account binding, and raw setState clearing is not that contract.
+No authentication behavior was changed and no live account-switch validation occurred.
