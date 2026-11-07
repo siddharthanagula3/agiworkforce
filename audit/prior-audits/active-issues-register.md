@@ -17673,3 +17673,39 @@ and unknown-mutation handling remain; no automatic mutation replay, rollback,
 durable recovery or cross-controller ordering guarantee. No product checks,
 live services, migrations, push or deployment. Existing recovery prerequisites,
 unapplied migrations and lost-history limits remain.
+
+### Viewer success payloads must contain the declared list shape
+
+Continuation d0a34310183cec030b7a6d69d5428aef21b35984, 2026-11-07, addresses conditional malformed-success
+handling in the web viewer manager. Missing or non-array viewers previously
+became an empty successful list; malformed entries could reach rendering.
+An initial read could therefore show Nobody yet and enable changes, or a
+mutation reply could clear an add draft and falsely restore readiness.
+
+Canonical runtime schemas now require the declared viewers array and string
+email/invitedAt fields. Public type names now infer the same declared shape.
+Empty arrays, arbitrary strings and harmless unknown fields are accepted;
+unknown fields are stripped by the object parser;
+the request email normalizer and timestamp/quota assumptions are not reused.
+
+The web helper parses this canonical shape instead of casting and inventing an
+empty list. Existing authority/settlement checks and editor production behavior
+remain. Read rejection yields unknown/error; mutation rejection hides the list,
+preserves its draft, disables further changes and allows explicit GET Retry.
+
+Current backend routes already return { viewers: [{ email, invitedAt }] };
+no incompatible current backend reply or observed incident is established.
+The prior JSON-null and invalid-JSON paths already rejected and are not described
+as empty-list normalization.
+
+Five independently source-reviewed source/fixture files include UNRUN canonical
+contract, GET/POST/DELETE helper and real-helper editor cases. They cover valid
+and malformed payloads, existing HTTP/JSON failures, disabled mutation, draft
+preservation and GET-only recovery. No product or browser acceptance is claimed.
+
+Validation is structural only, not semantic email/date validity, duplicate-key,
+quota, complete-inventory, target/action binding or final remote-state proof.
+No native/backend or database migration changes, additional reads, automatic replay
+or new recovery mechanism. Existing request ownership and ambient cookies remain.
+No product checks, live services, migration application, push or deployment.
+Existing recovery prerequisites, unapplied migrations and lost-history limits remain.

@@ -7620,3 +7620,22 @@ result/lifetime, not every older email draft.
 Canonical { viewers } response behavior remains unchanged; validation is separate.
 Four source/fixture files are independently reviewed, with fixtures UNRUN.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Viewer success uses the declared response shape
+
+Continuation d0a34310183cec030b7a6d69d5428aef21b35984 adds canonical runtime viewer/response schemas:
+a viewers array containing string email/invitedAt fields. Existing public type
+names are inferred from that shape. Empty lists, arbitrary strings and unknown
+fields remain accepted (unknown fields are stripped), without email/date
+normalization, semantic date/email
+rules, identity receipt fields or a list cap.
+
+Web readViewers now parses rather than casting and defaulting malformed success
+to an empty list. Existing owned helper and editor rejection paths handle errors:
+unknown inventory stays non-actionable; uncertain mutation keeps its draft and
+requires explicit GET Retry. Editor production code is unchanged.
+
+This is conditional malformed-success protection, not evidence of an incident,
+complete permissions, target/action binding or current remote state. Fixtures
+are UNRUN; no product checks, backend changes or migration application.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.
