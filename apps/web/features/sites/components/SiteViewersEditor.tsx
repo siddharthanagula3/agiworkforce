@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { X } from 'lucide-react';
 import { Button, Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -9,50 +9,87 @@ import { changeSiteViewer, listSiteViewers, type SiteViewer } from '../services/
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function SiteViewersEditor({ token }: { token: string }) {
+  return <SiteViewersSession key={token} token={token} />;
+}
+
+type Status = 'loading' | 'ready' | 'changing' | 'error';
+type Request = { controller: AbortController | null };
+
+function SiteViewersSession({ token }: { token: string }) {
   const [viewers, setViewers] = useState<SiteViewer[] | null>(null);
   const [email, setEmail] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const phase = useRef<Status>('loading');
+  const request = useRef<Request | null>(null);
 
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      try {
-        setViewers(await listSiteViewers(token, signal));
-      } catch (caught) {
-        if (caught instanceof DOMException && caught.name === 'AbortError') return;
-        setViewers([]);
-        setError(toUserMessage(caught, 'Failed to load who this site is shared with'));
-      }
-    },
-    [token],
-  );
+  const load = useCallback(async () => {
+    if (!mounted.current || request.current !== null) return;
+    const controller = new AbortController();
+    const operation: Request = { controller };
+    request.current = operation;
+    phase.current = 'loading';
+    setStatus('loading');
+    setError(null);
+    try {
+      const next = await listSiteViewers(token, controller.signal);
+      if (!mounted.current || request.current !== operation) return;
+      setViewers(next);
+      phase.current = 'ready';
+      setStatus('ready');
+    } catch (caught) {
+      if (!mounted.current || request.current !== operation) return;
+      setViewers(null);
+      phase.current = 'error';
+      setStatus('error');
+      setError(toUserMessage(caught, 'Failed to load who this site is shared with'));
+    } finally {
+      if (request.current === operation) request.current = null;
+    }
+  }, [token]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
+    mounted.current = true;
+    void load();
+    return () => {
+      mounted.current = false;
+      request.current?.controller?.abort();
+      request.current = null;
+      phase.current = 'loading';
+    };
   }, [load]);
 
   const change = async (address: string, action: 'add' | 'remove') => {
-    setBusy(true);
+    if (!mounted.current || phase.current !== 'ready' || request.current !== null) return;
+    const operation: Request = { controller: null };
+    request.current = operation;
+    phase.current = 'changing';
+    setStatus('changing');
     setError(null);
     try {
-      setViewers(await changeSiteViewer(token, address, action));
+      const next = await changeSiteViewer(token, address, action);
+      if (!mounted.current || request.current !== operation) return;
+      setViewers(next);
       if (action === 'add') setEmail('');
-    } catch (caught) {
+      phase.current = 'ready';
+      setStatus('ready');
+    } catch {
+      if (!mounted.current || request.current !== operation) return;
+      setViewers(null);
+      phase.current = 'error';
+      setStatus('error');
       setError(
-        toUserMessage(
-          caught,
-          action === 'add' ? 'Failed to share with that person' : 'Failed to remove that person',
-        ),
+        'The sharing change could not be confirmed. Access may have changed. Retry loading the list before making more changes.',
       );
     } finally {
-      setBusy(false);
+      if (request.current === operation) request.current = null;
     }
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (!mounted.current || phase.current !== 'ready' || request.current !== null) return;
     const address = email.trim().toLowerCase();
     if (!EMAIL.test(address)) {
       setError('Enter a full email address');
@@ -74,13 +111,13 @@ export function SiteViewersEditor({ token }: { token: string }) {
           onChange={(event) => setEmail(event.target.value)}
           placeholder="name@example.com"
           autoComplete="off"
-          disabled={busy}
+          disabled={status !== 'ready'}
           className="min-h-11 min-w-0 flex-1 rounded-md border border-[var(--chat-border)] bg-background px-3 text-sm text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
         />
         <Button
           type="submit"
           size="sm"
-          disabled={busy || !email.trim()}
+          disabled={status !== 'ready' || !email.trim()}
           data-testid="site-viewer-add"
         >
           Add
@@ -91,15 +128,19 @@ export function SiteViewersEditor({ token }: { token: string }) {
           {error}
         </p>
       ) : null}
-      {viewers === null ? (
+      {status === 'error' ? (
+        <Button type="button" size="sm" onClick={() => void load()}>
+          Retry
+        </Button>
+      ) : status === 'loading' || status === 'changing' ? (
         <div
           role="status"
           className="flex items-center gap-2 text-sm text-[var(--chat-text-secondary)]"
         >
           <Spinner size="sm" aria-hidden="true" />
-          Loading…
+          {status === 'changing' ? 'Updating access…' : 'Loading…'}
         </div>
-      ) : viewers.length === 0 ? (
+      ) : viewers?.length === 0 ? (
         <p className="text-sm text-[var(--chat-text-secondary)]">
           Nobody yet. Add the email address each person signs in with, then send them the link.
         </p>
@@ -108,7 +149,7 @@ export function SiteViewersEditor({ token }: { token: string }) {
           aria-label="People this site is shared with"
           className="flex flex-col divide-y divide-[var(--chat-border-subtle)]"
         >
-          {viewers.map((viewer) => (
+          {viewers?.map((viewer) => (
             <li
               key={viewer.email}
               className="flex min-h-11 items-center gap-2 text-sm text-[var(--chat-text-primary)]"
@@ -116,7 +157,7 @@ export function SiteViewersEditor({ token }: { token: string }) {
               <span className="min-w-0 flex-1 truncate">{viewer.email}</span>
               <button
                 type="button"
-                disabled={busy}
+                disabled={status !== 'ready'}
                 onClick={() => void change(viewer.email, 'remove')}
                 aria-label={`Stop sharing with ${viewer.email}`}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] disabled:opacity-50 sm:h-8 sm:w-8"

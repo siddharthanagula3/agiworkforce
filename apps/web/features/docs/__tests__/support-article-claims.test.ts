@@ -532,7 +532,7 @@ describe('artifacts help article follows the implemented publishing controls', (
 
   it('limits the invited audience to people added by email', () => {
     expect(preview).toMatch(
-      /artifactAudience\?\.current === 'invited' && publishedToken && \(\s*<div[^>]*>\s*<SiteViewersEditor token=\{publishedToken\} \/>/u,
+      /artifactAudience\?\.current === 'invited' && publishedToken && \(\s*<div[^>]*>\s*<SiteViewersEditor key=\{`\$\{artifact\.id\}:\$\{publishedToken\}`\} token=\{publishedToken\} \/>/u,
     );
     expect(preview).toContain('Only the people you add by email can open it after signing in.');
     expect(fileText('features/sites/components/SiteViewersEditor.tsx')).toContain(
