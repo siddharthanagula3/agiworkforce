@@ -6071,9 +6071,35 @@ not corrected here. Four production and five authored regression-source files
 were independently reviewed, but no product checks or browser acceptance ran.
 See WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01 for the remaining acceptance limits.
 
+## Recovery-key activation binds the acknowledged batch
+
+Accepted `27f5415844504cf244095595dcff175ffa3fbcc5` adds one opaque recoveryBatchId to
+the canonical prepared response, strict replacement/enrollment requests and
+pending storage. Both service paths compare it inside the same user/session/
+expiry/mode-guarded UPDATE that activates keys and clears pending state. The
+routes and step-up client retain the exact receipt; there is no identity-less
+latest-batch fallback. Explicit length validation rejects trailing line terminators
+before enrollment proof is consumed.
+
+Migration 0394 preserves active keys while invalidating legacy pending state.
+Its paired shape constraint and null-safe payload-change trigger refuse unsafe
+mixed-version inserts, overwrites and promotions. Old-node disable/undo with a
+new pending receipt also fail closed, an availability limit requiring coordinated
+migration-first rollout. The migration is authored, not applied or database-tested.
+
+The panel carries its receipt through the email step and binds acknowledgment,
+sheet identity and publication lifetime to that batch and canonical session.
+Regeneration/cancel/confirmed conflict retires old local state; ambiguous outcomes
+remain errors with the receipt retained. Started native clipboard writes cannot
+be reversed. Stale enrollment conflicts require renewed proof. Nine implementation/
+migration files and eight fixture files were independently read; fixtures are
+unrun models, not PostgreSQL concurrency or browser evidence. General transport
+ownership, credential-admission and post-activation cleanup remain outside scope.
+See WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01 for release/rollout limits.
+
 ## Reconstruction boundary
 
-Only the two hundred forty-nine accepted production slices traced above are
+Only the two hundred fifty accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

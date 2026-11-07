@@ -14033,25 +14033,64 @@ No tests, lint, typechecks, builds, app/service execution, push or deployment ra
 
 ## WEB-ACCOUNT-SECURITY-RECOVERY-BATCH-01
 
-Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime-reproduced.
+Severity: High. Source-confirmed on 2026-11-06; bounded correction
+`27f5415844504cf244095595dcff175ffa3fbcc5` independently source-reviewed on 2026-11-07.
+Migration, database concurrency, browser and rollout acceptance remain open.
 
-Recovery preparation returns keys and expiry without a batch identifier. The
-store overwrites one account-wide pending slot; promotion checks user, session,
-expiry and enrollment mode, then promotes whichever pending hashes are current.
-Two views in the same session can generate A then B, while view A saves A and
-confirms the pending B batch. A local request/session fence cannot prove that the
-promoted batch is the one acknowledged by the user. Different-session promotion
-is correctly refused and does not close this same-session case.
+Previously, preparation returned keys/expiry without a batch identity and
+replaced one account-wide pending slot. Promotion checked user, session, expiry
+and enrollment mode, then activated whichever hashes occupied that slot. Two
+views sharing one session could generate A then B, save/acknowledge A, and
+activate B. Enrollment had the same mismatch after email/passkey proof. Existing
+authentication and session guards did not distinguish those two batches. This
+was a recovery-availability/wrong-batch defect, not an unauthenticated bypass;
+no deployed incident or runtime reproduction is claimed.
 
-A correction needs an opaque batch identity in the canonical response and
-confirmation/enrollment request, owner/session/expiry-bound compare-and-swap at
-promotion, and matching UI receipt/export lifetime. Preserve old-contract handling
-explicitly and use a new migration if storage changes; no applied migration edits.
-Sources: packages/contracts/cloud-contracts/src/account-security.ts recovery-key
-and enrollment contracts; apps/web/lib/server/account-security/store.ts
-storePendingRecoveryKeys/promotePendingRecoveryKeys; service.ts preparation,
-replacement and enrollment; AdvancedAccountSecurityPanel and RecoveryKeysSheet.
-No contract, database or production behavior was changed by this inventory.
+The canonical response now carries an opaque recoveryBatchId generated alongside
+the keys. Strict replacement and enrollment requests require that exact receipt.
+The recovery schema checks length 43 plus URL-safe characters; malformed IDs are
+also refused at service entry before proof consumption. Legacy identity-less
+preparation responses and confirmation requests fail closed, without a fallback
+to the latest pending slot. Both route/client chains carry the acknowledged ID,
+including step-up replay. Store preparation persists it with pending hashes,
+session and expiry; the atomic promotion UPDATE compares the receipt alongside
+all prior guards, then activates and clears the paired pending fields together.
+Disable/undo shared clearing also removes the receipt.
+
+Append-only migration 0394_account_security_recovery_batch.sql requires a
+privileged migration role, adds the batch column, invalidates legacy pending
+material and preserves active keys/enrollment. Existing pending-field constraints
+combine with a new receipt shape constraint. A null-safe trigger refuses a
+pending payload change retaining the old receipt. Thus old identity-less inserts,
+old overwrites of new pending material and old promotions fail rather than
+silently activating the wrong batch. Old-node disable/undo also fail when they
+would leave a newer pending receipt behind. This is a deliberate availability
+caveat: the migration must precede new application code, and mixed-version
+traffic needs coordinated rollout. Nothing has been applied to a database;
+applied migration 0338 remains unchanged.
+
+The panel retains the exact receipt through keys and email steps, binds saved
+acknowledgment to its ID, retires it before regeneration and on cancel/confirmed
+conflict, and keys sheet state by batch. Canonical session ownership retires
+receipt publication on account/session replacement. Copy/export admission and
+clipboard settlement check current ownership; a native clipboard write already
+started cannot be reversed. Confirmed 409 retires local acknowledgment; ambiguous
+transport failures retain receipt/error and do not prove activation failed.
+Enrollment may consume passkey/email proof before a stale receipt conflicts, so
+its message requires new keys, email code and passkey confirmation.
+
+Nine implementation/migration files and eight authored fixture files were
+independently source-reviewed. Unrun coverage models A/B stale confirmation,
+correct activation/replay, existing user/session/expiry/mode predicates, paired
+clears, strict/legacy schemas including trailing line terminators, route/service/
+client propagation, proof consumption, receipt/UI retirement, copy/export and
+migration invariants. SQL-shape models are not PostgreSQL concurrency evidence;
+component fixtures are not browser or actual renewed-proof acceptance. No tests,
+lint, typechecks, builds, product execution, migration apply, push or deployment
+were performed. General request transport ownership, credential-admission races,
+post-promotion event/cleanup failure and other lifecycle atomicity remain outside
+this correction. See WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01 for that distinct
+invariant.
 
 ## WEB-ACCOUNT-SECURITY-CREDENTIAL-ADMISSION-01
 
