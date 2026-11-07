@@ -7390,13 +7390,38 @@ old finalizers cannot reset the new body's state. Existing takedown disclosure
 and backend semantics remain.
 
 Optional service authority passes existing API epoch/signal and caller-owned
-401 options only for the detail consumer, including the clear-to-delete gap.
+401 options for the detail consumer at this slice, including the clear-to-delete
+gap; subsequent list adoption is recorded below.
 Credentials stay ambient; global auth and other caller defaults are unchanged.
 Already-dispatched writes/native actions are not recalled and partial clearing
 is not atomic with unpublish. Shared copy-hook post-dispatch feedback is not
 newly lifetime-guarded.
 
 Fixtures are UNRUN. This does not add pagination, strict mutation receipts,
-durable recovery or global ordering. The separate Sites list and live
-React/native/auth/database acceptance remain open. No product checks, migration
+durable recovery or global ordering. Separate list lifetime was still open at
+this slice and is corrected below; live React/native/auth/database acceptance
+remains open. No product checks, migration
 application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile Sites list owns reads and displayed rows
+
+Continuation c0f9843c1ff881faf0026d4cda7cf69156c4884f bounds the mobile SitesScreen separately from the
+detail lifetime. A full-epoch/auth/mode view owns displayed rows, error and
+refresh state. Synchronous transition retirement and initial subscription
+reconciliation prevent older ownership from being reactivated by a round trip.
+
+Each read replaces and aborts its predecessor. Currentness is rechecked before
+acceptance and inside success/error state updaters; obsolete completion cannot
+overwrite a newer list or end its refresh indicator. Current failed refreshes
+may retain previous rows. Retry/refresh callbacks remain valid within their
+live view and are rejected after retirement.
+
+Row navigation additionally binds displayed-state identity, so callbacks
+captured before or during refresh cannot navigate after their display is
+replaced. The list now supplies existing SiteRequestAuthority epoch/signal and
+caller-owned 401 options; the detail helper and ambient defaults are unchanged.
+
+The existing service/API and backend remain unchanged. Credentials are ambient,
+not newly pinned. No pagination, global reconciliation or backend cancellation
+claim. Fixtures are UNRUN; no product checks, migrations, push or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.

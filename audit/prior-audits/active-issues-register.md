@@ -17228,7 +17228,55 @@ rollback, backend cancellation or universal account-isolation claim. Shared
 useCopyAction still owns its post-dispatch haptic/error feedback; not every
 platform/helper completion is lifetime-cancelled.
 
-The separate Sites list lifetime, legacy mobile receipts, capped detail
-discovery and live React/native/auth/database behavior remain open. No product
+At this detail slice, the separate Sites list lifetime remained open; its later
+correction is recorded below. Legacy mobile receipts, capped detail discovery
+and live React/native/auth/database behavior remain open. No product
 checks, live services/migrations, push or deployment. Recovery dependencies,
 unapplied migrations and lost-history limitations remain.
+
+### Mobile Sites list owns account and refresh lifetimes
+
+Continuation c0f9843c1ff881faf0026d4cda7cf69156c4884f, 2026-11-07, bounds the separate mobile SitesScreen.
+The prior list retained displayed metadata across ready-to-ready account
+transitions because its load effect watched readiness only. Same-account reads
+could settle out of order, and older refresh finalizers could clear a newer
+spinner. Retained row actions lacked current-owner checks. These are
+source-qualified UI paths, not observed cross-account disclosure; existing API
+generation guards and backend owner enforcement already existed.
+
+A list-local lifetime captures the full cloud account epoch and live auth
+readiness/owner and mode. Synchronous subscriptions retire changes permanently,
+including batched round trips; a post-subscription environment comparison
+reconciles the initial render-to-listener gap. Rendered sites, errors and
+refresh status are stamped with that lifetime and hidden when it is no longer
+current. Unavailable/misaligned ownership does not dispatch.
+
+Each initial load, retry or refresh supersedes and aborts the previous read.
+Success/error state updaters recheck both view and latest-read identity. The
+unguarded refresh finalizer is removed; only a current read ends its refresh
+state. Current-view failed refreshes may retain prior rows, as before. Retained
+refresh/retry callbacks intentionally remain usable within the same live view,
+but cannot dispatch after retirement.
+
+Row navigation checks its view, latest read and displayed state identity. A
+handler captured before a refresh, or while a refresh retains older rows,
+cannot later navigate after that read replaces the displayed rows. Already
+dispatched navigation cannot be recalled.
+
+The screen supplies the existing SiteRequestAuthority to listPublishedSites:
+full epoch, request abort signal and caller-owned 401 options. Service/API,
+detail helper, backend and ambient defaults for other callers are unchanged.
+This is request admission and caller acceptance, not pinned credentials or a
+global auth rewrite. API generation checks and owner enforcement remain.
+
+Three source/fixture files are independently reviewed. Fifteen expanded cases
+cover current actions, ready-to-ready owner changes, epoch/auth/mode round trips,
+overlapping resolve/reject outcomes, retained rows/retries, unmount,
+subscription-gap reconciliation, StrictMode and Local-to-Cloud readiness.
+
+Fixture cases are authored UNRUN. No product checks, migration application,
+live services, push or deployment. This does not complete paginated inventory,
+strict mobile mutation receipts, durable unknown-write recovery or global
+cross-controller ordering. Credentials remain ambient and mocked request options
+do not prove actual network/auth/abort behavior. Existing recovery dependencies,
+unapplied migrations and lost-history limits remain.
