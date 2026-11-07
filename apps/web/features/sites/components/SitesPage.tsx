@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Globe, RefreshCw } from '@agiworkforce/icons';
 import { Button, SearchInput, Spinner } from '@agiworkforce/ui';
@@ -17,6 +17,17 @@ type LoadState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'ready'; sites: PublishedSite[]; workspace: { memberCount: number } | null };
+
+type SitesView = {
+  active: boolean;
+  request: AbortController | null;
+};
+
+function interruptRead(view: SitesView) {
+  const request = view.request;
+  view.request = null;
+  request?.abort();
+}
 
 export function SitesEmptyState() {
   return (
@@ -42,17 +53,27 @@ export function SitesPage() {
   const [renaming, setRenaming] = useState<PublishedSite | null>(null);
   const [sharing, setSharing] = useState<PublishedSite | null>(null);
   const [query, setQuery] = useState('');
+  const viewRef = useRef<SitesView | null>(null);
   const hydrateStore = usePublishedSitesStore((store) => store.hydrate);
 
   const load = useCallback(
-    async (signal?: AbortSignal) => {
+    async () => {
+      const view = viewRef.current;
+      if (!view?.active) return;
+      interruptRead(view);
+      const request = new AbortController();
+      view.request = request;
       setState({ status: 'loading' });
       try {
-        const { sites, workspace } = await listPublishedSites(signal);
+        const { sites, workspace } = await listPublishedSites(request.signal);
+        if (!view.active || view.request !== request) return;
         hydrateStore(sites);
+        if (!view.active || view.request !== request) return;
+        view.request = null;
         setState({ status: 'ready', sites, workspace });
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (!view.active || view.request !== request) return;
+        view.request = null;
         setState({
           status: 'error',
           message: toUserMessage(error, 'Your sites could not be loaded.'),
@@ -62,10 +83,15 @@ export function SitesPage() {
     [hydrateStore],
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
+  useLayoutEffect(() => {
+    const view: SitesView = { active: true, request: null };
+    viewRef.current = view;
+    void load();
+    return () => {
+      view.active = false;
+      interruptRead(view);
+      if (viewRef.current === view) viewRef.current = null;
+    };
   }, [load]);
 
   const updateSite = useCallback((update: SiteUpdate) => {
