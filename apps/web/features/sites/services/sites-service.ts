@@ -216,10 +216,11 @@ export async function republishArtifactVersion(
   version: number,
   authority?: RequestAuthority,
 ): Promise<void> {
+  const token = artifact.token;
   return withPublicationAuthority(authority, async () => {
     const headers = await addCsrfHeaders();
     authority?.assertCurrent();
-    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactVersionPath(artifact.token, version), {
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactVersionPath(token, version), {
       method: 'POST',
       credentials: 'include',
       headers,
@@ -228,11 +229,13 @@ export async function republishArtifactVersion(
     if (!response.ok) {
       throw await responseError(response, 'Failed to put that version live');
     }
-    if (authority) {
-      const raw: unknown = await response.json();
-      authority.assertCurrent();
-      const receipt = PublishedArtifactRestoreReceiptSchema.parse(raw);
-      if (receipt.token !== artifact.token) throw new Error('Published version restore was not confirmed');
+    const raw: unknown = await response.json().catch(() => null);
+    authority?.assertCurrent();
+    const receipt = PublishedArtifactRestoreReceiptSchema.safeParse(raw);
+    if (!receipt.success || receipt.data.token !== token) {
+      throw new Error(
+        'This version restore could not be confirmed. It may have taken effect. Refresh to check before trying again.',
+      );
     }
   });
 }
