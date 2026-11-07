@@ -56,7 +56,7 @@ vi.mock('../../services/sites-service', async (importOriginal) => ({
 vi.mock('../SiteViewersEditor', () => ({ SiteViewersEditor: () => null }));
 
 const { SiteDetail } = await import('../SiteDetail');
-const { usePublishedSitesStore } = await import('../../stores/published-sites-store');
+const { usePublishedSitesStore, beginPublicationCleanup } = await import('../../stores/published-sites-store');
 
 type UpdateResponse = Awaited<ReturnType<SitesServiceModule['updatePublishedSite']>>;
 
@@ -132,8 +132,7 @@ async function openDataTab() {
 }
 
 beforeEach(() => {
-  usePublishedSitesStore.getState().hydrate([]);
-  usePublishedSitesStore.setState({ byArtifactId: {}, status: 'idle' });
+  beginPublicationCleanup()();
   mocks.listPublishedSites.mockResolvedValue({ sites: [site()], workspace: null });
   mocks.readPublishedSiteVersion.mockResolvedValue({
     version: 2,
@@ -166,7 +165,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  usePublishedSitesStore.getState().hydrate([]);
+  beginPublicationCleanup()();
 });
 
 describe('SiteDetail', () => {
@@ -831,5 +830,102 @@ describe('SiteDetail committed read lifetime models', () => {
     }
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Receipt title');
     expect(mocks.listPublishedSites).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('SiteDetail common cleanup ownership models', () => {
+  it('retires a mounted initial read across cleanup and release', async () => {
+    const oldRead = deferred<SiteList>();
+    const newRead = deferred<SiteList>();
+    mocks.listPublishedSites.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    render(<SiteDetail token={TOKEN} />);
+    const signal = mocks.listPublishedSites.mock.calls[0]![0] as AbortSignal;
+    let finish = () => {};
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      expect(signal.aborted).toBe(true);
+      expect(usePublishedSitesStore.getState().lease).toBeNull();
+      act(() => finish());
+      await act(async () => oldRead.resolve({ sites: [site({ title: 'Retired title' })], workspace: null }));
+      expect(screen.queryByText('Retired title')).not.toBeInTheDocument();
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+      await act(async () => newRead.resolve({ sites: [site({ title: 'Replacement title' })], workspace: null }));
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Replacement title');
+    } finally {
+      cleanup();
+      finish();
+      await act(async () => {
+        oldRead.resolve({ sites: [], workspace: null });
+        newRead.resolve({ sites: [], workspace: null });
+      });
+    }
+  });
+
+  it.each([['name', 'success'], ['name', 'error'], ['sharing', 'success'], ['sharing', 'error']] as const)('suppresses stale %s %s receipt and feedback after cleanup', async (kind, outcome) => {
+    const pending = deferredUpdate();
+    mocks.listPublishedSites.mockResolvedValue({ sites: [site({ visibility: 'invited' })], workspace: null });
+    mocks.updatePublishedSite.mockReturnValueOnce(pending.promise);
+    render(<SiteDetail token={TOKEN} />);
+    await screen.findByLabelText('Site name');
+    if (kind === 'name') {
+      fireEvent.change(screen.getByLabelText('Site name'), { target: { value: 'Retired rename' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    } else fireEvent.click(screen.getByRole('radio', { name: /anyone with the link/i }));
+    expect(mocks.updatePublishedSite).toHaveBeenCalledTimes(1);
+    mocks.toastSuccess.mockClear();
+    let finish = () => {};
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      await act(async () => {
+        if (outcome === 'success') pending.resolve(updateReceipt({ title: 'Retired rename' }));
+        else pending.reject(new Error('Retired settings failure'));
+      });
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+      expect(mocks.toastSuccess).not.toHaveBeenCalled();
+      expect(mocks.toastError).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    } finally {
+      cleanup();
+      finish();
+      await act(async () => pending.resolve(updateReceipt()));
+    }
+  });
+
+  it('does not navigate or report success for an unpublish receipt after cleanup', async () => {
+    const pending = deferred<void>();
+    mocks.unpublishArtifact.mockReturnValueOnce(pending.promise);
+    render(<SiteDetail token={TOKEN} />);
+    fireEvent.click(await screen.findByTestId('site-unpublish'));
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Unpublish' }));
+    expect(mocks.unpublishArtifact).toHaveBeenCalledTimes(1);
+    let finish = () => {};
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      await act(async () => pending.resolve());
+      expect(mocks.push).not.toHaveBeenCalled();
+      expect(mocks.toastSuccess).not.toHaveBeenCalled();
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+    } finally {
+      cleanup();
+      finish();
+      await act(async () => pending.resolve());
+    }
+  });
+
+  it('removes an offered unpublish confirmation on cleanup without sending its request', async () => {
+    render(<SiteDetail token={TOKEN} />);
+    fireEvent.click(await screen.findByTestId('site-unpublish'));
+    const confirm = within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Unpublish' });
+    let finish = () => {};
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      fireEvent.click(confirm);
+      expect(mocks.unpublishArtifact).not.toHaveBeenCalled();
+      expect(mocks.push).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      finish();
+    }
   });
 });

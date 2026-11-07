@@ -9,6 +9,7 @@ import { Copy } from '@agiworkforce/icons';
 import { Button, Input, Label, Spinner } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
+import { isPublicationLeaseCurrent, usePublishedSitesStore } from '../stores/published-sites-store';
 import { unpublishConsequence } from '../hooks/useSiteActions';
 import { formatRelativeTime } from '../lib/site-format';
 import {
@@ -58,6 +59,7 @@ function NameSetting({
   onRename: (site: PublishedSite, title: string) => Promise<void>;
 }) {
   const [value, setValue] = useState(site.title);
+  const lease = usePublishedSitesStore((state) => state.lease);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,16 +70,18 @@ function NameSetting({
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!trimmed || unchanged) return;
+    if (!isPublicationLeaseCurrent(lease) || !trimmed || unchanged) return;
     setSaving(true);
     setError(null);
     try {
       await onRename(site, trimmed);
+      if (!isPublicationLeaseCurrent(lease)) return;
       toast.success('Site renamed');
     } catch (caught) {
+      if (!isPublicationLeaseCurrent(lease)) return;
       setError(toUserMessage(caught, 'Failed to rename this site'));
     } finally {
-      setSaving(false);
+      if (isPublicationLeaseCurrent(lease)) setSaving(false);
     }
   };
 
@@ -117,15 +121,17 @@ function SharingSetting({
   workspace: { memberCount: number } | null;
   onChange: (site: PublishedSite, visibility: SiteVisibility) => Promise<void>;
 }) {
+  const lease = usePublishedSitesStore((state) => state.lease);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const change = async (next: SiteVisibility) => {
-    if (next === site.visibility) return;
+    if (!isPublicationLeaseCurrent(lease) || next === site.visibility) return;
     setSaving(true);
     setError(null);
     try {
       await onChange(site, next);
+      if (!isPublicationLeaseCurrent(lease)) return;
       toast.success(
         next === 'public'
           ? 'Anyone with the link can open it'
@@ -134,9 +140,10 @@ function SharingSetting({
             : 'Shared with your workspace',
       );
     } catch (caught) {
+      if (!isPublicationLeaseCurrent(lease)) return;
       setError(toUserMessage(caught, 'Failed to change who can open this site'));
     } finally {
-      setSaving(false);
+      if (isPublicationLeaseCurrent(lease)) setSaving(false);
     }
   };
 

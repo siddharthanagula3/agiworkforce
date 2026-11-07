@@ -4,7 +4,10 @@ vi.mock('@shared/lib/logger', () => ({
   logger: { auth: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('./layout-store', () => ({}));
+const publicationCleanupMocks = vi.hoisted(() => ({ reset: vi.fn() }));
+vi.mock('./layout-store', () => ({
+  useLayoutStore: { getState: () => ({ reset: publicationCleanupMocks.reset }) },
+}));
 vi.mock('./web-chat-store', () => ({}));
 vi.mock('./web-settings-store', () => ({}));
 vi.mock('./model-store', () => ({}));
@@ -23,6 +26,24 @@ import { cleanupAllStores, useAuthStore } from './authentication-store';
 import { useMediaStore } from './media-store';
 import { authService } from '@shared/services/authentication-manager';
 import { FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY } from '@/features/chat/components/FreePlanTrainingNotice';
+
+import {
+  beginPublicationCleanup,
+  capturePublicationLease,
+  isPublicationLeaseCurrent,
+  usePublishedSitesStore,
+} from '@/features/sites/stores/published-sites-store';
+
+function openPublicationLease() {
+  const lease = capturePublicationLease();
+  if (!lease) throw new Error('Expected publication cleanup to have completed');
+  return lease;
+}
+
+const publicationDetails = {
+  shareUrl: 'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
+  visibility: 'public' as const,
+};
 
 const mediaOwner = {
   userId: 'media-user', sessionId: 'media-session',
@@ -157,5 +178,84 @@ describe('authService.logout', () => {
 
   it('is a no-op when Clerk has not loaded', async () => {
     await expect(authService.logout()).resolves.toEqual({ error: null });
+  });
+});
+
+
+describe('common cleanup publication boundary', () => {
+  beforeEach(() => {
+    publicationCleanupMocks.reset.mockReset();
+    beginPublicationCleanup()();
+  });
+
+  afterEach(() => {
+    publicationCleanupMocks.reset.mockReset();
+    beginPublicationCleanup()();
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'clears before its first await and stays closed during a %s module cleanup and its microtasks',
+    async (outcome) => {
+      const lease = openPublicationLease();
+      usePublishedSitesStore.getState().record('private-artifact', publicationDetails, lease);
+      const observed: Array<{ lease: ReturnType<typeof capturePublicationLease>; accepted: boolean }> = [];
+      const observe = () => observed.push({
+        lease: capturePublicationLease(),
+        accepted: usePublishedSitesStore.getState().record('late-artifact', publicationDetails, lease),
+      });
+      let deferredObservation: Promise<void> | undefined;
+      publicationCleanupMocks.reset.mockImplementation(() => {
+        observe();
+        deferredObservation = Promise.resolve().then(() => { observe(); });
+        if (outcome === 'failure') throw new Error('Fixture store reset failed');
+        return deferredObservation;
+      });
+      const cleaning = cleanupAllStores();
+      try {
+        expect(capturePublicationLease()).toBeNull();
+        expect(isPublicationLeaseCurrent(lease)).toBe(false);
+        expect(usePublishedSitesStore.getState()).toMatchObject({ byArtifactId: {}, status: 'idle' });
+        expect(usePublishedSitesStore.getState().hydrate([], lease)).toBe(false);
+        expect(usePublishedSitesStore.getState().forget('private-artifact', lease)).toBe(false);
+        await cleaning;
+        await deferredObservation;
+        expect(publicationCleanupMocks.reset).toHaveBeenCalledTimes(1);
+        expect(observed).toEqual([
+          { lease: null, accepted: false },
+          { lease: null, accepted: false },
+        ]);
+        const reopened = openPublicationLease();
+        expect(reopened).not.toBe(lease);
+        expect(usePublishedSitesStore.getState().record('late-artifact', publicationDetails, lease)).toBe(false);
+        expect(usePublishedSitesStore.getState().record('fresh-artifact', publicationDetails, reopened)).toBe(true);
+        expect(Object.keys(usePublishedSitesStore.getState().byArtifactId)).toEqual(['fresh-artifact']);
+      } finally {
+        await cleaning;
+        await deferredObservation;
+      }
+    },
+  );
+
+  it('does not reopen the common boundary while another cleanup remains active', async () => {
+    const lease = openPublicationLease();
+    let nestedFinish: (() => void) | undefined;
+    publicationCleanupMocks.reset.mockImplementation(() => {
+      nestedFinish = beginPublicationCleanup();
+    });
+    const cleaning = cleanupAllStores();
+    try {
+      expect(capturePublicationLease()).toBeNull();
+      await cleaning;
+      expect(capturePublicationLease()).toBeNull();
+      expect(usePublishedSitesStore.getState().record('late-artifact', publicationDetails, lease)).toBe(false);
+      if (!nestedFinish) throw new Error('Nested cleanup did not start');
+      nestedFinish();
+      const reopened = openPublicationLease();
+      nestedFinish();
+      expect(openPublicationLease()).toBe(reopened);
+    } finally {
+      await cleaning;
+      nestedFinish?.();
+    }
   });
 });

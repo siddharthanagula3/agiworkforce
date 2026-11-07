@@ -1,3 +1,4 @@
+import { beginPublicationCleanup } from '@features/sites/stores/published-sites-store';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -202,41 +203,47 @@ function purgeStorageKeys(area: Storage | undefined, patterns: readonly RegExp[]
  * than an all-or-nothing one.
  */
 export async function cleanupAllStores(): Promise<void> {
-  const results = await Promise.allSettled(
-    USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
-      try {
-        const mod = await load();
-        if (!mod || typeof mod !== 'object') return;
-        for (const exported of Object.values(mod as Record<string, unknown>)) {
-          const handle = asZustandStore(exported);
-          if (!handle) continue;
-          resetStoreState(handle);
-          if (hasPersistApi(handle)) handle.persist?.clearStorage();
-        }
-        for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
-          if (MODULE_ACCOUNT_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
-            (exported as () => void)();
+  // This fences publication work across common cleanup, not cookie/session identity.
+  const finishPublicationCleanup = beginPublicationCleanup();
+  try {
+    const results = await Promise.allSettled(
+      USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
+        try {
+          const mod = await load();
+          if (!mod || typeof mod !== 'object') return;
+          for (const exported of Object.values(mod as Record<string, unknown>)) {
+            const handle = asZustandStore(exported);
+            if (!handle) continue;
+            resetStoreState(handle);
+            if (hasPersistApi(handle)) handle.persist?.clearStorage();
           }
+          for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
+            if (MODULE_ACCOUNT_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
+              (exported as () => void)();
+            }
+          }
+        } catch (error) {
+          logger.error(`Error cleaning up ${label} on logout:`, error);
+          throw error;
         }
-      } catch (error) {
-        logger.error(`Error cleaning up ${label} on logout:`, error);
-        throw error;
-      }
-    }),
-  );
-  const failedCount = results.filter((result) => result.status === 'rejected').length;
-
-  if (typeof window !== 'undefined') {
-    purgeAppOwnedStorage(window.localStorage);
-    purgeAppOwnedStorage(window.sessionStorage);
-  }
-
-  if (failedCount === 0) {
-    logger.auth('All stores cleaned up on logout');
-  } else {
-    logger.auth(
-      `Store cleanup on logout completed with ${failedCount} of ${USER_SCOPED_STORE_MODULES.length} module(s) failing; see preceding errors`,
+      }),
     );
+    const failedCount = results.filter((result) => result.status === 'rejected').length;
+
+    if (typeof window !== 'undefined') {
+      purgeAppOwnedStorage(window.localStorage);
+      purgeAppOwnedStorage(window.sessionStorage);
+    }
+
+    if (failedCount === 0) {
+      logger.auth('All stores cleaned up on logout');
+    } else {
+      logger.auth(
+        `Store cleanup on logout completed with ${failedCount} of ${USER_SCOPED_STORE_MODULES.length} module(s) failing; see preceding errors`,
+      );
+    }
+  } finally {
+    finishPublicationCleanup();
   }
 }
 

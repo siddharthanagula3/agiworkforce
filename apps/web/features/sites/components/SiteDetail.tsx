@@ -15,7 +15,11 @@ import {
   siteVisitPath,
   type PublishedSite,
 } from '../services/sites-service';
-import { usePublishedSitesStore } from '../stores/published-sites-store';
+import {
+  isPublicationLeaseCurrent,
+  usePublishedSitesStore,
+  type PublicationLease,
+} from '../stores/published-sites-store';
 import { SiteVisibilityBadge } from './SiteCard';
 import { SiteDataTab } from './SiteDataTab';
 import { SiteSettingsTab } from './SiteSettingsTab';
@@ -116,10 +120,11 @@ function SiteHeader({
 }
 
 export function SiteDetail({ token }: { token: string }) {
-  return <SiteDetailView key={token} token={token} />;
+  const lease = usePublishedSitesStore((store) => store.lease);
+  return <SiteDetailView key={`${token}:${lease?.epoch ?? 'closed'}`} token={token} lease={lease} />;
 }
 
-function SiteDetailView({ token }: { token: string }) {
+function SiteDetailView({ token, lease }: { token: string; lease: PublicationLease | null }) {
   const router = useRouter();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const viewRef = useRef<DetailView | null>(null);
@@ -128,7 +133,7 @@ function SiteDetailView({ token }: { token: string }) {
   const load = useCallback(
     async (showLoading = false) => {
       const view = viewRef.current;
-      if (!view?.active) return;
+      if (!isPublicationLeaseCurrent(lease) || !view?.active) return;
       interruptRead(view);
       const request = new AbortController();
       view.request = request;
@@ -137,17 +142,18 @@ function SiteDetailView({ token }: { token: string }) {
           ? { ...current, refreshError: undefined }
           : { status: 'loading' },
       );
+      if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
       try {
         const { sites, workspace } = await listPublishedSites(request.signal);
-        if (!view.active || view.request !== request) return;
+        if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
         const site = sites.find((candidate) => candidate.token === token);
         view.artifactId = site?.artifactId ?? null;
-        hydrateStore(sites);
-        if (!view.active || view.request !== request) return;
+        if (!hydrateStore(sites, lease)) return;
+        if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
         view.request = null;
         setState(site ? { status: 'ready', site, workspace } : { status: 'missing' });
       } catch (error) {
-        if (!view.active || view.request !== request) return;
+        if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
         view.request = null;
         setState((current) =>
           current.status === 'ready'
@@ -163,24 +169,34 @@ function SiteDetailView({ token }: { token: string }) {
         );
       }
     },
-    [token, hydrateStore],
+    [token, hydrateStore, lease],
   );
 
   useLayoutEffect(() => {
     const view: DetailView = { active: true, artifactId: null, request: null };
     viewRef.current = view;
+    const unsubscribe = usePublishedSitesStore.subscribe(() => {
+      if (!isPublicationLeaseCurrent(lease)) {
+        view.active = false;
+        interruptRead(view);
+      }
+    });
     void load(true);
     return () => {
+      unsubscribe();
       view.active = false;
       interruptRead(view);
       if (viewRef.current === view) viewRef.current = null;
     };
-  }, [load]);
+  }, [load, lease]);
 
   const onUpdated = useCallback(
     (update: SiteUpdate) => {
       const view = viewRef.current;
-      if (!view?.active || update.token !== token || update.artifactId !== view.artifactId) return;
+      if (
+        !isPublicationLeaseCurrent(lease) || !view?.active ||
+        update.token !== token || update.artifactId !== view.artifactId
+      ) return;
       const interrupted = interruptRead(view);
       setState((current) =>
         current.status === 'ready'
@@ -189,20 +205,23 @@ function SiteDetailView({ token }: { token: string }) {
       );
       if (interrupted) void load();
     },
-    [load, token],
+    [load, token, lease],
   );
   const onUnpublished = useCallback(
     (site: PublishedSite) => {
       const view = viewRef.current;
-      if (!view?.active || site.token !== token || site.artifactId !== view.artifactId) return;
+      if (
+        !isPublicationLeaseCurrent(lease) || !view?.active ||
+        site.token !== token || site.artifactId !== view.artifactId
+      ) return;
       view.active = false;
       interruptRead(view);
       setState({ status: 'missing' });
       router.push(SITES_PATH);
     },
-    [router, token],
+    [router, token, lease],
   );
-  const actions = useSiteActions({ onUpdated, onUnpublished });
+  const actions = useSiteActions({ onUpdated, onUnpublished, lease });
 
   return (
     <section

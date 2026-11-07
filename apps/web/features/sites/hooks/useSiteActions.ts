@@ -11,7 +11,11 @@ import {
   type PublishedSite,
   type SiteVisibility,
 } from '../services/sites-service';
-import { usePublishedSitesStore } from '../stores/published-sites-store';
+import {
+  isPublicationLeaseCurrent,
+  usePublishedSitesStore,
+  type PublicationLease,
+} from '../stores/published-sites-store';
 
 export type SiteUpdate = Pick<PublishedSite, 'token' | 'artifactId'> & {
   changes:
@@ -37,7 +41,9 @@ export function unpublishConsequence(site: Pick<PublishedSite, 'title'>): string
 export function useSiteActions({
   onUpdated,
   onUnpublished,
+  lease,
 }: {
+  lease: PublicationLease | null;
   onUpdated: (update: SiteUpdate) => void;
   onUnpublished: (site: PublishedSite) => void;
 }) {
@@ -46,39 +52,55 @@ export function useSiteActions({
   const forgetPublishedSite = usePublishedSitesStore((state) => state.forget);
 
   const copyLink = useCallback(async (site: PublishedSite) => {
+    if (!isPublicationLeaseCurrent(lease)) return;
     if (!navigator.clipboard?.writeText) {
       toast.error('Clipboard access is unavailable. Open the site and copy the address instead.');
       return;
     }
     try {
       await navigator.clipboard.writeText(site.shareUrl);
-      toast.success('Link copied');
+      if (isPublicationLeaseCurrent(lease)) toast.success('Link copied');
     } catch {
+      if (!isPublicationLeaseCurrent(lease)) return;
       toast.error('Could not copy the link. Open the site and copy the address instead.');
     }
-  }, []);
+  }, [lease]);
 
   const rename = useCallback(
     async (site: PublishedSite, title: string) => {
+      if (!isPublicationLeaseCurrent(lease)) {
+        throw new Error('This publication action is no longer available.');
+      }
       const { token, artifactId } = site;
       const updated = await updatePublishedSite(token, { title });
+      if (!isPublicationLeaseCurrent(lease)) {
+        throw new Error('This publication action is no longer available.');
+      }
       onUpdated({
         token,
         artifactId,
         changes: { title: updated.title, updatedAt: updated.updatedAt },
       });
     },
-    [onUpdated],
+    [onUpdated, lease],
   );
 
   const setVisibility = useCallback(
     async (site: PublishedSite, visibility: SiteVisibility) => {
+      if (!isPublicationLeaseCurrent(lease)) {
+        throw new Error('This publication action is no longer available.');
+      }
       const { token, artifactId } = site;
       const updated = await updatePublishedSite(token, { visibility });
-      recordPublishedSite(artifactId, {
+      if (!recordPublishedSite(artifactId, {
         shareUrl: updated.shareUrl,
         visibility: updated.visibility,
-      });
+      }, lease)) {
+        throw new Error('This publication action is no longer available.');
+      }
+      if (!isPublicationLeaseCurrent(lease)) {
+        throw new Error('This publication action is no longer available.');
+      }
       onUpdated({
         token,
         artifactId,
@@ -89,29 +111,33 @@ export function useSiteActions({
         },
       });
     },
-    [onUpdated, recordPublishedSite],
+    [onUpdated, recordPublishedSite, lease],
   );
 
   const requestUnpublish = useCallback(
-    (site: PublishedSite) =>
-      confirm({
+    (site: PublishedSite) => {
+      if (!isPublicationLeaseCurrent(lease)) return;
+      return confirm({
         title: `Unpublish “${siteName(site)}”?`,
         description: unpublishConsequence(site),
         confirmLabel: 'Unpublish',
         destructive: true,
         onConfirm: async () => {
+          if (!isPublicationLeaseCurrent(lease)) return;
           try {
             await unpublishArtifact(site.token);
           } catch (error) {
+            if (!isPublicationLeaseCurrent(lease)) return;
             toast.error(toUserMessage(error, 'Failed to unpublish this site'));
             return;
           }
-          forgetPublishedSite(site.artifactId);
+          if (!forgetPublishedSite(site.artifactId, lease)) return;
           toast.success(`Unpublished “${siteName(site)}”. The link no longer works.`);
           onUnpublished(site);
         },
-      }),
-    [confirm, forgetPublishedSite, onUnpublished],
+      });
+    },
+    [confirm, forgetPublishedSite, onUnpublished, lease],
   );
 
   return { dialog, copyLink, rename, setVisibility, requestUnpublish };

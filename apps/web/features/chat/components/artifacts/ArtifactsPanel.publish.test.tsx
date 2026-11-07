@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { ArtifactsPanel } from './ArtifactsPanel';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
-import { usePublishedSitesStore } from '@features/sites/stores/published-sites-store';
+import { usePublishedSitesStore, beginPublicationCleanup, capturePublicationLease } from '@features/sites/stores/published-sites-store';
 
 type PublishSelection = { content: string; versionIndex: number };
 let capturedLink: string | undefined;
@@ -73,7 +73,8 @@ function seedArtifact() {
 describe('ArtifactsPanel · publish wiring', () => {
   beforeEach(() => {
     capturedLink = undefined;
-    usePublishedSitesStore.setState({ byArtifactId: {}, status: 'ready' });
+    beginPublicationCleanup()();
+    usePublishedSitesStore.getState().hydrate([], capturePublicationLease()!);
     capturedPublish = undefined;
     capturedAudience = undefined;
     useArtifactsStore.getState().reset();
@@ -89,6 +90,8 @@ describe('ArtifactsPanel · publish wiring', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    beginPublicationCleanup()();
     vi.unstubAllGlobals();
     useChatStore.setState({ messagesByConversation: {}, messages: [] });
   });
@@ -164,7 +167,8 @@ describe('ArtifactsPanel · publish wiring', () => {
   });
 
   it('records the publish where the artifact card reads its published state', async () => {
-    usePublishedSitesStore.setState({ byArtifactId: {}, status: 'ready' });
+    beginPublicationCleanup()();
+    usePublishedSitesStore.getState().hydrate([], capturePublicationLease()!);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -258,7 +262,8 @@ describe('ArtifactsPanel publication ownership', () => {
     capturedAudience = undefined;
     useArtifactsStore.getState().reset();
     useStreamingArtifactStore.getState().clearStreamingArtifact();
-    usePublishedSitesStore.setState({ byArtifactId: {}, status: 'ready' });
+    beginPublicationCleanup()();
+    usePublishedSitesStore.getState().hydrate([], capturePublicationLease()!);
     useChatStore.setState({ activeConversationId: CONVERSATION_ID,
       messagesByConversation: { [CONVERSATION_ID]: [MANAGED_TURN] }, messages: [MANAGED_TURN] });
     seedArtifact();
@@ -266,7 +271,11 @@ describe('ArtifactsPanel publication ownership', () => {
     useArtifactsStore.getState().selectArtifact(ARTIFACT_ID);
     useArtifactsStore.getState().setPanelOpen(true);
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    cleanup();
+    beginPublicationCleanup()();
+    vi.unstubAllGlobals();
+  });
 
   it.each(['switch', 'round trip', 'close', 'unmount'])('attributes a late publish after %s only to A', async (transition) => {
     const post = deferredResponse();
@@ -440,5 +449,116 @@ describe('ArtifactsPanel publication ownership', () => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(0);
     },
   );
+
+  it.each(['publish', 'lookup', 'audience'] as const)('rejects a pre-cleanup %s receipt without recording or attaching its link', async (kind) => {
+    const old = deferredResponse();
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' || init?.method === 'PATCH' || kind === 'lookup') return old.promise;
+      return Response.json({ artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ArtifactsPanel />);
+    let pending: Promise<unknown> | undefined;
+    if (kind === 'audience') {
+      await waitFor(() => expect(capturedAudience).toBeDefined());
+      pending = capturedAudience!.onChange('invited');
+    } else if (kind === 'publish') pending = capturedPublish!({ content: CONTENT, versionIndex: 0 });
+    const settled = pending ? Promise.allSettled([pending]) : Promise.resolve([]);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    if (kind === 'publish') await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true));
+    let finish = () => {};
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      await act(async () => {
+        old.resolve(Response.json(kind === 'lookup'
+          ? { artifacts: [{ artifactId: ARTIFACT_ID, shareUrl: OWNED_URL, visibility: 'public' }] }
+          : { shareUrl: OWNED_URL, visibility: 'invited' }));
+        const outcomes = await settled;
+        if (pending) expect(outcomes[0]?.status).toBe('rejected');
+      });
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+      expect(capturedLink).toBeUndefined();
+      expect(capturedAudience).toBeUndefined();
+    } finally {
+      cleanup();
+      finish();
+      old.resolve(Response.json({ artifacts: [] }));
+      await settled;
+    }
+  });
+
+  it('allows a replacement-lease publish while the old request is pending and protects its pending flag from old finally', async () => {
+    const old = deferredResponse();
+    const current = deferredResponse();
+    let posts = 0;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
+      ? (++posts === 1 ? old.promise : current.promise)
+      : Response.json({ artifacts: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ArtifactsPanel />);
+    const first = capturedPublish!({ content: CONTENT, versionIndex: 0 });
+    const firstSettled = Promise.allSettled([first]);
+    await waitFor(() => expect(posts).toBe(1));
+    let finish = () => {};
+    let secondSettled: Promise<PromiseSettledResult<PublishResult>[]> = Promise.resolve([]);
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      act(() => finish());
+      const currentPublish = capturedPublish!;
+      const second = currentPublish({ content: CONTENT, versionIndex: 0 });
+      secondSettled = Promise.allSettled([second]);
+      await waitFor(() => expect(posts).toBe(2));
+      await act(async () => {
+        old.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+        expect((await firstSettled)[0]?.status).toBe('rejected');
+      });
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+      await expect(currentPublish({ content: CONTENT, versionIndex: 0 })).rejects.toThrow();
+      expect(posts).toBe(2);
+      await act(async () => {
+        current.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'invited' }));
+        expect((await secondSettled)[0]?.status).toBe('fulfilled');
+      });
+      expect(capturedLink).toBe(OWNED_URL);
+      expect(usePublishedSitesStore.getState().byArtifactId[ARTIFACT_ID]?.visibility).toBe('invited');
+    } finally {
+      cleanup();
+      finish();
+      old.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+      current.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'invited' }));
+      await Promise.all([firstSettled, secondSettled]);
+    }
+  });
+
+  it('rechecks local ownership when a synchronous record subscriber begins cleanup', async () => {
+    const post = deferredResponse();
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => init?.method === 'POST'
+      ? post.promise : Response.json({ artifacts: [] })));
+    render(<ArtifactsPanel />);
+    let finish = () => {};
+    let retired = false;
+    const unsubscribe = usePublishedSitesStore.subscribe((state) => {
+      if (retired || !state.byArtifactId[ARTIFACT_ID]) return;
+      retired = true;
+      finish = beginPublicationCleanup();
+    });
+    const pending = capturedPublish!({ content: CONTENT, versionIndex: 0 });
+    const settled = Promise.allSettled([pending]);
+    try {
+      await act(async () => {
+        post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+        expect((await settled)[0]?.status).toBe('rejected');
+      });
+      expect(retired).toBe(true);
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+      expect(capturedLink).toBeUndefined();
+    } finally {
+      unsubscribe();
+      cleanup();
+      finish();
+      post.resolve(Response.json({ shareUrl: OWNED_URL, visibility: 'public' }));
+      await settled;
+    }
+  });
 
 });

@@ -9,7 +9,11 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { mergeSiteUpdate, useSiteActions, type SiteUpdate } from '../hooks/useSiteActions';
 import { sortSitesByUpdated } from '../lib/site-format';
 import { listPublishedSites, type PublishedSite } from '../services/sites-service';
-import { usePublishedSitesStore } from '../stores/published-sites-store';
+import {
+  isPublicationLeaseCurrent,
+  usePublishedSitesStore,
+  type PublicationLease,
+} from '../stores/published-sites-store';
 import { SiteCard } from './SiteCard';
 import { RenameSiteDialog, SiteSharingDialog } from './SiteDialogs';
 
@@ -49,6 +53,11 @@ export function SitesEmptyState() {
 }
 
 export function SitesPage() {
+  const lease = usePublishedSitesStore((store) => store.lease);
+  return <SitesPageView key={lease?.epoch ?? 'closed'} lease={lease} />;
+}
+
+function SitesPageView({ lease }: { lease: PublicationLease | null }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [renaming, setRenaming] = useState<PublishedSite | null>(null);
   const [sharing, setSharing] = useState<PublishedSite | null>(null);
@@ -59,20 +68,21 @@ export function SitesPage() {
   const load = useCallback(
     async () => {
       const view = viewRef.current;
-      if (!view?.active) return;
+      if (!isPublicationLeaseCurrent(lease) || !view?.active) return;
       interruptRead(view);
       const request = new AbortController();
       view.request = request;
       setState({ status: 'loading' });
+      if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
       try {
         const { sites, workspace } = await listPublishedSites(request.signal);
-        if (!view.active || view.request !== request) return;
-        hydrateStore(sites);
-        if (!view.active || view.request !== request) return;
+        if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
+        if (!hydrateStore(sites, lease)) return;
+        if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
         view.request = null;
         setState({ status: 'ready', sites, workspace });
       } catch (error) {
-        if (!view.active || view.request !== request) return;
+        if (!isPublicationLeaseCurrent(lease) || !view.active || view.request !== request) return;
         view.request = null;
         setState({
           status: 'error',
@@ -80,21 +90,29 @@ export function SitesPage() {
         });
       }
     },
-    [hydrateStore],
+    [hydrateStore, lease],
   );
 
   useLayoutEffect(() => {
     const view: SitesView = { active: true, request: null };
     viewRef.current = view;
+    const unsubscribe = usePublishedSitesStore.subscribe(() => {
+      if (!isPublicationLeaseCurrent(lease)) {
+        view.active = false;
+        interruptRead(view);
+      }
+    });
     void load();
     return () => {
+      unsubscribe();
       view.active = false;
       interruptRead(view);
       if (viewRef.current === view) viewRef.current = null;
     };
-  }, [load]);
+  }, [load, lease]);
 
   const updateSite = useCallback((update: SiteUpdate) => {
+    if (!isPublicationLeaseCurrent(lease) || !viewRef.current?.active) return;
     setState((current) =>
       current.status === 'ready'
         ? {
@@ -103,17 +121,18 @@ export function SitesPage() {
           }
         : current,
     );
-  }, []);
+  }, [lease]);
 
   const removeSite = useCallback((removed: PublishedSite) => {
+    if (!isPublicationLeaseCurrent(lease) || !viewRef.current?.active) return;
     setState((current) =>
       current.status === 'ready'
         ? { ...current, sites: current.sites.filter((site) => site.token !== removed.token) }
         : current,
     );
-  }, []);
+  }, [lease]);
 
-  const actions = useSiteActions({ onUpdated: updateSite, onUnpublished: removeSite });
+  const actions = useSiteActions({ onUpdated: updateSite, onUnpublished: removeSite, lease });
   const sites = useMemo(
     () => (state.status === 'ready' ? sortSitesByUpdated(state.sites) : []),
     [state],

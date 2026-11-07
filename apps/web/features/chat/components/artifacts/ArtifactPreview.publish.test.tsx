@@ -1,11 +1,19 @@
+import { useLayoutEffect } from 'react';
+import { usePublicationView } from './usePublicationView';
+import { beginPublicationCleanup } from '@features/sites/stores/published-sites-store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { ArtifactPreview } from './ArtifactPreview';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), message: vi.fn() } }));
 import { toast } from 'sonner';
+
+afterEach(() => {
+  cleanup();
+  beginPublicationCleanup()();
+});
 
 const ARTIFACT_ID = 'artifact-publish-version-1';
 
@@ -233,6 +241,44 @@ describe('ArtifactPreview publication lifecycle', () => {
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Who can open this')).not.toBeDisabled();
+  });
+
+  it('suppresses real Preview publication feedback when cleanup closes its lease before a React commit', async () => {
+    const pending = deferredPublish();
+    const publish = vi.fn(() => pending.promise);
+    const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
+    let commits = 0;
+    let owner: ReturnType<typeof usePublicationView> | undefined;
+    function BoundaryModel() {
+      owner = usePublicationView(ARTIFACT_ID);
+      useLayoutEffect(() => { commits += 1; });
+      return <ArtifactPreview artifact={artifact} variant="panel" publishArtifact={publish} />;
+    }
+    render(<BoundaryModel />);
+    fireEvent.click(screen.getByLabelText('Publish artifact to a public link'));
+    const capturedOwner = owner!;
+    const beforeCleanup = commits;
+    let finish = () => {};
+    try {
+      await act(async () => {
+        finish = beginPublicationCleanup();
+        expect(commits).toBe(beforeCleanup);
+        expect(capturedOwner.active).toBe(false);
+        pending.resolve({ kind: 'cloud', shareUrl: PUBLIC_URL, publishedAt: '2026-11-07' });
+        await pending.promise;
+        expect(commits).toBe(beforeCleanup);
+        expect(writeText).not.toHaveBeenCalled();
+        expect(toast.success).not.toHaveBeenCalled();
+      });
+      expect(writeText).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('artifact-published-url')).not.toBeInTheDocument();
+    } finally {
+      cleanup();
+      finish();
+      pending.resolve({ kind: 'cloud', shareUrl: PUBLIC_URL, publishedAt: '2026-11-07' });
+      await pending.promise;
+    }
   });
 
 });

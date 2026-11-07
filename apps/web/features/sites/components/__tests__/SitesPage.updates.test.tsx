@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SiteUpdate } from '../../hooks/useSiteActions';
 import type { PublishedSite } from '../../services/sites-service';
 
@@ -38,7 +38,7 @@ vi.mock('../SiteCard', async (importOriginal) => ({
 
 const { SitesPage } = await import('../SitesPage');
 const { mergeSiteUpdate } = await import('../../hooks/useSiteActions');
-const { usePublishedSitesStore } = await import('../../stores/published-sites-store');
+const { beginPublicationCleanup } = await import('../../stores/published-sites-store');
 
 const original: PublishedSite = {
   token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
@@ -81,8 +81,13 @@ function readRecord() {
 
 beforeEach(() => {
   mocks.onUpdated = undefined;
-  usePublishedSitesStore.setState({ byArtifactId: {}, status: 'idle' });
+  beginPublicationCleanup()();
   mocks.listPublishedSites.mockResolvedValue({ sites: [{ ...original }], workspace: null });
+});
+
+afterEach(() => {
+  cleanup();
+  beginPublicationCleanup()();
 });
 
 describe('SitesPage update callback boundary', () => {

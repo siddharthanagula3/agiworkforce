@@ -27,7 +27,7 @@ vi.mock('../../services/sites-service', async (importOriginal) => ({
 }));
 
 const { SitesPage } = await import('../SitesPage');
-const { usePublishedSite, usePublishedSitesStore } = await import('../../stores/published-sites-store');
+const { usePublishedSite, usePublishedSitesStore, beginPublicationCleanup, capturePublicationLease } = await import('../../stores/published-sites-store');
 
 function site(overrides: Partial<PublishedSite> = {}): PublishedSite {
   return {
@@ -69,19 +69,18 @@ function PublicationProbe() {
 
 afterEach(async () => {
   cleanup();
-  usePublishedSitesStore.getState().hydrate([]);
+  beginPublicationCleanup()();
   for (const pending of pendingLists) pending.resolve({ sites: [], workspace: null });
   await act(async () => {
     await Promise.allSettled(pendingLists.map((pending) => pending.promise));
   });
   pendingLists.length = 0;
-  usePublishedSitesStore.getState().hydrate([]);
+  beginPublicationCleanup()();
 });
 
 beforeEach(() => {
-  usePublishedSitesStore.getState().hydrate([]);
+  beginPublicationCleanup()();
   for (const mock of Object.values(mocks)) mock.mockReset();
-  usePublishedSitesStore.setState({ byArtifactId: {}, status: 'idle' });
   mocks.readPublishedSiteVersion.mockResolvedValue({
     version: 2,
     title: 'Team scoreboard',
@@ -219,7 +218,7 @@ describe('SitesPage', () => {
     usePublishedSitesStore.getState().record('artifact-1', {
       shareUrl: site().shareUrl,
       visibility: 'public',
-    });
+    }, capturePublicationLease()!);
 
     render(<SitesPage />);
 
@@ -445,7 +444,7 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       expect(signal).toBeInstanceOf(AbortSignal);
       view.unmount();
       expect(signal.aborted).toBe(true);
-      usePublishedSitesStore.getState().hydrate([site({ visibility: 'invited' })]);
+      usePublishedSitesStore.getState().hydrate([site({ visibility: 'invited' })], capturePublicationLease()!);
       await act(async () => {
         if (outcome === 'success') initial.resolve({ sites: [site()], workspace: null });
         else initial.reject(new Error('Retired initial read failed'));
@@ -492,7 +491,7 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       expect(signal).toBeInstanceOf(AbortSignal);
       view.unmount();
       expect(signal.aborted).toBe(true);
-      usePublishedSitesStore.getState().hydrate([]);
+      usePublishedSitesStore.getState().hydrate([], capturePublicationLease()!);
       await act(async () => {
         if (outcome === 'success') retry.resolve({ sites: [site()], workspace: null });
         else retry.reject(new Error('Retired retry failed'));
@@ -561,7 +560,7 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       retireOnHydration = false;
       // Changing the selected hydrate identity synchronously retires and replaces the effect.
       flushSync(() => {
-        usePublishedSitesStore.setState({ hydrate: (sites) => originalHydrate(sites) });
+        usePublishedSitesStore.setState({ hydrate: (sites, lease) => originalHydrate(sites, lease) });
       });
     });
     try {
@@ -585,6 +584,36 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       unsubscribe();
       cleanup();
       usePublishedSitesStore.setState({ hydrate: originalHydrate });
+    }
+  });
+});
+
+describe('SitesPage common cleanup ownership model', () => {
+  it('does not refill a mounted list or cache with an old read after cleanup release', async () => {
+    const oldRead = deferredList();
+    const newRead = deferredList();
+    mocks.listPublishedSites.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    render(<SitesPage />);
+    const signal = mocks.listPublishedSites.mock.calls[0]![0] as AbortSignal;
+    let finish = () => {};
+    try {
+      act(() => { finish = beginPublicationCleanup(); });
+      expect(signal.aborted).toBe(true);
+      expect(usePublishedSitesStore.getState().lease).toBeNull();
+      act(() => finish());
+      await act(async () => oldRead.resolve({ sites: [site({ title: 'Retired card' })], workspace: null }));
+      expect(screen.queryByText('Retired card')).not.toBeInTheDocument();
+      expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
+      await act(async () => newRead.resolve({ sites: [site({ title: 'Current card' })], workspace: null }));
+      expect(screen.getByTestId('site-card')).toHaveTextContent('Current card');
+      expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+    } finally {
+      cleanup();
+      finish();
+      await act(async () => {
+        oldRead.resolve({ sites: [], workspace: null });
+        newRead.resolve({ sites: [], workspace: null });
+      });
     }
   });
 });

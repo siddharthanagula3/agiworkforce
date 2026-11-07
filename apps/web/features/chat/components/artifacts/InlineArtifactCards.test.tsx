@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { GeneratedFile } from '@agiworkforce/types';
 
-import { usePublishedSitesStore } from '@features/sites/stores/published-sites-store';
+import { usePublishedSitesStore, beginPublicationCleanup, capturePublicationLease } from '@features/sites/stores/published-sites-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import type { ArtifactData } from './ArtifactPreview';
 import { InlineArtifactCards } from './InlineArtifactCards';
@@ -62,7 +62,13 @@ function cardDescription(artifact: ArtifactData): string | null {
 beforeEach(() => {
   useArtifactsStore.getState().reset();
   useArtifactsStore.getState().setPanelOpen(false);
-  usePublishedSitesStore.setState({ byArtifactId: {}, status: 'ready' });
+  beginPublicationCleanup()();
+  usePublishedSitesStore.getState().hydrate([], capturePublicationLease()!);
+});
+
+afterEach(() => {
+  cleanup();
+  beginPublicationCleanup()();
 });
 
 describe('InlineArtifactCards: the compact artifact card', () => {
@@ -195,23 +201,16 @@ describe('InlineArtifactCards: the compact artifact card', () => {
   });
 
   it('says a published artifact is published, to whom, and links to its site page', () => {
-    usePublishedSitesStore.setState({
-      status: 'ready',
-      byArtifactId: {
-        [CALCULATOR.id]: {
-          token: 'tok123',
-          shareUrl: 'https://agiworkforce.com/a/tok123',
-          visibility: 'public',
-          sitePath: '/chat/sites/tok123',
-        },
-      },
-    });
+    usePublishedSitesStore.getState().record(CALCULATOR.id, {
+      shareUrl: 'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
+      visibility: 'public',
+    }, capturePublicationLease()!);
     render(<InlineArtifactCards artifacts={[CALCULATOR]} />);
 
     expect(screen.getByText('Artifact · Published · Public')).toBeVisible();
     expect(
       screen.getByRole('link', { name: 'Open the published site for Desk Calculator' }),
-    ).toHaveAttribute('href', '/chat/sites/tok123');
+    ).toHaveAttribute('href', '/chat/sites/aaaaaaaaaaaaaaaaaaaaaaaa');
   });
 
   it('draws every card from theme role tokens, never a fixed hue that fails in one theme', () => {
