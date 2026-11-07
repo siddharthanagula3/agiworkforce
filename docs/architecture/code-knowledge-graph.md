@@ -6222,16 +6222,43 @@ and no longer calls these "other" sessions because the report exempts none.
 Recipient, severity, category, target, dedupe, response contract, provider calls
 and confirmed-receipt gates are unchanged. This neither repairs recovery authority
 nor guarantees notification recording/delivery: errors can yield recorded:false,
-and duplicate IDs do not replace old notices. The separate enrollment-undo event
-still overclaims that every session ended, and the public response has no aggregate
-incomplete field. Two production and two fixture files were independently reviewed;
+and duplicate IDs do not replace old notices. The public response has no aggregate incomplete field. The later undo-link
+correction below bounds that workflow's copy and local intent without repairing
+server recovery custody. Two production and two fixture files were independently reviewed;
 exact-copy/count/predicate and error models are unrun. Isolated failed intent with
 complete sweep is defensive mock coverage, not a current helper reachability claim.
 See WEB-COMPROMISE-WRITE-AUTHORITY-01 for the unresolved recovery boundary.
 
+## Anonymous undo links own request and presentation lifetime
+
+Accepted `ce91425416e7a0e1fca2db50d239a6f5009c9ef7` adds canonical validation of the
+unchanged undo response fields, retaining additive-field compatibility. Optional
+client custody checks before/after CSRF fence mutation dispatch without requiring
+an authenticated session. The component confirms destructive enrollment/key
+registration removal, synchronously locks an attempt, captures/scrubs the fragment
+once across Strict Mode replay, and retires layout lifetimes and observed navigation.
+Current pathname/query/hash checks supplement popstate/pagehide/hashchange handling;
+unrelated destination fragments are preserved.
+
+Predispatch failures may retry; posted failures or unconfirmed retired requests
+retain uncertainty with no same-view repeat. Confirmed receipts stay confirmed.
+Page/component, server event and undo-specific enrollment-email copy no longer
+promise universal cleanup or verified password-target changes; suspect counts are
+not displayed. Other transport, response shape, recipients and server operations
+are unchanged. Six production and six fixture files were independently read;
+actual confirmation/client/schema paths use controlled transport in unrun fixtures.
+No browser, provider or database acceptance is claimed.
+
+This does not make token consumption and cleanup atomic, resolve product/native
+identity, deduplicate session counts or supply durable operation receipts. Reloads,
+other tabs, unobserved transient history changes and in-flight external effects
+remain outside the local fence. Silent URL mismatch can leave an old view inert.
+The unrelated enrollment-email summary remains unverified. See the emailed-undo
+subsection of WEB-SECURITY-SESSION-COMPLETION-01 for required recovery acceptance.
+
 ## Reconstruction boundary
 
-Only the two hundred fifty-six accepted production slices traced above are
+Only the two hundred fifty-seven accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

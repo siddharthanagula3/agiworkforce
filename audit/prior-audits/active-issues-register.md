@@ -12867,38 +12867,66 @@ No tests, lint, typechecks, builds, provider calls, push or deployment ran.
 
 ## WEB-SECURITY-SESSION-COMPLETION-01: emailed undo and recovery custody
 
-Additional independently reviewed source finding, 2026-11-05. The earlier
-password/support-recovery correction does not cover emailed enrollment undo.
-`account-security/undo.ts` consumes the one-time link and disables enrollment
-through the store transaction before awaiting mobile-intent revocation. If that
-await rejects, enrolling-session revocation, password reset and general
-containment are skipped. The link hash is already cleared, so retrying it does
-not resume cleanup. No durable operation receipt was found in this flow.
+High. Source finding first reviewed 2026-11-05; bounded anonymous-link intent and
+presentation correction `ce91425416e7a0e1fca2db50d239a6f5009c9ef7` independently
+source-reviewed on 2026-11-07. Durable recovery remains open.
 
-The shared compromise response processes a sweep containing failed session IDs
-or incompleteness. Its public result omits enumeration completeness and mobile-cleanup
-outcome, while undo ignores even the failed count. Undo's event context and
-`AccountSecurityUndo.tsx` success copy claim every session/device was signed out.
-The shared notice title also says the account was secured, though its body reports
-a count rather than literally all sessions/devices. The shared audit does mark
-failure for failed IDs, incomplete enumeration or mobile failure; this is not an
-entirely unrecorded failure. Its detail status is based only on incompleteness.
+The client validates the existing sessionsSignedOut/passwordReset response fields
+through a canonical schema that accepts additive fields. The anonymous undo
+transport retains cookie credentials, CSRF and token payload. Optional custody
+checks run before and after CSRF; request options are prepared before dispatch is
+marked immediately ahead of fetch. This is not authenticated session authority.
+Other account-security transport calls are unchanged.
 
-Counterguards remain: route CSRF, rate limiting and validated token input; store
-hash/expiry/enrollment checks with transaction locking; a deliberate UI click
-and fragment removal; cache write-error handling; caught enrolling-session and
-password-reset failures. Provider enumeration rejection can separately stop the
-shared response before device-refresh cleanup. None of this establishes an
-actual compromised-account incident or bypass of the one-time-link protections.
+The component confirms irreversible disabling and removal of recovery keys and
+saved key registrations existing at activation, matching the store cutoff. A
+synchronous attempt/phase lock prevents duplicate prompts or mutation dispatch.
+The fragment is captured once, exact-length validated and scrubbed; layout cleanup
+and generation/attempt identity prevent Strict Mode replay or an unmounted intent
+from publishing or dispatching after CSRF. Current pathname/query/hash checks and
+popstate/pagehide/hashchange retirement cover observed navigation. Retirement
+preserves an unconfirmed dispatched result as uncertainty and a validated receipt
+as confirmed. Hash scrubbing is confined to the original route, preserving
+unrelated destination fragments. No automatic POST is introduced.
 
-Acceptance requires explicit subsystem outcomes, truthful partial/pending
-notifications and UI, independent cleanup attempts, and durable owner-scoped
-reconciliation state created with token consumption. Preserve one-time authority
-without blindly replaying password changes. Include failures in mobile cleanup,
-provider enumeration, individual session revocation, device cleanup and
-post-action notification/response, plus concurrent token use. Suppressing one
-success string or catching one await alone is not complete recovery. Product
-code is unchanged for this finding; no service or runtime was exercised.
+Cancellation and predispatch failure permit retry. Any dispatched failure,
+malformed response or invalid receipt blocks another action in the current view
+and directs security review rather than blind replay. This is not a durable
+receipt or cross-tab/reload lease. Unobserved transient history changes are not
+detected; a silent URL mismatch can leave the old view inert until navigation or
+remount. Browser event ordering and BFCache behavior remain unverified.
+
+Success no longer displays the suspect session count or treats passwordReset as
+verified own-account password evidence. Component/page, server event and only the
+undo-specific enabled-email sentence stop promising universal sign-out/reset.
+The enabled email's separate enrollment summary remains unchanged and unverified.
+The earlier `40cd6e7131cb20dacb5d1069285f99f2fbda17d9` correction already qualified
+the shared in-app compromise notice. Neither copy correction guarantees delivery
+or repairs account containment.
+
+Server token consumption and cleanup ordering are unchanged: undo consumes its
+one-time link and disables enrollment in the store transaction before mobile-intent
+revocation. A later rejection can skip the remaining cleanup, and the consumed
+link cannot resume it. Provider operations still pass product IDs where mapped
+native subjects may differ; no reverse resolver or fallback was introduced.
+The enrolling-session attempt plus general sweep can double-count the same session.
+The shared public compromise result still omits aggregate incompleteness, and undo
+ignores its failed count. Counterguards remain CSRF/rate limiting/schema validation,
+store hash/expiry/enrollment locking, cache error handling and caught individual
+provider failures. They do not establish actual recovery success.
+
+Full acceptance requires explicit subsystem outcomes, independently attempted
+cleanup and durable owner-scoped reconciliation captured with token consumption,
+with a coherent product/native identity contract. Preserve one-time authority
+without replaying password changes blindly. Include partial provider/mobile/device
+cleanup, post-action response/notification failure and concurrent token use.
+
+Six production and six fixture files were independently source-reviewed. UI
+fixtures use the real confirmation hook/dialog, client and schema with controlled
+CSRF/fetch and a layout stub. Service/email/route/schema fixtures model boundaries,
+not real provider ownership, unique counts, token rollback, database or browser
+acceptance. Deferred cases settle their gates; no product tests, lint, typechecks,
+builds, installs, live services or migration actions were run.
 
 
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
@@ -14754,9 +14782,9 @@ This corrects one in-app notice producer, not guaranteed delivery: recordNotific
 can swallow insert errors into recorded:false, and existing dedupe does not rewrite
 older notices. Recipient, category, severity, target, dedupe, public response,
 provider calls and receipt guards are unchanged. Earlier errors can still prevent
-notification; notification-before-audit ordering remains. The emailed enrollment-undo
-workflow separately emits an "every session was signed out" claim that remains
-outside this slice. The public response still lacks the aggregate incomplete state.
+notification; notification-before-audit ordering remains. The later `ce91425416e7a0e1fca2db50d239a6f5009c9ef7` undo-link correction bounds
+that workflow's copy and local request lifetime, but does not repair server cleanup
+or identity custody. The public response still lacks the aggregate incomplete state.
 Two production and two fixture files were independently source-reviewed. Exact-copy,
 count, predicate and failure fixtures are unrun models; isolated failed intent with
 a complete sweep is defensive mock input, not a demonstrated current helper path.
