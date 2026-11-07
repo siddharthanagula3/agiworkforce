@@ -6296,8 +6296,8 @@ subsection of WEB-SECURITY-SESSION-COMPLETION-01 for required recovery acceptanc
 
 ## Reconstruction boundary
 
-Only the two hundred fifty-seven accepted production slices traced above are
-represented as reconstructed here. Other remembered changes from the unavailable branch require
+Only the accepted production slices documented in this record are represented as
+reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
 
