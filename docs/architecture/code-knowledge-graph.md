@@ -7445,6 +7445,34 @@ direct ordinary/authority target-snapshot and malformed-body fixtures.
 No UI, backend/shared schema, ambient transport, retry, recovery GET or durable
 uncertainty mechanism changes. Minimum acknowledgement does not certify content
 bytes, selected historical identity in the reply, rollback or lasting remote
-state. Separate version-view ownership/admission and ordinary DELETE/mobile
-receipt limits remain. All fixtures are UNRUN; no product checks, live services,
+state. Version-view ownership/admission was still open at this slice and is
+bounded below; ordinary DELETE/mobile receipt limits remain. All fixtures are UNRUN; no product checks, live services,
+migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web Sites version actions have local lifetime ownership
+
+Continuation f257608a82221c4483e2ca59ab9f8c6e3722ad55 bounds VersionsSetting beneath the already guarded
+SiteDetail owner.
+
+Token/artifact ID/version/audience/updatedAt/publication-lease keys isolate the
+child view; every layout setup has a new activation and operation slot. Current
+lease/activation checks retire old history results, errors, retained actions
+and mutation continuations. History-array identity plus selected non-live
+version binds Restore admission, and the synchronous slot rejects repeated
+same-turn callbacks.
+
+The local request wrapper checks ownership immediately before cookie fetch,
+adds an abort signal and reuses helper assertions around CSRF/response work.
+Only relevant helper authority types are narrowed to required capabilities;
+existing full authorities are compatible and receipt validation is unchanged.
+
+Acknowledged Restore consumes the old history before success feedback and the
+parent reload callback. Controls stay unavailable until fresh keyed detail
+metadata supplies new history; pending/failed parent reload cannot re-enable a
+retained row. The parent SiteDetail implementation stays unchanged.
+
+The scope is publication lease and view/request ownership, not native session
+or cookie identity. Existing full RequestAuthority callers remain compatible.
+No global auth, backend cancellation/rollback, cross-controller ordering or
+new confirmation claim. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.

@@ -17321,9 +17321,59 @@ ambient cookie/CSRF transport, optional authority behavior, non-2xx/transport
 handling and unrelated helpers remain. No extra GET, retry, Publish fallback,
 durable unknown-write record or backend/shared-contract change.
 
-The ordinary version UI's separate lifetime/admission/confirmation questions,
-bodyless ordinary DELETE acknowledgement and mobile legacy receipts remain
-open. Existing parent SiteDetail lease/token and reload guards are not removed
+The ordinary version UI's lifetime/admission gaps remained open at this slice
+and are bounded below. Bodyless ordinary DELETE acknowledgement and mobile
+legacy receipts remain open. Existing parent SiteDetail lease/token and reload guards are not removed
 or treated as missing. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. Recovery prerequisites, unapplied
 migrations and lost-history limitations remain.
+
+### Web version-history and Restore own their view
+
+Continuation f257608a82221c4483e2ca59ab9f8c6e3722ad55, 2026-11-07, bounds VersionsSetting's child reads,
+retained controls and mutation continuations. Previously a superseded history
+read could update child state, repeated same-turn Restore calls lacked immediate
+admission, and a retired Restore could emit its success toast even though the
+parent SiteDetail correctly refused the obsolete reload. Parent token/lease
+keying and read/cache protections already existed and remain.
+
+The child is keyed by token, artifact ID, version, audience, updatedAt and
+publication lease epoch. Each layout setup creates a fresh activation and
+operation slot, including StrictMode replay. Cleanup permanently retires its
+operation. Reads and current-state updates check activation/lease ownership;
+retained callbacks cannot dispatch for a replaced target or retired lease.
+
+Restore admission checks the captured history-array identity and selected
+non-live version against the current lane, with an immediate operation slot
+before asynchronous CSRF. Accepted history is not mutated or refreshed within
+that lane. The request-local fetch wrapper checks ownership immediately before
+the existing cookie fetch and adds its abort signal. History/Restore helper
+types accept their required assertCurrent/fetch subset; existing full
+RequestAuthority callers remain compatible and keep their behavior.
+
+Success, error and busy completion check current ownership. Acknowledged
+Restore consumes the lane's history before toast/onRestored, preventing reuse
+of an old row while the parent detail refresh is pending or failed. A status
+message asks for refreshed site details before another restore; new keyed
+metadata supplies a fresh history. Unconfirmed failures retain the existing
+error path and do not establish rollback or safe repetition.
+
+Five source/fixture files are independently reviewed. New real-service fixtures
+cover repeated/retained callbacks, target changes during CSRF, old history
+resolve/reject through token round trips, late unmounted success, lease
+replacement failure, StrictMode and consumed acknowledgement. Existing real
+Restore consumer and SiteDetail fixture arguments are adapted for the optional
+authority/signal. Fixtures remain authored UNRUN, not browser/type/runtime
+acceptance.
+
+This is publication-lease/view/request ownership, not native session or
+credential pinning. Ordinary cookie transport remains; no global auth rewrite,
+backend cancellation, cross-controller ordering or rollback claim. Existing
+Restore minimum receipt and history deduplication semantics are preserved.
+
+Restore republishes through retained history; this slice establishes no new
+irreversible consequence and adds no confirmation requirement. Ordinary DELETE
+acknowledgement, mobile legacy receipts, capped discovery and durable recovery
+remain separate. Fixtures are UNRUN; no product checks, live services,
+migration application, push or deployment. Existing recovery dependencies,
+unapplied migrations and lost-history limitations remain.
