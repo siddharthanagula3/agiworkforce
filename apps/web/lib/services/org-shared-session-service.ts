@@ -4,7 +4,7 @@ import { CONVERSATION_SHARE_VISIBILITIES } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { assertOrganizationSharedViewerAdmission } from '@/lib/services/organization-shared-viewer-admission';
-import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { resolveOrgMembershipForOrganization } from '@/lib/services/org-sharing-service';
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
@@ -157,7 +157,7 @@ export async function unshareSessionFromOrganization(
       returning shared_session_id`,
     [organizationId, sharedSessionId],
   );
-  return rows.length > 0;
+  return rows.length === 1 && rows[0]?.shared_session_id === sharedSessionId;
 }
 
 export interface OrgReadableSession {
@@ -320,13 +320,17 @@ export interface SessionShareTarget {
 
 /**
  * Resolve the organization a conversation would be shared into: the caller's
- * active organization, and the share row they own under that token.
+ * captured request organization, and the share row they own under that token.
  */
 export async function resolveSessionShareTarget(
   db: DatabaseAdapter,
-  input: { userId: string; token: string },
+  input: { userId: string; token: string; organizationId: string | null },
 ): Promise<SessionShareTarget> {
-  const membership = await resolveOrgMembership(db, input.userId);
+  const membership = await resolveOrgMembershipForOrganization(
+    db,
+    input.userId,
+    input.organizationId,
+  );
   if (!membership) {
     throw createError.forbidden(
       'You are not a member of a workspace yet, so there is nobody to share this with.',

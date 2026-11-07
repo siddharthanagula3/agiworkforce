@@ -23,6 +23,7 @@ import {
 } from '../org-shared-session-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const CAPTURED_ORG = '22222222-2222-4222-8222-222222222222';
 const SESSION = '33333333-3333-4333-8333-333333333333';
 const TOKEN = 'AAAAAAAAAAAAAAAAAAAAAAAA';
 
@@ -148,6 +149,35 @@ describe('unshareSessionFromOrganization', () => {
     await expect(unshareSessionFromOrganization(absent.db, ORG, SESSION)).resolves.toBe(false);
     expect(removed.issued[0]?.sql).toMatch(/delete from public\.organization_shared_sessions/);
   });
+
+  it.each([
+    { label: 'zero', rows: [], removed: false },
+    { label: 'mismatched', rows: [{ shared_session_id: 'another-session' }], removed: false },
+    {
+      label: 'multiple',
+      rows: [{ shared_session_id: SESSION }, { shared_session_id: SESSION }],
+      removed: false,
+    },
+    { label: 'exact', rows: [{ shared_session_id: SESSION }], removed: true },
+  ])('requires an exact single delete receipt: $label', async ({ rows, removed }) => {
+    const { db, issued } = makeDb(() => rows);
+
+    await expect(unshareSessionFromOrganization(db, CAPTURED_ORG, SESSION)).resolves.toBe(removed);
+    expect(issued).toHaveLength(1);
+    expect(issued[0]?.params).toEqual([CAPTURED_ORG, SESSION]);
+    expect(issued[0]?.sql).toMatch(/where organization_id = \$1\s+and shared_session_id = \$2/);
+    expect(issued[0]?.sql).toMatch(/returning shared_session_id/);
+  });
+
+  it('propagates delete failures without another attempt', async () => {
+    const error = new Error('delete denied');
+    const { db, issued } = makeDb(() => {
+      throw error;
+    });
+
+    await expect(unshareSessionFromOrganization(db, ORG, SESSION)).rejects.toBe(error);
+    expect(issued).toHaveLength(1);
+  });
 });
 
 describe('getPublicSharedSessionByToken', () => {
@@ -196,22 +226,109 @@ describe('getOrgReadableSessionByToken', () => {
 });
 
 describe('resolveSessionShareTarget', () => {
-  it('refuses a caller who belongs to no workspace, naming why', async () => {
-    mockResolveOrgMembership.mockResolvedValue(null);
-    const { db } = makeDb(() => []);
+  it('refuses Personal without querying membership or the token', async () => {
+    const { db, issued } = makeDb(() => {
+      throw new Error('Unexpected database query');
+    });
 
     await expect(
-      resolveSessionShareTarget(db, { userId: 'user_owner', token: TOKEN }),
+      resolveSessionShareTarget(db, { userId: 'user_owner', token: TOKEN, organizationId: null }),
     ).rejects.toThrow(/not a member of a workspace/i);
+    expect(issued).toHaveLength(0);
+    expect(mockResolveOrgMembership).not.toHaveBeenCalled();
   });
 
-  it('resolves the share row by token and owner', async () => {
-    const { db, issued } = makeDb(() => [{ id: SESSION }]);
+  it('uses captured B with real exact membership while saved membership points to A', async () => {
+    const { db, issued } = makeDb((sql) => {
+      if (sql.includes('from public.organization_members')) {
+        return [{ organization_id: CAPTURED_ORG, role: 'member' }];
+      }
+      if (sql.includes('from public.shared_sessions')) return [{ id: SESSION }];
+      throw new Error('Unexpected database query');
+    });
 
     await expect(
-      resolveSessionShareTarget(db, { userId: 'user_owner', token: TOKEN }),
-    ).resolves.toEqual({ organizationId: ORG, sharedSessionId: SESSION });
-    expect(issued[0]?.params).toEqual([TOKEN, 'user_owner']);
+      resolveSessionShareTarget(db, {
+        userId: 'user_owner',
+        token: TOKEN,
+        organizationId: CAPTURED_ORG,
+      }),
+    ).resolves.toEqual({ organizationId: CAPTURED_ORG, sharedSessionId: SESSION });
+    expect(issued).toHaveLength(2);
+    expect(issued[0]?.params).toEqual([CAPTURED_ORG, 'user_owner']);
+    expect(issued[0]?.sql).toMatch(/organization_id = \$1 and user_id = \$2/);
+    expect(issued[0]?.sql).toMatch(/status = 'active'/);
+    expect(issued[1]?.params).toEqual([TOKEN, 'user_owner']);
+    expect(issued[1]?.sql).toMatch(/where token = \$1 and owner_id = \$2/);
+    expect(issued.every(({ sql }) => !/user_settings|activeOrganizationId/.test(sql))).toBe(true);
+    expect(mockResolveOrgMembership).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: 'missing', rows: [] },
+    { label: 'mismatched', rows: [{ organization_id: ORG, role: 'owner' }] },
+  ])('refuses $label exact membership before reading the token', async ({ rows }) => {
+    const { db, issued } = makeDb(() => rows);
+
+    await expect(
+      resolveSessionShareTarget(db, {
+        userId: 'user_owner',
+        token: TOKEN,
+        organizationId: CAPTURED_ORG,
+      }),
+    ).rejects.toThrow(/not a member of a workspace/i);
+    expect(issued).toHaveLength(1);
+    expect(issued[0]?.sql).toMatch(/from public\.organization_members/);
+    expect(issued[0]?.params).toEqual([CAPTURED_ORG, 'user_owner']);
+    expect(mockResolveOrgMembership).not.toHaveBeenCalled();
+  });
+
+  it('propagates exact membership errors without falling back to saved selection', async () => {
+    const error = new Error('membership lookup failed');
+    const { db, issued } = makeDb(() => {
+      throw error;
+    });
+
+    await expect(
+      resolveSessionShareTarget(db, {
+        userId: 'user_owner',
+        token: TOKEN,
+        organizationId: CAPTURED_ORG,
+      }),
+    ).rejects.toBe(error);
+    expect(issued).toHaveLength(1);
+    expect(issued[0]?.sql).toMatch(/from public\.organization_members/);
+    expect(issued[0]?.params).toEqual([CAPTURED_ORG, 'user_owner']);
+    expect(mockResolveOrgMembership).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: 'missing', sessions: [] },
+    { label: 'foreign-owned', sessions: [{ id: SESSION, token: TOKEN, owner_id: 'another-user' }] },
+  ])('refuses a $label owned token using the SQL owner binding', async ({ sessions }) => {
+    const { db, issued } = makeDb((sql, params) => {
+      if (sql.includes('from public.organization_members')) {
+        return [{ organization_id: CAPTURED_ORG, role: 'member' }];
+      }
+      if (sql.includes('from public.shared_sessions')) {
+        expect(sql).toMatch(/where token = \$1 and owner_id = \$2/);
+        return sessions.filter(
+          (session) => session.token === params[0] && session.owner_id === params[1],
+        );
+      }
+      throw new Error('Unexpected database query');
+    });
+
+    await expect(
+      resolveSessionShareTarget(db, {
+        userId: 'user_owner',
+        token: TOKEN,
+        organizationId: CAPTURED_ORG,
+      }),
+    ).rejects.toThrow(/not found/i);
+    expect(issued).toHaveLength(2);
+    expect(issued[1]?.params).toEqual([TOKEN, 'user_owner']);
+    expect(mockResolveOrgMembership).not.toHaveBeenCalled();
   });
 });
 

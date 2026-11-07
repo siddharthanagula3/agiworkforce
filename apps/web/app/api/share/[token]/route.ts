@@ -190,7 +190,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     throw createError.validation('Invalid share visibility request', parsed.error.flatten());
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const visibility = parsed.data.visibility;
 
   const ownerDb = getNeonDb();
@@ -209,7 +209,7 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     );
   }
 
-  const target = await resolveSessionShareTarget(db, { userId, token });
+  const target = await resolveSessionShareTarget(db, { userId, token, organizationId });
   if (conversationOrganizationId && conversationOrganizationId !== target.organizationId) {
     throw createError.forbidden(SHARE_IN_OTHER_WORKSPACE_MESSAGE).asUserSafe();
   }
@@ -233,11 +233,16 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
       stored.grantOrganizationId,
     ]);
     if (sharingGateResponse) return sharingGateResponse;
-    revoked = await unshareSessionFromOrganization(
-      db,
-      target.organizationId,
-      target.sharedSessionId,
-    );
+    if (stored.grantOrganizationId) {
+      revoked = await unshareSessionFromOrganization(
+        db,
+        stored.grantOrganizationId,
+        target.sharedSessionId,
+      );
+      if (!revoked) {
+        throw createError.conflict('Shared conversation workspace access could not be removed');
+      }
+    }
   }
 
   const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
@@ -248,7 +253,8 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
   if (visibility === 'organization' || revoked) {
     await recordAuditEvent({
       userId,
-      organizationId: target.organizationId,
+      organizationId:
+        visibility === 'organization' ? target.organizationId : stored.grantOrganizationId,
       eventType:
         visibility === 'organization' ? 'organization_share_granted' : 'organization_share_revoked',
       request,

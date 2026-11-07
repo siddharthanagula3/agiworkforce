@@ -22,7 +22,7 @@ function parseSharedSessionId(raw: string): string {
   if (!isUuid(raw)) {
     throw createError.validation('sharedSessionId must be a uuid');
   }
-  return raw;
+  return raw.toLowerCase();
 }
 
 /**
