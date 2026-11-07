@@ -15742,8 +15742,9 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`; shared-project scope continuation in
 `2a5d910157b8b82127c79917140d705426e401a2`; shared-session target/receipt continuation in
 `7bab6613db418be541428fc48e7a3b32721b9cf9`; shared-session transaction continuation in
-`74658ddcc2d4e9e331a3dbaf986131cd991adaab`, 2026-11-07. Client intent, audience races, wider identity
-consumers and runtime acceptance remain open.
+`74658ddcc2d4e9e331a3dbaf986131cd991adaab`; web share confirmation scope in
+`36081001d8f696c5bd5afb7a216b3ff0bc903efe`, 2026-11-07. Wider clients, audience races,
+identity consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
 returns the authenticated request's organizationId. The affected handlers discarded
@@ -16321,7 +16322,7 @@ separate and best-effort, and postcommit response failures cannot roll back data
 This is failure-atomic grouping, not serialized audience switching. Scope and
 policy reads remain outside; the no-grant snapshot skip, replacement/reinsertion,
 membership/policy changes, default identity mapping and old-grant RLS refusal
-remain. No owner-row lock or policy expansion is added. Grant-before-session
+remain. No explicit owner-row lock or policy expansion is added. Grant-before-session
 write order now retains locks until commit and can contend with parent deletion
 and cascading grant deletion; deadlock/timeout aborts propagate. Older deployed
 writers still perform separate commits. The new path does not repair their
@@ -16338,14 +16339,70 @@ cases remain and two exhaustive module mocks include the new canonical export.
 No product checks or guard execution occurred; prior 0394/0395 remain UNAPPLIED.
 No new migration, live SQL/provider action, push or deployment.
 
-A separate source-qualified client issue remains uncorrected: the web
-use-share-conversation hook sends headerless lookup/audience requests and retains
+At this server-transaction checkpoint a separate source-qualified client issue
+remained: the web use-share-conversation hook sent headerless lookup/audience
+requests and retained
 member count without workspace identity. A real Personal conversation can remain
 loaded in one tab while another selects A before the dialog lookup and B before
 confirmation. The lookup can describe A while PATCH captures B; existing null
 conversation scope checks allow B's authorized grant. Ordinary same-tab workspace
 switching reloads and conversation navigation is keyed, so those are not the
-demonstrated paths. The next bounded correction should bind the hook's lookup,
-confirmation, cache and async mutations to admitted session/workspace lifetime
-and a pinned explicit selector, including Personal. Server transaction grouping
+demonstrated paths. The client continuation below binds this hook's lookup, confirmation, cache and
+async mutations to admitted session/workspace lifetime and a pinned explicit
+selector, including Personal. Server transaction grouping
 does not solve that user-intent race; no runtime incident is claimed.
+
+### Web share confirmation retains admitted workspace and view
+
+Source-reviewed continuation `36081001d8f696c5bd5afb7a216b3ff0bc903efe` corrects the previously qualified
+web-client path: a retained Personal chat could describe workspace A after lookup,
+then a headerless confirmation could grant B after another tab changed selection.
+The current hook captures the admitted account/workspace, explicit organization or
+Personal selector, conversation and open-dialog lifetime. GET, POST, PUT, DELETE
+and every audience PATCH reuse canonical request authority with the captured
+native-session bearer and credentials omitted. These route/auth/CSRF owners
+accept that bearer path by source inspection; public token-page GET is not used.
+
+A scope descriptor captures the owner epoch and scope key. Each layout-effect
+setup creates a distinct view activation; cleanup permanently retires it and
+its requests. StrictMode setup/cleanup/setup cannot revive an old callback.
+Owner/session retirement, conversation change, dismissal and close/reopen
+invalidate retained callbacks, lookup/cache/error state and pending confirmations.
+The dialog displays a confirmation only for its current activation and checks
+that captured activation again before the retained mutation. Deferred success
+toasts, clipboard feedback and revoke refocus are similarly guarded. An already
+dispatched clipboard write or server mutation cannot be undone by retirement.
+
+Writes freeze their payload before CSRF/token waits, retain the explicit selector
+through those waits, and recheck authority before dispatch and after response
+bodies. Functional state updaters recheck the owning view; busy/cleanup state is
+request-tagged so an old finalizer cannot clear a newer request. Each link in an
+audience loop checks the same authority. Timeout abort retires the request while
+leaving the view retryable, and timeout errors remain visible for the current
+view. Dismissal is not server rollback; multi-link changes remain sequential and
+can partially complete before a later refusal, retirement or failure.
+
+Admission loading is distinct from unavailable/uncertain admission, which shows
+finite retry/reload guidance and disables sharing. This is not a new deadline for
+workspace admission or ordinary list lookup. Ordinary lookup failure retains the
+existing create fallback after admission. Temporary-chat and transcript-readiness
+guards remain. Personal is explicitly Personal, not a fallback to saved selection;
+the server's existing non-null membership requirement can still refuse changing
+a Personal share's audience. No server authorization, shared confirmation
+primitive, grant transaction, policy, migration or other client is changed here.
+
+Authored hook/dialog fixtures are UNRUN. They use real workspace admission,
+QueryClient, request authority and confirmation source with mocked session, CSRF,
+network and notification boundaries. Cases cover pinned selectors/bearer,
+saved-selection changes, owner/session/conversation/close retirement, deferred
+CSRF/token/response/body work, stale cache/error/busy state, multi-link stopping,
+StrictMode activation, timeout retry, temporary/transcript refusal and frozen
+payloads. Seventeen page fixtures add truthful closed-hook fields without
+removing their assertions. The selector matrix mocks successful replies even for Personal organization PATCH;
+it asserts outgoing identity, not a backend grant or Personal denial. These
+source-reviewed assertions do not establish
+React/browser behavior, cross-tab delivery, end-to-end auth/CSRF, SQL/RLS or
+concurrency. No product tests, lint, typechecks, builds, app execution, live
+provider/database/migration actions, push or deployment. Prior 0394/0395 remain
+UNAPPLIED. Wider consumers, server snapshot/policy races, old writers and runtime
+acceptance remain open; this is not release readiness.

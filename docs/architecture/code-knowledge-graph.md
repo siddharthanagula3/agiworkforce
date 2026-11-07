@@ -6974,7 +6974,7 @@ existing scope. No nested transaction, rebinding, retry or privilege expansion.
 COMMIT acknowledgement loss can still hide a complete committed transition; audit
 is separate best-effort persistence and cannot roll back a committed result.
 
-No row locking or snapshot/policy lease is added. Pre-transaction grant snapshots,
+No explicit owner-row lock or snapshot/policy lease is added. Pre-transaction grant snapshots,
 no-grant skips, reinsertion/replacement, permission changes, inaccessible old
 grants and older nontransactional writers remain outside this guarantee.
 Grant-before-session locks can conflict with parent/cascade deletion and abort;
@@ -6987,8 +6987,39 @@ commit and audit ordering/failure. They do not establish SQL/RLS, live durabilit
 deadlock or concurrency behavior. Two full mocks declare the new export; no
 guards or product checks ran. No new migration; prior 0394/0395 stay UNAPPLIED.
 
-The web share hook's headerless lookup/confirmation can still follow a workspace
-changed by another tab for a retained Personal chat. Binding its cache, confirmation
-and async actions to admitted session/workspace plus a pinned selector is separate
-unfinished work. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for the qualified path and
+At this server-transaction checkpoint the web share hook's headerless
+lookup/confirmation could follow a workspace changed by another tab for a retained
+Personal chat. The client continuation below binds this hook's cache, confirmation
+and async actions to admitted session/workspace plus a pinned selector. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for the qualified path and
 source/runtime boundaries. No live SQL/provider actions, push or deployment.
+
+## Web share actions retain admitted confirmation scope
+
+Continuation `36081001d8f696c5bd5afb7a216b3ff0bc903efe` routes useShareConversation through canonical
+useAccountWorkspaces, workspace admission and captured native-session request
+authority. The owner epoch/scope key, conversation and open state define a scope;
+every layout setup publishes a fresh activation. Cleanup/dismissal permanently
+retires that activation and its requests, including StrictMode replay. Callbacks
+capture that activation rather than reauthorizing themselves from the latest ref.
+
+Share list/create/refresh/revoke/audience requests pin the explicit organization
+or Personal selector and captured Bearer, with credentials omitted. Existing
+route auth and CSRF accept this path by source inspection. Payloads are serialized
+before asynchronous preparation; currentness is checked around CSRF, token,
+fetch and body waits and before each sequential audience PATCH. View-tagged
+cache/error and request-tagged busy state prevent stale publication or finalizers.
+
+ShareConversationDialog binds confirmation display and retained confirmation
+callbacks to that activation. It guards later toast/copy/refocus effects and
+distinguishes admission pending from finite unavailable/reload guidance. A
+dispatched server or clipboard action is not rolled back. Timeout retirement
+leaves the current view retryable; list/admission requests gain no new deadline.
+Existing list-error create fallback, temporary-chat/transcript guards, and server
+Personal membership refusal remain. No shared confirmation or server owner changes.
+
+This narrows the source-qualified cross-tab saved-selection mismatch for this
+hook only. Other clients, old deployed writers, server snapshot/policy races,
+multi-link partial completion and actual auth/CSRF/React/SQL acceptance remain.
+Hook/dialog fixtures and seventeen closed-page mock adaptations are source-read
+but UNRUN. No product checks, live provider/database work, push or deployment;
+prior 0394/0395 remain UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
