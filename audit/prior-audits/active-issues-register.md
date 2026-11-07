@@ -16629,8 +16629,9 @@ push or deployment. Prior 0394/0395 remain UNAPPLIED.
 ## WEB-PUBLICATION-QUOTA-ADMISSION-01
 
 Severity: Medium. Bounded canonical admission correction source-reviewed in
-`cd014f06accf93bc09145cc5eb314409add7c5ef`, 2026-11-07. Inventory recovery, mixed-writer rollout and
-database acceptance remain open.
+`cd014f06accf93bc09145cc5eb314409add7c5ef`, 2026-11-07. Legacy publication detection, mixed-writer rollout and
+database acceptance remain open. Bounded management enumeration is source-reviewed
+in the continuation below.
 
 Source evidence: preparePublishArtifactRecord previously counted other owner
 publications before UPSERT without an owner-wide lock. With 199 rows, two
@@ -16647,14 +16648,15 @@ No live database, role or session default was inspected. This is a qualified
 source path under the stated isolation, not an executed reproduction or observed
 incident. Different-account data access is not the defect.
 
-The list helper returns only the newest 200 publications without pagination or
-completeness metadata. Settings consumes that list; SiteDetail also loads it and
-finds a token locally, so navigating directly to that detail view is not a full
-recovery path. An older public URL may remain available while absent from that
+At admission correction cd014f06ac, the list helper returned only the newest 200
+publications without pagination or completeness metadata. Settings consumed that
+list; SiteDetail also loaded it and found a token locally, so direct navigation
+was not then a full recovery path. An older public URL may remain available while absent from that
 inventory, subject to normal audience/account gates. This is not permanent loss:
 owner-scoped DELETE by known token remains, and deleting a visible publication
 then reloading can reveal the omitted row. Existing over-cap accounts remain
-possible after the admission correction; no inventory expansion is included.
+possible after the admission correction. The later bounded enumeration correction
+below addresses current management views, not all legacy detection consumers.
 
 The correction keeps input/conversation validation and canonical Publish's
 existing transaction. Admission requires exactly one isolation receipt equal to
@@ -16707,5 +16709,77 @@ Existing history/pointer and route assertions are preserved while obsolete
 restore-quota expectations are updated. No product tests, lint, typechecks,
 builds, app execution, live provider/database/migration actions, push or deployment.
 No new migration; prior 0394/0395 remain UNAPPLIED. Remaining work includes actual
-database/role/isolation acceptance and safe enumeration/recovery of existing
-over-cap publication inventories.
+database/role/isolation acceptance and legacy-client discovery, plus runtime
+acceptance of the bounded enumeration continuation below.
+
+### Bounded publication management enumeration
+
+Continuation `5d9b3c09ae2c5b472b8199e16a04de5f13da3769` on 2026-11-07 adds a separate owner-page reader and
+owner-token detail reader. The legacy array helper remains first-page-only.
+The collection route preserves artifacts/workspace and adds pageInfo.nextCursor;
+the shared schema accepts missing pageInfo for older clients, but current
+management readers require it. Missing metadata is unknown, never exhausted.
+The strict page reader bounds returned items and rejects a repeated next cursor.
+
+Pages use created_at DESC, id DESC and an exclusive tuple predicate after the
+authenticated owner predicate. A limit+1 lookahead yields at most the existing
+200-item page cap; continuation comes from the last returned row, not lookahead.
+SQL emits canonical UTC timestamp text with six fractional digits for the cursor;
+the display mapper's JavaScript Date conversion is never used for positioning.
+A versioned, bounded, canonical base64url JSON cursor validates its exact shape,
+UTF-8 encoding, calendar date, UUID and owner before query dispatch. It carries
+values rather than a reference to a boundary row, so deleting that row does not
+break continuation. Cursor owner is a consistency check, not authorization:
+the authenticated user still supplies SQL owner scope and the scoped adapter
+retains RLS. Well-formed own-owner cursor edits can skip the caller's own rows.
+
+The token GET selects owner-scoped summary metadata, not artifact content or the
+anonymous public reader. Missing and nonowned tokens have the same not-found
+outcome. Collection/detail success responses are private/no-store. Workspace
+audience metadata retains the existing entitlement/count behavior in a shared
+helper; this slice does not change workspace sharing policy.
+
+Settings and Sites replace one visible page on Older and expose Back to newest.
+They do not automatically fetch every page or retain a page-history stack.
+Continuation failure retains the displayed page and retries its exact boundary.
+Refresh returns to newest. Page controls remain reachable when filtering matches
+nothing or an older page becomes empty. Sites explicitly labels title filtering
+and updated-date sorting as page-local. Detail uses the exact token read rather
+than searching the first inventory page.
+
+Settings keeps its captured session, activation, request, inventory/history and
+one-shot confirmation guards. Navigation clears history and cannot start during
+a conflicting operation/confirmation. Non-page errors retire a prior failed-page
+retry boundary; uncertain mutations still remove actionable inventory and use
+GET-only recovery. An acknowledged restore clears inventory for its separate
+refresh, retaining acknowledgement separately from refresh failure.
+Sites retains lease/request checks and interrupts local pending reads when a
+matching mutation settles. Partial pages and detail results never replace the
+entire publication store through hydrate: each observed row is recorded with
+currentness checks after synchronous subscriber notification. This preserves
+other known keys but does not establish a global snapshot or bounded store size.
+
+This is live traversal, not point-in-time completeness. Normal edits retain
+creation order; deletions disappear and newer inserts require refresh.
+Backdated inserts, delayed commits or external ordering-field changes can enter
+or escape a traversal. Older deployed clients, web/mobile exact-artifact
+publication detection, the initial badge-store read and VS Code's first-list
+consumers remain capped. Their absence must not be treated as proof that an
+artifact was never published. No artifact-ID lookup or global reconciliation
+protocol is added here.
+
+The existing (user_id, created_at DESC) index supports the ordering prefix;
+PostgreSQL can sort ties for correctness. Response size is bounded, but database
+work and large tie-group/planner performance are unverified. No new migration.
+Cursor contents are unsigned positioning data, not a tamper-proof snapshot.
+Core quota admission, history/audience transactions and the old-writer rollout
+requirements above remain unchanged.
+
+Service/route/shared-contract/client/component fixtures are authored or adapted
+UNRUN. They cover cursor precision and malformed input, owner predicates and
+direct lookup, page retries/navigation, metadata rejection, existing session/
+lease retirement and local mutation interactions. Mock adapters and component
+fixtures do not establish PostgreSQL ordering/RLS, actual browser/auth behavior
+or deployment acceptance. No product tests, lint, typechecks, builds, installs,
+app/module execution, live providers/databases, migration application, fetch,
+push or deployment. Prior 0394/0395 remain UNAPPLIED.

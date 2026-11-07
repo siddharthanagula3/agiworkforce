@@ -7146,12 +7146,45 @@ change or automatic retry is attempted.
 
 This is a participating-writer protocol, not a database count constraint.
 Old publishers must drain; external/future inserts and live configuration remain
-unverified. Existing newest-200 listing and detail lookup are unchanged, so
-over-cap inventory may still omit older links. Known-token deletion or deleting
-visible entries and reloading remains a recovery route, not permanent loss.
+unverified. At this admission slice, newest-200 listing and detail lookup still
+omitted older excess links; the bounded enumeration continuation below updates
+current management. Known-token deletion or visible deletion plus reload also
+remains a recovery route. This is not permanent loss.
 
 Service/transaction/connector/route fixtures and a deterministic owner-queue
 simulation are authored UNRUN. Simulated ordering is not PostgreSQL lock,
 snapshot, RLS or end-to-end evidence. No product checks, live migrations/services,
 push or deployment. Prior 0394/0395 remain UNAPPLIED. See
 WEB-PUBLICATION-QUOTA-ADMISSION-01 for the source interleaving and acceptance limits.
+
+## Publication management traverses bounded owner pages
+
+Continuation `5d9b3c09ae2c5b472b8199e16a04de5f13da3769` adds a separate page service with
+created_at/id keyset ordering and a limit+1 probe, bounded by the shared 200-item
+page limit. Cursor positions use SQL-rendered UTC microsecond text, never the
+display mapper's JavaScript timestamp. Version/shape/encoding/calendar/UUID/owner
+validation precedes owner-scoped SQL; a self-contained boundary survives deletion.
+The unsigned cursor chooses position only. Authentication and RLS still own scope.
+
+The collection route adds pageInfo without removing legacy keys. New management
+readers require metadata and reject oversized pages or a next cursor identical
+to the requested cursor; legacy readers remain first-page compatible, not complete. A private/no-store token GET
+reads exact owner summary metadata, distinct from the public content reader.
+The shared workspace audience helper retains existing policy/count behavior.
+
+Settings and Sites replace one visible page, retry a failed continuation at its
+exact boundary, and expose Older/Back to newest even after empty page-local
+search or a deleted tail. Sites labels search/updated sorting as page-local.
+Settings preserves session/request/confirmation/history authority and resets
+old page retry intent when a later operation begins. Uncertain writes still
+require GET-only recovery; acknowledged restore and failed refresh stay distinct.
+SiteDetail no longer searches the first inventory. Page/detail observations
+record individual store entries with currentness checks, not replacement hydrate.
+
+This is live traversal, not snapshot completeness. Later/backdated/delayed writes
+and external ordering changes can affect traversal; the existing session cache
+may accumulate visited metadata. Legacy artifact-ID detection and other first-page
+clients remain incomplete. Prefix-index tie sorting, RLS, runtime/browser behavior
+and rollout are unverified; no index migration is added. Fixtures remain UNRUN,
+with no product checks, migration application, push or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01 for remaining limits.
