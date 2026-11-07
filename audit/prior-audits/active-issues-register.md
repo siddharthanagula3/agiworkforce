@@ -17327,8 +17327,8 @@ durable unknown-write record or backend/shared-contract change.
 
 The ordinary version UI's lifetime/admission gaps remained open at this slice
 and are bounded below. Ordinary DELETE acknowledgement is corrected in the later continuation below;
-mobile Sites receipt adoption is recorded below, while other mobile receipt
-limits remain. Existing parent SiteDetail lease/token and reload guards are not removed
+mobile Sites and chat Unpublish receipt adoption are recorded below, while
+broader recovery limits remain. Existing parent SiteDetail lease/token and reload guards are not removed
 or treated as missing. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. Recovery prerequisites, unapplied
 migrations and lost-history limitations remain.
@@ -17522,3 +17522,40 @@ are live positions, not a snapshot, global updated-time order or total count.
 No quota lift, backend/schema change, migration application, product checks,
 live service, push or deployment. Existing recovery prerequisites, unapplied
 migrations and lost-history limits remain.
+
+### Mobile chat Unpublish owns acknowledgement and 401 recovery
+
+Continuation c48e5aab9d14b6ba77f4340a8ca321b6ba186cec, 2026-11-07, aligns mobile chat Unpublish with
+the neighbouring audience operation's captured account boundary. The prior
+helper discarded its successful JSON value and used ambient 401 recovery,
+whose source path could refresh/reissue the DELETE or tear down Cloud state
+after failed recovery. No duplicate successful deletion or live auth incident
+was established.
+
+The helper captures and checks the full account epoch, passes the existing
+caller-owned 401 option and rechecks after transport completion. It parses the
+canonical minimum Delete receipt and requires the requested token before
+resolving. Credentials remain ambient and existing API generation checks remain;
+this is a per-request choice, not a global auth rewrite.
+
+Existing controls handle invalid acknowledgements as uncertain and return before
+onUnpublished, preserving the current link and badge. FullScreen production
+code, confirmation, lifecycle/sequence guards, Publish uncertainty marker and
+existing exact readback remain unchanged. That readback already gates Private;
+the former unchecked receipt alone did not demonstrate a false-Private path.
+
+Three source/fixture files are independently reviewed. Direct and actual
+controls/FullScreen fixtures cover matching and invalid receipts, callback and
+cache preservation, epoch retirement, error propagation and acknowledged-delete
+readback. Existing successful DELETE fixtures now use the actual receipt shape.
+All are UNRUN. Mocked transport asserts options and service error propagation,
+not real HTTP retry, refresh or sign-out behavior. Existing special 403,
+passkey and account-unavailable transport handling is unchanged; these mocks
+do not prove that every real 403 preserves the account.
+
+No extra GET, automatic replay, alternate mutation or recovery mechanism is
+added. Valid-delete positive readback can still restore a link without updating
+its audience badge; that cache-ordering issue remains separate. No lasting
+remote-state, deletion/cascade or rollback guarantee. No product checks, live
+services, migration application, push or deployment. Existing recovery
+prerequisites, unapplied migrations and lost-history limits remain.

@@ -7450,7 +7450,7 @@ bytes, selected historical identity in the reply, rollback or lasting remote
 state. Version-view ownership/admission was still open at this slice and is
 bounded below; ordinary DELETE acknowledgement is corrected in the later
 Unpublish continuation below. Mobile Sites receipt adoption is recorded later,
-while other mobile receipt limits remain. All fixtures are UNRUN; no product checks, live services,
+and chat Unpublish receipt adoption follows below; broader recovery remains open. All fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
 
 ## Web Sites version actions have local lifetime ownership
@@ -7547,3 +7547,20 @@ Status/counts are page-local, with terminal/unknown/error empty distinctions.
 No accumulation, automatic traversal, snapshot/global count, arbitrary-cycle
 proof or quota change. Existing lifetime, exact detail and mutation receipts
 remain. Fixtures are UNRUN; see WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile chat Unpublish validates owned acknowledgement
+
+Continuation c48e5aab9d14b6ba77f4340a8ca321b6ba186cec captures the full account epoch and uses the
+existing caller-owned 401 branch for chat Unpublish, matching its neighbouring
+audience helper. It requires the canonical success-true receipt and exact
+requested token after transport completion before resolving.
+
+Existing controls preserve link/badge and show uncertainty when receipt parsing
+or target matching fails. FullScreen production readback, Private gating,
+confirmation and Publish marker/lifecycle semantics are unchanged. No extra
+GET, replay/fallback, global auth rewrite or deletion guarantee. Valid-delete
+positive readback badge reconciliation remains separate.
+
+Fixtures are UNRUN and mock transport; request options do not demonstrate live
+HTTP recovery or sign-out behavior. No duplicate successful deletion or backend
+incident is established. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
