@@ -1,6 +1,9 @@
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+  parseAccountDeletionScheduleReceipt,
+  type AccountDeletionScheduleReceipt,
   MANAGED_CLOUD_REFLECT_PATH,
   MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
   managedCloudPreferencesNamespacePath,
@@ -774,19 +777,33 @@ export async function removeCloudTeamMember(memberId: string): Promise<void> {
   request.assertBoundary();
 }
 
-export interface CloudAccountDeletionResult {
-  message: string | null;
-}
+export type CloudAccountDeletionResult = AccountDeletionScheduleReceipt;
 
 export async function requestCloudAccountDeletion(): Promise<CloudAccountDeletionResult> {
   const request = createManagedCloudRequestContext('Cloud account deletion');
-  const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/user/delete-account`, {
-    method: 'DELETE',
-    headers: await request.getHeaders(),
-  });
-  if (!response.ok) throw await failure(request, response, 'Could not delete your Cloud account');
-  const payload: unknown = await response.json().catch(() => null);
-  request.assertBoundary();
-  const message = isRecord(payload) ? payload['message'] : null;
-  return { message: typeof message === 'string' ? message : null };
+  const headers = await request.getHeaders();
+  const unknownOutcome = () =>
+    new Error(
+      'Could not confirm account deletion scheduling. Check deletion status in the original account’s web settings before taking another action. A status check may not reflect a request still in progress.',
+    );
+  let response: Response;
+  try {
+    response = await request.fetch(`${CLOUD_API_BASE_URL}${MANAGED_CLOUD_ACCOUNT_DELETION_PATH}`, {
+      method: 'DELETE',
+      headers,
+    });
+  } catch {
+    request.assertBoundary();
+    throw unknownOutcome();
+  }
+  if (!response.ok)
+    throw await failure(request, response, 'Could not schedule Cloud account deletion');
+  try {
+    const payload: unknown = await response.json();
+    request.assertBoundary();
+    return parseAccountDeletionScheduleReceipt(payload);
+  } catch {
+    request.assertBoundary();
+    throw unknownOutcome();
+  }
 }

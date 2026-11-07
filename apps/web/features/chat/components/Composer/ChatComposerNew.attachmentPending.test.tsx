@@ -172,3 +172,14 @@ describe('the reason a shut send control gives to a screen reader', () => {
     expect(reason()).toBeNull();
   });
 });
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
+});

@@ -27,10 +27,10 @@ import {
   useChatAppModeStore,
   type MobileChatAppMode,
 } from '@/src/features/chat/store/appModeStore';
-import { toolApprovalPolicyOption, type ToolApprovalPolicy } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatStore } from '@/stores/chatStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useToolApprovalPolicySync } from '../tool-approvals/useToolApprovalPolicySync';
+import { toolApprovalPolicySummary } from '../tool-approvals/toolApprovalPolicyOwner';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
 
@@ -56,10 +56,10 @@ interface CapabilitySection {
 function makeSections(input: {
   cloudUnlocked: boolean;
   appMode: MobileChatAppMode;
-  toolApprovalPolicy: ToolApprovalPolicy;
+  approvalSummary: string;
   memoryFreshness: string | null;
 }): CapabilitySection[] {
-  const { cloudUnlocked, appMode, toolApprovalPolicy, memoryFreshness } = input;
+  const { cloudUnlocked, appMode, approvalSummary, memoryFreshness } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
   const memoryDescription = localModeActive
@@ -147,7 +147,7 @@ function makeSections(input: {
           tone: 'review',
           label: 'Action approvals',
           description: 'Choose how AGI asks before tool actions.',
-          value: toolApprovalPolicyOption(toolApprovalPolicy).shortLabel,
+          value: approvalSummary,
           href: '/(app)/settings/auto-approve',
         },
       ],
@@ -204,7 +204,7 @@ export default function CapabilitiesScreen() {
   const chatFeatures = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
+  const approval = useToolApprovalPolicySync();
   const memoryEntries = useMemoryStore((s) => s.entries);
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
   useEffect(() => {
@@ -214,7 +214,7 @@ export default function CapabilitiesScreen() {
   const sections = makeSections({
     cloudUnlocked,
     appMode,
-    toolApprovalPolicy,
+    approvalSummary: toolApprovalPolicySummary(approval),
     memoryFreshness,
   });
 

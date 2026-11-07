@@ -175,7 +175,7 @@ export function McpResourceList({
   if (catalog.resources.length === 0 && catalog.resourceTemplates.length === 0) {
     return (
       <p className="px-3 py-2 text-xs" style={{ color: 'var(--text-3)' }}>
-        {catalog.connectorLabel} offers tools but nothing to read.
+        {catalog.connectorLabel} has no resources or prompts to attach.
       </p>
     );
   }

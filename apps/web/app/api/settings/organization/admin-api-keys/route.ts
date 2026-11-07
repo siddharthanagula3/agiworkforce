@@ -31,7 +31,10 @@ import {
   type ServicePrincipal,
 } from '@/lib/server/service-principal';
 import { servicePrincipalScopes } from '@/lib/server/service-principals/route-access';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 
@@ -66,8 +69,10 @@ interface CreatedKeyPayload {
 }
 
 async function resolveCaller(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
   return { userId, membership };
 }

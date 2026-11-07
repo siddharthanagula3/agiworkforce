@@ -133,15 +133,50 @@ describe('describeConnectorSetup', () => {
     });
   });
 
-  it('names the secret store key when production has none', () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    expect(describeConnectorSetup('notion', 'Notion')).toMatchObject({
-      kind: 'token-storage',
-      missingEnv: ['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY'],
-    });
-    expect(describeDiscoveredConnectorSetup('io.github.someone/tool', 'Tool')?.kind).toBe(
-      'token-storage',
+  describe.each(['development', 'production'])('token storage setup in %s', (environment) => {
+    it.each([undefined, 'malformed-key'])(
+      'reports token-storage for an unconfigured key %j',
+      async (key) => {
+        vi.stubEnv('NODE_ENV', environment);
+        vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', key);
+        vi.resetModules();
+        const setup = await import('../oauth-setup');
+        expect(setup.describeConnectorSetup('notion', 'Notion')).toMatchObject({
+          kind: 'token-storage',
+          missingEnv: ['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY'],
+        });
+        expect(setup.describeDiscoveredConnectorSetup('io.github.someone/tool', 'Tool')?.kind).toBe(
+          'token-storage',
+        );
+      },
     );
+
+    it.each([undefined, 'malformed-key'])(
+      'reports token-storage for a configured OAuth pair with key %j',
+      async (key) => {
+        vi.stubEnv('NODE_ENV', environment);
+        vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', key);
+        describeProvider('slack');
+        process.env['CONNECTOR_OAUTH_SLACK_CLIENT_ID'] = 'fixture-client-id';
+        process.env['CONNECTOR_OAUTH_SLACK_CLIENT_SECRET'] = 'fixture-client-secret';
+        vi.resetModules();
+        const registry = await import('@/lib/connectors/oauth-registry');
+        const setup = await import('../oauth-setup');
+        expect(registry.isConnectorOAuthConfigured('slack')).toBe(true);
+        expect(setup.describeConnectorSetup('slack', 'Slack')).toMatchObject({
+          kind: 'token-storage',
+          missingEnv: ['CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY'],
+        });
+      },
+    );
+  });
+
+  it('keeps a valid configured OAuth pair ready with configured storage', () => {
+    describeProvider('slack');
+    process.env['CONNECTOR_OAUTH_SLACK_CLIENT_ID'] = 'fixture-client-id';
+    process.env['CONNECTOR_OAUTH_SLACK_CLIENT_SECRET'] = 'fixture-client-secret';
+    __resetConnectorOAuthRegistryCacheForTests();
+    expect(describeConnectorSetup('slack', 'Slack')).toBeNull();
   });
 
   it('describes a discovered directory server by its callback origin only', () => {

@@ -90,25 +90,20 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
             }
 
             std::env::set_var(env_var, &key);
-            match crate::auth::load_auth() {
-                Ok(mut store) => {
-                    store.entries.insert(
-                        selected_provider.to_string(),
-                        crate::auth::AuthEntry::ApiKey { key },
-                    );
-                    if let Err(e) = crate::auth::save_auth(&store) {
-                        output::print_error(&format!("Failed to save API key: {:#}", e));
-                    } else {
-                        output::print_info(&format!(
-                            "{} saved in the {} and set for this session.",
-                            env_var,
-                            crate::auth::credential_storage_label(),
-                        ));
-                    }
-                }
-                Err(e) => {
-                    output::print_error(&format!("Failed to load auth store: {:#}", e));
-                }
+            let saved = crate::auth::AuthStore::transaction(|store| {
+                store.entries.insert(
+                    selected_provider.to_string(),
+                    crate::auth::AuthEntry::ApiKey { key },
+                );
+                Ok(())
+            });
+            match saved {
+                Ok(()) => output::print_info(&format!(
+                    "{} saved in the {} and set for this session.",
+                    env_var,
+                    crate::auth::credential_storage_label(),
+                )),
+                Err(e) => output::print_error(&format!("Failed to save API key: {:#}", e)),
             }
         }
         Err(e) => {

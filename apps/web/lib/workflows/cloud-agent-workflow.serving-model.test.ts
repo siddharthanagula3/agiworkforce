@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -144,6 +145,7 @@ function makeInput(research?: CloudAgentWorkflowInput['research']): CloudAgentWo
     runId: RUN_ID,
     userId: 'user-1',
     processed: {
+      contextPolicySnapshot: contextPolicySnapshotFixture(),
       requestId: 'agi.chat.web.send.turn-1',
       chatRequest: { model: FAILED_MODEL, messages: [], work_mode: 'agiwork' },
       requestedModel: FAILED_MODEL,
@@ -201,6 +203,7 @@ describe('a durable run that continues after a managed failover to another model
         (async function* () {
           options.failover.next(new Error('overloaded'), { step: 1 });
           await options.onInvocationCheckpoint({
+            toolSchemaState: { loadedQualifiedNames: ['mcp__schemafixture__read_item'] },
             sessionId: 'session-1',
             turnId: 'turn-1',
             nextEventSequence: 4,
@@ -217,6 +220,9 @@ describe('a durable run that continues after a managed failover to another model
     if (result.kind !== 'continue') return;
     const continued = systemText(result.input.processed.llmRequest.messages);
     expect(result.input.processed.chatRequest.model).toBe(RESCUER_MODEL);
+    expect(result.input.processed.toolSchemaState).toEqual({
+      loadedQualifiedNames: ['mcp__schemafixture__read_item'],
+    });
     expect(continued).toContain(`This turn runs on ${RESCUER_NAME}`);
     expect(continued).not.toContain(`This turn runs on ${FAILED_NAME}`);
   });

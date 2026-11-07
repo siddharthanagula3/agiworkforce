@@ -159,6 +159,33 @@ describe('scheduleImageGenerationJobDrive', () => {
     ).resolves.toBe(true);
   });
 
+  it('does not queue a stored-source edit whose mask only the sender holds', async () => {
+    const job = imageJob({
+      operation: 'edit',
+      plan: { ...imageJob().plan, sourceAssetId: 'asset-1' },
+      maskImageSha256: 'a'.repeat(64),
+    });
+
+    expect(isImageGenerationJobDrivable(job)).toBe(false);
+    await expect(
+      scheduleImageGenerationJobDrive({ db: {} as DatabaseAdapter, job, delaySeconds: 5 }),
+    ).resolves.toBe(false);
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('queues a masked edit when both source and mask are stored', async () => {
+    const job = imageJob({
+      operation: 'edit',
+      plan: { ...imageJob().plan, sourceAssetId: 'asset-1', maskAssetId: 'asset-2' },
+      maskImageSha256: 'a'.repeat(64),
+    });
+
+    expect(isImageGenerationJobDrivable(job)).toBe(true);
+    await expect(
+      scheduleImageGenerationJobDrive({ db: {} as DatabaseAdapter, job, delaySeconds: 5 }),
+    ).resolves.toBe(true);
+  });
+
   it('never queues a settled, cancelled or exhausted job', async () => {
     for (const job of [
       imageJob({ terminalAt: new Date().toISOString() }),
@@ -263,6 +290,21 @@ describe('driveImageGenerationJob', () => {
 
   it('does not burn the attempt of an edit whose source only the sender holds', async () => {
     mocks.getJob.mockResolvedValue(imageJob({ operation: 'edit' }));
+
+    await expect(driveImageGenerationJob(handlerContext())).resolves.toMatchObject({
+      skipped: 'source_image_not_stored',
+    });
+    expect(mocks.runAttempt).not.toHaveBeenCalled();
+  });
+
+  it('does not replay a stored-source edit without its inline mask', async () => {
+    mocks.getJob.mockResolvedValue(
+      imageJob({
+        operation: 'edit',
+        plan: { ...imageJob().plan, sourceAssetId: 'asset-1' },
+        maskImageSha256: 'a'.repeat(64),
+      }),
+    );
 
     await expect(driveImageGenerationJob(handlerContext())).resolves.toMatchObject({
       skipped: 'source_image_not_stored',

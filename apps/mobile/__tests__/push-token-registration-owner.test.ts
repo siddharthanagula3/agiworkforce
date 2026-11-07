@@ -43,8 +43,16 @@ jest.mock('expo-notifications', () => ({
 import {
   registerForPushNotifications,
   setupNotificationListeners,
+  setPushAccountContext,
+  getPushRegistrationIssue,
   type PushNotificationAccountContext,
 } from '../services/notifications';
+import {
+  beginPushRegistration,
+  postPushRegistration,
+  stopPushPreferenceSync,
+} from '../services/pushPreferenceSync';
+import { ApiHttpError } from '../services/apiErrors';
 
 function makeContext(
   overrides: Partial<PushNotificationAccountContext> = {},
@@ -65,6 +73,11 @@ describe('push-token registration ownership', () => {
     capturedPushTokenListener = undefined;
     mockApiPost.mockResolvedValue(undefined);
     mockGetExpoPushToken.mockResolvedValue({ data: 'expo-token-a' });
+  });
+
+  afterEach(() => {
+    stopPushPreferenceSync();
+    setPushAccountContext(null);
   });
 
   it('posts the token with the JWT captured for the current Clerk owner', async () => {
@@ -88,6 +101,7 @@ describe('push-token registration ownership', () => {
       }),
       {
         headers: { Authorization: 'Bearer jwt-a' },
+        auth401Recovery: 'caller-owned',
         signal: controller.signal,
       },
     );
@@ -110,6 +124,14 @@ describe('push-token registration ownership', () => {
     expect(mockApiPost).not.toHaveBeenCalled();
   });
 
+  it('reports a caller-owned authentication refusal as failed registration', async () => {
+    mockApiPost.mockRejectedValueOnce(new ApiHttpError('Sign in again', 401, 'auth_required'));
+    await expect(
+      postPushRegistration(beginPushRegistration('expo-token-a', makeContext())),
+    ).resolves.toBe(false);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores a captured account-A native token-refresh callback after switching to B', async () => {
     let current = true;
     const removeListeners = setupNotificationListeners(makeContext({ isCurrent: () => current }));
@@ -122,5 +144,55 @@ describe('push-token registration ownership', () => {
 
     expect(mockApiPost).not.toHaveBeenCalled();
     removeListeners();
+  });
+  it('lets native refresh supersede an older same-context Expo lookup', async () => {
+    const context = makeContext();
+    const remove = setupNotificationListeners(context);
+    let resolveExpo!: (value: { data: string }) => void;
+    mockGetExpoPushToken.mockReturnValueOnce(
+      new Promise<{ data: string }>((resolve) => {
+        resolveExpo = resolve;
+      }),
+    );
+    const pending = registerForPushNotifications(context);
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+    capturedPushTokenListener?.({ data: 'new-native-token' });
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+    resolveExpo({ data: 'old-expo-token' });
+    await expect(pending).resolves.toBeNull();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    expect(mockApiPost.mock.calls[0]?.[1].pushToken).toBe('new-native-token');
+    remove();
+  });
+
+  it('retires pending registration when the provider clears context', async () => {
+    const context = makeContext();
+    setPushAccountContext(context);
+    let resolvePost!: () => void;
+    mockApiPost.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolvePost = resolve;
+      }),
+    );
+    const pending = registerForPushNotifications(context);
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+    setPushAccountContext(null);
+    resolvePost();
+    await expect(pending).resolves.toBeNull();
+    expect(getPushRegistrationIssue()).toBeNull();
+  });
+
+  it('ignores old native callbacks and cleanup after listeners are replaced', async () => {
+    const context = makeContext();
+    const oldCleanup = setupNotificationListeners(context);
+    const oldCallback = capturedPushTokenListener;
+    const cleanup = setupNotificationListeners(context);
+    oldCleanup();
+    oldCallback?.({ data: 'old-listener-token' });
+    capturedPushTokenListener?.({ data: 'current-listener-token' });
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    expect(mockApiPost.mock.calls[0]?.[1].pushToken).toBe('current-listener-token');
+    cleanup();
   });
 });

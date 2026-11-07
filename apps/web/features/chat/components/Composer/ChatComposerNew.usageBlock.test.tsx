@@ -207,3 +207,14 @@ describe('WEB-CHAT-MESSAGE-LIST-ACCOUNT-WIDE-QUOTA-01 · composer', () => {
     expect(screen.queryByRole('button', { name: ACTION_LABEL })).toBeNull();
   });
 });
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
+});

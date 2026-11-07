@@ -136,6 +136,28 @@ describe('/api/settings/security/compromise', () => {
     expect(mocks.hasEnrolledSecondFactor).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'Could not confirm that the compromise response was recorded.',
+    'Could not confirm the compromise report update. Some sessions may already have been signed out.',
+  ])(
+    'delivers a mocked report receipt refusal as a user-safe 503, not an accepted report: %s',
+    async (message) => {
+      mocks.respond.mockRejectedValueOnce(createError.serviceUnavailable(message).asUserSafe());
+
+      const response = await post();
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({
+        error: { code: 'SERVICE_UNAVAILABLE', message },
+        requestId: expect.any(String),
+      });
+      expect(mocks.respond).toHaveBeenCalledTimes(1);
+      expect(mocks.requireCsrfToken).toHaveBeenCalledWith(expect.any(NextRequest), 'user-1');
+      expect(mocks.requireStepUp).not.toHaveBeenCalled();
+      expect(mocks.hasEnrolledSecondFactor).not.toHaveBeenCalled();
+    },
+  );
+
   it('refuses a report that carries no CSRF token, and revokes nothing', async () => {
     mocks.requireCsrfToken.mockResolvedValue(
       NextResponse.json({ error: 'csrf' }, { status: 403 }) as never,
@@ -177,6 +199,41 @@ describe('/api/settings/security/compromise', () => {
         userId: 'user-1',
         responseId: 'res-1',
         currentSessionId: 'sess-new',
+      }),
+    );
+  });
+
+  it.each([
+    'Could not confirm the state of this compromise response.',
+    'Could not confirm that this response was resolved.',
+    'Could not confirm that this response was resolved. Some sessions may already have been signed out.',
+  ])('delivers a mocked resolution refusal as a user-safe 503: %s', async (message) => {
+    mocks.resolve.mockRejectedValueOnce(createError.serviceUnavailable(message).asUserSafe());
+
+    const response = await patch();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'SERVICE_UNAVAILABLE', message },
+      requestId: expect.any(String),
+    });
+    expect(mocks.requireCsrfToken).toHaveBeenCalledWith(expect.any(NextRequest), 'user-1');
+    expect(mocks.requireStepUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        action: 'security.compromise_resolve',
+        resourceId: 'res-1',
+      }),
+    );
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
+    expect(mocks.resolve).toHaveBeenCalledWith(
+      DB,
+      { id: 'identity' },
+      expect.objectContaining({
+        userId: 'user-1',
+        responseId: 'res-1',
+        currentSessionId: 'sess-new',
+        secondFactorVerified: true,
       }),
     );
   });

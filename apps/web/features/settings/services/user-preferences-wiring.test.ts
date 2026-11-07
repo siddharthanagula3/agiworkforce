@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(),
@@ -201,5 +206,121 @@ describe('settingsService · deleteAPIKey', () => {
 
     expect(result.error).toBeTruthy();
     expect(result.error).not.toBe('API key management not yet available via API');
+  });
+});
+
+describe('settingsService · getAPIKeys owned transport', () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+    const { getAuthToken } = await import('@shared/lib/get-auth-token');
+    vi.mocked(getAuthToken).mockClear();
+  });
+
+  function ownedRequest() {
+    const getToken = vi.fn(async () => 'captured-owner-token');
+    const request = createRequestAuthority({
+      userId: 'owner-a',
+      sessionId: 'session-a',
+      isCurrent: () => true,
+      getToken,
+    });
+    const headers = {
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]: MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    };
+    return { request, headers, getToken };
+  }
+
+  it('uses only captured auth, explicit scope and abort signal with the existing array parser', async () => {
+    const keys = [
+      {
+        id: 'owned-key',
+        name: 'Owned',
+        key_prefix: 'agi_',
+        scopes: [],
+        created_at: '2026-10-20T00:00:00.000Z',
+      },
+    ];
+    fetchMock.mockResolvedValueOnce(makeResponse({ api_keys: keys }));
+    const owned = ownedRequest();
+    const controller = new AbortController();
+    const { settingsService } = await import('./user-preferences');
+    const { getAuthToken } = await import('@shared/lib/get-auth-token');
+    const result = await settingsService.getAPIKeys(controller.signal, owned);
+    expect(result).toEqual({ data: keys });
+    expect(getAuthToken).not.toHaveBeenCalled();
+    expect(owned.getToken).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      '/api/settings/api-keys',
+      expect.objectContaining({ method: 'GET', cache: 'no-store', credentials: 'omit' }),
+    );
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer captured-owner-token');
+    expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
+      MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    );
+    expect(init.signal?.aborted).toBe(false);
+    controller.abort();
+    expect(init.signal?.aborted).toBe(true);
+  });
+
+  it.each([
+    { label: 'missing array', response: () => makeResponse({}), expected: { data: [] } },
+    {
+      label: 'HTTP failure',
+      response: () => makeResponse({ error: 'Unavailable' }, 503),
+      expected: { data: [], error: 'HTTP 503' },
+    },
+  ])(
+    'retains the legacy parser for $label without ambient auth',
+    async ({ response, expected }) => {
+      fetchMock.mockResolvedValueOnce(response());
+      const { settingsService } = await import('./user-preferences');
+      const { getAuthToken } = await import('@shared/lib/get-auth-token');
+      expect(await settingsService.getAPIKeys(undefined, ownedRequest())).toEqual(expected);
+      expect(getAuthToken).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not acquire either token or dispatch when the caller signal is already aborted', async () => {
+    const owned = ownedRequest();
+    const controller = new AbortController();
+    controller.abort();
+    const { settingsService } = await import('./user-preferences');
+    const { getAuthToken } = await import('@shared/lib/get-auth-token');
+    const result = await settingsService.getAPIKeys(controller.signal, owned);
+    expect(result.data).toEqual([]);
+    expect(result.error).toBeTruthy();
+    expect(getAuthToken).not.toHaveBeenCalled();
+    expect(owned.getToken).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not return a parsed array after its captured authority is retired', async () => {
+    let resolveBody!: (body: unknown) => void;
+    let started!: () => void;
+    const parsing = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const body = new Promise<unknown>((resolve) => {
+      resolveBody = resolve;
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => {
+        started();
+        return body;
+      },
+    });
+    const owned = ownedRequest();
+    const { settingsService } = await import('./user-preferences');
+    const { getAuthToken } = await import('@shared/lib/get-auth-token');
+    const result = settingsService.getAPIKeys(undefined, owned);
+    await parsing;
+    owned.request.retire();
+    resolveBody({ api_keys: [{ id: 'retired-key' }] });
+    expect(await result).toMatchObject({ data: [], error: expect.any(String) });
+    expect(getAuthToken).not.toHaveBeenCalled();
   });
 });

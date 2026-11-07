@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import { ProductNoticeStack } from '../ProductNotice';
@@ -20,7 +20,45 @@ const notice = (
   </ProductNoticeStack>
 );
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 describe('ProductNoticeStack', () => {
+  it('reserves the measured notice band below the header and releases it when removed', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return {
+        bottom: this.hasAttribute('data-product-notice-stack') ? 112 : 48,
+      } as DOMRect;
+    });
+    const view = render(
+      <>
+        {notice}
+        <Shell>
+          <header data-app-header="" />
+        </Shell>
+      </>,
+    );
+    const shell = screen.getByTestId('shell');
+    expect(shell.style.getPropertyValue('--agi-product-notice-inset')).toBe('64px');
+    view.rerender(
+      <Shell>
+        <header data-app-header="" />
+      </Shell>,
+    );
+    expect(shell.style.getPropertyValue('--agi-product-notice-inset')).toBe('');
+  });
+
   it('paints inside the open shell, beside the mobile panel that has to cover it', () => {
     render(
       <>

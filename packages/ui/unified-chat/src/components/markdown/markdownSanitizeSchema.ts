@@ -6,7 +6,10 @@ export const SANITIZED_ID_PREFIX = defaultSchema.clobberPrefix ?? '';
 
 export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
   ...defaultSchema,
-  tagNames: (defaultSchema.tagNames ?? []).filter((tag) => !RESPONSIVE_IMAGE_TAGS.has(tag)),
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []).filter((tag) => !RESPONSIVE_IMAGE_TAGS.has(tag)),
+    'u',
+  ],
   protocols: {
     ...defaultSchema.protocols,
     src: [...(defaultSchema.protocols?.['src'] ?? []), 'data', 'blob'],
@@ -18,6 +21,8 @@ export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
     code: [
       ...(defaultSchema.attributes?.['code'] ?? []),
       ['className', /^language-./, 'math-inline', 'math-display'],
+      ['dataAssistantFenceIndex', /^\d+$/],
+      ['dataMarkdownSource', 'readonly'],
     ],
     span: [
       ...(defaultSchema.attributes?.['span'] ?? []),

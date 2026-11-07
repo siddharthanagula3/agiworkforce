@@ -1,5 +1,6 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CodeBlockEditorContext } from './codeBlockEditor';
 
 vi.mock('./MermaidDiagram', () => ({
   MermaidDiagram: ({ source }: { source: string }) => <pre>{source}</pre>,
@@ -141,6 +142,71 @@ describe('MarkdownContent task lists', () => {
 });
 
 describe('MarkdownContent table alignment', () => {
+  const OVERFLOWING_TABLE = [
+    '| Resource | Rules |',
+    '| --- | --- |',
+    '| Guide | Escape `|` in cells and retain this complete rule. |',
+  ].join('\n');
+
+  it.each([true, false])('preserves overflowing table source while streaming=%s', (isStreaming) => {
+    render(<MarkdownContent content={OVERFLOWING_TABLE} isStreaming={isStreaming} />);
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByLabelText('markdown code block').textContent).toBe(OVERFLOWING_TABLE);
+  });
+
+  it('copies every character from an overflowing generated table', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<MarkdownContent content={OVERFLOWING_TABLE} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith(OVERFLOWING_TABLE));
+  });
+
+  it('keeps synthetic fallback source out of the fenced-code editor', () => {
+    render(
+      <CodeBlockEditorContext.Provider value={vi.fn()}>
+        <MarkdownContent content={OVERFLOWING_TABLE} />
+      </CodeBlockEditorContext.Provider>,
+    );
+    expect(screen.queryByRole('button', { name: 'Edit this code beside the chat' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Expand code' })).toBeTruthy();
+  });
+
+  it('retains the editor for a real Markdown code fence', () => {
+    const openEditor = vi.fn();
+    render(
+      <CodeBlockEditorContext.Provider value={openEditor}>
+        <MarkdownContent content={'```markdown\n# Saved source\n```'} />
+      </CodeBlockEditorContext.Provider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit this code beside the chat' }));
+    expect(openEditor).toHaveBeenCalledExactlyOnceWith('# Saved source');
+  });
+
+  it('keeps valid escaped inline pipes in a normal table', () => {
+    const source = OVERFLOWING_TABLE.replace('`|`', '`\\|`');
+    const { container } = render(<MarkdownContent content={source} />);
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(container.querySelectorAll('td')).toHaveLength(2);
+    expect(container.querySelectorAll('td')[1]?.textContent).toBe(
+      'Escape | in cells and retain this complete rule.',
+    );
+  });
+
+  it('does not render executable markup hidden in an overflowing cell', () => {
+    const source = '| Key | Value |\n| --- | --- |\n| A | B | <img src=x onerror=alert(1)> |';
+    const { container } = render(<MarkdownContent content={source} />);
+    expect(container.querySelector('img,script,iframe')).toBeNull();
+    expect(screen.getByLabelText('markdown code block').textContent).toBe(source);
+  });
+
+  it('keeps a short row as an ordinary table', () => {
+    render(<MarkdownContent content={'| A | B |\n| --- | --- |\n| One |'} />);
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getByRole('cell', { name: 'One' })).toBeTruthy();
+  });
+
   it('maps left, center and right alignment to start, center and end on headers and cells', () => {
     const markdown = [
       '| Label | Status | Amount |',
@@ -170,6 +236,20 @@ describe('MarkdownContent table alignment', () => {
 });
 
 describe('MarkdownContent literal HTML', () => {
+  it('preserves underline while stripping its executable attributes and arbitrary styles', () => {
+    const { container } = render(
+      <MarkdownContent
+        content={'Select <u onclick="alert(1)" style="position:fixed">this text</u>.'}
+      />,
+    );
+
+    const underline = container.querySelector('u');
+    expect(underline?.textContent).toBe('this text');
+    expect(underline?.hasAttribute('onclick')).toBe(false);
+    expect(underline?.hasAttribute('style')).toBe(false);
+    expect(container.textContent).toBe('Select this text.');
+  });
+
   it('keeps an angle-bracket placeholder visible as text', () => {
     const { container } = render(
       <MarkdownContent content={'**Result:** FINAL=<number>'} literalHtml />,

@@ -37,6 +37,8 @@ import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendPreview } from './SendPreview';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
+import { useComposerAttachmentScope } from '../useComposerAttachmentScope';
+import type { ComposerAttachmentOperation } from '../utils/runComposerAttachmentPick';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
@@ -48,10 +50,13 @@ import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
-import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import {
+  VoiceInputButton,
+  type VoiceInputHandle,
+  type DictationIntent,
+} from '@/src/features/voice/components/VoiceInputButton';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { Waveform } from '@/src/features/voice/components/Waveform';
-import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -66,7 +71,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
@@ -117,6 +122,9 @@ interface QueuedFollowUp {
 
 export interface ChatInputHandle {
   addAttachments: (items: Attachment[]) => void;
+  captureAttachmentOperation: (
+    executionMode: 'local' | 'cloud',
+  ) => ComposerAttachmentOperation | null;
   focus?: () => void;
   prefillText?: (starter: string) => void;
 }
@@ -185,7 +193,9 @@ export function ChatInput({
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
   const inputRef = useRef<TextInput>(null);
-  const transcriptionRunRef = useRef(0);
+  const voiceControlRef = useRef<VoiceInputHandle | null>(null);
+  const textRef = useRef(text);
+  textRef.current = text;
   const sendPendingRef = useRef(false);
   const heldSendRef = useRef<string | null>(null);
   const [sendHeld, setSendHeld] = useState(false);
@@ -209,6 +219,11 @@ export function ChatInput({
   const chatFeatures = useChatStore((s) => s.features);
   const failureCode = useChatStore((s) => s.failureCode?.code ?? null);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const captureAttachmentScope = useComposerAttachmentScope(
+    draftIdentity,
+    draftProvenance,
+    appMode,
+  );
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
@@ -286,7 +301,8 @@ export function ChatInput({
   }, []);
 
   const addAttachments = useCallback(
-    (items: Attachment[]) => {
+    (items: Attachment[], isCurrent: () => boolean = () => true) => {
+      if (!isCurrent()) return;
       const { accepted, rejected } = validateAttachments(items, appMode);
       const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
       const fresh: Attachment[] = [];
@@ -300,14 +316,24 @@ export function ChatInput({
         seen.add(identity);
         fresh.push(item);
       }
-      if (fresh.length > 0) setAttachments((prev) => [...prev, ...fresh]);
+      if (fresh.length > 0) {
+        setAttachments((prev) => {
+          if (!isCurrent()) return prev;
+          const currentIdentities = new Set(prev.map(attachmentIdentity));
+          return [
+            ...prev,
+            ...fresh.filter((item) => !currentIdentities.has(attachmentIdentity(item))),
+          ];
+        });
+      }
+      if (!isCurrent()) return;
       if (duplicates.length > 0) {
         Alert.alert(
           duplicates.length === 1 ? 'Already attached' : 'Some files are already attached',
           `${duplicates.join('\n')}\n\nEach file is attached once.`,
         );
       }
-      if (rejected.length > 0) {
+      if (rejected.length > 0 && isCurrent()) {
         Alert.alert(
           rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
           rejected.map((r) => r.reason).join('\n'),
@@ -327,8 +353,17 @@ export function ChatInput({
         setText((current) => (current.trim() ? current : starter));
       },
       addAttachments,
+      captureAttachmentOperation: (executionMode: 'local' | 'cloud') => {
+        const scope = captureAttachmentScope(executionMode);
+        return scope
+          ? {
+              isCurrent: scope.isCurrent,
+              addAttachments: (items: Attachment[]) => addAttachments(items, scope.isCurrent),
+            }
+          : null;
+      },
     }),
-    [addAttachments],
+    [addAttachments, captureAttachmentScope],
   );
 
   useLayoutEffect(() => {
@@ -630,16 +665,22 @@ ${current}`
   }, []);
 
   const handleTranscription = useCallback(
-    (transcribedText: string) => {
+    (transcribedText: string, intent: DictationIntent) => {
       setIsRecording(false);
+      setIsTranscribing(false);
       setAudioLevel(0);
       if (!cleanupVoiceDictation(transcribedText)) {
         handleDictationFailure();
         return;
       }
-      applyTranscript(transcribedText);
+      if (intent === 'send') {
+        const merged = mergeTranscript(textRef.current, transcribedText);
+        textRef.current = merged;
+        setText(merged);
+        sendComposerMessage(merged);
+      } else applyTranscript(transcribedText);
     },
-    [applyTranscript, handleDictationFailure],
+    [applyTranscript, handleDictationFailure, sendComposerMessage],
   );
 
   const resetRecordingUi = useCallback(() => {
@@ -660,59 +701,18 @@ ${current}`
   }, []);
 
   const handleDictationCancel = useCallback(() => {
-    transcriptionRunRef.current += 1;
+    voiceControlRef.current?.cancel();
     resetRecordingUi();
     setIsTranscribing(false);
-    setVoiceResetSignal((value) => value + 1);
-    VoiceService.cancelRecording().catch(() => {
-      // ignore cleanup errors
-    });
   }, [resetRecordingUi]);
 
-  const finishDictation = useCallback(
-    async ({ send }: { send: boolean }) => {
-      resetRecordingUi();
-      if (!VoiceService.isRecording()) {
-        setVoiceResetSignal((value) => value + 1);
-        return;
-      }
-      const run = transcriptionRunRef.current + 1;
-      transcriptionRunRef.current = run;
-      setIsTranscribing(true);
-      let transcript: string;
-      try {
-        const uri = await VoiceService.stopRecording();
-        if (transcriptionRunRef.current !== run) return;
-        const result = await VoiceService.transcribe(uri);
-        transcript = result.text.trim();
-      } catch {
-        transcript = '';
-      }
-      if (transcriptionRunRef.current !== run) return;
-      setIsTranscribing(false);
-      setVoiceResetSignal((value) => value + 1);
-      if (!cleanupVoiceDictation(transcript)) {
-        handleDictationFailure();
-        return;
-      }
-      if (send) {
-        const merged = mergeTranscript(text, transcript);
-        setText(merged);
-        sendComposerMessage(merged);
-      } else {
-        applyTranscript(transcript);
-      }
-    },
-    [applyTranscript, handleDictationFailure, resetRecordingUi, sendComposerMessage, text],
-  );
-
   const handleDictationStop = useCallback(() => {
-    void finishDictation({ send: false });
-  }, [finishDictation]);
+    voiceControlRef.current?.stop('insert');
+  }, []);
 
   const handleDictationSend = useCallback(() => {
-    void finishDictation({ send: true });
-  }, [finishDictation]);
+    voiceControlRef.current?.stop('send');
+  }, []);
 
   const handleVoiceError = useCallback(
     (message: string, permissionDenied?: boolean) => {
@@ -866,7 +866,8 @@ ${current}`
           accessibilityLabel={`Skill ${selectedSkillName} selected for the next Cloud message`}
           testID="chat.composer.skill"
           style={{
-            minHeight: 32,
+            minHeight: 44,
+            maxWidth: '100%',
             marginBottom: 8,
             alignSelf: 'flex-start',
             flexDirection: 'row',
@@ -883,7 +884,12 @@ ${current}`
           <Sparkles size={13} color={themeColors.teal} />
           <Text
             numberOfLines={1}
-            style={{ maxWidth: 220, color: themeColors.textSecondary, fontSize: typeScale.caption }}
+            style={{
+              maxWidth: 220,
+              flexShrink: 1,
+              color: themeColors.textSecondary,
+              fontSize: typeScale.caption,
+            }}
           >
             {selectedSkillName}
           </Text>
@@ -891,8 +897,7 @@ ${current}`
             onPress={onClearSelectedSkill}
             accessibilityRole="button"
             accessibilityLabel="Clear selected Skill"
-            hitSlop={8}
-            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
             <X size={14} color={themeColors.textMuted} />
           </PressableBox>
@@ -923,6 +928,7 @@ ${current}`
 
       {mentionQuery !== null ? (
         <FileMentionPalette
+          destinationKey={draftIdentity}
           query={mentionQuery}
           onSelect={(attachment) => {
             setText((current) => withoutTrailingMention(current));
@@ -1024,10 +1030,9 @@ ${current}`
                 accessibilityLabel="Edit queued message"
                 accessibilityHint="Takes this message out of the queue and puts it back in the message box"
                 accessibilityRole="button"
-                hitSlop={8}
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1041,10 +1046,9 @@ ${current}`
                 accessibilityLabel="Cancel queued message"
                 accessibilityHint="Removes this message from the queue so it is not sent"
                 accessibilityRole="button"
-                hitSlop={8}
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1079,14 +1083,13 @@ ${current}`
           <PressableBox
             onPress={handleDictationCancel}
             style={{
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               borderRadius: radii.full,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: themeColors.inputSurface,
             }}
-            hitSlop={6}
             testID="chat.composer.dictation-cancel"
             accessibilityLabel="Cancel recording"
             accessibilityHint="Discards the dictation without adding it to the message"
@@ -1110,7 +1113,7 @@ ${current}`
             borderColor: themeColors.composerBorder,
             paddingLeft: stacked ? 16 : 6,
             paddingRight: stacked ? 10 : 6,
-            paddingVertical: stacked ? 10 : 4,
+            paddingVertical: stacked ? 10 : 3,
             minHeight: 44,
           }}
         >
@@ -1126,13 +1129,12 @@ ${current}`
                 position: 'absolute',
                 top: 6,
                 right: 6,
-                width: 28,
-                height: 28,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
-              hitSlop={10}
               testID="chat.composer.expand"
               accessibilityLabel="Expand message"
               accessibilityHint="Opens the message in a full-screen editor"
@@ -1153,13 +1155,12 @@ ${current}`
               testID="chat.composer.plus"
               onPress={handlePlusPress}
               style={{
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
-              hitSlop={8}
               accessibilityLabel="Add to chat"
               accessibilityHint="Opens attachment, mode, and feature options"
               accessibilityRole="button"
@@ -1225,11 +1226,11 @@ ${current}`
             ref={inputRef}
             testID="chat.composer.input"
             style={{
-              ...(stacked ? { alignSelf: 'stretch', paddingRight: 28 } : { flex: 1 }),
+              ...(stacked ? { alignSelf: 'stretch', paddingRight: 44 } : { flex: 1, minWidth: 0 }),
               color: themeColors.textPrimary,
-              fontSize: typeScale.body,
+              ...chatTypography.body,
               paddingVertical: 0,
-              minHeight: 24,
+              minHeight: stacked ? 44 : 24,
               maxHeight: 160,
               display: isRecording || isTranscribing ? 'none' : 'flex',
             }}
@@ -1281,14 +1282,13 @@ ${current}`
                     testID="chat.composer.plus.stacked"
                     onPress={handlePlusPress}
                     style={{
-                      width: 34,
-                      height: 34,
+                      width: 44,
+                      height: 44,
                       borderRadius: radii.full,
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: themeColors.inputSurface,
                     }}
-                    hitSlop={6}
                     accessibilityLabel="Add to chat"
                     accessibilityHint="Opens attachment, mode, and feature options"
                     accessibilityRole="button"
@@ -1315,6 +1315,9 @@ ${current}`
             ) : null}
             {voiceAllowed ? (
               <VoiceInputButton
+                controlRef={voiceControlRef}
+                scopeKey={JSON.stringify([draftIdentity, appMode, selectedModel])}
+                onProcessingChange={setIsTranscribing}
                 onTranscription={handleTranscription}
                 onRecordingStart={handleRecordingStart}
                 onRecordingStop={handleRecordingStop}
@@ -1345,8 +1348,8 @@ ${current}`
                 importantForAccessibility="no-hide-descendants"
                 accessibilityElementsHidden
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1359,14 +1362,13 @@ ${current}`
               <PressableBox
                 onPress={handleDictationStop}
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   borderRadius: radii.full,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: themeColors.inputSurface,
                 }}
-                hitSlop={6}
                 testID="chat.composer.dictation-stop"
                 accessibilityLabel="Stop recording"
                 accessibilityHint="Stops recording and transcribes it into the message"
@@ -1382,15 +1384,14 @@ ${current}`
               onPress={isRecording ? handleDictationSend : undefined}
               disabled={!isRecording}
               style={{
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: themeColors.textPrimary,
                 opacity: isRecording ? 1 : 0.5,
               }}
-              hitSlop={6}
               testID="chat.composer.dictation-send"
               accessibilityLabel="Send recording"
               accessibilityHint="Stops recording, transcribes it, and sends the message"
@@ -1418,14 +1419,13 @@ ${current}`
                 <PressableBox
                   onPress={onOpenVoiceMode}
                   style={{
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     borderRadius: radii.full,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: themeColors.textPrimary,
                   }}
-                  hitSlop={6}
                   accessibilityLabel="Start voice mode"
                   accessibilityHint="Opens hands-free voice conversation"
                   accessibilityRole="button"

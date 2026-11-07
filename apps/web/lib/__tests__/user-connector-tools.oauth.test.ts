@@ -1,10 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { expectSdkBearerCredential } from '../connectors/__tests__/mcp-auth-contract';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SELECTIVELY_RELEASED_CONNECTOR_IDS } from '@agiworkforce/types';
 import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
+import * as grantStore from '@/lib/connectors/oauth-store';
 import { CONNECTOR_CAPABILITIES } from '@/lib/connectors/catalog';
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => true,
-}));
+const connectorRelease = vi.hoisted(() => ({ released: true }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) => connectorRelease.released || original.connectorReleased(id),
+    hasReleasedConnectors: () => connectorRelease.released || original.hasReleasedConnectors(),
+  };
+});
 
 type ScanModule0 = typeof import('@/lib/connectors/oauth-store');
 type OAuthAccessModule = typeof import('@/lib/connectors/oauth-access');
@@ -49,7 +58,9 @@ vi.mock('@/lib/egress-policy', () => {
 
 const mockBuildMcpToolCatalog = vi.fn();
 const mockConnectMcpServer = vi.fn();
-vi.mock('@agiworkforce/mcp', () => ({
+type McpModule = typeof import('@agiworkforce/mcp');
+vi.mock('@agiworkforce/mcp', async (importOriginal) => ({
+  ...(await importOriginal<McpModule>()),
   buildMcpToolCatalog: (...a: unknown[]) => mockBuildMcpToolCatalog(...a),
   connectMcpServer: (...a: unknown[]) => mockConnectMcpServer(...a),
 }));
@@ -195,15 +206,19 @@ describe('OAuth connector catalog gating', () => {
 
     expect(defs.map((d) => d.qualifiedName)).toEqual(['mcp__linear__create_issue']);
     expect(defs[0]?.serverId).toBe('linear');
+    await expectSdkBearerCredential(
+      (mockBuildMcpToolCatalog.mock.calls[0]?.[0] as Record<string, unknown>)['linear'],
+      'tok',
+    );
     expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith(
       {
         linear: expect.objectContaining({
           url: PROVIDER.mcpUrl,
-          headers: { Authorization: 'Bearer tok' },
+          authProvider: { token: expect.any(Function) },
         }),
       },
       MCP_EGRESS_POLICY,
-      { resolveRuntime: expect.any(Function) },
+      { resolveRuntime: expect.any(Function), onConnectionError: expect.any(Function) },
     );
   });
 
@@ -246,11 +261,11 @@ describe('OAuth connector catalog gating', () => {
         [connectorId]: expect.objectContaining({
           url: provider.mcpUrl,
           transport: 'streamable-http',
-          headers: { Authorization: 'Bearer people-test-token' },
+          authProvider: { token: expect.any(Function) },
         }),
       },
       MCP_EGRESS_POLICY,
-      { resolveRuntime: expect.any(Function) },
+      { resolveRuntime: expect.any(Function), onConnectionError: expect.any(Function) },
     );
 
     const callTool = vi.fn().mockResolvedValue({
@@ -266,6 +281,14 @@ describe('OAuth connector catalog gating', () => {
       isError: false,
     });
     expect(mockResolveAccessToken).toHaveBeenCalledWith('user-1', connectorId);
+    await expectSdkBearerCredential(
+      (mockBuildMcpToolCatalog.mock.calls[0]?.[0] as Record<string, unknown>)[connectorId],
+      'people-test-token',
+    );
+    await expectSdkBearerCredential(
+      (mockConnectMcpServer.mock.calls[0]?.[0] as { config: unknown }).config,
+      'people-test-token',
+    );
     expect(mockConnectMcpServer).toHaveBeenCalledWith(
       expect.objectContaining({
         serverName: connectorId,
@@ -273,7 +296,7 @@ describe('OAuth connector catalog gating', () => {
         config: expect.objectContaining({
           url: provider.mcpUrl,
           transport: 'streamable-http',
-          headers: { Authorization: 'Bearer people-test-token' },
+          authProvider: { token: expect.any(Function) },
         }),
       }),
     );
@@ -662,4 +685,326 @@ describe('a token refresh that failed for a moment, outside the chat catalog', (
   it('keeps answering null to background callers', async () => {
     await expect(withUserConnectorMcpHandle('user-1', 'linear', vi.fn())).resolves.toBeNull();
   });
+});
+
+describe('selective OAuth connector discovery', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+  });
+
+  it('discovers the canonical released IDs while withholding all other grants before refresh', async () => {
+    const blocked = ['gmail', 'huggingface', 'stripe', 'io.notion/mcp'];
+    const ids = [...SELECTIVELY_RELEASED_CONNECTOR_IDS, ...blocked];
+    mockConfiguredIds.mockReturnValue(new Set(ids));
+    mockGrantSummaries.mockResolvedValue(ids.map((connectorId) => ({ connectorId })));
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'test-access',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+    });
+    mockBuildMcpToolCatalog.mockImplementation(async (servers: Record<string, unknown>) => {
+      const id = Object.keys(servers)[0]!;
+      return catalogWith(id, `${id}_read_records`);
+    });
+
+    const tools = await loadUserConnectorToolDefs('user-selective-all', {
+      planTier: 'pro',
+      allowSelective: true,
+    });
+
+    expect(tools.map((tool) => tool.serverId).sort()).toEqual(
+      [...SELECTIVELY_RELEASED_CONNECTOR_IDS].sort(),
+    );
+    expect(mockResolveAccessToken.mock.calls.map((call) => call[1]).sort()).toEqual(
+      [...SELECTIVELY_RELEASED_CONNECTOR_IDS].sort(),
+    );
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(
+      SELECTIVELY_RELEASED_CONNECTOR_IDS.length,
+    );
+  });
+
+  it('keeps a per-chat connector denial ahead of token refresh and discovery', async () => {
+    mockGrantSummaries.mockResolvedValue([{ connectorId: 'linear' }]);
+
+    await expect(
+      loadUserConnectorToolDefs('user-selective-denied', {
+        planTier: 'pro',
+        allowSelective: true,
+        isConnectorDenied: (id) => id === 'linear',
+      }),
+    ).resolves.toEqual([]);
+
+    expect(mockResolveAccessToken).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+});
+
+type DiscoveryPolicyGateModule = typeof import('@/lib/services/connector-policy-gate');
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<DiscoveryPolicyGateModule>()),
+  evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
+}));
+
+function failedCatalog(serverName: string) {
+  return {
+    catalog: {
+      version: 1,
+      generatedAt: Date.now(),
+      servers: {
+        [serverName]: {
+          serverName,
+          safeServerName: serverName,
+          protocolEra: 'legacy',
+          capabilities: {},
+          tasksSupported: false,
+          tools: [],
+          resources: [],
+          resourceTemplates: [],
+          prompts: [],
+          apps: [],
+          discoveryErrors: [{ capability: 'tools', message: 'Connection failed' }],
+        },
+      },
+      tools: [],
+      resources: [],
+      resourceTemplates: [],
+      prompts: [],
+      apps: [],
+    },
+    handles: [],
+  };
+}
+
+describe('connector catalog authorization and readiness', () => {
+  it('does not report a failed handshake as a successful empty capability catalog', async () => {
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'valid',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+      accountKey: 'work',
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue(failedCatalog('linear'));
+
+    await expect(loadUserConnectorCapabilityCatalog('user-1', 'linear')).rejects.toBeInstanceOf(
+      ConnectorUnreachableError,
+    );
+  });
+
+  it('refreshes a rejected catalog credential once and rediscovers using that same account', async () => {
+    mockResolveAccessToken
+      .mockResolvedValueOnce({
+        status: 'ready',
+        accessToken: 'stale',
+        tokenType: 'Bearer',
+        grantedScopes: ['read'],
+        accountKey: 'work',
+      })
+      .mockResolvedValueOnce({
+        status: 'ready',
+        accessToken: 'fresh',
+        tokenType: 'Bearer',
+        grantedScopes: ['read'],
+        accountKey: 'work',
+      });
+    mockBuildMcpToolCatalog
+      .mockImplementationOnce(async (_servers, _policy, options) => {
+        options?.onConnectionError?.('linear', unauthorized());
+        return failedCatalog('linear');
+      })
+      .mockResolvedValueOnce(catalogWith('linear', 'create_issue'));
+
+    const definitions = await loadUserConnectorToolDefs('user-1');
+    expect(mockResolveAccessToken).toHaveBeenLastCalledWith('user-1', 'linear', {
+      forceRefresh: true,
+    });
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(2);
+    expect(mockBuildMcpToolCatalog.mock.calls[1]?.[0]).toMatchObject({
+      linear: { authProvider: { token: expect.any(Function) } },
+    });
+    await expectSdkBearerCredential(
+      (mockBuildMcpToolCatalog.mock.calls[1]?.[0] as Record<string, unknown>)['linear'],
+      'fresh',
+    );
+    expect(definitions.map((item) => item.qualifiedName)).toEqual(['mcp__linear__create_issue']);
+  });
+});
+
+describe('catalog refresh remains within the authorized account', () => {
+  it('does not move a rejected operation to a different account during refresh', async () => {
+    mockResolveAccessToken
+      .mockResolvedValueOnce({
+        status: 'ready',
+        accessToken: 'work-token',
+        tokenType: 'Bearer',
+        grantedScopes: ['read'],
+        accountKey: 'work',
+      })
+      .mockResolvedValueOnce({
+        status: 'ready',
+        accessToken: 'personal-token',
+        tokenType: 'Bearer',
+        grantedScopes: ['read'],
+        accountKey: 'personal',
+      });
+    mockBuildMcpToolCatalog.mockImplementation(async (_servers, _policy, options) => {
+      options?.onConnectionError?.('linear', unauthorized());
+      return failedCatalog('linear');
+    });
+
+    expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after the refreshed credential is also rejected', async () => {
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+      accountKey: 'work',
+    });
+    mockBuildMcpToolCatalog.mockImplementation(async (_servers, _policy, options) => {
+      options?.onConnectionError?.('linear', unauthorized());
+      return failedCatalog('linear');
+    });
+
+    expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(2);
+    expect(mockResolveAccessToken).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves the connection on a transient refresh failure without redialing', async () => {
+    mockResolveAccessToken
+      .mockResolvedValueOnce({
+        status: 'ready',
+        accessToken: 'token',
+        tokenType: 'Bearer',
+        grantedScopes: ['read'],
+        accountKey: 'work',
+      })
+      .mockResolvedValueOnce({ status: 'unreachable' });
+    mockBuildMcpToolCatalog.mockImplementation(async (_servers, _policy, options) => {
+      options?.onConnectionError?.('linear', unauthorized());
+      return failedCatalog('linear');
+    });
+
+    expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh or expand scopes for a forbidden catalog', async () => {
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+      accountKey: 'work',
+    });
+    mockBuildMcpToolCatalog.mockImplementation(async (_servers, _policy, options) => {
+      options?.onConnectionError?.(
+        'linear',
+        Object.assign(new Error('Bearer error="insufficient_scope", scope="write"'), {
+          status: 403,
+        }),
+      );
+      return failedCatalog('linear');
+    });
+
+    expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(1);
+    expect(mockResolveAccessToken).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('authenticates through the real SDK when the provider returns a lowercase bearer token type', async () => {
+  const actual = await vi.importActual<McpModule>('@agiworkforce/mcp');
+  const observedHeaders: string[] = [];
+  let providerReads = 0;
+  mockResolveAccessToken.mockResolvedValue({
+    status: 'ready',
+    accessToken: 'fixture-linear-access',
+    tokenType: 'bearer',
+    grantedScopes: ['read'],
+    accountKey: 'work',
+  });
+  mockConnectMcpServer.mockImplementation(
+    async (input: Parameters<McpModule['connectMcpServer']>[0]) =>
+      actual.connectMcpServer({
+        ...input,
+        egressPolicy: {
+          fetch: async (_url, init) => {
+            if (init?.method !== 'POST') return new Response(null, { status: 405 });
+            const authorization = new Headers(init.headers).get('authorization') ?? '';
+            observedHeaders.push(authorization);
+            if (authorization !== 'Bearer fixture-linear-access')
+              return Response.json({ error: 'invalid_token' }, { status: 401 });
+            const message = JSON.parse(String(init.body)) as {
+              id?: string | number;
+              method: string;
+              params?: { protocolVersion?: string };
+            };
+            if (message.id === undefined) return new Response(null, { status: 202 });
+            const reply = (result: unknown) =>
+              Response.json({ jsonrpc: '2.0', id: message.id, result });
+            if (message.method === 'server/discover')
+              return Response.json({
+                jsonrpc: '2.0',
+                id: message.id,
+                error: { code: -32601, message: 'Method not found' },
+              });
+            if (message.method === 'initialize')
+              return reply({
+                protocolVersion: message.params?.protocolVersion,
+                capabilities: { tools: {} },
+                serverInfo: { name: 'fixture-linear', version: '1.0.0' },
+              });
+            if (message.method === 'tools/list')
+              return reply({
+                tools: [{ name: 'whoami', inputSchema: { type: 'object', properties: {} } }],
+              });
+            if (message.method === 'tools/call') {
+              providerReads += 1;
+              return reply({ content: [{ type: 'text', text: 'verified current QA account' }] });
+            }
+            throw new Error('Unexpected fixture request');
+          },
+        },
+      }),
+  );
+
+  const result = await makeUserConnectorExecutor('user-1')('linear', 'whoami', {});
+  expect(result.isError).toBe(false);
+  expect(result.content).toContain('verified current QA account');
+  expect(providerReads).toBe(1);
+  expect(observedHeaders.length).toBeGreaterThan(2);
+  expect(observedHeaders.every((header) => header === 'Bearer fixture-linear-access')).toBe(true);
+});
+
+it('retains OAuth credentials when the MCP transport rejects an otherwise issued token', async () => {
+  const lock = vi
+    .spyOn(grantStore, 'withLockedConnectorOAuthGrant')
+    .mockRejectedValue(new Error('Unexpected credential revocation'));
+  mockResolveAccessToken.mockResolvedValue({
+    status: 'ready',
+    accessToken: 'fixture-access',
+    tokenType: 'Bearer',
+    grantedScopes: ['read'],
+    accountKey: 'work',
+  });
+  mockBuildMcpToolCatalog.mockImplementation(async (_servers, _policy, options) => {
+    options?.onConnectionError?.('linear', unauthorized());
+    return failedCatalog('linear');
+  });
+  try {
+    expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(2);
+    expect(lock).not.toHaveBeenCalled();
+  } finally {
+    lock.mockRestore();
+  }
 });

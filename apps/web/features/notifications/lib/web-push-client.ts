@@ -19,12 +19,27 @@ export function isWebPushSupported(): boolean {
     !isDesktopHost() &&
     'serviceWorker' in navigator &&
     'PushManager' in window &&
-    'Notification' in window
+    typeof window.Notification !== 'undefined'
   );
 }
 
 export function readNotificationPermission(): NotificationPermission | null {
   return isWebPushSupported() ? Notification.permission : null;
+}
+
+export function readBrowserNotificationPermission(): NotificationPermission | null {
+  return typeof window !== 'undefined' && typeof window.Notification !== 'undefined'
+    ? Notification.permission
+    : null;
+}
+
+export async function readNotificationWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!isWebPushSupported()) return null;
+  try {
+    return (await navigator.serviceWorker.getRegistration(SERVICE_WORKER_PATH)) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function registerNotificationWorker(): Promise<ServiceWorkerRegistration | null> {

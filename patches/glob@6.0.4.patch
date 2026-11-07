@@ -1,0 +1,32 @@
+diff --git a/glob.js b/glob.js
+index a62da27ebd507abfe2271653d15e7ad172fa7fe2..f5be4254067c71a40c32208805512afc40f40759 100644
+--- a/glob.js
++++ b/glob.js
+@@ -336 +336 @@ Glob.prototype._process = function (pattern, index, inGlobStar, cb) {
+-  else if (isAbsolute(prefix) || isAbsolute(pattern.join('/'))) {
++  else if (isAbsolute(prefix) || isAbsolute(pattern.map(function (p) { return typeof p === 'string' ? p : '[*]' }).join('/'))) {
+@@ -373 +373 @@ Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, in
+-  var rawGlob = pn._glob
++  var rawGlob = pn._glob || pn.pattern
+@@ -382 +382 @@ Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, in
+-        m = !e.match(pn)
++        m = !pn.test(e)
+@@ -384 +384 @@ Glob.prototype._processReaddir2 = function (prefix, read, abs, remain, index, in
+-        m = e.match(pn)
++        m = pn.test(e)
+diff --git a/sync.js b/sync.js
+index 09883d2ce0c9de83b33d3fe8bb35495cb7f996e7..3908cdfcfa61b70eb29445793625431891661983 100644
+--- a/sync.js
++++ b/sync.js
+@@ -113 +113 @@ GlobSync.prototype._process = function (pattern, index, inGlobStar) {
+-  else if (isAbsolute(prefix) || isAbsolute(pattern.join('/'))) {
++  else if (isAbsolute(prefix) || isAbsolute(pattern.map(function (p) { return typeof p === 'string' ? p : '[*]' }).join('/'))) {
+@@ -145 +145 @@ GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index,
+-  var rawGlob = pn._glob
++  var rawGlob = pn._glob || pn.pattern
+@@ -154 +154 @@ GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index,
+-        m = !e.match(pn)
++        m = !pn.test(e)
+@@ -156 +156 @@ GlobSync.prototype._processReaddir = function (prefix, read, abs, remain, index,
+-        m = e.match(pn)
++        m = pn.test(e)

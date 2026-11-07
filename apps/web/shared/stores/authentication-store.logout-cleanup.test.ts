@@ -4,10 +4,12 @@ vi.mock('@shared/lib/logger', () => ({
   logger: { auth: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('./layout-store', () => ({}));
+const publicationCleanupMocks = vi.hoisted(() => ({ reset: vi.fn() }));
+vi.mock('./layout-store', () => ({
+  useLayoutStore: { getState: () => ({ reset: publicationCleanupMocks.reset }) },
+}));
 vi.mock('./web-chat-store', () => ({}));
 vi.mock('./web-settings-store', () => ({}));
-vi.mock('./media-store', () => ({}));
 vi.mock('./model-store', () => ({}));
 vi.mock('./thinking-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
@@ -20,14 +22,102 @@ vi.mock('@/features/connectors/hooks/use-connectors', () => ({}));
 vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({}));
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
-import { cleanupAllStores } from './authentication-store';
+import { cleanupAllStores, useAuthStore } from './authentication-store';
+import { useMediaStore } from './media-store';
 import { authService } from '@shared/services/authentication-manager';
 import { FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY } from '@/features/chat/components/FreePlanTrainingNotice';
+
+import {
+  beginPublicationCleanup,
+  capturePublicationLease,
+  isPublicationLeaseCurrent,
+  usePublishedSitesStore,
+} from '@/features/sites/stores/published-sites-store';
+
+function openPublicationLease() {
+  const lease = capturePublicationLease();
+  if (!lease) throw new Error('Expected publication cleanup to have completed');
+  return lease;
+}
+
+const publicationDetails = {
+  shareUrl: 'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
+  visibility: 'public' as const,
+};
+
+const mediaOwner = {
+  userId: 'media-user',
+  sessionId: 'media-session',
+  isCurrent: () => true,
+  getToken: async () => 'media-token',
+};
 
 describe('sign-out storage sweep', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    useMediaStore.getState().reset();
+  });
+
+  it('clears actual media jobs and refuses resurrection by a late update', async () => {
+    const original = {
+      id: 'old-media-job',
+      type: 'image' as const,
+      prompt: 'private old prompt',
+      status: 'generating' as const,
+      createdAt: '2026-11-04T00:00:00.000Z',
+    };
+    for (const status of ['pending', 'generating', 'completed', 'failed'] as const) {
+      useMediaStore.getState().addJob(
+        {
+          ...original,
+          id: `${original.id}-${status}`,
+          status,
+          resultUrl: '/old-result',
+          errorMessage: 'old failure',
+        },
+        mediaOwner,
+      );
+    }
+    useMediaStore.getState().addJob(original, mediaOwner);
+    await cleanupAllStores();
+    expect(useMediaStore.getState().jobs).toEqual([]);
+
+    useMediaStore
+      .getState()
+      .addJob({ ...original, id: 'new-media-job', prompt: 'new prompt' }, mediaOwner);
+    useMediaStore
+      .getState()
+      .updateJob(original.id, { status: 'completed', resultUrl: '/old-image' });
+    expect(useMediaStore.getState().jobs).toEqual([
+      { ...original, id: 'new-media-job', prompt: 'new prompt', owner: mediaOwner },
+    ]);
+    expect(useMediaStore.getState().reset).toEqual(expect.any(Function));
+  });
+
+  it('synchronously clears media on cookie-absence resync without retiring SDK authority', async () => {
+    document.cookie = '__client_uat=; Max-Age=0; path=/';
+    document.cookie = '__session=; Max-Age=0; path=/';
+    useAuthStore.getState().reset();
+    const job = {
+      id: 'old-media-job',
+      type: 'image' as const,
+      prompt: 'old prompt',
+      status: 'generating' as const,
+      createdAt: '2026-11-04T00:00:00.000Z',
+    };
+    useMediaStore.getState().addJob(job, mediaOwner);
+
+    const resync = useAuthStore.getState().resyncSession();
+    expect(useMediaStore.getState().jobs).toEqual([]);
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+    expect(mediaOwner.isCurrent()).toBe(true);
+    useMediaStore.getState().addJob({ ...job, id: 'replacement' }, mediaOwner);
+    await resync;
+    useMediaStore.getState().updateJob(job.id, { status: 'completed', resultUrl: '/old-result' });
+    expect(useMediaStore.getState().jobs).toEqual([
+      { ...job, id: 'replacement', owner: mediaOwner },
+    ]);
   });
 
   it('removes the legacy APIClient bearer and refresh tokens', async () => {
@@ -106,5 +196,102 @@ describe('authService.logout', () => {
 
   it('is a no-op when Clerk has not loaded', async () => {
     await expect(authService.logout()).resolves.toEqual({ error: null });
+  });
+});
+
+describe('common cleanup publication boundary', () => {
+  beforeEach(() => {
+    publicationCleanupMocks.reset.mockReset();
+    beginPublicationCleanup()();
+  });
+
+  afterEach(() => {
+    publicationCleanupMocks.reset.mockReset();
+    beginPublicationCleanup()();
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'clears before its first await and stays closed during a %s module cleanup and its microtasks',
+    async (outcome) => {
+      const lease = openPublicationLease();
+      usePublishedSitesStore.getState().record('private-artifact', publicationDetails, lease);
+      const observed: Array<{
+        lease: ReturnType<typeof capturePublicationLease>;
+        accepted: boolean;
+      }> = [];
+      const observe = () =>
+        observed.push({
+          lease: capturePublicationLease(),
+          accepted: usePublishedSitesStore
+            .getState()
+            .record('late-artifact', publicationDetails, lease),
+        });
+      let deferredObservation: Promise<void> | undefined;
+      publicationCleanupMocks.reset.mockImplementation(() => {
+        observe();
+        deferredObservation = Promise.resolve().then(() => {
+          observe();
+        });
+        if (outcome === 'failure') throw new Error('Fixture store reset failed');
+        return deferredObservation;
+      });
+      const cleaning = cleanupAllStores();
+      try {
+        expect(capturePublicationLease()).toBeNull();
+        expect(isPublicationLeaseCurrent(lease)).toBe(false);
+        expect(usePublishedSitesStore.getState()).toMatchObject({
+          byArtifactId: {},
+          status: 'idle',
+        });
+        expect(usePublishedSitesStore.getState().hydrate([], lease)).toBe(false);
+        expect(usePublishedSitesStore.getState().forget('private-artifact', lease)).toBe(false);
+        await cleaning;
+        await deferredObservation;
+        expect(publicationCleanupMocks.reset).toHaveBeenCalledTimes(1);
+        expect(observed).toEqual([
+          { lease: null, accepted: false },
+          { lease: null, accepted: false },
+        ]);
+        const reopened = openPublicationLease();
+        expect(reopened).not.toBe(lease);
+        expect(
+          usePublishedSitesStore.getState().record('late-artifact', publicationDetails, lease),
+        ).toBe(false);
+        expect(
+          usePublishedSitesStore.getState().record('fresh-artifact', publicationDetails, reopened),
+        ).toBe(true);
+        expect(Object.keys(usePublishedSitesStore.getState().byArtifactId)).toEqual([
+          'fresh-artifact',
+        ]);
+      } finally {
+        await cleaning;
+        await deferredObservation;
+      }
+    },
+  );
+
+  it('does not reopen the common boundary while another cleanup remains active', async () => {
+    const lease = openPublicationLease();
+    let nestedFinish: (() => void) | undefined;
+    publicationCleanupMocks.reset.mockImplementation(() => {
+      nestedFinish = beginPublicationCleanup();
+    });
+    const cleaning = cleanupAllStores();
+    try {
+      expect(capturePublicationLease()).toBeNull();
+      await cleaning;
+      expect(capturePublicationLease()).toBeNull();
+      expect(
+        usePublishedSitesStore.getState().record('late-artifact', publicationDetails, lease),
+      ).toBe(false);
+      if (!nestedFinish) throw new Error('Nested cleanup did not start');
+      nestedFinish();
+      const reopened = openPublicationLease();
+      nestedFinish();
+      expect(openPublicationLease()).toBe(reopened);
+    } finally {
+      await cleaning;
+      nestedFinish?.();
+    }
   });
 });

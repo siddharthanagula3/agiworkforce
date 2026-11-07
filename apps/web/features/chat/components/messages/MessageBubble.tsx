@@ -23,6 +23,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
   Brain,
+  TriangleAlert,
   Check,
   BookOpen,
   CalendarClock,
@@ -98,6 +99,7 @@ import {
   type ArtifactManifest,
   type ComputeSession,
   type GeneratedFile,
+  type ImageCardBody,
   type ProjectFileCitation,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
@@ -117,12 +119,15 @@ import {
   useVoiceSessionStore,
 } from '@/features/chat/stores/voice-session-store';
 import { TranscriptNotice } from './TranscriptNotice';
+import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '../../lib/assistant-content-edit-contract';
 import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
 import {
   AgentActivityTimeline,
   BranchNavigator,
   CodeBlockEditorContext,
+  AnswerImageRendererContext,
+  type AnswerImageRenderer,
   getManagedModelPresentationLabel,
   hasCanonicalToolActivity,
   hasOpenApprovalDecision,
@@ -163,6 +168,7 @@ import {
   extractCodeBlocks,
   removeArtifactBlocks,
   splitProseAroundArtifacts,
+  isInlineVisualizationFence,
 } from '../../utils/artifact-detector';
 import {
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
@@ -192,6 +198,7 @@ import {
   isInputTurnLive,
   type ToolApprovalDecision,
 } from '@/lib/hooks/useChatStream';
+import { hasPendingMessageApproval } from '../../lib/pending-approval';
 import { ToolApprovalCard } from '../approvals/ToolApprovalCard';
 import { ConnectorInputRequestForm } from '@/features/connectors/components/ConnectorInputRequestForm';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
@@ -204,10 +211,18 @@ import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
-import { loadWorkbookSheets, pptxToSlidesMarkdown } from '../../lib/office-file-preview';
+import {
+  loadWorkbookSheets,
+  pptxToSlidesMarkdown,
+  PresentationPreviewLimitError,
+  PRESENTATION_PREVIEW_TOO_LARGE,
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
+import { ImageToolCard } from './cards/ImageToolCard';
 import { TurnPluginDraftCard } from '../PluginDraftCard';
 import {
   hasResponseRatingDetails,
@@ -245,7 +260,7 @@ import { ImageLightbox } from '../ImageLightbox';
 import { getImageModelLabel, type ImageAspectRatio } from '../../lib/imageGenerationOptions';
 import {
   editableDocumentFromReply,
-  hideSandboxChartImage,
+  groupGeneratedImageOutputs,
   imageCardModelId,
   interactiveCardsForTurn,
   logoConceptArtifact,
@@ -256,6 +271,12 @@ import { detectCardType } from '../cards';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
 import { MediaGenerationPlaceholder } from './MediaGenerationPlaceholder';
 import { EditableMessage } from './EditableMessage';
+import {
+  countEditableAssistantFences,
+  collectInlineImageSources,
+  imageResourceKey,
+  type AssistantFenceEdit,
+} from '@agiworkforce/unified-chat/assistant-fence-edits';
 
 /**
  * Inline user-message editing.
@@ -516,6 +537,7 @@ interface Message {
     streamError?: StoreMessageMetadata['streamError'];
     /** The run a Task feedback report is filed against. */
     cloudAgentRun?: StoreMessageMetadata['cloudAgentRun'];
+    cloudApproval?: StoreMessageMetadata['cloudApproval'];
     isPinned?: boolean;
     requestId?: string;
     tokensUsed?: number;
@@ -642,10 +664,12 @@ interface Message {
      * richer than what a reload will show, and the notice below says so.
      */
     metadataNotSaved?: true;
+    contentSaveConflict?: boolean;
   };
 }
 
-const INTERRUPTED_ARTIFACT_NOTICE = 'This artifact stopped before it finished.';
+const INTERRUPTED_ARTIFACT_NOTICE =
+  'This artifact was saved from a partial response. It may not include later output.';
 const ARTIFACT_PROSE_SLOT = '\u2063agi-artifact-slot\u2063';
 const INTERRUPTED_ARTIFACT_ACTION = 'Regenerate';
 
@@ -657,6 +681,7 @@ export interface RegenerateModelOption {
 interface MessageBubbleProps {
   message: Message;
   onEdit?: (messageId: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   onRegenerate?: (messageId: string) => void;
   /**
    * Re-run a Deep Research turn that errored or was stopped.
@@ -704,6 +729,7 @@ interface MessageBubbleProps {
   isReadingAloud?: boolean;
   /** Keeps an unavailable browser capability out of the action row. */
   isReadAloudSupported?: boolean;
+  readAloudUnavailableReason?: string | null;
   isLatestTurn?: boolean;
   /**
    * Why this turn failed, and what to do about it. Both ride on the run's own
@@ -748,6 +774,7 @@ interface MessageBubbleProps {
 const MessageBubbleComponent = function MessageBubble({
   message,
   onEdit,
+  onFenceEdit,
   onRegenerate,
   onRetryResearch,
   onResearchPlanDecision,
@@ -764,6 +791,7 @@ const MessageBubbleComponent = function MessageBubble({
   onReadAloud,
   isReadingAloud = false,
   isReadAloudSupported = false,
+  readAloudUnavailableReason,
   isLatestTurn = false,
   turnFailureReason,
   turnFailureActions,
@@ -780,6 +808,15 @@ const MessageBubbleComponent = function MessageBubble({
   onFollowUp,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyFeedbackMounted = useRef(true);
+  useEffect(() => {
+    copyFeedbackMounted.current = true;
+    return () => {
+      copyFeedbackMounted.current = false;
+      if (copyFeedbackTimer.current !== null) clearTimeout(copyFeedbackTimer.current);
+    };
+  }, []);
   const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useState(false);
   // D-2026-09-05-06. A receipt, not an alert: Auto moved off this
   // conversation's model, so the turn says so once and stays put.
@@ -961,6 +998,7 @@ const MessageBubbleComponent = function MessageBubble({
   // below would render live-wired but silently no-op (Finding 1). Only
   // meaningful when a resolver context exists at all -- a standalone render
   // with no provider isn't "expired", it just never had approval wired.
+  const awaitingApproval = hasPendingMessageApproval(message);
   const approvalTurnExpired = Boolean(resolveToolApproval) && !isApprovalTurnLive(message.id);
   const handleToolDecision = useCallback(
     (toolCallId: string, decision: ToolApprovalDecision) => {
@@ -1456,6 +1494,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (isUser) return null;
     const block = extractTrailingUnclosedBlock(message.content, messageCodeBlocks);
     if (!block) return null;
+    if (isInlineVisualizationFence(block.language, block.content)) return null;
     const renderable =
       artifactDerivationPolicy === EXPLICIT_ARTIFACT_DERIVATION_POLICY
         ? isExplicitlyRenderableArtifact(block.language, block.content)
@@ -1483,6 +1522,27 @@ const MessageBubbleComponent = function MessageBubble({
   const generatedFiles = useMemo<GeneratedFileMetadataEntry[]>(
     () => (isUser ? [] : (message.metadata?.generatedFiles ?? [])),
     [isUser, message.metadata?.generatedFiles],
+  );
+  const generatedImageOutputs = useMemo(
+    () => groupGeneratedImageOutputs(generatedFiles),
+    [generatedFiles],
+  );
+  const inlineGeneratedImageIds = useMemo(() => {
+    if (!generatedFiles.some((file) => file.kind === 'image')) return new Set<string>();
+    const sources = new Set(collectInlineImageSources(message.content));
+    if (message.metadata?.toolType === 'image-generation' && message.metadata.imageUrl) {
+      const key = imageResourceKey(message.metadata.imageUrl);
+      if (key) sources.add(key);
+    }
+    return new Set(
+      generatedFiles
+        .filter((file) => file.kind === 'image' && sources.has(imageResourceKey(file.uri)))
+        .map((file) => file.id),
+    );
+  }, [generatedFiles, message.content, message.metadata?.toolType, message.metadata?.imageUrl]);
+  const duplicateGeneratedImageIds = useMemo(
+    () => new Set(generatedImageOutputs.aliases.map((file) => file.id)),
+    [generatedImageOutputs],
   );
 
   // Fetched source text per generated-file id; 'error' → honest chip fallback.
@@ -1518,9 +1578,9 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [generatedFiles, generatedTextContent]);
 
-  const [officePreviews, setOfficePreviews] = useState<Record<string, string | { failed: true }>>(
-    {},
-  );
+  const [officePreviews, setOfficePreviews] = useState<
+    Record<string, string | { failed: true; tooLarge: boolean }>
+  >({});
   useEffect(() => {
     const pending = generatedFiles.filter(
       (f) =>
@@ -1542,8 +1602,17 @@ const MessageBubbleComponent = function MessageBubble({
         .then((preview) => {
           if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: preview }));
         })
-        .catch(() => {
-          if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: { failed: true } }));
+        .catch((error: unknown) => {
+          if (!cancelled)
+            setOfficePreviews((prev) => ({
+              ...prev,
+              [file.id]: {
+                failed: true,
+                tooLarge:
+                  error instanceof WorkbookPreviewLimitError ||
+                  error instanceof PresentationPreviewLimitError,
+              },
+            }));
         });
     }
     return () => {
@@ -1611,6 +1680,7 @@ const MessageBubbleComponent = function MessageBubble({
     // addressable in the artifact panel.
     for (const f of generatedFiles) {
       if (f.kind === 'image') {
+        if (duplicateGeneratedImageIds.has(f.id)) continue;
         out.push({
           id: generatedFileArtifactId(f.id),
           type: 'image',
@@ -1698,6 +1768,7 @@ const MessageBubbleComponent = function MessageBubble({
     generatedTextContent,
     officePreviews,
     generatedFileRecords,
+    duplicateGeneratedImageIds,
   ]);
 
   const artifacts = useMemo(() => {
@@ -1709,7 +1780,14 @@ const MessageBubbleComponent = function MessageBubble({
     // SharedArtifacts intentionally omit web-only generated-file provenance,
     // so a reload must also enrich the matching persisted entry with the
     // freshly reconstructed side-map fields instead of discarding them.
-    const merged = [...baseArtifacts];
+    const duplicateImageArtifactSources = new Map(
+      generatedImageOutputs.aliases.map((file) => [generatedFileArtifactId(file.id), file.uri]),
+    );
+    const merged = baseArtifacts.filter(
+      (artifact) =>
+        artifact.type !== 'image' ||
+        duplicateImageArtifactSources.get(artifact.id) !== artifact.content,
+    );
     for (const artifact of generatedFileArtifacts) {
       const existingIndex = merged.findIndex((existing) => existing.id === artifact.id);
       if (existingIndex === -1) {
@@ -1749,7 +1827,13 @@ const MessageBubbleComponent = function MessageBubble({
       }
     }
     return merged;
-  }, [visibleExistingArtifacts, extractedArtifacts, generatedFileArtifacts, generatedFileRecords]);
+  }, [
+    visibleExistingArtifacts,
+    extractedArtifacts,
+    generatedFileArtifacts,
+    generatedFileRecords,
+    generatedImageOutputs.aliases,
+  ]);
 
   // Generated files rendered through the EXISTING attachment grid: images get
   // the thumbnail + ImageLightbox path; descriptors without a successfully
@@ -1763,13 +1847,13 @@ const MessageBubbleComponent = function MessageBubble({
     return generatedFiles.filter((file) => {
       if (
         file.kind === 'image' &&
-        hideSandboxChartImage(file.fileName, message.content, artifacts)
+        (duplicateGeneratedImageIds.has(file.id) || inlineGeneratedImageIds.has(file.id))
       ) {
         return false;
       }
       return file.kind === 'image' || !artifactFileIds.has(file.id);
     });
-  }, [generatedFiles, artifacts, message.content]);
+  }, [generatedFiles, artifacts, duplicateGeneratedImageIds, inlineGeneratedImageIds]);
 
   const generatedFileAttachments = useMemo<Attachment[]>(
     () =>
@@ -1785,10 +1869,21 @@ const MessageBubbleComponent = function MessageBubble({
     [unprojectedGeneratedFiles],
   );
 
-  const deliverables = useMemo<GeneratedFileMetadataEntry[]>(
-    () => unprojectedGeneratedFiles.filter((file) => file.kind !== 'image'),
-    [unprojectedGeneratedFiles],
-  );
+  const deliverables = useMemo<GeneratedFileMetadataEntry[]>(() => {
+    const unprojectedIds = new Set(
+      unprojectedGeneratedFiles.filter((file) => file.kind !== 'image').map((file) => file.id),
+    );
+    return generatedFiles.filter((file) =>
+      file.kind === 'image'
+        ? duplicateGeneratedImageIds.has(file.id) || inlineGeneratedImageIds.has(file.id)
+        : unprojectedIds.has(file.id),
+    );
+  }, [
+    unprojectedGeneratedFiles,
+    generatedFiles,
+    duplicateGeneratedImageIds,
+    inlineGeneratedImageIds,
+  ]);
 
   const displayAttachments = useMemo<Attachment[]>(
     () => [...(message.attachments ?? []), ...generatedFileAttachments],
@@ -1818,8 +1913,20 @@ const MessageBubbleComponent = function MessageBubble({
   // Keep their artifact projection panel-only so the message does not render a
   // second, visually redundant "Open artifact" card beneath the same image.
   const inlineArtifacts = useMemo(
-    () => artifacts.filter((artifact) => artifact.type !== 'image'),
-    [artifacts],
+    () =>
+      artifacts.filter(
+        (artifact) =>
+          artifact.type !== 'image' &&
+          !(
+            isInlineVisualizationFence(artifact.language, artifact.content) &&
+            messageCodeBlocks.some(
+              (block) =>
+                block.language.toLowerCase() === artifact.language?.toLowerCase() &&
+                block.content.trim() === artifact.content.trim(),
+            )
+          ),
+      ),
+    [artifacts, messageCodeBlocks],
   );
   const createdArtifacts = useMemo(
     () => inlineArtifacts.filter((artifact) => !artifact.generatedFile && !artifact.interrupted),
@@ -1830,8 +1937,9 @@ const MessageBubbleComponent = function MessageBubble({
     [inlineArtifacts],
   );
   const handleRegenerateInterruptedArtifact = useCallback(() => {
+    if (awaitingApproval) return;
     onRegenerate?.(message.id);
-  }, [onRegenerate, message.id]);
+  }, [awaitingApproval, onRegenerate, message.id]);
 
   useEffect(() => {
     if (artifactDerivationPolicy !== EXPLICIT_ARTIFACT_DERIVATION_POLICY) return;
@@ -1998,19 +2106,75 @@ const MessageBubbleComponent = function MessageBubble({
     searchSources.length,
     citationsByMarker,
   ]);
+  const handleFenceEdit = useMemo(
+    () =>
+      !isUser && onFenceEdit
+        ? (edit: AssistantFenceEdit) => onFenceEdit(message.id, edit)
+        : undefined,
+    [isUser, onFenceEdit, message.id],
+  );
+  const trailingFenceIndexOffset = useMemo(
+    () => (trailingProse ? countEditableAssistantFences(leadProse) : 0),
+    [leadProse, trailingProse],
+  );
 
   const interactiveCards = useMemo(
     () =>
       interactiveCardsForTurn(message.metadata?.interactiveCards ?? [], Boolean(turnFailureReason)),
     [message.metadata?.interactiveCards, turnFailureReason],
   );
+  const inlineToolImages = useMemo(() => {
+    const images = new Map<string, { cardId: string; assetId: string; body: ImageCardBody }>();
+    if (!interactiveCards.some((card) => card.recognized && card.kind === 'image.v1'))
+      return images;
+    const sources = collectInlineImageSources(cleanedContent, 'gallery');
+    for (const card of interactiveCards) {
+      if (!card.recognized || card.kind !== 'image.v1') continue;
+      for (const image of card.body.images) {
+        const key = imageResourceKey(image.url);
+        if (key && sources.has(key))
+          images.set(key, {
+            cardId: card.cardId,
+            assetId: image.assetId,
+            body: { ...card.body, images: [image] },
+          });
+      }
+    }
+    return images;
+  }, [interactiveCards, cleanedContent]);
+  const renderInlineToolImage = useCallback<AnswerImageRenderer>(
+    ({ src }) => {
+      const image = inlineToolImages.get(imageResourceKey(src));
+      return image ? (
+        <div data-image-tool-card={image.cardId} data-image-asset={image.assetId}>
+          <ImageToolCard body={image.body} />
+        </div>
+      ) : undefined;
+    },
+    [inlineToolImages],
+  );
+  const separateInteractiveCards = useMemo(
+    () =>
+      interactiveCards.flatMap((card): InteractiveCard[] => {
+        if (!card.recognized || card.kind !== 'image.v1') return [card];
+        const images = card.body.images.filter(
+          (image) => !inlineToolImages.has(imageResourceKey(image.url)),
+        );
+        return images.length === card.body.images.length
+          ? [card]
+          : images.length
+            ? [{ ...card, body: { ...card.body, images } }]
+            : [];
+      }),
+    [interactiveCards, inlineToolImages],
+  );
   const leadingInteractiveCards = useMemo(
-    () => interactiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
-    [interactiveCards],
+    () => separateInteractiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
+    [separateInteractiveCards],
   );
   const trailingInteractiveCards = useMemo(
-    () => interactiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
-    [interactiveCards],
+    () => separateInteractiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
+    [separateInteractiveCards],
   );
 
   /**
@@ -2051,7 +2215,7 @@ const MessageBubbleComponent = function MessageBubble({
    * nothing to show. Retry already lives in the action bar underneath.
    */
   const producedNoVisibleOutput = useMemo(() => {
-    if (isUser || message.isStreaming) return false;
+    if (isUser || message.isStreaming || awaitingApproval) return false;
     if (message.metadata?.finishReason === 'stopped') return false;
     // A turn holding an approval has not finished, and Regenerate is the wrong
     // instruction for it: it abandons the decision and repeats the same stop.
@@ -2089,6 +2253,7 @@ const MessageBubbleComponent = function MessageBubble({
     );
   }, [
     isUser,
+    awaitingApproval,
     asksForInput,
     message.isStreaming,
     message.metadata,
@@ -2103,9 +2268,14 @@ const MessageBubbleComponent = function MessageBubble({
     await navigator.clipboard.writeText(
       isUser ? message.content : richBlocksAsPlainText(message.content),
     );
+    if (!copyFeedbackMounted.current) return;
     setCopied(true);
     toast.success('Copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
+    if (copyFeedbackTimer.current !== null) clearTimeout(copyFeedbackTimer.current);
+    copyFeedbackTimer.current = setTimeout(() => {
+      copyFeedbackTimer.current = null;
+      if (copyFeedbackMounted.current) setCopied(false);
+    }, 2000);
   }, [isUser, message.content]);
 
   const handleShare = useCallback(async () => {
@@ -2232,21 +2402,18 @@ const MessageBubbleComponent = function MessageBubble({
           : undefined) ?? imageCardModelId(message.metadata?.interactiveCards),
       )
     : null;
-  const answeredByChipLabel = generatedImageLabel
-    ? generatedImageLabel
-    : answeredByLabel
-      ? isAutoModeModelId(message.metadata?.requestedModel)
-        ? `Auto chose ${answeredByLabel}`
-        : answeredByLabel
-      : undefined;
+  const answeredByChipLabel = answeredByLabel
+    ? isAutoModeModelId(message.metadata?.requestedModel)
+      ? `Auto chose ${answeredByLabel}`
+      : answeredByLabel
+    : undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
     !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
-  // The turn's SSE connection stays open while a decision is outstanding, so
-  // `isStreaming` remains true although nothing is being written.
   const pausedForDecision =
     !isUser &&
-    (canonicalActivity?.status === 'awaiting-approval' ||
+    (awaitingApproval ||
+      canonicalActivity?.status === 'awaiting-approval' ||
       Boolean(
         message.metadata?.tools?.some(
           (tool) =>
@@ -2307,7 +2474,7 @@ const MessageBubbleComponent = function MessageBubble({
   // result on a question that was never about the web is noise with a Retry
   // attached.
   const searchNotice = useMemo<'no-results' | 'not-invoked' | 'memory-grounded' | null>(() => {
-    if (isUser || message.isStreaming) return null;
+    if (isUser || message.isStreaming || awaitingApproval) return null;
     if (message.metadata?.webSearchRequested !== true) return null;
     if (producedNoVisibleOutput) return null;
     if (rendersResearchPlan(message.metadata?.research)) return null;
@@ -2324,6 +2491,7 @@ const MessageBubbleComponent = function MessageBubble({
     return searchSources.length > 0 ? null : 'no-results';
   }, [
     isUser,
+    awaitingApproval,
     message.isStreaming,
     message.metadata,
     canonicalActivity,
@@ -2687,7 +2855,7 @@ const MessageBubbleComponent = function MessageBubble({
               !media ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <AgiMark size={16} spinning />
-                  <span className="text-sm">Thinking...</span>
+                  <span className="text-sm">Generating response…</span>
                 </div>
               ) : producedNoVisibleOutput ? (
                 <TranscriptNotice
@@ -2718,8 +2886,14 @@ const MessageBubbleComponent = function MessageBubble({
                         literalHtml={isUser}
                         onFollowUp={onFollowUp}
                         footnoteScope={`${message.id}lead`}
+                        onFenceEdit={handleFenceEdit}
                       />
                     </CodeBlockEditorContext.Provider>
+                  );
+                  const richMarkdown = (
+                    <AnswerImageRendererContext.Provider value={renderInlineToolImage}>
+                      {markdown}
+                    </AnswerImageRendererContext.Provider>
                   );
                   return (
                     <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
@@ -2729,10 +2903,10 @@ const MessageBubbleComponent = function MessageBubble({
                           cardType={formatCardType}
                           messageId={message.id}
                         >
-                          {markdown}
+                          {richMarkdown}
                         </MessageFormatCard>
                       ) : (
-                        markdown
+                        richMarkdown
                       )}
                     </StreamAnnouncer>
                   );
@@ -2953,6 +3127,19 @@ const MessageBubbleComponent = function MessageBubble({
             </p>
           )}
 
+          {!isUser &&
+            generatedFiles.map((file) => {
+              const preview = officePreviews[file.id];
+              return typeof preview === 'object' && preview.tooLarge ? (
+                <p key={file.id} role="status" className="mt-2 text-sm text-muted-foreground">
+                  {file.fileName}:{' '}
+                  {file.kind === 'pptx'
+                    ? PRESENTATION_PREVIEW_TOO_LARGE
+                    : WORKBOOK_PREVIEW_TOO_LARGE}
+                </p>
+              ) : null;
+            })}
+
           {deliverables.length > 0 && (
             <div
               data-testid="deliverable-cards"
@@ -3007,34 +3194,35 @@ const MessageBubbleComponent = function MessageBubble({
               data-testid="message-trailing-prose"
               className="prose dark:prose-invert message-text mt-3 max-w-none wrap-anywhere text-start"
             >
-              {proseIsStreaming ? (
-                <StreamingMarkdownContent
-                  content={trailingProse}
-                  isStreaming
-                  citations={citationsByMarker}
-                  trustedImageUrls={trustedImageUrls}
-                  announce={false}
-                  onFollowUp={onFollowUp}
-                  footnoteScope={`${message.id}tail`}
-                />
-              ) : (
-                <CodeBlockEditorContext.Provider value={openCodeBlockInEditor}>
-                  <MarkdownContent
+              <AnswerImageRendererContext.Provider value={renderInlineToolImage}>
+                {proseIsStreaming ? (
+                  <StreamingMarkdownContent
                     content={trailingProse}
-                    citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                    isStreaming
+                    citations={citationsByMarker}
                     trustedImageUrls={trustedImageUrls}
-                    linkifyNumericCitations={canLinkNumericCitations}
+                    announce={false}
                     onFollowUp={onFollowUp}
                     footnoteScope={`${message.id}tail`}
                   />
-                </CodeBlockEditorContext.Provider>
-              )}
+                ) : (
+                  <CodeBlockEditorContext.Provider value={openCodeBlockInEditor}>
+                    <MarkdownContent
+                      content={trailingProse}
+                      citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                      trustedImageUrls={trustedImageUrls}
+                      linkifyNumericCitations={canLinkNumericCitations}
+                      onFollowUp={onFollowUp}
+                      footnoteScope={`${message.id}tail`}
+                      onFenceEdit={handleFenceEdit}
+                      fenceIndexOffset={trailingFenceIndexOffset}
+                    />
+                  </CodeBlockEditorContext.Provider>
+                )}
+              </AnswerImageRendererContext.Provider>
             </div>
           )}
 
-          {/* A stopped turn leaves a partial artifact on the card above. The
-              card looks the same as a finished one, so the transcript has to
-              say which it is and offer the way to a whole document. */}
           {!isUser && hasInterruptedArtifact && (
             <div
               className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2"
@@ -3045,8 +3233,12 @@ const MessageBubbleComponent = function MessageBubble({
               }}
               data-testid="interrupted-artifact-notice"
             >
-              <span className="min-w-0 text-xs">{INTERRUPTED_ARTIFACT_NOTICE}</span>
-              {onRegenerate && (
+              <span className="min-w-0 text-xs">
+                {awaitingApproval
+                  ? 'This saved artifact is partial. The response awaits approval, and this copy may not include later output.'
+                  : INTERRUPTED_ARTIFACT_NOTICE}
+              </span>
+              {onRegenerate && !awaitingApproval && (
                 <button
                   type="button"
                   onClick={handleRegenerateInterruptedArtifact}
@@ -3376,7 +3568,10 @@ const MessageBubbleComponent = function MessageBubble({
           )}
 
           {!isUser && !message.isStreaming && searchSources.length > 0 && (
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex items-center justify-end gap-2">
+              {awaitingApproval && (
+                <span className="text-xs text-muted-foreground">Sources so far</span>
+              )}
               <SourcesControl
                 messageId={message.id}
                 cited={citedSources}
@@ -3387,17 +3582,50 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {!isUser && <StreamPhaseNotice messageId={message.id} />}
-
-          {!isUser && message.metadata?.metadataNotSaved && (
+          {awaitingApproval && (
             <div className="mt-2">
               <TranscriptNotice
+                role="status"
                 tone="neutral"
                 icon={CircleAlert}
-                message="The tool steps and reasoning shown here were not saved. The answer and its sources will still be here after a reload; the rest of this turn will not."
+                message={
+                  approvalTurnExpired
+                    ? 'This response is partial. The approval request can no longer be resumed; send a new message to try again.'
+                    : 'Waiting for approval. This response is partial; review the tool request to continue.'
+                }
               />
             </div>
           )}
+
+          {!isUser && <StreamPhaseNotice messageId={message.id} />}
+
+          {!isUser && message.metadata?.contentSaveConflict && (
+            <div className="mt-2">
+              <TranscriptNotice
+                tone="danger"
+                role="alert"
+                icon={TriangleAlert}
+                message={ASSISTANT_CONTENT_CHANGED_MESSAGE}
+                action={{
+                  label: 'Reopen saved chat',
+                  ariaLabel: 'Reopen saved chat',
+                  onClick: () => window.location.reload(),
+                }}
+              />
+            </div>
+          )}
+
+          {!isUser &&
+            message.metadata?.metadataNotSaved &&
+            !message.metadata.contentSaveConflict && (
+              <div className="mt-2">
+                <TranscriptNotice
+                  tone="neutral"
+                  icon={CircleAlert}
+                  message="The tool steps and reasoning shown here were not saved. The answer and its sources will still be here after a reload; the rest of this turn will not."
+                />
+              </div>
+            )}
 
           {searchNotice && (
             <div className="mt-2">
@@ -3448,7 +3676,7 @@ const MessageBubbleComponent = function MessageBubble({
               <div
                 data-testid="message-action-row"
                 className={cn(
-                  'flex flex-nowrap items-center gap-1 transition-opacity',
+                  'flex min-w-0 max-w-full flex-wrap items-center gap-1 transition-opacity',
                   ACTION_ROW_MIN_HEIGHT,
                   isUser || !isLatestTurn
                     ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100'
@@ -3615,6 +3843,7 @@ const MessageBubbleComponent = function MessageBubble({
                     {!isUser && variantPager}
 
                     {!isUser &&
+                      !awaitingApproval &&
                       !voiceModeActive &&
                       onRegenerate &&
                       message.metadata?.toolType !== 'image-generation' &&
@@ -3729,6 +3958,7 @@ const MessageBubbleComponent = function MessageBubble({
                         {!isUser && hasReadableTurn && isReadAloudSupported && onReadAloud && (
                           <DropdownMenuCheckboxItem
                             checked={isReadingAloud}
+                            disabled={Boolean(readAloudUnavailableReason)}
                             onCheckedChange={() => onReadAloud(message.id, message.content)}
                           >
                             {isReadingAloud ? (
@@ -3736,7 +3966,8 @@ const MessageBubbleComponent = function MessageBubble({
                             ) : (
                               <Volume2 className="me-2 h-4 w-4" aria-hidden="true" />
                             )}
-                            {isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
+                            {readAloudUnavailableReason ??
+                              (isReadingAloud ? 'Stop reading message' : 'Read message aloud')}
                           </DropdownMenuCheckboxItem>
                         )}
                         {onPin && (
@@ -3870,9 +4101,7 @@ const MessageBubbleComponent = function MessageBubble({
                   data-testid="message-answered-by"
                   className={cn(
                     'max-w-full truncate text-caption leading-tight text-[var(--chat-text-muted)]',
-                    generatedImageLabel
-                      ? undefined
-                      : 'opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
+                    'opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
                   )}
                 >
                   {answeredByChipLabel}
@@ -3993,6 +4222,7 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.thinkingSegments === next?.thinkingSegments &&
     prev?.thinkingSteps === next?.thinkingSteps &&
     prev?.agentActivity === next?.agentActivity &&
+    prev?.cloudApproval === next?.cloudApproval &&
     prev?.research === next?.research &&
     prev?.agiWorkPlan === next?.agiWorkPlan &&
     prev?.agiWorkPlanReview === next?.agiWorkPlanReview &&
@@ -4028,6 +4258,7 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.sendReplay === next?.sendReplay &&
     prev?.mcpContext === next?.mcpContext &&
     prev?.metadataNotSaved === next?.metadataNotSaved &&
+    prev?.contentSaveConflict === next?.contentSaveConflict &&
     prev?.secretRedactionCount === next?.secretRedactionCount &&
     prev?.truncatedAttachments === next?.truncatedAttachments &&
     toolEntriesEqual(prev?.tools, next?.tools)
@@ -4072,6 +4303,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
 
   // Check callback references (they should be memoized by parent)
   if (prev.onEdit !== next.onEdit) return false;
+  if (prev.onFenceEdit !== next.onFenceEdit) return false;
   if (prev.onRegenerate !== next.onRegenerate) return false;
   if (prev.onDelete !== next.onDelete) return false;
   if (prev.onDeleteVariant !== next.onDeleteVariant) return false;
@@ -4080,6 +4312,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onReact !== next.onReact) return false;
   if (prev.onBranch !== next.onBranch) return false;
   if (prev.onReadAloud !== next.onReadAloud) return false;
+  if (prev.readAloudUnavailableReason !== next.readAloudUnavailableReason) return false;
   if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;

@@ -291,3 +291,25 @@ export async function removeScheduledTaskRunJournal(
 }
 
 export const SCHEDULED_TASK_RUN_STORAGE_KEY = STORAGE_KEY;
+
+/** Refund only this serialized, pre-execution policy deferral, never newer work. */
+export async function restoreDeferredScheduledRecoveryAttempt(
+  before: ScheduledTaskRunJournal,
+  isCurrent: () => boolean,
+): Promise<void> {
+  return mutate(async (store) => {
+    const current = store.runs.find(
+      (run) => run.taskId === before.taskId && run.requestId === before.requestId,
+    );
+    if (
+      !isCurrent() ||
+      !current ||
+      current.cancellationPending ||
+      current.recoveryAttempts !== before.recoveryAttempts + 1
+    )
+      return;
+    current.recoveryAttempts = before.recoveryAttempts;
+    current.updatedAt = Date.now();
+    await writeStore(store);
+  });
+}

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { Button, Checkbox, Label, Spinner } from '@agiworkforce/ui';
 import type { ManagedCloudScheduleSources } from '@agiworkforce/cloud-contracts';
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import { connectorsReleased } from '@agiworkforce/types';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 
@@ -132,7 +132,9 @@ export function ScheduleAccessFields({
             toggleConnector={toggleConnector}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">{CONNECTORS_COMING_SOON_MESSAGE}</p>
+          <p className="text-sm text-muted-foreground">
+            Connectors for scheduled runs are coming soon.
+          </p>
         )}
       </fieldset>
     </section>

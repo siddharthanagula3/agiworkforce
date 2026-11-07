@@ -211,6 +211,7 @@ export interface GeneratedFileMetadataEntry {
   kind: string;
   /** SHA-256 of the stored bytes (integrity verification across surfaces). */
   checksumSha256?: string;
+  renderIdentity?: string;
   /** Server-owned UI classification: editable/renderable source vs byte deliverable. */
   surface?: 'artifact' | 'file';
   /** Whether the owning surface can offer an inline preview for this descriptor. */
@@ -218,6 +219,8 @@ export interface GeneratedFileMetadataEntry {
 }
 
 export interface MessageMetadata {
+  contentSaveConflict?: boolean;
+  assistantContentEdit?: string;
   artifactDerivation?: ArtifactDerivationPolicy;
   /**
    * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off
@@ -704,6 +707,7 @@ interface ChatState {
    * packages/ui/unified-chat/src/stores/chatStore.ts.
    */
   draftsByConversation: Record<string, string>;
+  draftOwnersByConversation: Record<string, object>;
   /** Live draft for the ACTIVE conversation (derived from the map above). */
   draftContent: string;
   /** Failed sends waiting behind newer live text in the same conversation. */
@@ -1002,6 +1006,7 @@ const initialState = {
   selectedModel: 'auto',
   selectedModelTier: 'balanced' as ModelTier,
   draftsByConversation: {} as Record<string, string>,
+  draftOwnersByConversation: {} as Record<string, object>,
   draftContent: '',
   deferredUnsentDraftsByConversation: {} as Record<string, string>,
   parkedSendsByFingerprint: {} as Record<string, string>,
@@ -1283,6 +1288,8 @@ export const useChatStore = create<ChatState>()(
               // send options go with it, so a recreated id resurrects none.
               const { [id]: _removed, ...messagesByConversation } = state.messagesByConversation;
               const { [id]: _removedDraft, ...draftsByConversation } = state.draftsByConversation;
+              const { [id]: _removedDraftOwner, ...draftOwnersByConversation } =
+                state.draftOwnersByConversation;
               const { [id]: _removedToggles, ...composerTogglesByConversation } =
                 state.composerTogglesByConversation;
               // A recreated id must not resurrect a dead conversation's connector opt-outs.
@@ -1304,6 +1311,7 @@ export const useChatStore = create<ChatState>()(
               return {
                 conversations: state.conversations.filter((c) => c.id !== id),
                 draftsByConversation,
+                draftOwnersByConversation,
                 composerTogglesByConversation,
                 disabledConnectorIdsByConversation,
                 memoryDisabledByConversation,
@@ -1406,9 +1414,12 @@ export const useChatStore = create<ChatState>()(
               // placeholder key it is unreachable: every composer reads the
               // slot for the id it is rendering, which from here on is `toId`.
               const draftsByConversation = { ...state.draftsByConversation };
+              const draftOwnersByConversation = { ...state.draftOwnersByConversation };
               if (fromId in draftsByConversation) {
                 draftsByConversation[toId] = draftsByConversation[fromId] ?? '';
+                draftOwnersByConversation[toId] = {};
                 delete draftsByConversation[fromId];
+                delete draftOwnersByConversation[fromId];
               }
               const streamingConversationIds = state.streamingConversationIds.map((id) =>
                 id === fromId ? toId : id,
@@ -1422,6 +1433,7 @@ export const useChatStore = create<ChatState>()(
                 messagesByConversation,
                 activeLeafByConversation,
                 draftsByConversation,
+                draftOwnersByConversation,
                 streamingConversationIds,
                 loadingConversationIds,
                 activeConversationId,
@@ -1817,10 +1829,18 @@ export const useChatStore = create<ChatState>()(
                 conversationId === undefined ? state.activeConversationId : conversationId;
               const key = conversationKey(targetId);
               const draftsByConversation = { ...state.draftsByConversation };
+              const draftOwnersByConversation = { ...state.draftOwnersByConversation };
               if (content || targetId) draftsByConversation[key] = content;
               else delete draftsByConversation[key];
+              if (content || targetId) {
+                draftOwnersByConversation[key] =
+                  state.draftsByConversation[key] === content
+                    ? (state.draftOwnersByConversation[key] ?? {})
+                    : {};
+              } else delete draftOwnersByConversation[key];
               return {
                 draftsByConversation,
+                draftOwnersByConversation,
                 ...(key === conversationKey(state.activeConversationId)
                   ? { draftContent: content }
                   : {}),
@@ -1844,10 +1864,14 @@ export const useChatStore = create<ChatState>()(
                 conversationId === undefined ? state.activeConversationId : conversationId;
               const key = conversationKey(targetId);
               const draftsByConversation = { ...state.draftsByConversation };
+              const draftOwnersByConversation = { ...state.draftOwnersByConversation };
               if (targetId) draftsByConversation[key] = '';
               else delete draftsByConversation[key];
+              if (targetId) draftOwnersByConversation[key] = {};
+              else delete draftOwnersByConversation[key];
               return {
                 draftsByConversation,
+                draftOwnersByConversation,
                 ...(key === conversationKey(state.activeConversationId)
                   ? { draftContent: '' }
                   : {}),

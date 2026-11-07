@@ -1,5 +1,8 @@
+import { headers } from 'next/headers';
+import { NextRequest } from 'next/server';
+import { SITE_URL } from '@/lib/seo/site';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
+import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { SharedSessionViewer } from '@/features/chat/components/share/SharedSessionViewer';
@@ -27,9 +30,14 @@ async function readSessionForViewer(
   const publiclyVisible = await getPublicSharedSessionByToken(getNeonDb(), token).catch(() => null);
   if (publiclyVisible) return { session: publiclyVisible, sharedBy: null };
 
-  const scoped = await getCurrentUserRlsDb().catch(() => null);
+  const request = new NextRequest(new URL(`/share/${token}`, SITE_URL), {
+    headers: await headers(),
+  });
+  const scoped = await getCurrentCookieUserRlsDb(request).catch(() => null);
   if (!scoped) return null;
-  const session = await getOrgReadableSessionByToken(scoped.db, token).catch(() => null);
+  const session = await getOrgReadableSessionByToken(scoped.db, token, scoped.userId).catch(
+    () => null,
+  );
   if (!session) return null;
   const sharedBy =
     session.visibility === 'organization'

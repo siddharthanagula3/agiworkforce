@@ -471,14 +471,12 @@ function DangerZone() {
 
   const handleDelete = async () => {
     setDeleting(true);
+    setResult(null);
     setError(null);
     setWebAction(null);
     try {
       const outcome = await requestCloudAccountDeletion();
-      setResult(
-        outcome.message ??
-          'Your Cloud account deletion has been submitted. Local data on this device is untouched.',
-      );
+      setResult(outcome.message);
       setConfirmation('');
     } catch (caught) {
       const action = cloudWebActionFor(caught);
@@ -497,9 +495,10 @@ function DangerZone() {
     >
       <h3 className="text-h5 text-foreground">Delete Cloud account</h3>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-        Permanently removes your AGI Cloud account and its conversations, artifacts, memories, and
-        settings. Local Mode chats, files, and model keys stay on this device and are not part of
-        this request. This cannot be undone.
+        Schedules your AGI Cloud account and its conversations, artifacts, memories, and settings
+        for permanent deletion after a grace period. Cancel in your web account settings before the
+        grace period ends to keep your account. Local Mode chats, files, and model keys stay on this
+        device and are not part of this request. Once erasure begins, it cannot be undone.
       </p>
       {error ? (
         <p role="alert" className="mt-3 text-xs text-destructive">
@@ -533,7 +532,7 @@ function DangerZone() {
         aria-busy={deleting || undefined}
         onClick={() => void handleDelete()}
       >
-        {deleting ? 'Deleting…' : 'Delete my Cloud account'}
+        {deleting ? 'Scheduling deletion…' : 'Delete my Cloud account'}
       </button>
     </div>
   );

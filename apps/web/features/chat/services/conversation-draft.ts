@@ -5,6 +5,11 @@ import {
   managedCloudConversationPath,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  createRequestAuthority,
+  type RequestAuthority,
+  type SessionAuthority,
+} from '@/lib/identity/request-authority';
 
 export interface DraftConflict {
   kind: 'conflict';
@@ -12,29 +17,95 @@ export interface DraftConflict {
   theirsRevision: string | null;
 }
 
-export type DraftSaveResult = 'saved' | 'failed' | 'not_saved_yet' | DraftConflict;
+export type DraftSaveResult = 'saved' | 'failed' | 'not_saved_yet' | 'superseded' | DraftConflict;
 
-const observedDraftRevisions = new Map<string, string | null>();
+interface DraftSession {
+  session: SessionAuthority;
+  revisions: Map<string, string | null>;
+  revisionChoices: Map<string, { revision: string | null }>;
+  queues: Map<string, Promise<DraftSaveResult>>;
+  requests: Set<RequestAuthority>;
+}
+
+let draftSession: DraftSession | null = null;
+let draftAdmissionSession: SessionAuthority | null = null;
+const draftOwnerSessions = new WeakMap<object, SessionAuthority>();
+
+export function bindConversationDraftOwners(
+  session: SessionAuthority,
+  owners: Record<string, object>,
+): void {
+  if (!session.isCurrent()) return;
+  const previous = draftAdmissionSession;
+  if (
+    previous &&
+    (!previous.isCurrent() ||
+      previous.userId !== session.userId ||
+      previous.sessionId !== session.sessionId)
+  ) {
+    for (const owner of Object.values(owners)) {
+      if (!draftOwnerSessions.has(owner)) draftOwnerSessions.set(owner, previous);
+    }
+  }
+  draftAdmissionSession = session;
+  for (const owner of Object.values(owners)) {
+    if (!draftOwnerSessions.has(owner)) draftOwnerSessions.set(owner, session);
+  }
+}
+
+export function isConversationDraftOwnerCurrent(owner: object, session: SessionAuthority): boolean {
+  const original = draftOwnerSessions.get(owner);
+  return (
+    original?.userId === session.userId &&
+    original.sessionId === session.sessionId &&
+    original.isCurrent() &&
+    session.isCurrent()
+  );
+}
+
+function currentDraftSession(session: SessionAuthority): DraftSession | null {
+  if (!session.isCurrent()) return null;
+  if (
+    draftSession?.session.userId === session.userId &&
+    draftSession.session.sessionId === session.sessionId &&
+    draftSession.session.isCurrent()
+  )
+    return draftSession;
+  clearObservedConversationDraftRevisions();
+  draftSession = {
+    session,
+    revisions: new Map(),
+    revisionChoices: new Map(),
+    queues: new Map(),
+    requests: new Set(),
+  };
+  return draftSession;
+}
 
 export function observeConversationDraftRevision(
   conversationId: string,
   draftUpdatedAt: string | null | undefined,
+  session: SessionAuthority,
 ): void {
   if (draftUpdatedAt === undefined) return;
-  const observed = observedDraftRevisions.get(conversationId);
+  const owner = currentDraftSession(session);
+  if (!owner) return;
+  const observed = owner.revisions.get(conversationId);
   if (observed && (!draftUpdatedAt || Date.parse(draftUpdatedAt) < Date.parse(observed))) return;
-  observedDraftRevisions.set(conversationId, draftUpdatedAt);
+  owner.revisions.set(conversationId, draftUpdatedAt);
 }
 
 export function adoptConversationDraftRevision(
   conversationId: string,
   draftUpdatedAt: string | null,
+  session: SessionAuthority,
 ): void {
-  observedDraftRevisions.set(conversationId, draftUpdatedAt);
+  currentDraftSession(session)?.revisionChoices.set(conversationId, { revision: draftUpdatedAt });
 }
 
 export function clearObservedConversationDraftRevisions(): void {
-  observedDraftRevisions.clear();
+  for (const request of draftSession?.requests ?? []) request.retire();
+  draftSession = null;
 }
 
 /**
@@ -49,25 +120,61 @@ export function clearObservedConversationDraftRevisions(): void {
 export async function saveConversationDraft(
   conversationId: string,
   draft: string,
-  getAuthHeaders: () => Promise<HeadersInit>,
+  session: SessionAuthority,
+  canDispatch: () => boolean,
 ): Promise<DraftSaveResult> {
+  const owner = currentDraftSession(session);
+  if (!owner || !canDispatch()) return 'superseded';
+  const previous = owner.queues.get(conversationId) ?? Promise.resolve();
+  const queued = previous.then(() =>
+    writeConversationDraft(owner, conversationId, draft, canDispatch),
+  );
+  owner.queues.set(conversationId, queued);
+  void queued.finally(() => {
+    if (owner.queues.get(conversationId) === queued) owner.queues.delete(conversationId);
+  });
+  return queued;
+}
+
+async function writeConversationDraft(
+  owner: DraftSession,
+  conversationId: string,
+  draft: string,
+  canDispatch: () => boolean,
+): Promise<DraftSaveResult> {
+  const authority = createRequestAuthority(
+    owner.session,
+    () => draftSession === owner,
+    () => {
+      if (!canDispatch()) throw new DOMException('Draft owner changed', 'AbortError');
+    },
+  );
+  owner.requests.add(authority);
   try {
-    const headers = await addCsrfHeaders({
-      'Content-Type': 'application/json',
-      ...(await getAuthHeaders()),
-    });
-    const response = await fetch(managedCloudConversationPath(conversationId), {
+    authority.assertCurrent();
+    if (!canDispatch()) return 'superseded';
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    authority.assertCurrent();
+    const revisionChoice = owner.revisionChoices.get(conversationId);
+    const response = await authority.fetch(managedCloudConversationPath(conversationId), {
       method: 'PUT',
       headers,
       body: JSON.stringify({
         draft: draft.slice(0, MANAGED_CLOUD_MAX_DRAFT_LENGTH) || null,
-        draftUpdatedAt: observedDraftRevisions.get(conversationId) ?? null,
+        draftUpdatedAt: revisionChoice
+          ? revisionChoice.revision
+          : (owner.revisions.get(conversationId) ?? null),
       }),
     });
-    if (response.status === 409) return readDraftConflict(await response.json());
+    if (response.status === 409) {
+      const payload: unknown = await response.json();
+      authority.assertCurrent();
+      return readDraftConflict(payload);
+    }
     if (response.status === 404) return 'not_saved_yet';
     if (!response.ok) return 'failed';
     const payload: unknown = await response.json();
+    authority.assertCurrent();
     if (!payload || typeof payload !== 'object' || !('saved' in payload) || !payload.saved) {
       return 'failed';
     }
@@ -78,10 +185,16 @@ export async function saveConversationDraft(
     ) {
       return 'failed';
     }
-    observedDraftRevisions.set(conversationId, draftUpdatedAt);
+    observeConversationDraftRevision(conversationId, draftUpdatedAt, owner.session);
+    if (revisionChoice && owner.revisionChoices.get(conversationId) === revisionChoice) {
+      owner.revisionChoices.delete(conversationId);
+    }
     return 'saved';
   } catch {
-    return 'failed';
+    return authority.isCurrent() && canDispatch() ? 'failed' : 'superseded';
+  } finally {
+    owner.requests.delete(authority);
+    authority.retire();
   }
 }
 

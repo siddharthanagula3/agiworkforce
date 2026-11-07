@@ -48,6 +48,8 @@ jest.mock('../stores/settings/cloudSettingsStore', () => ({
   useCloudSettingsStore: {
     getState: jest.fn(),
     setState: jest.fn(),
+    getInitialState: jest.requireActual('../stores/settings/cloudSettingsStore')
+      .useCloudSettingsStore.getInitialState,
   },
 }));
 
@@ -309,7 +311,7 @@ describe('authStore, secure storage persistence', () => {
 
     expect(mockCloudSettingsSetState).toHaveBeenCalledWith(
       expect.objectContaining({
-        personalization: {
+        personalization: expect.objectContaining({
           fullName: '',
           nickname: '',
           occupation: '',
@@ -319,7 +321,9 @@ describe('authStore, secure storage persistence', () => {
           enthusiasm: 50,
           headersLists: 50,
           emoji: 50,
-        },
+        }),
+        memoryEnabled: false,
+        includeSensitiveTopics: false,
         settingsUpdatedAt: null,
       }),
     );

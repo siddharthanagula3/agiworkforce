@@ -1,5 +1,8 @@
 import markdownit from 'markdown-it';
-import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  markdownItFenceSource,
+  normalizeMarkdownSource,
+} from '@agiworkforce/utils/markdown-source';
 import {
   classifyAssistantFence,
   renderClassifiedFenceHtml,
@@ -53,7 +56,7 @@ md.renderer.rules.fence = (tokens, index) => {
   const info = token.info ? md.utils.unescapeAll(token.info).trim() : '';
   const language = info ? info.split(/\s+/u, 1)[0] : '';
   const surface = renderClassifiedFenceHtml(
-    classifyAssistantFence(language ?? '', token.content),
+    classifyAssistantFence(language ?? '', markdownItFenceSource(token.content)),
     'vscode',
   );
   if (surface !== null) return surface;
@@ -100,8 +103,12 @@ export function bindAnswerSurfaces(root: ParentNode, actions: AnswerSurfaceActio
     if (button.dataset['bound'] === '1') return;
     button.dataset['bound'] = '1';
     button.addEventListener('click', () => {
-      const code = button.closest('.answer-surface')?.querySelector('.answer-copy code');
-      const text = code?.textContent ?? '';
+      const surface = button.closest('.answer-surface');
+      const draft = surface?.classList.contains('answer-surface-writing')
+        ? surface.querySelector<HTMLTextAreaElement>('textarea')
+        : null;
+      const code = surface?.querySelector('.answer-copy code');
+      const text = draft ? draft.value : (code?.textContent ?? '');
       void actions.copy?.(text);
     });
   });

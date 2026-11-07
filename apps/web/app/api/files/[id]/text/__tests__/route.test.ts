@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
+import { renderFileTextPreview } from '@/lib/server/file-text-preview';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/file-text-preview', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/file-text-preview')>();
+  return { ...actual, renderFileTextPreview: vi.fn(actual.renderFileTextPreview) };
+});
 
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
@@ -82,6 +88,7 @@ import { createError } from '@/lib/errors';
 import { GET } from '../route';
 
 const FILE_ID = '66666666-6666-4666-8666-666666666666';
+const MAX_TEXT_SOURCE_BYTES = 30 * 1024 * 1024;
 const db = { query: vi.fn() };
 
 function request(): NextRequest {
@@ -106,6 +113,20 @@ function asset(overrides: Record<string, unknown> = {}) {
 }
 
 describe('/api/files/[id]/text', () => {
+  it('passes the admitted organization to the reader', async () => {
+    mocks.getUserScopedDb.mockResolvedValue({
+      db,
+      userId: 'user-1',
+      organizationId: 'workspace-A',
+    });
+    mocks.getActiveWorkspaceMediaAssetById.mockResolvedValue(null);
+    await GET(request(), context());
+    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db, {
+      organizationId: 'workspace-A',
+    });
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
@@ -177,6 +198,61 @@ describe('/api/files/[id]/text', () => {
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
+  it.each([null, 12])('bounds stored bytes when asset byteSize is %s', async (byteSize) => {
+    mocks.getActiveWorkspaceMediaAssetById.mockResolvedValue(asset({ byteSize }));
+    mocks.readStoredMedia.mockRejectedValueOnce(
+      new StoredObjectTooLargeError(
+        'users/user-1/notes.txt',
+        MAX_TEXT_SOURCE_BYTES,
+        MAX_TEXT_SOURCE_BYTES + 1,
+      ),
+    );
+    const response = await GET(request(), context());
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'VALIDATION_ERROR', message: 'This file is too large to preview' },
+    });
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+      'users/user-1/notes.txt',
+      MAX_TEXT_SOURCE_BYTES,
+    );
+    expect(renderFileTextPreview).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unknown remote length or streaming overflow without claiming a known size', async () => {
+    mocks.getActiveWorkspaceMediaAssetById.mockResolvedValue(asset({ byteSize: null }));
+    mocks.readStoredMedia.mockRejectedValueOnce(
+      new StoredObjectTooLargeError('users/user-1/notes.txt', MAX_TEXT_SOURCE_BYTES),
+    );
+    const response = await GET(request(), context());
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'This file could not be read within the preview size limit',
+      },
+    });
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+      'users/user-1/notes.txt',
+      MAX_TEXT_SOURCE_BYTES,
+    );
+    expect(renderFileTextPreview).not.toHaveBeenCalled();
+  });
+
+  it('preserves missing stored bytes as not found', async () => {
+    mocks.readStoredMedia.mockResolvedValueOnce(null);
+    const response = await GET(request(), context());
+    expect(response.status).toBe(404);
+    expect(renderFileTextPreview).not.toHaveBeenCalled();
+  });
+
+  it('does not label an unrelated storage failure as a size validation error', async () => {
+    mocks.readStoredMedia.mockRejectedValueOnce(new Error('storage unavailable'));
+    const response = await GET(request(), context());
+    expect(response.status).toBe(500);
+    expect(renderFileTextPreview).not.toHaveBeenCalled();
+  });
+
   it('renders the stored text of the caller file', async () => {
     const response = await GET(request(), context());
     expect(response.status).toBe(200);
@@ -187,8 +263,19 @@ describe('/api/files/[id]/text', () => {
       truncated: false,
       fileName: 'notes.txt',
     });
-    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db);
-    expect(mocks.readStoredMedia).toHaveBeenCalledWith('users/user-1/notes.txt');
+    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db, {
+      organizationId: null,
+    });
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+      'users/user-1/notes.txt',
+      MAX_TEXT_SOURCE_BYTES,
+    );
+    expect(renderFileTextPreview).toHaveBeenCalledWith(
+      'text',
+      'notes.txt',
+      'text/plain',
+      Buffer.from('hello world\n'),
+    );
   });
 
   it('renders a csv as a table', async () => {

@@ -12,7 +12,7 @@ import {
   ConnectorGrantLockTimeoutError,
   getConnectorOAuthGrant,
   listRevocableConnectorTokens,
-  revokeConnectorOAuthGrant,
+  captureAndRevokeConnectorOAuthGrants,
   withLockedConnectorOAuthGrant,
   type ConnectorOAuthGrant,
   type LockedConnectorOAuthGrant,
@@ -378,10 +378,23 @@ async function revokeCredentialsAtVendor(
     );
     return { revocation: REVOCATION_FAILED, outcomes: [] };
   }
+  return revokeCapturedCredentialsAtVendor(userId, connectorId, revocable);
+}
+
+async function revokeCapturedCredentialsAtVendor(
+  userId: string,
+  connectorId: string,
+  revocable: RevocableConnectorToken[],
+  incomplete = false,
+): Promise<{ revocation: ConnectorVendorRevocation; outcomes: CredentialRevocation[] }> {
   const provider = getConnectorOAuthProvider(connectorId);
-  const outcomes: CredentialRevocation[] = [];
+  const outcomes: CredentialRevocation[] = incomplete ? [REVOCATION_FAILED] : [];
   for (const credential of revocable) {
-    outcomes.push(await revokeCredentialAtVendor(userId, connectorId, provider, credential));
+    try {
+      outcomes.push(await revokeCredentialAtVendor(userId, connectorId, provider, credential));
+    } catch {
+      outcomes.push(REVOCATION_FAILED);
+    }
   }
   const revocation = summarizeRevocations(outcomes);
   if (revocation.status === 'not-revoked') {
@@ -393,12 +406,7 @@ async function revokeCredentialsAtVendor(
   return { revocation, outcomes };
 }
 
-/**
- * Account erasure hands every live connector credential back to its provider
- * before the grant rows are deleted, the same way disconnect does, so a
- * deleted account leaves no refresh token live upstream. Best effort: a
- * provider that refuses or times out is logged and never blocks the erasure.
- */
+/** Account erasure remains best-effort provider-only cleanup without grant locking. */
 export async function revokeAllConnectorTokensAtProviders(
   userId: string,
 ): Promise<{ attempted: number; revoked: number }> {
@@ -431,21 +439,22 @@ export async function revokeAllConnectorTokensAtProviders(
   return { attempted, revoked };
 }
 
-/**
- * With no account key this disconnects every account of the connector, so every
- * one of their credentials is handed back to the provider before the local rows
- * are destroyed. Revoking only the default would leave a second mailbox's
- * refresh token live upstream with nothing left here to revoke it with.
- */
+/** Capture and remove local grants atomically before best-effort provider revocation. */
 export async function disconnectConnectorOAuthGrant(
   userId: string,
   connectorId: string,
   accountKey?: string | null,
 ): Promise<ConnectorDisconnectOutcome> {
   if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) await removeBankAccountsItem(userId);
-  const { revocation } = await revokeCredentialsAtVendor(userId, connectorId, accountKey);
+  const captured = await captureAndRevokeConnectorOAuthGrants(userId, connectorId, accountKey);
+  const { revocation } = await revokeCapturedCredentialsAtVendor(
+    userId,
+    connectorId,
+    captured.tokens,
+    captured.incomplete,
+  );
   return {
-    disconnected: await revokeConnectorOAuthGrant(userId, connectorId, accountKey),
+    disconnected: captured.disconnected,
     vendorRevocation: revocation,
   };
 }

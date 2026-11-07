@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { siNeon } from 'simple-icons';
 
 import { DirectoryGrid } from '../DirectoryGrid';
 import type { DirectoryEntry } from '../types';
@@ -335,6 +336,28 @@ describe('DirectoryGrid', () => {
     expect(container.querySelector('svg[aria-label="Gmail logo"]')).toBeTruthy();
     expect(container.querySelector('img[src="https://cdn.invalid/gmail.png"]')).toBeNull();
     expect(screen.queryByText('GM')).toBeNull();
+  });
+
+  it('uses the existing official Neon mark without a proxy image or monogram', () => {
+    const { container } = renderGrid({
+      section: 'connectors',
+      entries: [
+        {
+          id: 'neon',
+          name: 'Neon',
+          description: 'Database',
+          brandId: 'neon',
+          iconUrl: 'https://cdn.invalid/neon.png',
+          monogram: 'NE',
+        },
+      ],
+    });
+
+    expect(container.querySelector('svg[aria-label="Neon logo"] path')?.getAttribute('d')).toBe(
+      siNeon.path,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.queryByText('NE')).toBeNull();
   });
 
   it('falls back to the icon url when the entry names no brand', () => {

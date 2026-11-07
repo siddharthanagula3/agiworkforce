@@ -16,6 +16,7 @@ export interface SandboxFileEntry {
   name: string;
   isDir: boolean;
   byteSize: number;
+  modifiedAt?: string;
 }
 
 export interface CommandExecutionResult extends ExecutionResult {

@@ -3,6 +3,10 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  authenticate: vi.fn(),
+  getNeonDb: vi.fn(),
+  claimScope: vi.fn(),
+  resolveOrganization: vi.fn(),
   readSecondFactorStatus: vi.fn(),
   removeSecondFactor: vi.fn(async (..._args: unknown[]) => undefined),
   rememberMfaEnrollment: vi.fn(async (..._args: unknown[]) => undefined),
@@ -17,14 +21,24 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
+  getClerkAuthUser: mocks.authenticate,
+  getClerkAuthorizedParties: vi.fn(),
+  isAccountUnavailableError: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getCookieSessionAuthUser: vi.fn(),
+  getOptionalAuthUser: vi.fn(),
+  getSuspendedAccountUser: vi.fn(),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
-    userId: 'user-1',
-    organizationId: null,
-  })),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: mocks.getNeonDb,
+  getStripeWebhookDb: vi.fn(),
+}));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: mocks.claimScope,
+}));
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -51,10 +65,13 @@ vi.mock('@/lib/server/two-factor-security-events', () => ({
 
 process.env['CSRF_SECRET'] = 'two-factor-disable-step-up-secret-long-enough';
 
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { createError } from '@/lib/errors';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step-up/grant-token';
 import { GET, DELETE } from './route';
+
+const SERVICE_DB = { query: vi.fn(), withUser: vi.fn() };
+const CLAIMED_DB = { query: (...args: unknown[]) => mocks.query(...args) };
 
 const ENROLLED = { authenticator: true, backupCodes: true, anySecondFactor: true };
 const NOT_ENROLLED = { authenticator: false, backupCodes: false, anySecondFactor: false };
@@ -84,6 +101,15 @@ function grant(method: 'second_factor' | 'first_factor' = 'second_factor') {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.authenticate.mockReset();
+  mocks.authenticate.mockResolvedValue({
+    userId: 'user-1',
+    sessionIdentity: { subject: 'native-user-1', sessionId: 'session-1' },
+  });
+  mocks.getNeonDb.mockReturnValue(SERVICE_DB);
+  mocks.claimScope.mockReturnValue(CLAIMED_DB);
+  mocks.query.mockReset();
+  mocks.readSecondFactorStatus.mockReset();
   resetStepUpSigningKeyCache();
   mocks.readSecondFactorStatus.mockResolvedValue(ENROLLED);
 });
@@ -115,7 +141,18 @@ describe('GET /api/settings/2fa', () => {
   it('stays reachable for a member whose workspace requires two-factor', async () => {
     await GET(getRequest());
 
-    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
+      userId: 'user-1',
+      organizationId: null,
+    });
+    expect(mocks.resolveOrganization).not.toHaveBeenCalled();
+    expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
+    expect(mocks.readSecondFactorStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'native-user-1',
+    );
+    expect(mocks.authenticate).toHaveBeenCalledWith(expect.anything(), {
       mfaEnrollment: true,
       resolveOrganization: false,
     });
@@ -157,8 +194,11 @@ describe('DELETE /api/settings/2fa', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
-    expect(mocks.removeSecondFactor).toHaveBeenCalledWith('user-1');
+    expect(mocks.removeSecondFactor).toHaveBeenCalledWith('native-user-1');
     expect(mocks.rememberMfaEnrollment).toHaveBeenCalledWith('user-1', false);
+    expect(mocks.query).toHaveBeenCalledWith('delete from user_two_factor where user_id = $1', [
+      'user-1',
+    ]);
   });
 
   it('records how the account holder re-verified, and tells them', async () => {
@@ -168,6 +208,8 @@ describe('DELETE /api/settings/2fa', () => {
 
     expect(mocks.identityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
+        userId: 'user-1',
+        identitySubject: 'native-user-1',
         event: 'two_factor_disabled',
         detail: expect.objectContaining({ source: 'first_factor' }),
       }),
@@ -184,4 +226,50 @@ describe('DELETE /api/settings/2fa', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
   });
+});
+
+it('stops status when the session-account boundary rejects the credential', async () => {
+  mocks.authenticate.mockRejectedValueOnce(createError.unauthorized());
+
+  const response = await GET(getRequest());
+
+  expect(response.status).toBe(401);
+  expect(mocks.query).not.toHaveBeenCalled();
+  expect(mocks.readSecondFactorStatus).not.toHaveBeenCalled();
+  expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
+});
+
+it('stops disable when the session-account boundary rejects the credential', async () => {
+  mocks.authenticate.mockRejectedValueOnce(createError.unauthorized());
+
+  const response = await DELETE(deleteRequest(grant()));
+
+  expect(response.status).toBe(401);
+  expect(mocks.query).not.toHaveBeenCalled();
+  expect(mocks.readSecondFactorStatus).not.toHaveBeenCalled();
+  expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
+});
+
+it('returns 403 for an authenticated device credential before database or factor access', async () => {
+  mocks.authenticate.mockResolvedValueOnce({ userId: 'user-1', surfaceClass: 'developer' });
+  const incoming = new NextRequest('http://localhost/api/settings/2fa', {
+    headers: { authorization: 'Bearer verified-device-credential' },
+  });
+
+  const response = await GET(incoming);
+
+  expect(response.status).toBe(403);
+  await expect(response.json()).resolves.toMatchObject({
+    error: { message: 'Use your web account settings to manage sign-in security.' },
+  });
+  expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {
+    mfaEnrollment: true,
+    resolveOrganization: false,
+  });
+  expect(mocks.getNeonDb).not.toHaveBeenCalled();
+  expect(mocks.claimScope).not.toHaveBeenCalled();
+  expect(mocks.query).not.toHaveBeenCalled();
+  expect(mocks.readSecondFactorStatus).not.toHaveBeenCalled();
+  expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
+  expect(mocks.identityEvent).not.toHaveBeenCalled();
 });

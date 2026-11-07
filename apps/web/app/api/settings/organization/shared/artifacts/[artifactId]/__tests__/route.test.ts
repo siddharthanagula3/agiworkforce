@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
   requireCsrfToken: vi.fn(),
   getUserScopedDb: vi.fn(),
-  resolveOrgMembership: vi.fn(),
+  resolveOrgMembershipForOrganization: vi.fn(),
   unshareArtifactFromOrganization: vi.fn(),
   recordAuditEvent: vi.fn(),
 }));
@@ -71,13 +71,11 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  resolveOrgMembership: mocks.resolveOrgMembership,
+  resolveOrgMembershipForOrganization: mocks.resolveOrgMembershipForOrganization,
 }));
 vi.mock('@/lib/services/org-shared-artifact-service', () => ({
   getOrgReadableArtifactByToken: vi.fn(),
   listSharedArtifacts: vi.fn(),
-  resolveArtifactShareTarget: vi.fn(),
-  shareArtifactWithOrganization: vi.fn(),
   unshareArtifactFromOrganization: mocks.unshareArtifactFromOrganization,
 }));
 
@@ -102,7 +100,10 @@ describe('DELETE /api/settings/organization/shared/artifacts/[artifactId]', () =
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'owner-1', organizationId: ORG });
-    mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'member' });
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({
+      organizationId: ORG,
+      role: 'member',
+    });
   });
 
   it('returns the rate limit response', async () => {
@@ -139,7 +140,7 @@ describe('DELETE /api/settings/organization/shared/artifacts/[artifactId]', () =
   });
 
   it('refuses a caller who is not in an organization', async () => {
-    mocks.resolveOrgMembership.mockResolvedValue(null);
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue(null);
 
     const response = await del();
 
@@ -163,7 +164,7 @@ describe('DELETE /api/settings/organization/shared/artifacts/[artifactId]', () =
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true });
-    expect(mocks.resolveOrgMembership).toHaveBeenCalledWith(db, 'owner-1');
+    expect(mocks.resolveOrgMembershipForOrganization).toHaveBeenCalledWith(db, 'owner-1', ORG);
     expect(mocks.unshareArtifactFromOrganization).toHaveBeenCalledWith(db, ORG, ARTIFACT);
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({

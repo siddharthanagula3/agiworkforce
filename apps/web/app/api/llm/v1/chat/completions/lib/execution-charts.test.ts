@@ -11,7 +11,14 @@ describe('executionChartsToPersist', () => {
     expect(executionChartsToPersist(['same', 'same'])).toEqual(['same']);
   });
 
-  it('keeps only the last figure when a run emits a clipped chart and then the finished one', () => {
-    expect(executionChartsToPersist(['clipped', 'finished'])).toEqual(['finished']);
+  it('preserves different figures from one execution in their output order', () => {
+    expect(executionChartsToPersist(['bar-figure', 'line-figure', 'bar-figure'])).toEqual([
+      'bar-figure',
+      'line-figure',
+    ]);
+  });
+
+  it('does not treat empty render results as charts', () => {
+    expect(executionChartsToPersist(['', 'bar-figure', ''])).toEqual(['bar-figure']);
   });
 });

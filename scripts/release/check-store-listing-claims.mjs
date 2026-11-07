@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import {
   appIdentifierFrom,
   appVersionFrom,
-  billingEnabledFrom,
+  NATIVE_PURCHASE_SOURCE_PATHS,
+  nativePurchaseSupportFrom,
   storeListingFailures,
 } from '../lib/rollout/store-listing.mjs';
 
@@ -26,11 +27,17 @@ function main() {
     android: JSON.parse(read('apps/mobile/store-listing/LISTING-METADATA-ANDROID.json')),
     appVersion: appVersionFrom(appConfig),
     appIdentifier: appIdentifierFrom(appConfig),
-    billingEnabled: billingEnabledFrom(read('apps/mobile/lib/v1FeatureFlags.ts')),
+    nativePurchases: nativePurchaseSupportFrom(
+      Object.fromEntries(
+        Object.entries(NATIVE_PURCHASE_SOURCE_PATHS).map(([name, file]) => [name, read(file)]),
+      ),
+    ),
   });
 
   if (failures.length === 0) {
-    console.log('Store listings match the shipped version, ids and billing state');
+    console.log(
+      'Store listings match the shipped version, ids and native purchase capability; live sales remain server/store gated',
+    );
     return;
   }
   for (const failure of failures) console.error(`ERROR: ${failure}`);

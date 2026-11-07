@@ -2,10 +2,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
+import { connectorsReleased, hasReleasedConnectors } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
 import { productArtifactConnectors, productCapabilityFacts } from '../product-capability-facts';
+import { assembleChatSystemPrompt } from '../chat-system-prompt-assembly';
+import { chatSystemPromptSection, chatSystemPromptSections } from '../chat-system-prompt';
+import { buildMeCapabilityHandshake } from '@/lib/services/capability-handshake-service';
 
 const FIXTURE = path.resolve(
   import.meta.dirname,
@@ -20,12 +24,18 @@ const NO_EXCLUSIONS = {
   workspaceDisabledCapabilities: [],
 };
 
-function facts(tier: string, surface = 'web', cloudExecutionDeploymentEnabled = true) {
+function facts(
+  tier: string,
+  surface = 'web',
+  cloudExecutionDeploymentEnabled = true,
+  allowSelectiveConnectors = true,
+) {
   return productCapabilityFacts({
     userId: 'user-1',
     tier,
     surface,
     cloudExecutionDeploymentEnabled,
+    allowSelectiveConnectors,
     exclusions: NO_EXCLUSIONS,
   });
 }
@@ -42,11 +52,77 @@ describe('the product capabilities the chat prompt describes', () => {
     }
   });
 
-  it('claims connected apps on no plan while connectors are unreleased', () => {
+  it('describes selective ordinary-chat connectors only on an eligible plan', () => {
+    expect(connectorsReleased()).toBe(false);
+    expect(hasReleasedConnectors()).toBe(true);
+    expect(facts('free')).not.toContain('canUseConnectors');
+    for (const tier of ['pro', 'max']) {
+      expect(facts(tier)).toContain('canUseConnectors');
+    }
+  });
+
+  it('keeps artifact connector guidance on the full-release gate', () => {
     for (const tier of ['free', 'pro', 'max']) {
-      expect(facts(tier)).not.toContain('canUseConnectors');
       expect(productArtifactConnectors(tier, facts(tier))).toBe(false);
     }
+  });
+
+  it('withholds selective connectors by default and for an explicitly closed context', () => {
+    const input = {
+      userId: 'user-1',
+      tier: 'pro',
+      surface: 'web' as const,
+      cloudExecutionDeploymentEnabled: true,
+      exclusions: NO_EXCLUSIONS,
+    };
+    expect(buildMeCapabilityHandshake(input).granted).toContain('canUseConnectors');
+    const generic = productCapabilityFacts(input);
+    expect(generic).not.toContain('canUseConnectors');
+    expect(facts('pro', 'web', true, false)).toEqual(generic);
+    expect(generic).toEqual(facts('pro').filter((capability) => capability !== 'canUseConnectors'));
+  });
+
+  it.each([
+    'closedCapabilities',
+    'userDisabledCapabilities',
+    'workspaceDisabledCapabilities',
+  ] as const)('preserves %s for selective connector facts', (exclusion) => {
+    const narrowed = productCapabilityFacts({
+      userId: 'user-1',
+      tier: 'pro',
+      surface: 'web',
+      cloudExecutionDeploymentEnabled: true,
+      allowSelectiveConnectors: true,
+      exclusions: { ...NO_EXCLUSIONS, [exclusion]: ['canUseConnectors'] },
+    });
+    expect(narrowed).not.toContain('canUseConnectors');
+    expect(narrowed).toEqual(
+      facts('pro').filter((capability) => capability !== 'canUseConnectors'),
+    );
+  });
+
+  it('renders ordinary-chat availability without artifact connector instructions', () => {
+    const sections = chatSystemPromptSections(7);
+    const connectorLine = chatSystemPromptSection(sections, 'product_capability.canUseConnectors');
+    const artifactGuidance = chatSystemPromptSection(sections, 'artifact_runtime_connectors');
+    expect(connectorLine.length).toBeGreaterThan(0);
+    expect(artifactGuidance.length).toBeGreaterThan(0);
+    const render = (allowSelectiveConnectors: boolean) => {
+      const capabilities = facts('pro', 'web', true, allowSelectiveConnectors);
+      return assembleChatSystemPrompt(
+        sections,
+        {
+          toolNames: [],
+          productCapabilities: capabilities,
+          artifactConnectors: productArtifactConnectors('pro', capabilities),
+        },
+        { utc: '2026-11-01T12:00:00.000Z' },
+      ).body;
+    };
+    expect(render(true)).toContain(`- ${connectorLine}`);
+    expect(render(true)).not.toContain(artifactGuidance);
+    expect(render(false)).not.toContain(`- ${connectorLine}`);
+    expect(render(false)).not.toContain(artifactGuidance);
   });
 
   it('claims no code run when the deployment has no sandboxes', () => {
@@ -68,6 +144,7 @@ describe('the product capabilities the chat prompt describes', () => {
       tier: 'pro',
       surface: 'web',
       cloudExecutionDeploymentEnabled: true,
+      allowSelectiveConnectors: true,
       exclusions: {
         closedCapabilities: ['canUseWebSearch'],
         userDisabledCapabilities: ['canUseCloudExecution'],

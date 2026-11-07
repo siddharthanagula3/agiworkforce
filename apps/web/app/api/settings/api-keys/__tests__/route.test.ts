@@ -5,7 +5,7 @@ vi.mock('server-only', () => ({}));
 const { mockGetUserScopedDb, mockQuery, mockExecute, mockAudit } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockQuery: vi.fn(),
-  mockExecute: vi.fn(async () => 1),
+  mockExecute: vi.fn(async (..._args: unknown[]) => 1),
   mockAudit: vi.fn(async () => {}),
 }));
 
@@ -71,8 +71,51 @@ function createdRow(expiresAt: string | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  let active = false;
+  const outerQuery = (sql: string, params: unknown[]) => {
+    if (active || /insert into api_keys/i.test(sql)) {
+      throw new Error('Key insertion must use the owned transaction');
+    }
+    return mockQuery(sql, params);
+  };
   mockGetUserScopedDb.mockResolvedValue({
-    db: { query: mockQuery, execute: mockExecute },
+    db: {
+      query: outerQuery,
+      execute: (...args: unknown[]) => {
+        if (active) throw new Error('Outer execute during transaction');
+        return mockExecute(...args);
+      },
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+        if (active) throw new Error('Nested transaction');
+        active = true;
+        let open = true;
+        const tx = {
+          query: (sql: string, params: unknown[]) => {
+            if (!open) throw new Error('Transaction handle escaped');
+            if (!/insert into api_keys/i.test(sql)) throw new Error('Unexpected transaction query');
+            return mockQuery(sql, params);
+          },
+          execute: () => {
+            throw new Error('Unexpected transaction execute');
+          },
+          transaction: () => {
+            throw new Error('Nested transaction');
+          },
+          withUser: () => {
+            throw new Error('Transaction scope escape');
+          },
+          withOrg: () => {
+            throw new Error('Transaction scope escape');
+          },
+        };
+        try {
+          return await callback(tx);
+        } finally {
+          open = false;
+          active = false;
+        }
+      },
+    },
     userId: 'user-1',
     organizationId: null,
   });

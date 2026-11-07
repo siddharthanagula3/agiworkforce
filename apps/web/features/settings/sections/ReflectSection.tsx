@@ -1,16 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button, translateUiPlural } from '@agiworkforce/ui';
-import {
-  MANAGED_CLOUD_REFLECT_PATH,
-  ManagedCloudReflectRecapSchema,
-  type ManagedCloudReflectRange,
-  type ManagedCloudReflectRecap,
-} from '@agiworkforce/cloud-contracts';
+import { type ManagedCloudReflectRange } from '@agiworkforce/cloud-contracts';
 import { RefreshCw } from 'lucide-react';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
-import { toUserMessage } from '@/lib/user-error-message';
+import { useReflectRecap } from '../hooks/use-reflect-recap';
 import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
 
 const RANGE_OPTIONS: ReadonlyArray<{ value: ManagedCloudReflectRange; label: string }> = [
@@ -71,63 +66,14 @@ function formatHour(hour: number | null): string {
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2026, 0, 1, hour));
 }
 
-async function responseError(response: Response): Promise<{ code?: string; message: string }> {
-  const body = (await response.json().catch(() => ({}))) as {
-    error?: { code?: string; message?: string };
-  };
-  return {
-    code: body.error?.code,
-    message: body.error?.message ?? 'Reflect could not load right now.',
-  };
-}
-
-export function ReflectSection() {
+export function ReflectSection({ active = true }: { active?: boolean } = {}) {
   const timezone = useMemo(() => browserTimezone(), []);
   const [range, setRange] = useState<ManagedCloudReflectRange>('30d');
-  const [refreshVersion, setRefreshVersion] = useState(0);
-  const [recap, setRecap] = useState<ManagedCloudReflectRecap | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [memoryRequired, setMemoryRequired] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (signal: AbortSignal) => {
-      setLoading(true);
-      setRecap(null);
-      setError(null);
-      setMemoryRequired(false);
-      try {
-        const query = new URLSearchParams({ range, timezone });
-        const response = await fetch(`${MANAGED_CLOUD_REFLECT_PATH}?${query}`, {
-          credentials: 'include',
-          signal,
-        });
-        if (!response.ok) {
-          const failure = await responseError(response);
-          if (response.status === 409 && failure.code === 'memory_required') {
-            setRecap(null);
-            setMemoryRequired(true);
-            return;
-          }
-          throw new Error(failure.message);
-        }
-        setRecap(ManagedCloudReflectRecapSchema.parse(await response.json()));
-      } catch (loadError) {
-        if (signal.aborted) return;
-        setRecap(null);
-        setError(toUserMessage(loadError, 'Reflect could not load.'));
-      } finally {
-        if (!signal.aborted) setLoading(false);
-      }
-    },
-    [range, timezone],
+  const { recap, loading, memoryRequired, error, refresh, canRefresh } = useReflectRecap(
+    range,
+    timezone,
+    active,
   );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load, refreshVersion]);
 
   const topicsByShare = useMemo(
     () => (recap?.topics ?? []).slice().sort((left, right) => right.percentage - left.percentage),
@@ -153,7 +99,7 @@ export function ReflectSection() {
           <select
             aria-label="Reflect range"
             value={range}
-            disabled={loading}
+            disabled={loading || !canRefresh}
             onChange={(event) => setRange(event.target.value as ManagedCloudReflectRange)}
             className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
           >
@@ -167,8 +113,8 @@ export function ReflectSection() {
             type="button"
             variant="outline"
             size="sm"
-            disabled={loading}
-            onClick={() => setRefreshVersion((value) => value + 1)}
+            disabled={loading || !canRefresh}
+            onClick={refresh}
             aria-label="Refresh recap"
           >
             <RefreshCw
@@ -209,15 +155,11 @@ export function ReflectSection() {
         <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-6" role="alert">
           <h2 className="text-h4 text-foreground">Reflect could not load</h2>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={() => setRefreshVersion((value) => value + 1)}
-          >
-            Try again
-          </Button>
+          {canRefresh ? (
+            <Button type="button" variant="outline" size="sm" className="mt-4" onClick={refresh}>
+              Try again
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

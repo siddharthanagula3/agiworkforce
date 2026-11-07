@@ -1361,3 +1361,51 @@ describe('routine credit caps', () => {
     expect(sql).toContain("charge.status = 'completed'");
   });
 });
+
+describe('schedule creation cancellation', () => {
+  const input: ScheduleInput = {
+    name: 'Daily briefing',
+    prompt: 'Brief me',
+    recurrence: 'daily',
+    timeOfDay: '12:00',
+    timezone: 'UTC',
+  };
+
+  it('does not insert after cancellation during project ownership lookup', async () => {
+    const controller = new AbortController();
+    const projectId = '11111111-1111-4111-8111-111111111111';
+    const query = vi.fn(async () => {
+      controller.abort();
+      return [{ id: projectId }];
+    });
+    await expect(
+      createScheduleWithPlan(
+        database(query),
+        'user-1',
+        { ...input, projectId },
+        {
+          planTier: 'max',
+          signal: controller.signal,
+          now: new Date('2026-07-15T11:00:00.000Z'),
+        },
+      ),
+    ).rejects.toBe(controller.signal.reason);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a successful insert receipt when cancellation arrives after dispatch', async () => {
+    const controller = new AbortController();
+    const query = vi.fn(async () => {
+      controller.abort();
+      return [taskRow];
+    });
+    await expect(
+      createScheduleWithPlan(database(query), 'user-1', input, {
+        planTier: 'max',
+        signal: controller.signal,
+        now: new Date('2026-07-15T11:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ id: taskRow.id });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,209 +1,285 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-const reverification = vi.hoisted(() => ({
-  start: vi.fn(),
-  sendEmailCode: vi.fn(),
-  verifyPassword: vi.fn(),
-  verifyEmailCode: vi.fn(),
-  verifyPasskey: vi.fn(),
-  verifySecondFactor: vi.fn(),
-  freshToken: vi.fn(),
-}));
-
-vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'session-token') }));
-vi.mock('@/lib/client/csrf', () => ({
-  getCsrfToken: vi.fn(async () => 'csrf-token'),
-  addCsrfHeaders: vi.fn(),
-  clearCsrfToken: vi.fn(),
-}));
-vi.mock('sonner', () => ({ toast: toastMock }));
-vi.mock('@shared/lib/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
-vi.mock('@/lib/identity/client', () => ({
-  useSessionReverification: () => reverification,
-  useSignOut: () => vi.fn(),
-  signedOutRedirectUrl: (redirectUrl: string | undefined) => redirectUrl,
-}));
-
+import {
+  challenge,
+  deferred,
+  fixture,
+  grants,
+  identity,
+  json,
+  leaveReceipt,
+  ORG,
+  OTHER_ORG,
+  transferReceipt,
+  transport,
+  useLeaveOrganization,
+  useTransferOrganizationOwnership,
+  verification,
+  wrapper,
+  writes,
+} from './organization-membership-fixture';
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
 import { STEP_UP_TOKEN_HEADER } from '@/features/auth/step-up-fetch';
-import { useTransferOrganizationOwnership } from '../use-settings-queries';
 
-const ORG = '11111111-1111-4111-8111-111111111111';
-const CONSEQUENCE = 'Ownership of this workspace moves to another member.';
-
-const fetchMock = vi.fn();
-
-function refusal() {
-  return new Response(
-    JSON.stringify({
-      error: {
-        code: 'STEP_UP_REQUIRED',
-        message: 'Confirm it is you before completing this action.',
-        details: {
-          reason: 'step_up_required',
-          action: 'organization.transfer_ownership',
-          consequence: CONSEQUENCE,
-          freshnessSeconds: 300,
-        },
-      },
-    }),
-    { status: 403, headers: { 'content-type': 'application/json' } },
-  );
-}
-
-function verificationRequired() {
-  return new Response(
-    JSON.stringify({
-      error: {
-        code: 'STEP_UP_VERIFICATION_REQUIRED',
-        message: 'Confirm it is you with your authenticator app or a backup code.',
-        details: { action: 'organization.transfer_ownership', level: 'second_factor' },
-      },
-    }),
-    { status: 403, headers: { 'content-type': 'application/json' } },
-  );
-}
-
-function jsonOk(body: unknown) {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-function Harness() {
-  const transfer = useTransferOrganizationOwnership();
+const transferInput = () => ({
+  organizationId: ORG,
+  toUserId: 'successor',
+  outgoingOwnerRole: 'viewer' as const,
+});
+function Harness({ active = true, leave = false }: { active?: boolean; leave?: boolean }) {
+  const leaving = useLeaveOrganization(active);
+  const transferring = useTransferOrganizationOwnership(active);
+  const mutation = leave ? leaving : transferring;
   return (
     <>
       <button
-        type="button"
+        disabled={!mutation.canMutate}
         onClick={() =>
-          transfer.mutate({
-            organizationId: ORG,
-            toUserId: 'successor',
-            outgoingOwnerRole: 'admin',
-          })
+          leave
+            ? leaving.mutate({ organizationId: ORG, successorUserId: 'successor' })
+            : transferring.mutate(transferInput())
         }
       >
-        Transfer ownership
+        Submit workspace action
       </button>
-      {transfer.stepUpDialog}
+      {mutation.stepUpDialog}
+      <output aria-label="Workspace phase">{mutation.phase ?? 'idle'}</output>
+      <output aria-label="Workspace error">{mutation.error?.message}</output>
     </>
   );
 }
-
-function renderHarness() {
-  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <Harness />
-    </QueryClientProvider>,
+async function mount(leave = false) {
+  const mounted = render(<Harness leave={leave} />, { wrapper });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Submit workspace action' })).toBeEnabled(),
   );
+  return mounted;
 }
+const submit = () =>
+  fireEvent.click(screen.getByRole('button', { name: 'Submit workspace action' }));
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  fetchMock.mockReset();
-  vi.stubGlobal('fetch', fetchMock);
-  reverification.start.mockResolvedValue({
-    kind: 'second_factor',
-    methods: ['authenticator', 'backup_code'],
-  });
-  reverification.verifySecondFactor.mockResolvedValue({ kind: 'complete' });
-  reverification.freshToken.mockResolvedValue('fresh-session-token');
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe('useTransferOrganizationOwnership step-up', () => {
-  it('asks for the second factor, then replays the transfer with the proof', async () => {
-    const user = userEvent.setup();
-    fetchMock
-      .mockResolvedValueOnce(refusal())
-      .mockResolvedValueOnce(verificationRequired())
-      .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
-      .mockResolvedValueOnce(jsonOk({ ownerUserId: 'successor' }));
-
-    renderHarness();
-    await user.click(screen.getByRole('button', { name: /transfer ownership/i }));
-
-    expect(await screen.findByText(CONSEQUENCE)).toBeInTheDocument();
-    await user.type(await screen.findByLabelText(/code from your authenticator app/i), '123456');
-    await user.click(screen.getByRole('button', { name: /^confirm$/i }));
-
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith('Ownership transferred.'));
-    expect(reverification.start).toHaveBeenCalledWith('second_factor');
-    expect(reverification.verifySecondFactor).toHaveBeenCalledWith('authenticator', '123456');
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/settings/organization/transfer-ownership');
-    const headers = (fetchMock.mock.calls[3]?.[1] as RequestInit).headers as Record<string, string>;
-    expect(headers[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
-  });
-
-  it('binds the proof to the workspace and asks for it with the re-verified session', async () => {
-    const user = userEvent.setup();
-    fetchMock
-      .mockResolvedValueOnce(refusal())
-      .mockResolvedValueOnce(verificationRequired())
-      .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
-      .mockResolvedValueOnce(jsonOk({ ownerUserId: 'successor' }));
-
-    renderHarness();
-    await user.click(screen.getByRole('button', { name: /transfer ownership/i }));
-    await user.type(await screen.findByLabelText(/code from your authenticator app/i), '123456');
-    await user.click(screen.getByRole('button', { name: /^confirm$/i }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
-    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/auth/step-up');
-    const grantRequest = fetchMock.mock.calls[2]?.[1] as RequestInit;
-    expect(JSON.parse(grantRequest.body as string)).toEqual({
+it.each([false, true])(
+  'replays one captured %s action after native second-factor verification with a fresh owned grant',
+  async (leave) => {
+    const start = (fixture.sdk.session!.startVerification = vi.fn(async () => ({
+      status: 'needs_second_factor',
+      supportedSecondFactors: [{ strategy: 'totp' }],
+    })));
+    const second = fixture.sdk.session!.attemptSecondFactorVerification;
+    transport(async (path, init) => {
+      if (path === '/api/auth/step-up')
+        return grants().length === 1 ? verification() : json({ token: 'verified-proof' });
+      return new Headers(init?.headers).has(STEP_UP_TOKEN_HEADER)
+        ? json(leave ? leaveReceipt('successor') : transferReceipt())
+        : challenge();
+    });
+    await mount(leave);
+    submit();
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm it is you' });
+    fireEvent.change(await within(dialog).findByLabelText('Code from your authenticator app'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('Workspace phase')).toHaveTextContent('receipt'),
+    );
+    expect(start).toHaveBeenCalledWith({ level: 'second_factor' });
+    expect(second).toHaveBeenCalledWith({ strategy: 'totp', code: '123456' });
+    expect(fixture.sdk.session!.getToken).toHaveBeenCalledWith({ skipCache: true });
+    expect(grants()).toHaveLength(2);
+    expect(new Headers(grants()[1]![1]?.headers).get('Authorization')).toBe('Bearer fresh-token');
+    expect(grants()[1]![1]?.credentials).toBe('omit');
+    expect(JSON.parse(String(grants()[1]![1]?.body))).toEqual({
       action: 'organization.transfer_ownership',
       resourceId: ORG,
     });
-    expect((grantRequest.headers as Record<string, string>)['Authorization']).toBe(
-      'Bearer fresh-session-token',
-    );
+    expect(writes()).toHaveLength(2);
+    expect(writes()[1]![1]?.body).toBe(writes()[0]![1]?.body);
+    expect(new Headers(writes()[1]![1]?.headers).get(STEP_UP_TOKEN_HEADER)).toBe('verified-proof');
+    expect(fixture.success).not.toHaveBeenCalled();
+    expect(fixture.finalize).not.toHaveBeenCalled();
+  },
+);
+
+it('keeps ordinary leave proof-free with an empty captured body', async () => {
+  transport(async () => json(leaveReceipt()));
+  const { result } = renderHook(() => useLeaveOrganization(), { wrapper });
+  await waitFor(() => expect(result.current.canMutate).toBe(true));
+  act(() => result.current.mutate({ organizationId: ORG }));
+  await waitFor(() => expect(result.current.phase).toBe('receipt'));
+  expect(writes()).toHaveLength(1);
+  expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({});
+  expect(grants()).toHaveLength(0);
+});
+
+it('keeps current verification dismissal quiet and allows a fresh explicit action', async () => {
+  fixture.sdk.session!.startVerification = vi.fn(async () => ({
+    status: 'needs_second_factor',
+    supportedSecondFactors: [{ strategy: 'totp' }],
+  }));
+  transport(async (path) => (path === '/api/auth/step-up' ? verification() : challenge()));
+  await mount();
+  submit();
+  const dialog = await screen.findByRole('dialog', { name: 'Confirm it is you' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Submit workspace action' })).toBeEnabled(),
+  );
+  expect(screen.getByLabelText('Workspace error')).toBeEmptyDOMElement();
+  expect(fixture.error).not.toHaveBeenCalled();
+  expect(fixture.success).not.toHaveBeenCalled();
+  expect(writes()).toHaveLength(1);
+});
+
+const proofRetirements = (
+  ['silent-grant', 'native-verification', 'fresh-token', 'verified-grant', 'retry-csrf'] as const
+).flatMap((stage) => (['session', 'close'] as const).map((transition) => ({ stage, transition })));
+it.each(proofRetirements)(
+  'blocks proof or retry after $transition retirement at $stage',
+  async ({ stage, transition }) => {
+    const grant = deferred<Response>();
+    const native = deferred<unknown>();
+    const token = deferred<string>();
+    const nativeStart = (fixture.sdk.session!.startVerification = vi.fn(() =>
+      stage === 'native-verification' ? native.promise : Promise.resolve({ status: 'complete' }),
+    ));
+    const getToken = (fixture.sdk.session!.getToken = vi.fn(
+      async (options?: { skipCache?: boolean }) =>
+        options?.skipCache
+          ? stage === 'fresh-token'
+            ? token.promise
+            : 'fresh-token'
+          : 'captured-token',
+    ));
+    transport(async (path) => {
+      if (path !== '/api/auth/step-up') return challenge();
+      if (stage === 'silent-grant' || grants().length > 1 || stage === 'retry-csrf')
+        return grant.promise;
+      return verification();
+    });
+    const mounted = await mount();
+    submit();
+    if (stage === 'silent-grant' || stage === 'retry-csrf')
+      await waitFor(() => expect(grants()).toHaveLength(1));
+    if (stage === 'native-verification')
+      await waitFor(() => expect(nativeStart).toHaveBeenCalled());
+    if (stage === 'fresh-token')
+      await waitFor(() => expect(getToken).toHaveBeenCalledWith({ skipCache: true }));
+    if (stage === 'verified-grant') await waitFor(() => expect(grants()).toHaveLength(2));
+    if (stage === 'retry-csrf') {
+      const { getCsrfToken } = await import('@/lib/client/csrf');
+      vi.mocked(getCsrfToken).mockReturnValueOnce(token.promise);
+      await act(async () => grant.resolve(json({ token: 'old-proof' })));
+      await waitFor(() => expect(getCsrfToken).toHaveBeenCalledTimes(3));
+    }
+    if (transition === 'session') {
+      act(() => identity());
+      mounted.rerender(<Harness />);
+    } else mounted.rerender(<Harness active={false} />);
+    await act(async () => {
+      native.resolve({ status: 'complete' });
+      token.resolve('retired-token');
+      grant.resolve(json({ token: 'old-proof' }));
+    });
+    expect(writes()).toHaveLength(1);
+    expect(grants()).toHaveLength(stage === 'verified-grant' ? 2 : 1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByLabelText('Workspace phase')).not.toHaveTextContent('receipt');
+    expect(fixture.finalize).not.toHaveBeenCalled();
+    expect(fixture.success).not.toHaveBeenCalled();
+    expect(fixture.error).not.toHaveBeenCalled();
+  },
+);
+
+it('does not restart a proof-bearing write whose response is lost', async () => {
+  transport(async (path, init) => {
+    if (path === '/api/auth/step-up') return json({ token: 'proof' });
+    if (new Headers(init?.headers).has(STEP_UP_TOKEN_HEADER)) throw new TypeError('Lost response');
+    return challenge();
   });
+  await mount();
+  submit();
+  await waitFor(() =>
+    expect(screen.getByLabelText('Workspace phase')).toHaveTextContent('uncertain'),
+  );
+  expect(writes()).toHaveLength(2);
+  expect(grants()).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Submit workspace action' })).toBeDisabled();
+  expect(fixture.success).not.toHaveBeenCalled();
+});
 
-  it('transfers nothing, and raises no alarm, when the challenge is dismissed', async () => {
-    const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(refusal()).mockResolvedValueOnce(verificationRequired());
+const invalidLeaves = [
+  {
+    name: 'missing identity',
+    receipt: () => ({ revoked: { sessions: 0, deviceTokens: 0, apiKeys: 0 }, warnings: [] }),
+  },
+  { name: 'wrong workspace', receipt: () => ({ ...leaveReceipt(), organizationId: OTHER_ORG }) },
+  { name: 'wrong user', receipt: () => ({ ...leaveReceipt(), userId: 'another-account' }) },
+  {
+    name: 'provider subject instead of product account',
+    receipt: () => ({ ...leaveReceipt(), userId: fixture.auth.userId }),
+  },
+  {
+    name: 'wrong successor',
+    receipt: () => ({ ...leaveReceipt(), successorUserId: 'unexpected-successor' }),
+  },
+  {
+    name: 'negative count',
+    receipt: () => ({ ...leaveReceipt(), revoked: { sessions: -1, deviceTokens: 0, apiKeys: 0 } }),
+  },
+  {
+    name: 'fractional count',
+    receipt: () => ({ ...leaveReceipt(), sharedConnectorsUnshared: 0.5 }),
+  },
+  {
+    name: 'unsafe integer count',
+    receipt: () => ({ ...leaveReceipt(), sharedConnectorsUnshared: Number.MAX_SAFE_INTEGER + 1 }),
+  },
+  { name: 'missing warnings', receipt: () => ({ ...leaveReceipt(), warnings: undefined }) },
+];
+it.each(invalidLeaves)(
+  'keeps an invalid leave receipt ($name) uncertain and never reports success',
+  async ({ receipt }) => {
+    transport(async () => json(receipt()));
+    const { result } = renderHook(() => useLeaveOrganization(), { wrapper });
+    await waitFor(() => expect(result.current.canMutate).toBe(true));
+    act(() => result.current.mutate({ organizationId: ORG }));
+    await waitFor(() => expect(result.current.phase).toBe('uncertain'));
+    expect(result.current.data).toBeUndefined();
+    expect(writes()).toHaveLength(1);
+    expect(fixture.finalize).not.toHaveBeenCalled();
+  },
+);
 
-    renderHarness();
-    await user.click(screen.getByRole('button', { name: /transfer ownership/i }));
-    await user.click(await screen.findByRole('button', { name: /^cancel$/i }));
-
-    await waitFor(() =>
-      expect(screen.queryByLabelText(/code from your authenticator app/i)).toBeNull(),
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(toastMock.error).not.toHaveBeenCalled();
-    expect(toastMock.success).not.toHaveBeenCalled();
-  });
-
-  it('reports a genuine failure of the replayed transfer', async () => {
-    const user = userEvent.setup();
-    fetchMock
-      .mockResolvedValueOnce(refusal())
-      .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: { message: 'That member has left.' } }), {
-          status: 409,
-          headers: { 'content-type': 'application/json' },
-        }),
-      );
-
-    renderHarness();
-    await user.click(screen.getByRole('button', { name: /transfer ownership/i }));
-
-    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('That member has left.'));
-    expect(toastMock.success).not.toHaveBeenCalled();
-  });
+it.each([
+  { name: 'missing identity', receipt: {} },
+  {
+    name: 'wrong workspace',
+    receipt: { organizationId: OTHER_ORG, ownerUserId: 'successor', previousOwnerRole: 'viewer' },
+  },
+  {
+    name: 'wrong owner',
+    receipt: { organizationId: ORG, ownerUserId: 'replacement', previousOwnerRole: 'viewer' },
+  },
+  {
+    name: 'wrong outgoing role',
+    receipt: { organizationId: ORG, ownerUserId: 'successor', previousOwnerRole: 'admin' },
+  },
+])('keeps an invalid transfer receipt ($name) uncertain', async ({ receipt }) => {
+  transport(async () => json(receipt));
+  const { result } = renderHook(() => useTransferOrganizationOwnership(), { wrapper });
+  await waitFor(() => expect(result.current.canMutate).toBe(true));
+  act(() => result.current.mutate(transferInput()));
+  await waitFor(() => expect(result.current.phase).toBe('uncertain'));
+  expect(result.current.data).toBeUndefined();
+  expect(writes()).toHaveLength(1);
+  expect(fixture.finalize).not.toHaveBeenCalled();
 });

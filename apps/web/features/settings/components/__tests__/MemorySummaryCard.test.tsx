@@ -1,13 +1,33 @@
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/client/csrf', () => ({
-  addCsrfHeaders: vi.fn(async (headers: Record<string, string> = {}) => ({
-    ...headers,
-    'x-csrf-token': 'test-token',
-  })),
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/cloud-memory-fixture';
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => getCloudMemoryFixtureSession,
+  useReadonlyIdentityLifetime: () => () => {
+    const session = getCloudMemoryFixtureSession();
+    return { isCurrent: () => session?.isCurrent() === true };
+  },
 }));
+
+let cloud: ReturnType<typeof createCloudMemoryFixture>;
+beforeEach(() => {
+  cloud = createCloudMemoryFixture();
+});
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 import { MemorySummaryCard } from '../MemorySummaryCard';
 
@@ -22,7 +42,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 
-describe('MemorySummaryCard', () => {
+describe('Unexecuted cloud MemorySummaryCard', () => {
   it('writes a summary only when asked, then shows who you are and what you prefer', async () => {
     fetchMock
       .mockResolvedValueOnce(
@@ -44,7 +64,7 @@ describe('MemorySummaryCard', () => {
       );
     const user = userEvent.setup();
 
-    render(<MemorySummaryCard memoryCount={3} />);
+    render(<MemorySummaryCard memoryCount={3} />, { wrapper: cloud.wrapper });
 
     const write = await screen.findByRole('button', { name: 'Summarise my memories' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -58,7 +78,11 @@ describe('MemorySummaryCard', () => {
     expect(screen.getByRole('button', { name: 'Update summary' })).toBeVisible();
     const [, init] = fetchMock.mock.calls[1]!;
     expect(init.method).toBe('POST');
-    expect(init.headers).toMatchObject({ 'x-csrf-token': 'test-token' });
+    expect(new Headers(init.headers).get('Authorization')).toMatch(/^Bearer fixture-token-/);
+    expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
+      MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    );
+    expect(init.credentials).toBe('omit');
   });
 
   it('says there is nothing to summarise when no memory is saved', async () => {
@@ -66,7 +90,7 @@ describe('MemorySummaryCard', () => {
       jsonResponse({ summary: { about: [], preferences: [] }, memoryCount: 0, generatedAt: null }),
     );
 
-    render(<MemorySummaryCard memoryCount={0} />);
+    render(<MemorySummaryCard memoryCount={0} />, { wrapper: cloud.wrapper });
 
     expect(
       await screen.findByText('Nothing is saved yet, so there is nothing to summarise.'),
@@ -84,11 +108,11 @@ describe('MemorySummaryCard', () => {
         }),
       )
       .mockResolvedValueOnce(
-        jsonResponse({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Busy, try later.' } }, 503),
+        jsonResponse({ error: { code: 'SERVICE_UNAVAILABLE', message: 'Busy, try later.' } }, 422),
       );
     const user = userEvent.setup();
 
-    render(<MemorySummaryCard memoryCount={2} />);
+    render(<MemorySummaryCard memoryCount={2} />, { wrapper: cloud.wrapper });
     await user.click(await screen.findByRole('button', { name: 'Summarise my memories' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Busy, try later.');

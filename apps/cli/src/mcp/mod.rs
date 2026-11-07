@@ -1278,11 +1278,9 @@ fn client_metadata_document_url() -> Option<String> {
     agiworkforce_mcp::oauth::client_metadata_document_url(&base, "cli")
 }
 
-/// What the engine asks before it restarts a local server that stopped: for
-/// one a project declares, whether the launch is still the one the user
-/// approved. The engine restarts from the launch it saved, and the files
-/// that launch runs can have been edited since, so the approval is checked
-/// again there and not only when the session loaded its servers.
+/// Recheck cached workspace policy before every local restart, then the
+/// launch approval for servers a project declares. This synchronous hook
+/// does not refresh unavailable policy or revoke an already-running server.
 fn respawn_check(
     name: &str,
     config: &McpServerConfig,
@@ -1291,13 +1289,18 @@ fn respawn_check(
     let McpTransport::Stdio { origin, .. } = config.as_transport() else {
         return None;
     };
-    if origin == McpServerOrigin::User {
-        return None;
-    }
-    let project = project?.to_path_buf();
+    let project = project.map(std::path::Path::to_path_buf);
     let (name, config) = (name.to_string(), config.clone());
     Some(Arc::new(move || {
-        consent::respawn_allowed(&project, origin, &name, &config)
+        if let Some(refusal) = policy_refusal(&name, &config) {
+            return Err(refusal);
+        }
+        if origin != McpServerOrigin::User
+            && let Some(project) = project.as_deref()
+        {
+            consent::respawn_allowed(project, origin, &name, &config)?;
+        }
+        Ok(())
     }))
 }
 
@@ -2615,20 +2618,70 @@ mod tests {
     }
 
     #[test]
-    fn only_a_server_a_project_declares_is_checked_again_before_it_restarts() {
+    fn workspace_policy_allows_user_restarts_without_project_launch_consent() {
+        let mine = McpServerConfig::stdio("node", vec!["server.js".to_string()], HashMap::new());
+        let check = respawn_check("mine", &mine, None).expect("stdio policy check");
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"schemaVersion": 3, "governed": false, "code": null}),
+            || assert_eq!(check(), Ok(())),
+        );
+    }
+
+    #[test]
+    fn every_stdio_origin_checks_policy_before_project_consent() {
+        for origin in [McpServerOrigin::User, McpServerOrigin::Project, McpServerOrigin::Plugin] {
+            let config = McpServerConfig::stdio("node", vec![], HashMap::new()).with_origin(origin);
+            let check = respawn_check("server", &config, Some(std::path::Path::new("unread-project")))
+                .expect("stdio policy check");
+            crate::cloud::workspace_policy::with_test_policy(
+                serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
+                || assert!(check().unwrap_err().contains("administrator has turned MCP servers off")),
+            );
+        }
+    }
+
+    #[test]
+    fn stdio_restart_rechecks_policy_on_each_invocation() {
+        let config = McpServerConfig::stdio("node", vec![], HashMap::new());
+        let check = respawn_check("server", &config, None).expect("stdio policy check");
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"schemaVersion": 3, "governed": false, "code": null}),
+            || {
+                assert_eq!(check(), Ok(()));
+                crate::cloud::workspace_policy::with_test_policy(
+                    serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": true, "mcpRestrictionActive": true, "allowedMcpServers": []}}),
+                    || assert!(check().unwrap_err().contains("no host on that list")),
+                );
+                crate::cloud::workspace_policy::with_test_policy(
+                    serde_json::json!({"schemaVersion": 2, "code": {"allowMcpServers": true, "allowedMcpServers": []}}),
+                    || assert!(check().unwrap_err().contains("workspace policy could not be read")),
+                );
+                assert_eq!(check(), Ok(()));
+            },
+        );
+    }
+
+    #[test]
+    fn remote_transports_have_no_stdio_restart_hook() {
+        for remote in [
+            McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new()),
+            McpServerConfig::sse("https://mcp.example.invalid/sse", HashMap::new()),
+        ] {
+            assert!(respawn_check("remote", &remote, None).is_none());
+        }
+    }
+
+    #[test]
+    fn allowed_workspace_policy_still_requires_project_launch_consent() {
         let project = tempfile::tempdir().unwrap();
         let mine = McpServerConfig::stdio("node", vec!["server.js".to_string()], HashMap::new());
-        assert!(
-            respawn_check("mine", &mine, Some(project.path())).is_none(),
-            "the user's own server has no approval to check"
-        );
-        let remote = McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new());
-        assert!(respawn_check("remote", &remote, Some(project.path())).is_none());
-
         let theirs = mine.with_origin(McpServerOrigin::Project);
         let still_allowed = respawn_check("theirs", &theirs, Some(project.path()))
             .expect("a project server is checked");
-        let refused = still_allowed().expect_err("a launch nobody approved was restarted");
+        let refused = crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"schemaVersion": 3, "governed": false, "code": null}),
+            || still_allowed().expect_err("a launch nobody approved was restarted"),
+        );
         assert!(
             refused.contains("no longer the one you approved"),
             "{refused}"

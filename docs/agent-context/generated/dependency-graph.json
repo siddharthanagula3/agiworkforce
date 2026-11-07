@@ -675,6 +675,10 @@
       },
       {
         "from": "@agiworkforce/routing",
+        "to": "@agiworkforce/search"
+      },
+      {
+        "from": "@agiworkforce/routing",
         "to": "@agiworkforce/types"
       },
       {

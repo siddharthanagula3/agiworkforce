@@ -125,7 +125,6 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => (
   recordPublishedVersion: vi.fn(),
   requiresSandboxedRender: vi.fn(),
   renamePublishedArtifact: vi.fn(),
-  setPublishedArtifactVisibility: vi.fn(),
   unpublishArtifactRecord: vi.fn(),
   unpublishArtifactsForConversations: vi.fn(),
   PUBLISHED_TOKEN_REGEX: /^[A-Za-z0-9_-]{24}$/,

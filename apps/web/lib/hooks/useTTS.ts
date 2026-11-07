@@ -1,13 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSettingsStore, VOICE_SPEED_RATES } from '@shared/stores/web-settings-store';
-import { getCsrfToken } from '@/lib/client/csrf';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { useReadonlyIdentityLifetime, useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 
 const SPEECH_ENDPOINT = '/api/voice/speech';
 const SPEECH_CHUNK_CHARACTERS = 3_800;
-const CSRF_HEADER = 'x-csrf-token';
+interface SpeechOperation {
+  clean: string;
+  isCurrent: () => boolean;
+  retire: () => void;
+  authority: RequestAuthority | null;
+  source: AudioBufferSourceNode | null;
+  utterance: SpeechSynthesisUtterance | null;
+  settleEnded: (() => void) | null;
+}
+
+// speechSynthesis.cancel() is global. Only its exact active lease may cancel it.
+let deviceOwner: SpeechOperation | null = null;
 
 function speechChunks(text: string): string[] {
   const chunks: string[] = [];
@@ -26,15 +38,14 @@ function speechChunks(text: string): string[] {
 async function fetchSpeech(
   text: string,
   speed: number,
-  signal: AbortSignal,
+  operation: SpeechOperation,
 ): Promise<ArrayBuffer | null> {
   try {
-    const response = await fetch(SPEECH_ENDPOINT, {
+    if (!operation.isCurrent() || !operation.authority) return null;
+    const response = await operation.authority.fetch(SPEECH_ENDPOINT, {
       method: 'POST',
-      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        [CSRF_HEADER]: await getCsrfToken(),
         'Idempotency-Key': createManagedChatIdempotencyKey({
           surface: 'web',
           purpose: 'read-aloud',
@@ -42,9 +53,10 @@ async function fetchSpeech(
         }),
       },
       body: JSON.stringify({ text, speed }),
-      signal,
     });
-    return response.ok ? await response.arrayBuffer() : null;
+    if (!operation.isCurrent() || !response.ok) return null;
+    const bytes = await response.arrayBuffer();
+    return operation.isCurrent() ? bytes : null;
   } catch {
     return null;
   }
@@ -119,10 +131,24 @@ function stripMarkdown(text: string): string {
   );
 }
 
+export interface SpeechOptions {
+  deviceVoice?: boolean;
+  /** Re-read current content policy, including after asynchronous boundaries. */
+  canSpeak?: () => boolean;
+}
+
+function policyAllows(canSpeak?: () => boolean): boolean {
+  try {
+    return canSpeak?.() ?? true;
+  } catch {
+    return false;
+  }
+}
+
 export interface UseTTSReturn {
   isSpeaking: boolean;
   isSupported: boolean;
-  speak: (text: string, options?: { deviceVoice?: boolean }) => void;
+  speak: (text: string, options?: SpeechOptions) => void;
   stop: () => void;
   unlock: () => void;
   voices: SpeechSynthesisVoice[];
@@ -132,17 +158,54 @@ export interface UseTTSReturn {
 
 const UNLOCK_TEXT = ' ';
 
-export function useTTS(): UseTTSReturn {
+export function useTTS(ownerScope?: string | null, allowed = true): UseTTSReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceUri, setVoiceUriState] = useState<string | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const spokenTextRef = useRef<string | null>(null);
-  const playbackRef = useRef<{
-    controller: AbortController;
-    source: AudioBufferSourceNode | null;
-  } | null>(null);
+  const captureSession = useSessionSnapshot();
+  const captureIdentity = useReadonlyIdentityLifetime();
+  const lifetimeRef = useRef<object | null>(null);
+  const scopeRef = useRef(ownerScope);
+  const policyRef = useRef(allowed);
+  const policyGeneration = useRef(0);
+  if (policyRef.current !== allowed) {
+    policyRef.current = allowed;
+    policyGeneration.current += 1;
+  }
+  const renderedPolicyGeneration = policyGeneration.current;
+  const scopeGeneration = useRef(0);
+  if (scopeRef.current !== ownerScope) {
+    scopeRef.current = ownerScope;
+    scopeGeneration.current += 1;
+  }
+  const renderedScopeGeneration = scopeGeneration.current;
+  const renderedIdentity = captureIdentity();
+  const operationRef = useRef<SpeechOperation | null>(null);
+
+  const stop = useCallback(() => {
+    if (scopeGeneration.current !== renderedScopeGeneration || !renderedIdentity.isCurrent())
+      return;
+    if (policyGeneration.current !== renderedPolicyGeneration) return;
+    operationRef.current?.retire();
+  }, [renderedScopeGeneration, renderedIdentity, renderedPolicyGeneration]);
+
+  useLayoutEffect(() => {
+    const lifetime = {};
+    lifetimeRef.current = lifetime;
+    return () => {
+      lifetimeRef.current = null;
+      operationRef.current?.retire();
+    };
+  }, []);
+
+  // Identity helpers fence observations, not arbitrary SDK mutations. Every
+  // identity render also retires audio that is already playing, without waiting
+  // for a response or an utterance callback.
+  useLayoutEffect(() => {
+    const operation = operationRef.current;
+    if (operation && !operation.isCurrent()) operation.retire();
+  });
 
   useEffect(() => {
     const browserSupportsSpeech =
@@ -159,7 +222,6 @@ export function useTTS(): UseTTSReturn {
 
     return () => {
       synth.removeEventListener('voiceschanged', syncVoices);
-      synth.cancel();
     };
   }, []);
 
@@ -188,156 +250,247 @@ export function useTTS(): UseTTSReturn {
     [voices, voiceUri],
   );
 
-  const stopServerPlayback = useCallback(() => {
-    const playback = playbackRef.current;
-    playbackRef.current = null;
-    if (!playback) return;
-    playback.controller.abort();
-    playback.source?.stop();
-  }, []);
-
-  const stop = useCallback(() => {
-    stopServerPlayback();
-    if (!isSupported) return;
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-    utteranceRef.current = null;
-    spokenTextRef.current = null;
-  }, [isSupported, stopServerPlayback]);
-
-  const unlock = useCallback(() => {
-    if (!isSupported || !('speechSynthesis' in window)) return;
-    const synth = window.speechSynthesis;
-    if (synth.speaking || synth.pending) return;
-    const primer = new SpeechSynthesisUtterance(UNLOCK_TEXT);
-    primer.volume = 0;
-    synth.speak(primer);
-  }, [isSupported]);
+  const begin = useCallback(
+    (clean: string, canSpeak?: () => boolean): SpeechOperation | null => {
+      operationRef.current?.retire();
+      const lifetime = lifetimeRef.current;
+      if (!lifetime) return null;
+      const identity = captureIdentity();
+      const scope = scopeGeneration.current;
+      const policy = policyGeneration.current;
+      let retired = false;
+      const operation: SpeechOperation = {
+        clean,
+        authority: null,
+        source: null,
+        utterance: null,
+        settleEnded: null,
+        isCurrent: () => {
+          const current =
+            !retired &&
+            lifetimeRef.current === lifetime &&
+            scopeGeneration.current === scope &&
+            policyGeneration.current === policy &&
+            policyRef.current &&
+            policyAllows(canSpeak) &&
+            operationRef.current === operation &&
+            identity.isCurrent();
+          if (!current) operation.retire();
+          return current;
+        },
+        retire: () => {
+          if (retired) return;
+          retired = true;
+          operation.authority?.retire();
+          const source = operation.source;
+          operation.source = null;
+          if (source) {
+            source.onended = null;
+            try {
+              source.stop();
+            } catch {
+              /* Already stopped or never started. */
+            }
+            try {
+              source.disconnect();
+            } catch {
+              /* Already disconnected. */
+            }
+          }
+          operation.settleEnded?.();
+          operation.settleEnded = null;
+          if (operation.utterance) {
+            operation.utterance.onstart = null;
+            operation.utterance.onend = null;
+            operation.utterance.onerror = null;
+            operation.utterance = null;
+          }
+          if (deviceOwner === operation) {
+            deviceOwner = null;
+            try {
+              window.speechSynthesis.cancel();
+            } catch {
+              /* Device unavailable. */
+            }
+          }
+          if (operationRef.current === operation) {
+            operationRef.current = null;
+            if (lifetimeRef.current === lifetime) setIsSpeaking(false);
+          }
+        },
+      };
+      operationRef.current = operation;
+      return operation;
+    },
+    [captureIdentity],
+  );
 
   const speakWithDevice = useCallback(
-    (clean: string) => {
-      if (!('speechSynthesis' in window)) {
-        setIsSpeaking(false);
-        spokenTextRef.current = null;
+    (operation: SpeechOperation, primer = false) => {
+      if (!operation.isCurrent()) return;
+      if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+        operation.retire();
         return;
       }
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(clean);
-      // Read at speak time from the store rather than captured: the settings
-      // picker and the read-aloud button mount separate useTTS instances, and a
-      // captured value would leave one of them speaking at the old rate.
-      utterance.rate =
-        VOICE_SPEED_RATES[useSettingsStore.getState().voiceSpeed ?? 'normal'] ??
-        VOICE_SPEED_RATES.normal;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        utterance.lang = selectedVoice.lang;
+      // Do not acquire the global cancellation lease over someone else's voice.
+      if (!deviceOwner && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) {
+        operation.retire();
+        return;
       }
-
-      utterance.onstart = () => {
-        if (utteranceRef.current === utterance) setIsSpeaking(true);
-      };
-      utterance.onend = () => {
-        if (utteranceRef.current !== utterance) return;
-        setIsSpeaking(false);
-        utteranceRef.current = null;
-        spokenTextRef.current = null;
-      };
-      utterance.onerror = () => {
-        if (utteranceRef.current !== utterance) return;
-        setIsSpeaking(false);
-        utteranceRef.current = null;
-        spokenTextRef.current = null;
-      };
-
-      utteranceRef.current = utterance;
-      spokenTextRef.current = clean;
-      window.speechSynthesis.speak(utterance);
+      // An intentional new speak replaces the previous owned voice. Its later
+      // cleanup cannot cancel this replacement because the global lease changes.
+      deviceOwner?.retire();
+      if (!operation.isCurrent()) return;
+      try {
+        const utterance = new SpeechSynthesisUtterance(operation.clean);
+        utterance.rate =
+          VOICE_SPEED_RATES[useSettingsStore.getState().voiceSpeed ?? 'normal'] ??
+          VOICE_SPEED_RATES.normal;
+        utterance.pitch = 1;
+        utterance.volume = primer ? 0 : 1;
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          utterance.lang = selectedVoice.lang;
+        }
+        operation.utterance = utterance;
+        deviceOwner = operation;
+        utterance.onstart = () => {
+          if (operation.isCurrent() && deviceOwner === operation && !primer) setIsSpeaking(true);
+        };
+        const finish = () => {
+          if (!operation.isCurrent() || deviceOwner !== operation) return;
+          deviceOwner = null;
+          operation.retire();
+        };
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        if (operation.isCurrent()) window.speechSynthesis.speak(utterance);
+      } catch {
+        operation.retire();
+      }
     },
     [selectedVoice],
   );
 
+  const unlock = useCallback(() => {
+    if (!isSupported || !('speechSynthesis' in window)) return;
+    if (scopeGeneration.current !== renderedScopeGeneration || !renderedIdentity.isCurrent())
+      return;
+    if (!policyRef.current || policyGeneration.current !== renderedPolicyGeneration) return;
+    if (
+      operationRef.current ||
+      deviceOwner ||
+      window.speechSynthesis.speaking ||
+      window.speechSynthesis.pending
+    )
+      return;
+    const operation = begin(UNLOCK_TEXT);
+    if (operation) speakWithDevice(operation, true);
+  }, [
+    isSupported,
+    begin,
+    speakWithDevice,
+    renderedScopeGeneration,
+    renderedIdentity,
+    renderedPolicyGeneration,
+  ]);
+
   const speak = useCallback(
-    (text: string, options?: { deviceVoice?: boolean }) => {
-      if (!isSupported) return;
+    (text: string, options?: SpeechOptions) => {
+      if (
+        !isSupported ||
+        scopeGeneration.current !== renderedScopeGeneration ||
+        !renderedIdentity.isCurrent()
+      )
+        return;
+      if (policyGeneration.current !== renderedPolicyGeneration) return;
+      if (!policyRef.current || !policyAllows(options?.canSpeak)) {
+        operationRef.current?.retire();
+        return;
+      }
       const clean = stripMarkdown(text);
       if (!clean) return;
-      if (isSpeaking && spokenTextRef.current === clean) {
-        stop();
+      const previous = operationRef.current;
+      if (previous?.clean === clean && previous.isCurrent()) {
+        previous.retire();
         return;
       }
-      stop();
-      const context = options?.deviceVoice ? null : speechAudioContext();
-      if (!context) {
-        speakWithDevice(clean);
+      const operation = begin(clean, options?.canSpeak);
+      if (!operation) return;
+      const session = options?.deviceVoice ? null : captureSession();
+      const context = session ? speechAudioContext() : null;
+      if (!context || !session) {
+        speakWithDevice(operation);
         return;
       }
-      const resumed =
-        context.state === 'running'
-          ? Promise.resolve(true)
-          : context.resume().then(
-              () => context.state === 'running',
-              () => false,
-            );
-
-      const controller = new AbortController();
-      const playback: { controller: AbortController; source: AudioBufferSourceNode | null } = {
-        controller,
-        source: null,
-      };
-      playbackRef.current = playback;
-      spokenTextRef.current = clean;
+      operation.authority = createRequestAuthority(session, operation.isCurrent);
       setIsSpeaking(true);
       const speed =
         VOICE_SPEED_RATES[useSettingsStore.getState().voiceSpeed ?? 'normal'] ??
         VOICE_SPEED_RATES.normal;
-      const finish = () => {
-        if (playbackRef.current !== playback) return;
-        playbackRef.current = null;
-        spokenTextRef.current = null;
-        setIsSpeaking(false);
-      };
-
       void (async () => {
-        if (!(await resumed)) {
-          if (playbackRef.current !== playback) return;
-          playbackRef.current = null;
-          speakWithDevice(clean);
-          return;
-        }
-        const chunks = speechChunks(clean);
-        for (const [index, chunk] of chunks.entries()) {
-          const bytes = await fetchSpeech(chunk, speed, controller.signal);
-          const buffer = bytes ? await decodeSpeech(context, bytes) : null;
-          if (playbackRef.current !== playback) return;
-          if (!buffer) {
-            if (index === 0) {
-              playbackRef.current = null;
-              speakWithDevice(clean);
-            } else {
-              finish();
+        try {
+          let resumed = context.state === 'running';
+          if (!resumed) {
+            try {
+              await context.resume();
+              resumed = context.state === 'running';
+            } catch {
+              /* Device fallback. */
             }
+          }
+          if (!operation.isCurrent()) return;
+          if (!resumed) {
+            speakWithDevice(operation);
             return;
           }
-          const source = context.createBufferSource();
-          source.buffer = buffer;
-          source.connect(context.destination);
-          const ended = new Promise<void>((resolve) => {
-            source.onended = () => resolve();
-          });
-          source.start();
-          playback.source = source;
-          await ended;
-          source.disconnect();
-          if (playbackRef.current !== playback) return;
+          for (const [index, chunk] of speechChunks(clean).entries()) {
+            if (!operation.isCurrent()) return;
+            const bytes = await fetchSpeech(chunk, speed, operation);
+            if (!operation.isCurrent()) return;
+            const buffer = bytes ? await decodeSpeech(context, bytes) : null;
+            if (!operation.isCurrent()) return;
+            if (!buffer) {
+              if (index === 0) speakWithDevice(operation);
+              else operation.retire();
+              return;
+            }
+            const source = context.createBufferSource();
+            operation.source = source;
+            source.buffer = buffer;
+            source.connect(context.destination);
+            const ended = new Promise<void>((resolve) => {
+              operation.settleEnded = resolve;
+              source.onended = () => resolve();
+            });
+            if (!operation.isCurrent()) return;
+            source.start();
+            await ended;
+            if (!operation.isCurrent()) return;
+            operation.settleEnded = null;
+            source.onended = null;
+            try {
+              source.disconnect();
+            } catch {
+              /* Already disconnected. */
+            }
+            operation.source = null;
+          }
+          if (operation.isCurrent()) operation.retire();
+        } catch {
+          operation.retire();
         }
-        finish();
       })();
     },
-    [isSupported, isSpeaking, stop, speakWithDevice],
+    [
+      isSupported,
+      begin,
+      captureSession,
+      speakWithDevice,
+      renderedScopeGeneration,
+      renderedIdentity,
+      renderedPolicyGeneration,
+    ],
   );
 
   return { isSpeaking, isSupported, speak, stop, unlock, voices, voiceUri, setVoiceUri };

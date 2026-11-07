@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, ScrollView, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Archive, Trash2, AlertCircle, RotateCcw } from 'lucide-react-native';
 
@@ -14,6 +14,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -29,20 +30,25 @@ import {
 } from '@/src/features/archived-chats';
 import { translatePlural } from '@/src/i18n/plural';
 
-type LoadState =
-  | { kind: 'loading'; account: CloudAccountEpoch | null }
-  | {
-      kind: 'ready';
-      account: CloudAccountEpoch;
-      conversations: ArchivedConversation[];
-      hasMore: boolean;
-      nextOffset: number;
-    }
-  | { kind: 'error'; account: CloudAccountEpoch; message: string };
-
-function isCurrentCloudScope(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
-  return isCloudAccountEpochCurrent(account) && useChatAppModeStore.getState().appMode === 'cloud';
+interface ArchivedList {
+  conversations: ArchivedConversation[];
+  hasMore: boolean;
+  nextOffset: number;
 }
+
+interface ArchivedSession {
+  account: CloudAccountEpoch;
+  active: boolean;
+  controller: AbortController;
+  read: { controller: AbortController } | null;
+  mutation: object | null;
+  list: ArchivedList | null;
+}
+
+type LoadState =
+  | { kind: 'loading'; owner: ArchivedSession | null }
+  | ({ kind: 'ready'; owner: ArchivedSession; list: ArchivedList } & ArchivedList)
+  | { kind: 'error'; owner: ArchivedSession; message: string };
 
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
@@ -60,41 +66,156 @@ export default function ArchivedChatsScreen() {
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const loadConversations = useChatMessageStore((state) => state.loadConversations);
 
-  const [state, setState] = useState<LoadState>({ kind: 'loading', account: null });
+  const [state, setState] = useState<LoadState>({ kind: 'loading', owner: null });
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [scopeRevision, setScopeRevision] = useState(0);
+  const sessionRef = useRef<ArchivedSession | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    const account = captureCloudAccountEpoch();
-    if (!isCurrentCloudScope(account)) return;
-    setState({ kind: 'loading', account });
-    try {
-      const page = await fetchArchivedConversations(0, signal);
-      if (signal?.aborted || !isCurrentCloudScope(account)) return;
-      setState({
-        kind: 'ready',
-        account,
-        conversations: page.conversations,
-        hasMore: page.hasMore,
-        nextOffset: page.nextOffset,
-      });
-    } catch {
-      if (signal?.aborted || !isCurrentCloudScope(account)) return;
-      setState({
-        kind: 'error',
-        account,
-        message: 'Could not load archived chats. Retry.',
-      });
+  const isCurrent = useCallback((owner: ArchivedSession) => {
+    const auth = useAuthStore.getState();
+    return (
+      sessionRef.current === owner &&
+      owner.active &&
+      isCloudAccountEpochCurrent(owner.account) &&
+      useChatAppModeStore.getState().appMode === 'cloud' &&
+      auth.isClerkLoaded &&
+      auth.isClerkSignedIn &&
+      auth.clerkUserId === owner.account.ownerId
+    );
+  }, []);
+
+  const retire = useCallback(() => {
+    const owner = sessionRef.current;
+    sessionRef.current = null;
+    if (owner) {
+      owner.active = false;
+      owner.controller.abort();
+      owner.read?.controller.abort();
+      owner.read = null;
+      owner.list = null;
     }
   }, []);
 
+  const load = useCallback(
+    async (owner: ArchivedSession, refresh = false, more = false, expectedList?: ArchivedList) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      const base = owner.list;
+      if (more && (!base?.hasMore || owner.read || base !== expectedList)) return;
+      owner.read?.controller.abort();
+      const request = { controller: new AbortController() };
+      owner.read = request;
+      setRefreshing(refresh);
+      setLoadingMore(more);
+      if (!more) {
+        owner.list = null;
+        setState({ kind: 'loading', owner });
+      }
+      const ownsRead = () =>
+        isCurrent(owner) && owner.read === request && (!more || owner.list === base);
+      try {
+        const page = await fetchArchivedConversations(
+          more && base ? base.nextOffset : 0,
+          owner.account,
+          request.controller.signal,
+        );
+        if (!ownsRead()) return;
+        const seen = new Set(base?.conversations.map((conversation) => conversation.id));
+        const next: ArchivedList = {
+          ...page,
+          conversations:
+            more && base
+              ? [
+                  ...base.conversations,
+                  ...page.conversations.filter((conversation) => !seen.has(conversation.id)),
+                ]
+              : page.conversations,
+        };
+        owner.list = next;
+        owner.read = null;
+        setRefreshing(false);
+        setLoadingMore(false);
+        setState({ kind: 'ready', owner, list: next, ...next });
+      } catch {
+        if (!ownsRead()) return;
+        if (more) {
+          Alert.alert('Could not load more', 'Refresh archived chats and try again.');
+        } else {
+          owner.list = null;
+          setState({ kind: 'error', owner, message: 'Could not load archived chats. Retry.' });
+        }
+      } finally {
+        if (ownsRead()) {
+          owner.read = null;
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [isCurrent],
+  );
+
   useEffect(() => {
-    if (!isClerkSignedIn || appMode !== 'cloud') return;
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [appMode, clerkUserId, isClerkSignedIn, load]);
+    const invalidate = () => {
+      retire();
+      setRefreshing(false);
+      setLoadingMore(false);
+      setBusyId(null);
+      setState({ kind: 'loading', owner: null });
+      setScopeRevision((revision) => revision + 1);
+    };
+    const stopEpoch = subscribeCloudAccountEpochChange(invalidate);
+    const stopMode = useChatAppModeStore.subscribe((next, previous) => {
+      if (next.appMode !== previous.appMode) invalidate();
+    });
+    const stopAuth = useAuthStore.subscribe((next, previous) => {
+      if (
+        next.clerkUserId !== previous.clerkUserId ||
+        next.isClerkSignedIn !== previous.isClerkSignedIn ||
+        next.isClerkLoaded !== previous.isClerkLoaded
+      )
+        invalidate();
+    });
+    return () => {
+      stopEpoch();
+      stopMode();
+      stopAuth();
+      retire();
+    };
+  }, [retire]);
+
+  useFocusEffect(
+    useCallback(() => {
+      retire();
+      setRefreshing(false);
+      setLoadingMore(false);
+      setBusyId(null);
+      setState({ kind: 'loading', owner: null });
+      const account = captureCloudAccountEpoch();
+      if (
+        appMode !== 'cloud' ||
+        !isClerkLoaded ||
+        !isClerkSignedIn ||
+        !account ||
+        account.ownerId !== clerkUserId
+      )
+        return;
+      const owner: ArchivedSession = {
+        account,
+        active: true,
+        controller: new AbortController(),
+        read: null,
+        mutation: null,
+        list: null,
+      };
+      sessionRef.current = owner;
+      void load(owner);
+      return () => {
+        if (sessionRef.current === owner) retire();
+      };
+    }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, scopeRevision, load, retire]),
+  );
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -104,180 +225,142 @@ export default function ArchivedChatsScreen() {
     router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+  const handleRefresh = useCallback(() => {
+    const owner = state.owner;
+    if (owner) void load(owner, true);
+  }, [load, state.owner]);
 
-  const handleLoadMore = useCallback(async () => {
-    if (state.kind !== 'ready' || !state.hasMore) return;
-    const account = state.account;
-    if (!isCurrentCloudScope(account)) return;
-    setLoadingMore(true);
-    try {
-      const page = await fetchArchivedConversations(state.nextOffset);
-      if (!isCurrentCloudScope(account)) return;
-      setState((current) => {
-        if (
-          current.kind !== 'ready' ||
-          current.account.ownerId !== account.ownerId ||
-          current.account.epoch !== account.epoch
-        )
-          return current;
-        const seen = new Set(current.conversations.map((conversation) => conversation.id));
-        return {
-          kind: 'ready',
-          account,
-          conversations: [
-            ...current.conversations,
-            ...page.conversations.filter((conversation) => !seen.has(conversation.id)),
-          ],
-          hasMore: page.hasMore,
-          nextOffset: page.nextOffset,
-        };
-      });
-    } catch {
-      if (isCurrentCloudScope(account)) {
-        Alert.alert('Could not load more', 'Refresh archived chats and try again.');
-      }
-    } finally {
+  const mutate = useCallback(
+    (owner: ArchivedSession, kind: 'restore' | 'delete' | 'bulk', id?: string) => {
+      if (!isCurrent(owner) || owner.mutation || (kind !== 'bulk' && !id)) return;
+      const mutation = {};
+      owner.mutation = mutation;
+      owner.read?.controller.abort();
+      owner.read = null;
+      setRefreshing(false);
       setLoadingMore(false);
-    }
-  }, [state]);
-
-  const removeFromList = useCallback((id: string, account: CloudAccountEpoch) => {
-    setState((current) =>
-      current.kind === 'ready' &&
-      current.account.ownerId === account.ownerId &&
-      current.account.epoch === account.epoch
-        ? {
-            ...current,
-            conversations: current.conversations.filter((conversation) => conversation.id !== id),
-          }
-        : current,
-    );
-  }, []);
-
-  const handleRestore = useCallback(
-    (conversation: ArchivedConversation) => {
-      const account = captureCloudAccountEpoch();
-      if (!isCurrentCloudScope(account)) return;
+      setBusyId(id ?? '*');
+      const ownsMutation = () => isCurrent(owner) && owner.mutation === mutation;
       void (async () => {
-        setBusyId(conversation.id);
+        let restored = false;
         try {
-          await restoreArchivedConversation(conversation.id);
-          if (!isCurrentCloudScope(account)) return;
-          removeFromList(conversation.id, account);
-        } catch {
-          if (isCurrentCloudScope(account)) {
-            Alert.alert('Could not restore', 'The chat is still archived. Try again.');
+          if (kind === 'restore' && id) {
+            await restoreArchivedConversation(id, owner.account, owner.controller.signal);
+            restored = true;
+          } else if (kind === 'delete' && id) {
+            await deleteArchivedConversation(id, owner.account, owner.controller.signal);
+          } else {
+            const deleted = await deleteAllArchivedConversations(
+              owner.account,
+              owner.controller.signal,
+            );
+            if (ownsMutation()) {
+              Alert.alert(
+                'Archived chats deleted',
+                translatePlural('settings', 'counts.deletedArchivedChats', deleted, {
+                  one: 'Deleted {{count}} archived chat.',
+                  other: 'Deleted {{count}} archived chats.',
+                }),
+              );
+            }
           }
-          return;
+        } catch {
+          if (ownsMutation()) {
+            Alert.alert(
+              kind === 'restore' ? 'Could not restore' : 'Could not delete',
+              kind === 'restore'
+                ? 'Could not confirm the restore. Refresh archived chats before trying again.'
+                : 'Could not confirm the deletion. Refresh archived chats before trying again.',
+            );
+          }
         } finally {
-          setBusyId(null);
+          if (ownsMutation()) {
+            owner.mutation = null;
+            setBusyId(null);
+            void load(owner);
+          }
         }
+        if (!restored || !isCurrent(owner)) return;
         try {
-          if (!isCurrentCloudScope(account)) return;
           await loadConversations();
         } catch {
-          if (isCurrentCloudScope(account)) {
+          if (isCurrent(owner))
             Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
-          }
         }
       })();
     },
-    [loadConversations, removeFromList],
+    [isCurrent, load, loadConversations],
+  );
+
+  const handleRestore = useCallback(
+    (conversation: ArchivedConversation, owner: ArchivedSession) => {
+      mutate(owner, 'restore', conversation.id);
+    },
+    [mutate],
   );
 
   const handleDelete = useCallback(
-    (conversation: ArchivedConversation) => {
-      const account = captureCloudAccountEpoch();
-      if (!isCurrentCloudScope(account)) return;
+    (conversation: ArchivedConversation, owner: ArchivedSession) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      let consumed = false;
       Alert.alert(
         'Delete this chat?',
         `"${conversation.title}" is removed from every device; restore it from Recently deleted on the web.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              consumed = true;
+            },
+          },
           {
             text: 'Delete',
             style: 'destructive',
             onPress: () => {
-              if (!isCurrentCloudScope(account)) return;
-              void (async () => {
-                setBusyId(conversation.id);
-                try {
-                  await deleteArchivedConversation(conversation.id);
-                  if (isCurrentCloudScope(account)) removeFromList(conversation.id, account);
-                } catch {
-                  if (isCurrentCloudScope(account)) {
-                    Alert.alert('Could not delete', 'Refresh archived chats and try again.');
-                  }
-                } finally {
-                  setBusyId(null);
-                }
-              })();
+              if (consumed) return;
+              consumed = true;
+              mutate(owner, 'delete', conversation.id);
             },
           },
         ],
       );
     },
-    [removeFromList],
+    [isCurrent, mutate],
   );
 
-  const handleDeleteAll = useCallback(() => {
-    const account = captureCloudAccountEpoch();
-    if (!isCurrentCloudScope(account)) return;
-    Alert.alert(
-      'Delete all archived chats?',
-      'Every archived chat is removed from every device; restore them from Recently deleted on the web.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete all',
-          style: 'destructive',
-          onPress: () => {
-            if (!isCurrentCloudScope(account)) return;
-            void (async () => {
-              try {
-                const deleted = await deleteAllArchivedConversations();
-                if (!isCurrentCloudScope(account)) return;
-                setState({
-                  kind: 'ready',
-                  account,
-                  conversations: [],
-                  hasMore: false,
-                  nextOffset: 0,
-                });
-                Alert.alert(
-                  'Archived chats deleted',
-                  translatePlural('settings', 'counts.deletedArchivedChats', deleted, {
-                    one: 'Deleted {{count}} archived chat.',
-                    other: 'Deleted {{count}} archived chats.',
-                  }),
-                );
-              } catch {
-                if (isCurrentCloudScope(account)) {
-                  Alert.alert('Could not delete', 'Refresh archived chats before trying again.');
-                }
-              }
-            })();
+  const handleDeleteAll = useCallback(
+    (owner: ArchivedSession) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      let consumed = false;
+      Alert.alert(
+        'Delete all archived chats?',
+        'Every archived chat is removed from every device; restore them from Recently deleted on the web.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              consumed = true;
+            },
           },
-        },
-      ],
-    );
-  }, []);
+          {
+            text: 'Delete all',
+            style: 'destructive',
+            onPress: () => {
+              if (consumed) return;
+              consumed = true;
+              mutate(owner, 'bulk');
+            },
+          },
+        ],
+      );
+    },
+    [isCurrent, mutate],
+  );
 
-  const currentAccount = captureCloudAccountEpoch();
   const visibleState: LoadState =
-    appMode === 'cloud' &&
-    isClerkSignedIn &&
-    currentAccount &&
-    state.account &&
-    currentAccount.ownerId === state.account.ownerId &&
-    currentAccount.epoch === state.account.epoch
-      ? state
-      : { kind: 'loading', account: null };
+    state.owner && isCurrent(state.owner) ? state : { kind: 'loading', owner: null };
 
   const header = (
     <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
@@ -377,7 +460,9 @@ export default function ArchivedChatsScreen() {
               {visibleState.message}
             </Text>
             <Pressable
-              onPress={() => void load()}
+              onPress={() => {
+                if (state.owner) void load(state.owner);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Retry loading archived chats"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
@@ -445,8 +530,8 @@ export default function ArchivedChatsScreen() {
 
                 <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
                   <Pressable
-                    onPress={() => handleRestore(conversation)}
-                    disabled={busyId === conversation.id}
+                    onPress={() => handleRestore(conversation, visibleState.owner)}
+                    disabled={busyId !== null}
                     accessibilityRole="button"
                     accessibilityLabel={`Restore ${conversation.title}`}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
@@ -459,8 +544,8 @@ export default function ArchivedChatsScreen() {
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => handleDelete(conversation)}
-                    disabled={busyId === conversation.id}
+                    onPress={() => handleDelete(conversation, visibleState.owner)}
+                    disabled={busyId !== null}
                     accessibilityRole="button"
                     accessibilityLabel={`Delete ${conversation.title}`}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
@@ -483,8 +568,8 @@ export default function ArchivedChatsScreen() {
 
         {visibleState.kind === 'ready' && visibleState.hasMore && (
           <Pressable
-            onPress={() => void handleLoadMore()}
-            disabled={loadingMore}
+            onPress={() => void load(visibleState.owner, false, true, visibleState.list)}
+            disabled={loadingMore || busyId !== null}
             accessibilityRole="button"
             accessibilityLabel="Load more archived chats"
             style={{ alignSelf: 'center', paddingVertical: 14 }}
@@ -497,7 +582,8 @@ export default function ArchivedChatsScreen() {
 
         {visibleState.kind === 'ready' && visibleState.conversations.length > 0 && (
           <Pressable
-            onPress={handleDeleteAll}
+            onPress={() => handleDeleteAll(visibleState.owner)}
+            disabled={busyId !== null}
             accessibilityRole="button"
             accessibilityLabel="Delete all archived chats"
             style={{ alignSelf: 'center', paddingVertical: 14, marginTop: 4 }}

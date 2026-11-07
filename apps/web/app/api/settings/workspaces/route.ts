@@ -41,6 +41,8 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json(
     ManagedCloudAccountWorkspacesSchema.parse({
+      // Only the verified bearer DB branch currently resolves a product account ID.
+      accountId: request.headers.get('authorization')?.startsWith('Bearer ') ? userId : undefined,
       workspaces,
       activeWorkspaceId: active?.id ?? null,
       activeOrganizationId: organizationId ?? null,

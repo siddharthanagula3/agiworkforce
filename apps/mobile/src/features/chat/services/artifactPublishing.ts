@@ -1,6 +1,22 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
-import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  assertCloudAccountEpochCurrent,
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
+  ManagedCloudPublishedArtifactDeleteReceiptSchema,
+  ManagedCloudPublishedArtifactListResponseSchema,
+  ManagedCloudPublishedArtifactLookupQuerySchema,
+  ManagedCloudPublishedArtifactLookupResponseSchema,
+  ManagedCloudPublishedArtifactPublishResponseSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
+  type ManagedCloudPublishedArtifactPublishResponse,
+  managedCloudPublishedArtifactLookupPath,
+} from '@agiworkforce/cloud-contracts';
 import { ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -16,23 +32,34 @@ export interface PublishArtifactInput {
   conversationId?: string;
 }
 
-export async function publishArtifact(input: PublishArtifactInput): Promise<string> {
-  const response = await api.post<{ shareUrl?: unknown }>('/api/artifacts/publish', {
-    artifactId: input.artifactId,
-    title: input.title,
-    kind: input.kind,
-    ...(input.language ? { language: input.language } : {}),
-    content: input.content,
-    ...(input.conversationId &&
-    useChatAppModeStore.getState().appMode === 'cloud' &&
-    SERVER_CONVERSATION_ID.test(input.conversationId)
-      ? { conversationId: input.conversationId }
-      : {}),
-  });
-
-  const shareUrl = typeof response.shareUrl === 'string' ? response.shareUrl.trim() : '';
-  if (!shareUrl) throw new Error('The publish endpoint returned no share URL.');
-  return shareUrl;
+export async function publishArtifact(
+  input: PublishArtifactInput,
+): Promise<ManagedCloudPublishedArtifactPublishResponse> {
+  const { artifactId } = ManagedCloudPublishedArtifactLookupQuerySchema.parse(input);
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.post<unknown>(
+    '/api/artifacts/publish',
+    {
+      artifactId,
+      title: input.title,
+      kind: input.kind,
+      ...(input.language ? { language: input.language } : {}),
+      content: input.content,
+      ...(input.conversationId &&
+      useChatAppModeStore.getState().appMode === 'cloud' &&
+      SERVER_CONVERSATION_ID.test(input.conversationId)
+        ? { conversationId: input.conversationId }
+        : {}),
+    },
+    { accountEpoch: account, auth401Recovery: 'caller-owned' },
+  );
+  assertCloudAccountEpochCurrent(account);
+  const receipt = ManagedCloudPublishedArtifactPublishResponseSchema.parse(response);
+  if (receipt.artifactId !== artifactId) {
+    throw new Error('The publication receipt returned a different artifact.');
+  }
+  return receipt;
 }
 
 export type PublishedArtifactAudience = 'public' | 'organization' | 'invited';
@@ -45,16 +72,6 @@ export interface ArtifactPublication {
 export interface ArtifactPublicationState {
   publication: ArtifactPublication | null;
   workspaceMemberCount: number | null;
-}
-
-function readAudience(value: unknown): PublishedArtifactAudience {
-  return value === 'public' || value === 'organization' ? value : 'invited';
-}
-
-function readWorkspaceMemberCount(value: unknown): number | null {
-  if (!value || typeof value !== 'object') return null;
-  const count = (value as { memberCount?: unknown }).memberCount;
-  return typeof count === 'number' && Number.isFinite(count) ? count : null;
 }
 
 export function readPublishedTokenFromUrl(shareUrl: string): string | null {
@@ -72,7 +89,18 @@ interface PublishedArtifactAudiences {
   ownerId: string | null;
   byId: Record<string, PublishedArtifactAudience>;
   record: (ownerId: string, artifactId: string, audience: PublishedArtifactAudience | null) => void;
-  replace: (ownerId: string, byId: Record<string, PublishedArtifactAudience>) => void;
+}
+
+let activeAudienceRefresh: {
+  controller: AbortController;
+  changes: Map<string, PublishedArtifactAudience | null>;
+} | null = null;
+
+function invalidateAudienceRefresh(): void {
+  const refresh = activeAudienceRefresh;
+  activeAudienceRefresh = null;
+  refresh?.changes.clear();
+  refresh?.controller.abort();
 }
 
 export const usePublishedArtifactAudiences = create<PublishedArtifactAudiences>()((set) => ({
@@ -80,45 +108,82 @@ export const usePublishedArtifactAudiences = create<PublishedArtifactAudiences>(
   byId: {},
   record: (ownerId, artifactId, audience) =>
     set((state) => {
-      const byId = state.ownerId === ownerId ? { ...state.byId } : {};
+      if (captureCloudAccountEpoch()?.ownerId !== ownerId) return state;
+      activeAudienceRefresh?.changes.set(artifactId, audience);
+      const byId: Record<string, PublishedArtifactAudience> = Object.assign(
+        Object.create(null),
+        state.ownerId === ownerId ? state.byId : {},
+      );
       if (audience) byId[artifactId] = audience;
       else delete byId[artifactId];
       return { ownerId, byId };
     }),
-  replace: (ownerId, byId) => set({ ownerId, byId }),
 }));
+
+subscribeCloudAccountEpochChange(() => {
+  invalidateAudienceRefresh();
+  usePublishedArtifactAudiences.setState({ ownerId: null, byId: {} });
+});
+
+useChatAppModeStore.subscribe((state, previous) => {
+  if (state.appMode !== previous.appMode) invalidateAudienceRefresh();
+});
 
 export function usePublishedArtifactAudience(artifactId: string): PublishedArtifactAudience | null {
   return usePublishedArtifactAudiences((state) =>
-    state.ownerId !== null && state.ownerId === captureCloudAccountEpoch()?.ownerId
+    state.ownerId !== null &&
+    state.ownerId === captureCloudAccountEpoch()?.ownerId &&
+    Object.prototype.hasOwnProperty.call(state.byId, artifactId)
       ? (state.byId[artifactId] ?? null)
       : null,
   );
 }
 
-type PublishedArtifactList = {
-  artifacts?: Array<{ artifactId?: unknown; shareUrl?: unknown; visibility?: unknown }>;
-  workspace?: unknown;
-};
-
-async function listPublishedArtifacts(): Promise<PublishedArtifactList> {
-  const account = captureCloudAccountEpoch();
-  const response = await api.get<PublishedArtifactList>('/api/artifacts/publish');
-  if (account && captureCloudAccountEpoch()?.ownerId === account.ownerId) {
-    const byId: Record<string, PublishedArtifactAudience> = {};
-    for (const entry of response.artifacts ?? []) {
-      if (typeof entry.artifactId === 'string' && typeof entry.shareUrl === 'string') {
-        byId[entry.artifactId] = readAudience(entry.visibility);
-      }
-    }
-    usePublishedArtifactAudiences.getState().replace(account.ownerId, byId);
-  }
-  return response;
-}
-
 export async function refreshPublishedArtifactAudiences(): Promise<void> {
   if (useChatAppModeStore.getState().appMode !== 'cloud') return;
-  await listPublishedArtifacts();
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  invalidateAudienceRefresh();
+  const refresh = {
+    controller: new AbortController(),
+    changes: new Map<string, PublishedArtifactAudience | null>(),
+  };
+  activeAudienceRefresh = refresh;
+  try {
+    const raw = await api.get<unknown>('/api/artifacts/publish', {
+      accountEpoch: account,
+      signal: refresh.controller.signal,
+    });
+    assertCloudAccountEpochCurrent(account);
+    if (activeAudienceRefresh !== refresh) return;
+    const response = ManagedCloudPublishedArtifactListResponseSchema.parse(raw);
+    if (
+      response.artifacts.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS ||
+      new Set(response.artifacts.map((entry) => entry.artifactId)).size !==
+        response.artifacts.length
+    ) {
+      throw new Error('The publication list returned an invalid page.');
+    }
+    usePublishedArtifactAudiences.setState((state) => {
+      const byId: Record<string, PublishedArtifactAudience> = Object.assign(
+        Object.create(null),
+        response.pageInfo?.nextCursor === null || state.ownerId !== account.ownerId
+          ? {}
+          : state.byId,
+      );
+      for (const entry of response.artifacts) {
+        byId[entry.artifactId] = entry.visibility;
+      }
+      for (const [artifactId, audience] of refresh.changes) {
+        if (audience) byId[artifactId] = audience;
+        else delete byId[artifactId];
+      }
+      return { ownerId: account.ownerId, byId };
+    });
+  } finally {
+    refresh.changes.clear();
+    if (activeAudienceRefresh === refresh) activeAudienceRefresh = null;
+  }
 }
 
 export function recordPublishedArtifactAudience(
@@ -130,18 +195,52 @@ export function recordPublishedArtifactAudience(
     usePublishedArtifactAudiences.getState().record(account.ownerId, artifactId, audience);
 }
 
+export function capturePostUnpublishAudienceReconciliation(
+  artifactId: string,
+): (audience: PublishedArtifactAudience) => boolean {
+  const account = captureCloudAccountEpoch();
+  const state = usePublishedArtifactAudiences.getState();
+  const refresh = activeAudienceRefresh;
+  const cleared =
+    account !== null &&
+    state.ownerId === account.ownerId &&
+    !Object.prototype.hasOwnProperty.call(state.byId, artifactId);
+  let consumed = false;
+  return (audience) => {
+    if (consumed) return false;
+    consumed = true;
+    if (
+      !cleared ||
+      !isCloudAccountEpochCurrent(account) ||
+      usePublishedArtifactAudiences.getState() !== state ||
+      activeAudienceRefresh !== refresh
+    ) {
+      return false;
+    }
+    recordPublishedArtifactAudience(artifactId, audience);
+    return true;
+  };
+}
+
 export async function fetchArtifactPublication(
   artifactId: string,
 ): Promise<ArtifactPublicationState> {
-  const response = await listPublishedArtifacts();
-  const match = (response.artifacts ?? []).find(
-    (entry) => entry.artifactId === artifactId && typeof entry.shareUrl === 'string',
+  const query = ManagedCloudPublishedArtifactLookupQuerySchema.parse({ artifactId });
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = ManagedCloudPublishedArtifactLookupResponseSchema.parse(
+    await api.get<unknown>(managedCloudPublishedArtifactLookupPath(query.artifactId), {
+      accountEpoch: account,
+    }),
   );
+  assertCloudAccountEpochCurrent(account);
+  const match = response.artifact;
+  if (match && match.artifactId !== query.artifactId) {
+    throw new Error('The publication lookup returned a different artifact.');
+  }
   return {
-    publication: match
-      ? { shareUrl: String(match.shareUrl), visibility: readAudience(match.visibility) }
-      : null,
-    workspaceMemberCount: readWorkspaceMemberCount(response.workspace),
+    publication: match ? { shareUrl: match.shareUrl, visibility: match.visibility } : null,
+    workspaceMemberCount: response.workspace?.memberCount ?? null,
   };
 }
 
@@ -150,29 +249,62 @@ export async function setPublishedArtifactAudience(
   visibility: PublishedArtifactAudience,
 ): Promise<ArtifactPublication> {
   const token = requirePublishedToken(shareUrl);
-  const response = await api.patch<{ shareUrl?: unknown; visibility?: unknown }>(
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.patch<unknown>(
     `/api/artifacts/publish/${token}`,
     { visibility },
+    { accountEpoch: account, auth401Recovery: 'caller-owned' },
   );
-  return {
-    shareUrl: typeof response.shareUrl === 'string' ? response.shareUrl : shareUrl,
-    visibility: readAudience(response.visibility),
-  };
+  assertCloudAccountEpochCurrent(account);
+  const receipt = ManagedCloudPublishedArtifactUpdateReceiptSchema.parse(response);
+  if (receipt.token !== token || receipt.visibility !== visibility) {
+    throw new Error('The audience change receipt did not match the requested publication change.');
+  }
+  return { shareUrl: receipt.shareUrl, visibility: receipt.visibility };
 }
 
 export async function unpublishArtifact(shareUrl: string): Promise<void> {
   const token = requirePublishedToken(shareUrl);
-  await api.delete(`/api/artifacts/publish/${token}`);
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.delete<unknown>(`/api/artifacts/publish/${token}`, {
+    accountEpoch: account,
+    auth401Recovery: 'caller-owned',
+  });
+  assertCloudAccountEpochCurrent(account);
+  const receipt = ManagedCloudPublishedArtifactDeleteReceiptSchema.parse(response);
+  if (receipt.token !== token) {
+    throw new Error('The unpublish receipt returned a different publication.');
+  }
 }
 
 export const PUBLISH_FAILED_MESSAGE =
-  'This artifact could not be published right now. Nothing was shared. Try again in a moment.';
+  'The sharing change could not be confirmed. It may have completed. Check the current publication before trying again.';
+
+export function isPublicationOutcomeUncertain(error: unknown): boolean {
+  return !(
+    error instanceof ApiHttpError &&
+    (error.status === 400 ||
+      error.status === 401 ||
+      error.status === 403 ||
+      error.status === 409 ||
+      error.status === 429)
+  );
+}
 
 /**
  * Only a sentence the server wrote for a reader is shown as it is. Anything
  * else (a dropped connection, a malformed reply) is this app's own wording.
  */
 export function publishFailureMessage(error: unknown): string {
-  if (error instanceof ApiHttpError) return withFailureReference(error.message, error.requestId);
+  if (error instanceof ApiHttpError) {
+    return withFailureReference(
+      isPublicationOutcomeUncertain(error)
+        ? `${error.message} ${PUBLISH_FAILED_MESSAGE}`
+        : error.message,
+      error.requestId,
+    );
+  }
   return PUBLISH_FAILED_MESSAGE;
 }

@@ -7,7 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { TWO_FACTOR_SCOPE } from '@/app/api/settings/2fa/lib/scope';
 import { readJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -41,7 +41,10 @@ async function handleGrant(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId, sessionIdentity } = await getSessionAccountDb(
+    request,
+    TWO_FACTOR_SCOPE,
+  );
 
   const rateLimitResponse = await withRateLimit(request, 'auth-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -52,7 +55,7 @@ async function handleGrant(request: NextRequest) {
   }
   const { action, resourceId = null } = parsed.data;
 
-  const level = await stepUpLevelFor(db, userId);
+  const level = await stepUpLevelFor(db, userId, sessionIdentity.subject);
   const verifiedMinutesAgo = freshVerificationMinutes(
     await readSessionFactorAge(request),
     level,
@@ -102,9 +105,9 @@ async function handleGrant(request: NextRequest) {
 }
 
 async function handleReadiness(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, sessionIdentity } = await getSessionAccountDb(request, TWO_FACTOR_SCOPE);
   return NextResponse.json({
-    level: await stepUpLevelFor(db, userId),
+    level: await stepUpLevelFor(db, userId, sessionIdentity.subject),
     actions: Object.fromEntries(
       (Object.keys(STEP_UP_ACTIONS) as StepUpAction[]).map((action) => [
         action,

@@ -226,6 +226,7 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
       <p id={summaryId} className="sr-only" data-testid="chart-artifact-summary">
         {summarizeChart(parsed.spec, artifact.title)}
       </p>
+      <h3 className="px-3 pt-3 pb-2 text-sm font-medium">{chartName}</h3>
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-compact bg-primary/10 text-primary text-xs font-medium">
@@ -297,6 +298,40 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
           </Suspense>
         </ChartErrorBoundary>
       </div>
+
+      <details className="border-t px-3 py-2 text-sm">
+        <summary className="cursor-pointer text-muted-foreground">View chart data</summary>
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-left text-xs" aria-label={`${chartName} data`}>
+            <thead>
+              <tr>
+                <th scope="col" className="px-2 py-1">
+                  {parsed.spec.xLabel ?? parsed.spec.xKey}
+                </th>
+                {series.map((entry) => (
+                  <th key={entry.dataKey} scope="col" className="px-2 py-1 text-right">
+                    {entry.name ?? entry.dataKey}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  <th scope="row" className="px-2 py-1 font-normal">
+                    {row[parsed.spec.xKey]}
+                  </th>
+                  {series.map((entry) => (
+                    <td key={entry.dataKey} className="px-2 py-1 text-right">
+                      {row[entry.dataKey]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
       {totalRows > rows.length && (
         <div

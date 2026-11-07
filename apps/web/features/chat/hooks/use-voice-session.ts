@@ -1,13 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type {
   LiveVoicePendingApproval,
   LiveVoiceToolDecision,
 } from '@agiworkforce/cloud-contracts';
 import { toast } from 'sonner';
-import { getCsrfToken } from '@/lib/client/csrf';
+import {
+  createRequestAuthority,
+  type RequestAuthority,
+  type SessionAuthority,
+} from '@/lib/identity/request-authority';
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import {
   useVoiceSessionStore,
@@ -15,6 +20,8 @@ import {
 } from '@features/chat/stores/voice-session-store';
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { getProviderModeForModel } from '@features/chat/lib/localByokHandoff';
+import { conversationHoldsLocalTurns } from '@features/chat/lib/local-origin';
 import {
   advanceVoiceCallClock,
   INITIAL_VOICE_CALL_CLOCK,
@@ -48,7 +55,6 @@ const MESSAGE = {
   mutedHint: 'Muted, tap the mic to talk',
 } as const;
 
-const CSRF_HEADER = 'x-csrf-token';
 const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connection_lost']);
 const EXTEND_LEAD_MS = 15_000;
 const EXTEND_RETRY_MS = 10_000;
@@ -69,12 +75,21 @@ type BlockExtension =
 export type { LiveTranscriptTurn as VoiceTranscriptTurn };
 
 export interface UseVoiceSessionOptions {
+  managed: boolean;
   turnActive: boolean;
   conversationId: string | null;
   onSend: (text: string) => boolean;
-  onStartWorkTask?: (goal: string) => boolean;
-  onEnsureConversation: () => Promise<string | null>;
-  onTranscript: (conversationId: string, turn: LiveTranscriptTurn) => void;
+  onStartWorkTask?: (goal: string, conversationId: string, authority: RequestAuthority) => boolean;
+  onEnsureConversation: (
+    authority: RequestAuthority,
+    bindConversation: (id: string) => void,
+  ) => Promise<string | null>;
+  onTranscript: (
+    conversationId: string,
+    turn: LiveTranscriptTurn,
+    authority: RequestAuthority,
+  ) => void;
+  onCaption?: ((turn: LiveTranscriptTurn) => void) | undefined;
 }
 
 export interface VoiceSessionController {
@@ -110,11 +125,36 @@ export interface VoiceSessionController {
 }
 
 interface TranscriptSink {
+  surface: object;
+  managed: boolean;
+  captureSession: () => SessionAuthority | null;
   conversationId: string | null;
-  onStartWorkTask?: ((goal: string) => boolean) | undefined;
-  onEnsureConversation: () => Promise<string | null>;
-  onTranscript: (conversationId: string, turn: LiveTranscriptTurn) => void;
+  onStartWorkTask?:
+    ((goal: string, conversationId: string, authority: RequestAuthority) => boolean) | undefined;
+  onEnsureConversation: (
+    authority: RequestAuthority,
+    bindConversation: (id: string) => void,
+  ) => Promise<string | null>;
+  onTranscript: (
+    conversationId: string,
+    turn: LiveTranscriptTurn,
+    authority: RequestAuthority,
+  ) => void;
+  onCaption?: ((turn: LiveTranscriptTurn) => void) | undefined;
 }
+
+interface VoiceAttempt {
+  sink: TranscriptSink;
+  identity: SessionAuthority;
+  authority: RequestAuthority;
+  transcriptAuthority: RequestAuthority;
+  conversationId: string | null;
+  session: LiveVoiceSession | null;
+  ended: boolean;
+  finalizing: boolean;
+}
+
+const closingOwners = new Map<VoiceAttempt, LiveVoiceSession>();
 
 const NAVIGATION_HANDOFF_MS = 5_000;
 const PROVIDER_NOTICE_MS = 8_000;
@@ -136,9 +176,9 @@ const voiceLevel: VoiceOrbLevelSource = {
 };
 
 const controller = {
+  owner: null as VoiceAttempt | null,
   session: null as LiveVoiceSession | null,
   starting: null as Promise<LiveVoiceSession> | null,
-  conversation: null as Promise<string | null> | null,
   sink: null as TranscriptSink | null,
   handoff: null as number | null,
   attempt: 0,
@@ -197,12 +237,14 @@ function stopVoiceReconnect(): void {
  */
 function scheduleVoiceReconnect(): boolean {
   if (controller.attempt >= RECONNECT_MAX_ATTEMPTS) return false;
+  const owner = controller.owner;
   controller.attempt += 1;
   publishReconnectState({ active: true, attempt: controller.attempt });
   const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** (controller.attempt - 1));
   if (controller.reconnectTimer !== null) window.clearTimeout(controller.reconnectTimer);
   controller.reconnectTimer = window.setTimeout(() => {
     controller.reconnectTimer = null;
+    if (!owner || controller.owner !== owner || !owner.authority.isCurrent()) return;
     useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.retry });
   }, delay);
   return true;
@@ -210,7 +252,12 @@ function scheduleVoiceReconnect(): boolean {
 
 /** The network coming back is better evidence than the remaining backoff. */
 function retryVoiceReconnectNow(): void {
-  if (!reconnectState.active || controller.reconnectTimer === null) return;
+  if (
+    !reconnectState.active ||
+    controller.reconnectTimer === null ||
+    !controller.owner?.authority.isCurrent()
+  )
+    return;
   window.clearTimeout(controller.reconnectTimer);
   controller.reconnectTimer = null;
   useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.retry });
@@ -228,11 +275,14 @@ function markVoiceReconnected(): void {
   }, RECONNECT_STABLE_MS);
 }
 
-async function readActiveVoiceSession(conversationId: string): Promise<VoiceRejoinOffer | null> {
+async function readActiveVoiceSession(
+  conversationId: string,
+  authority: RequestAuthority,
+): Promise<VoiceRejoinOffer | null> {
   try {
-    const response = await fetch(
+    const response = await authority.fetch(
       `${LIVE_SESSION_ENDPOINT}/active?conversationId=${encodeURIComponent(conversationId)}`,
-      { credentials: 'include' },
+      {},
     );
     if (!response.ok) return null;
     const body = (await response.json()) as { session?: Record<string, unknown> | null };
@@ -251,30 +301,13 @@ async function readActiveVoiceSession(conversationId: string): Promise<VoiceRejo
 }
 
 function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Promise<void> {
-  return getCsrfToken()
-    .then((token) =>
-      fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(session.sessionId)}/close`, {
-        method: 'POST',
-        keepalive: true,
-        headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: token },
-        body: JSON.stringify({
-          seconds: closed.seconds ?? session.lastUsageSeconds ?? 0,
-          reason: closed.reason,
-          ...(session.lastTurnId ? { lastTurnId: session.lastTurnId } : {}),
-          ...(session.backendUsage ? { backend: session.backendUsage } : {}),
-        }),
-      }),
-    )
-    .then((response) => {
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    })
-    .catch((error: unknown) => {
-      console.warn('[voice] The live session close was not recorded:', error);
-      toast.error(
-        'This voice session did not close cleanly, so it may keep counting toward your voice usage for a few more minutes.',
-        { id: `voice-session-close-${session.sessionId}` },
-      );
-    });
+  return session.settle(closed).catch((error: unknown) => {
+    console.warn('[voice] The live session close was not recorded:', error);
+    toast.error(
+      'This voice session did not close cleanly, so it may keep counting toward your voice usage for a few more minutes.',
+      { id: `voice-session-close-${session.sessionId}` },
+    );
+  });
 }
 
 function clearSessionBudget(): void {
@@ -299,14 +332,8 @@ function scheduleBudget(budget: SessionBudget, delayMs: number, run: () => void)
 }
 
 function requestBlockExtension(session: LiveVoiceSession, block: number): Promise<BlockExtension> {
-  return getCsrfToken()
-    .then((token) =>
-      fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(session.sessionId)}/extend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: token },
-        body: JSON.stringify({ block }),
-      }),
-    )
+  return session
+    .extend(block)
     .then(async (response): Promise<BlockExtension> => {
       if (!response.ok) {
         const error = await readLiveSessionError(response);
@@ -396,39 +423,76 @@ function trackSessionBudget(session: LiveVoiceSession): void {
   });
 }
 
-function ensureConversation(): Promise<string | null> {
-  controller.conversation ??= (controller.sink?.onEnsureConversation() ?? Promise.resolve(null))
-    .catch(() => null)
-    .then((id) => id ?? controller.sink?.conversationId ?? null);
-  return controller.conversation;
+function destinationIsCurrent(owner: VoiceAttempt): boolean {
+  const sink = controller.sink;
+  return Boolean(
+    sink?.managed &&
+    owner.identity.isCurrent() &&
+    (sink.conversationId === owner.conversationId ||
+      (sink.conversationId === null &&
+        owner.sink.conversationId === null &&
+        sink.surface === owner.sink.surface)),
+  );
 }
 
-function deliverTranscript(turn: LiveTranscriptTurn): void {
-  void ensureConversation().then((id) => {
-    if (id) controller.sink?.onTranscript(id, turn);
-  });
+function originalConversationIsManaged(owner: VoiceAttempt): boolean {
+  if (!owner.conversationId) return false;
+  const chat = useChatStore.getState();
+  const conversation = chat.conversations.find((entry) => entry.id === owner.conversationId);
+  const mode = conversation?.model ? getProviderModeForModel(conversation.model) : null;
+  const messages = chat.messagesByConversation[owner.conversationId] ?? [];
+  return (
+    Boolean(conversation) &&
+    mode !== 'Local' &&
+    mode !== 'DirectByok' &&
+    !conversationHoldsLocalTurns(messages) &&
+    !messages.some((message) => message.metadata?.privacyMode === 'byok')
+  );
+}
+
+function deliverTranscript(owner: VoiceAttempt, turn: LiveTranscriptTurn): void {
+  const foreground = !owner.ended && owner.authority.isCurrent();
+  if (!foreground && !(owner.finalizing && turn.final)) return;
+  if (!owner.conversationId || !owner.transcriptAuthority.isCurrent()) return;
+  if (foreground) controller.sink?.onCaption?.(turn);
+  owner.sink.onTranscript(owner.conversationId, turn, owner.transcriptAuthority);
+}
+
+function closeOwnedSession(owner: VoiceAttempt, session: LiveVoiceSession, reason?: string): void {
+  owner.finalizing = true;
+  closingOwners.set(owner, session);
+  void session.close().then(
+    (closed) => {
+      owner.finalizing = false;
+      closingOwners.delete(owner);
+      return settleSession(session, reason ? { ...closed, reason } : closed);
+    },
+    () => {
+      owner.finalizing = false;
+      closingOwners.delete(owner);
+    },
+  );
 }
 
 export function endLiveVoiceSession(reason: string): void {
-  const { session, starting } = controller;
+  const { session, starting, owner } = controller;
+  controller.owner = null;
+  if (controller.handoff !== null) window.clearTimeout(controller.handoff);
+  controller.handoff = null;
+  if (controller.providerNoticeTimer !== null) window.clearTimeout(controller.providerNoticeTimer);
+  controller.providerNoticeTimer = null;
+  if (owner) owner.ended = true;
   clearSessionBudget();
   controller.session = null;
   liveVoiceOutputRef.current = null;
   controller.starting = null;
-  controller.conversation = null;
   stopVoiceReconnect();
   useVoiceSessionStore.getState().setBackendBusy(false);
   useVoiceSessionStore.getState().setToolActivity([]);
   useVoiceSessionStore.getState().setToolApprovals([]);
-  if (starting) {
-    void starting.then(
-      (started) => started.close().then((closed) => settleSession(started, { ...closed, reason })),
-      () => undefined,
-    );
-  }
-  if (session) {
-    void session.close().then((closed) => settleSession(session, { ...closed, reason }));
-  }
+  if (starting) void starting.catch(() => undefined);
+  if (session && owner) closeOwnedSession(owner, session, reason);
+  owner?.authority.retire();
 }
 
 export function exitVoiceSession(): void {
@@ -470,14 +534,63 @@ function currentVoiceSettings(): LiveVoiceStartSettings {
 }
 
 function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVoiceSession> {
+  if (controller.starting) return controller.starting;
+  const previous = controller.owner;
+  const sink = reconnectState.active && previous ? previous.sink : controller.sink;
+  const identity = reconnectState.active && previous ? previous.identity : sink?.captureSession();
+  if (!sink?.managed || !identity?.isCurrent()) {
+    useVoiceSessionStore.getState().dispatch({
+      type: VOICE_SESSION_EVENT.fail,
+      message: 'Live voice requires a signed-in Managed Cloud conversation.',
+    });
+    return Promise.reject(new DOMException('Managed voice owner is unavailable', 'AbortError'));
+  }
   const store = useVoiceSessionStore.getState();
-  // The conversation is settled before the offer, so the session the server
-  // records is bound to exactly one conversation rather than to none.
-  controller.starting ??= ensureConversation()
-    .catch(() => null)
-    .then((ensured) => ensured ?? controller.sink?.conversationId ?? null)
-    .then((conversationId) =>
-      LiveVoiceSession.start({
+  const owner: VoiceAttempt = {
+    sink,
+    identity,
+    authority: null as unknown as RequestAuthority,
+    transcriptAuthority: null as unknown as RequestAuthority,
+    conversationId:
+      previous && reconnectState.active ? previous.conversationId : sink.conversationId,
+    session: null,
+    ended: false,
+    finalizing: false,
+  };
+  owner.transcriptAuthority = createRequestAuthority(identity, () =>
+    originalConversationIsManaged(owner),
+  );
+  owner.authority = createRequestAuthority(
+    identity,
+    () => controller.owner === owner && !owner.ended && destinationIsCurrent(owner),
+  );
+  controller.owner = owner;
+  previous?.authority.retire();
+  const current = () => owner.authority.isCurrent();
+  const clearOwnedSession = () => {
+    if (!current()) return false;
+    clearSessionBudget();
+    controller.session = null;
+    liveVoiceOutputRef.current = null;
+    store.setBackendBusy(false);
+    return true;
+  };
+  const operation = Promise.resolve()
+    .then(async () => {
+      owner.authority.assertCurrent();
+      const conversationId =
+        owner.conversationId ??
+        (await sink.onEnsureConversation(owner.authority, (id) => {
+          owner.authority.assertCurrent();
+          if (owner.conversationId !== null && owner.conversationId !== id)
+            throw new Error('Voice destination changed');
+          owner.conversationId = id;
+        }));
+      owner.authority.assertCurrent();
+      if (!conversationId) throw new Error('Voice conversation is unavailable');
+      owner.conversationId = conversationId;
+      return LiveVoiceSession.start({
+        authority: owner.authority,
         voice: settings.voice,
         conversationId,
         memoryEnabled: useChatStore.getState().getMemoryEnabled(conversationId),
@@ -485,67 +598,72 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
         pace: settings.pace,
         reasoning: settings.reasoning,
         callbacks: {
-          onStarted: () => store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true }),
-          onSpeaking: (speaking) =>
-            store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking }),
-          onBackendBusy: store.setBackendBusy,
-          onToolActivity: store.setToolActivity,
-          onToolApprovals: store.setToolApprovals,
-          onToolResult: store.addToolOutcome,
-          ...(controller.sink?.onStartWorkTask
+          onStarted: () => {
+            if (current()) store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true });
+          },
+          onSpeaking: (speaking) => {
+            if (current())
+              store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking });
+          },
+          onBackendBusy: (busy) => {
+            if (current()) store.setBackendBusy(busy);
+          },
+          onToolActivity: (activity) => {
+            if (current()) store.setToolActivity(activity);
+          },
+          onToolApprovals: (approvals) => {
+            if (current()) store.setToolApprovals(approvals);
+          },
+          onToolResult: (outcome) => {
+            if (current()) store.addToolOutcome(outcome);
+          },
+          ...(sink.onStartWorkTask
             ? {
                 onStartWorkTask: (goal: string) =>
-                  controller.sink?.onStartWorkTask?.(goal) ?? false,
+                  current() &&
+                  owner.conversationId !== null &&
+                  (sink.onStartWorkTask?.(goal, owner.conversationId, owner.authority) ?? false),
               }
             : {}),
-          onTranscript: deliverTranscript,
+          onTranscript: (turn) => deliverTranscript(owner, turn),
           onUsage: () => undefined,
           onClosed: (closed) => {
-            const session = controller.session;
-            clearSessionBudget();
-            controller.session = null;
-            liveVoiceOutputRef.current = null;
-            store.setBackendBusy(false);
-            if (session) void settleSession(session, closed);
+            if (!clearOwnedSession()) return;
+            owner.ended = true;
+            if (owner.session) void settleSession(owner.session, closed);
             if (controller.paused) return;
-            if (REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)) {
-              store.dispatch({
-                type: VOICE_SESSION_EVENT.fail,
-                message: LIVE_SESSION_MESSAGE.sessionEnded,
-              });
-            } else {
-              store.dispatch({ type: VOICE_SESSION_EVENT.exit });
-            }
+            store.dispatch(
+              REMOTE_CLOSE_REASONS_WITH_NOTICE.has(closed.reason)
+                ? { type: VOICE_SESSION_EVENT.fail, message: LIVE_SESSION_MESSAGE.sessionEnded }
+                : { type: VOICE_SESSION_EVENT.exit },
+            );
           },
           onError: (message) => {
-            clearSessionBudget();
-            controller.session = null;
-            liveVoiceOutputRef.current = null;
-            store.setBackendBusy(false);
+            if (!clearOwnedSession()) return;
+            owner.ended = true;
             stopVoiceReconnect();
             store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
           },
           onProviderError: () => {
+            if (!current()) return;
             reportClientFailure({ failure: 'voice_provider_error', detail: 'rejected' });
             showVoiceNotice(LIVE_SESSION_MESSAGE.providerError);
           },
-          onSources: (sources) => store.setSources(sources),
+          onSources: (sources) => {
+            if (current()) store.setSources(sources);
+          },
           onPlaybackBlocked: () => {
+            if (!current()) return;
             reportClientFailure({ failure: 'voice_audio_blocked', detail: 'permission_denied' });
             store.setPlaybackBlocked(true);
           },
           onConnectionLost: (message) => {
-            const dropped = controller.session;
-            clearSessionBudget();
-            controller.session = null;
-            liveVoiceOutputRef.current = null;
-            store.setBackendBusy(false);
-            if (dropped) {
-              void settleSession(dropped, {
+            if (!clearOwnedSession()) return;
+            if (owner.session)
+              void settleSession(owner.session, {
                 reason: 'connection_lost',
-                seconds: dropped.lastUsageSeconds,
+                seconds: owner.session.lastUsageSeconds,
               });
-            }
             const retrying = scheduleVoiceReconnect();
             if (!retrying) stopVoiceReconnect();
             store.dispatch({
@@ -554,45 +672,51 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
             });
           },
         },
-      }),
-    )
-    .then(
-      (session) => {
-        controller.starting = null;
-        controller.session = session;
-        liveVoiceOutputRef.current = session.outputElement;
-        markVoiceReconnected();
-        trackSessionBudget(session);
-        return session;
-      },
-      (error: unknown) => {
-        controller.starting = null;
-        const message =
-          error instanceof LiveVoiceSessionError
-            ? error.message
-            : LIVE_SESSION_MESSAGE.connectionFailed;
-        const usageLimited = isUsageLimitError(error);
-        const recoverable =
-          !usageLimited &&
-          (!(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code));
-        if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) {
-          stopVoiceReconnect();
-        }
-        store.setUsageLimited(usageLimited);
-        store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
-        throw error;
-      },
-    );
-  return controller.starting;
+      });
+    })
+    .then((session) => {
+      owner.session = session;
+      if (!current()) {
+        closeOwnedSession(owner, session);
+        throw new DOMException('Voice attempt retired', 'AbortError');
+      }
+      controller.starting = null;
+      controller.session = session;
+      liveVoiceOutputRef.current = session.outputElement;
+      markVoiceReconnected();
+      trackSessionBudget(session);
+      return session;
+    })
+    .catch((error: unknown) => {
+      if (controller.owner === owner) controller.starting = null;
+      if (controller.owner !== owner || owner.ended || !destinationIsCurrent(owner)) throw error;
+      controller.starting = null;
+      const message =
+        error instanceof LiveVoiceSessionError
+          ? error.message
+          : LIVE_SESSION_MESSAGE.connectionFailed;
+      const usageLimited = isUsageLimitError(error);
+      const recoverable =
+        !usageLimited &&
+        (!(error instanceof LiveVoiceSessionError) || !UNRECOVERABLE_START_CODES.has(error.code));
+      if (!(reconnectState.active && recoverable && scheduleVoiceReconnect())) stopVoiceReconnect();
+      store.setUsageLimited(usageLimited);
+      store.dispatch({ type: VOICE_SESSION_EVENT.fail, message });
+      throw error;
+    });
+  controller.starting = operation;
+  return operation;
 }
 
 export function useVoiceSession({
+  managed,
   turnActive,
   conversationId,
   onSend,
   onStartWorkTask,
   onEnsureConversation,
   onTranscript,
+  onCaption,
 }: UseVoiceSessionOptions): VoiceSessionController {
   const state = useVoiceSessionStore((store) => store.session);
   const voice = useVoiceSessionStore((store) => store.voice);
@@ -621,7 +745,51 @@ export function useVoiceSession({
   const callEnded = status === VOICE_SESSION_STATUS.exited;
   const callRunning = voiceCallClockRunning(status, paused);
 
-  controller.sink = { conversationId, onStartWorkTask, onEnsureConversation, onTranscript };
+  const captureSession = useSessionSnapshot();
+  const surface = useRef({});
+  const sink = useRef<TranscriptSink>({
+    surface: surface.current,
+    managed,
+    captureSession,
+    conversationId,
+    onStartWorkTask,
+    onEnsureConversation,
+    onTranscript,
+    onCaption,
+  });
+  sink.current = {
+    surface: surface.current,
+    managed,
+    captureSession,
+    conversationId,
+    onStartWorkTask,
+    onEnsureConversation,
+    onTranscript,
+    onCaption,
+  };
+  controller.sink = sink.current;
+
+  useEffect(() => {
+    for (const [closing, session] of closingOwners) {
+      if (!closing.identity.isCurrent()) session.dispose();
+    }
+    const owner = controller.owner;
+    if (owner && !destinationIsCurrent(owner)) exitVoiceSession();
+    if (!managed) useVoiceSessionStore.getState().setRejoinOffer(null);
+  });
+
+  useEffect(
+    () =>
+      useVoiceSessionStore.subscribe((next, previous) => {
+        if (
+          next.session !== previous.session &&
+          next.session.status === VOICE_SESSION_STATUS.exited
+        ) {
+          endLiveVoiceSession('account_changed');
+        }
+      }),
+    [],
+  );
 
   useEffect(() => {
     resumeVoiceSessionAfterNavigation();
@@ -645,6 +813,13 @@ export function useVoiceSession({
   // re-negotiates the open session below instead of restarting the connection.
   useEffect(() => {
     if (status !== VOICE_SESSION_STATUS.entering) return undefined;
+    if (!managed) {
+      dispatch({
+        type: VOICE_SESSION_EVENT.fail,
+        message: 'Live voice requires a Managed Cloud conversation.',
+      });
+      return undefined;
+    }
     let cancelled = false;
     const start = () =>
       startLiveVoiceSession(currentVoiceSettings()).then(
@@ -657,16 +832,26 @@ export function useVoiceSession({
     if (!targetConversation || controller.session || controller.starting || reconnectState.active) {
       void start();
     } else {
-      void readActiveVoiceSession(targetConversation).then((offer) => {
-        if (cancelled) return;
+      const identity = captureSession();
+      if (!identity || !managed) return undefined;
+      const authority = createRequestAuthority(
+        identity,
+        () =>
+          !cancelled &&
+          controller.sink?.managed === true &&
+          controller.sink.conversationId === targetConversation,
+      );
+      void readActiveVoiceSession(targetConversation, authority).then((offer) => {
+        if (cancelled || !authority.isCurrent()) return;
         if (offer) useVoiceSessionStore.getState().setRejoinOffer(offer);
         else void start();
       });
     }
     return () => {
       cancelled = true;
+      useVoiceSessionStore.getState().setRejoinOffer(null);
     };
-  }, [status]);
+  }, [status, managed, conversationId, captureSession, dispatch]);
 
   const answerRejoin = useCallback((rejoin: boolean) => {
     const store = useVoiceSessionStore.getState();
@@ -786,6 +971,7 @@ export function useVoiceSession({
       return;
     }
     void session.shareAttachment(file).then((outcome) => {
+      if (controller.session !== session) return;
       showVoiceNotice(VOICE_ATTACHMENT_MESSAGE[outcome]);
     });
   }, []);
@@ -794,7 +980,8 @@ export function useVoiceSession({
     const session = controller.session;
     if (!session) return;
     void session.resumePlayback().then((played) => {
-      if (played) useVoiceSessionStore.getState().setPlaybackBlocked(false);
+      if (played && controller.session === session)
+        useVoiceSessionStore.getState().setPlaybackBlocked(false);
     });
   }, []);
 

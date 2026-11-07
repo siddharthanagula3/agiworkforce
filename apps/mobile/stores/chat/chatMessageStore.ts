@@ -7,7 +7,9 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureCloudAccountEpoch,
+  assertCloudAccountEpochCurrent,
   isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -56,6 +58,14 @@ import { getConversationMessageStore } from './conversationRepository';
 import { cancelVideoGeneration } from '@/src/features/video/services/videogen';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from './chatViewStore';
+import {
+  beginCloudHistoryLoad,
+  finishCloudHistoryLoad,
+  invalidateAllCloudHistoryLoads,
+  isCloudHistoryLoadCurrent,
+  publishCloudHistoryLoading,
+  subscribeCloudHistoryLoading,
+} from './cloudHistoryLoad';
 
 const CLOUD_CONVERSATION_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
 const CLOUD_MESSAGE_PAGE_SIZE = 500;
@@ -552,45 +562,54 @@ export const useChatMessageStore = create<MessageState>()(
 
       loadMessages: async (conversationId) => {
         const localConversation = get().conversations.find((c) => c.id === conversationId);
-        const cloudStore = getCloudStore();
-        const cloudConversation = !localConversation
-          ? cloudStore.getState().conversations.find((c) => c.id === conversationId)
-          : undefined;
-        const conversation = localConversation ?? cloudConversation;
-
-        const existingLocalMsgs = get().messages[conversationId];
-        const existingCloudMsgs = cloudStore.getState().messages[conversationId];
-        const existing = localConversation ? existingLocalMsgs : existingCloudMsgs;
-        if (
-          localConversation &&
-          existing &&
-          existing.length > 0 &&
-          !existing.some((m) => m.isStreaming)
-        ) {
-          captureArtifactsForLoadedMessages(
-            existing,
-            conversationId,
-            conversation?.title ?? '',
-            cloudConversation ? 'cloud' : 'local',
-          );
+        if (localConversation) {
+          const messages = get().messages[conversationId] ?? [];
+          if (!messages.some((message) => message.isStreaming)) {
+            captureArtifactsForLoadedMessages(
+              messages,
+              conversationId,
+              localConversation.title,
+              'local',
+            );
+          }
           return;
         }
-        const cloudMessagesAtRequestStart = cloudConversation ? (existingCloudMsgs ?? []) : [];
-
-        set({ isLoadingMessages: true });
+        const hasLocalOwner = () =>
+          get().conversations.some((candidate) => candidate.id === conversationId) ||
+          Object.prototype.hasOwnProperty.call(get().messages, conversationId);
+        if (hasLocalOwner()) return;
+        const cloudStore = getCloudStore();
+        const cloudConversation = cloudStore
+          .getState()
+          .conversations.find((c) => c.id === conversationId);
+        if (!shouldLoadRemoteMessages(cloudConversation)) return;
+        const accountEpoch = captureCloudAccountEpoch();
+        if (!isCloudAccountEpochCurrent(accountEpoch)) return;
+        const requestStartMessages = cloudStore.getState().messages[conversationId] ?? [];
+        const load = beginCloudHistoryLoad(conversationId);
+        const isCurrent = () =>
+          isCloudHistoryLoadCurrent(load) &&
+          isCloudAccountEpochCurrent(accountEpoch) &&
+          shouldLoadRemoteMessages(cloudConversation) &&
+          !hasLocalOwner();
         try {
-          if (!shouldLoadRemoteMessages(conversation)) return;
+          if (!isCurrent()) return;
           const normalizedMessages: ChatMessage[] = [];
+          let loadedConversation: ManagedCloudConversation | undefined;
           let messageOffset = 0;
           let hasMoreMessages = true;
-          let loadedActiveLeafMessageId: string | null | undefined;
           while (hasMoreMessages) {
+            if (!isCurrent()) return;
             const page = await managedCloudChat.getConversation(conversationId, {
               limit: CLOUD_MESSAGE_PAGE_SIZE,
               offset: messageOffset,
             });
+            if (!isCurrent()) return;
+            if (page.conversation.id !== conversationId) {
+              throw new Error('Cloud message history returned a different conversation.');
+            }
             normalizedMessages.push(...(page.messages as ChatMessage[]));
-            loadedActiveLeafMessageId = page.conversation.activeLeafMessageId;
+            loadedConversation = page.conversation;
             hasMoreMessages = page.hasMore;
             const nextOffset = messageOffset + page.messages.length;
             if (hasMoreMessages && nextOffset <= messageOffset) {
@@ -598,63 +617,69 @@ export const useChatMessageStore = create<MessageState>()(
             }
             messageOffset = nextOffset;
           }
-          if (cloudConversation) {
-            const cloudState = cloudStore.getState();
-            if (!cloudState.conversations.some((candidate) => candidate.id === conversationId)) {
+          if (!isCurrent() || !loadedConversation) return;
+          if (!cloudConversation) {
+            if (
+              cloudStore
+                .getState()
+                .conversations.some((candidate) => candidate.id === conversationId)
+            ) {
               return;
             }
-            if (loadedActiveLeafMessageId !== undefined) {
-              cloudState.patchCloudConversation(conversationId, {
-                activeLeafMessageId: loadedActiveLeafMessageId,
-              });
-            }
-            const currentMessages = cloudState.messages[conversationId] ?? [];
-            const dirtyMessageIds = new Set(
-              useCloudSyncStateStore
-                .getState()
-                .dirtyMessages.filter((dirty) => dirty.conversationId === conversationId)
-                .map((dirty) => dirty.messageId),
-            );
-            cloudState.setCloudMessages(
-              conversationId,
-              reconcileLoadedCloudMessages({
-                serverMessages: normalizedMessages,
-                requestStartMessages: cloudMessagesAtRequestStart,
-                currentMessages,
-                dirtyMessageIds,
-              }),
-            );
-          } else {
-            set((state) => ({
-              messages: { ...state.messages, [conversationId]: normalizedMessages },
-            }));
+            cloudStore
+              .getState()
+              .admitCloudHistoryConversation(
+                normalizeManagedCloudConversationForMobile(loadedConversation),
+                load,
+              );
+          } else if (!load.leafChanged && loadedConversation.activeLeafMessageId !== undefined) {
+            cloudStore.getState().patchCloudConversation(conversationId, {
+              activeLeafMessageId: loadedConversation.activeLeafMessageId,
+            });
           }
-
-          captureArtifactsForLoadedMessages(
-            normalizedMessages,
-            conversationId,
-            conversation?.title ?? '',
-            cloudConversation ? 'cloud' : 'local',
+          if (!isCurrent()) return;
+          const currentState = cloudStore.getState();
+          if (!currentState.conversations.some((candidate) => candidate.id === conversationId))
+            return;
+          const dirtyMessageIds = new Set(
+            useCloudSyncStateStore
+              .getState()
+              .dirtyMessages.filter((dirty) => dirty.conversationId === conversationId)
+              .map((dirty) => dirty.messageId),
           );
+          currentState.setCloudMessages(
+            conversationId,
+            reconcileLoadedCloudMessages({
+              serverMessages: normalizedMessages,
+              requestStartMessages,
+              currentMessages: currentState.messages[conversationId] ?? [],
+              dirtyMessageIds,
+            }),
+          );
+          if (!isCurrent()) return;
+          const committedState = cloudStore.getState();
+          const committedConversation = committedState.conversations.find(
+            (candidate) => candidate.id === conversationId,
+          );
+          if (!committedConversation) return;
+          captureArtifactsForLoadedMessages(
+            committedState.messages[conversationId] ?? [],
+            conversationId,
+            committedConversation.title,
+            'cloud',
+          );
+          if (!isCurrent()) return;
           set((state) =>
             state.messageLoadErrorConversationId === conversationId
               ? { messageLoadErrorConversationId: null }
               : state,
           );
         } catch (error) {
+          if (!isCurrent()) return;
           console.warn('[chatMessageStore] Messages could not be loaded:', error);
-          if (cloudConversation) {
-            set({ messageLoadErrorConversationId: conversationId });
-          } else {
-            set((state) => ({
-              messages: {
-                ...state.messages,
-                [conversationId]: state.messages[conversationId] ?? [],
-              },
-            }));
-          }
+          set({ messageLoadErrorConversationId: conversationId });
         } finally {
-          set({ isLoadingMessages: false });
+          finishCloudHistoryLoad(load);
         }
       },
 
@@ -1479,7 +1504,18 @@ export const useChatMessageStore = create<MessageState>()(
   ),
 );
 
+subscribeCloudHistoryLoading((isLoadingMessages) => {
+  useChatMessageStore.setState({ isLoadingMessages });
+});
+
+subscribeCloudAccountEpochChange(() => {
+  invalidateAllCloudHistoryLoads();
+  publishCloudHistoryLoading();
+});
+
 export function clearCloudConversationPagination(): void {
+  invalidateAllCloudHistoryLoads();
+  publishCloudHistoryLoading();
   conversationListRequestVersion += 1;
   cloudConversationPagination = null;
   useChatMessageStore.setState({
@@ -1698,6 +1734,8 @@ async function createConversationForMode(
     throw new Error('AGI Cloud chat is not enabled in this mobile build.');
   }
 
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
   try {
     const id = uuidv7();
     const isTemporary = useSettingsStore.getState().isTemporaryChat;
@@ -1707,6 +1745,7 @@ async function createConversationForMode(
       projectId,
       isTemporary,
     });
+    assertCloudAccountEpochCurrent(account);
     const conversation: ConversationSummary = {
       ...normalizeManagedCloudConversationForMobile(normalizedCloudConversation),
       projectId,

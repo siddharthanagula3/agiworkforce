@@ -9,6 +9,21 @@ type ScanModule1 = typeof import('@agiworkforce/unified-chat');
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
+vi.mock('@clerk/nextjs', async (importOriginal) => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    ...createClerkSessionFixture(() => ({
+      isLoaded: true,
+      isSignedIn: true,
+      userId: 'user_test',
+      sessionId: 'session-1',
+      getToken: authMocks.getToken,
+    })),
+  };
+});
+
 vi.mock('@/lib/identity/client', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
   return {

@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ArtifactPreview, type ArtifactData } from './ArtifactPreview';
+import {
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
+import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 
 const loadWorkbookSheets = vi.fn();
 
-vi.mock('../../lib/office-file-preview', () => ({
+vi.mock('../../utils/downloadArtifacts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/downloadArtifacts')>()),
+  downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../lib/office-file-preview', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/office-file-preview')>()),
   loadWorkbookSheets: (uri: string) => loadWorkbookSheets(uri),
 }));
 
@@ -41,6 +52,7 @@ function workbookArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
 }
 
 beforeEach(() => {
+  vi.mocked(downloadGeneratedFile).mockClear();
   loadWorkbookSheets.mockReset();
   loadWorkbookSheets.mockResolvedValue(SHEETS);
 });
@@ -77,6 +89,24 @@ describe('ArtifactPreview · generated workbook', () => {
     await waitFor(() => expect(loadWorkbookSheets).toHaveBeenCalled());
     expect(screen.queryByRole('tablist', { name: 'Worksheets' })).toBeNull();
     expect(screen.getByText('Fill in the budget')).toBeTruthy();
+  });
+
+  it('explains an oversized workbook without replacing the saved table', async () => {
+    loadWorkbookSheets.mockRejectedValue(new WorkbookPreviewLimitError());
+    render(<ArtifactPreview variant="panel" artifact={workbookArtifact()} />);
+
+    expect(await screen.findByText(WORKBOOK_PREVIEW_TOO_LARGE)).toBeTruthy();
+    expect(screen.queryByRole('tablist', { name: 'Worksheets' })).toBeNull();
+    expect(screen.getByText('Fill in the budget')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Download artifact' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Download generated file' }));
+    await waitFor(() =>
+      expect(downloadGeneratedFile).toHaveBeenCalledWith(
+        '/api/files/workbook',
+        'Grant application.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ),
+    );
   });
 
   it('shows no tabs when the shown content is no longer the workbook', async () => {

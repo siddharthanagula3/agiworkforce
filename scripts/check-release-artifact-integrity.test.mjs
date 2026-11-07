@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import './lib/rollout/release-guards.test.mjs';
+
 import {
   UNVERIFIED_RELEASE_SURFACES,
   releaseWorkflows,

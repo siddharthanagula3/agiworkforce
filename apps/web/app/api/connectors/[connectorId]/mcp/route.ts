@@ -121,7 +121,7 @@ async function handlePost(
           };
       }
     },
-    { organizationId },
+    { organizationId, request, allowSelective: true },
   );
   if (!output) throw createError.notFound('Connected MCP connector not found');
   const readOperation = ['readResource', 'getPrompt', 'taskGet'].includes(body.operation);

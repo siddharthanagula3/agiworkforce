@@ -90,25 +90,26 @@ jest.mock('../src/features/voice/components/Waveform', () => {
   };
 });
 
-let capturedRecordingStart: (() => void) | undefined;
+let capturedVoice: React.ComponentProps<
+  typeof import('../src/features/voice/components/VoiceInputButton').VoiceInputButton
+>;
+const mockVoiceStop = jest.fn();
+const mockVoiceCancel = jest.fn();
 
 jest.mock('../src/features/voice/components/VoiceInputButton', () => {
   const React = require('react');
   const { Pressable } = require('react-native');
   return {
-    VoiceInputButton: (props: { onRecordingStart?: () => void }) => {
-      capturedRecordingStart = props.onRecordingStart;
+    VoiceInputButton: (props: typeof capturedVoice) => {
+      capturedVoice = props;
+      React.useImperativeHandle(props.controlRef, () => ({
+        stop: mockVoiceStop,
+        cancel: mockVoiceCancel,
+      }));
       return <Pressable testID="voice-input-button" accessibilityLabel="Voice input" />;
     },
   };
 });
-
-jest.mock('../src/features/voice/services/voice', () => ({
-  isRecording: jest.fn().mockReturnValue(false),
-  cancelRecording: jest.fn().mockResolvedValue(undefined),
-  stopRecording: jest.fn().mockResolvedValue('mock-uri'),
-  transcribe: jest.fn().mockResolvedValue({ text: '' }),
-}));
 
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -116,8 +117,13 @@ jest.mock('../src/features/model-picker/store', () => ({
 }));
 
 jest.mock('../src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: 'local' }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: 'local' }),
+    {
+      getState: () => ({ appMode: 'local' }),
+      subscribe: jest.fn(() => jest.fn()),
+    },
+  ),
 }));
 
 jest.mock('../src/features/auth/store', () => ({
@@ -187,13 +193,6 @@ jest.mock('../lib/constants', () => ({ MAX_INPUT_LINES: 6 }));
 
 import { ChatInput } from '../src/features/chat/components/ChatInput';
 
-const VoiceService = require('../src/features/voice/services/voice') as {
-  isRecording: jest.Mock;
-  cancelRecording: jest.Mock;
-  stopRecording: jest.Mock;
-  transcribe: jest.Mock;
-};
-
 const defaultProps = {
   onSend: jest.fn(),
   isStreaming: false,
@@ -209,205 +208,96 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInput>> 
 }
 
 function startRecording() {
-  act(() => {
-    capturedRecordingStart!();
-  });
+  act(() => capturedVoice.onRecordingStart?.());
 }
 
-describe('ChatInput dictation controls (PAR-M22)', () => {
+function deliver(text: string, intent: 'insert' | 'send') {
+  act(() => capturedVoice.onTranscription(text, intent));
+}
+
+describe('ChatInput owned dictation controls', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    capturedRecordingStart = undefined;
     lastWaveformProps = undefined;
-    VoiceService.isRecording.mockReturnValue(true);
-    VoiceService.stopRecording.mockResolvedValue('mock-uri');
-    VoiceService.transcribe.mockResolvedValue({ text: '' });
-    VoiceService.cancelRecording.mockResolvedValue(undefined);
   });
 
-  describe('the four-control row', () => {
-    it('renders cancel, waveform, stop and send while recording', () => {
-      const { getByTestId, queryByTestId } = renderInput();
-
-      expect(queryByTestId('chat.composer.dictation-send')).toBeNull();
-
-      startRecording();
-
-      expect(getByTestId('chat.composer.dictation-cancel')).toBeTruthy();
-      expect(getByTestId('chat.composer.recording')).toBeTruthy();
-      expect(getByTestId('dictation-waveform')).toBeTruthy();
-      expect(getByTestId('chat.composer.dictation-stop')).toBeTruthy();
-      expect(getByTestId('chat.composer.dictation-send')).toBeTruthy();
-    });
-
-    it('renders no elapsed timer', () => {
-      const { queryByText } = renderInput();
-      startRecording();
-
-      expect(queryByText(/^\d\d:\d\d$/)).toBeNull();
-    });
+  it('renders cancel, waveform, stop and send without an elapsed timer', () => {
+    const { getByTestId, queryByText } = renderInput();
+    startRecording();
+    expect(getByTestId('chat.composer.dictation-cancel')).toBeTruthy();
+    expect(getByTestId('dictation-waveform')).toBeTruthy();
+    expect(getByTestId('chat.composer.dictation-stop')).toBeTruthy();
+    expect(getByTestId('chat.composer.dictation-send')).toBeTruthy();
+    expect(queryByText(/^\d\d:\d\d$/)).toBeNull();
   });
 
-  describe('one-tap send', () => {
-    it('stops, transcribes and sends without a trip through the composer', async () => {
-      VoiceService.transcribe.mockResolvedValue({ text: 'book the meeting room' });
-      const onSend = jest.fn();
-      const { getByTestId, getByLabelText } = renderInput({ onSend });
-
-      startRecording();
-
-      await act(async () => {
-        fireEvent.press(getByTestId('chat.composer.dictation-send'));
-      });
-
-      expect(VoiceService.stopRecording).toHaveBeenCalledTimes(1);
-      expect(VoiceService.transcribe).toHaveBeenCalledTimes(1);
-      await waitFor(() => {
-        expect(onSend).toHaveBeenCalledWith('book the meeting room', undefined);
-      });
-      await waitFor(() => {
-        expect(getByLabelText('Message input').props.value).toBe('');
-      });
-    });
-
-    it('appends the dictation to text already typed and sends the whole message', async () => {
-      VoiceService.transcribe.mockResolvedValue({ text: 'tomorrow at nine' });
-      const onSend = jest.fn();
-      const { getByTestId, getByLabelText } = renderInput({ onSend });
-
-      fireEvent.changeText(getByLabelText('Message input'), 'Remind me');
-      startRecording();
-
-      await act(async () => {
-        fireEvent.press(getByTestId('chat.composer.dictation-send'));
-      });
-
-      await waitFor(() => {
-        expect(onSend).toHaveBeenCalledWith('Remind me tomorrow at nine', undefined);
-      });
-    });
-
-    it('keeps the dictated words in the composer when the send is rejected', async () => {
-      VoiceService.transcribe.mockResolvedValue({ text: 'send the invoice' });
-      const onSend = jest.fn(() => Promise.resolve(false));
-      const { getByTestId, getByLabelText } = renderInput({ onSend });
-
-      startRecording();
-
-      await act(async () => {
-        fireEvent.press(getByTestId('chat.composer.dictation-send'));
-      });
-
-      await waitFor(() => {
-        expect(onSend).toHaveBeenCalledWith('send the invoice', undefined);
-      });
-      expect(getByLabelText('Message input').props.value).toBe('send the invoice');
-    });
-
-    it('leaves the stop square as a review path that does not send', async () => {
-      VoiceService.transcribe.mockResolvedValue({ text: 'draft a reply' });
-      const onSend = jest.fn();
-      const { getByTestId, getByLabelText } = renderInput({ onSend });
-
-      startRecording();
-
-      await act(async () => {
-        fireEvent.press(getByTestId('chat.composer.dictation-stop'));
-      });
-
-      await waitFor(() => {
-        expect(getByLabelText('Message input').props.value).toBe('draft a reply');
-      });
-      expect(onSend).not.toHaveBeenCalled();
-    });
+  it('delegates send to its recording owner and sends the completed result', async () => {
+    const onSend = jest.fn();
+    const { getByTestId } = renderInput({ onSend });
+    startRecording();
+    fireEvent.press(getByTestId('chat.composer.dictation-send'));
+    expect(mockVoiceStop).toHaveBeenCalledWith('send');
+    expect(onSend).not.toHaveBeenCalled();
+    deliver('book the meeting room', 'send');
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('book the meeting room', undefined));
   });
 
-  describe('cancel during transcription', () => {
-    function renderTranscribing(overrides: Partial<React.ComponentProps<typeof ChatInput>> = {}) {
-      let releaseStop!: (uri: string) => void;
-      VoiceService.stopRecording.mockImplementation(
-        () => new Promise<string>((resolve) => (releaseStop = resolve)),
-      );
-      const utils = renderInput(overrides);
-      startRecording();
-      act(() => {
-        fireEvent.press(utils.getByTestId('chat.composer.dictation-send'));
-      });
-      return { ...utils, releaseStop: () => releaseStop('mock-uri') };
-    }
+  it('merges text edited while recording instead of overwriting it', async () => {
+    const onSend = jest.fn();
+    const { getByLabelText } = renderInput({ onSend });
+    fireEvent.changeText(getByLabelText('Message input'), 'Original');
+    startRecording();
+    fireEvent.changeText(getByLabelText('Message input'), 'Remind me');
+    deliver('tomorrow at nine', 'send');
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith('Remind me tomorrow at nine', undefined),
+    );
+  });
 
-    it('turns the stop slot into a spinner, disables send and keeps cancel live', () => {
-      const { getByTestId, queryByTestId, UNSAFE_getByType } = renderTranscribing();
-      const { ActivityIndicator } = require('react-native');
+  it('preserves the dictated draft when send is rejected', async () => {
+    const onSend = jest.fn(async () => false);
+    const { getByLabelText } = renderInput({ onSend });
+    startRecording();
+    deliver('send the invoice', 'send');
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('send the invoice', undefined));
+    expect(getByLabelText('Message input').props.value).toBe('send the invoice');
+  });
 
-      expect(getByTestId('chat.composer.transcribing')).toBeTruthy();
-      expect(queryByTestId('chat.composer.dictation-stop')).toBeNull();
-      expect(
-        getByTestId('chat.composer.transcribing-spinner', { includeHiddenElements: true }),
-      ).toBeTruthy();
-      expect(UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
+  it('delegates stop as review and inserts without sending', () => {
+    const onSend = jest.fn();
+    const { getByTestId, getByLabelText } = renderInput({ onSend });
+    startRecording();
+    fireEvent.press(getByTestId('chat.composer.dictation-stop'));
+    expect(mockVoiceStop).toHaveBeenCalledWith('insert');
+    deliver('draft a reply', 'insert');
+    expect(getByLabelText('Message input').props.value).toBe('draft a reply');
+    expect(onSend).not.toHaveBeenCalled();
+  });
 
-      expect(
-        getByTestId('chat.composer.dictation-cancel').props.accessibilityState?.disabled,
-      ).toBeFalsy();
-      expect(getByTestId('chat.composer.dictation-send').props.accessibilityState?.disabled).toBe(
-        true,
-      );
-
-      const stopCallsBefore = VoiceService.stopRecording.mock.calls.length;
-      act(() => {
-        fireEvent.press(getByTestId('chat.composer.dictation-send'));
-      });
-      expect(VoiceService.stopRecording).toHaveBeenCalledTimes(stopCallsBefore);
-
-      act(() => {
-        fireEvent.press(getByTestId('chat.composer.dictation-cancel'));
-      });
-      expect(VoiceService.cancelRecording).toHaveBeenCalledTimes(1);
+  it('keeps cancellation available while its owner transcribes', () => {
+    const { getByTestId, queryByTestId, getByText } = renderInput();
+    startRecording();
+    act(() => {
+      capturedVoice.onRecordingStop?.();
+      capturedVoice.onProcessingChange?.(true);
     });
+    expect(queryByTestId('chat.composer.dictation-stop')).toBeNull();
+    expect(queryByTestId('dictation-waveform')).toBeNull();
+    expect(getByText('Transcribing')).toBeTruthy();
+    expect(getByTestId('chat.composer.dictation-send').props.accessibilityState?.disabled).toBe(
+      true,
+    );
+    fireEvent.press(getByTestId('chat.composer.dictation-cancel'));
+    expect(mockVoiceCancel).toHaveBeenCalledTimes(1);
+    expect(queryByTestId('chat.composer.transcribing')).toBeNull();
+  });
 
-    it('replaces the waveform with a centred Transcribing label', () => {
-      const { getByTestId, queryByTestId, getByText } = renderInput();
-      startRecording();
-      expect(lastWaveformProps?.active).toBe(true);
-
-      VoiceService.stopRecording.mockImplementation(() => new Promise<string>(() => {}));
-      act(() => {
-        fireEvent.press(getByTestId('chat.composer.dictation-send'));
-      });
-
-      const transcribing = getByTestId('chat.composer.transcribing');
-      expect(transcribing.props.accessibilityLabel).toBe('Transcribing');
-      expect(transcribing.props.style).toMatchObject({
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-      });
-      const { StyleSheet } = require('react-native');
-      expect(StyleSheet.flatten(getByText('Transcribing').props.style)).toMatchObject({
-        textAlign: 'center',
-      });
-      expect(queryByTestId('dictation-waveform')).toBeNull();
-    });
-
-    it('aborts the capture session and drops a late transcript', async () => {
-      VoiceService.transcribe.mockResolvedValue({ text: 'this should never land' });
-      const onSend = jest.fn();
-      const { getByTestId, getByLabelText, releaseStop } = renderTranscribing({ onSend });
-
-      await act(async () => {
-        fireEvent.press(getByTestId('chat.composer.dictation-cancel'));
-      });
-
-      expect(VoiceService.cancelRecording).toHaveBeenCalledTimes(1);
-
-      await act(async () => {
-        releaseStop();
-      });
-
-      expect(getByLabelText('Message input').props.value).toBe('');
-      expect(onSend).not.toHaveBeenCalled();
-      expect(getByTestId('chat.composer.send')).toBeTruthy();
-    });
+  it('passes a new ownership scope when the draft destination changes', () => {
+    const view = renderInput({ draftKey: 'first', draftProvenance: { scope: 'local' } });
+    const originalScope = capturedVoice.scopeKey;
+    view.rerender(
+      <ChatInput {...defaultProps} draftKey="second" draftProvenance={{ scope: 'local' }} />,
+    );
+    expect(capturedVoice.scopeKey).not.toBe(originalScope);
   });
 });

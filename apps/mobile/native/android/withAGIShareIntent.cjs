@@ -62,6 +62,9 @@ const COMPANION_AND_METHODS = `
       .apply {
         if (!text.isNullOrBlank()) {
           appendQueryParameter("text", text.take(MAX_SHARED_TEXT_CHARS))
+          if (text.length > MAX_SHARED_TEXT_CHARS) {
+            appendQueryParameter("truncated", "1")
+          }
         }
         if (files.length() > 0) {
           appendQueryParameter("files", files.toString())
@@ -109,8 +112,14 @@ const COMPANION_AND_METHODS = `
   private fun copySharedStream(uri: Uri, inbox: File): JSONObject? {
     val fileName = sharedDisplayName(uri)
     val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-    val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-    val target = File(inbox, "\${System.currentTimeMillis()}-\${safeName}")
+    val suffix = fileName.substringAfterLast('.', "")
+      .takeIf { it.matches(Regex("[A-Za-z0-9]{1,16}")) }
+      ?.let { ".\${it}" } ?: ".bin"
+    val target = try {
+      File.createTempFile("shared-", suffix, inbox)
+    } catch (error: Exception) {
+      return null
+    }
     val bytes = try {
       contentResolver.openInputStream(uri)?.use { input ->
         target.outputStream().use { output ->

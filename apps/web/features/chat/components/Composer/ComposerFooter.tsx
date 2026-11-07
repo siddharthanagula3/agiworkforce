@@ -69,7 +69,7 @@ import {
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { Switch } from '@agiworkforce/ui';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 import {
   EFFORT_LABEL,
   type Effort,
@@ -82,6 +82,7 @@ import {
   isFreeBillingPlanTier,
   isModelNew,
   normalizeBillingPlanTier,
+  resolveReasoningSettings,
   type ModelEnvironment,
 } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -814,6 +815,7 @@ function ModelRow({
 }
 
 interface ComposerFooterProps {
+  conversationId?: string | null;
   showModelSelector?: boolean;
   onUpgradeRequest?: () => void;
   /**
@@ -845,6 +847,7 @@ interface ComposerFooterProps {
 }
 
 export function ComposerFooter({
+  conversationId,
   showModelSelector = true,
   onUpgradeRequest,
   onModelChange,
@@ -999,10 +1002,27 @@ export function ComposerFooter({
       ? ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === routingProfile)?.label
       : undefined;
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
-  const thinkingEnabled = useThinkingStore((s) => s.enabled);
-  const thinkingEffort = useThinkingStore((s) => s.effort);
-  const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
-  const setThinkingEffort = useThinkingStore((s) => s.setEffort);
+  const thinkingScopeKey = conversationId === null ? PENDING_CONVERSATION_KEY : conversationId;
+  const globalThinkingEnabled = useThinkingStore((s) => s.enabled);
+  const globalThinkingEffort = useThinkingStore((s) => s.effort);
+  const conversationThinking = useThinkingStore((s) =>
+    thinkingScopeKey ? s.byConversation?.[thinkingScopeKey] : undefined,
+  );
+  const thinkingEnabled = conversationThinking?.enabled ?? globalThinkingEnabled;
+  const thinkingEffort = conversationThinking?.effort ?? globalThinkingEffort;
+  const setGlobalThinkingEnabled = useThinkingStore((s) => s.setEnabled);
+  const setGlobalThinkingEffort = useThinkingStore((s) => s.setEffort);
+  const setConversationEnabled = useThinkingStore((s) => s.setConversationEnabled);
+  const setConversationEffort = useThinkingStore((s) => s.setConversationEffort);
+  const clearConversationPreference = useThinkingStore((s) => s.clearConversationPreference);
+  const setThinkingEnabled = (enabled: boolean) => {
+    if (thinkingScopeKey) setConversationEnabled(thinkingScopeKey, enabled);
+    else setGlobalThinkingEnabled(enabled);
+  };
+  const setThinkingEffort = (effort: Effort) => {
+    if (thinkingScopeKey) setConversationEffort(thinkingScopeKey, effort);
+    else setGlobalThinkingEffort(effort);
+  };
   const fastEnabled = useThinkingStore((s) => s.fast);
   const setFastEnabled = useThinkingStore((s) => s.setFast);
   const subscription = useBillingStore((s) => s.subscription);
@@ -1275,9 +1295,12 @@ export function ComposerFooter({
   const selectedProviderKey = (lockModelSelector ? lockedDisplayModel : selectedModel).providerKey;
   const reasoning = reasoningFor(selectedModel);
   const supportsAdaptive = modelSupportsThinking(selectedModel);
-  const isAlwaysOn =
-    reasoning.control === 'always_on' ||
-    (reasoning.capable && reasoning.canDisableThinking === false);
+  const thinkingPolicy = resolveReasoningSettings({
+    reasoning,
+    requestedThinking: thinkingEnabled,
+    requestedEffort: thinkingEffort,
+  });
+  const isAlwaysOn = thinkingPolicy.alwaysOn;
   const { allowed: effortChips, gated: gatedEffortChips } =
     knownTier === null
       ? { allowed: reasoning.supportedEfforts ?? [], gated: [] as Effort[] }
@@ -1302,9 +1325,10 @@ export function ComposerFooter({
   const fastOn = Boolean(fastTier) && fastEnabled && fastAvailability.allowed;
   // Store efforts this model actually supports (for clamping the persisted pref).
   const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
-  const effectiveEffort = supportedStoreEfforts.has(thinkingEffort)
-    ? thinkingEffort
-    : defaultStoreEffort(reasoning);
+  const effectiveEffort =
+    thinkingPolicy.effort && supportedStoreEfforts.has(thinkingPolicy.effort)
+      ? thinkingPolicy.effort
+      : (effortChips.find((effort) => effort === defaultStoreEffort(reasoning)) ?? effortChips[0]);
 
   useEffect(() => {
     if (!billingPolicyReady || !promotionReady) return;
@@ -1329,16 +1353,6 @@ export function ComposerFooter({
     setSelectedModelId,
     tier,
   ]);
-
-  useEffect(() => {
-    // always_on reasoners keep thinking on. If thinking is enabled but the current
-    // persisted effort isn't in this model's supported set, snap it to the model's
-    // default so we never send an effort the model would reject.
-    if (isAlwaysOn && !thinkingEnabled) {
-      setThinkingEnabled(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModelId, isAlwaysOn, thinkingEnabled]);
 
   const handleThinkingEnabledChange = (checked: boolean) => {
     if (!checked) {
@@ -1377,7 +1391,9 @@ export function ComposerFooter({
   const selectedEffortChip = effortChips[effortSliderIndex];
   const selectedEffortLabel = selectedEffortChip ? EFFORT_LABEL[selectedEffortChip] : '';
   const effortSliderVisible =
-    effortChipsVisible && effortChips.length > 1 && (!showThinkingSwitch || thinkingEnabled);
+    effortChipsVisible &&
+    effortChips.length > 1 &&
+    (!showThinkingSwitch || thinkingPolicy.thinkingEnabled === true);
   const effortLadder = [...effortChips, ...gatedEffortChips];
   const firstGatedIndex = gatedEffortChips.length > 0 ? effortChips.length : -1;
   const effortMarks = effortLadder
@@ -1878,7 +1894,7 @@ export function ComposerFooter({
                     <span className="text-sm font-medium text-foreground">Effort</span>
                     {showThinkingSwitch && (
                       <Switch
-                        checked={thinkingEnabled}
+                        checked={thinkingPolicy.thinkingEnabled === true}
                         onCheckedChange={handleThinkingEnabledChange}
                         aria-label="Toggle extended thinking"
                         className="h-5 w-9"
@@ -1951,12 +1967,31 @@ export function ComposerFooter({
                   </div>
                 )}
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {isAlwaysOn
-                    ? 'Always on for this model'
-                    : effortSliderVisible
-                      ? 'Higher effort thinks longer before it answers.'
-                      : 'Extended thinking is off for this model.'}
+                  {thinkingPolicy.offUnsupported
+                    ? `Off is not supported by this model. Using ${selectedEffortLabel || 'required reasoning'}.`
+                    : isAlwaysOn
+                      ? 'Always on for this model'
+                      : effortSliderVisible
+                        ? 'Higher effort thinks longer before it answers.'
+                        : 'Extended thinking is off for this model.'}
                 </p>
+                <p className="mt-2 text-xs text-muted-foreground" data-reasoning-source>
+                  {conversationThinking
+                    ? 'This chat overrides the global default.'
+                    : 'Using the global default.'}{' '}
+                  Global default:{' '}
+                  {globalThinkingEnabled ? EFFORT_LABEL[globalThinkingEffort] : EFFORT_OFF_LABEL}.
+                  {effectiveEffort === 'none' ? ' Direct means no extra reasoning.' : ''}
+                </p>
+                {conversationThinking && thinkingScopeKey && (
+                  <button
+                    type="button"
+                    className="mt-2 rounded-md px-2 py-1 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => clearConversationPreference(thinkingScopeKey)}
+                  >
+                    Use global default
+                  </button>
+                )}
                 {fastTier && (
                   <div className="mt-3 border-t border-[var(--chat-border)] pt-3">
                     <div className="flex items-center justify-between gap-3">

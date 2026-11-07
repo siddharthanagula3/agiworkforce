@@ -4,6 +4,9 @@
 // Windows test build doesn't fail on each iteration as test bodies evolve.
 #![allow(unused_imports, dead_code, unused_variables)]
 
+#[path = "integration_fixture.rs"]
+mod integration_fixture;
+
 use super::*;
 use crate::automation::input::{KeyboardSimulator, MouseButton, MouseSimulator};
 use crate::automation::screen::{capture_primary_screen, capture_region};
@@ -15,6 +18,8 @@ use serial_test::serial;
 use std::process::{Child, Command};
 use std::thread;
 use std::time::Duration;
+
+const WINDOW_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct TestApp {
     process: Child,
@@ -70,26 +75,35 @@ pub fn find_window_with_retry(
     name_contains: &str,
     max_attempts: u32,
 ) -> anyhow::Result<ElementInfo> {
-    for attempt in 1..=max_attempts {
-        let windows = service.list_windows()?;
+    let name = name_contains.to_lowercase();
+    find_window_matching_with_retry(
+        service,
+        |window| window.name.to_lowercase().contains(&name),
+        max_attempts,
+    )
+    .map_err(|error| anyhow!("Failed to find window containing '{name_contains}': {error}"))
+}
 
-        if let Some(window) = windows.iter().find(|w| {
-            w.name
-                .to_lowercase()
-                .contains(&name_contains.to_lowercase())
-        }) {
-            return Ok(window.clone());
-        }
-
-        if attempt < max_attempts {
-            thread::sleep(Duration::from_millis(500));
-        }
-    }
-
-    Err(anyhow!(
-        "Failed to find window containing '{}'",
-        name_contains
-    ))
+fn find_window_matching_with_retry(
+    service: &UIAutomationService,
+    matches: impl Fn(&ElementInfo) -> bool,
+    max_attempts: u32,
+) -> anyhow::Result<ElementInfo> {
+    let mut observed = Vec::new();
+    let found = integration_fixture::poll_matching(
+        max_attempts,
+        || {
+            let windows = service.list_windows()?;
+            observed = windows
+                .iter()
+                .map(|window| format!("{} ({})", window.name, window.class_name))
+                .collect::<Vec<_>>();
+            Ok::<_, anyhow::Error>(windows)
+        },
+        matches,
+        || thread::sleep(WINDOW_RETRY_INTERVAL),
+    )?;
+    found.ok_or_else(|| anyhow!("Window fixture was not ready after {max_attempts} probes. Observed top-level windows: {observed:?}"))
 }
 
 pub fn find_element_with_retry(
@@ -516,22 +530,23 @@ mod file_explorer_tests {
     #[serial]
     fn test_explorer_launch_and_detect() {
         let app = TestApp::launch("explorer.exe", &[]).expect("Failed to launch Explorer");
-
-        thread::sleep(Duration::from_millis(1000));
-
         let service = UIAutomationService::new().expect("Failed to create service");
+        let window = find_window_matching_with_retry(
+            &service,
+            |window| {
+                window.class_name.contains("CabinetWClass")
+                    || window.name.to_lowercase().contains("file explorer")
+            },
+            5,
+        )
+        .expect("Should find Explorer window");
 
-        let windows = service.list_windows().expect("Failed to list windows");
-        let explorer_window = windows.iter().find(|w| {
-            w.class_name.contains("CabinetWClass")
-                || w.name.to_lowercase().contains("file explorer")
-        });
-
-        assert!(explorer_window.is_some(), "Should find Explorer window");
-
-        if let Some(window) = explorer_window {
-            assert!(!window.id.is_empty());
-        }
+        assert!(
+            window.class_name.contains("CabinetWClass")
+                || window.name.to_lowercase().contains("file explorer"),
+            "Should find Explorer window"
+        );
+        assert!(!window.id.is_empty());
 
         app.close().expect("Failed to close Explorer");
     }
@@ -540,33 +555,27 @@ mod file_explorer_tests {
     #[serial]
     fn test_explorer_address_bar() {
         let app = TestApp::launch("explorer.exe", &[]).expect("Failed to launch Explorer");
-
-        thread::sleep(Duration::from_millis(1000));
-
         let service = UIAutomationService::new().expect("Failed to create service");
+        let window = find_window_matching_with_retry(
+            &service,
+            |window| window.class_name.contains("CabinetWClass"),
+            5,
+        )
+        .expect("Should find Explorer window before querying its address bar");
+        let query = ElementQuery {
+            window: None,
+            window_class: None,
+            name: None,
+            class_name: None,
+            automation_id: None,
+            control_type: Some("Edit".to_string()),
+            max_results: Some(10),
+        };
+        let edit = find_element_with_retry(&service, Some(&window.id), &query, 5)
+            .expect("Should find edit controls in Explorer");
 
-        let windows = service.list_windows().expect("Failed to list windows");
-        let explorer_window = windows
-            .iter()
-            .find(|w| w.class_name.contains("CabinetWClass"));
-
-        if let Some(window) = explorer_window {
-            let query = ElementQuery {
-                window: None,
-                window_class: None,
-                name: None,
-                class_name: None,
-                automation_id: None,
-                control_type: Some("Edit".to_string()),
-                max_results: Some(10),
-            };
-
-            let result = service.find_elements(Some(window.id.clone()), &query);
-
-            if let Ok(elements) = result {
-                assert!(elements.len() > 0, "Should find edit controls in Explorer");
-            }
-        }
+        assert!(!edit.id.is_empty());
+        assert_eq!(edit.control_type, "Edit");
 
         app.close().expect("Failed to close Explorer");
     }

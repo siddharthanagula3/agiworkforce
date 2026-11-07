@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 type CsrfModule = typeof import('@/lib/csrf');
 type RateLimitModule = typeof import('@/lib/rate-limit');
@@ -27,7 +28,11 @@ vi.mock('@/lib/rate-limit', async (importOriginal) => ({
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: async () => ({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    db: {
+      query: (...args: unknown[]) => mocks.query(...args),
+      transaction: async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+        callback({ query: (...args: unknown[]) => mocks.query(...args) } as DatabaseAdapter),
+    },
     userId: 'owner-1',
     organizationId: null,
   }),
@@ -68,9 +73,17 @@ beforeEach(() => {
     if (text.includes('from public.published_artifacts')) {
       return params[1] === 'owner-1' ? [{ id: PUBLICATION }] : [];
     }
+    if (text.includes("current_setting('transaction_isolation')"))
+      return [{ isolation: 'read committed' }];
+    if (text.includes('pg_advisory_xact_lock')) return [{ locked: true }];
+    if (text.includes('select email from public.published_artifact_viewers')) {
+      return viewers.filter((viewer) => viewer.email === params[1]).map(({ email }) => ({ email }));
+    }
     if (text.includes('count(*)')) return [{ total: viewers.length }];
     if (text.includes('insert into public.published_artifact_viewers')) {
-      viewers.push({ email: params[1] as string, created_at: '2026-10-19T00:00:00Z' });
+      if (!viewers.some((viewer) => viewer.email === params[1])) {
+        viewers.push({ email: params[1] as string, created_at: '2026-10-19T00:00:00Z' });
+      }
       return [];
     }
     if (text.includes('delete from public.published_artifact_viewers')) {
@@ -145,6 +158,38 @@ describe('/api/artifacts/publish/[token]/viewers', () => {
       created_at: '2026-10-19T00:00:00Z',
     }));
     expect((await POST(request('POST', { email: 'one@more.com' }), context)).status).toBe(409);
+  });
+
+  it.each([100, 107])(
+    'accepts an existing normalized viewer at inventory %i without inserting',
+    async (count) => {
+      viewers = Array.from({ length: count }, (_, index) => ({
+        email: `p${index}@example.com`,
+        created_at: '2026-10-19T00:00:00Z',
+      }));
+      expect((await POST(request('POST', { email: ' P0@Example.COM ' }), context)).status).toBe(
+        200,
+      );
+      expect(viewers).toHaveLength(count);
+      expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+        false,
+      );
+      expect((await POST(request('POST', { email: 'new@example.com' }), context)).status).toBe(409);
+      expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not query or audit after CSRF rejection', async () => {
+    mocks.csrf.mockResolvedValueOnce(new Response(null, { status: 403 }));
+    expect((await POST(request('POST', { email: 'ana@example.com' }), context)).status).toBe(403);
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for an add without an owned publication and records nothing', async () => {
+    mocks.query.mockResolvedValue([]);
+    expect((await POST(request('POST', { email: 'ana@example.com' }), context)).status).toBe(404);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('answers 404 to anyone but the publisher', async () => {

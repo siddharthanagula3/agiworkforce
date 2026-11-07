@@ -66,12 +66,20 @@ const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const newChat = z.object({ type: z.literal('newChat') });
 const openArchivedSessions = z.object({ type: z.literal('openArchivedSessions') });
+const composerBinding = z.object({
+  instance: z.string().min(1).max(64),
+  revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  attachments: z.number().int().nonnegative(),
+});
+export type ComposerBinding = z.infer<typeof composerBinding>;
+const composerState = z.object({ type: z.literal('composerState'), payload: composerBinding });
 const messageAction = z.object({
   type: z.literal('messageAction'),
   payload: z.object({
     action: z.enum(['resend', 'branch', 'branchAnswer']),
     text: z.string().min(1).max(1_000_000),
     occurrence: z.number().int().nonnegative().max(10_000),
+    composer: composerBinding.optional(),
   }),
 });
 const planDecision = z.object({
@@ -326,6 +334,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openArchivedSessions,
   searchSessions,
   messageAction,
+  composerState,
   planDecision,
   openAccount,
   completeOnboarding,

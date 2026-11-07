@@ -98,6 +98,17 @@ describe('GET /api/settings/2fa/requirement', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(await response.json()).toEqual({ required });
-    expect(mocks.isBlockedByMfaPolicy).toHaveBeenCalledWith('user-1');
+    expect(mocks.isBlockedByMfaPolicy).toHaveBeenCalledWith('user-1', undefined);
+  });
+
+  it('passes the authenticated native identity separately from the product policy owner', async () => {
+    const sessionIdentity = { subject: 'native-subject', sessionId: 'native-session' };
+    mocks.getClerkAuthUser.mockResolvedValue({ userId: 'product-account', sessionIdentity });
+    mocks.isBlockedByMfaPolicy.mockResolvedValue(true);
+
+    const response = await GET(request());
+
+    expect(await response.json()).toEqual({ required: true });
+    expect(mocks.isBlockedByMfaPolicy).toHaveBeenCalledWith('product-account', sessionIdentity);
   });
 });

@@ -31,44 +31,90 @@ export function speechOptionsFromSettings(): Pick<
   return speechSettings();
 }
 
-export async function speak(text: string, options?: TTSOptions): Promise<void> {
-  await Speech.stop();
+export type SpeechOutcome =
+  { status: 'done' } | { status: 'stopped' } | { status: 'failed'; error: Error };
 
-  return new Promise<void>((resolve, reject) => {
-    let settled = false;
-    Speech.speak(text, {
-      voice: options?.voice,
-      rate: options?.rate ?? 1.0,
-      pitch: options?.pitch ?? 1.0,
-      language: options?.language ?? 'en-US',
-      onStart: () => {
-        options?.onStart?.();
-      },
-      onDone: () => {
-        if (settled) return;
-        settled = true;
-        options?.onDone?.();
-        resolve();
-      },
-      onStopped: () => {
-        if (settled) return;
-        settled = true;
-        options?.onStopped?.();
-        resolve();
-      },
-      onError: (error) => {
-        if (settled) return;
-        settled = true;
-        const err = error instanceof Error ? error : new Error(String(error));
-        options?.onError?.(err);
-        reject(err);
-      },
-    });
-  });
+export interface SpeechHandle {
+  done: Promise<SpeechOutcome>;
+  stop: () => Promise<void>;
 }
 
-export async function stop(): Promise<void> {
-  await Speech.stop();
+let activeUtterance: SpeechHandle | null = null;
+let nativeControl: Promise<void> = Promise.resolve();
+
+function queueNativeStop(): Promise<void> {
+  nativeControl = nativeControl.catch(() => undefined).then(() => Speech.stop());
+  return nativeControl;
+}
+
+export const preparePlayback = queueNativeStop;
+
+export function start(text: string, options?: TTSOptions): SpeechHandle {
+  void activeUtterance?.stop().catch(() => undefined);
+  let settled = false;
+  let stopping: Promise<void> | null = null;
+  let resolveDone!: (outcome: SpeechOutcome) => void;
+  const done = new Promise<SpeechOutcome>((resolve) => {
+    resolveDone = resolve;
+  });
+  const finish = (outcome: SpeechOutcome) => {
+    if (settled) return;
+    settled = true;
+    if (activeUtterance === handle) activeUtterance = null;
+    resolveDone(outcome);
+  };
+  const handle: SpeechHandle = {
+    done,
+    stop: () => {
+      if (settled) return stopping ?? Promise.resolve();
+      const ownsNativeSpeech = activeUtterance === handle;
+      finish({ status: 'stopped' });
+      stopping = ownsNativeSpeech ? queueNativeStop() : Promise.resolve();
+      void stopping.catch(() => undefined);
+      return stopping;
+    },
+  };
+  activeUtterance = handle;
+  const ready = queueNativeStop();
+  void ready.then(
+    () => {
+      if (settled || activeUtterance !== handle) return;
+      try {
+        Speech.speak(text, {
+          voice: options?.voice,
+          rate: options?.rate ?? 1.0,
+          pitch: options?.pitch ?? 1.0,
+          language: options?.language ?? 'en-US',
+          onStart: () => {
+            if (settled || activeUtterance !== handle) return;
+            try {
+              options?.onStart?.();
+            } catch (error) {
+              console.warn('[tts] speech callback failed', error);
+            }
+          },
+          onDone: () => finish({ status: 'done' }),
+          onStopped: () => finish({ status: 'stopped' }),
+          onError: (error) =>
+            finish({
+              status: 'failed',
+              error: error instanceof Error ? error : new Error(String(error)),
+            }),
+        });
+      } catch (error) {
+        finish({
+          status: 'failed',
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    },
+    (error: unknown) =>
+      finish({
+        status: 'failed',
+        error: error instanceof Error ? error : new Error(String(error)),
+      }),
+  );
+  return handle;
 }
 
 export async function isSpeaking(): Promise<boolean> {

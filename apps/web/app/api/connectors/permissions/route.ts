@@ -84,14 +84,17 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   let destructive: boolean;
   try {
-    const result = await saveConnectorToolPermissions(db, {
-      userId,
-      organizationId,
-      connectorId,
-      toolNames,
-      level,
+    const result = await db.transaction(async (transaction) => {
+      const saved = await saveConnectorToolPermissions(transaction, {
+        userId,
+        organizationId,
+        connectorId,
+        toolNames,
+        level,
+      });
+      if (!saved.saved) throw createError.validation('The tool permission could not be saved.');
+      return saved;
     });
-    if (!result.saved) throw createError.validation('The tool permission could not be saved.');
     destructive = result.destructive;
   } catch (error) {
     if (error instanceof CriticalStandingAllowError)
@@ -140,23 +143,21 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
   }
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  const revoked = await revokeConnectorSessionGrants(
-    db,
-    { userId, organizationId },
-    connectorId,
-    toolName,
-  );
-  const removed = toolName
-    ? await db.execute(
-        `delete from public.connector_tool_permissions
-          where user_id = $1 and connector_id = $2 and tool_name = $3`,
-        [userId, connectorId, toolName],
-      )
-    : await db.execute(
-        `delete from public.connector_tool_permissions
-          where user_id = $1 and connector_id = $2`,
-        [userId, connectorId],
-      );
+  const removed = await db.transaction(async (transaction) => {
+    const revoked = await revokeConnectorSessionGrants(transaction, connectorId, toolName);
+    const standingRemoved = toolName
+      ? await transaction.execute(
+          `delete from public.connector_tool_permissions
+            where user_id = $1 and connector_id = $2 and tool_name = $3`,
+          [userId, connectorId, toolName],
+        )
+      : await transaction.execute(
+          `delete from public.connector_tool_permissions
+            where user_id = $1 and connector_id = $2`,
+          [userId, connectorId],
+        );
+    return standingRemoved + revoked;
+  });
 
   await recordAuditEvent({
     userId,
@@ -169,13 +170,13 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
       connectorId,
       ...(toolName ? { resourceName: toolName } : {}),
       status: 'permission_removed',
-      count: removed + revoked,
+      count: removed,
     },
   });
 
   return NextResponse.json({
     success: true,
-    removed: removed + revoked,
+    removed,
   } satisfies DeleteConnectorToolPermissionsResponse);
 }
 

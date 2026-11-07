@@ -1,8 +1,8 @@
 # Neon Free plan readiness
 
-Status: Source changes implemented; production quota validation pending
+Status: Web optimizations deployed; Fly services stopped by the owner; Free allowance acceptance remains open
 Owner: Web + mobile + signaling maintainers
-Last verified: 2026-10-30
+Last verified: 2026-10-31
 Purpose: Track measured transfer/compute causes and the remaining live checks for Free allowances.
 Retention: Delete this tracker when the production acceptance checks pass; the original chat retains the dated diagnostic bundle.
 
@@ -118,9 +118,10 @@ field. Existing socket, revocation and authorization paths remain enforced.
 The repository configures 45 crons. Frequent jobs already call
 `lowPowerCronSkip()` except the security-anomaly route, whose Redis marker
 avoids an idle database read. Hourly/daily jobs align with the first 15 minutes
-of the hour. The production Vercel configuration contains an encrypted
-`AGI_DB_LOW_POWER` variable; its value and presence in the serving deployment
-were not retrieved. No production variable was changed by this work.
+of the hour. The production Vercel configuration has `AGI_DB_LOW_POWER` enabled, confirmed
+during the October 31 release preparation. The new serving deployment and
+sustained idle behavior still require live acceptance. No production variable
+was changed by this work.
 
 An hourly 15-minute maintenance window plus the five-minute suspension tail
 means about eight awake hours/day before real traffic: 62 CU-hours/month at
@@ -154,3 +155,60 @@ Remaining production checks:
 The screenshot's CSP-blocked external font and unused stylesheet preloads are
 browser asset warnings. They do not prove Neon request volume, and weakening
 CSP is not a database optimization.
+
+## October 31 release preparation
+
+The owner explicitly authorized shipping the Neon optimizations and related
+branding/icon changes to production. The previously serving release predates
+the committed cache/activity fixes. Its missing canonical symbol and older PWA
+mark match that older source; publishing the verified newer source addresses
+that release staleness. Two active provider placeholders and the Neon connector
+monogram now use official vectors from the existing dependency, with bounded
+generator and consumer regressions.
+
+A fresh management-only pre-downgrade capture preserves paid history and
+configuration outside Git; no SQL keepalive or customer-content export was used.
+Legacy user-account limits do not establish organization/project quotas. The
+production low-power flag is confirmed enabled. Endpoint suspension value zero
+means the plan default, not disabled suspension. Editing an autoscaling maximum
+requires a compute restart. The owner explicitly chose to leave that adjustment
+for the Free-plan downgrade, avoiding an additional restart; no endpoint change
+was applied.
+
+The owner authorized a direct Vercel release once the exact commit's JavaScript
+lint, typecheck, test and build job passed, without waiting for Rust or Priority
+Level 1. Production now serves `28260a8d5e6f37da432d21e6fe8edc37eb845e26`.
+The production and staging workflows were restored to their original disabled
+states. The migration ledger has 391 applied migrations, none pending and no
+checksum drift. Billing, credit, role and customer-row mutations are excluded.
+Remaining Free allowances, downgrade carry-over treatment and sustained
+post-release savings remain unverified; deployment alone cannot establish them.
+
+## Owner-requested Fly shutdown
+
+The October 31 cost explorer displayed $37.36 for October 2–31, excluding the
+current day. The upload scanner accounted for $29.86 and the relay for $7.50.
+Actual machine configuration showed a shared two-CPU, 4 GB scanner and a shared
+one-CPU, 1 GB relay. Both had automatic stopping disabled and a minimum of one
+running machine. These resources incur CPU/RAM charges while running even
+without end users. This Fly bill is separate from Neon's public transfer usage.
+
+The owner cancelled the pending Fly optimization deployment and requested
+immediate shutdown. Both machines were stopped. After explicit approval,
+their live service settings were changed to disable automatic startup, enable
+automatic stopping, keep zero minimum running machines and use restart policy
+`no`. Fresh Fly inventories confirmed both remain stopped; neither app has a
+persistent volume. Preserved machine root filesystems can still incur storage
+charges. Apps, machines, images and secrets were retained; no customer database
+rows were changed.
+
+A management-only observation at 18:29 UTC reported production compute `idle`,
+with last activity at 18:10 UTC and no started-at timestamp. No SQL probe was
+used for that observation. This confirms an idle state after the shutdown;
+monthly Free-allowance fit still needs representative consumption measurements.
+
+Do not redeploy or restart either Fly app without a new owner request. The
+repository's serving-topology configuration is not evidence that these paused
+production resources should be started. The relay's new idle-probe code was not
+deployed before shutdown. The original chat holds the live configuration and
+shutdown evidence outside Git.

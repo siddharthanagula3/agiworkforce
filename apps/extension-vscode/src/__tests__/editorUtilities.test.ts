@@ -9,6 +9,13 @@ import {
   setEditorUtilityChat,
 } from '../features/editor-utilities';
 
+const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:fs')>()),
+  realpathSync: realpath,
+}));
+
 function setEditor(editor: unknown): void {
   Object.defineProperty(vscode.window, 'activeTextEditor', {
     configurable: true,
@@ -51,6 +58,8 @@ function editorWith(options: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  realpath.mockReset().mockImplementation((path) => path);
+  vscode.workspace.isTrusted = true;
   setEditorUtilityChat(undefined);
   setEditor(undefined);
   vi.mocked(vscode.workspace.asRelativePath).mockImplementation((value: unknown) =>
@@ -252,4 +261,29 @@ describe('what never leaves the machine', () => {
 
     expect(built.ok).toBe(true);
   });
+
+  it.each(['credential-target', 'unresolved'] as const)(
+    'omits file contents from every editor utility when the path is %s',
+    (refusal) => {
+      if (refusal === 'credential-target') {
+        realpath.mockReturnValue('/workspace/.ssh/config');
+      } else {
+        realpath.mockImplementation(() => {
+          throw new Error('ENOENT');
+        });
+      }
+      const editor = editorOn('/workspace/src/app.ts') as vscode.TextEditor;
+      const read = vi.spyOn(editor.document, 'getText');
+      setEditor(editor);
+
+      expect(buildExplainSelectionPrompt().ok).toBe(false);
+      expect(buildExplainErrorPrompt().ok).toBe(false);
+      expect(buildAskAboutCodePrompt('what is wrong here?')).toEqual({
+        ok: true,
+        prompt: 'what is wrong here?',
+      });
+      expect(read).not.toHaveBeenCalled();
+      expect(vscode.languages.getDiagnostics).not.toHaveBeenCalled();
+    },
+  );
 });

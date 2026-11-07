@@ -1,5 +1,5 @@
 import type { SearchResponse, SearchResult } from './search-media';
-import type { CloudWorkMode } from '@agiworkforce/types';
+import { isEffort, type CloudWorkMode, type Effort } from '@agiworkforce/types';
 import type { FreeLimitReason } from '@agiworkforce/cloud-contracts';
 import type { ArtifactDerivationPolicy } from '@agiworkforce/artifacts';
 import { isChatOutputFormat, type ChatOutputFormat } from '@/lib/chat-output-format';
@@ -24,6 +24,7 @@ export interface GeneratedDocument {
 export interface SendReplayMetadata {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
   officeOutputFormat?: ChatOutputFormat;
@@ -64,6 +65,7 @@ function isWebChatStyleMode(value: unknown): value is WebChatStyleMode {
 export function createSendReplayMetadata(params: {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
   officeOutputFormat?: ChatOutputFormat;
@@ -76,6 +78,7 @@ export function createSendReplayMetadata(params: {
   if (typeof params.webSearchEnabled === 'boolean')
     replay.webSearchEnabled = params.webSearchEnabled;
   if (typeof params.thinkingEnabled === 'boolean') replay.thinkingEnabled = params.thinkingEnabled;
+  if (isEffort(params.thinkingEffort)) replay.thinkingEffort = params.thinkingEffort;
   if (typeof params.codeExecutionEnabled === 'boolean') {
     replay.codeExecutionEnabled = params.codeExecutionEnabled;
   }
@@ -148,6 +151,8 @@ export interface ThinkingSegment {
 }
 
 export interface WebChatMessageMetadata {
+  contentSaveConflict?: boolean;
+  assistantContentEdit?: string;
   artifactDerivation?: ArtifactDerivationPolicy;
   tokensUsed?: number;
   inputTokens?: number;

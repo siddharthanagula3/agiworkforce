@@ -187,9 +187,10 @@ describe('resendInvitation', () => {
   });
 
   it('updates the existing row with a fresh token instead of creating a second one', async () => {
+    const previousHash = hashInvitationToken('previous-invitation-token-that-is-long-enough');
     h.execute.mockResolvedValueOnce(0);
     h.query
-      .mockResolvedValueOnce([invitationRow()])
+      .mockResolvedValueOnce([invitationRow({ token_hash: previousHash })])
       .mockResolvedValueOnce([invitationRow({ resend_count: 1 })]);
 
     const result = await resendInvitation(h.db, ORG_A, invitationRow().id);
@@ -199,12 +200,26 @@ describe('resendInvitation', () => {
     expect(calls.at(-1)).toContain('update public.organization_invitations');
     expect(calls.at(-1)).toContain('resend_count = resend_count + 1');
     expect(calls.at(-1)).toContain('organization_id = $4');
+    expect(calls.at(-1)).toContain("status = 'pending'");
+    expect(hashInvitationToken(result.token)).not.toBe(previousHash);
     expect(h.query.mock.calls.at(-1)?.[1]).toEqual([
       hashInvitationToken(result.token),
       expect.any(String),
       invitationRow().id,
       ORG_A,
     ]);
+  });
+
+  it('reports a conflict when a pending resend transition returns no receipt', async () => {
+    h.execute.mockResolvedValueOnce(0);
+    h.query.mockResolvedValueOnce([invitationRow()]).mockResolvedValueOnce([]);
+
+    await expect(resendInvitation(h.db, ORG_A, invitationRow().id)).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'The invitation changed while it was being resent',
+    });
+    expect(h.query).toHaveBeenCalledTimes(2);
+    expect(h.execute).toHaveBeenCalledTimes(1);
   });
 
   it('refuses to resend an invitation that already reached a terminal status', async () => {
@@ -301,6 +316,43 @@ describe('acceptInvitation', () => {
     expect(h.query.mock.calls[0]?.[1]).toEqual([
       hashInvitationToken('raw-token-value-that-is-long-enough'),
     ]);
+    const transition = sqlCalls(h.query)[4]!;
+    expect(transition).toContain('token_hash = $3');
+    expect(transition).toContain("status = 'pending'");
+    expect(transition).toContain('expires_at > now()');
+    expect(h.query.mock.calls[4]?.[1]).toEqual([
+      'new-user',
+      invitationRow().id,
+      hashInvitationToken('raw-token-value-that-is-long-enough'),
+    ]);
+  });
+
+  it('refuses a token-bound transition with no receipt before membership or workspace writes', async () => {
+    h.query
+      .mockResolvedValueOnce([invitationRow()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      acceptInvitation(h.db, {
+        token: 'rotated-away-token-value-that-is-long-enough',
+        userId: 'new-user',
+        userEmail: 'invitee@example.com',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'This invitation changed while it was being accepted',
+    });
+
+    expect(h.query).toHaveBeenCalledTimes(5);
+    expect(h.query.mock.calls[4]?.[1]).toEqual([
+      'new-user',
+      invitationRow().id,
+      hashInvitationToken('rotated-away-token-value-that-is-long-enough'),
+    ]);
+    expect(h.execute).not.toHaveBeenCalled();
   });
 
   it('releases the invitation seat BEFORE consuming a membership seat', async () => {
@@ -471,10 +523,38 @@ describe('declineInvitation', () => {
     expect(declined.status).toBe('declined');
     const sql = sqlCalls(h.query)[1]!;
     expect(sql).toContain("set status = 'declined'");
+    expect(sql).toContain('token_hash = $2');
     expect(sql).toContain("status = 'pending'");
+    expect(sql).toContain('expires_at > now()');
     expect(h.query.mock.calls[0]?.[1]).toEqual([
       hashInvitationToken('raw-token-value-that-is-long-enough'),
     ]);
+    expect(h.query.mock.calls[1]?.[1]).toEqual([
+      invitationRow().id,
+      hashInvitationToken('raw-token-value-that-is-long-enough'),
+    ]);
+  });
+
+  it('reports a conflict when the token-bound decline returns no receipt', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([invitationRow()]).mockResolvedValueOnce([]);
+
+    await expect(
+      declineInvitation(h.db, {
+        token: 'rotated-away-token-value-that-is-long-enough',
+        userEmail: 'invitee@example.com',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'This invitation changed while it was being declined',
+    });
+
+    expect(h.query).toHaveBeenCalledTimes(2);
+    expect(h.query.mock.calls[1]?.[1]).toEqual([
+      invitationRow().id,
+      hashInvitationToken('rotated-away-token-value-that-is-long-enough'),
+    ]);
+    expect(h.execute).not.toHaveBeenCalled();
   });
 
   it('404s an unknown token', async () => {

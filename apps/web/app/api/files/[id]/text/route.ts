@@ -8,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { getActiveWorkspaceMediaAssetById } from '@/lib/server/media-assets';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMediaStorageConfigured, readStoredMedia } from '@/lib/server/media-storage';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
 import { fileTextPreviewKind, renderFileTextPreview } from '@/lib/server/file-text-preview';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
@@ -23,11 +24,11 @@ async function handleGetFileText(
   const rateLimitResponse = await withRateLimit(request, 'files-serve');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id } = await context.params;
   if (!UUID_RE.test(id)) throw createError.notFound('File not found');
 
-  const asset = await getActiveWorkspaceMediaAssetById(userId, id, db);
+  const asset = await getActiveWorkspaceMediaAssetById(userId, id, db, { organizationId });
   if (!asset || asset.deletedAt) throw createError.notFound('File not found');
 
   const rawName = asset.metadata['filename'];
@@ -41,7 +42,18 @@ async function handleGetFileText(
     throw createError.notFound('File bytes are not available');
   }
 
-  const object = await readStoredMedia(asset.storagePathname);
+  const object = await readStoredMedia(asset.storagePathname, MAX_TEXT_SOURCE_BYTES).catch(
+    (error: unknown) => {
+      if (error instanceof StoredObjectTooLargeError) {
+        throw createError.validation(
+          error.contentLength === undefined
+            ? 'This file could not be read within the preview size limit'
+            : 'This file is too large to preview',
+        );
+      }
+      throw error;
+    },
+  );
   if (!object) throw createError.notFound('File bytes are not available');
 
   return NextResponse.json<FileTextPreview>(

@@ -1,6 +1,17 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
+jest.mock('@/src/features/auth/store', () => {
+  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  return {
+    useAuthStore: create(() => ({
+      isClerkLoaded: true,
+      isClerkSignedIn: false,
+      clerkUserId: null,
+    })),
+  };
+});
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -25,8 +36,11 @@ jest.mock('../stores/settingsStore', () => ({
 }));
 
 jest.mock('../src/features/waitlist/store', () => ({
-  useWaitlistStore: (selector: (state: { cloudUnlocked: boolean }) => unknown) =>
-    selector({ cloudUnlocked: false }),
+  useWaitlistStore: Object.assign(
+    (selector: (state: { cloudUnlocked: boolean }) => unknown) =>
+      selector({ cloudUnlocked: false }),
+    { getState: () => ({ cloudUnlocked: false }), subscribe: () => () => {} },
+  ),
 }));
 
 jest.mock('../lib/safeOpenURL', () => ({

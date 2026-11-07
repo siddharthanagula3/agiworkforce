@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Button, Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { toast } from 'sonner';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import { isPublicationLeaseCurrent, usePublishedSitesStore } from '../stores/published-sites-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { formatBytes, formatRelativeTime, siteName } from '../lib/site-format';
 import {
@@ -28,48 +30,171 @@ export function clearSharedDataConsequence(
   return `Every visitor of “${siteName(site)}” loses the ${entriesLabel(entryCount)} it shares between them, such as a shared list or scoreboard. Each visitor's personal data is not touched. This cannot be undone.`;
 }
 
-export function SiteDataTab({ site }: { site: PublishedSite }) {
-  const [state, setState] = useState<DataState>({ status: 'loading' });
-  const { confirm, dialog } = useConfirmAction();
+type DataRequest = Pick<
+  RequestAuthority,
+  'assertCurrent' | 'fetch' | 'isCurrent' | 'retire' | 'signal'
+>;
+type DataLane = {
+  active: boolean;
+  read: DataRequest | null;
+  mutation: DataRequest | null;
+  confirmation: object | null;
+  result: DataState;
+};
 
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      setState({ status: 'loading' });
-      try {
-        setState({ status: 'ready', data: await readPublishedSiteData(site.token, signal) });
-      } catch (caught) {
-        if (caught instanceof DOMException && caught.name === 'AbortError') return;
-        setState({
-          status: 'error',
-          message: toUserMessage(caught, "This site's data could not be loaded."),
-        });
-      }
+function createDataRequest(owns: () => boolean): DataRequest {
+  const controller = new AbortController();
+  const retire = () => controller.abort();
+  const isCurrent = () => {
+    if (!owns()) retire();
+    return !controller.signal.aborted;
+  };
+  const assertCurrent = () => {
+    if (!isCurrent()) throw new DOMException('Site data owner changed', 'AbortError');
+  };
+  return {
+    isCurrent,
+    assertCurrent,
+    retire,
+    signal: controller.signal,
+    fetch: (input, init) => {
+      assertCurrent();
+      const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      return fetch(input, {
+        ...init,
+        signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+      });
     },
-    [site.token],
+  };
+}
+
+export function SiteDataTab({ site }: { site: PublishedSite }) {
+  const lease = usePublishedSitesStore((store) => store.lease);
+  return (
+    <DataSession key={JSON.stringify([site.token, site.artifactId, lease?.epoch])} site={site} />
+  );
+}
+
+function DataSession({ site }: { site: PublishedSite }) {
+  const lease = usePublishedSitesStore((store) => store.lease);
+  const activation = useRef<DataLane | null>(null);
+  const [view, setView] = useState<{ lane: DataLane | null; result: DataState }>({
+    lane: null,
+    result: { status: 'loading' },
+  });
+  const { confirm, dialog } = useConfirmAction();
+  const current = useCallback(
+    (lane: DataLane) =>
+      lane.active && activation.current === lane && isPublicationLeaseCurrent(lease),
+    [lease],
+  );
+  const publish = useCallback(
+    (lane: DataLane, result: DataState) => {
+      if (!current(lane)) return;
+      lane.result = result;
+      setView((previous) =>
+        current(lane) && lane.result === result ? { lane, result } : previous,
+      );
+    },
+    [current],
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const load = useCallback(
+    async (lane: DataLane) => {
+      if (!current(lane) || lane.mutation) return;
+      lane.read?.retire();
+      lane.confirmation = null;
+      const request = createDataRequest(() => current(lane) && lane.read === request);
+      lane.read = request;
+      publish(lane, { status: 'loading' });
+      try {
+        const data = await readPublishedSiteData(site.token, request.signal, request);
+        if (request.isCurrent()) publish(lane, { status: 'ready', data });
+      } catch (caught) {
+        if (request.isCurrent())
+          publish(lane, {
+            status: 'error',
+            message: toUserMessage(caught, "This site's data could not be loaded."),
+          });
+      } finally {
+        if (lane.read === request) lane.read = null;
+        request.retire();
+      }
+    },
+    [current, publish, site.token],
+  );
 
-  const requestClear = (entryCount: number) =>
+  useLayoutEffect(() => {
+    const lane: DataLane = {
+      active: true,
+      read: null,
+      mutation: null,
+      confirmation: null,
+      result: { status: 'loading' },
+    };
+    activation.current = lane;
+    publish(lane, lane.result);
+    void load(lane);
+    return () => {
+      lane.active = false;
+      lane.confirmation = null;
+      lane.read?.retire();
+      lane.mutation?.retire();
+    };
+  }, [load, publish]);
+
+  const { lane, result: state } = view;
+  const retry = () => {
+    if (lane && current(lane) && lane.result === state) void load(lane);
+  };
+  const requestClear = () => {
+    if (
+      !lane ||
+      !current(lane) ||
+      lane.result !== state ||
+      lane.mutation ||
+      lane.confirmation ||
+      state.status !== 'ready' ||
+      !state.data.supported ||
+      state.data.shared.entryCount === 0
+    )
+      return;
+    const ticket = {};
+    lane.confirmation = ticket;
     confirm({
       title: 'Clear shared data?',
-      description: clearSharedDataConsequence(site, entryCount),
+      description: clearSharedDataConsequence(site, state.data.shared.entryCount),
       confirmLabel: 'Clear shared data',
       destructive: true,
+      onCancel: () => {
+        if (lane.confirmation === ticket) lane.confirmation = null;
+      },
       onConfirm: async () => {
+        if (
+          !current(lane) ||
+          lane.confirmation !== ticket ||
+          lane.result !== state ||
+          lane.mutation
+        )
+          return;
+        lane.confirmation = null;
+        const request = createDataRequest(() => current(lane) && lane.mutation === request);
+        lane.mutation = request;
         try {
-          const cleared = await clearPublishedSiteSharedData(site.token);
+          const cleared = await clearPublishedSiteSharedData(site.token, request);
+          if (!request.isCurrent()) return;
           toast.success(`Cleared ${entriesLabel(cleared)} of shared data`);
         } catch (caught) {
+          if (!request.isCurrent()) return;
           toast.error(toUserMessage(caught, "Failed to clear this site's shared data"));
+        } finally {
+          if (lane.mutation === request) lane.mutation = null;
+          request.retire();
         }
-        await load();
+        if (current(lane)) await load(lane);
       },
     });
+  };
 
   if (state.status === 'loading') {
     return (
@@ -89,7 +214,7 @@ export function SiteDataTab({ site }: { site: PublishedSite }) {
         <p role="alert" className="text-sm text-[var(--chat-text-secondary)]">
           {state.message}
         </p>
-        <Button variant="outline" size="sm" onClick={() => void load()}>
+        <Button variant="outline" size="sm" onClick={retry}>
           Try again
         </Button>
       </div>
@@ -127,7 +252,7 @@ export function SiteDataTab({ site }: { site: PublishedSite }) {
             variant="outline"
             size="sm"
             disabled={shared.entryCount === 0}
-            onClick={() => requestClear(shared.entryCount)}
+            onClick={requestClear}
           >
             Clear shared data
           </Button>

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   addCsrfHeaders: vi.fn(async () => ({ 'x-csrf-token': 'csrf' })),
   get2FAStatus: vi.fn(),
   settings: { two_factor_enabled: false, session_timeout: 60 },
+  user: { id: 'user-1', passwordEnabled: false },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -15,9 +16,22 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: true, user: null }),
+  useUser: () => ({ isLoaded: true, isSignedIn: true, user: mocks.user }),
   useClerk: () => ({ signOut: mocks.signOut }),
 }));
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => {
+  const session = {
+    userId: 'user-1',
+    sessionId: 'session-1',
+    isCurrent: () => true,
+    getToken: async () => 'token',
+  };
+  return {
+    ...(await original<typeof import('@/lib/identity/useSessionSnapshot')>()),
+    useSessionSnapshot: () => () => session,
+  };
+});
 
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) =>

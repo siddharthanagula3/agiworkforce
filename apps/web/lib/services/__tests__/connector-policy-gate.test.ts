@@ -3,6 +3,8 @@ const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
+  connectorReleased: () => connectorRelease.released,
+  hasReleasedConnectors: () => connectorRelease.released,
 }));
 
 type ScanModule0 = typeof import('@/lib/services/connector-policy-service');
@@ -173,6 +175,7 @@ describe('evaluateConnectorPolicyForUser', () => {
       organizationId: ORG,
       planTier: 'pro',
       surface: 'web',
+      connectorId: 'github',
     });
   });
 

@@ -1,6 +1,9 @@
+import { headers } from 'next/headers';
+import { NextRequest } from 'next/server';
+import { SITE_URL } from '@/lib/seo/site';
 import type { Metadata } from 'next';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
+import { getCurrentCookieUserRlsDb } from '@/lib/server/rls-db';
 import { artifactAiEnabled } from '@/lib/server/artifact-ai-switch';
 import {
   PUBLISHED_TOKEN_REGEX,
@@ -29,10 +32,13 @@ async function readArtifactForViewer(
   const publiclyVisible = await getPublishedArtifactByToken(getNeonDb(), token).catch(() => null);
   if (publiclyVisible) return { artifact: publiclyVisible, signedIn: false };
 
-  const scoped = await getCurrentUserRlsDb().catch(() => null);
+  const request = new NextRequest(new URL(`/shared-artifact/${token}`, SITE_URL), {
+    headers: await headers(),
+  });
+  const scoped = await getCurrentCookieUserRlsDb(request).catch(() => null);
   if (!scoped) return { artifact: null, signedIn: false };
   const shared =
-    (await getOrgReadableArtifactByToken(scoped.db, token).catch(() => null)) ??
+    (await getOrgReadableArtifactByToken(scoped.db, token, scoped.userId).catch(() => null)) ??
     (await getInvitedReadableArtifactByToken(scoped.db, token).catch(() => null));
   return { artifact: shared, signedIn: true };
 }

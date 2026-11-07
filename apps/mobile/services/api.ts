@@ -5,7 +5,11 @@ import { combineAbortSignals } from '@/lib/abortSignal';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
-import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  invalidateCloudAccount,
+  assertCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
 import {
   createUploadTask,
@@ -208,9 +212,11 @@ export function streamAuthRefusal(status: number, text: string): Error | null {
   return null;
 }
 
-export async function recoverStreamSession(): Promise<boolean> {
+export async function recoverStreamSession(account: CloudAccountEpoch): Promise<boolean> {
+  assertCloudAccountEpochCurrent(account);
   const accountGeneration = _accountGeneration;
   const refreshed = await tryRefreshToken();
+  assertCloudAccountEpochCurrent(account);
   assertApiAccountGeneration(accountGeneration);
   if (!refreshed) handleUnrecoverableAuth();
   return refreshed;
@@ -248,6 +254,7 @@ function handleUnrecoverableAuth(): void {
 }
 
 interface RequestOptions {
+  accountEpoch?: CloudAccountEpoch | null;
   timeout?: number;
   signal?: AbortSignal;
   /**
@@ -257,6 +264,12 @@ interface RequestOptions {
    */
   baseUrl?: string;
   headers?: Record<string, string>;
+  /**
+   * Only controls 401 recovery. Caller-owned credentials return the refusal to
+   * the caller without refreshing or retiring the ambient session. Other auth
+   * refusals and all transport/account guards retain their normal behavior.
+   */
+  auth401Recovery?: 'ambient' | 'caller-owned';
   /** A content report the user chose to send; lets that one POST through in Local mode. */
   consentedReport?: boolean;
   _skipAuthRetry?: boolean;
@@ -293,8 +306,10 @@ async function sendRequest(
   path: string,
   init: RequestInit,
   options: RequestOptions,
+  accountGeneration: number,
 ): Promise<SentRequest> {
-  const accountGeneration = _accountGeneration;
+  assertApiAccountGeneration(accountGeneration);
+  if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
   const authHeaders = await getAuthHeaders();
   const headers = {
     'Content-Type': 'application/json',
@@ -303,6 +318,7 @@ async function sendRequest(
     ...authHeaders,
   };
   assertApiAccountGeneration(accountGeneration);
+  if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
   if (
     path === TERMS_ACCEPTANCE_PATH &&
     options.baseUrl === undefined &&
@@ -341,14 +357,18 @@ async function sendRequest(
       },
     );
     assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
 
     if (response.status === 401) {
+      if (options.auth401Recovery === 'caller-owned') return { response, release };
       if (!options._skipAuthRetry) {
         const refreshed = await tryRefreshToken();
         assertApiAccountGeneration(accountGeneration);
+        if (options.accountEpoch !== undefined)
+          assertCloudAccountEpochCurrent(options.accountEpoch);
         if (refreshed) {
           release();
-          return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+          return sendRequest(path, init, { ...options, _skipAuthRetry: true }, accountGeneration);
         }
       }
       release();
@@ -356,14 +376,19 @@ async function sendRequest(
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
 
-    if (response.status === 403 && (await refusedForPasskey(response))) {
-      release();
-      announcePasskeyRequired();
-      throw new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
-    }
-
     if (response.status === 403) {
+      const passkeyRequired = await refusedForPasskey(response);
+      assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
+      if (passkeyRequired) {
+        release();
+        announcePasskeyRequired();
+        throw new ApiHttpError(PASSKEY_REQUIRED_MESSAGE, 403, PASSKEY_REQUIRED_CODE);
+      }
+
       const refusal = await readAccountUnavailable(response);
+      assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
       if (refusal) {
         release();
         handleAccountUnavailable(refusal);
@@ -391,9 +416,12 @@ export async function apiFetch(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<Response> {
-  const { response, release } = await sendRequest(path, init, options);
+  const accountGeneration = _accountGeneration;
+  const { response, release } = await sendRequest(path, init, options, accountGeneration);
   try {
     const body = BODYLESS_STATUSES.has(response.status) ? '' : await response.text();
+    assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
     return new Response(body.length > 0 ? body : null, {
       status: response.status,
       statusText: response.statusText,
@@ -416,11 +444,14 @@ export async function apiFetchBinary(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<ApiBinaryResponse> {
-  const { response, release } = await sendRequest(path, init, options);
+  const accountGeneration = _accountGeneration;
+  const { response, release } = await sendRequest(path, init, options, accountGeneration);
   try {
     const bytes = BODYLESS_STATUSES.has(response.status)
       ? new ArrayBuffer(0)
       : await response.arrayBuffer();
+    assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
     return {
       ok: response.ok,
       status: response.status,
@@ -438,12 +469,13 @@ async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const accountGeneration = _accountGeneration;
-  const { response, release } = await sendRequest(path, init, options);
+  const { response, release } = await sendRequest(path, init, options, accountGeneration);
 
   try {
     if (response.status === 429) {
       const bodyText = await response.text();
       assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
       const parsed = parseJsonBody(bodyText);
 
       const rateLimitError = rateLimitErrorFrom(parsed);
@@ -460,6 +492,7 @@ async function request<T>(
     if (!response.ok) {
       const body = await response.text();
       assertApiAccountGeneration(accountGeneration);
+      if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
 
       if (response.status === 403) {
         try {
@@ -504,6 +537,7 @@ async function request<T>(
 
     const result = (await response.json()) as T;
     assertApiAccountGeneration(accountGeneration);
+    if (options.accountEpoch !== undefined) assertCloudAccountEpochCurrent(options.accountEpoch);
     return result;
   } finally {
     release();

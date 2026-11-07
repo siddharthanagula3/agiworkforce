@@ -103,6 +103,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `edit_image`                   | asks                   | asks                           | write, reversible                                                                |
 | `skill`                        | asks                   | runs                           | read, reversible                                                                 |
 | `read_tool_result`             | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `load_connector_tools`         | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 | `save_memory`                  | asks                   | asks                           | write, reversible                                                                |
 | `search_memory`                | asks                   | runs                           | read, reversible                                                                 |
 | `forget_memory`                | asks                   | asks                           | delete, not reversible                                                           |
@@ -157,6 +158,18 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `device_calendar_availability` | asks                   | asks                           | read, reversible                                                                 |
 | `device_calendar_create_event` | asks                   | asks                           | write, reversible                                                                |
 | `device_reminder_create`       | asks                   | asks                           | write, reversible                                                                |
+
+`load_connector_tools` exposes input schemas from the connected-tool catalog
+already available to the turn. It does not call a connected app or change its
+data. Each loaded tool retains its own permissions and approval checks.
+
+External tool schemas retain the shared MCP raw-depth, key-count and reference
+budgets before Web inspection. The Web depth budget counts child schema
+definitions, rather than property-map containers or literal default/example
+values. Unknown nested object metadata remains conservative. Descriptive
+schema annotations pass the same poisoning and length checks as the tool
+description. Admission does not rewrite the original schema or grant execution
+permission.
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
@@ -272,11 +285,16 @@ The GitHub App's **installation permission set is configured on GitHub and is no
 declared anywhere in this repository.** Public copy must say that rather than
 guess a permission list.
 
-Connectors are not released yet. `CONNECTOR_RELEASE_STATE` in
-`packages/contracts/types/src/connector-release.ts` is `coming_soon`, and the
-connector start and custom-connector routes refuse every plan until it is
-`released`. Once released, connectors and Remote Control are paid-plan
-capabilities (`BILLING_PLAN_CAPABILITY_TIERS` in
+Connector authorization and execution require the exact ID to pass
+`connectorReleased()` in `packages/contracts/types/src/connector-release.ts`.
+The global `CONNECTOR_RELEASE_STATE` remains `coming_soon`, while
+`SELECTIVELY_RELEASED_CONNECTOR_IDS` releases individual connectors.
+`hasReleasedConnectors()` enables coarse capability discovery when any connector
+is released; `connectorsReleased()` reports only the global release state.
+Discovery does not release other IDs or custom connectors. Plan, region and
+provider-setup checks still apply to released connectors.
+
+Connectors and Remote Control are paid-plan capabilities (`BILLING_PLAN_CAPABILITY_TIERS` in
 `packages/contracts/types/src/billing-catalog.ts`): the connector turn gate and
 the capability handshake read the `connectors` capability
 (`lib/connectors/connector-capability.ts`), and `/api/pair/initiate` and

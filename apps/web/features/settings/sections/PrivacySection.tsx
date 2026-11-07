@@ -1,11 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { useRouter } from 'next/navigation';
-import { Switch, useConfirm, translateUiPlural } from '@agiworkforce/ui';
+import { Switch } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   confirmTelemetryConsent,
   hasPendingTelemetryOptOut,
@@ -13,27 +11,24 @@ import {
   setTelemetryConsentCache,
 } from '@/lib/sentry-shared';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import { usePreferenceOwner, usePreferenceView } from '../hooks/use-preference-owner';
 import {
-  fetchPreferenceNamespace,
-  savePreferenceNamespace,
-} from '@/app/settings/_lib/preferences-client';
-import {
-  applyBulkConversationAction,
-  fetchConversationHistoryStats,
-  type BulkConversationAction,
-} from '../services/conversation-data-service';
+  readPrivacyPreferences,
+  savePrivacyPreference,
+  type PrivacySnapshot,
+  type PrivacyKey,
+} from '../services/privacy-preferences-client';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
-import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { DataExportRow } from '../components/DataExportRow';
+import { BulkConversationControls } from '../components/BulkConversationControls';
 import { UsOnlyRoutingPanel } from '../components/UsOnlyRoutingPanel';
 import { ProductAnalyticsConsentRow } from '../components/ProductAnalyticsConsentRow';
 import { MarketingEmailConsentRow } from '../components/MarketingEmailConsentRow';
 import { NamedProviderConsentRows } from '../components/NamedProviderConsentRows';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
-
-const NAMESPACE = 'privacy';
 
 // 'locationMetadata' and 'improveModelTraining' are intentionally absent from
 // TOGGLES: both persisted correctly but had zero consumers anywhere (no
@@ -45,7 +40,7 @@ const NAMESPACE = 'privacy';
 // Fixing that means gating the save path itself, not this settings screen.
 // do not re-add the switch until that read is wired, or it goes back to
 // actively lying to privacy-conscious users.
-type ToggleKey = 'shareTelemetry' | 'keepOutOfProviderTraining';
+type ToggleKey = PrivacyKey;
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -185,215 +180,162 @@ function ExpandableSection({ title, children }: { title: string; children: React
 const BROWSER_SYNC_STATEMENT =
   'Artifacts you create here are synced to your account; conversations are stored in your account directly, not synced from this browser.';
 
+type PrivacyLane = {
+  active: boolean;
+  ready: PrivacySnapshot | null;
+  operation: RequestAuthority | null;
+};
+
+type PrivacyView = {
+  lane: PrivacyLane;
+  ready: PrivacySnapshot | null;
+  values: Record<ToggleKey, boolean>;
+  busy: boolean;
+  message: string | null;
+  failed: boolean;
+};
+
 export function PrivacySection() {
   const newChatsTemporary = useSettingsStore((state) => state.newChatsTemporary) ?? false;
   const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
-
-  const router = useRouter();
-  /**
-   * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
-   *
-   * Archive-all and delete-all-chats used native `window.confirm()`, an OS
-   * alert with browser chrome, not the product's own dialog. `useConfirm` is
-   * the shared promise-based wrapper around
-   * the styled AlertDialog primitive (packages/ui/ui/src/primitives/
-   * ConfirmDialog.tsx) already wired into WebChatPage/WebAppShell/
-   * MessageBubble for the same class of action. Same await-a-boolean shape as
-   * `window.confirm`, so the guards below read the same, but the user sees a
-   * dialog with a red confirm and copy naming the exact, specific
-   * consequence instead of a generic browser prompt.
-   */
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud =
     subscription?.status === 'active' && !isFreeBillingPlanTier(subscription.tier);
-  const conversations = useChatStore((state) => state.conversations);
-  const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
-  const updateConversationInStore = useChatStore((state) => state.updateConversation);
-  const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
-  const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
-  const [savingPreferences, setSavingPreferences] = useState(false);
-  const [preferenceError, setPreferenceError] = useState<string | null>(null);
-  const [loadingPreferences, setLoadingPreferences] = useState(true);
-  const [hasChanged, setHasChanged] = useState(false);
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [pendingPreference, setPendingPreference] = useState<Record<ToggleKey, boolean> | null>(
-    null,
+  const owner = usePreferenceOwner();
+  const capture = usePreferenceView(owner);
+  const lane = useMemo<PrivacyLane>(
+    () => ({ active: false, ready: null, operation: null }),
+    [owner],
   );
-  const saveInFlight = useRef(false);
+  const [view, setView] = useState<PrivacyView | null>(null);
+  const displayed = view?.lane === lane ? view : null;
+  const ready = displayed?.ready ?? null;
+  const state = displayed?.values ?? defaultPrivacyState();
+  const laneCurrent = useCallback(() => lane.active && owner?.isCurrent() === true, [lane, owner]);
 
-  const [bulkAction, setBulkAction] = useState<BulkConversationAction | null>(null);
-  const [conversationActionError, setConversationActionError] = useState<string | null>(null);
-  const [conversationActionNotice, setConversationActionNotice] = useState<string | null>(null);
+  const read = useCallback(
+    async (
+      operation: RequestAuthority,
+      message: string | null = null,
+      acknowledged: boolean = false,
+    ) => {
+      const current = () => lane.operation === operation && operation.isCurrent();
+      try {
+        const snapshot = await readPrivacyPreferences(operation);
+        if (!current()) return;
+        const values = { ...defaultPrivacyState(), ...snapshot.stored };
+        setTelemetryConsentCache(values.shareTelemetry);
+        if (!current()) return;
+        const pendingDenial = hasPendingTelemetryOptOut();
+        if (pendingDenial) values.shareTelemetry = false;
+        lane.ready = snapshot;
+        setView({
+          lane,
+          ready: snapshot,
+          values,
+          busy: false,
+          message: pendingDenial
+            ? 'Telemetry is off on this browser. Review your account setting before choosing again.'
+            : message,
+          failed: pendingDenial || (message !== null && !acknowledged),
+        });
+      } catch {
+        if (!current()) return;
+        lane.ready = null;
+        setView((previous) => ({
+          lane,
+          ready: null,
+          values: previous?.lane === lane ? previous.values : defaultPrivacyState(),
+          busy: false,
+          message: `${message ? `${message} ` : ''}The latest privacy settings could not be loaded. Retry loading them.`,
+          failed: true,
+        }));
+      } finally {
+        if (lane.operation === operation) lane.operation = null;
+        operation.retire();
+      }
+    },
+    [lane],
+  );
+
+  const load = useCallback(() => {
+    const viewCurrent = capture();
+    if (!owner || !laneCurrent() || !viewCurrent() || lane.operation) return;
+    const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
+    lane.operation = operation;
+    lane.ready = null;
+    setView({
+      lane,
+      ready: null,
+      values: defaultPrivacyState(),
+      busy: true,
+      message: null,
+      failed: false,
+    });
+    void read(operation);
+  }, [owner, capture, lane, laneCurrent, read]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoadingPreferences(true);
-    setLoadFailed(false);
-    setPreferenceError(null);
-    fetchPreferenceNamespace<Record<ToggleKey, boolean>>(NAMESPACE, defaultPrivacyState())
-      .then((value) => {
-        if (cancelled) return;
-        const loaded = { ...defaultPrivacyState(), ...value };
-        setTelemetryConsentCache(loaded.shareTelemetry);
-        if (hasPendingTelemetryOptOut()) {
-          const pending = { ...loaded, shareTelemetry: false };
-          setState(pending);
-          setPendingPreference(pending);
-          setPreferenceError(
-            'Telemetry is off on this browser. Retry saving to update your account.',
-          );
-        } else {
-          setState(loaded);
-          setPendingPreference(null);
-        }
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setLoadFailed(true);
-        setPreferenceError(toUserMessage(error, 'We could not load privacy settings. Try again.'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingPreferences(false);
-      });
+    lane.active = true;
+    load();
     return () => {
-      cancelled = true;
+      lane.active = false;
+      lane.ready = null;
+      lane.operation?.retire();
+      lane.operation = null;
     };
-  }, [loadAttempt]);
+  }, [lane, load]);
 
-  async function savePrivacy(next: Record<ToggleKey, boolean>) {
-    if (saveInFlight.current || loadingPreferences || loadFailed) return;
-    saveInFlight.current = true;
-    setSavingPreferences(true);
-    setPreferenceError(null);
-    setHasChanged(true);
-    if (!next.shareTelemetry) {
-      requestTelemetryOptOut();
-      setState(next);
-    }
-    try {
-      await savePreferenceNamespace(NAMESPACE, next);
-      confirmTelemetryConsent(next.shareTelemetry);
-      setState(next);
-      setPendingPreference(null);
-    } catch (error) {
-      setPendingPreference(next);
-      setPreferenceError(
-        next.shareTelemetry
-          ? toUserMessage(error, 'We could not save privacy settings. Try again.')
-          : 'Telemetry is off on this browser. Retry saving to update your account.',
-      );
-    } finally {
-      saveInFlight.current = false;
-      setSavingPreferences(false);
-    }
-  }
-
-  function toggle(key: ToggleKey) {
-    void savePrivacy({ ...state, [key]: !state[key] });
-  }
-
-  async function handleArchiveAllChats() {
-    let activeCount: number | null = null;
-    try {
-      activeCount = (await fetchConversationHistoryStats()).activeConversationCount;
-    } catch {
-      activeCount = null;
-    }
-    const scope =
-      activeCount === null
-        ? 'Every chat in the current workspace will move out of the sidebar'
-        : translateUiPlural('settings', 'counts.chatsToArchive', activeCount, {
-            one: '{{count}} chat in the current workspace will move out of the sidebar',
-            other: 'All {{count}} chats in the current workspace will move out of the sidebar',
-          });
-    const confirmed = await confirmDestructive({
-      title: 'Archive all chats in this workspace?',
-      description: `${scope}. You can restore them from Archived chats at any time; this does not delete anything.`,
-      confirmText: 'Archive all',
-      variant: 'default',
-    });
-    if (!confirmed) return;
-
-    setBulkAction('archive_all');
-    setConversationActionError(null);
-    setConversationActionNotice(null);
-    try {
-      const affectedCount = await applyBulkConversationAction('archive_all');
-      for (const conversation of conversations) {
-        if (!conversation.isArchived) {
-          updateConversationInStore(conversation.id, { isArchived: true });
-        }
-      }
-      setConversationActionNotice(
-        translateUiPlural('settings', 'counts.archivedChats', affectedCount, {
-          one: 'Archived {{count}} chat.',
-          other: 'Archived {{count}} chats.',
-        }),
-      );
-    } catch (caught) {
-      setConversationActionError(toUserMessage(caught, 'Failed to archive chats'));
-    } finally {
-      setBulkAction(null);
-    }
-  }
-
-  async function handleDeleteAllChats() {
-    if (streamingConversationIds.length > 0) {
-      setConversationActionError('Finish or stop active replies before deleting all chats.');
+  async function savePrivacy(key: ToggleKey, value: boolean) {
+    const viewCurrent = capture();
+    if (
+      !owner ||
+      !laneCurrent() ||
+      !viewCurrent() ||
+      !ready ||
+      lane.ready !== ready ||
+      lane.operation
+    )
       return;
-    }
-    // The sidebar store holds only the pages fetched so far, so its length
-    // understates the scope of a delete-everything action. Ask the server for
-    // the real total before naming a number in an irreversible-looking prompt.
-    let chatCount: number | null = null;
-    try {
-      chatCount = (await fetchConversationHistoryStats()).conversationCount;
-    } catch {
-      chatCount = null;
-    }
-    const scope =
-      chatCount === null
-        ? 'Every chat in the current workspace, active and archived, will be removed from your history'
-        : translateUiPlural('settings', 'counts.allChatsRemoved', chatCount, {
-            one: 'All {{count}} chat in the current workspace, active and archived, will be removed from your history',
-            other:
-              'All {{count}} chats in the current workspace, active and archived, will be removed from your history',
-          });
-    const confirmed = await confirmDestructive({
-      title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Personalization.`,
-      confirmText: 'Delete all chats',
-      variant: 'destructive',
+    const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
+    lane.operation = operation;
+    lane.ready = null;
+    if (key === 'shareTelemetry' && !value) requestTelemetryOptOut();
+    setView({
+      lane,
+      ready: null,
+      values: key === 'shareTelemetry' && !value ? { ...state, shareTelemetry: false } : state,
+      busy: true,
+      message: null,
+      failed: false,
     });
-    if (!confirmed) return;
-
-    setBulkAction('delete_all');
-    setConversationActionError(null);
-    setConversationActionNotice(null);
+    let acknowledged = false;
     try {
-      const affectedCount = await applyBulkConversationAction('delete_all');
-      for (const conversation of conversations) {
-        deleteConversationFromStore(conversation.id);
-      }
-      router.replace('/chat');
-      setConversationActionNotice(
-        translateUiPlural('settings', 'counts.deletedChats', affectedCount, {
-          one: 'Deleted {{count}} chat.',
-          other: 'Deleted {{count}} chats.',
-        }),
-      );
-    } catch (caught) {
-      setConversationActionError(toUserMessage(caught, 'Failed to delete chats'));
+      await savePrivacyPreference(operation, key, value);
+      operation.assertCurrent();
+      if (lane.operation !== operation) return;
+      if (key === 'shareTelemetry') confirmTelemetryConsent(value);
+      acknowledged = true;
+    } catch {
+      if (!operation.isCurrent()) return;
     } finally {
-      setBulkAction(null);
+      if (!operation.isCurrent()) {
+        if (lane.operation === operation) lane.operation = null;
+        operation.retire();
+      }
     }
+    if (lane.operation !== operation || !operation.isCurrent()) return;
+    await read(
+      operation,
+      acknowledged
+        ? 'Your privacy setting was saved.'
+        : 'We could not confirm whether your change was saved. Review the latest settings before choosing again.',
+      acknowledged,
+    );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {destructiveConfirmDialog}
       <div>
         <h1
           style={{
@@ -409,31 +351,33 @@ export function PrivacySection() {
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="privacy-controls" label="How privacy controls work" />
         </div>
-        {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
+        {displayed?.busy || displayed?.message ? (
           <SaveStatusLine
-            failed={preferenceError !== null}
+            failed={displayed?.failed === true}
             style={{ margin: 'var(--space-1) 0 0', fontSize: 14, color: 'var(--text-3)' }}
           >
-            {loadingPreferences
-              ? 'Loading account settings...'
-              : savingPreferences
-                ? 'Saving...'
-                : preferenceError
-                  ? preferenceError
-                  : 'Saved'}
+            {displayed?.busy ? 'Updating account settings...' : displayed?.message}
           </SaveStatusLine>
         ) : null}
-        {preferenceError ? (
+        {ready &&
+        !displayed?.busy &&
+        hasPendingTelemetryOptOut() &&
+        ready.stored.shareTelemetry === true ? (
           <button
             type="button"
-            disabled={savingPreferences || loadingPreferences}
-            onClick={() => {
-              if (loadFailed) setLoadAttempt((attempt) => attempt + 1);
-              else if (pendingPreference) void savePrivacy(pendingPreference);
-            }}
+            onClick={() => void savePrivacy('shareTelemetry', false)}
             className="mt-2 text-sm underline underline-offset-4"
           >
-            {loadFailed ? 'Retry loading' : 'Retry saving'}
+            Keep telemetry off for my account
+          </button>
+        ) : null}
+        {displayed?.failed && !ready && !displayed.busy ? (
+          <button
+            type="button"
+            onClick={load}
+            className="mt-2 text-sm underline underline-offset-4"
+          >
+            Retry loading
           </button>
         ) : null}
       </div>
@@ -586,12 +530,12 @@ export function PrivacySection() {
             <Switch
               checked={state[spec.id]}
               disabled={
-                loadingPreferences ||
-                savingPreferences ||
-                loadFailed ||
+                !ready ||
+                !laneCurrent() ||
+                displayed?.busy === true ||
                 (spec.managedOnly && !hasHostedCloud)
               }
-              onCheckedChange={() => toggle(spec.id)}
+              onCheckedChange={(checked) => void savePrivacy(spec.id, checked)}
               aria-label={spec.label}
             />
           </div>
@@ -704,97 +648,7 @@ export function PrivacySection() {
           </SettingsSectionLink>
         </div>
 
-        <div
-          style={{
-            padding: 'var(--space-4) 0',
-            borderBottom: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-              Archive all chats in this workspace
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Move every chat out of the sidebar. You can restore them later.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleArchiveAllChats()}
-            disabled={bulkAction !== null}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--text-1)',
-              background: 'transparent',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius-md)',
-              cursor: bulkAction !== null ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {bulkAction === 'archive_all' ? 'Archiving…' : 'Archive all'}
-          </button>
-        </div>
-
-        <div
-          style={{
-            padding: 'var(--space-4) 0',
-            borderBottom: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-              Delete all chats in this workspace
-            </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Remove every active and archived conversation in this workspace from history. Restore
-              them from Recently deleted within 30 days.
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleDeleteAllChats()}
-            disabled={bulkAction !== null || streamingConversationIds.length > 0}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--settings-destructive-text)',
-              background: 'transparent',
-              border: '1px solid var(--settings-destructive-text)',
-              borderRadius: 'var(--radius-md)',
-              cursor:
-                bulkAction !== null || streamingConversationIds.length > 0
-                  ? 'not-allowed'
-                  : 'pointer',
-            }}
-          >
-            {bulkAction === 'delete_all' ? 'Deleting…' : 'Delete all'}
-          </button>
-        </div>
-
-        {conversationActionError || conversationActionNotice ? (
-          <div
-            role={conversationActionError ? 'alert' : 'status'}
-            style={{
-              padding: 'var(--space-3) var(--space-5)',
-              borderBottom: '1px solid var(--settings-border)',
-              color: conversationActionError ? 'var(--chat-accent-primary)' : 'var(--text-2)',
-              fontSize: 14,
-            }}
-          >
-            {conversationActionError ?? conversationActionNotice}
-          </div>
-        ) : null}
+        <BulkConversationControls />
 
         {/*
           Start new chats temporary.

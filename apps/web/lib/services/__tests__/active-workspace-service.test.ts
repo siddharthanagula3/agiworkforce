@@ -12,6 +12,7 @@ import {
 } from '@agiworkforce/key-value';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  clearRecordedActiveWorkspaceSelection,
   persistActiveWorkspaceSelection,
   persistProvenActiveWorkspaceSelection,
   resolveActiveOrganizationId,
@@ -153,6 +154,56 @@ describe('active workspace persistence', () => {
 
     expect(h.query).not.toHaveBeenCalled();
     expect(h.execute).toHaveBeenCalledWith(expect.any(String), ['user-1', ORGANIZATION_ID]);
+  });
+
+  it('issues conditional nested selection cleanup without pre-reading or caching before commit', async () => {
+    const h = harness();
+    const redis = fakeCacheRedis();
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
+
+    await clearRecordedActiveWorkspaceSelection(h.db, 'user-1', ORGANIZATION_ID);
+
+    expect(h.query).not.toHaveBeenCalled();
+    expect(h.execute).toHaveBeenCalledTimes(1);
+    const [sql, params] = h.execute.mock.calls[0] ?? [];
+    expect(String(sql)).toMatch(/^update public\.user_settings\s/);
+    expect(String(sql)).not.toMatch(/\binsert\b/i);
+    expect(String(sql)).toMatch(
+      /jsonb_set\(\s*settings,\s*'\{workspace,activeOrganizationId\}',\s*to_jsonb\(\$2::text\),\s*false\s*\)/,
+    );
+    expect(String(sql)).toMatch(
+      /where user_id = \$1\s+and settings #>> '\{workspace,activeOrganizationId\}' = \$3/,
+    );
+    expect(params).toEqual(['user-1', 'personal', ORGANIZATION_ID]);
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed cleanup target before SQL', async () => {
+    const h = harness();
+
+    await expect(
+      clearRecordedActiveWorkspaceSelection(h.db, 'user-1', 'not-a-workspace'),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    expect(h.query).not.toHaveBeenCalled();
+    expect(h.execute).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed selection cleanup without publishing a cache value', async () => {
+    const h = harness();
+    const redis = fakeCacheRedis();
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(redis));
+    const failure = new Error('settings update failed');
+    h.execute.mockRejectedValueOnce(failure);
+
+    await expect(
+      clearRecordedActiveWorkspaceSelection(h.db, 'user-1', ORGANIZATION_ID),
+    ).rejects.toBe(failure);
+
+    expect(redis.set).not.toHaveBeenCalled();
+    expect(redis.del).not.toHaveBeenCalled();
   });
 });
 

@@ -11,7 +11,7 @@
  * reaches the skill, folder and plugin catalogs the account already has.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Brain,
@@ -62,7 +62,9 @@ import { cn } from '@shared/lib/utils';
 import {
   CONNECTORS_COMING_SOON_LABEL,
   CONNECTORS_COMING_SOON_MESSAGE,
+  connectorReleased,
   connectorsReleased,
+  hasReleasedConnectors,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
@@ -85,7 +87,13 @@ import {
   type ChatOutputFormat,
 } from '@/lib/chat-output-format';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  FREE_MEDIA_LIMITED_LABEL,
+  freeMediaAccess,
+  type FreeMediaAccess,
+} from '@/features/models/lib/free-media';
 import { ConnectorToggleRow } from './ConnectorToggleRow';
+import { LimitedBadge } from './LimitedBadge';
 import {
   COMPOSER_FILES_ATTACH_FAILED_COPY,
   COMPOSER_FILES_ATTACH_LABEL_PREFIX,
@@ -222,6 +230,7 @@ const BADGE_MUTED_CLASS = 'bg-muted text-muted-foreground';
 const BADGE_UPGRADE_CLASS = 'bg-primary/10 text-primary';
 const DIVIDER_CLASS = 'my-1 border-t border-border/30';
 const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 ps-10 text-caption text-muted-foreground';
+const MEDIA_OFFER_NOTE_CLASS = 'px-3 pb-1 ps-10 text-sm text-muted-foreground';
 const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
@@ -277,7 +286,8 @@ interface MediaGate {
   billingPolicyError: boolean;
   availabilityStatus: MediaAvailabilityStatus;
   modelsAvailable: boolean;
-  planIncludes: boolean;
+  access: FreeMediaAccess;
+  offerChecking: boolean;
   noun: string;
   entitlementHint: string;
 }
@@ -285,6 +295,11 @@ interface MediaGate {
 interface MediaBadge {
   label: string;
   upgrade: boolean;
+  limited?: boolean;
+}
+
+function mediaAccess(access: FreeMediaAccess | undefined, planIncludes: boolean): FreeMediaAccess {
+  return access ?? freeMediaAccess({ planIncludes, offer: null });
 }
 
 function titleCase(value: string): string {
@@ -295,17 +310,25 @@ function mediaGateTitle(gate: MediaGate): string | undefined {
   if (!gate.billingPolicyReady) {
     return gate.billingPolicyError ? PLAN_UNVERIFIED_TITLE : PLAN_CHECKING_TITLE;
   }
+  if (gate.access.label === 'unknown')
+    return `Free ${gate.noun} availability could not be checked. Click to retry.`;
   if (gate.availabilityStatus === 'loading') return `Checking configured ${gate.noun} providers.`;
   if (gate.availabilityStatus === 'error') {
     return `${titleCase(gate.noun)} provider availability could not be checked. Click to retry.`;
   }
   if (!gate.modelsAvailable) return `This deployment is not ready for ${gate.noun} generation.`;
-  return gate.planIncludes ? undefined : gate.entitlementHint;
+  if (gate.access.label !== 'upgrade') return undefined;
+  return gate.offerChecking
+    ? `Checking ${gate.noun} generation for your plan.`
+    : gate.entitlementHint;
 }
 
 function mediaGateBadge(gate: MediaGate): MediaBadge | null {
   if (!gate.billingPolicyReady) {
     return { label: gate.billingPolicyError ? BADGE_RETRY : BADGE_CHECKING, upgrade: false };
+  }
+  if (gate.access.label === 'unknown') {
+    return { label: gate.offerChecking ? BADGE_CHECKING : BADGE_RETRY, upgrade: false };
   }
   if (gate.availabilityStatus !== 'ready' || !gate.modelsAvailable) {
     return {
@@ -313,10 +336,19 @@ function mediaGateBadge(gate: MediaGate): MediaBadge | null {
       upgrade: false,
     };
   }
-  return gate.planIncludes ? null : { label: BADGE_UPGRADE, upgrade: true };
+  if (gate.access.label === 'limited') {
+    return { label: FREE_MEDIA_LIMITED_LABEL, upgrade: false, limited: true };
+  }
+  if (gate.access.label === 'upgrade') {
+    return gate.offerChecking
+      ? { label: BADGE_CHECKING, upgrade: false }
+      : { label: BADGE_UPGRADE, upgrade: true };
+  }
+  return null;
 }
 
 function RowBadge({ badge }: { badge: MediaBadge }) {
+  if (badge.limited) return <LimitedBadge />;
   return (
     <span className={cn(BADGE_BASE_CLASS, badge.upgrade ? BADGE_UPGRADE_CLASS : BADGE_MUTED_CLASS)}>
       {badge.label}
@@ -580,12 +612,17 @@ export interface ComposerPlusMenuProps {
   hostCanGenerateImage: boolean;
   imageModelsAvailable: boolean;
   canUseImageGeneration: boolean;
+  imageAccess?: FreeMediaAccess;
+  imageOfferNote?: string | null;
+  freeMediaOfferChecking?: boolean;
   imageMode: boolean;
   onCreateImage: () => void;
 
   hostCanGenerateVideo: boolean;
   videoModelsAvailable: boolean;
   canUseVideoGeneration: boolean;
+  videoAccess?: FreeMediaAccess;
+  videoOfferNote?: string | null;
   videoMode: boolean;
   onCreateVideo: () => void;
 
@@ -733,25 +770,36 @@ function ImageRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
     billingPolicyError: props.billingPolicyError,
     availabilityStatus: props.mediaAvailabilityStatus,
     modelsAvailable: props.imageModelsAvailable,
-    planIncludes: props.canUseImageGeneration,
+    access: mediaAccess(props.imageAccess, props.canUseImageGeneration),
+    offerChecking: props.freeMediaOfferChecking === true,
     noun: 'image',
     entitlementHint: IMAGE_ENTITLEMENT_HINT,
   };
   const badge = mediaGateBadge(gate);
+  const note = badge?.limited ? (props.imageOfferNote ?? null) : null;
+  const noteId = useId();
   return (
-    <button
-      type="button"
-      role={role}
-      onClick={props.onCreateImage}
-      title={mediaGateTitle(gate)}
-      className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.imageMode && 'text-primary')}
-    >
-      <ImagePlus
-        className={cn(GLYPH_CLASS, props.imageMode ? 'text-primary' : 'text-muted-foreground')}
-      />
-      <span className="flex-1 text-start">{ROW_LABEL_IMAGE}</span>
-      {badge && <RowBadge badge={badge} />}
-    </button>
+    <>
+      <button
+        type="button"
+        role={role}
+        onClick={props.onCreateImage}
+        title={mediaGateTitle(gate)}
+        aria-describedby={note ? noteId : undefined}
+        className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.imageMode && 'text-primary')}
+      >
+        <ImagePlus
+          className={cn(GLYPH_CLASS, props.imageMode ? 'text-primary' : 'text-muted-foreground')}
+        />
+        <span className="flex-1 text-start">{ROW_LABEL_IMAGE}</span>
+        {badge && <RowBadge badge={badge} />}
+      </button>
+      {note && (
+        <p id={noteId} className={MEDIA_OFFER_NOTE_CLASS}>
+          {note}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -761,25 +809,36 @@ function VideoRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
     billingPolicyError: props.billingPolicyError,
     availabilityStatus: props.mediaAvailabilityStatus,
     modelsAvailable: props.videoModelsAvailable,
-    planIncludes: props.canUseVideoGeneration,
+    access: mediaAccess(props.videoAccess, props.canUseVideoGeneration),
+    offerChecking: props.freeMediaOfferChecking === true,
     noun: 'video',
     entitlementHint: VIDEO_ENTITLEMENT_HINT,
   };
   const badge = mediaGateBadge(gate);
+  const note = badge?.limited ? (props.videoOfferNote ?? null) : null;
+  const noteId = useId();
   return (
-    <button
-      type="button"
-      role={role}
-      onClick={props.onCreateVideo}
-      title={mediaGateTitle(gate)}
-      className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.videoMode && 'text-primary')}
-    >
-      <Video
-        className={cn(GLYPH_CLASS, props.videoMode ? 'text-primary' : 'text-muted-foreground')}
-      />
-      <span className="flex-1 text-start">{ROW_LABEL_VIDEO}</span>
-      {badge && <RowBadge badge={badge} />}
-    </button>
+    <>
+      <button
+        type="button"
+        role={role}
+        onClick={props.onCreateVideo}
+        title={mediaGateTitle(gate)}
+        aria-describedby={note ? noteId : undefined}
+        className={cn(ROW_CLASS, ROW_HOVER_CLASS, props.videoMode && 'text-primary')}
+      >
+        <Video
+          className={cn(GLYPH_CLASS, props.videoMode ? 'text-primary' : 'text-muted-foreground')}
+        />
+        <span className="flex-1 text-start">{ROW_LABEL_VIDEO}</span>
+        {badge && <RowBadge badge={badge} />}
+      </button>
+      {note && (
+        <p id={noteId} className={MEDIA_OFFER_NOTE_CLASS}>
+          {note}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -1145,6 +1204,9 @@ function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?
 }
 
 function ChatMenu(props: MenuProps) {
+  const connectors = props.connectors.filter((connector) =>
+    connectorReleased(connectorToggleId(connector)),
+  );
   const { t } = useTranslation('v3');
   const enabledConnector = (connector: ComposerPlusMenuConnector) =>
     !props.disabledConnectorIds.includes(connectorToggleId(connector));
@@ -1291,7 +1353,7 @@ function ChatMenu(props: MenuProps) {
         </div>
       )}
 
-      {connectorsReleased() ? (
+      {hasReleasedConnectors() ? (
         <button
           type="button"
           onClick={props.onToggleConnectorsSubmenu}
@@ -1321,14 +1383,14 @@ function ChatMenu(props: MenuProps) {
           <span className="shrink-0 text-caption">{CONNECTORS_COMING_SOON_LABEL}</span>
         </button>
       )}
-      {connectorsReleased() && props.connectorsSubmenuOpen && (
+      {hasReleasedConnectors() && props.connectorsSubmenuOpen && (
         <div role="group" aria-label={ROW_LABEL_CONNECTORS} className="space-y-0.5 pb-1">
-          {props.connectors.length === 0 ? (
+          {connectors.length === 0 ? (
             <p className="px-3 py-2 ps-8 text-caption text-muted-foreground">
               {CONNECTORS_EMPTY_COPY}
             </p>
           ) : (
-            props.connectors.map((connector) => (
+            connectors.map((connector) => (
               <ConnectorToggleRow
                 key={connector.id}
                 indented
@@ -1352,14 +1414,16 @@ function ChatMenu(props: MenuProps) {
           >
             {ROW_LABEL_BROWSE_CONNECTORS}
           </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => openCustomConnectorForm(props)}
-            className={SUBMENU_MANAGE_CLASS}
-          >
-            {ROW_LABEL_ADD_CUSTOM_CONNECTOR}
-          </button>
+          {connectorsReleased() ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => openCustomConnectorForm(props)}
+              className={SUBMENU_MANAGE_CLASS}
+            >
+              {ROW_LABEL_ADD_CUSTOM_CONNECTOR}
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -1534,7 +1598,12 @@ function WorkPalette(props: MenuProps) {
   );
 
   const visibleConnectors = useMemo(
-    () => props.connectors.filter((connector) => matches(connector.label, connector.description)),
+    () =>
+      props.connectors.filter(
+        (connector) =>
+          connectorReleased(connectorToggleId(connector)) &&
+          matches(connector.label, connector.description),
+      ),
     [props.connectors, matches],
   );
 
@@ -1665,7 +1734,7 @@ function WorkPalette(props: MenuProps) {
 
       <div className={DIVIDER_CLASS} />
       <p className={SECTION_HEADING_CLASS}>{t('agiWork.compose.palette.connectorsHeading')}</p>
-      {!connectorsReleased() ? (
+      {!hasReleasedConnectors() ? (
         <ConnectorsComingSoonMenuItem compact label={ROW_LABEL_CONNECTORS} />
       ) : props.connectorsLoading ? (
         <div className="flex items-center gap-3 px-3 py-2">
@@ -1693,7 +1762,7 @@ function WorkPalette(props: MenuProps) {
           />
         ))
       )}
-      {connectorsReleased() ? (
+      {hasReleasedConnectors() ? (
         <button
           type="button"
           role="menuitem"

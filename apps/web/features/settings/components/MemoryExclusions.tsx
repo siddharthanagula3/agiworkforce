@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
 import {
-  fetchStoredPreferenceNamespace,
-  savePreferenceNamespace,
+  fetchOwnedPreferenceNamespace,
+  saveOwnedPreferenceNamespace,
+  type PreferenceOwner,
 } from '@/app/settings/_lib/preferences-client';
+import { usePreferenceOwner, usePreferenceView } from '../hooks/use-preference-owner';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const PREF_NAMESPACE = 'memory';
@@ -53,6 +55,12 @@ function normalize(value: unknown): string[] {
 }
 
 export function MemoryExclusions() {
+  const owner = usePreferenceOwner();
+  return <OwnedMemoryExclusions key={owner?.incarnation ?? 'unavailable'} owner={owner} />;
+}
+
+function OwnedMemoryExclusions({ owner }: { owner: PreferenceOwner | null }) {
+  const capture = usePreferenceView(owner);
   const [terms, setTerms] = useState<string[]>([]);
   const [suppressedSources, setSuppressedSources] = useState<MemorySourceId[]>([]);
   const [draft, setDraft] = useState('');
@@ -60,46 +68,53 @@ export function MemoryExclusions() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const editable = loaded && !loadFailed && !saving;
+  const editable = owner?.isCurrent() === true && loaded && !loadFailed && !saving;
 
   useEffect(() => {
+    if (!owner) return;
     let cancelled = false;
-    void fetchStoredPreferenceNamespace<MemoryPreferences>(PREF_NAMESPACE)
+    const viewCurrent = capture();
+    const current = () => !cancelled && viewCurrent();
+    void fetchOwnedPreferenceNamespace<MemoryPreferences>(owner, PREF_NAMESPACE)
       .then((stored) => {
-        if (cancelled) return;
+        if (!current()) return;
         setTerms(normalize(stored.excludedTerms));
         setSuppressedSources(normalizeSources(stored.suppressedSources));
         setError(null);
       })
       .catch((cause) => {
-        if (!cancelled) {
+        if (current()) {
           setLoadFailed(true);
           setError(toUserMessage(cause, 'Could not load exclusions'));
         }
       })
       .finally(() => {
-        if (!cancelled) setLoaded(true);
+        if (current()) setLoaded(true);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [owner, capture]);
 
   const persist = useCallback(
     async (next: { excludedTerms: string[]; suppressedSources: MemorySourceId[] }) => {
+      if (!owner || !editable) return;
+      const current = capture();
+      if (!current()) return;
       setSaving(true);
       try {
-        await savePreferenceNamespace(PREF_NAMESPACE, next);
+        await saveOwnedPreferenceNamespace(owner, PREF_NAMESPACE, next);
+        if (!current()) return;
         setTerms(next.excludedTerms);
         setSuppressedSources(next.suppressedSources);
         setError(null);
       } catch (cause) {
-        setError(toUserMessage(cause, 'Could not save exclusions'));
+        if (current()) setError(toUserMessage(cause, 'Could not save exclusions'));
       } finally {
-        setSaving(false);
+        if (current()) setSaving(false);
       }
     },
-    [],
+    [owner, capture, editable],
   );
 
   const toggleSource = useCallback(

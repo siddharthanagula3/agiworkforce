@@ -56,6 +56,58 @@ beforeEach(() => {
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
 });
 
+describe('composer unresolved approval presentation', () => {
+  const notice =
+    'This response has an unresolved approval request. Review it in the conversation or Approvals menu.';
+
+  it('observes approval-only prop changes without marking the transport active', () => {
+    const onSend = vi.fn();
+    const props = { onSend, conversationId: 'approval-conversation', isLoading: false };
+    const { rerender } = render(<ChatComposerNew {...props} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'a separate follow-up' } });
+
+    expect(screen.queryByText(notice)).not.toBeInTheDocument();
+    rerender(<ChatComposerNew {...props} awaitingApproval />);
+    expect(screen.getByText(notice)).toBeVisible();
+    expect(sendButton()).toBeEnabled();
+    expect(sendButton()).toHaveAttribute('aria-label', 'Send message');
+    expect(screen.queryByRole('button', { name: /stop generating/i })).not.toBeInTheDocument();
+    expect(textarea).toHaveValue('a separate follow-up');
+
+    rerender(<ChatComposerNew {...props} awaitingApproval={false} />);
+    expect(screen.queryByText(notice)).not.toBeInTheDocument();
+    expect(sendButton()).toBeEnabled();
+
+    rerender(<ChatComposerNew {...props} awaitingApproval />);
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend.mock.calls[0]?.[0]).toBe('a separate follow-up');
+  });
+
+  it('shows only the displayed conversation approval state across navigation', () => {
+    const onSend = vi.fn();
+    const { rerender } = render(
+      <ChatComposerNew onSend={onSend} conversationId="approval-conversation" awaitingApproval />,
+    );
+    expect(screen.getByText(notice)).toBeVisible();
+
+    rerender(
+      <ChatComposerNew
+        onSend={onSend}
+        conversationId="other-conversation"
+        awaitingApproval={false}
+      />,
+    );
+    expect(screen.queryByText(notice)).not.toBeInTheDocument();
+
+    rerender(
+      <ChatComposerNew onSend={onSend} conversationId="approval-conversation" awaitingApproval />,
+    );
+    expect(screen.getByText(notice)).toBeVisible();
+  });
+});
+
 describe('composer offline recovery', () => {
   it('keeps the draft, explains why Send is unavailable, and re-enables it on reconnect', () => {
     const onSend = vi.fn();
@@ -245,4 +297,15 @@ describe('a blocked send restores its text across the same remount (files-1)', (
       'edited after the restore',
     );
   });
+});
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
 });

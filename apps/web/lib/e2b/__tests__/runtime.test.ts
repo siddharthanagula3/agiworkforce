@@ -550,7 +550,7 @@ describe('getE2BExecutor, managed Code session', () => {
     const instance = await create.mock.results[0]!.value;
     expect(instance.createCodeContext).toHaveBeenCalledTimes(1);
     expect(instance.runCode).toHaveBeenNthCalledWith(
-      2,
+      3,
       'print(x)',
       expect.objectContaining({ context: expect.objectContaining({ language: 'python' }) }),
     );
@@ -1507,8 +1507,31 @@ describe('getE2BExecutor, notebook cell outputs', () => {
     sandboxCounter = 0;
   });
 
+  it('initializes figure provenance once in the same Python context without changing user code', async () => {
+    const instance = makeSandboxInstance('sbx-figure-provenance');
+    create.mockResolvedValueOnce(instance);
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-figure-provenance', 'trusted'));
+    await executor!.runCode({ language: 'python', code: 'print("first")' });
+    await executor!.runCode({ language: 'python', code: 'print("second")' });
+    expect(instance.runCode).toHaveBeenCalledTimes(3);
+    const bootstrap = instance.runCode.mock.calls[0]?.[0];
+    expect(bootstrap).toContain('FigureCanvasBase.print_figure = print_figure');
+    expect(bootstrap).not.toContain('print("first")');
+    const calls = instance.runCode.mock.calls as unknown[][];
+    expect(calls[1]?.[0]).toBe('print("first")');
+    expect(calls[2]?.[0]).toBe('print("second")');
+    expect(calls[0]?.[1]).toEqual(calls[1]?.[1]);
+    expect(calls[1]?.[1]).toEqual(calls[2]?.[1]);
+  });
+
   it('orders stream, image, html and text results the way the sandbox produced them', async () => {
     const instance = makeSandboxInstance('sbx-outputs');
+    instance.runCode.mockResolvedValueOnce({
+      logs: { stdout: [], stderr: [] },
+      text: undefined,
+      error: undefined,
+    });
     instance.runCode.mockResolvedValueOnce({
       logs: { stdout: ['hello\n'], stderr: [] },
       text: undefined,
@@ -1532,6 +1555,11 @@ describe('getE2BExecutor, notebook cell outputs', () => {
 
   it('appends the traceback as the final error output and marks the cell failed', async () => {
     const instance = makeSandboxInstance('sbx-error');
+    instance.runCode.mockResolvedValueOnce({
+      logs: { stdout: [], stderr: [] },
+      text: undefined,
+      error: undefined,
+    });
     instance.runCode.mockResolvedValueOnce({
       logs: { stdout: [], stderr: [] },
       text: undefined,

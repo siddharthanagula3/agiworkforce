@@ -30,8 +30,10 @@ export function confirmShareConversation(input: ShareConversationInput): void {
                 modelId: input.modelId,
                 messages,
               });
+              if (!input.isCurrent()) return;
               await Share.share({ message: link.shareUrl, url: link.shareUrl });
             } catch (error: unknown) {
+              if (!input.isCurrent()) return;
               Alert.alert(
                 'Could not create the link',
                 toUserMessage(error, 'Try again in a moment.'),

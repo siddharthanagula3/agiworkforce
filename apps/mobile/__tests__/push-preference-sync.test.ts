@@ -41,7 +41,11 @@ import {
   registerForPushNotifications,
   type PushNotificationAccountContext,
 } from '../services/notifications';
-import { stopPushPreferenceSync } from '../services/pushPreferenceSync';
+import {
+  beginPushRegistration,
+  postPushRegistration,
+  stopPushPreferenceSync,
+} from '../services/pushPreferenceSync';
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 import type { TimeFocusWeekday } from '@agiworkforce/types';
 
@@ -229,6 +233,90 @@ describe('push delivery preference sync', () => {
     await settle();
 
     expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not publish an old token receipt over the replacement lifetime', async () => {
+    const context = makeContext();
+    let resolveOld!: () => void;
+    mockApiPost.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const old = beginPushRegistration('old-token', context);
+    const oldPost = postPushRegistration(old);
+    await settle();
+
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
+    const replacement = beginPushRegistration('new-token', context);
+    await postPushRegistration(replacement);
+    resolveOld();
+    await expect(oldPost).resolves.toBe(false);
+    expect(old.isCurrent()).toBe(false);
+
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', true);
+    jest.runOnlyPendingTimers();
+    await settle();
+    expect(mockApiPost).toHaveBeenCalledTimes(3);
+    expect(bodyOfCall(2).pushToken).toBe('new-token');
+    expect(bodyOfCall(2).preferences.categories.tasks).toBe(true);
+  });
+
+  it('fences a stopped registration even when the identical context and token restart', async () => {
+    const context = makeContext();
+    let resolveOld!: () => void;
+    mockApiPost.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const old = beginPushRegistration('same-token', context);
+    const oldPost = postPushRegistration(old);
+    await settle();
+    stopPushPreferenceSync();
+    const replacement = beginPushRegistration('same-token', context);
+    expect(replacement).not.toBe(old);
+    resolveOld();
+    await expect(oldPost).resolves.toBe(false);
+    expect(appStateListener).toBeUndefined();
+    expect(replacement.isCurrent()).toBe(true);
+  });
+
+  it('accepts a same-lifetime success after a newer request fails', async () => {
+    const context = makeContext();
+    let resolveFirst!: () => void;
+    mockApiPost.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const registration = beginPushRegistration('same-token', context);
+    const first = postPushRegistration(registration);
+    await settle();
+    expect(beginPushRegistration('same-token', context)).toBe(registration);
+    mockApiPost.mockRejectedValueOnce(new Error('offline'));
+    await expect(postPushRegistration(registration)).resolves.toBe(false);
+    resolveFirst();
+    await expect(first).resolves.toBe(true);
+    appStateListener?.('active');
+    await settle();
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores retired foreground callbacks without stopping the replacement', async () => {
+    const context = makeContext();
+    await postPushRegistration(beginPushRegistration('old-token', context));
+    const oldForeground = appStateListener;
+    const replacement = beginPushRegistration('new-token', context);
+    await postPushRegistration(replacement);
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
+    oldForeground?.('active');
+    await settle();
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+    expect(replacement.isCurrent()).toBe(true);
+    jest.runOnlyPendingTimers();
+    await settle();
+    expect(mockApiPost).toHaveBeenCalledTimes(3);
   });
 
   it('still suppresses a foreground notification whose category is off', async () => {

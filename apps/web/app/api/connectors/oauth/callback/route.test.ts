@@ -5,6 +5,8 @@ const connectorRelease = vi.hoisted(() => ({ released: true }));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => connectorRelease.released,
+  connectorReleased: () => connectorRelease.released,
+  hasReleasedConnectors: () => connectorRelease.released,
 }));
 
 const mocks = vi.hoisted(() => {
@@ -348,3 +350,14 @@ describe('GET /api/connectors/oauth/callback while connectors are coming soon', 
     expect(target.searchParams.get('connector')).toBe('linear');
   });
 });
+
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ConnectorPolicyGateModule = typeof import('@/lib/services/connector-policy-gate');
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<RlsDbModule>()),
+  getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
+}));
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ConnectorPolicyGateModule>()),
+  evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
+}));

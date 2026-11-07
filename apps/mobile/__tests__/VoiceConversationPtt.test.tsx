@@ -8,6 +8,7 @@ let mockAudioUri: string | undefined;
 let mockSelectedModel = 'test-model';
 
 jest.mock('../lib/mmkv', () => ({
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
     if (store?.persist?.rehydrate) store.persist.rehydrate();
@@ -145,6 +146,10 @@ import {
 } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
   __fireResult: (event: {
@@ -184,6 +189,7 @@ describe('Voice conversation PTT + hands-free', () => {
     await VoiceInput.cancelCapture();
     speechRecognitionMock.__clearListeners();
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
     chatState().messages = {};
     chatState().error = null;
     mockSelectedModel = 'test-model';
@@ -281,6 +287,7 @@ describe('Voice conversation PTT + hands-free', () => {
   });
 
   it('uses a Cloud model when a stale Local model is selected before Voice opens', async () => {
+    activateCloudAccount('voice-test-account');
     mockSelectedModel = DEFAULT_LOCAL_MODEL_ID;
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useTierStore.setState({ tier: 'pro' });

@@ -1,6 +1,6 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { Image as ImageIcon, ImageOff } from 'lucide-react';
-import { Button, useUiTranslation } from '@agiworkforce/ui';
+import { Button, Spinner, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { markdownImageSource } from './markdownImageSources';
 
@@ -32,22 +32,44 @@ export function GatedImage({
   const { t } = useUiTranslation('chat');
   const trusted = useContext(TrustedImagesContext);
   const source = useMemo(() => markdownImageSource(src), [src]);
-  const [approved, setApproved] = useState(() =>
-    source?.kind === 'cross-origin' ? approvedImageKeys.has(source.key) : false,
+  const [approvedKey, setApprovedKey] = useState<string | null>(null);
+  const [result, setResult] = useState<{ src: string; phase: 'loaded' | 'failed' } | null>(null);
+  const imageRef = useCallback(
+    (element: HTMLImageElement | null) => {
+      const src = source?.src;
+      if (src && element?.complete && element.naturalWidth > 0)
+        setResult((current) =>
+          current?.src === src && current.phase === 'loaded' ? current : { src, phase: 'loaded' },
+        );
+    },
+    [source?.src],
   );
-  const [failed, setFailed] = useState(false);
+  const failed = result?.src === source?.src && result?.phase === 'failed';
 
   if (!source || failed) {
     return (
       <div className={cn(TILE_CLASS, className)} data-image-state="unavailable">
         <ImageOff className="h-5 w-5" aria-hidden="true" />
-        <span>{alt || t('markdown.imageUnavailable', 'Image unavailable')}</span>
+        <span>
+          {t('markdown.imageUnavailable', 'Image unavailable')}
+          {alt ? `: ${alt}` : ''}
+        </span>
+        {source ? (
+          <Button type="button" variant="outline" size="xs" onClick={() => setResult(null)}>
+            {t('markdown.retryImage', 'Retry image')}
+          </Button>
+        ) : null}
       </div>
     );
   }
 
   const crossOrigin = source.kind === 'cross-origin';
-  if (source.kind === 'cross-origin' && !trusted.has(source.key) && !approved) {
+  if (
+    source.kind === 'cross-origin' &&
+    !trusted.has(source.key) &&
+    !approvedImageKeys.has(source.key) &&
+    approvedKey !== source.key
+  ) {
     return (
       <div className={cn(TILE_CLASS, className)} data-image-state="blocked">
         <ImageIcon className="h-5 w-5" aria-hidden="true" />
@@ -64,7 +86,7 @@ export function GatedImage({
           })}
           onClick={() => {
             approvedImageKeys.add(source.key);
-            setApproved(true);
+            setApprovedKey(source.key);
           }}
         >
           {t('markdown.loadImage', 'Load image')}
@@ -73,15 +95,25 @@ export function GatedImage({
     );
   }
 
+  const loaded = result?.src === source.src && result.phase === 'loaded';
   return (
-    <img
-      src={source.src}
-      alt={alt}
-      loading="lazy"
-      referrerPolicy={crossOrigin ? 'no-referrer' : undefined}
-      onError={() => setFailed(true)}
-      className={className}
-      data-image-state="loaded"
-    />
+    <div className="relative" data-image-state={loaded ? 'loaded' : 'loading'}>
+      <img
+        ref={imageRef}
+        key={source.src}
+        src={source.src}
+        alt={alt}
+        loading="lazy"
+        referrerPolicy={crossOrigin ? 'no-referrer' : undefined}
+        onLoad={() => setResult({ src: source.src, phase: 'loaded' })}
+        onError={() => setResult({ src: source.src, phase: 'failed' })}
+        className={className}
+      />
+      {!loaded ? (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <Spinner size="sm" aria-label={t('markdown.loadingImage', 'Loading image')} />
+        </span>
+      ) : null}
+    </div>
   );
 }

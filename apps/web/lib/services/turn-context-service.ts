@@ -7,6 +7,7 @@ import {
   createPostgresContextManifestStore,
   resolveContext,
   type ContextManifest,
+  type OrganizationContextPolicy,
   type ContextSourceLoader,
 } from '@agiworkforce/context-engine';
 
@@ -117,6 +118,7 @@ export async function resolveInteractiveTurnContext(
     projectContext: LoadedProjectContext | null;
     pastChatLinksShown: boolean;
     recordManifest?: boolean;
+    organizationContextPolicy?: OrganizationContextPolicy;
   },
 ): Promise<InteractiveTurnContext> {
   const includeMemory =
@@ -171,7 +173,9 @@ export async function resolveInteractiveTurnContext(
     ...(memoryLoader ? [memoryLoader] : []),
   ];
 
-  const contextPolicy = await loadOrganizationContextPolicy(db, input.organizationId);
+  const contextPolicy =
+    input.organizationContextPolicy ??
+    (await loadOrganizationContextPolicy(db, input.organizationId));
   const resolution = await resolveContext({
     turnId: input.turnId,
     actor: {

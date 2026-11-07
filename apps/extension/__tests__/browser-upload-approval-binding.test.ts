@@ -81,7 +81,6 @@ function harness() {
     chrome: chromeMock,
     APPROVAL_TIMEOUT_MS,
     permissionMode: 'full',
-    siteTools: [],
     isCrucialAction,
     allowedForTask: new Set<string>(),
     readsWithoutActing,

@@ -273,6 +273,11 @@ async function main(): Promise<void> {
     let extensionTestsPath = path.resolve(__dirname, './suite/index');
     const userDataDir = path.join(runRoot, 'user');
     const extensionsDir = path.join(runRoot, 'extensions');
+    const isolatedProfileArgs = [
+      '--use-inmemory-secretstorage',
+      `--user-data-dir=${userDataDir}`,
+      `--extensions-dir=${extensionsDir}`,
+    ];
     const workspaceDir = path.join(runRoot, 'workspace');
     const emptyPathDir = path.join(runRoot, 'empty-path');
     const isolatedHomeDir = path.join(runRoot, 'home');
@@ -342,10 +347,13 @@ async function main(): Promise<void> {
     if (packagedTestRunner !== undefined) {
       extensionTestsPath = packagedTestRunner.extensionTestsPath;
     }
-    const downloadedExecutablePath = await downloadAndUnzipVSCode({
-      version: process.env.AGI_VSCODE_E2E_VERSION ?? DEFAULT_VSCODE_E2E_VERSION,
-      extensionDevelopmentPath: packagedTestRunner?.extensionDevelopmentPath ?? extensionRoot,
-    });
+    const requestedExecutablePath = argumentValue('--vscode-executable');
+    const downloadedExecutablePath = requestedExecutablePath
+      ? path.resolve(requestedExecutablePath)
+      : await downloadAndUnzipVSCode({
+          version: process.env.AGI_VSCODE_E2E_VERSION ?? DEFAULT_VSCODE_E2E_VERSION,
+          extensionDevelopmentPath: packagedTestRunner?.extensionDevelopmentPath ?? extensionRoot,
+        });
     const vscodeExecutablePath = resolveVsCodeExecutablePath(downloadedExecutablePath);
     let expectedExtensionRoot: string | undefined;
     let extensionDevelopmentPath = extensionRoot;
@@ -357,7 +365,11 @@ async function main(): Promise<void> {
       if (vscodeCli === undefined) throw new Error('Could not resolve the VS Code extension CLI');
       const expectedVsCodeVersion =
         process.env.AGI_VSCODE_E2E_VERSION ?? DEFAULT_VSCODE_E2E_VERSION;
-      const versionOutput = runChecked(vscodeCli, [...vscodeCliArgs, '--version'], extensionRoot);
+      const versionOutput = runChecked(
+        vscodeCli,
+        [...vscodeCliArgs, ...isolatedProfileArgs, '--version'],
+        extensionRoot,
+      );
       const [actualVsCodeVersion] = versionOutput.split(/\r?\n/u);
       if (actualVsCodeVersion !== expectedVsCodeVersion) {
         throw new Error(
@@ -369,8 +381,7 @@ async function main(): Promise<void> {
         vscodeCli,
         [
           ...vscodeCliArgs,
-          `--user-data-dir=${userDataDir}`,
-          `--extensions-dir=${extensionsDir}`,
+          ...isolatedProfileArgs,
           '--install-extension',
           artifact.vsixPath,
           '--force',
@@ -380,13 +391,7 @@ async function main(): Promise<void> {
       verifyArtifactDigest(artifact.vsixPath, artifact.sha256);
       const publicExtensionList = runChecked(
         vscodeCli,
-        [
-          ...vscodeCliArgs,
-          `--user-data-dir=${userDataDir}`,
-          `--extensions-dir=${extensionsDir}`,
-          '--list-extensions',
-          '--show-versions',
-        ],
+        [...vscodeCliArgs, ...isolatedProfileArgs, '--list-extensions', '--show-versions'],
         extensionRoot,
       );
       verifyPublicExtensionList(publicExtensionList, artifact.identity);
@@ -435,8 +440,7 @@ async function main(): Promise<void> {
         ...(artifact === undefined ? ['--disable-extensions'] : []),
         '--disable-workspace-trust',
         ...(artifact === undefined ? [] : ['--force-disable-user-env']),
-        `--user-data-dir=${userDataDir}`,
-        `--extensions-dir=${extensionsDir}`,
+        ...isolatedProfileArgs,
       ],
       ...(extensionTestsEnv === undefined ? {} : { extensionTestsEnv }),
     });

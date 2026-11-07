@@ -3,7 +3,10 @@ import 'server-only';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
-import { withUserConnectorMcpHandle } from '@/lib/user-connector-tools';
+import {
+  withUserConnectorMcpHandle,
+  type LoadUserConnectorToolOptions,
+} from '@/lib/user-connector-tools';
 
 export const MCP_UNTRUSTED_CONTEXT_PROMPT_ID = 'safety.untrusted_context';
 
@@ -56,6 +59,7 @@ function fenceContext(label: string, value: string): string {
 export async function loadSelectedMcpContext(
   userId: string,
   selection: McpContextSelection,
+  options: Pick<LoadUserConnectorToolOptions, 'organizationId' | 'request' | 'allowSelective'> = {},
 ): Promise<string> {
   const sections: string[] = [];
   if (selection.prompt) {
@@ -84,6 +88,7 @@ export async function loadSelectedMcpContext(
           .filter(Boolean)
           .join('\n\n');
       },
+      options,
     );
     if (promptResult === null)
       throw new McpContextError('The selected MCP connector is not connected');
@@ -104,6 +109,7 @@ export async function loadSelectedMcpContext(
           .join('\n');
         return text ? fenceContext(`MCP resource ${connectorId} ${selected.uri}`, text) : '';
       },
+      options,
     );
     if (resourceText === null) {
       throw new McpContextError(`The MCP connector for ${selected.uri} is not connected`);

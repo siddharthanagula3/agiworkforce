@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import console from 'node:console';
 import { readFileSync } from 'node:fs';
+import { devNull } from 'node:os';
 import process from 'node:process';
 import { setTimeout } from 'node:timers';
 import { URL, URLSearchParams, pathToFileURL } from 'node:url';
@@ -27,6 +28,47 @@ export const SURFACE_DEPLOY_WORKFLOWS = {
   sandbox: 'deploy-production.yml',
   signaling: RELEASE_READINESS.relay.workflow,
 };
+
+export function isAutomaticDeploymentAllowed(parsedTrailers) {
+  return !parsedTrailers.split(/\r?\n/).some((trailer) => {
+    const separator = trailer.indexOf(':');
+    if (separator === -1) return false;
+    const name = trailer.slice(0, separator).trim().toLowerCase();
+    const directive = trailer.slice(separator + 1).trim();
+    return name === 'deployment' && directive !== '';
+  });
+}
+
+function readAutomaticDeploymentIntent() {
+  const message = execFileSync('git', ['log', '-1', '--format=%B', 'HEAD'], {
+    encoding: 'utf8',
+  });
+  const parsedTrailers = execFileSync(
+    'git',
+    [
+      `--git-dir=${devNull}`,
+      '-c',
+      'trailer.separators=:',
+      'interpret-trailers',
+      '--parse',
+      '--no-divider',
+    ],
+    {
+      input: message,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      // Configured trailer aliases make Git accept keys inside body paragraphs.
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: '1',
+        GIT_CONFIG_GLOBAL: devNull,
+        GIT_CONFIG_COUNT: '0',
+        GIT_CONFIG_PARAMETERS: '',
+      },
+    },
+  );
+  return isAutomaticDeploymentAllowed(parsedTrailers);
+}
 
 const DEPLOY_WORKFLOW_FILE = 'deploy-production.yml';
 const RUNS_TO_SCAN = 30;
@@ -582,6 +624,15 @@ export async function selectShippedSurfaceScope(surface, environment = process.e
 }
 
 async function main() {
+  if (process.argv.includes('--automatic-deployment')) {
+    try {
+      console.log(`allowed=${readAutomaticDeploymentIntent() ? 'true' : 'false'}`);
+    } catch (error) {
+      console.log('allowed=false');
+      throw error;
+    }
+    return;
+  }
   if (process.argv.includes('--release-ready')) {
     await requireReleaseReady(process.env, {
       requireRelay: process.argv.includes('--require-relay'),

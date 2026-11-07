@@ -13,7 +13,7 @@ import {
   type DisconnectResponse,
   type ListConnectorsResponse,
 } from '@agiworkforce/cloud-contracts';
-import { connectorsReleased } from '@agiworkforce/types';
+import { connectorReleased } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -184,7 +184,7 @@ function getAvailableConnectorIds(): string[] {
   ) {
     available.add(GITHUB_CONNECTOR_ID);
   }
-  return [...available];
+  return [...available].filter(connectorReleased);
 }
 
 function connectorDisplayName(connectorId: string): string {
@@ -367,7 +367,7 @@ async function handleGetConnectors(request: NextRequest) {
 
   return NextResponse.json({
     connectors: withHealth,
-    available: connectorsReleased() ? offered.available : [],
+    available: offered.available,
     setup: offered.setup,
     pending,
   } satisfies ListConnectorsResponse);

@@ -8,6 +8,7 @@ import {
   hasExplicitWebFetchIntent,
   hasExplicitWebSearchOptOut,
   hasExplicitWebSearchIntent,
+  hasExplicitWebSearchRequestOptOut,
 } from '../explicit-search-intent';
 
 const EM_DASH = String.fromCodePoint(0x2014);
@@ -168,6 +169,25 @@ describe('detectExplicitWebSearchIntent', () => {
 });
 
 describe('hasExplicitWebSearchOptOut', () => {
+  it.each([
+    'Read the attached resource. Do not use public web search.',
+    'Read the attached resource. No public web searches.',
+    'Use the connector only. Do not search my workspace, edit anything, use public web search, or generate images.',
+    'Use the attached document without edits, public internet searches, or external sharing.',
+    'Do not edit the page, use public online search, or generate artwork.',
+  ])('keeps qualified public search inside the scope of a refusal: %s', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(true);
+    expect(hasExplicitWebSearchIntent(text)).toBe(false);
+  });
+
+  it.each([
+    'Do not edit the document. Use public web search to check the current price.',
+    'Do not edit the page, but use public web search to verify the announcement.',
+  ])('retains a public search requested outside the refused action: %s', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(false);
+    expect(hasExplicitWebSearchIntent(text)).toBe(true);
+  });
+
   it.each([
     [
       'AUTH-06',
@@ -536,5 +556,28 @@ describe('explicitWebSearchSignals', () => {
   it('reports nothing for an opt-out or plain text', () => {
     expect(explicitWebSearchSignals('do not search the web, answer from memory')).toEqual([]);
     expect(explicitWebSearchSignals('rewrite this paragraph')).toEqual([]);
+  });
+});
+
+describe('coordinated direct prohibitions without a final comma', () => {
+  it.each([
+    'Do not create documents, run code, search the web or use external tools.',
+    'Do not open files, search the internet or create images.',
+    'Never edit files, search online or call external services.',
+    'Fetch only the existing Notion QA page once. Do not create, edit, move or delete content, list other pages, search the web, generate images or use other connectors.',
+  ])('does not turn the prohibited search in %j into a required lookup', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(true);
+    expect(hasExplicitWebSearchRequestOptOut(text)).toBe(true);
+    expect(hasExplicitWebSearchIntent(text)).toBe(false);
+  });
+
+  it.each([
+    "Don't guess, check the docs or search the web.",
+    'Do not write files; search the web for official documentation instead.',
+    'Do not edit files, just search the web or check official sources.',
+    'Without editing files, search the web or check official documentation.',
+  ])('preserves the separate affirmative lookup in %j', (text) => {
+    expect(hasExplicitWebSearchOptOut(text)).toBe(false);
+    expect(hasExplicitWebSearchIntent(text)).toBe(true);
   });
 });

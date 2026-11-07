@@ -8,7 +8,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { requireSharingManager, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireSharingManager,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { shareConnector, unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 import { assertConnectorsReleased } from '@/lib/connectors/connector-capability';
@@ -37,8 +40,11 @@ async function handleShare(
   const { connectorId } = await context.params;
   const parsedConnectorId = parseConnectorId(connectorId);
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = await requireSharingManager(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+    userId,
+  );
   assertConnectorsReleased();
 
   const shared = await shareConnector(db, {
@@ -71,8 +77,11 @@ async function handleUnshare(
   const { connectorId } = await context.params;
   const parsedConnectorId = parseConnectorId(connectorId);
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = await requireSharingManager(await resolveOrgMembership(db, userId), userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = await requireSharingManager(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+    userId,
+  );
 
   const removed = await unshareConnector(db, membership.organizationId, parsedConnectorId);
   if (!removed) {

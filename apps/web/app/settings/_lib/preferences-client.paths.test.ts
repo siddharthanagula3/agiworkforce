@@ -1,3 +1,4 @@
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@agiworkforce/cloud-contracts');
 
@@ -37,7 +38,9 @@ beforeEach(async () => {
   vi.mocked(getAuthToken).mockResolvedValue('test-auth-token');
   vi.mocked(getCsrfToken).mockResolvedValue('test-csrf-token');
   vi.mocked(addCsrfHeaders).mockImplementation(async (headers) => headers as HeadersInit);
-  const { invalidatePreferencesSnapshot } = await import('./preferences-client');
+  const { invalidatePreferencesSnapshot, observePreferenceOwner } =
+    await import('./preferences-client');
+  observePreferenceOwner(null);
   invalidatePreferencesSnapshot();
 });
 
@@ -46,6 +49,46 @@ function requestedUrls(): string[] {
 }
 
 describe('settings preference paths come from the cloud contract', () => {
+  it('routes mandatory-owner reads and writes through the same relocated contract', async () => {
+    const { observePreferenceOwner, readOwnedPreferences, saveOwnedPreferenceNamespace } =
+      await import('./preferences-client');
+    const owner = observePreferenceOwner({
+      userId: 'fixture-owner',
+      sessionId: 'fixture-session',
+      isCurrent: () => true,
+      getToken: async () => 'fixture-token',
+    })!;
+    await readOwnedPreferences(owner);
+    await saveOwnedPreferenceNamespace(owner, 'capabilities', { memory: true }, { merge: true });
+    expect(requestedUrls()).toEqual([RELOCATED, RELOCATED]);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'omit', cache: 'no-store' });
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ credentials: 'omit', method: 'PUT' });
+  });
+
+  it('does not dispatch an owned preference write after session retirement during CSRF', async () => {
+    const { savePreferenceNamespace } = await import('./preferences-client');
+    const { addCsrfHeaders } = await import('@/lib/client/csrf');
+    let finish!: (headers: HeadersInit) => void;
+    vi.mocked(addCsrfHeaders).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const authority = createRequestAuthority({
+      userId: 'owner-a',
+      sessionId: 'session-a',
+      isCurrent: () => true,
+      getToken: async () => 'owner-a-token',
+    });
+    const saving = savePreferenceNamespace('provider-consent', { accepted: true }, { authority });
+    const rejected = expect(saving).rejects.toMatchObject({ name: 'AbortError' });
+    authority.retire();
+    finish({});
+    await rejected;
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('reads and writes namespaces through the relocated contract path', async () => {
     const {
       fetchStoredPreferenceNamespace,

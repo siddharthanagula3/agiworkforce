@@ -4,7 +4,7 @@ import { chartHoverText } from '@agiworkforce/unified-chat';
 
 import {
   editableDocumentFromReply,
-  hideSandboxChartImage,
+  groupGeneratedImageOutputs,
   interactiveCardsForTurn,
   logoConceptArtifact,
 } from './turn-artifacts';
@@ -93,17 +93,34 @@ describe('chart and map display', () => {
     expect(chartHoverText('February', 25)).toBe('February: 25');
   });
 
-  it('hides the sandbox chart image when a chart artifact is also present', () => {
-    expect(
-      hideSandboxChartImage('chart.png', 'See the chart.', [{ type: 'html', content: '<svg>' }]),
-    ).toBe(true);
-    expect(
-      hideSandboxChartImage('notes.png', 'See the chart.', [{ type: 'html', content: '<svg>' }]),
-    ).toBe(false);
-    expect(hideSandboxChartImage('chart.png', 'Only the picture.', [])).toBe(false);
-    expect(
-      hideSandboxChartImage('chart.png', 'A checklist.', [{ type: 'html', content: '<ul></ul>' }]),
-    ).toBe(false);
+  it('presents matching image bytes once while preserving aliases and distinct charts', () => {
+    const image = (id: string, checksumSha256?: string) => ({
+      id,
+      uri: `/api/files/${id}`,
+      kind: 'image',
+      mimeType: 'image/png',
+      checksumSha256,
+    });
+    const first = image('monthly-sales', 'a'.repeat(64));
+    const alias = image('chart', 'a'.repeat(64));
+    const distinct = image('chart-2', 'b'.repeat(64));
+    expect(groupGeneratedImageOutputs([first, alias, distinct])).toEqual({
+      images: [first, distinct],
+      aliases: [alias],
+    });
+  });
+
+  it('never deduplicates by filename, an absent hash or a malformed hash', () => {
+    const image = (id: string, checksumSha256?: string) => ({
+      id,
+      fileName: 'chart.png',
+      uri: `/api/files/${id}`,
+      kind: 'image',
+      mimeType: 'image/png',
+      checksumSha256,
+    });
+    const files = [image('one'), image('two'), image('three', 'bad'), image('four', 'bad')];
+    expect(groupGeneratedImageOutputs(files)).toEqual({ images: files, aliases: [] });
   });
 
   it('drops a map card when the turn failed', () => {

@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { type ChatConversationRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { restorableScopeSql } from '@/lib/resources/lifecycle-sql';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -36,7 +37,7 @@ async function handleRestoreConversation(request: NextRequest, context: RouteCon
         where id = $1
           and user_id = $2
           and organization_id is not distinct from $3
-          and deleted_at is not null
+          and ${restorableScopeSql('web_conversations')}
         returning id, title, model, project_id, pinned, starred, archived, is_temporary,
                   created_at, updated_at, deleted_at
       `,

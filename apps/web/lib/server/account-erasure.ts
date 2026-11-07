@@ -13,17 +13,16 @@ import {
   objectKeyFromPublicUrl,
   objectKeyFromStorageUri,
 } from '@/lib/server/object-storage';
-import {
-  deleteBackupObject,
-  forgetBackupReplicas,
-  resolveObjectBackupTarget,
-} from '@/lib/server/object-backup';
+import { eraseBackupCopies } from '@/lib/server/object-backup-erasure';
 import {
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
 import { deleteE2BSessionsForUser } from '@/lib/e2b/session-store';
-import { eraseUserDataExportArchives } from '@/lib/server/data-export-archive';
+import {
+  DATA_EXPORT_BUILD_ARCHIVE_JOB,
+  eraseUserDataExportArchives,
+} from '@/lib/server/data-export-archive';
 import {
   mcpAuthorizationContext,
   purgeMcpResponseCachePartitions,
@@ -624,41 +623,6 @@ async function sealAndCheckMediaJobsForErasure(
   }
 }
 
-/**
- * The backup bucket is a copy of what existed, and an erasure that stops at the
- * primary leaves the subject's objects restorable from it. The hourly
- * reconciliation would reach them eventually; an erasure request cannot wait
- * for a round of a round-robin sweep, so the copies go with the originals.
- */
-async function eraseBackupCopies(
-  keys: ReadonlyArray<string>,
-): Promise<{ deleted: number; failedKeys: string[] }> {
-  if (keys.length === 0) return { deleted: 0, failedKeys: [] };
-  const target = resolveObjectBackupTarget();
-  if (!target) return { deleted: 0, failedKeys: [] };
-
-  const removed: string[] = [];
-  const failedKeys: string[] = [];
-  for (const key of keys) {
-    try {
-      const outcome = await deleteBackupObject(key, { target });
-      if (outcome === 'deleted') removed.push(key);
-      else if (outcome === 'absent') removed.push(key);
-    } catch (error) {
-      failedKeys.push(key);
-      logger.warn({ key, error }, 'Failed to delete the backup copy of an erased object');
-    }
-  }
-
-  try {
-    await forgetBackupReplicas(removed);
-  } catch (error) {
-    logger.warn({ error }, 'Backup replica records outlived the objects they tracked');
-  }
-
-  return { deleted: removed.length, failedKeys };
-}
-
 export async function eraseUserMedia(
   userId: string,
 ): Promise<
@@ -754,9 +718,12 @@ async function deleteObjectKeys(
   return { deleted, failed };
 }
 
-async function eraseUserKnowledgeObjects(
-  userId: string,
-): Promise<{ deleted: number; failed: number }> {
+async function eraseUserKnowledgeObjects(userId: string): Promise<{
+  deleted: number;
+  failed: number;
+  backupObjectsDeleted: number;
+  backupObjectsFailed: number;
+}> {
   const rows = await getNeonDb().query<{ storage_uri: string | null }>(
     `select k.storage_uri
        from public.project_knowledge_files k
@@ -766,13 +733,35 @@ async function eraseUserKnowledgeObjects(
     [userId],
   );
 
-  const keys = rows
-    .map((row) => (row.storage_uri ? objectKeyFromStorageUri(row.storage_uri) : null))
-    .filter((key): key is string => Boolean(key));
-  return deleteObjectKeys(keys, 'knowledge-file', {
+  const keys: string[] = [];
+  let unresolvedReferences = 0;
+  for (const row of rows) {
+    if (!row.storage_uri?.trim()) continue;
+    const key = objectKeyFromStorageUri(row.storage_uri);
+    if (key) keys.push(key);
+    else unresolvedReferences++;
+  }
+  if (unresolvedReferences > 0) {
+    logger.warn(
+      { userId, count: unresolvedReferences },
+      'Knowledge object references could not be resolved for erasure',
+    );
+  }
+  const erasedKeys: string[] = [];
+  const primary = await deleteObjectKeys(keys, 'knowledge-file', {
     configured: isProjectKnowledgeObjectStorageConfigured,
-    deleteKey: deleteProjectKnowledgeObject,
+    deleteKey: async (key) => {
+      await deleteProjectKnowledgeObject(key);
+      erasedKeys.push(key);
+    },
   });
+  const backup = await eraseBackupCopies(erasedKeys);
+  return {
+    ...primary,
+    failed: primary.failed + unresolvedReferences,
+    backupObjectsDeleted: backup.deleted,
+    backupObjectsFailed: backup.failedKeys.length,
+  };
 }
 
 async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number; failed: number }> {
@@ -974,7 +963,10 @@ export async function eraseUserAccountData(
 
     for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
       if (table === PROFILE_TABLE) continue;
-      if (table === 'user_projects' && knowledge.failed > 0) {
+      if (
+        table === 'user_projects' &&
+        (knowledge.failed > 0 || knowledge.backupObjectsFailed > 0)
+      ) {
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
@@ -982,11 +974,19 @@ export async function eraseUserAccountData(
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
+      const retainExportJobs = table === 'background_jobs' && exportArchives.failed > 0;
       const subject =
         alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
       try {
-        await db.execute(`delete from public.${table} where ${subject}`, [userId]);
-        recordTableOutcome(tables, table, { deleted: true });
+        await db.execute(
+          `delete from public.${table} where ${subject}${retainExportJobs ? ' and kind <> $2' : ''}`,
+          retainExportJobs ? [userId, DATA_EXPORT_BUILD_ARCHIVE_JOB] : [userId],
+        );
+        recordTableOutcome(
+          tables,
+          table,
+          retainExportJobs ? { deleted: false, retainedForRetry: true } : { deleted: true },
+        );
       } catch (error) {
         recordTableOutcome(tables, table, {
           deleted: false,
@@ -1000,6 +1000,7 @@ export async function eraseUserAccountData(
       media.mediaObjectsFailed === 0 &&
       media.backupObjectsFailed === 0 &&
       knowledge.failed === 0 &&
+      knowledge.backupObjectsFailed === 0 &&
       exportArchives.failed === 0 &&
       avatar.failed === 0 &&
       feedbackScreenshots.failed === 0 &&
@@ -1029,6 +1030,8 @@ export async function eraseUserAccountData(
     return {
       userId,
       ...media,
+      backupObjectsDeleted: media.backupObjectsDeleted + knowledge.backupObjectsDeleted,
+      backupObjectsFailed: media.backupObjectsFailed + knowledge.backupObjectsFailed,
       knowledgeObjectsDeleted: knowledge.deleted,
       knowledgeObjectsFailed: knowledge.failed,
       exportObjectsDeleted: exportArchives.deleted,

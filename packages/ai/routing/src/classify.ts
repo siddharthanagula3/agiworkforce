@@ -26,6 +26,11 @@
 import { getModelMetadataById, type RoutingTaskType } from '@agiworkforce/types';
 
 import { tokenizerDriftFactor } from './pricing';
+import {
+  classifyResponseOutputIntent,
+  isSelfContainedResponseRequest,
+  requestsSeparateImageResources,
+} from './output-intent';
 
 import type {
   ClassifierResult,
@@ -33,11 +38,6 @@ import type {
   RoutingAttachment,
   RoutingMessage,
 } from './types';
-
-const RE_IMAGE_SLASH = /^\/(image|imagine|draw|generate)\b/i;
-
-const RE_IMAGE_PHRASE =
-  /\b(generate|create|make|draw)\s+(me\s+)?(an?\s+|some\s+)?(\w+\s+){0,2}(image|picture|photo|photograph|illustration|logo|mockup|wireframe|artwork|drawing|painting|sketch|portrait|poster|banner|avatar|thumbnail|wallpaper)\b/i;
 
 const RE_COMPUTER_REQUEST_PREFIX =
   /^\s*(?:(?:please\s+)?(?:can|could|would|will)\s+you\s+(?:please\s+)?|please\s+)?/i;
@@ -136,7 +136,8 @@ export function classifyTaskLocally(
   history: ReadonlyArray<RoutingMessage>,
   attachments?: ReadonlyArray<RoutingAttachment>,
 ): ClassifierResult {
-  if (RE_IMAGE_SLASH.test(message) || RE_IMAGE_PHRASE.test(message)) {
+  if (requestsSeparateImageResources(message)) return { type: 'agentic', confidence: 0.95 };
+  if (classifyResponseOutputIntent(message) === 'image') {
     return { type: 'image_generation', confidence: 0.95 };
   }
 
@@ -193,7 +194,7 @@ export function classifyTaskLocally(
     return { type: 'agentic', confidence: 0.85 };
   }
 
-  if (RE_RESEARCH.test(message)) {
+  if (RE_RESEARCH.test(message) && !isSelfContainedResponseRequest(message)) {
     return { type: 'research', confidence: 0.85 };
   }
 

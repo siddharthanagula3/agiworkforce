@@ -422,8 +422,8 @@ async function revokeIdentitySession(sessionId: string, userId: string): Promise
   try {
     const identity = getIdentityProvider();
     const session = await identity.getSession(sessionId);
-    if (!session || session.userId !== userId) return false;
-    await identity.revokeSession(session.id);
+    if (!session || session.id !== sessionId || session.userId !== userId) return false;
+    await identity.revokeSession(sessionId);
     return true;
   } catch (error) {
     logger.warn({ error, userId }, 'Device identity session could not be revoked');

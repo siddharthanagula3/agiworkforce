@@ -22,6 +22,7 @@
  * byte-for-byte the original Phase-B-scaffold behavior.
  */
 import 'server-only';
+import { randomUUID } from 'node:crypto';
 
 import {
   SANDBOX_COMPUTE_RATE_ENV,
@@ -48,6 +49,7 @@ import { e2bExecutionEnabled } from './gate';
 import { e2bChatTemplate } from './chat-template';
 import { tracedCodeAction } from '@/lib/observability/code-action-span';
 import { activeSpan } from '@/lib/observability/span';
+import { pythonFigureProvenanceBootstrap } from './python-figure-provenance';
 
 import { traceSandboxExecutor } from './tracing';
 import {
@@ -1120,6 +1122,8 @@ export const getE2BExecutor = tracedCodeAction(
       return stored;
     }
 
+    const figureExecutionId = randomUUID();
+    const figureProvenanceContexts = new Map<string, Promise<void>>();
     const executor: E2BExecutor = {
       async runCode({ language, code, signal }): Promise<ExecutionResult> {
         const interruptions: Array<() => void> = [];
@@ -1139,12 +1143,41 @@ export const getE2BExecutor = tracedCodeAction(
             signal.addEventListener('abort', interrupt, { once: true });
             interruptions.push(() => signal.removeEventListener('abort', interrupt));
           }
-          const execution = context
-            ? await sandbox.runCode(code, {
-                context: { id: context.id, language: context.language, cwd: context.cwd },
-              })
-            : await sandbox.runCode(code, { language: lang });
-          if (signal?.aborted) return { ok: false, output: '', error: CODE_RUN_STOPPED_MESSAGE };
+          const codeOptions = context
+            ? { context: { id: context.id, language: context.language, cwd: context.cwd } }
+            : { language: lang };
+          if (lang === 'python') {
+            const contextKey = context?.id ?? 'default-python';
+            let initialize = figureProvenanceContexts.get(contextKey);
+            if (!initialize) {
+              initialize = sandbox
+                .runCode(pythonFigureProvenanceBootstrap(figureExecutionId), codeOptions)
+                .then((result) => {
+                  if (result.error)
+                    logger.warn(
+                      { sandboxId: sandbox.sandboxId, error: result.error.name },
+                      '[e2b] figure output identity unavailable',
+                    );
+                })
+                .catch((err: unknown) => {
+                  logger.warn(
+                    { err, sandboxId: sandbox.sandboxId },
+                    '[e2b] figure output identity unavailable',
+                  );
+                });
+              figureProvenanceContexts.set(contextKey, initialize);
+            }
+            await initialize;
+            if (signal?.aborted) {
+              figureProvenanceContexts.delete(contextKey);
+              return { ok: false, output: '', error: CODE_RUN_STOPPED_MESSAGE };
+            }
+          }
+          const execution = await sandbox.runCode(code, codeOptions);
+          if (signal?.aborted) {
+            figureProvenanceContexts.delete(context?.id ?? 'default-python');
+            return { ok: false, output: '', error: CODE_RUN_STOPPED_MESSAGE };
+          }
           // Bounded here rather than at the caller: what a cell prints is chosen
           // by the executed code, and runCommand already truncates its own
           // streams the same way.
@@ -1395,6 +1428,9 @@ export const getE2BExecutor = tracedCodeAction(
             name: e.name,
             isDir: e.type === 'dir',
             byteSize: typeof e.size === 'number' ? e.size : 0,
+            ...(e.modifiedTime instanceof Date && Number.isFinite(e.modifiedTime.getTime())
+              ? { modifiedAt: e.modifiedTime.toISOString() }
+              : {}),
           }));
         } catch (err) {
           logger.warn({ err, path }, '[e2b] listFiles failed');

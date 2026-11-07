@@ -54,7 +54,15 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const rawBody = (await request.json().catch(() => ({}))) as unknown;
+  const bodyText = await request.text();
+  let rawBody: unknown = {};
+  if (bodyText !== '') {
+    try {
+      rawBody = JSON.parse(bodyText) as unknown;
+    } catch {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+  }
   const surfaceValue =
     rawBody !== null && typeof rawBody === 'object' && !Array.isArray(rawBody)
       ? (rawBody as Record<string, unknown>)['surface']

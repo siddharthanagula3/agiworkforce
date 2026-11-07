@@ -419,6 +419,7 @@ describe('Article 50(2), generated image provenance', () => {
       TEST_USER.userId,
       sourceAssetId,
       expect.anything(),
+      { organizationId: ORGANIZATION_ID },
     );
     expect(storageMocks.read).toHaveBeenCalledWith(sourcePathname);
     expect(providerCalls()).toHaveLength(1);

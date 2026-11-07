@@ -275,6 +275,25 @@ export function parseManagedMemoryListResponse(value: unknown): ManagedMemoryLis
   return { memories: parseRecords(value['memories']), hasMore: value['hasMore'] === true };
 }
 
+export function parseManagedMemoryStrictPageResponse(
+  value: unknown,
+): ManagedMemoryListResponse | null {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value['memories']) ||
+    typeof value['hasMore'] !== 'boolean'
+  ) {
+    return null;
+  }
+  const memories: ManagedMemoryRecord[] = [];
+  for (const entry of value['memories']) {
+    const memory = parseManagedMemoryRecord(entry);
+    if (!memory) return null;
+    memories.push(memory);
+  }
+  return { memories, hasMore: value['hasMore'] };
+}
+
 export function parseManagedMemoryItemResponse(value: unknown): ManagedMemoryItemResponse | null {
   if (!isRecord(value)) return null;
   const memory = parseManagedMemoryRecord(value['memory']);

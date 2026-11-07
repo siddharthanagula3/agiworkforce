@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSession } from '@/lib/identity/client';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
+import {
+  usePreferenceOwner,
+  usePreferenceView,
+} from '@/features/settings/hooks/use-preference-owner';
 
-import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
+import { readPrivacyPreferences } from '@/features/settings/services/privacy-preferences-client';
 import { hasTelemetryConsent, setTelemetryConsentCache } from '@/lib/sentry-shared';
-
-const NAMESPACE = 'privacy';
 
 /**
  * Brings this device's telemetry-consent mirror in line with the account.
@@ -24,37 +26,32 @@ const NAMESPACE = 'privacy';
  * mirror, and the endpoint could only answer 401.
  */
 export function TelemetryConsentSync() {
-  const { isLoaded, isSignedIn } = useSession();
+  const owner = usePreferenceOwner();
+  const capture = usePreferenceView(owner);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    let cancelled = false;
+    const viewCurrent = capture();
+    if (!owner || !viewCurrent()) return;
+    const operation = createRequestAuthority(owner.session, viewCurrent);
 
-    void fetchPreferenceNamespace<{ shareTelemetry?: boolean }>(NAMESPACE, {})
-      .then((stored) => {
-        if (cancelled || typeof stored.shareTelemetry !== 'boolean') return;
+    void readPrivacyPreferences(operation)
+      .then(async ({ stored }) => {
+        if (!operation.isCurrent() || typeof stored.shareTelemetry !== 'boolean') return;
         const hadConsent = hasTelemetryConsent();
-        // Only write on a genuine difference: setting it every load would churn
-        // localStorage on every navigation for no change.
         if (stored.shareTelemetry !== hadConsent) {
           setTelemetryConsentCache(stored.shareTelemetry);
         }
         if (stored.shareTelemetry && !hadConsent) {
-          void import('@/lib/client/initialize-sentry-after-consent')
-            .then(({ initializeSentryAfterConsent }) => initializeSentryAfterConsent())
-            .catch(() => undefined);
+          const { initializeSentryAfterConsent } =
+            await import('@/lib/client/initialize-sentry-after-consent');
+          if (operation.isCurrent()) initializeSentryAfterConsent();
         }
       })
-      .catch(() => {
-        // Signed out, offline, or the endpoint is unavailable. Leaving the
-        // mirror alone is the safe outcome: it already holds this device's last
-        // known answer, and guessing would be worse than being stale.
-      });
+      .catch(() => undefined)
+      .finally(() => operation.retire());
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn]);
+    return () => operation.retire();
+  }, [owner, capture]);
 
   return null;
 }

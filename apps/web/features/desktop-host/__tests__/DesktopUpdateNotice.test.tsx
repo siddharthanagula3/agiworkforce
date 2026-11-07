@@ -1,6 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HostBridge } from '@agiworkforce/local-runtime-contract';
+import type {
+  DesktopRuntimeEvent,
+  HostBridge,
+  HostUpdateAvailability,
+} from '@agiworkforce/local-runtime-contract';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { DesktopUpdateNotice } from '../components/DesktopUpdateNotice';
 
@@ -13,6 +17,76 @@ beforeEach(() => {
 });
 
 describe('DesktopUpdateNotice', () => {
+  it('offers an installer rather than inferring downloading from capability', async () => {
+    render(
+      <DesktopUpdateNotice
+        host={host({
+          checkForUpdate: async () => ({
+            available: true,
+            currentVersion: '1.2.0',
+            version: '1.3.0',
+            downloadUrl: '',
+            installsAutomatically: true,
+          }),
+        })}
+      />,
+    );
+    expect(await screen.findByRole('button', { name: 'Download installer' })).toBeEnabled();
+  });
+
+  it('preserves an unknown staged event against a delayed metadata response', async () => {
+    let receive!: (event: DesktopRuntimeEvent) => void;
+    let finish!: (value: HostUpdateAvailability) => void;
+    const checkForUpdate = vi.fn(
+      () =>
+        new Promise<HostUpdateAvailability>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(
+      <DesktopUpdateNotice
+        host={host({
+          restartToUpdate: vi.fn(),
+          checkForUpdate,
+          onRuntimeEvent: (callback) => {
+            receive = callback;
+            return () => undefined;
+          },
+        })}
+      />,
+    );
+    await waitFor(() => expect(checkForUpdate).toHaveBeenCalledTimes(1));
+    act(() => receive({ kind: 'update-ready', version: '' }));
+    await act(async () =>
+      finish({
+        available: true,
+        currentVersion: '1.2.0',
+        version: '1.4.0',
+        downloadUrl: '',
+        readyToInstall: true,
+      }),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('AGI Desktop update is ready to install');
+    expect(screen.getByRole('status')).not.toHaveTextContent('1.4.0');
+    expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
+  });
+
+  it('retires events from a previous host', async () => {
+    let receive!: (event: DesktopRuntimeEvent) => void;
+    const first = host({
+      onRuntimeEvent: (callback) => {
+        receive = callback;
+        return () => undefined;
+      },
+    });
+    const view = render(<DesktopUpdateNotice host={first} />);
+    act(() => receive({ kind: 'update-ready', version: '1.3.0' }));
+    expect(screen.getByRole('status')).toHaveTextContent('1.3.0');
+    view.rerender(<DesktopUpdateNotice host={host()} />);
+    act(() => receive({ kind: 'update-ready', version: '1.4.0' }));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('checks on startup and presents an available installer inside the app', async () => {
     const openUpdateInstaller = vi.fn(async () => undefined);
     const checkForUpdate = vi.fn(async () => ({

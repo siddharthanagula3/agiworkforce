@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { z } from 'zod';
+import type { NextRequest } from 'next/server';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 import {
   buildMcpToolCatalog,
@@ -55,6 +57,7 @@ import {
 import {
   findDirectoryTargetByRemoteUrl,
   isDirectoryServerId,
+  isCuratedConnectorId,
   normalizeRemoteUrl,
   resolveDirectoryTarget,
   type DirectoryConnectTarget,
@@ -116,7 +119,9 @@ import {
 import { isGoogleApiUrl, isGoogleUserDataConnector } from '@/lib/connectors/google-user-data';
 import {
   CONNECTORS_COMING_SOON_MESSAGE,
+  connectorReleased,
   connectorsReleased,
+  hasReleasedConnectors,
   getBillingPlanProductLimits,
   getPlanMaxConnectorTools,
 } from '@agiworkforce/types';
@@ -1304,13 +1309,15 @@ function oauthConnectorMcpConfig(
   accessToken: string,
   tokenType: string,
 ): McpServerConfig {
+  const bearer = !tokenType || tokenType.toLowerCase() === 'bearer';
   return {
     url: target.mcpUrl,
     transport: target.transport,
     headers: {
       ...target.optionHeaders,
-      Authorization: `${tokenType || 'Bearer'} ${accessToken}`,
+      ...(!bearer ? { Authorization: `${tokenType} ${accessToken}` } : {}),
     },
+    ...(bearer ? { authProvider: { token: async () => accessToken } } : {}),
     connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
@@ -1398,24 +1405,44 @@ async function buildOAuthConnectorCatalog(
   }
 
   try {
-    const { catalog, handles } = await buildMcpToolCatalog(
-      {
-        [target.serverId]: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
-      },
-      MCP_EGRESS_POLICY,
-      {
-        resolveRuntime: () =>
-          getMcpStatelessRuntime(
-            target.mcpUrl,
-            mcpAuthorizationContext.userOauthConnector(
-              userId,
-              target.connectorId,
-              access.accountKey,
-            ),
+    const discover = async (credential: ReadyConnectorAccess) => {
+      let connectionError: unknown;
+      const { catalog, handles } = await buildMcpToolCatalog(
+        {
+          [target.serverId]: oauthConnectorMcpConfig(
+            target,
+            credential.accessToken,
+            credential.tokenType,
           ),
-      },
-    );
-    await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
+        },
+        MCP_EGRESS_POLICY,
+        {
+          onConnectionError: (_serverName, error) => {
+            connectionError = error;
+          },
+          resolveRuntime: () =>
+            getMcpStatelessRuntime(
+              target.mcpUrl,
+              mcpAuthorizationContext.userOauthConnector(
+                userId,
+                target.connectorId,
+                credential.accountKey,
+              ),
+            ),
+        },
+      );
+      await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
+      return { catalog, connectionError };
+    };
+
+    let discovery = await discover(access);
+    if (detectConnectorAuthChallenge(discovery.connectionError)?.status === 401) {
+      await evictConnectorOAuthCaches(userId, target.connectorId);
+      const refreshed = await resolveTargetAccess(userId, target, true);
+      if (refreshed.status !== 'ready' || refreshed.accountKey !== access.accountKey) return null;
+      discovery = await discover(refreshed);
+    }
+    const catalog = discovery.catalog;
     const ttl = isOAuthServerUnreachable(catalog, target.serverId)
       ? OAUTH_CATALOG_UNREACHABLE_TTL_MS
       : OAUTH_CATALOG_TTL_MS;
@@ -1609,6 +1636,34 @@ async function resolveConnectorOrganizationId(
   const membershipId = await resolveOrganizationMembershipId(db, userId, admittedOrganizationId);
   if (!membershipId) throw createError.forbidden('You are not an active member of this workspace.');
   return membershipId;
+}
+
+async function assertConnectorDiscoveryAllowed(
+  userId: string,
+  connectorRef: string,
+  organizationId: string | null,
+  request?: NextRequest,
+): Promise<void> {
+  const { evaluateConnectorPolicyForUser } = await import('@/lib/services/connector-policy-gate');
+  const mappedTarget = loadConnectorMcpMap().get(connectorRef);
+  const url = mappedTarget?.url ?? resolveConnectorMcpTarget(connectorRef)?.mcpUrl;
+  const isCustom =
+    connectorRef.startsWith(CUSTOM_SERVER_PREFIX) ||
+    connectorRef.startsWith(ORG_SHARED_SERVER_PREFIX) ||
+    isDirectoryServerId(connectorRef) ||
+    (!isCuratedConnectorId(connectorRef) &&
+      !mappedTarget &&
+      getConnectorOAuthProvider(connectorRef) === null);
+  const decision = await evaluateConnectorPolicyForUser({
+    db: connectorOwnerDb(userId).withOrg(organizationId),
+    userId,
+    organizationId,
+    connectorId: connectorRef,
+    isCustom,
+    ...(url ? { url } : {}),
+    ...(request ? { request, surface: resolveCloudChatSurface(request) } : {}),
+  });
+  if (!decision.allowed) throw createError.forbidden(decision.reason).asUserSafe();
 }
 
 async function getOrgSharedConnectorRows(
@@ -1836,6 +1891,8 @@ export async function loadUserConnectorToolDefs(
 }
 
 export interface LoadUserConnectorToolOptions {
+  allowSelective?: boolean;
+  request?: NextRequest;
   customConnectorLimit?: number;
   organizationId?: string | null;
   planTier?: string | null;
@@ -2022,8 +2079,15 @@ export async function loadUserConnectorCapabilityCatalog(
   connectorRef: string,
   options: LoadUserConnectorToolOptions = {},
 ): Promise<UserConnectorCapabilityCatalog | null> {
-  if (!userId || !connectorRef || !connectorsReleased()) return null;
+  if (
+    !userId ||
+    !connectorReleased(connectorRef) ||
+    (!connectorsReleased() && options.allowSelective !== true)
+  ) {
+    return null;
+  }
   const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
+  await assertConnectorDiscoveryAllowed(userId, connectorRef, organizationId, options.request);
 
   let result: UserConnectorCapabilityCatalog | null = null;
   if (connectorRef === GITHUB_SERVER_ID) {
@@ -2129,6 +2193,12 @@ export async function loadUserConnectorCapabilityCatalog(
     result.source === 'organization' ||
     isDirectoryServerId(result.connectorId);
   if (!(await connectorPolicyAllows(result.connectorId, organizationId, isCustom))) return null;
+  if (
+    result.catalog.servers[result.connectorId] &&
+    isOAuthServerUnreachable(result.catalog, result.connectorId)
+  ) {
+    throw new ConnectorUnreachableError(result.connectorLabel);
+  }
   return {
     ...result,
     catalog: filterCapabilityCatalogTools(result.catalog, options.isToolDenied),
@@ -2196,15 +2266,21 @@ export async function withUserConnectorMcpHandle<T>(
   userId: string,
   connectorRef: string,
   operation: (connection: UserConnectorMcpHandle) => Promise<T>,
-  options: Pick<LoadUserConnectorToolOptions, 'organizationId'> & {
+  options: Pick<LoadUserConnectorToolOptions, 'organizationId' | 'request' | 'allowSelective'> & {
     /** Throw ConnectorUnreachableError instead of answering null when a refresh failed transiently. */
     reportUnreachable?: boolean;
   } = {},
 ): Promise<T | null> {
-  if (!userId || !connectorRef || connectorRef === GITHUB_SERVER_ID || !connectorsReleased()) {
+  if (
+    !userId ||
+    connectorRef === GITHUB_SERVER_ID ||
+    !connectorReleased(connectorRef) ||
+    (!connectorsReleased() && options.allowSelective !== true)
+  ) {
     return null;
   }
   const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
+  await assertConnectorDiscoveryAllowed(userId, connectorRef, organizationId, options.request);
   let descriptor:
     | {
         connectorId: string;
@@ -2364,11 +2440,18 @@ export async function loadUserConnectorToolCatalog(
   options: LoadUserConnectorToolOptions = {},
 ): Promise<UserConnectorToolCatalog> {
   const limit = resolveConnectorToolLimit(options.planTier);
-  if (!userId || !connectorsReleased()) return { tools: [], dropped: [], limit };
+  if (
+    !userId ||
+    !(options.allowSelective === true ? hasReleasedConnectors() : connectorsReleased())
+  ) {
+    return { tools: [], dropped: [], limit };
+  }
   try {
     const defs: WebMcpToolDef[] = [];
 
-    const installations = await getUserGithubInstallations(userId);
+    const installations = connectorReleased(GITHUB_SERVER_ID)
+      ? await getUserGithubInstallations(userId)
+      : [];
     if (installations.length > 0) {
       defs.push(...GITHUB_TOOL_DEFS);
     }
@@ -2394,6 +2477,7 @@ export async function loadUserConnectorToolCatalog(
     ]);
     const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
     if (
+      connectorReleased(BANK_ACCOUNTS_CONNECTOR_ID) &&
       grantedOAuthIds.has(BANK_ACCOUNTS_CONNECTOR_ID) &&
       isPlaidConfigured() &&
       !options.isConnectorDenied?.(BANK_ACCOUNTS_CONNECTOR_ID)
@@ -2406,6 +2490,7 @@ export async function loadUserConnectorToolCatalog(
 
     const dialPolicy = organizationId ? await readDialPolicy(organizationId) : null;
     const dialPermitted = (serverId: string, member: boolean): boolean => {
+      if (!connectorReleased(serverId)) return false;
       if (options.isConnectorDenied?.(serverId)) return false;
       if (dialPolicy === false) return false;
       return evaluateConnectorAccess(dialPolicy, { connectorId: serverId, isCustom: member })
@@ -2450,6 +2535,7 @@ export async function loadUserConnectorToolCatalog(
     }
 
     for (const connectorId of usableOAuthIds) {
+      if (!connectorReleased(connectorId)) continue;
       if (!grantedOAuthIds.has(connectorId)) continue;
       if (isHealthSpaceConnector(connectorId) && !offersHealthSpaceConnectors) continue;
       if (isGraphAdapterConnector(connectorId)) {
@@ -2484,6 +2570,7 @@ export async function loadUserConnectorToolCatalog(
     }
 
     for (const grant of grantSummaries) {
+      if (!connectorReleased(grant.connectorId)) continue;
       if (usableOAuthIdSet.has(grant.connectorId) || map.has(grant.connectorId)) continue;
       if (sensitiveDataConnector(grant.connectorId)) continue;
       dials.push({
@@ -2677,7 +2764,7 @@ export function makeUserConnectorExecutor(
     const guarded = async (
       run: (safeArgs: Record<string, unknown>) => Promise<ConnectorExecResult>,
     ): Promise<ConnectorExecResult> => {
-      if (!connectorsReleased()) {
+      if (!connectorReleased(serverId)) {
         return { handled: true, content: CONNECTORS_COMING_SOON_MESSAGE, isError: true };
       }
       try {
@@ -2687,6 +2774,11 @@ export function makeUserConnectorExecutor(
         }
       } catch (error) {
         logger.warn({ error, connectorId: serverId }, 'Connector gate could not be read');
+        return {
+          handled: true,
+          content: 'Connector availability could not be checked. Try again.',
+          isError: true,
+        };
       }
       const meter = (result: ConnectorExecResult): ConnectorExecResult => {
         if (result.handled) log(result.isError === true ? 'failed' : 'succeeded');
@@ -2726,7 +2818,7 @@ export function makeUserConnectorExecutor(
     if (isGmailActionTool(serverId, toolName)) {
       return guarded(async (safeArgs) => ({
         handled: true,
-        ...(await executeGmailAction(userId, toolName, safeArgs)),
+        ...(await executeGmailAction(userId, toolName, safeArgs, organizationId)),
       }));
     }
 

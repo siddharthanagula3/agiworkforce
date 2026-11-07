@@ -13,7 +13,10 @@ import { EgressPolicyError } from '@/lib/egress-policy';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
@@ -54,8 +57,10 @@ export interface SavedAuditDestinationResponse extends AuditDestinationResponse 
 }
 
 async function requireAdmin(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
   await requireTeamAdminAccess(db, userId, membership.organizationId);
 
   await requireMemberPermission(

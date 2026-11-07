@@ -13,7 +13,9 @@ import {
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
   requireImageMessagePersistence,
+  mediaPersistenceToken,
 } from './imageGenerationPersistence';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { EMPTY_ASSISTANT_CONTENT_PLACEHOLDER } from '@/lib/hooks/useChatStream';
 import type { MessageMetadata } from '@shared/stores/web-chat-store';
 import { getModels, isExecutableImageModel, isModelLive } from '@agiworkforce/types';
@@ -272,5 +274,85 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     expect(String(consoleError.mock.calls[0]?.[0])).toMatch(/failed to save assistant message/i);
     expect(updateMessage).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('media persistence session authority', () => {
+  beforeEach(() => {
+    toastError.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it('carries authority through the queued save and refuses a retired token wait', async () => {
+    let resolveToken!: (token: string) => void;
+    let entered!: () => void;
+    const token = new Promise<string>((resolve) => {
+      resolveToken = resolve;
+    });
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const owner = createRequestAuthority({
+      userId: 'original-user',
+      sessionId: 'original-session',
+      isCurrent: () => true,
+      getToken: () => {
+        entered();
+        return token;
+      },
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const updateMessage = vi.fn();
+    const pending = persistImageGenerationUserMessage({
+      conversationId: 'original-conversation',
+      messageId: USER_MESSAGE_ID,
+      content: 'original private prompt',
+      getAuthToken: mediaPersistenceToken(owner),
+      updateMessage,
+    });
+    await reading;
+    owner.retire();
+    resolveToken('original-token');
+    expect(await pending).toMatchObject({ ok: false, error: { name: 'AbortError' } });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updateMessage).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('does not publish a late saved row id into a retired session', async () => {
+    let resolveResponse!: (response: Response) => void;
+    let dispatched!: () => void;
+    const response = new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const dispatch = new Promise<void>((resolve) => {
+      dispatched = resolve;
+    });
+    const owner = createRequestAuthority({
+      userId: 'original-user',
+      sessionId: 'original-session',
+      isCurrent: () => true,
+      getToken: async () => 'original-token',
+    });
+    const fetchMock = vi.fn(() => {
+      dispatched();
+      return response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const updateMessage = vi.fn();
+    const pending = persistImageGenerationUserMessage({
+      conversationId: 'original-conversation',
+      messageId: USER_MESSAGE_ID,
+      content: 'original private prompt',
+      getAuthToken: mediaPersistenceToken(owner),
+      updateMessage,
+    });
+    await dispatch;
+    owner.retire();
+    resolveResponse(jsonResponse(200, { message: { id: SAVED_USER_MESSAGE_ID } }));
+    expect(await pending).toMatchObject({ ok: false });
+    expect(updateMessage).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

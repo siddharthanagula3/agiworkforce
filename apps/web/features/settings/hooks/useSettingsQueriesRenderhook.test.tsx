@@ -4,6 +4,20 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 type ScanModule0 = typeof import('@agiworkforce/types');
 
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => ({
+    userId: 'creation-fixture',
+    sessionId: 'creation-session',
+    isCurrent: () => true,
+    getToken: async () => 'test-auth-token',
+  }),
+}));
+vi.mock('@/features/workspaces/lib/workspace-cache-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/workspaces/lib/workspace-cache-scope')>()),
+  finalizeWorkspaceSwitch: vi.fn(async () => undefined),
+}));
+
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(),
 }));
@@ -148,7 +162,7 @@ describe('team administration mutations · renderHook', () => {
 
   it('creates a workspace through the real POST endpoint', async () => {
     const organization = {
-      id: 'org-1',
+      id: '11111111-1111-4111-8111-111111111111',
       name: 'Demo Team',
       slug: 'demo-team',
       plan: 'team',
@@ -158,11 +172,44 @@ describe('team administration mutations · renderHook', () => {
       updatedAt: '2026-07-25T00:00:00Z',
       currentUserRole: 'owner',
     };
-    fetchMock.mockResolvedValue(makeResponse({ organization }, 201));
+    let created = false;
+    const selected = {
+      workspaces: [
+        {
+          id: organization.id,
+          organizationId: organization.id,
+          kind: 'organization',
+          name: organization.name,
+          slug: organization.slug,
+          role: 'owner',
+          isPrimary: true,
+        },
+      ],
+      activeWorkspaceId: organization.id,
+      activeOrganizationId: organization.id,
+      scope: 'organization',
+    };
+    fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        created = true;
+        return makeResponse({ organization }, 201);
+      }
+      return makeResponse(
+        created
+          ? selected
+          : {
+              workspaces: [],
+              activeWorkspaceId: null,
+              activeOrganizationId: null,
+              scope: 'personal',
+            },
+      );
+    });
 
     const { useCreateOrganization } = await import('./use-settings-queries');
     const { result } = renderHook(() => useCreateOrganization(), { wrapper: makeWrapper() });
 
+    await waitFor(() => expect(result.current.canMutate).toBe(true));
     act(() => result.current.mutate({ name: 'Demo Team', slug: 'demo-team' }));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -170,11 +217,12 @@ describe('team administration mutations · renderHook', () => {
       '/api/settings/organization',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
+        credentials: 'omit',
+        headers: expect.any(Headers),
         body: JSON.stringify({ name: 'Demo Team', slug: 'demo-team' }),
       }),
     );
-    expect(result.current.data).toEqual(organization);
+    expect(result.current.data).toEqual(selected);
   });
 });
 

@@ -17,11 +17,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({
+vi.mock('@/lib/server/session-account', () => ({
+  getSessionAccountDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'user-1',
     organizationId: null,
+    sessionIdentity: { subject: 'native-user-1', sessionId: 'session-1' },
   })),
 }));
 vi.mock('@/lib/logger', () => ({
@@ -52,7 +53,8 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { createError } from '@/lib/errors';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { POST } from './route';
 
 function request(code: string) {
@@ -67,6 +69,8 @@ const PENDING = [{ totp_secret_enc: 'enc' }];
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.query.mockReset();
+  mocks.verifyTOTPCode.mockReset();
   vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
 });
 
@@ -103,11 +107,17 @@ describe('POST /api/settings/2fa/verify', () => {
       success: true,
       backup_codes: ['aaaa1111', 'bbbb2222'],
     });
-    expect(mocks.registerSecondFactor).toHaveBeenCalledWith('user-1', {
+    expect(mocks.registerSecondFactor).toHaveBeenCalledWith('native-user-1', {
       totpSecret: 'SECRET',
       backupCodes: ['aaaa1111', 'bbbb2222'],
     });
     expect(mocks.rememberMfaEnrollment).toHaveBeenCalledWith('user-1', true);
+    expect(mocks.query).toHaveBeenNthCalledWith(1, expect.any(String), ['user-1']);
+    expect(mocks.query).toHaveBeenNthCalledWith(
+      2,
+      'delete from user_two_factor where user_id = $1',
+      ['user-1'],
+    );
   });
 
   it('rejects an invalid code and registers nothing', async () => {
@@ -129,6 +139,7 @@ describe('POST /api/settings/2fa/verify', () => {
     expect(mocks.identityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
+        identitySubject: 'native-user-1',
         event: 'two_factor_enabled',
         detail: expect.objectContaining({ source: 'totp_code' }),
       }),
@@ -174,9 +185,19 @@ describe('POST /api/settings/2fa/verify', () => {
 
     await POST(request('123456'));
 
-    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+    expect(getSessionAccountDb).toHaveBeenCalledWith(expect.anything(), {
       mfaEnrollment: true,
       resolveOrganization: false,
     });
   });
+});
+
+it('stops verify when the session-account boundary rejects the credential', async () => {
+  vi.mocked(getSessionAccountDb).mockRejectedValueOnce(createError.unauthorized());
+
+  const response = await POST(request('123456'));
+
+  expect(response.status).toBe(401);
+  expect(mocks.query).not.toHaveBeenCalled();
+  expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
 });

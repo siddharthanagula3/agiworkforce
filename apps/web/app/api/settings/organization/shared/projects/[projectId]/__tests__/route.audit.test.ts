@@ -4,7 +4,7 @@ type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
-  resolveOrgMembership: vi.fn(),
+  resolveOrgMembershipForOrganization: vi.fn(),
   shareProject: vi.fn(),
   unshareProject: vi.fn(),
   setProjectMemberAccess: vi.fn(),
@@ -23,7 +23,11 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({ db: { query: vi.fn() }, userId: 'admin-1' })),
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: vi.fn() },
+    userId: 'admin-1',
+    organizationId: ORG,
+  })),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
@@ -32,7 +36,7 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  resolveOrgMembership: mocks.resolveOrgMembership,
+  resolveOrgMembershipForOrganization: mocks.resolveOrgMembershipForOrganization,
   shareProject: mocks.shareProject,
   unshareProject: mocks.unshareProject,
   setProjectMemberAccess: mocks.setProjectMemberAccess,
@@ -57,7 +61,10 @@ const context = { params: Promise.resolve({ projectId: PROJECT }) };
 describe('shared project routes write the workspace audit trail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'admin' });
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({
+      organizationId: ORG,
+      role: 'admin',
+    });
   });
 
   it('records who shared which project into the organization trail', async () => {

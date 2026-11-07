@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 import * as path from 'path';
 
@@ -16,6 +15,7 @@ export function run(): Promise<void> {
     ui: 'tdd',
     color: true,
     timeout: 60_000,
+    failZero: true,
     ...(grep === undefined ? {} : { grep: new RegExp(grep, 'u') }),
   });
   const testsRoot = path.resolve(__dirname, '..');

@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -59,16 +60,25 @@ vi.mock('next/navigation', async (importOriginal) => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async (importOriginal) => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule2>();
@@ -155,7 +165,15 @@ vi.mock('../../hooks/use-artifact-cloud-sync', async (importOriginal) => ({
 }));
 vi.mock('../../hooks/use-share-conversation', async (importOriginal) => ({
   ...(await importOriginal<ScanModule12>()),
-  useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
+  useShareConversation: () => ({
+    share: vi.fn(),
+    isSharing: false,
+    view: null,
+    isViewCurrent: () => false,
+    workspacePending: false,
+    workspaceUnavailable: false,
+    inventoryIncomplete: false,
+  }),
 }));
 vi.mock('../../hooks/use-conversation-branches', async (importOriginal) => ({
   ...(await importOriginal<ScanModule13>()),
@@ -280,6 +298,8 @@ vi.mock('@shared/components/agi/SidebarWordmark', async (importOriginal) => ({
 }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 const TITLE = 'Quarterly forecast';
@@ -332,7 +352,7 @@ describe('WebChatPage conversation title slot', () => {
   it('holds the header title slot while the routed conversation is still loading', async () => {
     listConversationOnly();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     const slot = await screen.findByRole('status', { name: /loading conversation title/i });
     expect(slot).toHaveAttribute('aria-busy', 'true');
@@ -342,7 +362,7 @@ describe('WebChatPage conversation title slot', () => {
   it('replaces the placeholder with the title menu once the transcript arrives', async () => {
     openConversation();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     const trigger = await screen.findByRole('button', { name: /conversation options/i });
@@ -355,7 +375,7 @@ describe('WebChatPage conversation title slot', () => {
     mocks.updateConversation.mockImplementation(async () => false);
     openConversation();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     await user.click(await screen.findByRole('button', { name: /conversation options/i }));
@@ -380,7 +400,7 @@ describe('WebChatPage conversation title slot', () => {
   it('removes full-shell chrome from the compact Quick Ask surface', async () => {
     openConversation();
 
-    const { container } = render(<WebChatPage compact />);
+    const { container } = render(<WebChatPage compact />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     expect(container.firstElementChild).toHaveAttribute('data-chat-surface', 'quick-ask');
@@ -394,7 +414,7 @@ describe('WebChatPage conversation title slot', () => {
     routedSessionId = null;
     useChatStore.getState().reset();
 
-    const { container } = render(<WebChatPage compact />);
+    const { container } = render(<WebChatPage compact />, { wrapper: workspaceFixture.wrapper });
 
     await waitFor(() =>
       expect(container.firstElementChild).toHaveAttribute('data-chat-surface', 'quick-ask'),
@@ -407,7 +427,7 @@ describe('WebChatPage conversation title slot', () => {
   it('gives Quick Ask a way to the full conversation and to a new chat', async () => {
     openConversation();
 
-    render(<WebChatPage compact />);
+    render(<WebChatPage compact />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     expect(screen.getByRole('link', { name: /openFullChat|Open full chat/ })).toHaveAttribute(
@@ -462,7 +482,7 @@ describe('WebChatPage study mode', () => {
     vi.stubGlobal('fetch', fetchMock);
     openConversation();
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     expect(await screen.findByText('Studying: Eigenvalues')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Leave study mode' })).toBeVisible();
@@ -477,7 +497,7 @@ describe('WebChatPage study mode', () => {
     openConversation();
     useChatStore.getState().updateConversation(CONVERSATION_ID, { isTemporary: true });
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     expect(studyReads(fetchMock)).toEqual([]);
@@ -506,7 +526,7 @@ describe('WebChatPage tab title', () => {
     useChatStore.getState().reset();
     document.title = SERVER_TITLE;
 
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('chat-sidebar');
 
     expect(document.title).toBe(SERVER_TITLE);

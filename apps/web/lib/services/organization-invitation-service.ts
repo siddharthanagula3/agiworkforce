@@ -357,9 +357,12 @@ export async function acceptInvitation(
       const [accepted] = await tx.query<OrganizationInvitationRow>(
         `update public.organization_invitations
             set status = 'accepted', accepted_by_user_id = $1
-          where id = $2 and status = 'pending'
+          where id = $2
+            and token_hash = $3
+            and status = 'pending'
+            and expires_at > now()
           returning ${INVITATION_COLUMNS}`,
-        [input.userId, invitation.id],
+        [input.userId, invitation.id, tokenHash],
       );
 
       if (!accepted) {
@@ -427,9 +430,12 @@ export async function declineInvitation(
     const [declined] = await tx.query<OrganizationInvitationRow>(
       `update public.organization_invitations
           set status = 'declined'
-        where id = $1 and status = 'pending'
+        where id = $1
+          and token_hash = $2
+          and status = 'pending'
+          and expires_at > now()
         returning ${INVITATION_COLUMNS}`,
-      [invitation.id],
+      [invitation.id, tokenHash],
     );
 
     if (!declined) {

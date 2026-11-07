@@ -97,7 +97,12 @@ const mockSetDraft = mockDraftStore.setDraft;
 
 let capturedAttachmentPreviewProps:
   | {
-      attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
+      attachments: Array<{
+        id: string;
+        fileName: string;
+        pastedText?: string;
+        sendFailed?: boolean;
+      }>;
       onExpandPastedText?: (id: string) => void;
     }
   | undefined;
@@ -107,7 +112,12 @@ jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const { View } = require('react-native');
   return {
     AttachmentPreview: (props: {
-      attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
+      attachments: Array<{
+        id: string;
+        fileName: string;
+        pastedText?: string;
+        sendFailed?: boolean;
+      }>;
       onExpandPastedText?: (id: string) => void;
     }) => {
       capturedAttachmentPreviewProps = props;
@@ -159,14 +169,21 @@ jest.mock('../src/features/chat/components/CommandPalette', () => {
   };
 });
 
-let lastVoiceResetSignal: number | undefined;
+const mockVoiceStop = jest.fn();
+const mockVoiceCancel = jest.fn();
 
 jest.mock('../src/features/voice/components/VoiceInputButton', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
   return {
-    VoiceInputButton: (props: { resetSignal?: number; onRecordingStart?: () => void }) => {
-      lastVoiceResetSignal = props.resetSignal;
+    VoiceInputButton: (props: {
+      controlRef?: React.Ref<unknown>;
+      onRecordingStart?: () => void;
+    }) => {
+      React.useImperativeHandle(props.controlRef, () => ({
+        stop: mockVoiceStop,
+        cancel: mockVoiceCancel,
+      }));
       capturedRecordingStart = props.onRecordingStart;
       return (
         <Pressable testID="voice-input-button" accessibilityLabel="Voice input">
@@ -179,13 +196,6 @@ jest.mock('../src/features/voice/components/VoiceInputButton', () => {
 
 let capturedRecordingStart: (() => void) | undefined;
 
-jest.mock('../src/features/voice/services/voice', () => ({
-  isRecording: jest.fn().mockReturnValue(false),
-  cancelRecording: jest.fn().mockResolvedValue(undefined),
-  stopRecording: jest.fn().mockResolvedValue('mock-uri'),
-  transcribe: jest.fn().mockResolvedValue({ text: '' }),
-}));
-
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
@@ -195,8 +205,13 @@ jest.mock('../src/features/model-picker/store', () => ({
 }));
 
 jest.mock('../src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: mockAppMode }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: mockAppMode }),
+    {
+      getState: () => ({ appMode: mockAppMode }),
+      subscribe: jest.fn(() => jest.fn()),
+    },
+  ),
 }));
 
 jest.mock('../src/features/auth/store', () => ({
@@ -287,7 +302,6 @@ function stackComposer(input: ReturnType<typeof renderInput>['getByLabelText']) 
 describe('ChatInput', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    lastVoiceResetSignal = undefined;
     capturedRecordingStart = undefined;
     capturedAttachmentPreviewProps = undefined;
     mockSelectedModel = mockCapabilityModelId;
@@ -309,6 +323,29 @@ describe('ChatInput', () => {
     useChatViewStore.setState({ workMode: 'chat' });
     useLocalSettingsStore.setState({ autoCorrectEnabled: true });
     mockGetDraft.mockReturnValue('');
+  });
+
+  it('gives compact composer controls separate physical touch targets', () => {
+    const { getByRole, getByLabelText } = renderInput();
+
+    expect(getByRole('button', { name: 'Add to chat' })).toHaveStyle({ width: 44, height: 44 });
+    expect(getByRole('button', { name: 'Start voice mode' })).toHaveStyle({
+      width: 44,
+      height: 44,
+    });
+    expect(getByLabelText('Message input')).toHaveStyle({ fontSize: 16, minWidth: 0 });
+  });
+
+  it('reserves input space for the expanded-editor target above the control row', () => {
+    const { getByLabelText, getByRole } = renderInput();
+    stackComposer(getByLabelText);
+
+    expect(getByRole('button', { name: 'Expand message' })).toHaveStyle({
+      width: 44,
+      height: 44,
+    });
+    expect(getByRole('button', { name: 'Add to chat' })).toHaveStyle({ width: 44, height: 44 });
+    expect(getByLabelText('Message input')).toHaveStyle({ minHeight: 44, paddingRight: 44 });
   });
 
   describe('account-scoped drafts', () => {
@@ -450,37 +487,58 @@ describe('ChatInput', () => {
   });
 
   describe('attachment send failure', () => {
-    it('marks a staged attachment "Not sent" when the surface rejects the send', async () => {
-      const onSend = jest.fn().mockResolvedValue(false);
-      const attachRef = React.createRef<ChatInputHandle>();
-      const { getByLabelText, getByTestId } = renderInput({ onSend, attachRef });
+    it.each([true, false])(
+      'preserves a rejected Cloud message and files when isOnline=%s',
+      async (isOnline) => {
+        mockAppMode = 'cloud';
+        mockIsClerkSignedIn = true;
+        const onSend = jest
+          .fn()
+          .mockImplementation(() => (isOnline ? Promise.resolve(false) : false));
+        const attachRef = React.createRef<ChatInputHandle>();
+        const { getByLabelText, getByTestId } = renderInput({
+          onSend,
+          attachRef,
+          isOnline,
+          draftKey: 'cloud-conversation-1',
+          draftProvenance: { scope: 'cloud', ownerId: 'account-a' },
+        });
 
-      await act(async () => {
-        attachRef.current?.addAttachments([
-          {
-            id: 'a-1',
-            uri: 'file:///doc.pdf',
-            mimeType: 'application/pdf',
-            fileName: 'doc.pdf',
-            fileSize: 1024,
-          },
+        await act(async () => {
+          attachRef.current?.addAttachments([
+            {
+              id: 'a-1',
+              uri: 'file:///doc.pdf',
+              mimeType: 'application/pdf',
+              fileName: 'doc.pdf',
+              fileSize: 1024,
+            },
+          ]);
+        });
+
+        fireEvent.changeText(getByLabelText('Message input'), 'read this');
+        await act(async () => {
+          fireEvent.press(getByTestId('send-button'));
+        });
+
+        await waitFor(() => {
+          expect(
+            capturedAttachmentPreviewProps?.attachments.find((a) => a.id === 'a-1')?.sendFailed,
+          ).toBe(true);
+        });
+        expect(onSend).toHaveBeenCalledTimes(1);
+        expect(onSend).toHaveBeenCalledWith('read this', [
+          expect.objectContaining({ id: 'a-1', uri: 'file:///doc.pdf' }),
         ]);
-      });
-
-      fireEvent.changeText(getByLabelText('Message input'), 'read this');
-      await act(async () => {
-        fireEvent.press(getByTestId('send-button'));
-      });
-
-      await waitFor(() => {
-        expect(
-          capturedAttachmentPreviewProps?.attachments.find((a) => a.id === 'a-1')?.sendFailed,
-        ).toBe(true);
-      });
-      expect(onSend).toHaveBeenCalledTimes(1);
-      const sentAttachments = onSend.mock.calls[0][1] as Array<Record<string, unknown>>;
-      expect(sentAttachments[0]).not.toHaveProperty('sendFailed');
-    });
+        expect(getByLabelText('Message input').props.value).toBe('read this');
+        expect(capturedAttachmentPreviewProps?.attachments).toEqual([
+          expect.objectContaining({ id: 'a-1', fileName: 'doc.pdf', sendFailed: true }),
+        ]);
+        expect(mockDraftStore.clearDraft).not.toHaveBeenCalled();
+        const sentAttachments = onSend.mock.calls[0][1] as Array<Record<string, unknown>>;
+        expect(sentAttachments[0]).not.toHaveProperty('sendFailed');
+      },
+    );
   });
 
   describe('[+] button', () => {
@@ -798,50 +856,19 @@ describe('ChatInput', () => {
     });
   });
 
-  describe('recording overlay send', () => {
-    it('bumps voiceResetSignal even when the recording session already ended', async () => {
-      const VoiceService = require('../src/features/voice/services/voice');
-      VoiceService.isRecording.mockReturnValue(false);
-      VoiceService.stopRecording.mockClear();
-      VoiceService.transcribe.mockClear();
-
+  describe('recording overlay controls', () => {
+    it('asks the capture owner for its completed result even after native capture may have ended', () => {
       const { getByLabelText } = renderInput();
-      act(() => {
-        capturedRecordingStart!();
-      });
-      const signalBefore = lastVoiceResetSignal;
-
-      await act(async () => {
-        fireEvent.press(getByLabelText('Stop recording'));
-      });
-
-      await waitFor(() => {
-        expect(lastVoiceResetSignal).toBe((signalBefore ?? 0) + 1);
-      });
-      expect(VoiceService.stopRecording).not.toHaveBeenCalled();
-      expect(VoiceService.transcribe).not.toHaveBeenCalled();
+      act(() => capturedRecordingStart!());
+      fireEvent.press(getByLabelText('Stop recording'));
+      expect(mockVoiceStop).toHaveBeenCalledWith('insert');
     });
 
-    it('bumps voiceResetSignal after a normal send with an active recording', async () => {
-      const VoiceService = require('../src/features/voice/services/voice');
-      VoiceService.isRecording.mockReturnValue(true);
-      VoiceService.transcribe.mockResolvedValue({ text: 'hello from voice' });
-
-      const onSend = jest.fn();
-      const { getByLabelText } = renderInput({ onSend });
-      act(() => {
-        capturedRecordingStart!();
-      });
-      const signalBefore = lastVoiceResetSignal;
-
-      await act(async () => {
-        fireEvent.press(getByLabelText('Stop recording'));
-      });
-
-      await waitFor(() => {
-        expect(lastVoiceResetSignal).toBe((signalBefore ?? 0) + 1);
-      });
-      expect(VoiceService.stopRecording).toHaveBeenCalledTimes(1);
+    it('delegates send intent without independently reading global transcription state', () => {
+      const { getByLabelText } = renderInput();
+      act(() => capturedRecordingStart!());
+      fireEvent.press(getByLabelText('Send recording'));
+      expect(mockVoiceStop).toHaveBeenCalledWith('send');
     });
   });
 

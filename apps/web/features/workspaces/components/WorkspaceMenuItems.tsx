@@ -74,10 +74,17 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
   const workspaces = useAccountWorkspaces();
   const selectWorkspace = useSelectWorkspace();
   const interruptions = useWorkspaceSwitchInterruptions();
-  const [confirming, setConfirming] = useState<SwitchTarget | null>(null);
+  const [confirmation, setConfirming] = useState<
+    | (SwitchTarget & {
+        select: () => void;
+        ownerKey: string | null;
+      })
+    | null
+  >(null);
+  const confirming = confirmation?.ownerKey === selectWorkspace.ownerKey ? confirmation : null;
   const confirmDescriptionId = useId();
   const activeId = workspaces.data?.activeWorkspaceId ?? null;
-  const personalSelected = workspaces.data?.scope !== 'organization';
+  const personalSelected = workspaces.data?.scope === 'personal';
   const organizations = (workspaces.data?.workspaces ?? []).filter(
     (workspace: WorkspaceSummary) => workspace.kind === 'organization',
   );
@@ -85,7 +92,11 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
   const startSwitch = (target: SwitchTarget) => {
     selectWorkspace.reset();
     if (interruptions.length > 0) {
-      setConfirming(target);
+      setConfirming({
+        ...target,
+        ownerKey: selectWorkspace.ownerKey,
+        select: () => selectWorkspace.mutate(target.id),
+      });
       return;
     }
     selectWorkspace.mutate(target.id);
@@ -93,9 +104,9 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
 
   const confirmSwitch = () => {
     if (!confirming) return;
-    const { id } = confirming;
+    const { select } = confirming;
     setConfirming(null);
-    selectWorkspace.mutate(id);
+    select();
   };
 
   if (confirming) {
@@ -150,14 +161,17 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
           <Spinner size="sm" />
           {t('navLoadingWorkspaces', { defaultValue: 'Loading workspaces' })}
         </DropdownMenuItem>
-      ) : workspaces.isError ? (
+      ) : workspaces.isError || !workspaces.data ? (
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
-            void workspaces.refetch();
+            if (workspaces.requiresReload) window.location.reload();
+            else void workspaces.refetch();
           }}
         >
-          {t('navRetryWorkspaces', { defaultValue: 'Try loading workspaces again' })}
+          {workspaces.requiresReload
+            ? t('navReloadWorkspaces', { defaultValue: 'Reload to resolve workspace status' })
+            : t('navRetryWorkspaces', { defaultValue: 'Try loading workspaces again' })}
         </DropdownMenuItem>
       ) : (
         <>
@@ -210,10 +224,13 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
           <DropdownMenuItem
             onSelect={(event) => {
               event.preventDefault();
-              selectWorkspace.mutate(selectWorkspace.variables ?? null);
+              if (workspaces.requiresReload) window.location.reload();
+              else selectWorkspace.mutate(selectWorkspace.variables ?? null);
             }}
           >
-            {t('navRetryWorkspaceSwitch', { defaultValue: 'Try switching again' })}
+            {workspaces.requiresReload
+              ? t('navReloadWorkspaces', { defaultValue: 'Reload to resolve workspace status' })
+              : t('navRetryWorkspaceSwitch', { defaultValue: 'Try switching again' })}
           </DropdownMenuItem>
         </>
       ) : null}

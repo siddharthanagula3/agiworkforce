@@ -13,6 +13,8 @@ import type { AuthProviderId } from '@agiworkforce/client-runtime';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
 import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
+import type { RequestAuthority } from './request-authority';
+import { nativeSessionFor } from './native-session-authority';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
 /**
@@ -146,55 +148,144 @@ export interface IdentityPasskey {
   lastUsedAt: Date | null;
 }
 
+export const MAX_PASSKEY_NAME_CHARS = 50;
+
+export interface IdentityPasskeyOperation {
+  isCurrent: () => boolean;
+  execute: (name?: string) => Promise<void>;
+}
+
+export interface IdentityPasskeyScope {
+  authority: RequestAuthority;
+  onDispatch: () => void;
+}
+
 export interface IdentityPasskeysState {
+  isCurrent: () => boolean;
   isLoaded: boolean;
   isSupported: boolean;
   passkeys: readonly IdentityPasskey[];
-  create: () => Promise<void>;
-  rename: (passkeyId: string, name: string) => Promise<void>;
-  remove: (passkeyId: string) => Promise<void>;
+  capture: (
+    kind: 'create' | 'rename' | 'remove',
+    scope: IdentityPasskeyScope,
+    passkeyId?: string,
+  ) => IdentityPasskeyOperation;
 }
 
 export function usePasskeys(): IdentityPasskeysState {
-  const { isLoaded, user } = useUser();
-  const passkeys = useMemo<IdentityPasskey[]>(
-    () =>
-      (user?.passkeys ?? []).map((passkey) => ({
+  const { isLoaded: userLoaded, user } = useUser();
+  const clerk = useClerk();
+  const isLoaded = Boolean(
+    userLoaded && clerk.loaded && user && clerk.user === user && clerk.session?.user === user,
+  );
+  const passkeys: IdentityPasskey[] = isLoaded
+    ? (user?.passkeys ?? []).map((passkey) => ({
         id: passkey.id,
         name: optional(passkey.name),
         createdAt: passkey.createdAt,
         lastUsedAt: passkey.lastUsedAt,
-      })),
-    [user],
-  );
-
-  const create = useCallback(async () => {
-    if (!user) throw new Error('Sign in again to add a passkey.');
-    await user.createPasskey();
-    await user.reload();
-  }, [user]);
-
-  const rename = useCallback(
-    async (passkeyId: string, name: string) => {
-      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
-      if (!user || !passkey) throw new Error('That passkey is no longer on this account.');
-      await passkey.update({ name });
-      await user.reload();
+      }))
+    : [];
+  const capture = useCallback<IdentityPasskeysState['capture']>(
+    (kind, submitted, passkeyId) => {
+      const { authority, onDispatch } = submitted;
+      authority.assertCurrent();
+      const session = nativeSessionFor(authority.session);
+      const capturedUser = session.user;
+      if (
+        !isLoaded ||
+        !capturedUser ||
+        capturedUser !== user ||
+        capturedUser.id !== authority.session.userId
+      ) {
+        throw new Error('The account changed. Open passkey settings again.');
+      }
+      const target =
+        kind === 'create' ? null : capturedUser.passkeys.find((key) => key.id === passkeyId);
+      if (kind !== 'create' && !target)
+        throw new Error('That passkey is no longer on this account.');
+      const assertCurrent = () => {
+        if (
+          session.user !== capturedUser ||
+          clerk.user !== capturedUser ||
+          capturedUser.id !== authority.session.userId
+        )
+          authority.retire();
+        authority.assertCurrent();
+      };
+      let dispatched = false;
+      let stop: (() => void) | undefined;
+      const release = () => {
+        stop?.();
+        stop = undefined;
+      };
+      const observe = () => {
+        if (
+          !authority.isCurrent() ||
+          session.user !== capturedUser ||
+          clerk.user !== capturedUser ||
+          (!dispatched &&
+            target &&
+            !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId))
+        )
+          authority.retire();
+      };
+      authority.signal.addEventListener('abort', release, { once: true });
+      stop = authority.session.subscribe?.(observe);
+      if (authority.signal.aborted) release();
+      return {
+        isCurrent: () => {
+          observe();
+          return authority.isCurrent();
+        },
+        execute: async (name) => {
+          assertCurrent();
+          if (dispatched) throw new Error('This passkey operation has already started.');
+          if (
+            target &&
+            !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId)
+          ) {
+            throw new Error('That passkey is no longer on this account.');
+          }
+          const submittedName = name?.trim();
+          if (
+            kind === 'rename' &&
+            (!submittedName || submittedName.length > MAX_PASSKEY_NAME_CHARS)
+          ) {
+            throw new Error(`Enter a passkey name of 1 to ${MAX_PASSKEY_NAME_CHARS} characters.`);
+          }
+          assertCurrent();
+          dispatched = true;
+          onDispatch();
+          assertCurrent();
+          try {
+            if (kind === 'create') await capturedUser.createPasskey();
+            else if (kind === 'rename' && target) await target.update({ name: submittedName! });
+            else if (target) await target.delete();
+            assertCurrent();
+            const refreshed = await capturedUser.reload();
+            assertCurrent();
+            if (refreshed.id !== authority.session.userId) {
+              authority.retire();
+              throw new Error('The refreshed account could not be confirmed.');
+            }
+          } catch (cause) {
+            assertCurrent();
+            throw cause;
+          }
+        },
+      };
     },
-    [user],
+    [clerk, isLoaded, user],
   );
-
-  const remove = useCallback(
-    async (passkeyId: string) => {
-      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
-      if (!user || !passkey) return;
-      await passkey.delete();
-      await user.reload();
-    },
-    [user],
-  );
-
-  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, rename, remove };
+  return {
+    isCurrent: () =>
+      Boolean(isLoaded && clerk.loaded && clerk.user === user && clerk.session?.user === user),
+    isLoaded,
+    isSupported: browserSupportsPasskeys(),
+    passkeys,
+    capture,
+  };
 }
 
 export type IdentityVerificationLevel = 'first_factor' | 'second_factor';
@@ -278,8 +369,13 @@ export interface IdentityConnectedAccount {
 export interface IdentityConnectedAccountsState {
   isLoaded: boolean;
   accounts: readonly IdentityConnectedAccount[];
-  connect: (provider: AuthProviderId, returnUrl: string) => Promise<void>;
-  disconnect: (accountId: string) => Promise<void>;
+  isCurrent: () => boolean;
+  capture: (
+    selection:
+      | { kind: 'connect'; provider: AuthProviderId; returnUrl: string }
+      | { kind: 'disconnect'; accountId: string },
+    scope: IdentityPasskeyScope,
+  ) => IdentityPasskeyOperation;
 }
 
 const VERIFIED_EMAIL_STATUS = 'verified';
@@ -295,45 +391,115 @@ const CONNECT_STRATEGIES = {
 } as const satisfies Readonly<Record<AuthProviderId, string>>;
 
 export function useConnectedAccounts(): IdentityConnectedAccountsState {
-  const { isLoaded, user } = useUser();
-  const accounts = useMemo<IdentityConnectedAccount[]>(
-    () =>
-      (user?.externalAccounts ?? []).map((account) => ({
-        id: account.id,
-        provider: account.provider,
-        email: optional(account.emailAddress),
-      })),
-    [user],
+  const { isLoaded: userLoaded, user } = useUser();
+  const clerk = useClerk();
+  const isCurrent = () =>
+    Boolean(
+      userLoaded && clerk.loaded && user && clerk.user === user && clerk.session?.user === user,
+    );
+  const isLoaded = isCurrent();
+  const accounts: IdentityConnectedAccount[] = (isLoaded ? (user?.externalAccounts ?? []) : []).map(
+    (account) => ({
+      id: account.id,
+      provider: account.provider,
+      email: optional(account.emailAddress),
+    }),
   );
-
-  const connect = useCallback(
-    async (provider: AuthProviderId, returnUrl: string) => {
-      if (!user) throw new Error('Sign in again to connect an account.');
-      if (user.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS) {
-        throw new Error(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
+  const capture = useCallback<IdentityConnectedAccountsState['capture']>(
+    (selection, { authority, onDispatch }) => {
+      authority.assertCurrent();
+      const native = nativeSessionFor(authority.session);
+      const capturedUser = native.user;
+      if (
+        !isLoaded ||
+        !capturedUser ||
+        capturedUser !== user ||
+        clerk.user !== user ||
+        capturedUser.id !== authority.session.userId
+      ) {
+        throw new Error('The account changed. Open sign-in settings again.');
       }
-      const account = await user.createExternalAccount({
-        strategy: CONNECT_STRATEGIES[provider],
-        redirectUrl: returnUrl,
-      });
-      const next = account.verification?.externalVerificationRedirectURL;
-      if (!next) throw new Error('The sign-in provider did not start. Try again.');
-      window.location.assign(next.toString());
+      const submitted = { ...selection };
+      const targets =
+        submitted.kind === 'disconnect'
+          ? capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId)
+          : [];
+      const target = targets[0] ?? null;
+      if (submitted.kind === 'disconnect' && targets.length !== 1)
+        throw new Error('That account is no longer uniquely connected.');
+      let dispatched = false;
+      const observe = () => {
+        if (
+          native.user !== capturedUser ||
+          clerk.user !== capturedUser ||
+          capturedUser.id !== authority.session.userId ||
+          (!dispatched &&
+            target &&
+            submitted.kind === 'disconnect' &&
+            (target.id !== submitted.accountId ||
+              !capturedUser.externalAccounts.includes(target) ||
+              capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId)
+                .length !== 1))
+        )
+          authority.retire();
+        return authority.isCurrent();
+      };
+      const assertCurrent = () => {
+        observe();
+        authority.assertCurrent();
+      };
+      let stop: (() => void) | undefined;
+      const release = () => {
+        stop?.();
+        stop = undefined;
+      };
+      authority.signal.addEventListener('abort', release, { once: true });
+      stop = authority.session.subscribe?.(observe);
+      if (authority.signal.aborted) release();
+      return {
+        isCurrent: observe,
+        execute: async () => {
+          assertCurrent();
+          if (dispatched) throw new Error('This sign-in change has already started.');
+          if (
+            submitted.kind === 'connect' &&
+            capturedUser.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS
+          ) {
+            throw new Error(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
+          }
+          dispatched = true;
+          onDispatch();
+          assertCurrent();
+          try {
+            if (submitted.kind === 'connect') {
+              const account = await capturedUser.createExternalAccount({
+                strategy: CONNECT_STRATEGIES[submitted.provider],
+                redirectUrl: submitted.returnUrl,
+              });
+              assertCurrent();
+              const next = account.verification?.externalVerificationRedirectURL;
+              if (!next) throw new Error('The sign-in provider did not start.');
+              const destination = next.toString();
+              assertCurrent();
+              window.location.assign(destination);
+            } else if (target) {
+              await target.destroy();
+              assertCurrent();
+              const refreshed = await capturedUser.reload();
+              assertCurrent();
+              if (refreshed.id !== capturedUser.id)
+                throw new Error('The refreshed account could not be confirmed.');
+            }
+          } catch (cause) {
+            assertCurrent();
+            throw cause;
+          }
+        },
+      };
     },
-    [user],
+    [clerk, isLoaded, user],
   );
-
-  const disconnect = useCallback(
-    async (accountId: string) => {
-      const account = user?.externalAccounts.find((candidate) => candidate.id === accountId);
-      if (!user || !account) return;
-      await account.destroy();
-      await user.reload();
-    },
-    [user],
-  );
-
-  return { isLoaded, accounts, connect, disconnect };
+  return { isLoaded, accounts, isCurrent, capture };
 }
 
 const EMAIL_CODE_STRATEGY = 'email_code';
@@ -397,16 +563,27 @@ export function usePrimaryEmailConfirmation(): IdentityEmailConfirmation {
   };
 }
 
-export function useSessionReverification(): IdentityReverification {
+export function useSessionReverification(authority?: RequestAuthority): IdentityReverification {
   const { session } = useProviderSession();
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
   const activeSession = useCallback(() => {
-    const current = sessionRef.current;
+    authority?.assertCurrent();
+    const current = authority ? nativeSessionFor(authority.session) : sessionRef.current;
     if (!current) throw new Error('You are signed out. Sign in again to continue.');
     return current;
-  }, []);
+  }, [authority]);
+
+  const checked = useCallback(
+    async <T>(operation: () => Promise<T>): Promise<T> => {
+      authority?.assertCurrent();
+      const result = await operation();
+      authority?.assertCurrent();
+      return result;
+    },
+    [authority],
+  );
 
   const start = useCallback(
     async (level: IdentityVerificationLevel) =>
@@ -463,15 +640,17 @@ export function useSessionReverification(): IdentityReverification {
 
   return useMemo(
     () => ({
-      start,
-      sendEmailCode,
-      verifyPassword,
-      verifyEmailCode,
-      verifyPasskey,
-      verifySecondFactor,
-      freshToken,
+      start: (level: IdentityVerificationLevel) => checked(() => start(level)),
+      sendEmailCode: (factor: IdentityEmailCodeFactor) => checked(() => sendEmailCode(factor)),
+      verifyPassword: (password: string) => checked(() => verifyPassword(password)),
+      verifyEmailCode: (code: string) => checked(() => verifyEmailCode(code)),
+      verifyPasskey: () => checked(verifyPasskey),
+      verifySecondFactor: (method: IdentitySecondFactorMethod, code: string) =>
+        checked(() => verifySecondFactor(method, code)),
+      freshToken: () => checked(freshToken),
     }),
     [
+      checked,
       start,
       sendEmailCode,
       verifyPassword,
@@ -483,43 +662,141 @@ export function useSessionReverification(): IdentityReverification {
   );
 }
 
+export interface EmailAddressVerificationScope {
+  readonly authority: RequestAuthority;
+  readonly emailAddress: string;
+  readonly onDispatch?: () => void;
+}
+
 export interface IdentityEmailAddressVerification {
-  sendCode: (emailAddressId: string) => Promise<void>;
-  verifyCode: (emailAddressId: string, code: string) => Promise<void>;
-  refresh: () => Promise<void>;
+  sendCode: (emailAddressId: string, scope: EmailAddressVerificationScope) => Promise<void>;
+  verifyCode: (
+    emailAddressId: string,
+    code: string,
+    scope: EmailAddressVerificationScope,
+  ) => Promise<void>;
+  requireVerified: (emailAddressId: string, scope: EmailAddressVerificationScope) => Promise<void>;
+  refresh: (authority: RequestAuthority) => Promise<void>;
 }
 
 export function useEmailAddressVerification(): IdentityEmailAddressVerification {
-  const { user } = useUser();
-  const userRef = useRef(user);
-  userRef.current = user;
-
-  const pendingAddress = useCallback(async (emailAddressId: string) => {
-    const current = userRef.current;
-    if (!current) throw new Error('You are signed out. Sign in again to continue.');
-    const reloaded = await current.reload();
-    const address = reloaded.emailAddresses.find((candidate) => candidate.id === emailAddressId);
-    if (!address) throw new Error('That address is no longer on your account. Start again.');
-    return address;
+  return useMemo<IdentityEmailAddressVerification>(() => {
+    type NativeUser = NonNullable<ReturnType<typeof nativeSessionFor>['user']>;
+    const owned = async <T>(
+      authority: RequestAuthority,
+      work: (user: NativeUser, assertCurrent: () => void) => Promise<T>,
+    ): Promise<T> => {
+      authority.assertCurrent();
+      const session = nativeSessionFor(authority.session);
+      const user = session.user;
+      if (!user || user.id !== authority.session.userId) {
+        authority.retire();
+        authority.assertCurrent();
+        throw new Error('You are signed out. Sign in again to continue.');
+      }
+      const observe = () => {
+        if (
+          !authority.isCurrent() ||
+          session.user !== user ||
+          user.id !== authority.session.userId
+        ) {
+          authority.retire();
+        }
+      };
+      const assertCurrent = () => {
+        observe();
+        authority.assertCurrent();
+      };
+      let stop: (() => void) | undefined;
+      const release = () => {
+        stop?.();
+        stop = undefined;
+      };
+      authority.signal.addEventListener('abort', release, { once: true });
+      stop = authority.session.subscribe?.(observe);
+      if (authority.signal.aborted) release();
+      try {
+        assertCurrent();
+        const result = await work(user, assertCurrent);
+        assertCurrent();
+        return result;
+      } finally {
+        release();
+        authority.signal.removeEventListener('abort', release);
+      }
+    };
+    const matches = (
+      address: { id: string; emailAddress: string } | null | undefined,
+      emailAddressId: string,
+      scope: EmailAddressVerificationScope,
+    ) =>
+      address?.id === emailAddressId &&
+      address.emailAddress.trim().toLowerCase() === scope.emailAddress.trim().toLowerCase();
+    const pendingAddress = async (
+      user: NativeUser,
+      assertCurrent: () => void,
+      emailAddressId: string,
+      scope: EmailAddressVerificationScope,
+    ) => {
+      assertCurrent();
+      const reloaded = await user.reload();
+      assertCurrent();
+      if (reloaded.id !== scope.authority.session.userId)
+        throw new Error('The account changed. Start again.');
+      const address = reloaded.emailAddresses.find((candidate) => candidate.id === emailAddressId);
+      if (!address || !matches(address, emailAddressId, scope)) {
+        throw new Error('That address is no longer on your account. Start again.');
+      }
+      return address;
+    };
+    return {
+      sendCode: (emailAddressId, submitted) => {
+        const scope = { ...submitted };
+        return owned(scope.authority, async (user, assertCurrent) => {
+          const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
+          assertCurrent();
+          scope.onDispatch?.();
+          assertCurrent();
+          const prepared = await address.prepareVerification({ strategy: 'email_code' });
+          assertCurrent();
+          if (!matches(prepared, emailAddressId, scope))
+            throw new Error('The code delivery could not be confirmed.');
+        });
+      },
+      verifyCode: (emailAddressId, code, submitted) => {
+        const scope = { ...submitted };
+        return owned(scope.authority, async (user, assertCurrent) => {
+          const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
+          assertCurrent();
+          scope.onDispatch?.();
+          assertCurrent();
+          const verified = await address.attemptVerification({ code });
+          assertCurrent();
+          if (
+            !matches(verified, emailAddressId, scope) ||
+            verified.verification?.status !== 'verified'
+          ) {
+            throw new Error('The email address verification could not be confirmed.');
+          }
+        });
+      },
+      requireVerified: (emailAddressId, submitted) => {
+        const scope = { ...submitted };
+        return owned(scope.authority, async (user, assertCurrent) => {
+          const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
+          if (address.verification?.status !== 'verified')
+            throw new Error(
+              'That email address is not currently verified. Close this dialog and start again.',
+            );
+        });
+      },
+      refresh: (authority) =>
+        owned(authority, async (user, assertCurrent) => {
+          const reloaded = await user.reload();
+          assertCurrent();
+          if (reloaded.id !== authority.session.userId)
+            throw new Error('The account changed. Start again.');
+        }),
+    };
   }, []);
-
-  const sendCode = useCallback(
-    async (emailAddressId: string) => {
-      await (await pendingAddress(emailAddressId)).prepareVerification({ strategy: 'email_code' });
-    },
-    [pendingAddress],
-  );
-
-  const verifyCode = useCallback(
-    async (emailAddressId: string, code: string) => {
-      await (await pendingAddress(emailAddressId)).attemptVerification({ code });
-    },
-    [pendingAddress],
-  );
-
-  const refresh = useCallback(async () => {
-    await userRef.current?.reload();
-  }, []);
-
-  return useMemo(() => ({ sendCode, verifyCode, refresh }), [sendCode, verifyCode, refresh]);
 }

@@ -1,3 +1,4 @@
+import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -73,7 +74,8 @@ import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
 } from '@/src/features/voice/hooks/useVoiceConversation';
-import * as TTS from '@/src/features/voice/services/tts';
+import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
+import { speechSettings } from '@/src/features/voice/services/speechSettings';
 import {
   createMessageIdSet,
   findNewAssistantResponse,
@@ -136,7 +138,6 @@ import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
-import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
@@ -156,6 +157,10 @@ import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
+import {
+  freeImageOfferFor,
+  FREE_IMAGE_OFFER_UNKNOWN_ALERT,
+} from '@/src/features/chat/actions/freeImageOffer';
 import { useTheme, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -186,9 +191,17 @@ export default function ChatScreen() {
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const params = useLocalSearchParams<{ id: string; prompt?: string; voice?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const composerFocusedRef = useRef(false);
+  const composerFocusGenerationRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
+      composerFocusGenerationRef.current += 1;
+      composerFocusedRef.current = true;
       if (id) useChatViewStore.getState().bindStyleConversation(id);
+      return () => {
+        composerFocusedRef.current = false;
+        composerFocusGenerationRef.current += 1;
+      };
     }, [id]),
   );
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
@@ -304,6 +317,7 @@ export default function ChatScreen() {
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
+  const speechOwner = useVoiceOutputOwner(conversationExecutionMode, id ?? 'unavailable');
   const inFlightTurn = useInFlightTurnRecovery({
     conversationId: id,
     isCloud: conversationExecutionMode === 'cloud',
@@ -398,14 +412,8 @@ export default function ChatScreen() {
   }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
 
   const stopSpeaking = useCallback(() => {
-    void VoiceOutput.stop();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-    };
-  }, [stopSpeaking]);
+    void speechOwner?.stop().catch(() => undefined);
+  }, [speechOwner]);
 
   useEffect(() => {
     if (paywallError) {
@@ -528,8 +536,62 @@ export default function ChatScreen() {
       });
 
       if (imageRequest.status === 'blocked') {
-        alertBlockedImageRequest(imageRequest);
-        return false;
+        if (imageRequest.code !== 'plan_required' || !imageRequest.prompt) {
+          alertBlockedImageRequest(imageRequest);
+          return false;
+        }
+        const account = captureCloudAccountEpoch();
+        if (!account || account.ownerId !== clerkUserId) {
+          Alert.alert(FREE_IMAGE_OFFER_UNKNOWN_ALERT.title, FREE_IMAGE_OFFER_UNKNOWN_ALERT.message);
+          return false;
+        }
+        const action = captureConversationAction();
+        const focusGeneration = composerFocusGenerationRef.current;
+        const imageModel = useChatViewStore.getState().selectedMediaModel.image;
+        const isRequestCurrent = () =>
+          isCloudAccountEpochCurrent(account) &&
+          composerFocusedRef.current &&
+          composerFocusGenerationRef.current === focusGeneration &&
+          isConversationActionCurrent(action) &&
+          useModelStore.getState().selectedModel === selectedModel &&
+          useChatViewStore.getState().mediaMode === mediaMode &&
+          useChatViewStore.getState().selectedMediaModel.image === imageModel;
+        return freeImageOfferFor(imageRequest, account).then(async (offer) => {
+          if (!isRequestCurrent()) return false;
+          if (offer.status !== 'offered') {
+            if (offer.status === 'unknown') {
+              Alert.alert(
+                FREE_IMAGE_OFFER_UNKNOWN_ALERT.title,
+                FREE_IMAGE_OFFER_UNKNOWN_ALERT.message,
+              );
+            } else {
+              alertBlockedImageRequest(imageRequest);
+            }
+            return false;
+          }
+          const onAccepted = () => {
+            if (!isRequestCurrent()) return;
+            clearError();
+            quotedMessageScopeRef.current = null;
+            setQuotedMessage(null);
+          };
+          if (dispatchOptions?.awaitCompletion) {
+            return sendMessage(id, offer.prompt, offer.model, undefined, { onAccepted });
+          }
+          return resolveOnAcceptedSend(
+            (accepted) =>
+              sendMessage(id, offer.prompt, offer.model, undefined, {
+                onAccepted: () => {
+                  onAccepted();
+                  accepted();
+                },
+              }),
+            () => {
+              if (isRequestCurrent())
+                setSendError('Image request could not be sent. Please try again.');
+            },
+          );
+        });
       }
       if (imageRequest.status === 'ready') {
         let started = false;
@@ -573,7 +635,21 @@ export default function ChatScreen() {
         return started;
       }
 
+      const skillNameForTurn =
+        conversationExecutionMode === 'cloud' &&
+        clerkUserId &&
+        skillSelection?.ownerId === clerkUserId
+          ? skillSelection.name
+          : undefined;
+
       if (!isOnline && conversationExecutionMode === 'cloud') {
+        if (attachments?.length) {
+          Alert.alert(
+            'Connect to send attachments',
+            'Attachments cannot be queued offline. Your message and files are still in the composer. Reconnect and send again.',
+          );
+          return false;
+        }
         if (!clerkUserId) {
           Alert.alert(
             'Sign in to queue this message',
@@ -589,6 +665,7 @@ export default function ChatScreen() {
             conversationId: id,
             content: finalText,
             model: selectedModel,
+            ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
             provenance: { scope: 'cloud', ownerId: clerkUserId },
           });
         } catch {
@@ -599,15 +676,10 @@ export default function ChatScreen() {
           return false;
         }
         enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
+        if (skillNameForTurn) clearSelectedSkill();
         return true;
       }
 
-      const skillNameForTurn =
-        conversationExecutionMode === 'cloud' &&
-        clerkUserId &&
-        skillSelection?.ownerId === clerkUserId
-          ? skillSelection.name
-          : undefined;
       const sendOptions = skillNameForTurn ? { skillName: skillNameForTurn } : {};
 
       quotedMessageScopeRef.current = null;
@@ -667,6 +739,7 @@ export default function ChatScreen() {
       stopSpeaking,
       quotedMessage,
       isConversationActionCurrent,
+      captureConversationAction,
       isOnline,
       clerkUserId,
       skillSelection,
@@ -1044,84 +1117,109 @@ export default function ChatScreen() {
   }, [handleOpenCloudSignIn, router]);
 
   const handleSheetCamera = useCallback(async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
+    const operation =
+      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(
+      operation,
+      async (scope) => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (!scope.isCurrent()) return [];
+        if (status !== 'granted') {
+          Alert.alert(
+            'Camera Access',
+            'Camera permission is required to take photos. Allow it in Settings to attach a photo.',
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  if (scope.isCurrent()) void Linking.openSettings();
+                },
+              },
+            ],
+          );
+          return [];
+        }
+        const assets = await captureImageAssetsFromCamera();
+        return scope.isCurrent() ? imageAssetsToChatAttachments(assets, 'cam') : [];
+      },
+      (error) => {
         Alert.alert(
-          'Camera Access',
-          'Camera permission is required to take photos. Allow it in Settings to attach a photo.',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => void Linking.openSettings() },
-          ],
+          'Camera',
+          error instanceof PictureMetadataError
+            ? PICTURE_METADATA_RECOVERY_MESSAGE
+            : 'Could not open the camera. Please try again.',
         );
-        return;
-      }
-      const assets = await captureImageAssetsFromCamera();
-      if (assets.length > 0) {
-        chatInputAttachRef.current?.addAttachments(imageAssetsToChatAttachments(assets, 'cam'));
-      }
-    } catch (error) {
-      Alert.alert(
-        'Camera',
-        error instanceof PictureMetadataError
-          ? PICTURE_METADATA_RECOVERY_MESSAGE
-          : 'Could not open the camera. Please try again.',
-      );
-    }
-  }, []);
+      },
+    );
+  }, [conversationExecutionMode]);
 
   const handleSheetPasteImage = useCallback(async () => {
-    try {
-      const attachment = await readClipboardImageAttachment();
-      if (attachment) chatInputAttachRef.current?.addAttachments([attachment]);
-      else Alert.alert('Paste image', 'There is no image on the clipboard to paste.');
-    } catch {
-      Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
-    }
-  }, []);
+    const operation =
+      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(
+      operation,
+      async (scope) => {
+        const attachment = await readClipboardImageAttachment();
+        if (!scope.isCurrent()) return [];
+        if (attachment) return [attachment];
+        Alert.alert('Paste image', 'There is no image on the clipboard to paste.');
+        return [];
+      },
+      () => {
+        Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
+      },
+    );
+  }, [conversationExecutionMode]);
 
   const handleSheetPhotos = useCallback(async () => {
-    try {
-      const assets = await pickImageAssetsFromLibrary({
-        allowsMultipleSelection: true,
-        selectionLimit: 5,
-        orderedSelection: true,
-      });
-      if (assets.length > 0) {
-        const attachments = imageAssetsToChatAttachments(assets);
-        chatInputAttachRef.current?.addAttachments(attachments);
-      }
-    } catch (error) {
-      Alert.alert(
-        'Photos',
-        error instanceof PictureMetadataError
-          ? PICTURE_METADATA_RECOVERY_MESSAGE
-          : 'Could not open Photos. Please try again.',
-      );
-    }
-  }, []);
+    const operation =
+      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(
+      operation,
+      async (scope) => {
+        const assets = await pickImageAssetsFromLibrary({
+          allowsMultipleSelection: true,
+          selectionLimit: 5,
+          orderedSelection: true,
+        });
+        return scope.isCurrent() ? imageAssetsToChatAttachments(assets) : [];
+      },
+      (error) => {
+        Alert.alert(
+          'Photos',
+          error instanceof PictureMetadataError
+            ? PICTURE_METADATA_RECOVERY_MESSAGE
+            : 'Could not open Photos. Please try again.',
+        );
+      },
+    );
+  }, [conversationExecutionMode]);
 
   const handleSheetFile = useCallback(async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: pickableDocumentMimeTypes(conversationExecutionMode),
-        copyToCacheDirectory: true,
-        multiple: true,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        const attachments: Attachment[] = result.assets.map((asset) => ({
+    const operation =
+      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    await runComposerAttachmentPick(
+      operation,
+      async (scope) => {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: pickableDocumentMimeTypes(conversationExecutionMode),
+          copyToCacheDirectory: true,
+          multiple: true,
+        });
+        if (!scope.isCurrent() || result.canceled) return [];
+        return result.assets.map((asset) => ({
           id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           uri: asset.uri,
           mimeType: asset.mimeType ?? 'application/octet-stream',
           fileName: asset.name ?? 'document',
           fileSize: asset.size,
         }));
-        chatInputAttachRef.current?.addAttachments(attachments);
-      }
-    } catch {
-      Alert.alert('Error', 'Failed to pick document. Please try again.');
-    }
+      },
+      () => {
+        Alert.alert('Error', 'Failed to pick document. Please try again.');
+      },
+    );
   }, [conversationExecutionMode]);
 
   const handleSelectVariant = useCallback(
@@ -1583,9 +1681,8 @@ export default function ChatScreen() {
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
-    speak: (text, callbacks) =>
-      TTS.speak(text, { ...TTS.speechOptionsFromSettings(), ...callbacks }),
-    stopSpeaking: () => TTS.stop(),
+    speechOwner,
+    speechOptions: speechSettings(),
     onCaptureError: (err) => {
       setVoiceInlineVisible(false);
       Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
@@ -1630,10 +1727,9 @@ export default function ChatScreen() {
         >
           <Pressable
             onPress={handleOpenDrawer}
-            hitSlop={6}
             style={({ pressed }) => ({
-              width: 32,
-              height: 32,
+              width: 44,
+              height: 44,
               borderRadius: radii.full,
               alignItems: 'center',
               justifyContent: 'center',
@@ -1653,16 +1749,16 @@ export default function ChatScreen() {
                   params: { id: activeProjectId },
                 })
               }
-              hitSlop={6}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 4,
                 paddingHorizontal: 12,
-                height: 32,
+                height: 44,
                 borderRadius: radii.full,
                 backgroundColor: colors.inputSurface,
                 maxWidth: 120,
+                minWidth: 44,
                 flexShrink: 1,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
@@ -1680,7 +1776,13 @@ export default function ChatScreen() {
           <Pressable
             onPress={handleMenuPress}
             disabled={!conversation}
-            style={{ flex: 1, minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 }}
+            style={{
+              flex: 1,
+              minWidth: 44,
+              minHeight: 44,
+              justifyContent: 'center',
+              paddingHorizontal: 4,
+            }}
             accessibilityLabel={`${title}. Open conversation menu`}
             accessibilityRole="button"
             accessibilityState={{ disabled: !conversation }}
@@ -1697,14 +1799,13 @@ export default function ChatScreen() {
             </Text>
           </Pressable>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', flexShrink: 0, alignItems: 'center', gap: 4 }}>
             <ProjectSourcesButton projectId={conversation?.projectId} />
             <Pressable
               onPress={handleNewChat}
-              hitSlop={6}
               style={({ pressed }) => ({
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1718,10 +1819,9 @@ export default function ChatScreen() {
             <Pressable
               onPress={handleMenuPress}
               disabled={!conversation}
-              hitSlop={6}
               style={({ pressed }) => ({
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 borderRadius: radii.full,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1789,6 +1889,7 @@ export default function ChatScreen() {
           ) : (
             <MessageList
               messages={conversationMessages}
+              speechOwner={speechOwner}
               onDeleteMessage={handleDeleteMessage}
               onReaction={handleReaction}
               onRetryMessage={handleRetryMessage}
@@ -1956,6 +2057,7 @@ export default function ChatScreen() {
         )}
 
         <AddToChatSheet
+          destinationKey={id ?? 'unavailable'}
           ref={addToChatRef}
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}
@@ -2028,6 +2130,7 @@ export default function ChatScreen() {
         {/* Full-duplex voice for a cloud conversation: the same live session the
             web app runs, sharing this conversation's thread. */}
         <LiveVoiceComposer
+          executionMode={conversationExecutionMode}
           visible={liveVoiceVisible}
           conversationId={id ?? null}
           model={selectedModel}

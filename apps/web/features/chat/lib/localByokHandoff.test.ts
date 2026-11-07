@@ -93,6 +93,25 @@ describe('localByokHandoff', () => {
     ).toBe('Local');
   });
 
+  it.each(['Local', 'DirectByok'] as const)(
+    'retains known %s message authority when the conversation model is unresolved',
+    (providerMode) => {
+      expect(
+        getConversationProviderMode({ ...conversation, model: 'unresolved-fixture-model' }, [
+          { ...messages[0]!, model: undefined, metadata: { providerMode } },
+        ]),
+      ).toBe(providerMode);
+    },
+  );
+
+  it('retains direct BYOK message model authority when the conversation model is unresolved', () => {
+    expect(
+      getConversationProviderMode({ ...conversation, model: 'unresolved-fixture-model' }, [
+        { ...messages[0]!, model: BYOK_MODEL_ID },
+      ]),
+    ).toBe('DirectByok');
+  });
+
   it('builds recent message context with required outgoing prompt', () => {
     const candidates = buildHandoffContextCandidates({
       conversationId: conversation.id,

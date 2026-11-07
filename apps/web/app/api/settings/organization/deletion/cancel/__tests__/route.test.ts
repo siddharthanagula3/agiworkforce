@@ -1,12 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetClerkAuthUser, mockGetNeonDb, mockRecordAuditEvent } = vi.hoisted(() => ({
+const {
+  mockQuery,
+  mockGetClerkAuthUser,
+  mockGetNeonDb,
+  mockRecordAuditEvent,
+  mockGetCachedActiveOrganizationId,
+} = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
   mockGetNeonDb: vi.fn(),
   mockRecordAuditEvent: vi.fn(async () => undefined),
+  mockGetCachedActiveOrganizationId: vi.fn(),
+}));
+
+vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
+  setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -65,14 +82,16 @@ function bind({
   });
 }
 
-function req(): Request {
+function req(selector?: string): Request {
   return new Request('https://app.test/api/settings/organization/deletion/cancel', {
     method: 'POST',
+    headers: selector === undefined ? {} : { [MANAGED_CLOUD_ORGANIZATION_HEADER]: selector },
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetCachedActiveOrganizationId.mockResolvedValue(undefined);
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
 });
 
@@ -130,5 +149,66 @@ describe('POST /api/settings/organization/deletion/cancel', () => {
     });
     const res = await POST(req() as never);
     expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.message).toMatch(/cancellation window has closed/i);
+    expect(body.error.message).not.toMatch(/erasure.*underway/i);
+  });
+
+  describe('explicit workspace selection', () => {
+    const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
+    const NONMEMBER_ORG = '33333333-3333-4333-8333-333333333333';
+
+    beforeEach(() => {
+      mockGetCachedActiveOrganizationId.mockResolvedValue(OTHER_ORG);
+      mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+        if (sql.includes('from public.organization_members')) {
+          return params[0] === ORG || params[0] === OTHER_ORG
+            ? [{ organization_id: params[0], user_id: 'user-1', role: 'owner' }]
+            : [];
+        }
+        if (sql.trim().startsWith('update public.organizations')) return [{ id: params[0] }];
+        return [];
+      });
+    });
+
+    it('cancels A rather than the account selection B', async () => {
+      const response = await POST(req(ORG) as never);
+
+      expect(response.status).toBe(200);
+      expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('deletion_scheduled_for > now()'),
+        [ORG],
+      );
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: ORG }),
+      );
+    });
+
+    it.each([
+      ['not-a-workspace', 400],
+      [NONMEMBER_ORG, 403],
+      [MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE, 404],
+    ] as const)('refuses selector %s without cancelling B', async (selector, status) => {
+      const response = await POST(req(selector) as never);
+
+      expect(response.status).toBe(status);
+      expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mockQuery.mock.calls.some(([sql]) => String(sql).trim().startsWith('update'))).toBe(
+        false,
+      );
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('retains legacy headerless cancellation of selected B', async () => {
+      const response = await POST(req() as never);
+
+      expect(response.status).toBe(200);
+      expect(mockGetCachedActiveOrganizationId).toHaveBeenCalledWith('user-1');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('deletion_scheduled_for > now()'),
+        [OTHER_ORG],
+      );
+    });
   });
 });

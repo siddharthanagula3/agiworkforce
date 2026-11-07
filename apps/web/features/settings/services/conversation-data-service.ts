@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   CONVERSATION_SHARES_PATH,
   ConversationShareListResponseSchema,
+  ConversationShareRevokedSchema,
   conversationSharePath,
   type ConversationShareSummary,
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -10,8 +11,11 @@ import {
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
   normalizeManagedCloudConversation,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 
 const ARCHIVED_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
@@ -23,6 +27,23 @@ const BulkConversationResponseSchema = z.object({
 
 export type BulkConversationAction = z.infer<typeof BulkConversationResponseSchema>['action'];
 export type SharedLinkSummary = ConversationShareSummary;
+export type SharedLinkList = Pick<
+  z.output<typeof ConversationShareListResponseSchema>,
+  'shares' | 'complete'
+>;
+
+export interface ConversationDataAuthority {
+  request: RequestAuthority;
+  organizationId: string | null;
+}
+
+function scopedHeaders(scope?: ConversationDataAuthority): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (scope)
+    headers[MANAGED_CLOUD_ORGANIZATION_HEADER] =
+      scope.organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
+  return headers;
+}
 
 export interface ArchivedConversationSummary {
   id: string;
@@ -52,16 +73,19 @@ async function responseError(response: Response, fallback: string): Promise<Erro
 export async function listArchivedConversations(
   offset = 0,
   signal?: AbortSignal,
+  scope?: ConversationDataAuthority,
 ): Promise<ArchivedConversationPage> {
-  const response = await fetch(
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)(
     `/api/chat/conversations?archived=only&limit=${ARCHIVED_PAGE_SIZE}&offset=${Math.max(0, offset)}`,
-    { credentials: 'include', signal },
+    { credentials: 'include', signal, headers: scopedHeaders(scope), cache: 'no-store' },
   );
   if (!response.ok) {
     throw await responseError(response, 'Failed to load archived chats');
   }
 
   const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
+  scope?.request.assertCurrent();
   return {
     conversations: data.conversations.map((wire) => {
       const conversation = normalizeManagedCloudConversation(wire);
@@ -79,16 +103,19 @@ export async function listArchivedConversations(
 export async function listDeletedConversations(
   offset = 0,
   signal?: AbortSignal,
+  scope?: ConversationDataAuthority,
 ): Promise<ArchivedConversationPage> {
-  const response = await fetch(
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)(
     `/api/chat/conversations?deleted=only&limit=${ARCHIVED_PAGE_SIZE}&offset=${Math.max(0, offset)}`,
-    { credentials: 'include', signal },
+    { credentials: 'include', signal, headers: scopedHeaders(scope), cache: 'no-store' },
   );
   if (!response.ok) {
     throw await responseError(response, 'Failed to load deleted chats');
   }
 
   const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
+  scope?.request.assertCurrent();
   return {
     conversations: data.conversations.map((wire) => {
       const conversation = normalizeManagedCloudConversation(wire);
@@ -103,41 +130,76 @@ export async function listDeletedConversations(
   };
 }
 
-export async function restoreDeletedConversation(id: string) {
-  const response = await fetch(`${managedCloudConversationPath(id)}/restore`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+export async function restoreDeletedConversation(id: string, scope?: ConversationDataAuthority) {
+  scope?.request.assertCurrent();
+  const headers = await addCsrfHeaders({
+    ...scopedHeaders(scope),
+    'Content-Type': 'application/json',
   });
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)(
+    `${managedCloudConversationPath(id)}/restore`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+    },
+  );
   if (!response.ok) {
     throw await responseError(response, 'Failed to restore deleted chat');
   }
-  return ManagedCloudUpdateConversationResponseSchema.parse(await response.json()).conversation;
+  const receipt = ManagedCloudUpdateConversationResponseSchema.parse(
+    await response.json(),
+  ).conversation;
+  scope?.request.assertCurrent();
+  if (receipt.id !== id) throw new Error('Chat restore was not confirmed');
+  return receipt;
 }
 
-export async function restoreArchivedConversation(id: string) {
-  const response = await fetch(managedCloudConversationPath(id), {
+export async function restoreArchivedConversation(id: string, scope?: ConversationDataAuthority) {
+  scope?.request.assertCurrent();
+  const headers = await addCsrfHeaders({
+    ...scopedHeaders(scope),
+    'Content-Type': 'application/json',
+  });
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)(managedCloudConversationPath(id), {
     method: 'PUT',
     credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    headers,
     body: JSON.stringify({ archived: false }),
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to restore archived chat');
   }
-  return ManagedCloudUpdateConversationResponseSchema.parse(await response.json()).conversation;
+  const receipt = ManagedCloudUpdateConversationResponseSchema.parse(
+    await response.json(),
+  ).conversation;
+  scope?.request.assertCurrent();
+  if (receipt.id !== id || receipt.archived) throw new Error('Chat restore was not confirmed');
+  return receipt;
 }
 
-export async function deleteManagedConversation(id: string): Promise<void> {
-  const response = await fetch(managedCloudConversationPath(id), {
+export async function deleteManagedConversation(
+  id: string,
+  scope?: ConversationDataAuthority,
+): Promise<void> {
+  scope?.request.assertCurrent();
+  const headers = await addCsrfHeaders({
+    ...scopedHeaders(scope),
+    'Content-Type': 'application/json',
+  });
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)(managedCloudConversationPath(id), {
     method: 'DELETE',
     credentials: 'include',
-    headers: await addCsrfHeaders(),
+    headers,
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to delete chat');
   }
   ManagedCloudDeleteConversationResponseSchema.parse(await response.json());
+  scope?.request.assertCurrent();
 }
 
 const ConversationHistoryStatsSchema = z.object({
@@ -156,45 +218,86 @@ export interface ConversationHistoryStats {
 
 export async function fetchConversationHistoryStats(
   signal?: AbortSignal,
+  scope?: ConversationDataAuthority,
 ): Promise<ConversationHistoryStats> {
-  const response = await fetch('/api/chat/conversations?includeHistoryStats=1&statsOnly=1', {
-    credentials: 'include',
-    signal,
-  });
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)(
+    '/api/chat/conversations?includeHistoryStats=1&statsOnly=1',
+    {
+      credentials: 'include',
+      signal,
+      headers: scopedHeaders(scope),
+      cache: 'no-store',
+    },
+  );
   if (!response.ok) {
     throw await responseError(response, 'Failed to load chat history size');
   }
-  return ConversationHistoryStatsSchema.parse(await response.json()).historyStats;
+  const data = ConversationHistoryStatsSchema.parse(await response.json());
+  scope?.request.assertCurrent();
+  return data.historyStats;
 }
 
-export async function applyBulkConversationAction(action: BulkConversationAction): Promise<number> {
-  const response = await fetch('/api/chat/conversations/bulk', {
+export async function applyBulkConversationAction(
+  action: BulkConversationAction,
+  scope?: ConversationDataAuthority,
+): Promise<number> {
+  scope?.request.assertCurrent();
+  const headers = scopedHeaders(scope);
+  headers['Content-Type'] = 'application/json';
+  const csrfHeaders = await addCsrfHeaders(headers);
+  scope?.request.assertCurrent();
+  const response = await (scope?.request.fetch ?? fetch)('/api/chat/conversations/bulk', {
     method: 'POST',
     credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    headers: csrfHeaders,
     body: JSON.stringify({ action }),
   });
   if (!response.ok) {
     throw await responseError(response, 'Failed to update chats');
   }
-  return BulkConversationResponseSchema.parse(await response.json()).affectedCount;
+  const receipt = BulkConversationResponseSchema.parse(await response.json());
+  scope?.request.assertCurrent();
+  if (receipt.action !== action) throw new Error('Chat update was not confirmed');
+  return receipt.affectedCount;
 }
 
-export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkSummary[]> {
-  const response = await fetch(CONVERSATION_SHARES_PATH, { credentials: 'include', signal });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to load shared links');
+export async function listSharedLinks(request: RequestAuthority): Promise<SharedLinkList> {
+  request.assertCurrent();
+  try {
+    const response = await request.fetch(CONVERSATION_SHARES_PATH, { cache: 'no-store' });
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to load shared links');
+    }
+    const body: unknown = await response.json();
+    request.assertCurrent();
+    const { shares, complete } = ConversationShareListResponseSchema.parse(body);
+    request.assertCurrent();
+    return { shares, complete };
+  } catch (error) {
+    request.assertCurrent();
+    throw error;
   }
-  return ConversationShareListResponseSchema.parse(await response.json()).shares;
 }
 
-export async function revokeSharedLink(token: string): Promise<void> {
-  const response = await fetch(conversationSharePath(token), {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: await addCsrfHeaders(),
-  });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to revoke shared link');
+export async function revokeSharedLink(token: string, request: RequestAuthority): Promise<void> {
+  request.assertCurrent();
+  try {
+    const headers = await addCsrfHeaders();
+    request.assertCurrent();
+    const response = await request.fetch(conversationSharePath(token), {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to revoke shared link');
+    }
+    const body: unknown = await response.json();
+    request.assertCurrent();
+    ConversationShareRevokedSchema.parse(body);
+    request.assertCurrent();
+  } catch (error) {
+    request.assertCurrent();
+    throw error;
   }
 }

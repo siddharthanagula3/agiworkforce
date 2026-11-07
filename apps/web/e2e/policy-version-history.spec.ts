@@ -50,3 +50,55 @@ test.describe('/legal/archive', () => {
     expect(response?.status()).toBe(404);
   });
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [1440, 1024, 390, 320]) {
+    test(`connector disclosure fits ${width}px in ${theme} mode`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      expect((await page.goto('/agent-permissions'))?.status()).toBe(200);
+
+      await expect(page.getByRole('button', { name: /Switch to (light|dark) mode/ })).toBeVisible();
+      const switchTheme = page.getByRole('button', { name: `Switch to ${theme} mode` });
+      if (await switchTheme.isVisible()) await switchTheme.click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+
+      const connectors = page.locator('#connectors');
+      await connectors.scrollIntoViewIfNeeded();
+      await expect(
+        connectors.getByRole('heading', { name: 'What connectors request.' }),
+      ).toBeVisible();
+      await expect(connectors.getByText(/Selected connectors can be connected/)).toBeVisible();
+      await expect(connectors.getByText(/none can be connected yet/)).toHaveCount(0);
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+      ).toBeLessThanOrEqual(0);
+    });
+  }
+}
+
+test('connector availability history preserves the previously published disclosure', async ({
+  page,
+}) => {
+  expect((await page.goto('/agent-permissions'))?.status()).toBe(200);
+  await page.getByRole('link', { name: 'Previous versions' }).click();
+  await expect(page).toHaveURL(/\/legal\/archive\/agent-permissions$/);
+
+  await page
+    .getByRole('list', { name: 'Versions' })
+    .getByRole('listitem')
+    .filter({ has: page.getByText('2026-10-08', { exact: true }) })
+    .getByRole('link', { name: 'Read this version' })
+    .click();
+  await expect(page).toHaveURL(/\/legal\/archive\/agent-permissions\/2026-10-08$/);
+  await expect(page.getByText(/none can be connected yet/)).toBeVisible();
+  await expect(page.getByText('Load connector tools', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('link', { name: 'Read the current version' }).click();
+  await expect(page).toHaveURL(/\/agent-permissions$/);
+  await expect(
+    page.locator('#connectors').getByText(/Selected connectors can be connected/),
+  ).toBeVisible();
+});

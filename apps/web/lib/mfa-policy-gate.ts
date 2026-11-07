@@ -17,6 +17,10 @@ const MFA_REQUIRED_ERROR_REASON = 'mfa_required';
 type CachedMfaEnrollment =
   typeof MFA_ENROLLMENT_CACHE_ENROLLED | typeof MFA_ENROLLMENT_CACHE_UNENROLLED;
 
+export interface MfaSessionIdentity {
+  readonly subject: string;
+}
+
 export class MfaRequiredError extends AppError {
   constructor(message: string) {
     super(ErrorCode.MFA_REQUIRED, message, 403, { reason: MFA_REQUIRED_ERROR_REASON });
@@ -50,7 +54,12 @@ export async function rememberMfaEnrollment(userId: string, enrolled: boolean): 
     });
 }
 
-export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
+export async function resolveMfaEnrolled(
+  userId: string,
+  sessionIdentity?: MfaSessionIdentity,
+): Promise<boolean> {
+  if (sessionIdentity) return resolveSessionMfaEnrolled(userId, sessionIdentity);
+
   const store = getKeyValueStore();
   const cacheKey = enrollmentCacheKey(userId);
 
@@ -83,22 +92,47 @@ export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
 
 async function mfaPolicyRefusal(
   userId: string,
+  sessionIdentity?: MfaSessionIdentity,
 ): Promise<{ organizationId: string; code: string; reason: string } | null> {
   const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId);
   if (!policy || !policy.requireMfa || !organizationId) return null;
 
-  const mfaEnrolled = await resolveMfaEnrolled(userId);
+  const mfaEnrolled = await resolveMfaEnrolled(userId, sessionIdentity);
   const decision = evaluateOrganizationPolicy(policy, { resource: 'mfa', mfaEnrolled });
   if (decision.allowed) return null;
   return { organizationId, code: decision.code, reason: decision.reason };
 }
 
-export async function isBlockedByMfaPolicy(userId: string): Promise<boolean> {
-  return (await mfaPolicyRefusal(userId)) !== null;
+async function resolveSessionMfaEnrolled(
+  userId: string,
+  { subject }: MfaSessionIdentity,
+): Promise<boolean> {
+  if (!subject.trim()) return false;
+  // Product enrollment caches cannot attest to the identity that authenticated this request.
+  try {
+    const user = await getIdentityUser(subject);
+    return user?.id === subject && user.twoFactorEnabled === true;
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[mfa-policy] session enrollment lookup failed; failing closed',
+    );
+    return false;
+  }
 }
 
-export async function assertMfaPolicy(userId: string): Promise<void> {
-  const refusal = await mfaPolicyRefusal(userId);
+export async function isBlockedByMfaPolicy(
+  userId: string,
+  sessionIdentity?: MfaSessionIdentity,
+): Promise<boolean> {
+  return (await mfaPolicyRefusal(userId, sessionIdentity)) !== null;
+}
+
+export async function assertMfaPolicy(
+  userId: string,
+  sessionIdentity?: MfaSessionIdentity,
+): Promise<void> {
+  const refusal = await mfaPolicyRefusal(userId, sessionIdentity);
   if (!refusal) return;
 
   logger.warn(

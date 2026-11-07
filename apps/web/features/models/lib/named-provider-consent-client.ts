@@ -6,6 +6,7 @@ import {
   type NamedProviderNotice,
 } from '@agiworkforce/compliance';
 import { getProviderOffering, getProviderOfferings } from '@agiworkforce/types';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import {
   NAMED_PROVIDER_CONSENT_NAMESPACE,
@@ -67,6 +68,7 @@ export function namedProviderConsentRecorded(
 export async function saveNamedProviderConsent(
   notice: NamedProviderNotice,
   accepted: boolean,
+  authority?: RequestAuthority,
 ): Promise<void> {
   await savePreferenceNamespace(
     NAMED_PROVIDER_CONSENT_NAMESPACE,
@@ -78,8 +80,9 @@ export async function saveNamedProviderConsent(
         now: new Date(),
       }),
     },
-    { merge: true },
+    { merge: true, ...(authority ? { authority } : {}) },
   );
+  authority?.assertCurrent();
   announceNamedProviderConsent({ providerId: notice.providerId, accepted });
 }
 

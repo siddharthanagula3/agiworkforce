@@ -1,4 +1,5 @@
 jest.mock('@/lib/mmkv', () => ({
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   rehydrateWhenMmkvReady: jest.fn(),
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   mmkvStorage: {
@@ -9,7 +10,7 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 jest.mock('@/services/cloudSyncEngine', () => ({ markProjectForSync: jest.fn() }));
-jest.mock('@/services/authSession', () => ({ getAuthHeaders: jest.fn().mockResolvedValue({}) }));
+jest.mock('@/services/authSession', () => ({ getAuthHeaders: jest.fn() }));
 jest.mock('@/lib/egressGuard', () => ({
   guardedFetch: jest.fn().mockResolvedValue({ ok: true, status: 200 }),
 }));
@@ -20,6 +21,8 @@ const mockUploadProgress: {
   current?: (data: { totalBytesSent: number; totalBytesExpectedToSend: number }) => void;
 } = {};
 jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
+  writeAsStringAsync: jest.fn(),
   EncodingType: { UTF8: 'utf8', Base64: 'base64' },
   FileSystemUploadType: { BINARY_CONTENT: 0 },
   createUploadTask: jest.fn(
@@ -49,13 +52,27 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { managedCloudProjectKnowledgePath } from '@agiworkforce/cloud-contracts';
-import { Alert } from 'react-native';
+import { Alert, Modal } from 'react-native';
 import { getDocumentAsync } from 'expo-document-picker';
-import { createUploadTask, getInfoAsync, readAsStringAsync } from 'expo-file-system/legacy';
+import {
+  createUploadTask,
+  getInfoAsync,
+  readAsStringAsync,
+  writeAsStringAsync,
+} from 'expo-file-system/legacy';
 import { api } from '@/services/api';
+import { getAuthHeaders } from '@/services/authSession';
+import {
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+  invalidateCloudAccount,
+  __resetCloudAccountSessionForTests,
+  StaleCloudAccountOperationError,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import {
+  cloudProjectSources,
   ProjectSourceCancelledError,
   ProjectSourceError,
   useProjectStore,
@@ -131,6 +148,13 @@ function primeHappyPath() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('user_1');
+  (getAuthHeaders as jest.Mock)
+    .mockReset()
+    .mockResolvedValue({ Authorization: 'Bearer original-test-token' });
+  mockCancelAsync.mockReset().mockResolvedValue(undefined);
+  mockUploadProgress.current = undefined;
   useProjectStore.setState({ projects: [], activeProjectId: null });
   useCloudProjectStore.setState({ projects: [cloudProject()], activeProjectId: null });
 });
@@ -141,24 +165,38 @@ describe('adding sources to a cloud project', () => {
 
     await useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE);
 
-    expect(api.post).toHaveBeenCalledWith('/api/uploads/presign', {
-      kind: 'knowledge-file',
-      uploadProtocolVersion: 2,
-      projectId: CLOUD_PROJECT_ID,
-      fileName: 'notes.md',
-      mimeType: 'text/markdown',
-      byteCount: 1,
-      checksumSha256: FILE_SHA256,
-    });
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/uploads/presign',
+      {
+        kind: 'knowledge-file',
+        uploadProtocolVersion: 2,
+        projectId: CLOUD_PROJECT_ID,
+        fileName: 'notes.md',
+        mimeType: 'text/markdown',
+        byteCount: 1,
+        checksumSha256: FILE_SHA256,
+      },
+      expect.objectContaining({
+        accountEpoch: captureCloudAccountEpoch(),
+        signal: expect.anything(),
+      }),
+    );
     expect(mockUploadAsync).toHaveBeenCalledTimes(1);
-    expect(api.post).toHaveBeenCalledWith(managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID), {
-      fileName: 'notes.md',
-      mimeType: 'text/markdown',
-      byteCount: 1,
-      checksumSha256: FILE_SHA256,
-      sourceSurface: 'mobile',
-      storageUri: STORAGE_KEY,
-    });
+    expect(api.post).toHaveBeenCalledWith(
+      managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID),
+      {
+        fileName: 'notes.md',
+        mimeType: 'text/markdown',
+        byteCount: 1,
+        checksumSha256: FILE_SHA256,
+        sourceSurface: 'mobile',
+        storageUri: STORAGE_KEY,
+      },
+      expect.objectContaining({
+        accountEpoch: captureCloudAccountEpoch(),
+        signal: expect.anything(),
+      }),
+    );
     expect(useProjectStore.getState().projects).toHaveLength(0);
   });
 
@@ -181,7 +219,7 @@ describe('adding sources to a cloud project', () => {
     expect(mockUploadAsync).not.toHaveBeenCalled();
   });
 
-  it('releases the presigned object when registration fails', async () => {
+  it('retains the object when registration may have committed despite a failed response', async () => {
     primeHappyPath();
     (api.post as jest.Mock).mockImplementation(async (path: string) => {
       if (path === '/api/uploads/presign') {
@@ -198,10 +236,7 @@ describe('adding sources to a cloud project', () => {
     await expect(
       useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE),
     ).rejects.toThrow('Project knowledge storage limit reached.');
-    expect(guardedFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/uploads/presign'),
-      expect.objectContaining({ method: 'DELETE' }),
-    );
+    expect(guardedFetch).not.toHaveBeenCalled();
   });
 
   it('rejects a file type the server would refuse before uploading anything', async () => {
@@ -221,6 +256,7 @@ describe('adding sources to a cloud project', () => {
     await useProjectStore.getState().removeSource(CLOUD_PROJECT_ID, 'kf_1');
     expect(api.delete).toHaveBeenCalledWith(
       `${managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID)}/kf_1`,
+      { accountEpoch: captureCloudAccountEpoch() },
     );
   });
 });
@@ -467,5 +503,487 @@ describe('project source failure copy', () => {
 
     expect(screen.queryByText('Could not load sources')).toBeNull();
     expect(screen.getByText('No sources added yet')).toBeTruthy();
+  });
+});
+
+function deferredSource<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+describe('project upload operation ownership', () => {
+  it.each(['info', 'hash', 'credentials'])(
+    'stops an account switch during %s before presigning',
+    async (stage) => {
+      primeHappyPath();
+      const pendingStage = deferredSource<unknown>();
+      const mock =
+        stage === 'info' ? getInfoAsync : stage === 'hash' ? readAsStringAsync : getAuthHeaders;
+      (mock as jest.Mock).mockImplementationOnce(() => pendingStage.promise);
+      const pending = cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE);
+      const rejected = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+      await waitFor(() => expect(mock).toHaveBeenCalled());
+      activateCloudAccount('user_2');
+      pendingStage.resolve(
+        stage === 'info'
+          ? { exists: true, size: 1 }
+          : stage === 'hash'
+            ? 'aA=='
+            : { Authorization: 'Bearer replacement-test-token' },
+      );
+      await rejected;
+      expect(api.post).not.toHaveBeenCalled();
+      expect(createUploadTask).not.toHaveBeenCalled();
+      expect(guardedFetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a returned presign after account retirement without acquiring cleanup credentials', async () => {
+    primeHappyPath();
+    const presign = deferredSource<unknown>();
+    (api.post as jest.Mock).mockImplementationOnce(() => presign.promise);
+    const pending = cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE);
+    const rejected = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    invalidateCloudAccount();
+    activateCloudAccount('user_1');
+    presign.resolve({
+      uploadUrl: 'https://storage.example.com/file',
+      uploadMethod: 'PUT',
+      uploadHeaders: {},
+      storageKey: STORAGE_KEY,
+    });
+    await rejected;
+    expect(createUploadTask).not.toHaveBeenCalled();
+    expect(getAuthHeaders).toHaveBeenCalledTimes(1);
+    expect(guardedFetch).not.toHaveBeenCalled();
+  });
+
+  it('cancels native work and drops late progress after an account switch', async () => {
+    primeHappyPath();
+    hangUploadUntilCancelled();
+    const onProgress = jest.fn();
+    const pending = cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE, { onProgress });
+    const rejected = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    await waitFor(() => expect(mockUploadAsync).toHaveBeenCalled());
+    activateCloudAccount('user_2');
+    mockUploadProgress.current?.({ totalBytesSent: 1, totalBytesExpectedToSend: 1 });
+    await rejected;
+    expect(mockCancelAsync).toHaveBeenCalledTimes(1);
+    expect(onProgress).not.toHaveBeenCalled();
+    expect(knowledgeRegistrations()).toHaveLength(0);
+    expect(guardedFetch).not.toHaveBeenCalled();
+  });
+
+  it('uses only captured credentials for cleanup after a storage failure', async () => {
+    primeHappyPath();
+    (getAuthHeaders as jest.Mock)
+      .mockResolvedValueOnce({ Authorization: 'Bearer captured-test-token' })
+      .mockResolvedValue({ Authorization: 'Bearer later-test-token' });
+    mockUploadAsync.mockResolvedValue({ status: 500 });
+    await expect(
+      cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE),
+    ).rejects.toBeInstanceOf(ProjectSourceError);
+    expect(getAuthHeaders).toHaveBeenCalledTimes(1);
+    expect(guardedFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer captured-test-token' }),
+        signal: expect.anything(),
+      }),
+    );
+  });
+
+  it.each(['cancel-success', 'stale-success', 'cancel-failure', 'mismatch'])(
+    'retains dispatched registration on %s',
+    async (outcome) => {
+      primeHappyPath();
+      const registration = deferredSource<unknown>();
+      const originalPost = (api.post as jest.Mock).getMockImplementation()!;
+      (api.post as jest.Mock).mockImplementation((path: string, ...args: unknown[]) =>
+        path === managedCloudProjectKnowledgePath(CLOUD_PROJECT_ID)
+          ? registration.promise
+          : originalPost(path, ...args),
+      );
+      const controller = new AbortController();
+      const pending = cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE, {
+        signal: controller.signal,
+      });
+      const settled = pending.then(
+        (value) => ({ value, error: null }),
+        (error: unknown) => ({ value: null, error }),
+      );
+      await waitFor(() => expect(knowledgeRegistrations()).toHaveLength(1));
+      if (outcome === 'stale-success') activateCloudAccount('user_2');
+      else controller.abort();
+      if (outcome === 'cancel-failure') registration.reject(new Error('Response lost'));
+      else if (outcome === 'mismatch')
+        registration.resolve({ file: { ...registeredFile().file, byteCount: 2 } });
+      else registration.resolve(registeredFile());
+      const result = await settled;
+      if (outcome === 'cancel-success') expect(result.value).toEqual(registeredFile().file);
+      else expect(result.error).toBeInstanceOf(Error);
+      expect(guardedFetch).not.toHaveBeenCalled();
+      expect(getAuthHeaders).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('rejects Cloud context instead of retargeting to an on-device project', async () => {
+    const accountEpoch = captureCloudAccountEpoch();
+    useCloudProjectStore.setState({ projects: [] });
+    useProjectStore.setState({
+      projects: [
+        {
+          id: CLOUD_PROJECT_ID,
+          name: 'Local',
+          description: '',
+          instructions: '',
+          createdAt: '',
+          updatedAt: '',
+          sources: [],
+        },
+      ],
+    });
+    await expect(
+      useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE, { accountEpoch }),
+    ).rejects.toThrow('Cloud project is no longer available');
+    expect(useProjectStore.getState().projects[0]?.sources).toEqual([]);
+  });
+});
+
+describe('source picker ownership before preparation', () => {
+  it.each(['account', 'project', 'unmount'])(
+    'does not upload a picker result after %s changes',
+    async (change) => {
+      primeHappyPath();
+      (api.get as jest.Mock).mockResolvedValue({ files: [] });
+      const picker = deferredSource<unknown>();
+      (getDocumentAsync as jest.Mock).mockReturnValue(picker.promise);
+      const screen = render(
+        React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }),
+      );
+      await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('Add sources'));
+      await waitFor(() => expect(getDocumentAsync).toHaveBeenCalled());
+      await act(async () => {
+        if (change === 'account') activateCloudAccount('user_2');
+        else if (change === 'project')
+          screen.rerender(React.createElement(ProjectSourcesTab, { projectId: 'missing-project' }));
+        else screen.unmount();
+        picker.resolve({ canceled: false, assets: [PICKED_SOURCE] });
+      });
+      expect(getInfoAsync).not.toHaveBeenCalled();
+      expect(api.post).not.toHaveBeenCalled();
+      if (change !== 'unmount') screen.unmount();
+    },
+  );
+
+  it('does not upload text whose cache write outlives its account', async () => {
+    primeHappyPath();
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    const write = deferredSource<void>();
+    (writeAsStringAsync as jest.Mock).mockReturnValue(write.promise);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Add text'));
+    fireEvent.changeText(
+      screen.getByPlaceholderText('Paste or type the text this project should use'),
+      'original account text',
+    );
+    fireEvent.press(screen.getByLabelText('Add'));
+    await waitFor(() => expect(writeAsStringAsync).toHaveBeenCalled());
+    await act(async () => {
+      activateCloudAccount('user_2');
+      write.resolve();
+    });
+    expect(api.post).not.toHaveBeenCalled();
+    expect(getInfoAsync).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+});
+
+describe('source cancellation and delayed removal', () => {
+  it('stops hashing after a cancelled chunk without starting another read', async () => {
+    primeHappyPath();
+    (getInfoAsync as jest.Mock).mockResolvedValue({
+      exists: true,
+      isDirectory: false,
+      size: 4 * 1024 * 1024,
+    });
+    const chunk = deferredSource<string>();
+    (readAsStringAsync as jest.Mock).mockReturnValueOnce(chunk.promise);
+    const controller = new AbortController();
+    const pending = cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE, {
+      signal: controller.signal,
+    });
+    const rejected = expect(pending).rejects.toBeInstanceOf(ProjectSourceCancelledError);
+    await waitFor(() => expect(readAsStringAsync).toHaveBeenCalledTimes(1));
+    controller.abort();
+    chunk.resolve('aA==');
+    await rejected;
+    expect(readAsStringAsync).toHaveBeenCalledTimes(1);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('does not deliver progress after a completed upload', async () => {
+    primeHappyPath();
+    const onProgress = jest.fn();
+    await cloudProjectSources.upload(CLOUD_PROJECT_ID, PICKED_SOURCE, { onProgress });
+    mockUploadProgress.current?.({ totalBytesSent: 1, totalBytesExpectedToSend: 1 });
+    expect(onProgress).not.toHaveBeenCalled();
+    activateCloudAccount('user_2');
+    expect(mockCancelAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse an original-account remove confirmation after switching accounts', async () => {
+    (api.get as jest.Mock).mockResolvedValue({ files: [registeredFile().file] });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByLabelText('Remove notes.md')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Remove notes.md'));
+    const confirm = alert.mock.calls
+      .find(([title]) => title === 'Remove source')?.[2]
+      ?.find((button) => button.text === 'Remove');
+    expect(confirm?.onPress).toBeDefined();
+    await act(async () => {
+      activateCloudAccount('user_2');
+      confirm?.onPress?.();
+    });
+    expect(api.delete).not.toHaveBeenCalled();
+    screen.unmount();
+    alert.mockRestore();
+  });
+
+  it('does not refresh or alert for a removal response from a retired account', async () => {
+    (api.get as jest.Mock).mockResolvedValue({ files: [registeredFile().file] });
+    const removal = deferredSource<unknown>();
+    (api.delete as jest.Mock).mockReturnValue(removal.promise);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByLabelText('Remove notes.md')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Remove notes.md'));
+    const confirm = alert.mock.calls
+      .find(([title]) => title === 'Remove source')?.[2]
+      ?.find((button) => button.text === 'Remove');
+    await act(async () => {
+      confirm?.onPress?.();
+    });
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    alert.mockClear();
+    await act(async () => {
+      activateCloudAccount('user_2');
+    });
+    const currentLoads = (api.get as jest.Mock).mock.calls.length;
+    await act(async () => {
+      removal.resolve({});
+    });
+    expect(api.get).toHaveBeenCalledTimes(currentLoads);
+    expect(alert).not.toHaveBeenCalled();
+    screen.unmount();
+    alert.mockRestore();
+  });
+});
+
+describe('source view concurrent work', () => {
+  it('opens only one picker when pressed twice before a render', async () => {
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    const picker = deferredSource<unknown>();
+    (getDocumentAsync as jest.Mock).mockReturnValue(picker.promise);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    const button = screen.getByLabelText('Add sources');
+    act(() => {
+      fireEvent.press(button);
+      fireEvent.press(button);
+    });
+    expect(getDocumentAsync).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      picker.resolve({ canceled: true, assets: null });
+    });
+    screen.unmount();
+  });
+
+  it('drops a list response when the account changed without a project rerender', async () => {
+    const listing = deferredSource<unknown>();
+    (api.get as jest.Mock).mockReturnValueOnce(listing.promise).mockResolvedValue({ files: [] });
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      activateCloudAccount('user_2');
+      listing.resolve({ files: [registeredFile().file] });
+    });
+    expect(screen.queryByText('notes.md')).toBeNull();
+    expect(screen.queryByText('Could not load sources')).toBeNull();
+    screen.unmount();
+  });
+});
+
+describe('retained source action callbacks', () => {
+  it('does not let an old text save adopt a replacement epoch before rerender', async () => {
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    (writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Add text'));
+    fireEvent.changeText(
+      screen.getByPlaceholderText('Paste or type the text this project should use'),
+      'original private text',
+    );
+    const oldSave = screen.getByLabelText('Add').props.onPress as () => void;
+    await act(async () => {
+      activateCloudAccount('user_2');
+      activateCloudAccount('user_1');
+      oldSave();
+    });
+    expect(writeAsStringAsync).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('does not let a retained picker callback adopt an A to B to A project return', async () => {
+    const otherProjectId = '01920000-0000-7000-8000-000000000002';
+    useCloudProjectStore.setState({
+      projects: [cloudProject(), cloudProject({ id: otherProjectId })],
+    });
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    const oldPick = screen.getByLabelText('Add sources').props.onPress as () => void;
+    screen.rerender(React.createElement(ProjectSourcesTab, { projectId: otherProjectId }));
+    screen.rerender(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await act(async () => oldPick());
+    expect(getDocumentAsync).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+});
+
+describe('text source editor revisions', () => {
+  async function openDraft() {
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    (writeAsStringAsync as jest.Mock).mockResolvedValue(undefined);
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Add text'));
+    fireEvent.changeText(screen.getByLabelText('Text source title'), 'Original title');
+    fireEvent.changeText(screen.getByLabelText('Text source content'), 'Original body');
+    return screen;
+  }
+
+  it.each(['title', 'body'])(
+    'preserves newer %s input after an accepted upload succeeds',
+    async (field) => {
+      const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
+      const uploadSource = jest
+        .spyOn(cloudProjectSources, 'upload')
+        .mockReturnValue(upload.promise);
+      const screen = await openDraft();
+      try {
+        fireEvent.press(screen.getByLabelText('Add'));
+        await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
+        fireEvent.changeText(
+          screen.getByLabelText(`Text source ${field === 'title' ? 'title' : 'content'}`),
+          'Newer input',
+        );
+        await act(async () => {
+          upload.resolve(registeredFile().file);
+        });
+        expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+        expect(
+          screen.getByLabelText(`Text source ${field === 'title' ? 'title' : 'content'}`).props
+            .value,
+        ).toBe('Newer input');
+        expect(uploadSource).toHaveBeenCalledTimes(1);
+        expect(guardedFetch).not.toHaveBeenCalled();
+      } finally {
+        screen.unmount();
+        uploadSource.mockRestore();
+      }
+    },
+  );
+
+  it('closes an unchanged editor after a successful same-session save', async () => {
+    const uploadSource = jest
+      .spyOn(cloudProjectSources, 'upload')
+      .mockResolvedValue(registeredFile().file);
+    const screen = await openDraft();
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(false));
+      expect(uploadSource).toHaveBeenCalledTimes(1);
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+    }
+  });
+
+  it('preserves a reopened editor when an earlier accepted save settles', async () => {
+    const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
+    const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
+    const screen = await openDraft();
+    const reopen = screen.getByLabelText('Add text').props.onPress as () => void;
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
+      fireEvent.press(screen.getByLabelText('Cancel'));
+      act(() => reopen());
+      fireEvent.changeText(screen.getByLabelText('Text source content'), 'Reopened draft');
+      await act(async () => {
+        upload.resolve(registeredFile().file);
+      });
+      expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+      expect(screen.getByLabelText('Text source content').props.value).toBe('Reopened draft');
+      expect(uploadSource).toHaveBeenCalledTimes(1);
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+    }
+  });
+
+  it('rejects a retained pre-edit save callback before writing its old text', async () => {
+    const screen = await openDraft();
+    try {
+      const oldSave = screen.getByLabelText('Add').props.onPress as () => void;
+      const edit = screen.getByLabelText('Text source content').props.onChangeText as (
+        text: string,
+      ) => void;
+      await act(async () => {
+        edit('Newer input before rerender');
+        oldSave();
+      });
+      expect(writeAsStringAsync).not.toHaveBeenCalled();
+      expect(api.post).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Text source content').props.value).toBe(
+        'Newer input before rerender',
+      );
+    } finally {
+      screen.unmount();
+    }
+  });
+
+  it('does not show an old save failure over newer text', async () => {
+    const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
+    const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const screen = await openDraft();
+    try {
+      fireEvent.press(screen.getByLabelText('Add'));
+      await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
+      fireEvent.changeText(screen.getByLabelText('Text source content'), 'Newer draft');
+      await act(async () => {
+        upload.reject(new Error('Original upload failed'));
+      });
+      expect(alert).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Text source content').props.value).toBe('Newer draft');
+      expect(screen.UNSAFE_getByType(Modal).props.visible).toBe(true);
+    } finally {
+      screen.unmount();
+      uploadSource.mockRestore();
+      alert.mockRestore();
+    }
   });
 });

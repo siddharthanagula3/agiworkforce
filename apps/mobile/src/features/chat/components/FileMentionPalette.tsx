@@ -3,6 +3,10 @@ import { View } from 'react-native';
 import { FileText, Image as ImageIcon } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
+import {
+  useLibraryPickerScope,
+  type LibraryPickerScope,
+} from '@/src/features/library/useLibraryPickerScope';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import type { Attachment } from './AttachmentPreview';
 
@@ -20,22 +24,34 @@ interface MentionFile {
 
 export function FileMentionPalette({
   query,
+  destinationKey,
   onSelect,
 }: {
   query: string;
+  destinationKey: string;
   onSelect: (attachment: Attachment) => void;
 }) {
   const colors = useThemeColors();
-  const [files, setFiles] = useState<MentionFile[]>([]);
+  const scope = useLibraryPickerScope(JSON.stringify([destinationKey, query]));
+  const [result, setResult] = useState<{ scope: LibraryPickerScope; files: MentionFile[] } | null>(
+    null,
+  );
+  const files = result?.scope === scope && scope.isCurrent() ? result.files : [];
 
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      fetchLibraryPage({ limit: MAX_RESULTS, ...(query ? { search: query } : {}) })
+      if (!scope.isCurrent()) return;
+      fetchLibraryPage({
+        limit: MAX_RESULTS,
+        kind: ['image', 'file'],
+        ...(query ? { search: query } : {}),
+      })
         .then((page) => {
-          if (cancelled) return;
-          setFiles(
-            page.assets
+          if (cancelled || !scope.isCurrent()) return;
+          setResult({
+            scope,
+            files: page.assets
               .filter((asset) => asset.kind !== 'video')
               .map((asset) => ({
                 id: asset.id,
@@ -50,17 +66,17 @@ export function FileMentionPalette({
                   assetId: asset.id,
                 },
               })),
-          );
+          });
         })
         .catch(() => {
-          if (!cancelled) setFiles([]);
+          if (!cancelled && scope.isCurrent()) setResult({ scope, files: [] });
         });
     }, SEARCH_DELAY_MS);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, scope]);
 
   if (files.length === 0) return null;
 
@@ -82,7 +98,9 @@ export function FileMentionPalette({
         return (
           <Pressable
             key={file.id}
-            onPress={() => onSelect(file.attachment)}
+            onPress={() => {
+              if (scope.isCurrent()) onSelect(file.attachment);
+            }}
             accessibilityRole="button"
             accessibilityLabel={`Mention ${file.fileName}`}
             style={{

@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { usePublicationView } from './usePublicationView';
+import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Tabs,
@@ -93,7 +94,12 @@ import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
-import { loadWorkbookSheets } from '../../lib/office-file-preview';
+import {
+  loadWorkbookSheets,
+  WorkbookPreviewLimitError,
+  WORKBOOK_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
+import { storedOfficeArchive } from '../../lib/office-archive';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
 import { ArtifactChangesReview } from './review/ArtifactChangesReview';
@@ -196,9 +202,8 @@ export interface ArtifactData {
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
   /**
-   * The stream producing this artifact stopped before its fence closed, so the
-   * content is everything that arrived and not the finished document. Set by
-   * the streaming sync hook when it persists the partial.
+   * Saved from an unclosed response fence. This marker does not establish
+   * ownership of the content or whether later output has been retained.
    */
   interrupted?: boolean;
 }
@@ -209,7 +214,7 @@ const SOURCE_LANGUAGE_FOR_TYPE: Partial<Record<ArtifactData['type'], string>> = 
 };
 
 const INTERRUPTED_ARTIFACT_NOTICE =
-  'This artifact stopped before it finished. What arrived is kept below; regenerate for the whole document.';
+  'This artifact was saved from a partial response. It may not include later output.';
 
 export interface ArtifactPublishSelection {
   content: string;
@@ -244,6 +249,7 @@ export interface ArtifactProjectSave {
 }
 interface ArtifactPreviewProps {
   artifact: ArtifactData;
+  awaitingApproval?: boolean;
   onShare?: () => void;
   className?: string;
   /** 'card' (default) = inline card with fixed heights + TabsList row.
@@ -255,6 +261,7 @@ interface ArtifactPreviewProps {
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
   publishedLink?: string;
+  publicationScope?: object;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
@@ -379,8 +386,15 @@ const MARKDOWN_SHORTCUTS: Readonly<
 };
 
 const ARTIFACT_DRAFT_STORAGE_PREFIX = 'agi.artifact-draft:';
-const ARTIFACT_DRAFT_AUTOSAVE_MS = 800;
 const CHECKLIST_COMMIT_IDLE_MS = 4_000;
+
+interface SourceDraftSession {
+  owner: { active: boolean };
+  session: number;
+  text: string;
+  origin: 'editor' | 'checklist';
+  status: 'saved' | 'unsaved' | null;
+}
 
 function readStoredDraft(key: string): string | null {
   try {
@@ -519,10 +533,12 @@ export function ArtifactPreview({
   publishArtifact,
   artifactAudience,
   publishedLink,
+  publicationScope,
   projectLink,
   projectSave,
   onRequestEdits,
   liveRuntime = false,
+  awaitingApproval = false,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
   const live = useLiveArtifactRuntime(
@@ -533,11 +549,23 @@ export function ArtifactPreview({
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
-  const shownPublishedUrl = publishedUrl ?? publishedLink ?? null;
+  const publicationView = usePublicationView(artifact.id, publicationScope);
+  const [publicationPending, setPublicationPending] = useState<{
+    view: object;
+    kind: 'publish' | 'audience';
+  } | null>(null);
+  const isPublishing =
+    publicationPending?.view === publicationView && publicationPending.kind === 'publish';
+  const isChangingAudience =
+    publicationPending?.view === publicationView && publicationPending.kind === 'audience';
+  const [publishedUrl, setPublishedUrl] = useState<{ view: object; url: string } | null>(null);
+  const shownPublishedUrl =
+    publishedLink ?? (publishedUrl?.view === publicationView ? publishedUrl.url : null);
   const publishedToken = shownPublishedUrl ? readPublishedTokenFromUrl(shownPublishedUrl) : null;
-  const [isChangingAudience, setIsChangingAudience] = useState(false);
+  const audienceSnapshot = useRef(artifactAudience);
+  useLayoutEffect(() => {
+    audienceSnapshot.current = artifactAudience;
+  }, [artifactAudience]);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
   const versionCount = versionHistory?.length ?? 0;
@@ -585,7 +613,68 @@ export function ArtifactPreview({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
-  const [sourceDraft, setSourceDraft] = useState<string | null>(null);
+  const draftOwner = useMemo(
+    () => ({ active: false }),
+    [artifact.id, artifact.content, versionCount],
+  );
+  useLayoutEffect(() => {
+    draftOwner.active = true;
+    return () => {
+      draftOwner.active = false;
+    };
+  }, [draftOwner]);
+  const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
+  const [draftSnapshot, setDraftSnapshot] = useState<SourceDraftSession | null>(null);
+  const liveDraft = useRef<SourceDraftSession | null>(null);
+  const draftSequence = useRef(0);
+  const draftEventEpoch = useRef(0);
+  const renderedDraftEventEpoch = draftEventEpoch.current;
+  const currentDraft = draftSnapshot?.owner === draftOwner ? draftSnapshot : null;
+  const sourceDraft = currentDraft?.text ?? null;
+  const draftOrigin = currentDraft?.origin ?? null;
+  const draftStatus = currentDraft?.status ?? null;
+  const beginSourceDraft = useCallback(
+    (
+      text: string,
+      origin: SourceDraftSession['origin'],
+      status: SourceDraftSession['status'] = null,
+    ) => {
+      if (!draftOwner.active) return;
+      draftEventEpoch.current += 1;
+      const next = { owner: draftOwner, session: ++draftSequence.current, text, origin, status };
+      liveDraft.current = next;
+      setDraftSnapshot(next);
+    },
+    [draftOwner],
+  );
+  const clearSourceDraft = useCallback(() => {
+    if (!draftOwner.active) return;
+    draftEventEpoch.current += 1;
+    if (liveDraft.current?.owner === draftOwner) liveDraft.current = null;
+    setDraftSnapshot(null);
+  }, [draftOwner]);
+  const changeSourceDraft = useCallback(
+    (text: string) => {
+      const current = liveDraft.current;
+      if (
+        !draftOwner.active ||
+        !current ||
+        current.owner !== draftOwner ||
+        current.session !== currentDraft?.session ||
+        current.text === text
+      ) {
+        return;
+      }
+      const next: SourceDraftSession = {
+        ...current,
+        text,
+        status: writeStoredDraft(draftStorageKey, text) ? 'saved' : 'unsaved',
+      };
+      liveDraft.current = next;
+      setDraftSnapshot(next);
+    },
+    [currentDraft?.session, draftOwner, draftStorageKey],
+  );
   const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [editRequestMode, setEditRequestMode] = useState(false);
   const [pickerSelection, setPickerSelection] = useState<ArtifactPickerSelection | null>(null);
@@ -641,7 +730,9 @@ export function ArtifactPreview({
           const binary = artifact.content;
           arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
         }
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const result = await mammoth.convertToHtml({
+          arrayBuffer: await storedOfficeArchive(arrayBuffer),
+        });
         if (!cancelled) setDocxHtml(result.value);
       } catch (err) {
         if (!cancelled) setDocxError(toUserMessage(err, 'DOCX conversion failed'));
@@ -708,52 +799,51 @@ export function ArtifactPreview({
     for (const raw of candidates) {
       if (!raw) continue;
       const value = raw.trim();
-      if (value.toLowerCase().startsWith('data:application/pdf')) return value;
+      if (/^data:application\/pdf(?:;[^,]*)?,/i.test(value)) return value;
       if (value.startsWith('blob:')) return value;
       // Same-origin http(s) URL pointing at a PDF (never an arbitrary origin).
-      if (typeof window !== 'undefined' && /^https?:\/\//i.test(value)) {
+      if (typeof window !== 'undefined' && (/^https?:\/\//i.test(value) || value.startsWith('/'))) {
         try {
-          const url = new URL(value);
+          const url = new URL(value, window.location.origin);
           if (
+            (url.protocol === 'http:' || url.protocol === 'https:') &&
             url.origin === window.location.origin &&
             (url.pathname.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))
           ) {
             if (url.pathname.startsWith('/api/files/')) url.searchParams.set('preview', 'pdf');
-            return url.href;
+            return value.startsWith('/') && !url.pathname.startsWith('//')
+              ? `${url.pathname}${url.search}${url.hash}`
+              : url.href;
           }
         } catch {
           // noop
         }
-      }
-      // Relative same-origin path.
-      if (value.startsWith('/') && (value.toLowerCase().endsWith('.pdf') || mime.includes('pdf'))) {
-        if (value.startsWith('/api/files/')) {
-          const url = new URL(value, window.location.origin);
-          url.searchParams.set('preview', 'pdf');
-          return `${url.pathname}${url.search}${url.hash}`;
-        }
-        return value;
       }
     }
     return null;
   }, [isPdf, artifact.content, generatedFileSummary.primaryUri, generatedFileSummary.mimeType]);
 
   const isBlobPdf = Boolean(pdfSrc?.startsWith('blob:'));
-  const [pdfBlobOk, setPdfBlobOk] = useState<boolean | null>(null);
+  const [pdfBlobVerification, setPdfBlobVerification] = useState<{
+    src: string;
+    allowed: boolean;
+  } | null>(null);
+  const pdfBlobOk = pdfBlobVerification?.src === pdfSrc ? pdfBlobVerification.allowed : null;
   useEffect(() => {
     if (!pdfSrc || !pdfSrc.startsWith('blob:')) {
-      setPdfBlobOk(null);
+      setPdfBlobVerification(null);
       return;
     }
     let cancelled = false;
-    setPdfBlobOk(null);
+    setPdfBlobVerification(null);
     fetch(pdfSrc)
       .then((r) => r.blob())
       .then((b) => {
-        if (!cancelled) setPdfBlobOk(b.type === 'application/pdf');
+        if (!cancelled)
+          setPdfBlobVerification({ src: pdfSrc, allowed: b.type === 'application/pdf' });
       })
       .catch(() => {
-        if (!cancelled) setPdfBlobOk(false);
+        if (!cancelled) setPdfBlobVerification({ src: pdfSrc, allowed: false });
       });
     return () => {
       cancelled = true;
@@ -799,6 +889,11 @@ export function ArtifactPreview({
     versionHistory && versionHistory[shownVersionIndex]
       ? versionHistory[shownVersionIndex]!.content
       : artifact.content;
+  const publishFeedbackScope = useMemo(
+    () => ({}),
+    [publicationView, activeContent, shownVersionIndex],
+  );
+  const publishFeedbackView = usePublicationView(artifact.id, publishFeedbackScope);
   const imageSrc = useMemo(
     () => (isImage ? resolveArtifactImageSource(activeContent) : null),
     [isImage, activeContent],
@@ -818,9 +913,6 @@ export function ArtifactPreview({
     setPdfError(false);
     setImageError(false);
     setCopied(false);
-    // An unsaved draft belongs to the revision it was opened from. Carrying it
-    // across an artifact swap or a new version would overwrite other content.
-    setSourceDraft(null);
     setEditorFocusRequest(0);
     // A published URL belongs to one artifact id; keeping it after a swap
     // would offer the previous artifact's public link under this title.
@@ -914,15 +1006,25 @@ export function ArtifactPreview({
         confirmLabel: 'Restore',
         destructive: draftIsUnsaved,
         onConfirm: () => {
+          if (!draftOwner.active || draftEventEpoch.current !== renderedDraftEventEpoch) return;
           if (restoreArtifactVersion(artifact.id, index)) {
             removeStoredDraft(`${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`);
-            setSourceDraft(null);
+            clearSourceDraft();
             setViewedVersionIndex(null);
           }
         },
       });
     },
-    [artifact.id, confirmAction, restoreArtifactVersion, sourceDraft, versionHistory],
+    [
+      artifact.id,
+      clearSourceDraft,
+      confirmAction,
+      draftOwner,
+      renderedDraftEventEpoch,
+      restoreArtifactVersion,
+      sourceDraft,
+      versionHistory,
+    ],
   );
   const canEditSource =
     variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
@@ -967,58 +1069,74 @@ export function ArtifactPreview({
     stepEdit(target, redo.slice(0, -1));
   }, [activeEditTrail, canRedoEdit, stepEdit]);
 
-  const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
-  const [draftStatus, setDraftStatus] = useState<'saved' | 'unsaved' | null>(null);
-  const [draftOrigin, setDraftOrigin] = useState<'editor' | 'checklist' | null>(null);
-
   useEffect(() => {
-    if (!canEditSource) return;
+    if (!canEditSource || liveDraft.current?.owner === draftOwner) return;
     const kept = readStoredDraft(draftStorageKey);
     if (kept === null || kept === activeContent) return;
-    setSourceDraft(kept);
-    setDraftOrigin('editor');
+    beginSourceDraft(kept, 'editor', 'saved');
     setActiveTab('code');
-    setDraftStatus('saved');
     toast.message('Restored your unsaved edits to this artifact');
-  }, [activeContent, canEditSource, draftStorageKey]);
+  }, [activeContent, beginSourceDraft, canEditSource, draftOwner, draftStorageKey]);
 
   useEffect(() => {
     if (!editRequested || variant !== 'panel') return;
     setViewedVersionIndex(null);
     if (!canEditSource) return;
-    setSourceDraft((current) => current ?? activeContent);
-    setDraftOrigin('editor');
+    const current = liveDraft.current;
+    beginSourceDraft(
+      current?.owner === draftOwner ? current.text : activeContent,
+      'editor',
+      current?.owner === draftOwner ? current.status : null,
+    );
     setActiveTab('code');
     setChangesShownFor(null);
     setEditorFocusRequest((count) => count + 1);
     clearEditRequest();
-  }, [activeContent, canEditSource, clearEditRequest, editRequested, variant]);
-
-  useEffect(() => {
-    if (sourceDraft === null) return;
-    const timer = setTimeout(() => {
-      setDraftStatus(writeStoredDraft(draftStorageKey, sourceDraft) ? 'saved' : 'unsaved');
-    }, ARTIFACT_DRAFT_AUTOSAVE_MS);
-    return () => clearTimeout(timer);
-  }, [draftStorageKey, sourceDraft]);
+  }, [
+    activeContent,
+    beginSourceDraft,
+    canEditSource,
+    clearEditRequest,
+    draftOwner,
+    editRequested,
+    variant,
+  ]);
 
   const endSourceEdit = useCallback(() => {
+    if (!draftOwner.active || liveDraft.current?.session !== currentDraft?.session) return;
     removeStoredDraft(draftStorageKey);
-    setDraftStatus(null);
-    setDraftOrigin(null);
-    setSourceDraft(null);
+    clearSourceDraft();
     setEditorFocusRequest(0);
-  }, [draftStorageKey]);
+  }, [clearSourceDraft, currentDraft?.session, draftOwner, draftStorageKey]);
 
   const saveSourceEdit = useCallback(() => {
-    if (sourceDraft === null) return;
+    const current = liveDraft.current;
+    if (
+      !draftOwner.active ||
+      !current ||
+      current.owner !== draftOwner ||
+      current.session !== currentDraft?.session
+    ) {
+      return;
+    }
     const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
     if (!stored) return;
-    if (sourceDraft !== stored.content) {
-      upsertArtifact({ ...stored, content: sourceDraft, createdAt: new Date() });
+    if (current.text !== stored.content) {
+      upsertArtifact({ ...stored, content: current.text, createdAt: new Date() });
     }
-    endSourceEdit();
-  }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
+    removeStoredDraft(draftStorageKey);
+    if (liveDraft.current?.session === current.session) {
+      clearSourceDraft();
+      setEditorFocusRequest(0);
+    }
+  }, [
+    artifact.id,
+    clearSourceDraft,
+    currentDraft?.session,
+    draftOwner,
+    draftStorageKey,
+    upsertArtifact,
+  ]);
 
   const saveArtifactContent = useCallback(
     (next: string) => {
@@ -1031,10 +1149,21 @@ export function ArtifactPreview({
 
   const handleTaskToggle = useCallback(
     (index: number) => {
-      setSourceDraft((current) => toggleMarkdownTask(current ?? activeContent, index));
-      setDraftOrigin((origin) => origin ?? 'checklist');
+      if (!draftOwner.active || draftEventEpoch.current !== renderedDraftEventEpoch) return;
+      const current = liveDraft.current?.owner === draftOwner ? liveDraft.current : null;
+      const text = toggleMarkdownTask(current?.text ?? activeContent, index);
+      if (text === (current?.text ?? activeContent)) return;
+      const next: SourceDraftSession = {
+        owner: draftOwner,
+        session: current?.session ?? ++draftSequence.current,
+        text,
+        origin: current?.origin ?? 'checklist',
+        status: writeStoredDraft(draftStorageKey, text) ? 'saved' : 'unsaved',
+      };
+      liveDraft.current = next;
+      setDraftSnapshot(next);
     },
-    [activeContent],
+    [activeContent, draftOwner, draftStorageKey, renderedDraftEventEpoch],
   );
 
   useEffect(() => {
@@ -1078,16 +1207,27 @@ export function ArtifactPreview({
   };
 
   const handlePublish = useCallback(async () => {
-    if (!publishArtifact || isPublishing) return;
-    setIsPublishing(true);
+    if (
+      !publishArtifact ||
+      !publicationView.active ||
+      !publishFeedbackView.active ||
+      publicationView.pending
+    )
+      return;
+    publicationView.pending = true;
+    publicationView.revision += 1;
+    setPublicationPending({ view: publicationView, kind: 'publish' });
     try {
       const result = await publishArtifact({
         content: activeContent,
         versionIndex: shownVersionIndex,
       });
+      if (!publicationView.active || !publishFeedbackView.active) return;
       if (result.kind === 'cloud') {
-        setPublishedUrl(result.shareUrl);
-        if (await writeToClipboard(result.shareUrl)) {
+        setPublishedUrl({ view: publicationView, url: result.shareUrl });
+        const copied = await writeToClipboard(result.shareUrl);
+        if (!publicationView.active || !publishFeedbackView.active) return;
+        if (copied) {
           toast.success('Published · link copied to clipboard');
         } else {
           toast.success('Published. Copy the link from the bar below.');
@@ -1095,36 +1235,57 @@ export function ArtifactPreview({
         return;
       }
       if (result.kind === 'local') {
-        setPublishedUrl(result.shareUrl);
+        setPublishedUrl({ view: publicationView, url: result.shareUrl });
         toast.success('Exported to a local file');
         return;
       }
       setPublishedUrl(null);
-      if (await writeToClipboard(activeContent)) {
+      const copied = await writeToClipboard(activeContent);
+      if (!publicationView.active || !publishFeedbackView.active) return;
+      if (copied) {
         toast.message(result.reason, { description: 'Artifact source copied to the clipboard.' });
       } else {
         toast.error(result.reason);
       }
     } catch (error) {
+      if (!publicationView.active || !publishFeedbackView.active) return;
       setPublishedUrl(null);
       toast.error(toUserMessage(error, 'Failed to publish artifact'));
     } finally {
-      setIsPublishing(false);
+      publicationView.pending = false;
+      if (publicationView.active) setPublicationPending(null);
     }
-  }, [publishArtifact, isPublishing, activeContent, shownVersionIndex]);
+  }, [publishArtifact, publicationView, publishFeedbackView, activeContent, shownVersionIndex]);
 
   const handleChangeAudience = useCallback(
     (next: PublishedArtifactAudience) => {
-      if (!artifactAudience || isChangingAudience || next === artifactAudience.current) return;
+      if (
+        !artifactAudience ||
+        !publicationView.active ||
+        publicationView.pending ||
+        next === artifactAudience.current
+      )
+        return;
+      const revision = publicationView.revision;
       const members = artifactAudience.memberCount ?? 0;
       const memberLabel = translateUiPlural('settings', 'counts.members', members, {
         one: '{{count}} member',
         other: '{{count}} members',
       });
       const apply = async () => {
-        setIsChangingAudience(true);
+        if (
+          !publicationView.active ||
+          publicationView.pending ||
+          publicationView.revision !== revision ||
+          audienceSnapshot.current !== artifactAudience
+        )
+          return;
+        publicationView.pending = true;
+        publicationView.revision += 1;
+        setPublicationPending({ view: publicationView, kind: 'audience' });
         try {
           await artifactAudience.onChange(next);
+          if (!publicationView.active) return;
           toast.success(
             next === 'organization'
               ? 'Only your workspace can open this now'
@@ -1133,9 +1294,12 @@ export function ArtifactPreview({
                 : 'Anyone with the link can open this now',
           );
         } catch (error) {
-          toast.error(toUserMessage(error, 'Could not change who can open this'));
+          if (publicationView.active) {
+            toast.error(toUserMessage(error, 'Could not change who can open this'));
+          }
         } finally {
-          setIsChangingAudience(false);
+          publicationView.pending = false;
+          if (publicationView.active) setPublicationPending(null);
         }
       };
       if (next === 'invited') {
@@ -1174,7 +1338,7 @@ export function ArtifactPreview({
             },
       );
     },
-    [artifactAudience, isChangingAudience, confirmAction],
+    [artifactAudience, publicationView, confirmAction],
   );
 
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
@@ -1636,19 +1800,25 @@ export function ArtifactPreview({
     uri: string;
     sheets: { name: string; content: string }[];
   } | null>(null);
+  const [oversizedWorkbookUri, setOversizedWorkbookUri] = useState<string | null>(null);
   useEffect(() => {
     if (!workbookUri) return;
     let cancelled = false;
     loadWorkbookSheets(workbookUri)
       .then((sheets) => {
-        if (!cancelled)
+        if (!cancelled) {
+          setOversizedWorkbookUri(null);
           setWorkbookSheets({
             uri: workbookUri,
             sheets: sheets.map((sheet) => ({ name: sheet.name, content: sheet.csv })),
           });
+        }
       })
-      .catch(() => {
-        if (!cancelled) setWorkbookSheets(null);
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setWorkbookSheets(null);
+          setOversizedWorkbookUri(error instanceof WorkbookPreviewLimitError ? workbookUri : null);
+        }
       });
     return () => {
       cancelled = true;
@@ -1722,6 +1892,11 @@ export function ArtifactPreview({
 
   const renderSharedPreview = (containerClassName: string) => (
     <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
+      {workbookUri && oversizedWorkbookUri === workbookUri && (
+        <p role="status" className="p-3 text-sm text-muted-foreground">
+          {WORKBOOK_PREVIEW_TOO_LARGE}
+        </p>
+      )}
       {isTabular ? (
         <SpreadsheetArtifact
           artifact={sharedArtifactView}
@@ -1937,10 +2112,9 @@ export function ArtifactPreview({
   );
 
   const startDocumentEdit = useCallback(() => {
-    setSourceDraft(activeContent);
-    setDraftOrigin('editor');
+    beginSourceDraft(activeContent, 'editor');
     setEditorFocusRequest((count) => count + 1);
-  }, [activeContent]);
+  }, [activeContent, beginSourceDraft]);
 
   const canRequestSelectionEdits =
     variant === 'panel' &&
@@ -2087,7 +2261,7 @@ export function ArtifactPreview({
         id: 'publish',
         label: isPublishing ? 'Publishing…' : 'Publish',
         icon: Globe,
-        disabled: isPublishing,
+        disabled: isPublishing || isChangingAudience,
         onSelect: () => void handlePublish(),
         className: NARROW_ONLY_ITEM_CLASS,
       });
@@ -2291,7 +2465,7 @@ export function ArtifactPreview({
               toast.error('That artifact could not be duplicated');
               return;
             }
-            setSourceDraft(null);
+            clearSourceDraft();
             setViewedVersionIndex(null);
             toast.success('Duplicated. Edits here no longer touch the original.');
           },
@@ -2699,7 +2873,7 @@ export function ArtifactPreview({
                 variant="ghost"
                 size="sm"
                 onClick={() => void handlePublish()}
-                disabled={isPublishing}
+                disabled={isPublishing || isChangingAudience}
                 className="hidden h-7 px-2 @[26rem]:inline-flex"
                 aria-label="Publish artifact to a public link"
                 title="Publish"
@@ -2738,10 +2912,6 @@ export function ArtifactPreview({
           </div>
         </div>
 
-        {/* The turn was stopped before this artifact finished, so the panel is
-            showing a fragment. Saying so is the point: the content looks like a
-            whole document and a reader who copies or publishes it would carry
-            the truncation with them. */}
         {artifact.interrupted && (
           <div
             className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
@@ -2753,7 +2923,11 @@ export function ArtifactPreview({
             data-testid="artifact-interrupted-notice"
           >
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 text-xs">{INTERRUPTED_ARTIFACT_NOTICE}</span>
+            <span className="min-w-0 text-xs">
+              {awaitingApproval
+                ? 'This saved artifact is partial. The response awaits approval, and this copy may not include later output.'
+                : INTERRUPTED_ARTIFACT_NOTICE}
+            </span>
           </div>
         )}
 
@@ -2803,7 +2977,9 @@ export function ArtifactPreview({
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => {
+                if (!publicationView.active) return;
                 void writeToClipboard(shownPublishedUrl).then((ok) => {
+                  if (!publicationView.active) return;
                   if (ok) toast.success('Link copied');
                   else toast.error('Could not copy the link');
                 });
@@ -2819,7 +2995,7 @@ export function ArtifactPreview({
                 <select
                   id="artifact-audience-select"
                   value={artifactAudience.current}
-                  disabled={isChangingAudience}
+                  disabled={isChangingAudience || isPublishing}
                   onChange={(event) =>
                     handleChangeAudience(
                       event.target.value === 'organization' || event.target.value === 'invited'
@@ -2841,7 +3017,10 @@ export function ArtifactPreview({
             )}
             {artifactAudience?.current === 'invited' && publishedToken && (
               <div className="w-full" data-testid="artifact-invited-viewers">
-                <SiteViewersEditor token={publishedToken} />
+                <SiteViewersEditor
+                  key={`${artifact.id}:${publishedToken}`}
+                  token={publishedToken}
+                />
               </div>
             )}
           </div>
@@ -3062,8 +3241,9 @@ export function ArtifactPreview({
             isMarkdownDoc &&
             (sourceDraft !== null && draftOrigin === 'editor' ? (
               <ArtifactDocumentEditor
+                key={currentDraft?.session}
                 value={sourceDraft}
-                onChange={setSourceDraft}
+                onChange={changeSourceDraft}
                 wraps={MARKDOWN_SHORTCUTS}
               />
             ) : (
@@ -3104,8 +3284,9 @@ export function ArtifactPreview({
             !showChanges &&
             (sourceDraft !== null ? (
               <ArtifactCodeEditor
+                key={currentDraft?.session}
                 value={sourceDraft}
-                onChange={setSourceDraft}
+                onChange={changeSourceDraft}
                 language={isMarkdownDoc ? 'markdown' : (artifact.language ?? artifact.type)}
                 wraps={artifact.type === 'document' ? MARKDOWN_SHORTCUTS : undefined}
                 ariaLabel="Artifact source"

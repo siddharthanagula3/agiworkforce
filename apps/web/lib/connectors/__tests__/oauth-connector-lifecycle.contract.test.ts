@@ -1,9 +1,12 @@
+import { expectSdkBearerCredential } from './mcp-auth-contract';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 type Row = Record<string, unknown>;
@@ -81,7 +84,8 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
     (globalThis.fetch as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init),
 }));
 
-vi.mock('@agiworkforce/mcp', () => {
+type McpModule = typeof import('@agiworkforce/mcp');
+vi.mock('@agiworkforce/mcp', async (importOriginal) => {
   const catalog = {
     version: 1,
     generatedAt: 0,
@@ -118,6 +122,7 @@ vi.mock('@agiworkforce/mcp', () => {
     };
   };
   return {
+    ...(await importOriginal<McpModule>()),
     connectMcpServer: async ({
       serverName,
       config,
@@ -218,6 +223,8 @@ vi.mock('@/lib/server/neon-db', () => {
         (g) => g['user_id'] === userId && g['connector_id'] === connectorId,
       );
       const row: Row = {
+        id: existing?.['id'] ?? '00000000-0000-0000-0000-000000000001',
+        account_key: params[11] ?? 'default',
         user_id: userId,
         connector_id: connectorId,
         access_token_enc: accessEnc,
@@ -235,16 +242,26 @@ vi.mock('@/lib/server/neon-db', () => {
       return [];
     }
     if (q.startsWith('update public.connector_oauth_grants set revoked_at')) {
-      const [userId, connectorId] = params as [string, string];
-      const row = mocks.grants.find(
+      const [userId, connectorId, target] = params as [
+        string,
+        string,
+        string[] | string | undefined,
+      ];
+      const rows = mocks.grants.filter(
         (g) =>
-          g['user_id'] === userId && g['connector_id'] === connectorId && g['revoked_at'] === null,
+          g['user_id'] === userId &&
+          g['connector_id'] === connectorId &&
+          g['revoked_at'] === null &&
+          (Array.isArray(target)
+            ? target.includes(String(g['id']))
+            : target === undefined || g['account_key'] === target),
       );
-      if (!row) return [];
-      row['revoked_at'] = new Date().toISOString();
-      row['access_token_enc'] = null;
-      row['refresh_token_enc'] = null;
-      return [{ connector_id: connectorId }];
+      for (const row of rows) {
+        row['revoked_at'] = new Date().toISOString();
+        row['access_token_enc'] = null;
+        row['refresh_token_enc'] = null;
+      }
+      return rows.map((row) => ({ connector_id: connectorId, id: row['id'] }));
     }
     if (q.startsWith('update public.connector_oauth_grants set access_token_enc')) {
       const [userId, connectorId, accessEnc, refreshEnc, tokenType, scopes, expiresAt] = params as [
@@ -268,7 +285,18 @@ vi.mock('@/lib/server/neon-db', () => {
       row['access_token_expires_at'] = expiresAt;
       return [];
     }
-    // Disconnect first lists every live credential of the connector so each is revoked upstream.
+    if (q.startsWith('select id, access_token_enc, refresh_token_enc,')) {
+      const [userId, connectorId, accountKey] = params as [string, string, string | undefined];
+      return mocks.grants
+        .filter(
+          (g) =>
+            g['user_id'] === userId &&
+            g['connector_id'] === connectorId &&
+            g['revoked_at'] === null &&
+            (accountKey === undefined || g['account_key'] === accountKey),
+        )
+        .map((row) => ({ ...row }));
+    }
     if (q.startsWith('select access_token_enc, refresh_token_enc,')) {
       const [userId, connectorId] = params as [string, string];
       return mocks.grants.filter(
@@ -295,6 +323,7 @@ vi.mock('@/lib/server/neon-db', () => {
       run(sql, params);
       return 0;
     },
+    // This fixture models sequential transactions, not PostgreSQL lock scheduling.
     transaction: async (callback: (tx: unknown) => unknown) => callback(adapter),
   };
   return { getNeonDb: vi.fn(() => adapter) };
@@ -448,9 +477,10 @@ describe('CRIT-001, an available connector completes the whole lifecycle', () =>
     expect(names).toContain('mcp__acme__create_record');
 
     const connect = mocks.mcpConnects.find((c) => c.serverName === 'acme');
+    await expectSdkBearerCredential(connect?.config, 'acme-access-1');
     expect(connect?.config).toMatchObject({
       url: 'https://acme.example.com/mcp',
-      headers: expect.objectContaining({ Authorization: 'Bearer acme-access-1' }),
+      authProvider: { token: expect.any(Function) },
     });
   });
 

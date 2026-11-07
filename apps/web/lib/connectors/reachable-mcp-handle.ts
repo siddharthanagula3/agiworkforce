@@ -24,7 +24,7 @@ export function withReachableMcpHandle<T>(
   userId: string,
   connectorRef: string,
   operation: (connection: UserConnectorMcpHandle) => Promise<T>,
-  options: Pick<LoadUserConnectorToolOptions, 'organizationId'> = {},
+  options: Pick<LoadUserConnectorToolOptions, 'organizationId' | 'request' | 'allowSelective'> = {},
 ): Promise<T | null> {
   return withUserConnectorMcpHandle(userId, connectorRef, operation, {
     ...options,

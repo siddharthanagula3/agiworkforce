@@ -11,6 +11,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CONNECTORS_COMING_SOON_MESSAGE,
   billingPlanCapabilityUpgradeMessage,
+  connectorReleased,
   connectorsReleased,
 } from '@agiworkforce/types';
 
@@ -143,7 +144,7 @@ export async function evaluateConnectorPolicyForUser(
     surface?: string | null;
   },
 ): Promise<ConnectorPolicyGateResult> {
-  if (!connectorsReleased()) {
+  if (!connectorsReleased() && !connectorReleased(params.connectorId)) {
     return {
       allowed: false,
       code: 'connectors_coming_soon',
@@ -189,6 +190,7 @@ export async function evaluateConnectorPolicyForUser(
     organizationId,
     planTier,
     surface: params.surface ?? null,
+    connectorId: params.connectorId,
   });
   if (!connectorsAllowed) {
     return {

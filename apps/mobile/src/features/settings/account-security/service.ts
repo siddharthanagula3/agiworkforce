@@ -1,5 +1,7 @@
+import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { api } from '@/services/api';
 import {
+  type PreferenceRequestOptions,
   fetchAccountSettings,
   fetchPreferenceNamespace,
   saveAccountSettings,
@@ -83,14 +85,22 @@ function isSessionTimeout(value: unknown): value is SessionTimeoutMinutes {
   return SESSION_TIMEOUT_MINUTES.includes(value as SessionTimeoutMinutes);
 }
 
-export async function fetchSessionTimeout(): Promise<SessionTimeoutMinutes> {
-  const settings = await fetchAccountSettings();
+export async function fetchSessionTimeout(
+  options?: PreferenceRequestOptions,
+): Promise<SessionTimeoutMinutes> {
+  const settings = await fetchAccountSettings({ ...options, strictSettings: true });
   const stored = settings['session_timeout'];
-  return isSessionTimeout(stored) ? stored : DEFAULT_SESSION_TIMEOUT;
+  if (stored === undefined) return DEFAULT_SESSION_TIMEOUT;
+  if (!isSessionTimeout(stored))
+    throw new Error('Account security returned an invalid session timeout');
+  return stored;
 }
 
-export async function saveSessionTimeout(minutes: SessionTimeoutMinutes): Promise<void> {
-  await saveAccountSettings({ session_timeout: minutes });
+export async function saveSessionTimeout(
+  minutes: SessionTimeoutMinutes,
+  options: PreferenceRequestOptions,
+): Promise<void> {
+  await saveAccountSettings({ session_timeout: minutes }, options);
 }
 
 export interface AccountSessionRow {
@@ -139,20 +149,33 @@ export function parseAccountSessions(value: unknown): AccountSessions {
   };
 }
 
-export async function fetchAccountSessions(signal?: AbortSignal): Promise<AccountSessions> {
+export async function fetchAccountSessions(
+  signal?: AbortSignal,
+  accountEpoch?: CloudAccountEpoch,
+): Promise<AccountSessions> {
   const response = await api.get<unknown>(
     '/api/settings/sessions',
-    signal ? { signal } : undefined,
+    accountEpoch ? { signal, accountEpoch } : signal ? { signal } : undefined,
   );
   return parseAccountSessions(response);
 }
 
-export async function revokeAccountSession(sessionId: string): Promise<void> {
-  await api.delete(`/api/settings/sessions/${encodeURIComponent(sessionId)}`);
+export async function revokeAccountSession(
+  sessionId: string,
+  accountEpoch: CloudAccountEpoch,
+  signal?: AbortSignal,
+): Promise<void> {
+  await api.delete(`/api/settings/sessions/${encodeURIComponent(sessionId)}`, {
+    accountEpoch,
+    signal,
+  });
 }
 
-export async function revokeAllAccountSessions(headers: Record<string, string>): Promise<void> {
-  await api.delete('/api/settings/sessions', { headers });
+export async function revokeAllAccountSessions(
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<void> {
+  await api.delete('/api/settings/sessions', { headers, accountEpoch });
 }
 
 export interface PasswordChange {
@@ -163,6 +186,7 @@ export interface PasswordChange {
 export async function changeAccountPassword(
   change: PasswordChange,
   headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
 ): Promise<void> {
   await api.post(
     '/api/settings/password',
@@ -170,7 +194,7 @@ export async function changeAccountPassword(
       newPassword: change.newPassword,
       ...(change.currentPassword === null ? {} : { currentPassword: change.currentPassword }),
     },
-    { headers },
+    { headers, accountEpoch },
   );
 }
 
@@ -202,13 +226,23 @@ export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<A
 
 const LOCKDOWN_PREFERENCE_NAMESPACE = 'lockdown';
 
-export async function fetchLockdownMode(): Promise<boolean> {
-  const settings = await fetchPreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE);
-  return (settings as { enabled?: unknown }).enabled === true;
+export async function fetchLockdownMode(options?: PreferenceRequestOptions): Promise<boolean> {
+  const settings = await fetchPreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE, {
+    ...options,
+    strictSettings: true,
+  });
+  const enabled = (settings as { enabled?: unknown }).enabled;
+  if (enabled === undefined) return false;
+  if (typeof enabled !== 'boolean')
+    throw new Error('Account security returned an invalid lockdown setting');
+  return enabled;
 }
 
-export async function saveLockdownMode(enabled: boolean): Promise<void> {
-  await savePreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE, { enabled });
+export async function saveLockdownMode(
+  enabled: boolean,
+  options: PreferenceRequestOptions,
+): Promise<void> {
+  await savePreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE, { enabled }, options);
 }
 
 export interface SignInIdentity {
@@ -281,8 +315,13 @@ function readBackupCodes(value: unknown): string[] {
 
 export async function startAuthenticatorSetup(
   headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
 ): Promise<{ secret: string; otpauthUrl: string }> {
-  const response = await api.post<unknown>('/api/settings/2fa/setup', {}, { headers });
+  const response = await api.post<unknown>(
+    '/api/settings/2fa/setup',
+    {},
+    { headers, accountEpoch },
+  );
   const secret = isRecord(response) ? response['secret'] : null;
   const otpauthUrl = isRecord(response) ? response['otpauth_url'] : null;
   if (typeof secret !== 'string' || typeof otpauthUrl !== 'string') {
@@ -291,16 +330,27 @@ export async function startAuthenticatorSetup(
   return { secret, otpauthUrl };
 }
 
-export async function verifyAuthenticatorCode(code: string): Promise<string[]> {
-  return readBackupCodes(await api.post<unknown>('/api/settings/2fa/verify', { code }));
-}
-
-export async function regenerateBackupCodes(headers: Record<string, string>): Promise<string[]> {
+export async function verifyAuthenticatorCode(
+  code: string,
+  accountEpoch: CloudAccountEpoch,
+): Promise<string[]> {
   return readBackupCodes(
-    await api.post<unknown>('/api/settings/2fa/backup-codes', {}, { headers }),
+    await api.post<unknown>('/api/settings/2fa/verify', { code }, { accountEpoch }),
   );
 }
 
-export async function turnOffTwoFactor(headers: Record<string, string>): Promise<void> {
-  await api.delete('/api/settings/2fa', { headers });
+export async function regenerateBackupCodes(
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<string[]> {
+  return readBackupCodes(
+    await api.post<unknown>('/api/settings/2fa/backup-codes', {}, { headers, accountEpoch }),
+  );
+}
+
+export async function turnOffTwoFactor(
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<void> {
+  await api.delete('/api/settings/2fa', { headers, accountEpoch });
 }

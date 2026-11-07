@@ -2,11 +2,31 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-10-18
+Last updated: 2026-10-31
 
 What the owner registers with each vendor so that AGI Workforce connectors sign
 in the way Claude and ChatGPT connectors do. Most connectors need nothing from
 you. This runbook covers only the ones that do, in the order to start them.
+
+## Current release boundary
+
+The full-launch switch remains `coming_soon`. Selected self-service connector
+IDs are owned by `SELECTIVELY_RELEASED_CONNECTOR_IDS` in
+`packages/contracts/types/src/connector-release.ts`; `connectorReleased(id)`
+enforces that exact selection. Coarse availability enables discovery UI only.
+It does not authorize another connector, a directory alias or a custom server.
+
+The subset is admitted in ordinary account chat and Settings. Agent, voice,
+schedule, artifact and generic custom/plugin setup paths keep the full-launch
+restriction. Account email, plan, kill switches, workspace policy, host policy
+and tool permissions still apply before the relevant external operation.
+
+Setup readiness is distinct from authorization. The authenticated connector
+list's `setup` object reports missing deployment prerequisites; `available` is
+also filtered by release policy. A ready setup does not prove that a vendor
+accepted the callback origin, that its owner completed consent, or that an
+actual read succeeded. Record those checks separately and never mark a provider
+connected from a successful redirect alone.
 
 ## Why most connectors need nothing
 

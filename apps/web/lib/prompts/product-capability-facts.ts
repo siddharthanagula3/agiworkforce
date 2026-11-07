@@ -3,6 +3,7 @@ import 'server-only';
 import {
   SYNCED_APP_SURFACES,
   canUseBillingPlanCapability,
+  connectorsReleased,
   type PlatformCapability,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
@@ -17,15 +18,15 @@ import {
  * What the product grants this account on this surface, for the chat prompt's
  * overview. It reads the same capability handshake `/api/me` serves, with the
  * same operator, account and workspace exclusions, so the model is told
- * exactly what the app shows the user, and narrows it only where the chat
- * route enforces a stricter rule than the handshake records: a plan without
- * sandboxes never gets a code run.
+ * what the app shows the user, narrowed by the chat route's code execution
+ * entitlement and explicit selective-connector context.
  */
 export interface ProductCapabilityFactsInput {
   readonly userId: string;
   readonly tier: string | null | undefined;
   readonly surface: string;
   readonly cloudExecutionDeploymentEnabled: boolean;
+  readonly allowSelectiveConnectors?: boolean;
   readonly exclusions: CapabilityExclusions;
 }
 
@@ -46,7 +47,11 @@ export function productCapabilityFacts(
     ...input.exclusions,
   });
   return document.granted.filter(
-    (capability) => capability !== 'canUseCloudExecution' || planAdmitsCodeExecution(input.tier),
+    (capability) =>
+      (capability !== 'canUseCloudExecution' || planAdmitsCodeExecution(input.tier)) &&
+      (capability !== 'canUseConnectors' ||
+        connectorsReleased() ||
+        input.allowSelectiveConnectors === true),
   );
 }
 
@@ -55,6 +60,7 @@ export function productArtifactConnectors(
   capabilities: readonly PlatformCapability[],
 ): boolean {
   return (
+    connectorsReleased() &&
     capabilities.includes('canUseConnectors') &&
     canUseBillingPlanCapability(tier, 'artifact_connectors')
   );

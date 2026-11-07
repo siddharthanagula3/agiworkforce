@@ -1,4 +1,4 @@
-import type { CloudWorkMode } from '@agiworkforce/types';
+import type { CloudWorkMode, Effort } from '@agiworkforce/types';
 
 // Only a turn recorded before the skill's name was carried in the replay. A
 // turn that names its skill regenerates with that skill.
@@ -11,6 +11,7 @@ const LEGACY_TOOL_REGENERATE_MESSAGE =
 export interface SendReplayMetadataLike {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
   officeOutputFormat?: string;
@@ -81,6 +82,7 @@ export function replayToSendOptions<R extends SendReplayMetadataLike = SendRepla
 ): {
   webSearch?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecution?: boolean;
   officeCreation?: boolean;
   officeFormat?: R['officeOutputFormat'];
@@ -91,6 +93,7 @@ export function replayToSendOptions<R extends SendReplayMetadataLike = SendRepla
   return {
     webSearch: replay?.webSearchEnabled,
     thinkingEnabled: replay?.thinkingEnabled,
+    thinkingEffort: replay?.thinkingEffort,
     codeExecution: replay?.codeExecutionEnabled,
     officeCreation: replay?.officeCreationEnabled,
     officeFormat: replay?.officeOutputFormat,

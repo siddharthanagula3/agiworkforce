@@ -66,9 +66,13 @@ export function getSentryEnvironment(): string {
 
 export const TELEMETRY_CONSENT_STORAGE_KEY = 'agi.privacy.shareTelemetry';
 const TELEMETRY_PENDING_OPT_OUT_KEY = 'agi.privacy.pendingTelemetryOptOut';
+// Writes can fail while old consent stays readable. This module/page latch does
+// not survive reloads, order cross-tab changes, or stop post-init delivery.
+let pageTelemetryRefused = false;
 
 export function hasPendingTelemetryOptOut(): boolean {
   if (typeof window === 'undefined') return false;
+  if (pageTelemetryRefused) return true;
   try {
     return window.localStorage.getItem(TELEMETRY_PENDING_OPT_OUT_KEY) === 'true';
   } catch {
@@ -78,11 +82,12 @@ export function hasPendingTelemetryOptOut(): boolean {
 
 export function requestTelemetryOptOut(): void {
   if (typeof window === 'undefined') return;
+  pageTelemetryRefused = true;
   try {
     window.localStorage.setItem(TELEMETRY_PENDING_OPT_OUT_KEY, 'true');
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, 'false');
   } catch {
-    // Unavailable storage is treated as no consent by the read gates.
+    // Reads can still return old consent when storage writes are refused.
   }
 }
 
@@ -92,9 +97,11 @@ export function confirmTelemetryConsent(value: boolean): void {
     return;
   }
   if (typeof window === 'undefined') return;
+  pageTelemetryRefused = true;
   try {
+    window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, 'true');
     window.localStorage.removeItem(TELEMETRY_PENDING_OPT_OUT_KEY);
-    setTelemetryConsentCache(true);
+    pageTelemetryRefused = false;
   } catch {
     // Keep the prior denial when consent cannot be persisted locally.
   }
@@ -111,10 +118,14 @@ export function hasTelemetryConsent(): boolean {
 
 export function setTelemetryConsentCache(value: boolean): void {
   if (typeof window === 'undefined') return;
+  if (!value) pageTelemetryRefused = true;
   try {
     if (value && hasPendingTelemetryOptOut()) return;
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, value ? 'true' : 'false');
-    if (!value) window.localStorage.removeItem(TELEMETRY_PENDING_OPT_OUT_KEY);
+    if (!value) {
+      window.localStorage.removeItem(TELEMETRY_PENDING_OPT_OUT_KEY);
+      pageTelemetryRefused = false;
+    }
   } catch {
     // noop
   }

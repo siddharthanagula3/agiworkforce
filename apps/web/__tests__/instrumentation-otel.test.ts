@@ -21,6 +21,7 @@ vi.mock('@sentry/nextjs', () => ({
   captureRequestError: vi.fn(),
   captureRouterTransitionStart: vi.fn(),
   withStaticSpan: (callback: unknown) => callback,
+  makeFetchTransport: vi.fn(),
   openTelemetryIntegration: () => ({ name: 'OpenTelemetry' }),
 }));
 
@@ -147,7 +148,20 @@ describe('register with an exporter endpoint configured', () => {
   });
 });
 
-describe('client telemetry consent gate', () => {
+describe('mocked SDK initialization transport separation', () => {
+  it.each(['nodejs', 'edge'])('leaves %s on shared transport defaults', async (runtime) => {
+    vi.stubEnv('NEXT_RUNTIME', runtime);
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('SENTRY_DSN', SENTRY_DSN);
+
+    await runRegister();
+
+    expect(sentryInit).toHaveBeenCalledTimes(1);
+    expect(sentryOptions()).not.toHaveProperty('transport');
+  });
+});
+
+describe('client telemetry consent gate with mocked SDK initialization', () => {
   async function loadClientInstrumentation(): Promise<void> {
     vi.resetModules();
     await import('@/instrumentation-client');
@@ -170,6 +184,8 @@ describe('client telemetry consent gate', () => {
     await loadClientInstrumentation();
     expect(sentryInit).toHaveBeenCalledTimes(1);
     expect(sentryOptions()['enableOpenTelemetrySetup']).toBeUndefined();
+    const { makeConsentAwareSentryTransport } = await import('@/lib/client/sentry-client-options');
+    expect(sentryOptions()['transport']).toBe(makeConsentAwareSentryTransport);
   });
 
   it('lets a revoked document consent flag override a stale cache', async () => {

@@ -447,6 +447,7 @@ export type McpConnectionRuntimeOptions = Omit<
 >;
 
 export interface BuildMcpCatalogOptions {
+  onConnectionError?: (serverName: string, error: unknown) => void;
   resolveRuntime?: (
     serverName: string,
     config: McpServerConfig,
@@ -939,6 +940,7 @@ export async function buildMcpToolCatalog(
       flatResourceTemplates.push(...handle.catalog.resourceTemplates);
       flatPrompts.push(...handle.catalog.prompts);
     } catch (err) {
+      options?.onConnectionError?.(serverName, err);
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[mcp] failed to connect to server "${serverName}": ${message}`);
       serverEntries[serverName] = {

@@ -60,7 +60,10 @@ import {
   withConnectorReturnPath,
 } from '@features/connectors/hooks/use-connectors';
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
-import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
+import {
+  announceSkillCatalogChanged,
+  SKILL_CATALOG_CHANGED_EVENT,
+} from '@shared/events/skill-catalog-events';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
 import {
@@ -255,7 +258,6 @@ const SKILL_COMPOSE_ACTION_ID = 'compose-skill';
 const EMPTY_SKILL_NAMES: readonly string[] = [];
 const EMPTY_SKILL_DESCRIPTIONS: ReadonlyMap<string, string> = new Map();
 const EMPTY_SKILL_INDEX: ReadonlyMap<string, ManagedSkillSummary> = new Map();
-const EMPTY_CATALOG: readonly ManagedSkillSummary[] = [];
 const SECTIONS: readonly DirectorySectionKey[] = ['skills', 'connectors', 'plugins'];
 const DEFAULT_CONNECT_AUTH_TYPE = 'oauth2';
 
@@ -410,6 +412,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const [connectors, setConnectors] = useState<DirectorySection>(initialConnectorSection);
   const [plugins, setPlugins] = useState<DirectorySection>(initialPluginSection);
   const skillCache = useRef<readonly ManagedSkillSummary[]>([]);
+  const skillRequestSeq = useRef(0);
   const serverConnectedIds = useRef<ReadonlySet<string>>(new Set<string>());
   const connectorErrors = useRef<Record<string, string>>({});
   const connectorsErrorRef = useRef<string | null>(null);
@@ -470,12 +473,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   );
 
   const loadSkills = useCallback(async () => {
+    const seq = ++skillRequestSeq.current;
     setSkills((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const [catalog, installed] = await Promise.all([
         fetchSkillCatalog(),
         fetchInstalledSkillNames(),
       ]);
+      if (seq !== skillRequestSeq.current) return;
       skillCache.current = catalog;
       installedSkills.current = installed;
       publishSkillCatalog(catalog);
@@ -492,6 +497,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         retry: loadSkills,
       });
     } catch {
+      if (seq !== skillRequestSeq.current) return;
       setSkills((prev) => ({
         ...prev,
         loading: false,
@@ -507,6 +513,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       }));
     }
   }, [createSkillLabel, publishSkillCatalog]);
+
+  useEffect(() => {
+    const refresh = () => {
+      skillCache.current = [];
+      void loadSkills();
+    };
+    window.addEventListener(SKILL_CATALOG_CHANGED_EVENT, refresh);
+    return () => {
+      skillRequestSeq.current += 1;
+      window.removeEventListener(SKILL_CATALOG_CHANGED_EVENT, refresh);
+    };
+  }, [loadSkills]);
 
   useEffect(() => {
     setSkills((prev) =>
@@ -1005,15 +1023,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       publishSkillCatalog(skillCache.current);
       return;
     }
-    const [catalog, installed] = await Promise.all([
-      fetchSkillCatalog().catch(() => EMPTY_CATALOG),
-      fetchInstalledSkillNames().catch(() => new Set<string>()),
-    ]);
-    if (catalog.length === 0) return;
-    skillCache.current = catalog;
-    installedSkills.current = installed;
-    publishSkillCatalog(catalog);
-  }, [publishSkillCatalog]);
+    await loadSkills();
+  }, [loadSkills, publishSkillCatalog]);
 
   const withPluginReview = useCallback(
     async (detail: DirectoryPluginDetail): Promise<DirectoryPluginDetail> => {
@@ -1761,8 +1772,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   }, []);
 
   const pluginRepairs = useCallback(
-    (pluginId: string, enabledSkills: ReadonlySet<string>): DirectoryPluginRepair[] => {
-      if (!settingsEnabled || skillIndex.size === 0) return [];
+    (enabledSkills: ReadonlySet<string>): DirectoryPluginRepair[] => {
+      if (!pluginSettingsState.enabled || skillIndex.size === 0) return [];
       const connectorLabel = (connectorId: string): string =>
         curatedRef.current.find((entry) => entry.id === connectorId)?.name ?? connectorId;
       const active = settingsSkills.filter((name) => enabledSkills.has(name));
@@ -1774,9 +1785,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           id: PLUGIN_REPAIR_RELOAD_ID,
           label: `${PLUGIN_REPAIR_MISSING_SKILLS_COPY} ${missing.join(', ')}`,
           actionLabel: PLUGIN_REPAIR_RELOAD_LABEL,
-          run: async () => {
-            await installPlugin(pluginId);
-          },
+          run: loadSkills,
         });
       }
       const needed = new Set(
@@ -1793,7 +1802,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       }
       return repairs;
     },
-    [settingsEnabled, settingsSkills, skillIndex, connectedIds, installPlugin, openConnector],
+    [
+      pluginSettingsState.enabled,
+      settingsSkills,
+      skillIndex,
+      connectedIds,
+      loadSkills,
+      openConnector,
+    ],
   );
 
   const pluginSettings = useMemo<DirectoryPluginSettings | undefined>(() => {
@@ -1801,9 +1817,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     const enabledSkills = new Set(pluginSettingsState.settings?.enabledSkills ?? []);
     const connectorLabel = (connectorId: string): string =>
       curatedRef.current.find((entry) => entry.id === connectorId)?.name ?? connectorId;
-    const repairs = pluginSettingsState.settings
-      ? pluginRepairs(settingsPluginId, enabledSkills)
-      : [];
+    const repairs = pluginSettingsState.settings ? pluginRepairs(enabledSkills) : [];
     return {
       pluginId: settingsPluginId,
       skills: settingsSkills.map((name) => {

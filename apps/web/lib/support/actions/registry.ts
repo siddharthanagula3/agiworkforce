@@ -105,6 +105,7 @@ export const SUPPORT_ACTIONS: Readonly<{
       effects: [
         'The current key stops working immediately. Anything using it will start failing.',
         'A new key is created with the same name and exactly the same scopes, no extra access.',
+        'The existing expiry and project are kept.',
         'The new key is shown to you once and is never stored in plain text, so copy it before closing.',
       ],
       reversibleNote:

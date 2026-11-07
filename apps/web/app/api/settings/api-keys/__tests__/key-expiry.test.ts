@@ -80,13 +80,48 @@ function applyInsert(sql: string, params: readonly unknown[]): Record<string, un
   return row;
 }
 
+let insertionActive = false;
 const insertingDb = {
-  query: async (sql: string, params: readonly unknown[]) => {
-    const row = applyInsert(sql, params);
-    table.push(row);
-    return [row];
+  query: () => {
+    throw new Error('Insertion escaped its transaction');
   },
-  execute: async () => 1,
+  execute: () => {
+    throw new Error('Unexpected outer execute');
+  },
+  transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+    if (insertionActive) throw new Error('Nested transaction');
+    insertionActive = true;
+    let open = true;
+    const pending: Array<Record<string, unknown>> = [];
+    const tx = {
+      query: async (sql: string, params: readonly unknown[]) => {
+        if (!open) throw new Error('Transaction handle escaped');
+        const row = applyInsert(sql, params);
+        pending.push(row);
+        return [row];
+      },
+      execute: () => {
+        throw new Error('Unexpected transaction execute');
+      },
+      transaction: () => {
+        throw new Error('Nested transaction');
+      },
+      withUser: () => {
+        throw new Error('Transaction scope escape');
+      },
+      withOrg: () => {
+        throw new Error('Transaction scope escape');
+      },
+    };
+    try {
+      const result = await callback(tx);
+      table.push(...pending);
+      return result;
+    } finally {
+      open = false;
+      insertionActive = false;
+    }
+  },
 } as never;
 
 async function issueKey(expiresAt: Date | null) {

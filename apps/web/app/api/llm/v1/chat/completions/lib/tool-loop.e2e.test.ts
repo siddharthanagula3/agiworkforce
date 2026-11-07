@@ -4,6 +4,7 @@ import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 type ScanModule0 = typeof import('@/lib/server/container-files');
 type ScanModule1 = typeof import('@/lib/services/managed-usage-request-service');
+type ToolResultStoreModule = typeof import('./tool-result-store');
 
 function requireCatalogModelId(predicate: (model: ModelMetadata) => boolean): string {
   const model = listCanonicalModels().find(predicate);
@@ -31,6 +32,15 @@ vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: (...args: unknown[]) => mockBuildToolLoopStream(...args),
   buildServingRouteId: (...args: unknown[]) => args.join(':'),
 }));
+
+const mockReadStoredToolResult = vi.fn();
+vi.mock('./tool-result-store', async (importOriginal) => {
+  const actual = await importOriginal<ToolResultStoreModule>();
+  return {
+    ...actual,
+    readStoredToolResult: (...args: unknown[]) => mockReadStoredToolResult(...args),
+  };
+});
 
 const mockGetE2BExecutor = vi.fn();
 const mockPauseE2BSession = vi.fn();
@@ -147,6 +157,7 @@ function agentEvents(output: string): AgentEventEnvelope[] {
 describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
+    mockReadStoredToolResult.mockReset();
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
     mockResolveCloudCodeExecutionPolicy.mockReset();
@@ -1274,6 +1285,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       nextEventSequence: 3,
       completedSteps: 0,
       messages: [{ role: 'user', content: 'run print(1+1)' }],
+      toolSchemaState: { loadedQualifiedNames: [] },
     });
     expect(output).not.toContain('agent_time_budget_reached');
     expect(output).not.toContain('data: [DONE]');
@@ -1458,6 +1470,164 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
         }),
       ),
     ).rejects.toBe(controlError);
+  });
+
+  it.each([
+    { name: 'read_file', args: { path: 'report.txt' } },
+    { name: 'execute_code', args: { language: 'python', code: 'print(1)' } },
+  ])('propagates durable $name executor errors unchanged', async ({ name, args }) => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([
+        chunk({
+          tool_calls: [
+            { index: 0, id: 'control-tool', function: { name, arguments: JSON.stringify(args) } },
+          ],
+        }),
+        chunk({}, 'tool_calls'),
+      ]),
+    );
+    const controlError = new Error('durable tool receipt is leased');
+    const toolExecutor = vi.fn().mockRejectedValue(controlError);
+    await expect(
+      drain(
+        runToolLoop(makeProcessed(), {
+          approvalMode: 'auto',
+          toolExecutor,
+          shouldPropagateExecutionError: (error) => error === controlError,
+        }),
+      ),
+    ).rejects.toBe(controlError);
+    expect(toolExecutor).toHaveBeenCalledOnce();
+    expect(mockBuildToolLoopStream).toHaveBeenCalledOnce();
+    expect(mockGetE2BExecutor).not.toHaveBeenCalled();
+  });
+
+  it('propagates durable planning errors without starting the execution turn', async () => {
+    const processed = makeProcessed();
+    processed.chatRequest.work_mode = 'agiwork';
+    processed.chatRequest.agi_work_goal = { goal: 'Prepare the report' };
+    const controlError = new Error('planning receipt is leased');
+    const providerExecutor = vi.fn().mockRejectedValue(controlError);
+    await expect(
+      drain(
+        runToolLoop(processed, {
+          approvalMode: 'auto',
+          providerExecutor,
+          shouldPropagateExecutionError: (error) => error === controlError,
+        }),
+      ),
+    ).rejects.toBe(controlError);
+    expect(providerExecutor).toHaveBeenCalledOnce();
+    expect(providerExecutor.mock.calls[0]?.[0].step).toBe(0);
+    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
+  });
+
+  it('continues after an ordinary planning failure', async () => {
+    const processed = makeProcessed();
+    processed.chatRequest.work_mode = 'agiwork';
+    processed.chatRequest.agi_work_goal = { goal: 'Prepare the report' };
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([chunk({ content: 'Report ready.' }), chunk({}, 'stop')]),
+    );
+    const providerExecutor = vi.fn<ToolLoopProviderExecutor>(async (input) => {
+      if (input.step === 0) throw new Error('ordinary planning failure');
+      return input.execute();
+    });
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        providerExecutor,
+        shouldPropagateExecutionError: () => false,
+      }),
+    );
+    expect(output).toContain('Report ready.');
+    expect(providerExecutor.mock.calls.map(([input]) => input.step)).toEqual([0, 1]);
+  });
+
+  function storedResultReadFixture(): ProcessedRequest {
+    const processed = makeProcessed('stored-results');
+    processed.llmRequest.messages.push({
+      role: 'tool',
+      tool_call_id: 'older-result',
+      content: 'read_tool_result with reference "older-result"',
+    });
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([
+        chunk({
+          tool_calls: [
+            {
+              index: 0,
+              id: 'read-result',
+              function: {
+                name: 'read_tool_result',
+                arguments: JSON.stringify({ reference: 'older-result', offset: 0 }),
+              },
+            },
+          ],
+        }),
+        chunk({}, 'tool_calls'),
+      ]),
+    );
+    return processed;
+  }
+
+  it('propagates selected errors from the early stored-result reader branch', async () => {
+    const processed = storedResultReadFixture();
+    const controlError = new Error('reader control failure');
+    mockReadStoredToolResult.mockRejectedValue(controlError);
+    await expect(
+      drain(
+        runToolLoop(processed, {
+          approvalMode: 'auto',
+          shouldPropagateExecutionError: (error) => error === controlError,
+        }),
+      ),
+    ).rejects.toBe(controlError);
+    expect(mockReadStoredToolResult).toHaveBeenCalledOnce();
+    expect(mockBuildToolLoopStream).toHaveBeenCalledOnce();
+  });
+
+  it('converts an ordinary stored-result reader rejection into a tool result', async () => {
+    const processed = storedResultReadFixture();
+    mockReadStoredToolResult.mockRejectedValue(new Error('ordinary reader failure'));
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([chunk({ content: 'Reader unavailable.' }), chunk({}, 'stop')]),
+    );
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        shouldPropagateExecutionError: () => false,
+      }),
+    );
+    expect(output).toContain('ordinary reader failure');
+    expect(output).toContain('Reader unavailable.');
+  });
+
+  it('bounds the early stored-result reader without claiming storage cancellation', async () => {
+    vi.useFakeTimers();
+    try {
+      const processed = storedResultReadFixture();
+      let readerStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        readerStarted = resolve;
+      });
+      mockReadStoredToolResult.mockImplementation(() => {
+        readerStarted();
+        return new Promise(() => {});
+      });
+      mockBuildToolLoopStream.mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Reader timed out.' }), chunk({}, 'stop')]),
+      );
+      const output = drain(
+        runToolLoop(processed, { approvalMode: 'auto', maxDurationMs: 1000, now: () => 0 }),
+      );
+      await started;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await output).toContain('read_tool_result timed out');
+      expect(mockReadStoredToolResult).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('honors durable cancellation before provider or tool side effects', async () => {

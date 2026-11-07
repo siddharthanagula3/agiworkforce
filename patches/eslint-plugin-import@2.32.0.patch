@@ -1,0 +1,82 @@
+diff --git a/lib/rules/extensions.js b/lib/rules/extensions.js
+index 54e60e1094fd3e6dcae5d789f502984b76248e79..334ba38decc26577b7cd01bc275c9eb43f33890d 100644
+--- a/lib/rules/extensions.js
++++ b/lib/rules/extensions.js
+@@ -3 +3 @@
+-var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++var _minimatch = require('minimatch');
+@@ -174 +174 @@ module.exports = {
+-          if ((0, _minimatch2['default'])(path, pattern, patternOptions || { nocomment: true })) {
++          if ((0, _minimatch.minimatch)(path, pattern, patternOptions || { nocomment: true })) {
+diff --git a/lib/rules/no-extraneous-dependencies.js b/lib/rules/no-extraneous-dependencies.js
+index 0dcf9d0544610dcdfa04409d438e2f82b3b4b718..708a52ed4a8c15b2d78ee2216bdba58a64de4ebe 100644
+--- a/lib/rules/no-extraneous-dependencies.js
++++ b/lib/rules/no-extraneous-dependencies.js
+@@ -3 +3 @@ var _fs = require('fs');var _fs2 = _interopRequireDefault(_fs);
+-var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++var _minimatch = require('minimatch');
+@@ -255,2 +255,2 @@ function testConfig(config, filename) {
+-  return config.some(function (c) {return (0, _minimatch2['default'])(filename, c) ||
+-    (0, _minimatch2['default'])(filename, _path2['default'].join(process.cwd(), c));});
++  return config.some(function (c) {return (0, _minimatch.minimatch)(filename, c) ||
++    (0, _minimatch.minimatch)(filename, _path2['default'].join(process.cwd(), c));});
+diff --git a/lib/rules/no-import-module-exports.js b/lib/rules/no-import-module-exports.js
+index c54dddeb5421c164b480883f3227760c4a33291d..d495ce817cbcfce1672b8452dae7ec230a0849b0 100644
+--- a/lib/rules/no-import-module-exports.js
++++ b/lib/rules/no-import-module-exports.js
+@@ -1 +1 @@
+-'use strict';var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++'use strict';var _minimatch = require('minimatch');
+@@ -62 +62 @@ module.exports = {
+-        var isException = !!options.exceptions && options.exceptions.some(function (glob) {return (0, _minimatch2['default'])(fileName, glob);});
++        var isException = !!options.exceptions && options.exceptions.some(function (glob) {return (0, _minimatch.minimatch)(fileName, glob);});
+diff --git a/lib/rules/no-internal-modules.js b/lib/rules/no-internal-modules.js
+index 3b20616a24314b815c11561faeaa6a32ea629e4e..9432eab260f0b0d7a59330b036bdc61d7cc6c3c7 100644
+--- a/lib/rules/no-internal-modules.js
++++ b/lib/rules/no-internal-modules.js
+@@ -1 +1 @@
+-'use strict';var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++'use strict';var _minimatch = require('minimatch');
+@@ -51,2 +51,2 @@ module.exports = {
+-      var allowRegexps = (options.allow || []).map(function (p) {return _minimatch2['default'].makeRe(p);});
+-      var forbidRegexps = (options.forbid || []).map(function (p) {return _minimatch2['default'].makeRe(p);});
++      var allowMatchers = (options.allow || []).map(function (p) {return new _minimatch.Minimatch(p);});
++      var forbidMatchers = (options.forbid || []).map(function (p) {return new _minimatch.Minimatch(p);});
+@@ -74 +74 @@ module.exports = {
+-        return allowRegexps.some(function (re) {return re.test(importPath);});
++        return allowMatchers.some(function (matcher) {return matcher.match(importPath);});
+@@ -79 +79 @@ module.exports = {
+-        return forbidRegexps.some(function (re) {return re.test(importPath);});
++        return forbidMatchers.some(function (matcher) {return matcher.match(importPath);});
+diff --git a/lib/rules/no-namespace.js b/lib/rules/no-namespace.js
+index c858db0c0c3a84d1712b8f61cc69998e4c6275c2..a179c6f43330231632cbe8152ce10cc9feead142 100644
+--- a/lib/rules/no-namespace.js
++++ b/lib/rules/no-namespace.js
+@@ -6 +6 @@
+-var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++var _minimatch = require('minimatch');
+@@ -109 +109 @@ module.exports = {
+-            if (ignoreGlobs && ignoreGlobs.find(function (glob) {return (0, _minimatch2['default'])(node.parent.source.value, glob, { matchBase: true });})) {
++            if (ignoreGlobs && ignoreGlobs.find(function (glob) {return (0, _minimatch.minimatch)(node.parent.source.value, glob, { matchBase: true });})) {
+diff --git a/lib/rules/no-unassigned-import.js b/lib/rules/no-unassigned-import.js
+index 121d5110923ca474a7eed915051146ff92f8879b..a5eef995e69d43cdbec53f42d3a7d2ea39ff63e3 100644
+--- a/lib/rules/no-unassigned-import.js
++++ b/lib/rules/no-unassigned-import.js
+@@ -2 +2 @@
+-var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++var _minimatch = require('minimatch');
+@@ -28,2 +28,2 @@ function testIsAllow(globs, filename, source) {
+-  return globs.find(function (glob) {return (0, _minimatch2['default'])(filePath, glob) ||
+-    (0, _minimatch2['default'])(filePath, _path2['default'].join(process.cwd(), glob));}) !==
++  return globs.find(function (glob) {return (0, _minimatch.minimatch)(filePath, glob) ||
++    (0, _minimatch.minimatch)(filePath, _path2['default'].join(process.cwd(), glob));}) !==
+diff --git a/lib/rules/order.js b/lib/rules/order.js
+index 578709bf0b90c1c794ed7f8c046d9b3edaf0ff0a..5e981c3d5e5ce634caf71a84c6e00eb360c1f9ad 100644
+--- a/lib/rules/order.js
++++ b/lib/rules/order.js
+@@ -3 +3 @@
+-var _minimatch = require('minimatch');var _minimatch2 = _interopRequireDefault(_minimatch);
++var _minimatch = require('minimatch');
+@@ -510 +510 @@ function computePathRank(ranks, pathGroups, path, maxPosition) {
+-    if ((0, _minimatch2['default'])(path, pattern, patternOptions || { nocomment: true })) {
++    if ((0, _minimatch.minimatch)(path, pattern, patternOptions || { nocomment: true })) {

@@ -29,6 +29,8 @@ pub struct AccountSnapshot {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct AccountCacheEnvelope {
+    #[serde(default)]
+    owner: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     email: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -67,11 +69,13 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-fn read_account_cache() -> Option<AccountCacheEnvelope> {
+fn read_account_cache(context: &tier_cache::ManagedRequestContext) -> Option<AccountCacheEnvelope> {
+    let owner = context.owner.as_ref()?;
     let content = std::fs::read_to_string(account_cache_path()?).ok()?;
     let envelope: AccountCacheEnvelope = toml::from_str(&content).ok()?;
-    let age = now_secs().saturating_sub(envelope.cached_at);
-    (age <= ACCOUNT_CACHE_TTL.as_secs()).then_some(envelope)
+    let now = now_secs();
+    (envelope.owner.as_ref() == Some(owner) && envelope.cached_at <= now
+        && now - envelope.cached_at <= ACCOUNT_CACHE_TTL.as_secs()).then_some(envelope)
 }
 
 fn write_account_cache(envelope: &AccountCacheEnvelope) {
@@ -148,93 +152,53 @@ pub fn epoch_millis_to_rfc3339(millis: i64) -> Option<String> {
 /// With `refresh` unset this touches the network only once a cache has
 /// expired, which is the same rule `agi` itself applies at startup.
 pub async fn account_status(refresh: bool) -> AccountSnapshot {
-    let credential = managed_credential();
-    let Some((jwt, _)) = credential else {
-        return AccountSnapshot {
-            signed_in: false,
-            cached: true,
-            ..AccountSnapshot::default()
-        };
+    let Ok(context) = tier_cache::ManagedRequestContext::capture() else { return AccountSnapshot::default(); };
+    let Some(_) = context.jwt.as_deref() else {
+        return AccountSnapshot { cached: true, ..AccountSnapshot::default() };
     };
-
     if refresh {
-        tier_cache::invalidate_tier_cache();
-        clear_account_cache();
+        context.with_current(|| { tier_cache::invalidate_tier_cache(); clear_account_cache(); });
     }
-
-    let tier_was_cached = tier_cache::read_tier_cache().is_some();
-    let resolved = tier_cache::resolve_user_tier(Some(&jwt)).await;
-    let tier = resolved
-        .cached
-        .map(|cached| tier_cache::tier_slug(&cached.tier));
-
-    if let Some(envelope) = read_account_cache() {
-        return AccountSnapshot {
-            signed_in: true,
-            email: envelope.email,
-            tier,
-            balance_credits: envelope.balance_credits,
-            purchased_credits: envelope.purchased_credits,
-            cached: tier_was_cached,
-        };
-    }
-
-    let email = fetch_email(&jwt).await;
-    let (balance_credits, purchased_credits) = fetch_credits(&jwt).await;
-    write_account_cache(&AccountCacheEnvelope {
-        email: email.clone(),
-        balance_credits,
-        purchased_credits,
-        cached_at: now_secs(),
-    });
-
-    AccountSnapshot {
+    let tier_was_cached = context.with_current(|| tier_cache::read_tier_for(&context)).flatten().is_some();
+    let resolved = tier_cache::resolve_user_tier_for(&context).await;
+    let tier = resolved.cached.map(|cached| tier_cache::tier_slug(&cached.tier));
+    if let Some(snapshot) = context.with_current(|| read_account_cache(&context).map(|envelope| AccountSnapshot {
         signed_in: true,
-        email,
-        tier,
-        balance_credits,
-        purchased_credits,
-        cached: false,
-    }
-}
-
-async fn fetch_email(jwt: &str) -> Option<String> {
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
-    let base = tier_cache::resolve_agi_api_base(&raw_base)?;
-    let client = reqwest::Client::builder()
-        .timeout(ME_FETCH_TIMEOUT)
-        .build()
-        .ok()?;
-    let response = client
-        .get(format!("{base}/api/me"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .send()
-        .await
-        .ok()?;
-    if !response.status().is_success() {
-        return None;
-    }
-    let body: MeResponse = response.json().await.ok()?;
-    if let Some(plan_tier) = body
-        .plan
-        .as_ref()
-        .and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref()))
-    {
-        tier_cache::adopt_server_plan(plan_tier);
-    }
-    body.email.filter(|email| !email.is_empty())
-}
-
-/// Plan allowance left this month and the separately purchased balance.
-async fn fetch_credits(jwt: &str) -> (Option<f64>, Option<f64>) {
-    match crate::usage_summary::fetch_account_usage(jwt).await {
+        email: envelope.email,
+        tier: tier.clone(),
+        balance_credits: envelope.balance_credits,
+        purchased_credits: envelope.purchased_credits,
+        cached: tier_was_cached,
+    })).flatten() { return snapshot; }
+    if !context.is_current() { return AccountSnapshot::default(); }
+    let email = fetch_email(&context).await;
+    let (balance_credits, purchased_credits) = match crate::usage_summary::fetch_account_usage_for(&context).await {
         Ok(usage) => match usage.credits {
             Some(credits) => (Some(credits.monthly.remaining), credits.purchased.remaining),
             None => (None, None),
         },
         Err(_) => (None, None),
+    };
+    context.with_current(|| {
+        if context.owner.is_some() {
+            write_account_cache(&AccountCacheEnvelope { owner: context.owner.clone(), email: email.clone(), balance_credits, purchased_credits, cached_at: now_secs() });
+        }
+        AccountSnapshot { signed_in: true, email, tier, balance_credits, purchased_credits, cached: false }
+    }).unwrap_or_default()
+}
+
+async fn fetch_email(context: &tier_cache::ManagedRequestContext) -> Option<String> {
+    let jwt = context.jwt.as_deref()?;
+    let client = reqwest::Client::builder().timeout(ME_FETCH_TIMEOUT).build().ok()?;
+    let response = client.get(format!("{}/api/me", context.base))
+        .header("Authorization", format!("Bearer {jwt}"))
+        .send().await.ok()?;
+    if !response.status().is_success() { return None; }
+    let body: MeResponse = response.json().await.ok()?;
+    if let Some(plan_tier) = body.plan.as_ref().and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref())) {
+        tier_cache::adopt_server_plan(context, plan_tier);
     }
+    context.with_current(|| body.email.filter(|email| !email.is_empty())).flatten()
 }
 
 /// Base URL of the device-grant endpoints, honouring the same override the
@@ -247,18 +211,18 @@ pub fn device_auth_base() -> String {
         .unwrap_or_else(|| crate::auth::agiworkforce_api_base().to_string())
 }
 
-/// Persist a completed device grant under the CLI's own credential key, so the
-/// next `agi` run in a terminal is signed in too.
-pub fn save_device_grant(entry: AuthEntry) -> Result<()> {
-    let mut store = AuthStore::load().context("Failed to read the credential store")?;
+fn install_device_grant(store: &mut AuthStore, entry: AuthEntry) {
+    store.entries.remove("managed_cloud");
     store.entries.insert("agiworkforce".to_string(), entry);
-    store.save().context("Failed to save the credential")?;
-    tier_cache::invalidate_tier_cache();
-    clear_account_cache();
-    Ok(())
 }
 
-/// Every key a managed credential is held under, dropped from the store.
+pub fn save_device_grant(entry: AuthEntry) -> Result<()> {
+    AuthStore::transaction_with_commit(|store| {
+        install_device_grant(store, entry);
+        Ok(())
+    }, |_| forget_account_caches())
+}
+
 fn forget_managed(store: &mut AuthStore) {
     for key in MANAGED_AUTH_KEYS {
         store.entries.remove(key);
@@ -267,144 +231,194 @@ fn forget_managed(store: &mut AuthStore) {
 
 const RENEW_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
 
-fn expiring_refresh_token(store: &AuthStore) -> Option<String> {
-    match store.entries.get("agiworkforce") {
-        Some(AuthEntry::OAuth {
-            refresh, expires, ..
-        }) if !refresh.is_empty()
-            && *expires > 0
-            && *expires - chrono::Utc::now().timestamp_millis() < RENEW_WITHIN_MS =>
-        {
-            Some(refresh.clone())
+#[derive(Clone, PartialEq, Eq)]
+struct ManagedGrant {
+    key: String,
+    entry: AuthEntry,
+}
+
+impl ManagedGrant {
+    fn access(&self) -> &str {
+        match &self.entry {
+            AuthEntry::OAuth { access, .. } => access,
+            AuthEntry::ApiKey { key } => key,
         }
-        _ => None,
+    }
+
+    fn refresh(&self) -> &str {
+        match &self.entry {
+            AuthEntry::OAuth { refresh, .. } => refresh,
+            AuthEntry::ApiKey { .. } => "",
+        }
     }
 }
 
-async fn lock_device_session() -> Option<std::fs::File> {
-    let path = crate::config::CliConfig::config_dir()
-        .ok()?
-        .join("device-session.lock");
-    tokio::task::spawn_blocking(move || {
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(path)
-            .ok()?;
-        file.lock().ok()?;
-        Some(file)
+fn stored_managed_grant(store: &AuthStore) -> Option<ManagedGrant> {
+    MANAGED_AUTH_KEYS.iter().find_map(|key| {
+        let grant = ManagedGrant {
+            key: (*key).to_string(),
+            entry: store.entries.get(*key)?.clone(),
+        };
+        (!grant.access().is_empty()).then_some(grant)
+    })
+}
+
+fn replace_grant(store: &mut AuthStore, expected: &ManagedGrant, replacement: Option<AuthEntry>) -> bool {
+    if stored_managed_grant(store).as_ref() != Some(expected) {
+        return false;
+    }
+    for key in MANAGED_AUTH_KEYS {
+        if store.entries.get(key) == Some(&expected.entry) {
+            store.entries.remove(key);
+        }
+    }
+    if let Some(entry) = replacement {
+        store.entries.insert(expected.key.clone(), entry);
+    }
+    true
+}
+
+fn persist_replacement(expected: &ManagedGrant, replacement: Option<AuthEntry>) -> Result<bool> {
+    AuthStore::transaction_with_commit(
+        |store| Ok(replace_grant(store, expected, replacement)),
+        |changed| {
+            if *changed {
+                forget_account_caches();
+            }
+        },
+    )
+}
+
+fn same_managed_session(left: &str, right: &str) -> bool {
+    match (crate::auth::jwt_session_identity(left), crate::auth::jwt_session_identity(right)) {
+        (Some(left), Some(right)) => left == right,
+        _ => false,
+    }
+}
+
+pub fn managed_api_base() -> Option<String> {
+    let raw = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
+    tier_cache::resolve_agi_api_base(&raw)
+}
+
+fn matching_deployment(api_base: &str, auth_base: &str) -> bool {
+    let expected = reqwest::Url::parse(&format!("{}/api", api_base.trim_end_matches('/')));
+    let actual = reqwest::Url::parse(auth_base.trim_end_matches('/'));
+    matches!((expected, actual), (Ok(expected), Ok(actual)) if expected == actual)
+}
+
+fn recovery_deployment_unchanged(api_base: &str, auth_base: &str) -> bool {
+    managed_api_base().as_deref() == Some(api_base)
+        && device_auth_base() == auth_base
+        && matching_deployment(api_base, auth_base)
+}
+
+async fn lock_device_session() -> Result<std::fs::File> {
+    let dir = crate::config::CliConfig::config_dir()?;
+    tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
+        std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).truncate(false).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(dir.join("device-session.lock"))
+            .context("Failed to open the session renewal lock")?;
+        file.lock().context("Failed to lock session renewal")?;
+        Ok(file)
     })
     .await
-    .ok()
-    .flatten()
+    .context("Session renewal lock task failed")?
 }
 
 pub async fn renew_managed_session_if_expiring() -> Option<String> {
-    expiring_refresh_token(&AuthStore::load().ok()?)?;
-    let _lock = lock_device_session().await?;
-    let refresh = expiring_refresh_token(&AuthStore::load().ok()?)?;
-    match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
-        crate::oauth::DeviceSessionRenewal::Renewed(entry) => save_device_grant(entry)
-            .err()
-            .map(|error| format!("The renewed AGI session could not be saved: {error:#}. Run agi login.")),
-        crate::oauth::DeviceSessionRenewal::Refused(reason) => reason,
-        crate::oauth::DeviceSessionRenewal::Revoked => Some(match logout() {
-            Ok(()) => "Your AGI session ended. Sign in again to continue.".to_string(),
-            Err(error) => format!(
-                "Your AGI session ended, and the saved credential could not be removed: {error:#}. Run agi logout, then sign in again."
-            ),
-        }),
-        crate::oauth::DeviceSessionRenewal::Unavailable => None,
+    if std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty()) {
+        return None;
     }
+    let _lock = match lock_device_session().await {
+        Ok(lock) => lock,
+        Err(error) => return Some(format!("Session renewal could not be locked: {error:#}")),
+    };
+    if std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty()) {
+        return None;
+    }
+    let store = match AuthStore::load() {
+        Ok(store) => store,
+        Err(error) => return Some(format!("The credential store could not be read: {error:#}")),
+    };
+    let grant = stored_managed_grant(&store)?;
+    match &grant.entry {
+        AuthEntry::OAuth { refresh, expires, .. }
+            if !refresh.is_empty() && *expires > 0
+                && *expires - chrono::Utc::now().timestamp_millis() < RENEW_WITHIN_MS => {}
+        _ => return None,
+    }
+    let api_base = managed_api_base()?;
+    let auth_base = device_auth_base();
+    if !recovery_deployment_unchanged(&api_base, &auth_base) {
+        return Some("The account and device-auth deployments differ. Sign in again with matching endpoints.".to_string());
+    }
+    renewal_result(&grant, &api_base, &auth_base).await.message()
 }
 
-/// What became of a session the server refused (401) before its access token
-/// was due to expire, as happens when the account enrolls a passkey or the
-/// device is unlinked on the web.
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RejectedSessionRecovery {
-    /// A fresh access token is stored; the call can be made again once.
-    Renewed,
-    /// The credential is gone and was forgotten here: sign in again.
+    Renewed(String),
     Ended(String),
-    /// The account has to act on the web first; the credential is kept.
     Refused(String),
-    /// Nothing could be decided now; the refusal stands for this call.
     Unavailable,
+}
+
+impl RejectedSessionRecovery {
+    fn message(self) -> Option<String> {
+        match self {
+            Self::Ended(message) | Self::Refused(message) => Some(message),
+            Self::Renewed(_) | Self::Unavailable => None,
+        }
+    }
 }
 
 pub const SESSION_ENDED_MESSAGE: &str = "Your AGI session ended. Sign in again to continue.";
 
-fn stored_managed_grant(store: &AuthStore) -> Option<(String, String)> {
-    match store.entries.get("agiworkforce") {
-        Some(AuthEntry::OAuth {
-            access, refresh, ..
-        }) => Some((access.clone(), refresh.clone())),
-        _ => None,
+fn forget_expected_grant(grant: &ManagedGrant) -> RejectedSessionRecovery {
+    match persist_replacement(grant, None) {
+        Ok(true) => RejectedSessionRecovery::Ended(SESSION_ENDED_MESSAGE.to_string()),
+        Ok(false) => RejectedSessionRecovery::Unavailable,
+        Err(error) => RejectedSessionRecovery::Refused(format!(
+            "The rejected credential could not be removed: {error:#}. Run agi logout."
+        )),
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum RecoveryStep {
-    AlreadyRenewed,
-    NothingStored,
-    Forget,
-    Refresh(String),
-}
-
-/// A stored token other than the refused one was renewed by another process;
-/// a grant with no refresh credential cannot be renewed and is forgotten.
-fn next_recovery_step(stored: Option<(String, String)>, rejected_access: &str) -> RecoveryStep {
-    match stored {
-        None => RecoveryStep::NothingStored,
-        Some((access, _)) if !access.is_empty() && access != rejected_access => {
-            RecoveryStep::AlreadyRenewed
+async fn renewal_result(grant: &ManagedGrant, api_base: &str, auth_base: &str) -> RejectedSessionRecovery {
+    let result = crate::oauth::renew_device_session(auth_base, grant.refresh()).await;
+    if !recovery_deployment_unchanged(api_base, auth_base)
+        || std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty())
+    {
+        return RejectedSessionRecovery::Unavailable;
+    }
+    match result {
+        crate::oauth::DeviceSessionRenewal::Renewed(entry) => {
+            let access = match &entry {
+                AuthEntry::OAuth { access, .. } => access.clone(),
+                _ => return RejectedSessionRecovery::Unavailable,
+            };
+            if !same_managed_session(grant.access(), &access) {
+                return RejectedSessionRecovery::Refused(
+                    "The renewed credential does not belong to the original device session. Sign in again.".to_string(),
+                );
+            }
+            match persist_replacement(grant, Some(entry)) {
+                Ok(true) => RejectedSessionRecovery::Renewed(access),
+                Ok(false) => RejectedSessionRecovery::Unavailable,
+                Err(error) => RejectedSessionRecovery::Refused(format!(
+                    "The renewed AGI session could not be saved: {error:#}. Run agi login."
+                )),
+            }
         }
-        Some((_, refresh)) if refresh.is_empty() => RecoveryStep::Forget,
-        Some((_, refresh)) => RecoveryStep::Refresh(refresh),
-    }
-}
-
-fn forget_session() -> RejectedSessionRecovery {
-    RejectedSessionRecovery::Ended(match logout() {
-        Ok(()) => SESSION_ENDED_MESSAGE.to_string(),
-        Err(error) => format!(
-            "{SESSION_ENDED_MESSAGE} The saved credential could not be removed: {error:#}. Run agi logout."
-        ),
-    })
-}
-
-/// Try one refresh after a 401, under the same lock renewal takes. A token
-/// another process already replaced counts as renewed. A refresh credential the
-/// server also refuses (invalid_grant), or none at all, is forgotten so the
-/// account reads as signed out and the desktop signs this machine in again.
-pub async fn recover_rejected_session(rejected_access: &str) -> RejectedSessionRecovery {
-    // A token given in the environment is not this store's to renew or forget.
-    if std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty()) {
-        return RejectedSessionRecovery::Unavailable;
-    }
-    let Some(_lock) = lock_device_session().await else {
-        return RejectedSessionRecovery::Unavailable;
-    };
-    let stored = AuthStore::load()
-        .ok()
-        .as_ref()
-        .and_then(stored_managed_grant);
-    let refresh = match next_recovery_step(stored, rejected_access) {
-        RecoveryStep::AlreadyRenewed => return RejectedSessionRecovery::Renewed,
-        RecoveryStep::NothingStored => return RejectedSessionRecovery::Unavailable,
-        RecoveryStep::Forget => return forget_session(),
-        RecoveryStep::Refresh(refresh) => refresh,
-    };
-    match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
-        crate::oauth::DeviceSessionRenewal::Renewed(entry) => match save_device_grant(entry) {
-            Ok(()) => RejectedSessionRecovery::Renewed,
-            Err(error) => RejectedSessionRecovery::Refused(format!(
-                "The renewed AGI session could not be saved: {error:#}. Run agi login."
-            )),
-        },
-        crate::oauth::DeviceSessionRenewal::Revoked => forget_session(),
+        crate::oauth::DeviceSessionRenewal::Revoked => forget_expected_grant(grant),
         crate::oauth::DeviceSessionRenewal::Refused(reason) => {
             RejectedSessionRecovery::Refused(reason.unwrap_or_else(|| {
                 "AGI did not renew this session. Sign in again on agiworkforce.com.".to_string()
@@ -414,50 +428,98 @@ pub async fn recover_rejected_session(rejected_access: &str) -> RejectedSessionR
     }
 }
 
-/// A second 401 right after a renewal means the account itself refuses this
-/// device, so the credential is forgotten rather than retried for ever.
-pub fn forget_refused_session() -> String {
-    match forget_session() {
-        RejectedSessionRecovery::Ended(message) => message,
-        _ => SESSION_ENDED_MESSAGE.to_string(),
+pub async fn recover_rejected_session(
+    rejected_access: &str,
+    api_base: &str,
+    auth_base: &str,
+) -> RejectedSessionRecovery {
+    if std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty())
+        || !recovery_deployment_unchanged(api_base, auth_base)
+    {
+        return RejectedSessionRecovery::Unavailable;
     }
+    let _lock = match lock_device_session().await {
+        Ok(lock) => lock,
+        Err(error) => return RejectedSessionRecovery::Refused(format!(
+            "Session recovery could not be locked: {error:#}"
+        )),
+    };
+    if !recovery_deployment_unchanged(api_base, auth_base)
+        || std::env::var("AGIWORKFORCE_JWT").is_ok_and(|jwt| !jwt.is_empty())
+    {
+        return RejectedSessionRecovery::Unavailable;
+    }
+    let grant = match AuthStore::load() {
+        Ok(store) => stored_managed_grant(&store),
+        Err(error) => return RejectedSessionRecovery::Refused(format!(
+            "The credential store could not be read: {error:#}"
+        )),
+    };
+    let Some(grant) = grant else {
+        return RejectedSessionRecovery::Unavailable;
+    };
+    if grant.access() != rejected_access {
+        return if same_managed_session(rejected_access, grant.access()) {
+            RejectedSessionRecovery::Renewed(grant.access().to_string())
+        } else {
+            RejectedSessionRecovery::Unavailable
+        };
+    }
+    if grant.refresh().is_empty() {
+        return forget_expected_grant(&grant);
+    }
+    renewal_result(&grant, api_base, auth_base).await
 }
 
-pub async fn revoke_managed_sessions() -> bool {
-    let Ok(store) = AuthStore::load() else {
-        return true;
-    };
-    let base = device_auth_base();
+fn forget_access(store: &mut AuthStore, rejected_access: &str) -> bool {
+    if rejected_access.is_empty() {
+        return false;
+    }
+    let mut changed = false;
+    for key in MANAGED_AUTH_KEYS {
+        let matches = store.entries.get(key).is_some_and(|entry| match entry {
+            AuthEntry::OAuth { access, .. } => access == rejected_access,
+            AuthEntry::ApiKey { key } => key == rejected_access,
+        });
+        if matches {
+            store.entries.remove(key);
+            changed = true;
+        }
+    }
+    changed
+}
+
+pub fn forget_refused_session(rejected_access: &str) -> Result<()> {
+    AuthStore::transaction_with_commit(
+        |store| Ok(forget_access(store, rejected_access)),
+        |changed| {
+            if *changed {
+                forget_account_caches();
+            }
+        },
+    ).map(|_| ())
+}
+
+async fn revoke_snapshot(base: &str, entries: &std::collections::HashMap<String, AuthEntry>) -> bool {
     let mut confirmed = true;
     for key in MANAGED_AUTH_KEYS {
-        if let Some(AuthEntry::OAuth {
-            access, refresh, ..
-        }) = store.entries.get(key)
-        {
-            if access.is_empty() && refresh.is_empty() {
-                continue;
+        if let Some(AuthEntry::OAuth { access, refresh, .. }) = entries.get(key) {
+            if !access.is_empty() || !refresh.is_empty() {
+                confirmed &= crate::oauth::revoke_device_session(base, access, refresh).await;
             }
-            confirmed &= crate::oauth::revoke_device_session(&base, access, refresh).await;
         }
     }
     confirmed
 }
 
 pub async fn sign_out() -> Result<bool> {
-    let confirmed = revoke_managed_sessions().await;
-    logout()?;
-    Ok(confirmed)
-}
-
-/// Forget the managed credential on this machine.
-pub fn logout() -> Result<()> {
-    let mut store = AuthStore::load().context("Failed to read the credential store")?;
-    forget_managed(&mut store);
-    store
-        .save()
-        .context("Failed to update the credential store")?;
-    forget_account_caches();
-    Ok(())
+    let (base, entries) = AuthStore::transaction_with_commit(|store| {
+        let base = device_auth_base();
+        let entries = store.entries.clone();
+        forget_managed(store);
+        Ok((base, entries))
+    }, |_| forget_account_caches())?;
+    Ok(revoke_snapshot(&base, &entries).await)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -488,20 +550,21 @@ fn forget_every_provider(store: &mut AuthStore) -> usize {
     providers
 }
 
-/// `agi logout`, and /logout in the TUI and the REPL: the AGI Cloud sessions
-/// are revoked, then every stored credential, the caches that answered for the
-/// account and, as Claude Code's /logout does, the first-run setup are dropped.
+// Remove locally before awaiting revocation, so a concurrent renewal cannot
+// restore the removed grant and a subsequent login is not removed afterward.
 pub async fn sign_out_of_every_provider() -> Result<CliSignOut> {
-    let revoked = revoke_managed_sessions().await;
-    let mut store = AuthStore::load().context("Failed to read the credential store")?;
-    let providers = forget_every_provider(&mut store);
-    if providers > 0 {
-        store
-            .save()
-            .context("Failed to update the credential store")?;
-        crate::onboarding::forget_setup();
-    }
-    forget_account_caches();
+    let (base, entries, providers) = AuthStore::transaction_with_commit(|store| {
+        let base = device_auth_base();
+        let entries = store.entries.clone();
+        let providers = forget_every_provider(store);
+        Ok((base, entries, providers))
+    }, |(_, _, providers)| {
+        if *providers > 0 {
+            crate::onboarding::forget_setup();
+        }
+        forget_account_caches();
+    })?;
+    let revoked = revoke_snapshot(&base, &entries).await;
     Ok(CliSignOut { providers, revoked })
 }
 
@@ -509,25 +572,106 @@ pub async fn sign_out_of_every_provider() -> Result<CliSignOut> {
 mod tests {
     use super::*;
 
+    fn token(subject: &str, session: &str, generation: u8) -> String {
+        use base64::Engine;
+        let payload = serde_json::json!({ "sub": subject, "sid": session, "iat": generation });
+        format!("fixture.{}.signature", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload.to_string()))
+    }
+
+    fn grant(access: &str, refresh: &str) -> AuthEntry {
+        AuthEntry::OAuth { access: access.to_string(), refresh: refresh.to_string(), expires: 1 }
+    }
+
     #[test]
-    fn a_refused_session_is_renewed_once_or_forgotten() {
-        let grant = |access: &str, refresh: &str| Some((access.to_string(), refresh.to_string()));
-        assert_eq!(
-            next_recovery_step(grant("refused", "r-1"), "refused"),
-            RecoveryStep::Refresh("r-1".to_string())
-        );
-        assert_eq!(
-            next_recovery_step(grant("newer", "r-2"), "refused"),
-            RecoveryStep::AlreadyRenewed
-        );
-        assert_eq!(
-            next_recovery_step(grant("refused", ""), "refused"),
-            RecoveryStep::Forget
-        );
-        assert_eq!(
-            next_recovery_step(None, "refused"),
-            RecoveryStep::NothingStored
-        );
+    fn retry_continuity_requires_both_account_and_device_session() {
+        let original = token("account-a", "session-a", 1);
+        assert!(same_managed_session(&original, &token("account-a", "session-a", 2)));
+        for replacement in [
+            token("account-b", "session-a", 2),
+            token("account-a", "session-b", 2),
+            token("", "session-a", 2),
+            token("account-a", "", 2),
+            "malformed".to_string(),
+        ] {
+            assert!(!same_managed_session(&original, &replacement));
+        }
+    }
+
+    #[test]
+    fn recovery_deployment_comparison_is_separate_from_token_identity() {
+        assert!(matching_deployment("https://agiworkforce.com", "https://agiworkforce.com/api"));
+        assert!(matching_deployment("http://localhost:8080", "http://localhost:8080/api"));
+        assert!(!matching_deployment("http://localhost:8080", "http://localhost:8081/api"));
+        assert!(!matching_deployment("https://agiworkforce.com", "https://preview.agiworkforce.com/api"));
+    }
+
+    #[test]
+    fn renewal_compare_and_swap_requires_the_selected_exact_pair() {
+        let original = grant("old-access", "old-refresh");
+        let mut store = AuthStore::default();
+        store.entries.insert("agiworkforce".to_string(), original.clone());
+        let expected = stored_managed_grant(&store).unwrap();
+        store.entries.insert("agiworkforce".to_string(), grant("old-access", "new-refresh"));
+        assert!(!replace_grant(&mut store, &expected, Some(grant("renewed", "rotated"))));
+        store.entries.insert("agiworkforce".to_string(), original.clone());
+        store.entries.insert("managed_cloud".to_string(), grant("other-access", "other-refresh"));
+        assert!(!replace_grant(&mut store, &expected, None));
+        store.entries.remove("managed_cloud");
+        assert!(replace_grant(&mut store, &expected, Some(grant("renewed", "rotated"))));
+        assert_eq!(store.entries.get("agiworkforce"), Some(&grant("renewed", "rotated")));
+    }
+
+    #[test]
+    fn login_replaces_the_shadow_alias_without_removing_other_providers() {
+        let mut store = AuthStore::default();
+        store.entries.insert("managed_cloud".to_string(), grant("old", "old-refresh"));
+        store.entries.insert("anthropic".to_string(), AuthEntry::ApiKey { key: "byok".to_string() });
+        install_device_grant(&mut store, grant("new", "new-refresh"));
+        assert!(!store.entries.contains_key("managed_cloud"));
+        assert_eq!(store.entries.get("agiworkforce"), Some(&grant("new", "new-refresh")));
+        assert_eq!(store.entries.get("anthropic"), Some(&AuthEntry::ApiKey { key: "byok".to_string() }));
+    }
+
+    #[test]
+    fn renewal_reconciles_only_duplicate_aliases() {
+        let mut store = AuthStore::default();
+        let original = grant("old", "old-refresh");
+        for key in MANAGED_AUTH_KEYS {
+            store.entries.insert(key.to_string(), original.clone());
+        }
+        let expected = stored_managed_grant(&store).unwrap();
+        assert!(replace_grant(&mut store, &expected, Some(grant("renewed", "rotated"))));
+        assert_eq!(store.entries.len(), 1);
+        assert_eq!(store.entries.get("managed_cloud"), Some(&grant("renewed", "rotated")));
+        store.entries.insert("agiworkforce".to_string(), grant("unrelated", "unrelated-refresh"));
+        let expected = stored_managed_grant(&store).unwrap();
+        assert!(replace_grant(&mut store, &expected, None));
+        assert_eq!(store.entries.get("agiworkforce"), Some(&grant("unrelated", "unrelated-refresh")));
+    }
+
+    #[test]
+    fn refused_access_removal_preserves_replacement_and_unrelated_alias() {
+        let mut store = AuthStore::default();
+        store.entries.insert("agiworkforce".to_string(), grant("new-access", "new-refresh"));
+        store.entries.insert("managed_cloud".to_string(), grant("rejected", "old-refresh"));
+        assert!(forget_access(&mut store, "rejected"));
+        assert_eq!(store.entries.get("agiworkforce"), Some(&grant("new-access", "new-refresh")));
+        assert!(!forget_access(&mut store, "rejected"));
+        assert!(!forget_access(&mut store, ""));
+    }
+
+    #[test]
+    fn signout_removal_prevents_pending_renewal_from_restoring_a_grant() {
+        let mut store = AuthStore::default();
+        store.entries.insert("agiworkforce".to_string(), grant("old", "old-refresh"));
+        let expected = stored_managed_grant(&store).unwrap();
+        let snapshot = store.entries.clone();
+        forget_managed(&mut store);
+        assert!(!replace_grant(&mut store, &expected, Some(grant("rotated", "rotated-refresh"))));
+        store.entries.insert("agiworkforce".to_string(), grant("new-login", "new-refresh"));
+        assert!(!replace_grant(&mut store, &expected, None));
+        assert_eq!(snapshot.get("agiworkforce"), Some(&grant("old", "old-refresh")));
+        assert_eq!(store.entries.get("agiworkforce"), Some(&grant("new-login", "new-refresh")));
     }
 
     /// Signing out has to reach every key a sign-in wrote, and the caches the

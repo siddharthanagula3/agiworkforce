@@ -36,6 +36,7 @@ import {
 } from './desktopCloudUpdate';
 import {
   autoUpdateDownloadFailed,
+  autoUpdateState,
   autoUpdateSupported,
   checkForAutoUpdate,
   downloadedUpdate,
@@ -577,10 +578,6 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
-    if (downloadedUpdate() !== null) {
-      await restartToUpdate();
-      return;
-    }
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
   });
 
@@ -2043,12 +2040,33 @@ function stepZoomLevel(steps: number): void {
 }
 
 async function cloudUpdateAvailability(): Promise<DesktopCloudUpdateAvailability> {
-  const update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
-  if (update.available) checkForAutoUpdate();
+  let update: DesktopCloudUpdateAvailability;
+  try {
+    update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
+  } catch (error) {
+    if (downloadedUpdate() === null) throw error;
+    update = {
+      available: false,
+      currentVersion: app.getVersion(),
+      version: '',
+      downloadUrl: desktopCloudInstallerDownloadUrl(installedMacArchitecture()),
+      metadataError: `${PRODUCT_NAMES.desktop} could not check the latest published version.`,
+    };
+  }
+  const staged = downloadedUpdate();
+  if (update.available && staged === null) checkForAutoUpdate();
+  const nativeUpdateState = autoUpdateState();
+  const readyVersion = downloadedUpdate();
   return {
     ...update,
-    installsAutomatically: autoUpdateSupported() && !autoUpdateDownloadFailed(),
-    readyToInstall: update.available && downloadedUpdate() === update.version,
+    ...(readyVersion !== null
+      ? { available: true, version: readyVersion, stagedVersion: readyVersion || null }
+      : {}),
+    nativeUpdateState,
+    installsAutomatically: nativeUpdateState === 'downloading' || readyVersion !== null,
+    downloading: nativeUpdateState === 'downloading',
+    readyToInstall: readyVersion !== null,
+    checkedAt: new Date().toISOString(),
   };
 }
 
@@ -2065,7 +2083,12 @@ async function restartToUpdate(): Promise<HostRestartOutcome> {
   setTimeout(() => {
     quitConfirmed = false;
   }, UPDATE_RESTART_TIMEOUT_MS).unref?.();
-  installDownloadedUpdate();
+  try {
+    installDownloadedUpdate();
+  } catch (error) {
+    quitConfirmed = false;
+    throw error;
+  }
   return 'restarting';
 }
 
@@ -2074,7 +2097,7 @@ function announceUpdateReady(version: string): void {
   if (!Notification.isSupported()) return;
   const notification = createNativeNotification({
     title: `${PRODUCT_NAMES.desktop} update ready`,
-    body: `Version ${version} is downloaded. Restart ${PRODUCT_NAMES.desktop} to finish updating.`,
+    body: `${version ? `Version ${version}` : 'An update'} is downloaded. Restart ${PRODUCT_NAMES.desktop} to finish updating.`,
     actions: [{ type: 'button', text: 'Restart to Update' }],
   });
   notification.on('action', () => void restartToUpdate());

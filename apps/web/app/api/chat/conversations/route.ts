@@ -11,6 +11,7 @@ import {
   type ChatConversationRow,
 } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { restorableScopeSql } from '@/lib/resources/lifecycle-sql';
 import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { assertSessionInvariants } from '@agiworkforce/types';
 import {
@@ -65,8 +66,8 @@ async function handleGetConversations(request: NextRequest) {
       MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
     ) || MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
-  // A cursor names the last row, so a conversation touched while the reader
-  // pages cannot repeat or hide a row. Offset stays for clients still sending it.
+  // A cursor avoids offset shifts, but pin, timestamp or filter-membership
+  // changes can still affect later pages. Offset stays for clients still sending it.
   const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
   const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
@@ -80,7 +81,9 @@ async function handleGetConversations(request: NextRequest) {
       'coalesce(is_temporary, false) = false',
       'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id and web_messages.deleted_at is null)',
     ];
-    where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
+    where.push(
+      deletedFilter === 'only' ? restorableScopeSql('web_conversations') : 'deleted_at is null',
+    );
     const params: unknown[] = [userId, organizationId];
     if (projectId) {
       params.push(projectId);
@@ -201,11 +204,14 @@ async function handleCreateConversation(request: NextRequest) {
       .asUserSafe();
   }
 
+  const bodyText = await request.text();
   let rawBody: unknown = {};
-  try {
-    rawBody = await request.json();
-  } catch {
-    // Empty body is fine - defaults will be applied by schema
+  if (bodyText !== '') {
+    try {
+      rawBody = JSON.parse(bodyText);
+    } catch {
+      throw createError.validation('Invalid JSON body');
+    }
   }
 
   const validationResult = CreateConversationSchema.safeParse(rawBody);

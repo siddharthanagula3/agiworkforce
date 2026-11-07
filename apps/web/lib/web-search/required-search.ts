@@ -1,8 +1,11 @@
 import {
   detectExplicitWebSearchIntent,
-  explicitWebSearchSignals,
-  hasExplicitWebSearchOptOut,
+  explicitWebSearchRequestSignals,
+  hasExplicitWebSearchRequestOptOut as hasExplicitWebSearchOptOut,
+  webSearchRequestText as requestText,
+  WEB_SEARCH_LONG_MESSAGE_CHARS as LONG_MESSAGE_CHARS,
 } from '@agiworkforce/search';
+import { isSelfContainedResponseRequest } from '@agiworkforce/routing';
 import {
   canAccessModelForSubscriptionTier,
   getModelMetadataById,
@@ -150,21 +153,6 @@ export type WebSearchRequirementInput = {
 // material to read, whose dates and "latest" are not the user asking about now. Only an
 // explicit ask for a search or sources in those paragraphs forces one there; the model still
 // decides on the hints, with the tool offered.
-const REQUEST_EDGE_CHARS = 280;
-const LONG_MESSAGE_CHARS = REQUEST_EDGE_CHARS * 3;
-const PARAGRAPH_BREAK = /\n\s*\n/u;
-
-function requestText(message: string): string {
-  if (message.length <= LONG_MESSAGE_CHARS) return message;
-  const paragraphs = message
-    .split(PARAGRAPH_BREAK)
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph.length > 0);
-  const first = (paragraphs[0] ?? '').slice(0, REQUEST_EDGE_CHARS);
-  const last = (paragraphs.at(-1) ?? '').slice(-REQUEST_EDGE_CHARS);
-  return `${first}\n${last}`;
-}
-
 // Writing, rewriting, echoing or translating text works on what the user gave, so a date or a
 // "latest" in it is content. The model can still search, since the tool stays offered.
 // Politeness is stripped in a bounded loop. One expression that repeated a group of
@@ -200,10 +188,11 @@ function classifyWebSearchRequirement(input: WebSearchRequirementInput): WebSear
   if (input.searchRequested === true) return { required: true, source: 'explicit_mode' };
   if (hasExplicitWebSearchOptOut(input.userMessage)) return NOT_REQUIRED;
   if (input.agiWorkRun) return { required: true, source: 'work_mode' };
+  if (isSelfContainedResponseRequest(input.userMessage)) return NOT_REQUIRED;
   const request = requestText(input.userMessage);
   const hintsCount =
     input.userMessage.length <= LONG_MESSAGE_CHARS && !isTransformationRequest(request);
-  const signals = explicitWebSearchSignals(request);
+  const signals = explicitWebSearchRequestSignals(request);
   if (
     signals.includes('search_verb') ||
     signals.includes('sources') ||
@@ -262,10 +251,12 @@ export function shouldOfferWebSearchForTurn(input: {
   modelPolicy: 'required_only' | undefined;
   surface: string;
   userOptOut?: boolean;
+  userMessage?: string;
 }): boolean {
   return (
     input.webSearchEnabled === true &&
     input.userOptOut !== true &&
+    (input.requirement.required || !isSelfContainedResponseRequest(input.userMessage ?? '')) &&
     (input.surface !== 'web' || input.modelPolicy !== 'required_only' || input.requirement.required)
   );
 }

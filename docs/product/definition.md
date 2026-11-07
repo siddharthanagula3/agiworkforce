@@ -331,12 +331,15 @@ beside it. The catalogue entry is `team_premium` in
 `packages/contracts/types/src/billing-catalog.ts`; it is a seat on a Team
 subscription and cannot be checked out as a plan of its own.
 
-The Image generation and Video generation columns state what each plan includes
-as a paid capability. The Free plan has neither: the limited free media offer
-of 2026-10-04 ended by owner decision on 2026-10-22, and a Free account that
-asks for an image or video is shown Upgrade. Free quota image and video
-offerings serve only plans that include the capability; see
-`docs/runbooks/free-quota-models.md`.
+The Image generation and Video generation columns state paid plan inclusion,
+which is unchanged. Separately, configured limited provider-funded media offers
+allow eligible managed-chat accounts up to 10 image and 5 video requests per user
+per UTC day, only when live inventory and request admission permit them. These
+request caps are distinct from provider allowance units; availability is not a
+promise of capacity. Unknown availability preserves the draft and asks for retry,
+not Upgrade. Web exposes limited media; mobile restores the image fallback while
+its video UI remains paid-only. See `docs/runbooks/free-quota-models.md` for scope,
+accounting uncertainty and source-only validation limits.
 
 Video generation is requested through Google's interactions API for Gemini Omni
 Flash (`apps/web/app/api/media/video/generate/route.ts`); the Veo path is gone.

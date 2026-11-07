@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { E2BExecutor, SandboxFileEntry } from '../types';
 
@@ -108,6 +107,23 @@ describe('snapshotSandboxFiles + harvestGeneratedFiles', () => {
       organizationId: null,
     });
     expect(files.map((f) => f.file_name)).toEqual(['data.csv']);
+  });
+
+  it('preserves an overwritten same-size plot when its modification time changes', async () => {
+    const executor = makeExecutor({
+      '/home/user': [{ ...file('/home/user/chart.png', 100), modifiedAt: '2026-10-30T12:00:00Z' }],
+    });
+    const baseline = await snapshotSandboxFiles(executor);
+    (executor.listFiles as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...file('/home/user/chart.png', 100), modifiedAt: '2026-10-30T12:00:01Z' },
+    ]);
+    const { files } = await harvestGeneratedFiles({
+      executor,
+      baseline,
+      userId: 'u1',
+      organizationId: null,
+    });
+    expect(files.map((entry) => entry.file_name)).toEqual(['chart.png']);
   });
 
   it('walks subdirectories but skips hidden and package dirs', async () => {

@@ -1,3 +1,4 @@
+import { validateMcpInputSchema } from '@agiworkforce/mcp';
 export type McpToolRejectionReason =
   | 'malformed_name'
   | 'description_too_long'
@@ -74,14 +75,118 @@ const POISONED_DESCRIPTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; label: str
   },
 ];
 
-function schemaDepth(value: unknown, depth = 1): number {
+const SCHEMA_MAP_KEYS = new Set([
+  '$defs',
+  'definitions',
+  'properties',
+  'patternProperties',
+  'dependentSchemas',
+]);
+const SCHEMA_ARRAY_KEYS = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems']);
+const SCHEMA_SINGLE_KEYS = new Set([
+  'additionalProperties',
+  'unevaluatedProperties',
+  'propertyNames',
+  'contains',
+  'not',
+  'if',
+  'then',
+  'else',
+  'additionalItems',
+  'unevaluatedItems',
+  'contentSchema',
+]);
+function objectRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+function schemaChildren(schema: Record<string, unknown>): unknown[] {
+  const out: unknown[] = [];
+  for (const [key, value] of Object.entries(schema)) {
+    if (SCHEMA_MAP_KEYS.has(key)) {
+      if (!objectRecord(value)) return [null];
+      for (const child of Object.values(value)) out.push(child);
+    } else if (SCHEMA_ARRAY_KEYS.has(key)) {
+      if (!Array.isArray(value)) return [null];
+      for (const child of value) out.push(child);
+    } else if (SCHEMA_SINGLE_KEYS.has(key)) out.push(value);
+    else if (key === 'items') {
+      for (const child of Array.isArray(value) ? value : [value]) out.push(child);
+    } else if (key === 'dependencies') {
+      if (!objectRecord(value)) return [null];
+      for (const child of Object.values(value)) {
+        if (Array.isArray(child)) {
+          if (!child.every((v) => typeof v === 'string')) return [null];
+        } else out.push(child);
+      }
+    }
+  }
+  return out;
+}
+function rawDepth(value: unknown, depth: number): number {
   if (!value || typeof value !== 'object') return depth;
-  if (depth >= MAX_TOOL_SCHEMA_DEPTH + 1) return depth;
+  if (depth > MAX_TOOL_SCHEMA_DEPTH) return depth;
   let deepest = depth;
-  for (const child of Object.values(value as Record<string, unknown>)) {
+  for (const child of Object.values(value)) deepest = Math.max(deepest, rawDepth(child, depth + 1));
+  return deepest;
+}
+function schemaDepth(value: unknown, depth = 1): number {
+  if (typeof value === 'boolean') return depth - 1;
+  if (!objectRecord(value)) return Number.POSITIVE_INFINITY;
+  if (depth > MAX_TOOL_SCHEMA_DEPTH) return depth;
+  let deepest = depth;
+  for (const child of schemaChildren(value))
     deepest = Math.max(deepest, schemaDepth(child, depth + 1));
+  for (const [key, child] of Object.entries(value)) {
+    if (
+      SCHEMA_MAP_KEYS.has(key) ||
+      SCHEMA_ARRAY_KEYS.has(key) ||
+      SCHEMA_SINGLE_KEYS.has(key) ||
+      key === 'items' ||
+      key === 'dependencies'
+    )
+      continue;
+    const data =
+      key === 'default' ||
+      key === 'const' ||
+      ((key === 'enum' || key === 'examples') && Array.isArray(child)) ||
+      ((key === 'required' || key === 'type') &&
+        Array.isArray(child) &&
+        child.every((v) => typeof v === 'string')) ||
+      (key === 'dependentRequired' &&
+        objectRecord(child) &&
+        Object.values(child).every(
+          (v) => Array.isArray(v) && v.every((x) => typeof x === 'string'),
+        ));
+    if (!data && child && typeof child === 'object')
+      deepest = Math.max(deepest, rawDepth(child, depth + 1));
   }
   return deepest;
+}
+function schemaAnnotationProblem(
+  schema: Record<string, unknown>,
+): { reason: McpToolRejectionReason; detail: string } | null {
+  const pending = [schema];
+  while (pending.length) {
+    const node = pending.pop();
+    if (!node) continue;
+    for (const key of ['description', 'title', '$comment']) {
+      const text = node[key];
+      if (typeof text !== 'string') continue;
+      if (text.length > MAX_TOOL_DESCRIPTION_LENGTH)
+        return {
+          reason: 'description_too_long',
+          detail: 'A schema annotation exceeds the description limit',
+        };
+      const directive = findPoisonedDirective(text);
+      if (directive)
+        return {
+          reason: 'poisoned_description',
+          detail: `A schema annotation carries a ${directive} directive`,
+        };
+    }
+    for (const child of schemaChildren(node)) if (objectRecord(child)) pending.push(child);
+  }
+  return null;
 }
 
 function countProperties(schema: Record<string, unknown>): number {
@@ -139,6 +244,14 @@ function inspectOne(def: InspectableToolDef): McpToolRejection | null {
       detail: 'Input schema is not an object',
     };
   }
+  const raw = validateMcpInputSchema(schema);
+  if (!raw.ok)
+    return {
+      serverId: def.serverId,
+      toolName: def.toolName,
+      reason: 'malformed_schema',
+      detail: raw.reason ?? 'Shared input-schema admission refused the schema',
+    };
   if (countProperties(schema) > MAX_TOOL_SCHEMA_PROPERTIES) {
     return {
       serverId: def.serverId,
@@ -147,7 +260,15 @@ function inspectOne(def: InspectableToolDef): McpToolRejection | null {
       detail: `Input schema declares more than ${MAX_TOOL_SCHEMA_PROPERTIES} properties`,
     };
   }
-  if (schemaDepth(schema) > MAX_TOOL_SCHEMA_DEPTH) {
+  const depth = schemaDepth(schema);
+  if (!Number.isFinite(depth))
+    return {
+      serverId: def.serverId,
+      toolName: def.toolName,
+      reason: 'malformed_schema',
+      detail: 'Input schema has a malformed child schema or keyword container',
+    };
+  if (depth > MAX_TOOL_SCHEMA_DEPTH) {
     return {
       serverId: def.serverId,
       toolName: def.toolName,
@@ -155,6 +276,10 @@ function inspectOne(def: InspectableToolDef): McpToolRejection | null {
       detail: `Input schema nests deeper than ${MAX_TOOL_SCHEMA_DEPTH} levels`,
     };
   }
+
+  const annotationProblem = schemaAnnotationProblem(schema);
+  if (annotationProblem)
+    return { serverId: def.serverId, toolName: def.toolName, ...annotationProblem };
 
   return null;
 }

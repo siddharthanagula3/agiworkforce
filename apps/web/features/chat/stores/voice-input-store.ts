@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 import { isSupportedLanguage } from '@agiworkforce/i18n';
-import { getCsrfToken } from '@/lib/client/csrf';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 
 const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
@@ -10,7 +10,6 @@ const STORE_NAME = 'agi-web-voice-input';
 const STORE_VERSION = 1;
 const DEFAULT_LANGUAGE = 'en-US';
 const TRANSCRIBE_ENDPOINT = '/api/voice/transcribe';
-const CSRF_HEADER = 'x-csrf-token';
 const RECORDER_TIMESLICE_MS = 100;
 const LOCALE_SUBTAG_SEPARATOR = '-';
 
@@ -27,14 +26,14 @@ export interface VoiceInputState {
 }
 
 interface VoiceInputActions {
-  startListening: () => Promise<void>;
-  stopListening: () => Promise<void>;
-  cancelListening: () => void;
-  clearTranscript: () => void;
+  startListening: (owner: RequestAuthority) => Promise<void>;
+  stopListening: (owner: RequestAuthority) => Promise<void>;
+  cancelListening: (owner?: RequestAuthority) => void;
+  clearTranscript: (owner: RequestAuthority) => void;
   setLanguage: (lang: string) => void;
   setMicrophoneId: (deviceId: string) => void;
   clearError: () => void;
-  retryTranscription: () => Promise<void>;
+  retryTranscription: (owner: RequestAuthority) => Promise<void>;
 }
 
 interface RuntimeRefs {
@@ -44,6 +43,8 @@ interface RuntimeRefs {
   audioChunks: Blob[];
   stopResolve: (() => void) | null;
   failedRecording: Blob | null;
+  owner: RequestAuthority | null;
+  language: string;
 }
 
 const rt: RuntimeRefs = {
@@ -53,6 +54,8 @@ const rt: RuntimeRefs = {
   audioChunks: [],
   stopResolve: null,
   failedRecording: null,
+  owner: null,
+  language: DEFAULT_LANGUAGE,
 };
 
 /**
@@ -63,6 +66,9 @@ const rt: RuntimeRefs = {
  */
 export function _resetRuntimeRefs(): void {
   rt.generation += 1;
+  rt.owner?.retire();
+  rt.owner = null;
+  releaseCapture();
   rt.mediaStream = null;
   rt.mediaRecorder = null;
   rt.audioChunks = [];
@@ -143,6 +149,10 @@ function getBestMimeType(): string {
 }
 
 function releaseCapture(): void {
+  if (rt.mediaRecorder) {
+    rt.mediaRecorder.ondataavailable = null;
+    rt.mediaRecorder.onstop = null;
+  }
   if (rt.mediaRecorder && rt.mediaRecorder.state !== 'inactive') {
     rt.mediaRecorder.stop();
   }
@@ -163,7 +173,12 @@ export function toProviderLanguage(language: string): string {
   return isSupportedLanguage(primary) ? primary : '';
 }
 
-async function transcribeViaServer(blob: Blob, language: string): Promise<string> {
+async function transcribeViaServer(
+  blob: Blob,
+  language: string,
+  owner: RequestAuthority,
+): Promise<string> {
+  owner.assertCurrent();
   const form = new FormData();
   const ext = blob.type.includes(MP4_CONTAINER) ? MP4_CONTAINER : DEFAULT_RECORDING_EXTENSION;
   form.append('file', blob, `recording.${ext}`);
@@ -171,9 +186,8 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   const providerLanguage = toProviderLanguage(language);
   if (providerLanguage) form.append('language', providerLanguage);
 
-  const response = await fetch(TRANSCRIBE_ENDPOINT, {
+  const response = await owner.fetch(TRANSCRIBE_ENDPOINT, {
     method: 'POST',
-    headers: { [CSRF_HEADER]: await getCsrfToken() },
     body: form,
   });
 
@@ -182,6 +196,7 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   }
 
   const data = (await response.json()) as { text?: string };
+  owner.assertCurrent();
   return data?.text?.trim() ?? '';
 }
 
@@ -199,8 +214,13 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
       captureStream: null,
       canRetryTranscription: false,
 
-      startListening: async () => {
-        if (get().mode !== 'idle') return;
+      startListening: async (owner) => {
+        if (!owner.isCurrent()) return;
+        if (rt.owner === owner && get().mode !== 'idle') return;
+        get().cancelListening();
+        rt.owner = owner;
+        owner.signal.addEventListener('abort', () => get().cancelListening(owner), { once: true });
+        rt.language = get().language;
         const generation = ++rt.generation;
         const { microphoneId } = get();
         rt.failedRecording = null;
@@ -217,7 +237,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
             },
           });
 
-          if (generation !== rt.generation) {
+          if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) {
             stream.getTracks().forEach((track) => track.stop());
             return;
           }
@@ -230,10 +250,17 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           rt.mediaRecorder = recorder;
 
           recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) rt.audioChunks.push(e.data);
+            if (
+              generation === rt.generation &&
+              rt.owner === owner &&
+              owner.isCurrent() &&
+              e.data.size > 0
+            )
+              rt.audioChunks.push(e.data);
           };
 
           recorder.onstop = () => {
+            if (generation !== rt.generation || rt.owner !== owner) return;
             rt.stopResolve?.();
             rt.stopResolve = null;
           };
@@ -241,7 +268,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           recorder.start(RECORDER_TIMESLICE_MS);
           set({ captureStream: stream });
         } catch (err) {
-          if (generation !== rt.generation) return;
+          if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
           rt.mediaStream?.getTracks()?.forEach((t) => t.stop());
           rt.mediaStream = null;
           rt.mediaRecorder = null;
@@ -249,13 +276,19 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         }
       },
 
-      stopListening: async () => {
-        const { mode, language } = get();
+      stopListening: async (owner) => {
+        if (rt.owner !== owner) return;
+        if (!owner.isCurrent()) {
+          get().cancelListening(owner);
+          return;
+        }
+        const { mode } = get();
+        const language = rt.language;
         if (mode !== 'listening') return;
         const generation = rt.generation;
 
         if (!rt.mediaRecorder) {
-          set({ mode: 'idle', captureStream: null });
+          get().cancelListening(owner);
           return;
         }
 
@@ -265,7 +298,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           rt.stopResolve = resolve;
           rt.mediaRecorder!.stop();
         });
-        if (generation !== rt.generation) return;
+        if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
 
         rt.mediaStream?.getTracks().forEach((t) => t.stop());
         rt.mediaStream = null;
@@ -283,11 +316,11 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         const blob = new Blob(chunks, { type: mimeType });
 
         try {
-          const text = await transcribeViaServer(blob, language);
-          if (generation !== rt.generation) return;
+          const text = await transcribeViaServer(blob, language, owner);
+          if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
           set({ transcript: text, mode: 'idle' });
         } catch (err) {
-          if (generation !== rt.generation) return;
+          if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
           rt.failedRecording = blob;
           set({
             mode: 'error',
@@ -297,18 +330,23 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         }
       },
 
-      retryTranscription: async () => {
+      retryTranscription: async (owner) => {
+        if (rt.owner !== owner) return;
+        if (!owner.isCurrent()) {
+          get().cancelListening(owner);
+          return;
+        }
         const blob = rt.failedRecording;
         if (!blob || get().mode === 'listening' || get().mode === 'transcribing') return;
         const generation = ++rt.generation;
         set({ mode: 'transcribing', error: null, transcript: '' });
         try {
-          const text = await transcribeViaServer(blob, get().language);
-          if (generation !== rt.generation) return;
+          const text = await transcribeViaServer(blob, rt.language, owner);
+          if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
           rt.failedRecording = null;
           set({ transcript: text, mode: 'idle', canRetryTranscription: false });
         } catch (err) {
-          if (generation !== rt.generation) return;
+          if (generation !== rt.generation || rt.owner !== owner || !owner.isCurrent()) return;
           set({
             mode: 'error',
             error: transcriptionErrorMessage(err),
@@ -317,16 +355,21 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         }
       },
 
-      cancelListening: () => {
+      cancelListening: (owner) => {
+        if (owner && rt.owner !== owner) return;
+        const previous = rt.owner;
+        rt.owner = null;
         rt.generation += 1;
+        previous?.retire();
         rt.failedRecording = null;
         if (get().canRetryTranscription) set({ canRetryTranscription: false });
-        if (get().mode === 'idle') return;
         releaseCapture();
         set({ mode: 'idle', transcript: '', error: null, captureStream: null });
       },
 
-      clearTranscript: () => set({ transcript: '' }),
+      clearTranscript: (owner) => {
+        if (rt.owner === owner) set({ transcript: '' });
+      },
       setLanguage: (lang) => set({ language: lang }),
       setMicrophoneId: (deviceId) => set({ microphoneId: deviceId }),
       clearError: () => set({ error: null, mode: 'idle' }),

@@ -38,6 +38,14 @@ function cssRule(source: string, selector: string): string {
 }
 
 beforeEach(() => {
+  if (!Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'innerText')) {
+    Object.defineProperty(HTMLElement.prototype, 'innerText', {
+      configurable: true,
+      get: function (this: HTMLElement) {
+        return this.textContent ?? '';
+      },
+    });
+  }
   (globalThis as { chrome?: unknown }).chrome = {
     i18n: { getMessage, getUILanguage: () => 'en' },
   };
@@ -285,6 +293,67 @@ describe('markdown images', () => {
   it('keeps a non-web image source as text', async () => {
     const root = await render('![x](javascript:alert(1))');
     expect(root.querySelector('img, a')).toBeNull();
+  });
+});
+
+describe('native writing copy', () => {
+  it.each(['  edited first line  \nsecond line\n\n', '<tag> & "quotes"\n'])(
+    'copies live edited text after its original code node is replaced: %j',
+    async (edited) => {
+      const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      const root = await render(
+        [
+          '```writing',
+          'Original draft.',
+          '```',
+          '',
+          '```document',
+          'Independent draft.',
+          '```',
+        ].join('\n'),
+      );
+      const sections = root.querySelectorAll<HTMLElement>('section[data-lang="surface:writing"]');
+      expect(sections).toHaveLength(2);
+      const draft = sections[0]!.querySelector<HTMLPreElement>('pre')!;
+      const originalCode = draft.querySelector('code');
+      expect(originalCode).not.toBeNull();
+      expect(draft.getAttribute('contenteditable')).toBe('plaintext-only');
+
+      draft.replaceChildren(document.createTextNode(edited));
+      expect(draft.contains(originalCode)).toBe(false);
+      sections[0]!.querySelector<HTMLButtonElement>('button')?.click();
+      expect(writeText).toHaveBeenNthCalledWith(1, edited);
+      sections[1]!.querySelector<HTMLButtonElement>('button')?.click();
+      expect(writeText).toHaveBeenNthCalledWith(2, 'Independent draft.');
+      expect(writeText).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('reads browser-visible line breaks instead of joining block text nodes', async () => {
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const root = await render('```writing\nOriginal draft.\n```');
+    const draft = root.querySelector<HTMLPreElement>('pre[contenteditable]')!;
+    draft.innerHTML = 'first<div>second</div><div><br></div>';
+    expect(draft.textContent).toBe('firstsecond');
+    Object.defineProperty(draft, 'innerText', { configurable: true, value: 'first\nsecond\n' });
+
+    root.querySelector<HTMLButtonElement>('section[data-lang="surface:writing"] > button')?.click();
+
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('first\nsecond\n');
+  });
+
+  it('keeps email copying on its original selectable plain text', async () => {
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const root = await render('```email\nSubject: Review\n\nPlease review.\n```');
+    const section = root.querySelector<HTMLElement>('section[data-lang="surface:email"]')!;
+    expect(section.querySelector('[contenteditable]')).toBeNull();
+
+    section.querySelector<HTMLButtonElement>('button')?.click();
+
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('Subject: Review\n\nPlease review.');
   });
 });
 

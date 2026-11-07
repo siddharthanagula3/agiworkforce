@@ -29,16 +29,55 @@ describe('the worker is only woken when there is work', () => {
     );
     expect(created).toEqual(['MAINTENANCE_ALARM']);
     expect(background).not.toContain("chrome.alarms.create('keep-alive'");
+    expect(background).toContain('const maintenanceAlarm = createMaintenanceAlarmController({');
     expect(background).toMatch(
-      /function armMaintenanceAlarm\(\)[\s\S]*?chrome\.alarms\.create\(MAINTENANCE_ALARM/,
+      /function armMaintenanceAlarm\(\)[\s\S]*?maintenanceAlarm\.requestWork\(\)/,
     );
   });
 
-  it('disarms the maintenance alarm when a pass finds nothing outstanding', () => {
+  it('delegates pass settlement and actual alarm reads and clears to the controller', () => {
     expect(background).toMatch(
-      /async function settleMaintenanceAlarm\(\)[\s\S]*?if \(await runMaintenancePass\(\)\) armMaintenanceAlarm\(\);\s*else disarmMaintenanceAlarm\(\);/,
+      /async function settleMaintenanceAlarm\(\)[\s\S]*?await maintenanceAlarm\.settle\(\)/,
     );
-    expect(background).toContain('void chrome.alarms.clear(MAINTENANCE_ALARM)');
+    expect(background).toContain('read: () => chrome.alarms.get(MAINTENANCE_ALARM)');
+    expect(background).toContain('await chrome.alarms.clear(MAINTENANCE_ALARM)');
+    expect(background).toContain('runPass: runMaintenancePass');
+  });
+
+  it('requests demand only after a deletion was durably queued', () => {
+    const handler = background.slice(
+      background.indexOf("case 'DELETE_CLOUD_CONVERSATION'"),
+      background.indexOf("case 'AGI_START_COMPUTER_USE'"),
+    );
+    expect(handler).toContain('const queued = await queueCloudConversationDeletion(');
+    expect(handler).toContain('if (queued) armMaintenanceAlarm();');
+  });
+
+  it('wakes dormant work on observed valid owner transitions, not every token read', () => {
+    const handler = background.slice(
+      background.indexOf("case 'GET_CLOUD_AUTH_TOKEN'"),
+      background.indexOf("case 'GET_CONNECTION_STATUS'"),
+    );
+    expect(handler).toContain('observeMaintenanceOwner(context?.owner ?? null)');
+    expect(handler).toContain('observeMaintenanceOwner(null)');
+    expect(background).toContain(
+      'owner !== null && !sameManagedCloudOwner(maintenanceObservedOwner, owner)',
+    );
+    expect(background).toContain('maintenanceObservedOwner = owner ? { ...owner } : null');
+    expect(background).toContain('if (changed) armMaintenanceAlarm()');
+    const pass = background.slice(
+      background.indexOf('async function runMaintenancePass()'),
+      background.indexOf('async function settleMaintenanceAlarm()'),
+    );
+    expect(pass).toMatch(
+      /sweepConversationSync\(\(\) => \{[\s\S]*?maintenanceObservedOwner = null;/,
+    );
+    const unavailableCallback = pass.slice(
+      pass.indexOf('sweepConversationSync(() => {'),
+      pass.indexOf('})) outstanding = true;'),
+    );
+    expect(unavailableCallback).not.toContain('armMaintenanceAlarm');
+    expect(unavailableCallback).not.toContain('getManagedCloudAuthContext');
   });
 
   it('clears a task alarm whose task is gone instead of waking for it forever', () => {

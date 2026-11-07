@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS } from '@agiworkforce/cloud-contracts';
+import type { PublishedArtifactRow } from './published-artifact-service';
 
 vi.mock('server-only', () => ({}));
 
@@ -8,9 +10,14 @@ const {
   getPublishedArtifactByToken,
   isPublishableKind,
   listPublishedArtifacts,
+  listPublishedArtifactsPage,
+  getOwnedPublishedArtifactSummary,
+  getOwnedPublishedArtifactSummaryByArtifactId,
   renamePublishedArtifact,
   mintPublishToken,
   publishArtifactRecord,
+  readPublishedArtifactRestoreSource,
+  restorePublishedArtifactRecord,
   requiresSandboxedRender,
   unpublishArtifactRecord,
   unpublishArtifactsForConversations,
@@ -22,10 +29,65 @@ const {
 
 interface FakeDb {
   query: ReturnType<typeof vi.fn>;
+  transaction: ReturnType<typeof vi.fn>;
 }
 
 function makeDb(rows: unknown[] = []): FakeDb {
-  return { query: vi.fn(async () => rows) };
+  const db = {
+    query: vi.fn(async (_sql: unknown, _params?: unknown[]) => rows),
+    transaction: vi.fn(),
+  };
+  db.transaction.mockImplementation(async (callback: (tx: FakeDb) => Promise<unknown>) => {
+    const original = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async (sql: unknown, params: unknown[] = []) => {
+      const history = historyRows(String(sql), params);
+      if (history !== null) return history;
+      const admission = admissionRows(String(sql));
+      if (admission !== null) return admission;
+      if (String(sql).includes('as owned_conversations')) {
+        return [{ owned_conversations: 1 }];
+      }
+      if (isInsert(sql) || String(sql).includes('set title = case')) return rows;
+      throw new Error(`Unexpected transaction SQL: ${String(sql)}`);
+    });
+    try {
+      return await callback(db);
+    } finally {
+      db.query.mockImplementation(original);
+    }
+  });
+  return db;
+}
+
+function admissionRows(
+  sql: string,
+  publishedCount = 0,
+  existingRows: unknown[] = [],
+): unknown[] | null {
+  if (sql.includes("current_setting('transaction_isolation')")) {
+    return [{ isolation: 'read committed' }];
+  }
+  if (sql.includes('pg_advisory_xact_lock')) return [{ locked: true }];
+  if (sql.includes('from public.published_artifacts') && sql.includes('for update')) {
+    return existingRows;
+  }
+  if (sql.includes('as published_count')) return [{ published_count: publishedCount }];
+  return null;
+}
+
+function historyRows(sql: string, params: unknown[]): unknown[] | null {
+  if (
+    sql.includes('from public.published_artifact_versions') &&
+    sql.includes('order by version desc')
+  )
+    return [];
+  if (sql.includes('insert into public.published_artifact_versions')) {
+    return [{ version: params[2] }];
+  }
+  if (sql.includes('set version = $2')) {
+    return [{ id: params[0], user_id: params[2], version: params[1] }];
+  }
+  return null;
 }
 
 const INSERT_SQL = 'insert into public.published_artifacts';
@@ -41,28 +103,40 @@ function insertCall(db: FakeDb): [string, unknown[]] {
 }
 
 function makeRoutedDb(options: {
-  otherPublished?: number | string;
+  publishedCount?: number;
+  existingRows?: unknown[];
   ownedConversations?: number | string;
   insertRows?: unknown[];
   insertError?: unknown;
 }): FakeDb {
-  return {
-    query: vi.fn(async (sql: unknown) => {
+  const db = {
+    transaction: vi.fn(),
+    query: vi.fn(async (sql: unknown, params: unknown[] = []) => {
+      const history = historyRows(String(sql), params);
+      if (history !== null) return history;
       if (isInsert(sql)) {
         if (options.insertError) throw options.insertError;
         return options.insertRows ?? [row()];
       }
+      const admission = admissionRows(String(sql), options.publishedCount, options.existingRows);
+      if (admission !== null) return admission;
+      if (!String(sql).includes('as owned_conversations')) {
+        throw new Error(`Unexpected publish SQL: ${String(sql)}`);
+      }
       return [
         {
-          other_published: options.otherPublished ?? 0,
           owned_conversations: options.ownedConversations ?? 0,
         },
       ];
     }),
   };
+  db.transaction.mockImplementation(async (callback: (tx: typeof db) => Promise<unknown>) =>
+    callback(db),
+  );
+  return db;
 }
 
-function row(overrides: Record<string, unknown> = {}) {
+function row(overrides: Partial<PublishedArtifactRow> = {}): PublishedArtifactRow {
   return {
     id: 'row-1',
     token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
@@ -73,6 +147,7 @@ function row(overrides: Record<string, unknown> = {}) {
     kind: 'html',
     language: null,
     content: '<h1>hi</h1>',
+    visibility: 'public',
     created_at: '2026-08-01T00:00:00.000Z',
     updated_at: '2026-08-02T00:00:00.000Z',
     ...overrides,
@@ -228,7 +303,7 @@ describe('publishArtifactRecord', () => {
     });
     const [sql, params] = owned.query.mock.calls[0]! as [string, unknown[]];
     expect(sql).toContain('public.web_conversations');
-    expect(params).toEqual(['user-1', 'artifact-1', '11111111-1111-4111-8111-111111111111']);
+    expect(params).toEqual(['user-1', '11111111-1111-4111-8111-111111111111']);
     expect(owned.query.mock.calls.some(([s]) => isInsert(s))).toBe(true);
   });
 
@@ -245,7 +320,7 @@ describe('publishArtifactRecord', () => {
   });
 
   it('bounds how many pages one user can leave published', async () => {
-    const full = makeRoutedDb({ otherPublished: MAX_PUBLISHED_PER_USER });
+    const full = makeRoutedDb({ publishedCount: MAX_PUBLISHED_PER_USER });
     await expect(
       publishArtifactRecord(full as never, {
         userId: 'user-1',
@@ -258,20 +333,29 @@ describe('publishArtifactRecord', () => {
     expect(full.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
-  it('excludes the artifact being republished from the quota count', async () => {
-    const atCap = makeRoutedDb({ otherPublished: MAX_PUBLISHED_PER_USER - 1 });
-    await expect(
-      publishArtifactRecord(atCap as never, {
-        userId: 'user-1',
-        artifactId: 'artifact-1',
-        title: 'Dashboard',
-        kind: 'html',
-        content: '<h1>hi</h1>',
-      }),
-    ).resolves.toMatchObject({ token: 'aaaaaaaaaaaaaaaaaaaaaaaa' });
-    const [sql] = atCap.query.mock.calls[0]! as [string, unknown[]];
-    expect(sql).toContain('artifact_id <> $2');
-  });
+  it.each([MAX_PUBLISHED_PER_USER, MAX_PUBLISHED_PER_USER + 1])(
+    'republishes a pinned existing artifact without quota admission at inventory %i',
+    async (publishedCount) => {
+      const atCap = makeRoutedDb({
+        publishedCount,
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+      });
+      await expect(
+        publishArtifactRecord(atCap as never, {
+          userId: 'user-1',
+          artifactId: 'artifact-1',
+          title: 'Dashboard',
+          kind: 'html',
+          content: '<h1>hi</h1>',
+        }),
+      ).resolves.toMatchObject({ token: 'aaaaaaaaaaaaaaaaaaaaaaaa' });
+      const existing = atCap.query.mock.calls.find(([sql]) => String(sql).includes('for update'));
+      expect(existing?.[1]).toEqual(['user-1', 'artifact-1']);
+      expect(
+        atCap.query.mock.calls.some(([sql]) => String(sql).includes('as published_count')),
+      ).toBe(false);
+    },
+  );
 
   it('turns a racing RLS denial into an ownership refusal, not an unhandled 500', async () => {
     const denied = makeRoutedDb({
@@ -485,5 +569,591 @@ describe('unpublishArtifactsForConversations', () => {
       }),
     ).toEqual([]);
     expect(db.query).not.toHaveBeenCalled();
+  });
+});
+
+// This adapter models predicate-bound reads/writes, not PostgreSQL locks, triggers or RLS.
+describe('Restore persistence without republication', () => {
+  const restoreInput = {
+    userId: 'user-1',
+    publishedArtifactId: 'row-1',
+    artifactId: 'artifact-1',
+    token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+    title: 'Historical title',
+    kind: 'code',
+    language: 'typescript',
+    content: 'const restored = true;',
+  };
+  const sourceInput = { userId: 'user-1', token: restoreInput.token, version: 2 };
+
+  function model(
+    options: {
+      publication?: PublishedArtifactRow | null;
+      snapshot?: Record<string, unknown> | null;
+      beforeUpdate?: () => void;
+      otherPublished?: number;
+      ownedConversations?: number;
+      updateError?: unknown;
+    } = {},
+  ) {
+    let publication =
+      options.publication === undefined ? row({ visibility: 'invited' }) : options.publication;
+    const snapshot =
+      options.snapshot === undefined
+        ? {
+            published_artifact_id: 'row-1',
+            user_id: 'user-1',
+            version: 2,
+            title: 'Historical title',
+            kind: 'code',
+            language: 'typescript',
+            content: 'const historical = true;',
+          }
+        : options.snapshot;
+    const grants = [{ publicationId: 'row-1', recipient: 'reader-1' }];
+    const storage = [{ publicationId: 'row-1', key: 'existing-storage' }];
+    const db = {
+      transaction: vi.fn(),
+      query: vi.fn(async (sql: string, params: unknown[]) => {
+        const history = historyRows(sql, params);
+        if (history !== null) return history;
+        const normalized = sql.replace(/\s+/g, ' ').trim();
+        if (normalized.includes('as published_count')) {
+          return [{ published_count: options.otherPublished ?? 0 }];
+        }
+        if (normalized.startsWith('select') && normalized.includes('as owned_conversations')) {
+          expect(normalized).toContain(
+            'where id = $2::uuid and user_id = $1 and deleted_at is null',
+          );
+          return [
+            {
+              owned_conversations: options.ownedConversations ?? 1,
+            },
+          ];
+        }
+        if (
+          normalized.startsWith('select') &&
+          normalized.includes('snapshot.version as snapshot_version')
+        ) {
+          expect(normalized).toContain(
+            'join public.published_artifact_versions snapshot on ' +
+              'snapshot.published_artifact_id = publication.id and snapshot.user_id = $2',
+          );
+          expect(normalized).toContain(
+            'where publication.token = $1 and publication.user_id = $2 and snapshot.version = $3',
+          );
+          if (
+            !publication ||
+            !snapshot ||
+            publication.token !== params[0] ||
+            publication.user_id !== params[1] ||
+            snapshot['published_artifact_id'] !== publication.id ||
+            snapshot['user_id'] !== params[1] ||
+            snapshot['version'] !== params[2]
+          )
+            return [];
+          return [
+            {
+              ...publication,
+              snapshot_version: String(snapshot['version']),
+              snapshot_title: snapshot['title'],
+              snapshot_kind: snapshot['kind'],
+              snapshot_language: snapshot['language'],
+              snapshot_content: snapshot['content'],
+            },
+          ];
+        }
+        if (normalized.startsWith('update public.published_artifacts')) {
+          expect(normalized).toContain(
+            'where user_id = $1 and id = $2 and artifact_id = $3 and token = $4',
+          );
+          expect(normalized.split(' where ')[0]).toBe(
+            "update public.published_artifacts set title = case when title = '' then $5 else title end, " +
+              'kind = $6, language = $7, content = $8, updated_at = now()',
+          );
+          options.beforeUpdate?.();
+          if (options.updateError) throw options.updateError;
+          if (
+            !publication ||
+            publication.user_id !== params[0] ||
+            publication.id !== params[1] ||
+            publication.artifact_id !== params[2] ||
+            publication.token !== params[3]
+          )
+            return [];
+          publication = {
+            ...publication,
+            title: publication.title === '' ? String(params[4]) : publication.title,
+            kind: String(params[5]),
+            language: params[6] === null ? null : String(params[6]),
+            content: String(params[7]),
+            updated_at: '2026-11-07T00:00:00.000Z',
+          };
+          return [publication];
+        }
+        throw new Error(`Unexpected Restore SQL: ${normalized}`);
+      }),
+    };
+    db.transaction.mockImplementation(async (callback: (tx: typeof db) => Promise<unknown>) =>
+      callback(db),
+    );
+    return {
+      db,
+      grants,
+      storage,
+      current: () => publication,
+      replace: (next: PublishedArtifactRow | null) => {
+        publication = next;
+      },
+    };
+  }
+
+  it('reads the current owner publication and historical snapshot through one bound join', async () => {
+    const state = model();
+    const source = await readPublishedArtifactRestoreSource(state.db as never, {
+      ...sourceInput,
+      userId: ' user-1 ',
+      token: ` ${sourceInput.token} `,
+    });
+    expect(source).toMatchObject({
+      publication: {
+        id: 'row-1',
+        title: 'Dashboard',
+        visibility: 'invited',
+        content: '<h1>hi</h1>',
+      },
+      snapshot: {
+        version: 2,
+        title: 'Historical title',
+        kind: 'code',
+        language: 'typescript',
+        content: 'const historical = true;',
+      },
+    });
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+    expect(state.db.query.mock.calls[0]?.[1]).toEqual([sourceInput.token, 'user-1', 2]);
+  });
+
+  it.each([
+    { userId: '' },
+    { token: 'bad' },
+    { version: 0 },
+    { version: -1 },
+    { version: 1.5 },
+    { version: NaN },
+    { version: Infinity },
+    { version: Number.MAX_SAFE_INTEGER + 1 },
+  ])('rejects invalid source identity/version without querying: %j', async (change) => {
+    const state = model();
+    expect(
+      await readPublishedArtifactRestoreSource(state.db as never, { ...sourceInput, ...change }),
+    ).toBeNull();
+    expect(state.db.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { publication: null },
+    { publication: row({ user_id: 'other-user' }) },
+    { publication: row({ token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }) },
+    { publication: row({ id: 'replacement-publication' }) },
+    { snapshot: null },
+    { snapshot: { published_artifact_id: 'row-1', user_id: 'other-user', version: 2 } },
+    { snapshot: { published_artifact_id: 'other-publication', user_id: 'user-1', version: 2 } },
+    { snapshot: { published_artifact_id: 'row-1', user_id: 'user-1', version: 3 } },
+  ])('does not join missing, replaced, foreign or wrong-version sources: %j', async (options) => {
+    const state = model(options);
+    expect(await readPublishedArtifactRestoreSource(state.db as never, sourceInput)).toBeNull();
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['public', 'organization', 'invited'])(
+    'preserves %s metadata with content-only SQL',
+    async (visibility) => {
+      const original = row({ visibility, conversation_id: '11111111-1111-4111-8111-111111111111' });
+      const state = model({ publication: original });
+      const restored = await restorePublishedArtifactRecord(state.db as never, {
+        ...restoreInput,
+        conversationId: original.conversation_id,
+      });
+      expect(restored).toMatchObject({
+        id: original.id,
+        token: original.token,
+        userId: original.user_id,
+        artifactId: original.artifact_id,
+        conversationId: original.conversation_id,
+        title: original.title,
+        visibility,
+        createdAt: original.created_at,
+        kind: 'code',
+        language: 'typescript',
+        content: restoreInput.content,
+      });
+      expect(restored?.updatedAt).not.toBe(original.updated_at);
+      expect(state.grants).toEqual([{ publicationId: 'row-1', recipient: 'reader-1' }]);
+      expect(state.storage).toEqual([{ publicationId: 'row-1', key: 'existing-storage' }]);
+      expect(state.db.query).toHaveBeenCalledTimes(5);
+      expect(state.db.query.mock.calls[1]?.[1]).toEqual([
+        'user-1',
+        'row-1',
+        'artifact-1',
+        restoreInput.token,
+        restoreInput.title,
+        'code',
+        'typescript',
+        restoreInput.content,
+      ]);
+    },
+  );
+
+  it('fills an empty current title using prepared input but never overwrites conversation provenance', async () => {
+    const state = model({
+      publication: row({ title: '', conversation_id: 'original-conversation' }),
+    });
+    const result = await restorePublishedArtifactRecord(state.db as never, {
+      ...restoreInput,
+      userId: ' user-1 ',
+      artifactId: ' artifact-1 ',
+      conversationId: null,
+    });
+    expect(result).toMatchObject({
+      title: restoreInput.title,
+      conversationId: 'original-conversation',
+    });
+    expect(state.db.query.mock.calls[0]?.[1]).toEqual(['user-1', null]);
+  });
+
+  it.each([
+    null,
+    row({ id: 'replacement-publication', token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }),
+    row({ id: 'replacement-publication' }),
+    row({ user_id: 'other-user' }),
+    row({ artifact_id: 'other-artifact' }),
+    row({ token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }),
+  ])('refuses a deleted/replaced/mismatched row at write time: %j', async (replacement) => {
+    const state = model({ beforeUpdate: () => state.replace(replacement) });
+    const source = await readPublishedArtifactRestoreSource(state.db as never, sourceInput);
+    expect(source?.publication.id).toBe('row-1');
+    expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
+    expect(state.current()).toEqual(replacement);
+    expect(state.db.query).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns null when the publication is already absent', async () => {
+    const state = model({ publication: null });
+    expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
+    expect(state.current()).toBeNull();
+  });
+
+  it('cannot resurrect a row on retry after UPDATE followed by a modeled deletion', async () => {
+    const state = model();
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).resolves.toMatchObject({ id: 'row-1', content: restoreInput.content });
+    state.replace(null);
+    expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
+    expect(state.current()).toBeNull();
+    expect(state.db.query).toHaveBeenCalledTimes(7);
+  });
+
+  it.each([{ publishedArtifactId: '' }, { token: 'bad' }])(
+    'rejects malformed identity: %j',
+    async (change) => {
+      const state = model();
+      expect(
+        await restorePublishedArtifactRecord(state.db as never, { ...restoreInput, ...change }),
+      ).toBeNull();
+      expect(state.db.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { userId: '' },
+    { artifactId: '' },
+    { artifactId: 'x'.repeat(201) },
+    { kind: 'pdf' },
+    { content: '   ' },
+    { content: 'x'.repeat(1_000_001) },
+  ])('retains shared validation before touching persistence (case %#)', async (change) => {
+    const state = model();
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, { ...restoreInput, ...change }),
+    ).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(state.db.query).not.toHaveBeenCalled();
+  });
+
+  it.each([MAX_PUBLISHED_PER_USER, MAX_PUBLISHED_PER_USER + 1])(
+    'restores existing content without quota admission at inventory %i',
+    async (otherPublished) => {
+      const state = model({ otherPublished });
+      await expect(
+        restorePublishedArtifactRecord(state.db as never, restoreInput),
+      ).resolves.toMatchObject({ id: 'row-1', content: restoreInput.content, version: 1 });
+      expect(state.db.query).toHaveBeenCalledTimes(5);
+      expect(
+        state.db.query.mock.calls.some(([sql]) =>
+          /published_count|other_published|pg_advisory_xact_lock|transaction_isolation|for update/.test(
+            sql,
+          ),
+        ),
+      ).toBe(false);
+      expect(
+        state.db.query.mock.calls.some(([sql]) =>
+          sql.includes('insert into public.published_artifact_versions'),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('rejects a deleted or foreign conversation before updating', async () => {
+    const state = model({ ownedConversations: 0 });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, {
+        ...restoreInput,
+        conversationId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).rejects.toBeInstanceOf(PublishedArtifactOwnershipError);
+    expect(state.db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { code: '42501' },
+    { cause: { code: '42501' } },
+    { cause: { cause: { code: '42501' } } },
+  ])('maps an adapter RLS error to an ownership refusal: %j', async (updateError) => {
+    const state = model({ updateError });
+    await expect(
+      restorePublishedArtifactRecord(state.db as never, restoreInput),
+    ).rejects.toBeInstanceOf(PublishedArtifactOwnershipError);
+    expect(state.current()?.content).toBe('<h1>hi</h1>');
+  });
+
+  it('preserves infrastructure errors for the route instead of reporting a successful restore', async () => {
+    const updateError = Object.assign(new Error('relation does not exist'), { code: '42P01' });
+    const state = model({ updateError });
+    await expect(restorePublishedArtifactRecord(state.db as never, restoreInput)).rejects.toBe(
+      updateError,
+    );
+  });
+});
+
+describe('Restore prepared payload', () => {
+  it('bounds title and language while passing the prepared sanitized body unchanged', async () => {
+    const db = makeDb([row()]);
+    const content = '<h1>Sanitized historical content</h1>';
+    await restorePublishedArtifactRecord(db as never, {
+      userId: ' user-1 ',
+      artifactId: ' artifact-1 ',
+      publishedArtifactId: 'row-1',
+      token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      title: 't'.repeat(MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS + 1),
+      kind: 'html',
+      language: 'l'.repeat(51),
+      content,
+    });
+    expect(db.query.mock.calls[1]?.[1]).toEqual([
+      'user-1',
+      'row-1',
+      'artifact-1',
+      'aaaaaaaaaaaaaaaaaaaaaaaa',
+      't'.repeat(MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS),
+      'html',
+      'l'.repeat(50),
+      content,
+    ]);
+  });
+});
+
+// UNRUN: source-authored pagination and owner lookup fixtures.
+describe('published artifact owner pages', () => {
+  const firstId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const lastId = '99999999-9999-4999-8999-999999999999';
+  const stamp = '2026-11-07T12:34:56.123456Z';
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const boundary = { v: 1, owner: 'user-1', createdAt: stamp, id: firstId };
+  const pageRow = (id = firstId) => ({
+    ...row({ id }),
+    content_chars: 10,
+    version: 1,
+    cursor_created_at: stamp,
+  });
+
+  it('probes one extra row and uses the last returned boundary, preserving microseconds', async () => {
+    const db = makeDb([pageRow(), pageRow(lastId)]);
+    const page = await listPublishedArtifactsPage(db as never, { userId: 'user-1', limit: 1 });
+    expect(page.artifacts).toHaveLength(1);
+    expect(JSON.parse(Buffer.from(page.nextCursor!, 'base64url').toString('utf8'))).toEqual(
+      boundary,
+    );
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('order by created_at desc, id desc');
+    expect(sql).toContain('HH24:MI:SS.US');
+    expect(params).toEqual(['user-1', 2]);
+    expect(page.artifacts[0]).not.toHaveProperty('content');
+    expect(page.artifacts[0]).not.toHaveProperty('cursor_created_at');
+  });
+
+  it('uses a self-contained timestamp and UUID boundary without looking up a deleted row', async () => {
+    const db = makeDb([pageRow(lastId)]);
+    const page = await listPublishedArtifactsPage(db as never, {
+      userId: 'user-1',
+      limit: 1,
+      cursor: encode(boundary),
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0]![0]).toContain(
+      'where user_id = $1 and (created_at, id) < ($3::timestamptz, $4::uuid)',
+    );
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 2, stamp, firstId]);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it.each([0, 1, 200])('marks an exhausted page of %i rows explicitly', async (count) => {
+    const db = makeDb(Array.from({ length: count }, () => pageRow()));
+    const page = await listPublishedArtifactsPage(db as never, { userId: 'user-1' });
+    expect(page.artifacts).toHaveLength(count);
+    expect(page.nextCursor).toBeNull();
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 201]);
+  });
+
+  it.each([
+    '',
+    'not-a-cursor',
+    'a'.repeat(2049),
+    encode({ ...boundary, owner: 'another-user' }),
+    encode({ ...boundary, v: 2 }),
+    encode({ ...boundary, extra: true }),
+    encode({ ...boundary, id: 'not-a-uuid' }),
+    encode({ ...boundary, createdAt: '2026-02-29T12:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '1900-02-29T12:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '2026-04-31T12:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '2026-11-07T24:34:56.123456Z' }),
+    encode({ ...boundary, createdAt: '2026-11-07T12:34:56.123Z' }),
+    encode(boundary) + '=',
+    Buffer.from(' ' + JSON.stringify(boundary)).toString('base64url'),
+    Buffer.from(JSON.stringify(boundary).replace('"v":1', '"v":1,"v":1')).toString('base64url'),
+  ])('rejects malformed or foreign-owner cursor before querying: %s', async (cursor) => {
+    const db = makeDb();
+    await expect(
+      listPublishedArtifactsPage(db as never, { userId: 'user-1', cursor }),
+    ).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('accepts leap-day microseconds without Date normalization', async () => {
+    const db = makeDb();
+    const createdAt = '2000-02-29T23:59:59.999999Z';
+    await listPublishedArtifactsPage(db as never, {
+      userId: 'user-1',
+      cursor: encode({ ...boundary, createdAt }),
+    });
+    expect(db.query.mock.calls[0]![1]).toEqual(['user-1', 201, createdAt, firstId]);
+  });
+
+  it.each([0, -1, 201, 1.5, NaN, Infinity])(
+    'rejects invalid limit %s before querying',
+    async (limit) => {
+      const db = makeDb();
+      await expect(
+        listPublishedArtifactsPage(db as never, { userId: 'user-1', limit }),
+      ).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+      expect(db.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it('always scopes well-formed altered positioning to the authenticated owner', async () => {
+    const db = makeDb();
+    await listPublishedArtifactsPage(db as never, {
+      userId: 'user-1',
+      cursor: encode({ ...boundary, createdAt: '2020-01-01T00:00:00.000000Z' }),
+    });
+    expect(db.query.mock.calls[0]![0]).toContain('where user_id = $1');
+    expect(db.query.mock.calls[0]![1]?.[0]).toBe('user-1');
+  });
+
+  it('looks up summary metadata directly by token and owner with no public visibility gate', async () => {
+    const db = makeDb([pageRow()]);
+    const result = await getOwnedPublishedArtifactSummary(db as never, {
+      userId: 'user-1',
+      token: row().token,
+    });
+    expect(result?.artifactId).toBe('artifact-1');
+    expect(result).not.toHaveProperty('content');
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('where token = $1 and user_id = $2');
+    expect(sql).not.toContain("visibility = 'public'");
+    expect(sql).not.toMatch(/select[\s\S]*\bcontent,/);
+    expect(params).toEqual([row().token, 'user-1']);
+  });
+
+  it('returns null for an unknown or nonowned token without a fallback list', async () => {
+    const db = makeDb();
+    await expect(
+      getOwnedPublishedArtifactSummary(db as never, { userId: 'user-1', token: row().token }),
+    ).resolves.toBeNull();
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up an older publication by exact case-sensitive text ID without listing', async () => {
+    const artifactId = 'Older/Artifact?x=1+#片';
+    const db = makeDb([{ ...pageRow(), artifact_id: artifactId, visibility: 'invited' }]);
+    const result = await getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+      userId: 'user-1',
+      artifactId: ` ${artifactId} `,
+    });
+    expect(result).toMatchObject({ artifactId, visibility: 'invited' });
+    expect(result).not.toHaveProperty('content');
+    expect(db.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('where user_id = $1 and artifact_id = $2');
+    expect(sql).toContain('limit 1');
+    expect(sql).not.toContain('order by');
+    expect(sql).not.toContain('lower(');
+    expect(sql).not.toContain("visibility = 'public'");
+    expect(sql).not.toMatch(/select[\s\S]*\bcontent,/);
+    expect(params).toEqual(['user-1', artifactId]);
+  });
+
+  it('returns null for an absent or nonowned artifact ID with one bounded query', async () => {
+    const db = makeDb();
+    await expect(
+      getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+        userId: 'other-user',
+        artifactId: 'artifact-1',
+      }),
+    ).resolves.toBeNull();
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0]![1]).toEqual(['other-user', 'artifact-1']);
+  });
+
+  it.each(['', '   ', 'a'.repeat(201)])(
+    'rejects invalid artifact ID %s without querying',
+    async (artifactId) => {
+      const db = makeDb();
+      await expect(
+        getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+          userId: 'user-1',
+          artifactId,
+        }),
+      ).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+      expect(db.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an empty owner and propagates database failures instead of absence', async () => {
+    const db = makeDb();
+    await expect(
+      getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+        userId: ' ',
+        artifactId: 'artifact-1',
+      }),
+    ).rejects.toBeInstanceOf(PublishedArtifactValidationError);
+    expect(db.query).not.toHaveBeenCalled();
+    db.query.mockRejectedValue(new Error('database unavailable'));
+    await expect(
+      getOwnedPublishedArtifactSummaryByArtifactId(db as never, {
+        userId: 'user-1',
+        artifactId: 'artifact-1',
+      }),
+    ).rejects.toThrow('database unavailable');
   });
 });

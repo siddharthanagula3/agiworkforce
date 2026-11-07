@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -44,14 +44,33 @@ export interface ProjectSettingsDialogProps {
   onDuplicated?: () => void;
 }
 
-export function ProjectSettingsDialog({
+export function ProjectSettingsDialog(props: ProjectSettingsDialogProps) {
+  // Each opening owns its draft and receipts, even when a parent keeps this
+  // wrapper mounted while closed or replaces its target project.
+  return props.open ? <ProjectSettingsSession key={props.project.id} {...props} /> : null;
+}
+
+function ProjectSettingsSession({
   open,
   onOpenChange,
-  project,
+  project: initialProject,
   onUpdate,
   onDelete,
   onDuplicated,
 }: ProjectSettingsDialogProps) {
+  // Parent refreshes must not overwrite the draft in an already-open dialog.
+  const [project] = useState(initialProject);
+  const lifetime = useRef(0);
+  const mounted = useRef(false);
+  const savePending = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      lifetime.current += 1;
+      savePending.current = false;
+    };
+  }, []);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? '');
   const [instructions, setInstructions] = useState(project.instructions ?? '');
@@ -85,10 +104,6 @@ export function ProjectSettingsDialog({
     project.chatDefaults,
   ]);
 
-  useEffect(() => {
-    resetFields();
-  }, [project.id, resetFields]);
-
   const dirty =
     open &&
     (name !== project.name ||
@@ -107,6 +122,7 @@ export function ProjectSettingsDialog({
   });
 
   const handleOpenChange = (next: boolean) => {
+    if (savePending.current) return;
     if (next) {
       onOpenChange(true);
       return;
@@ -150,6 +166,7 @@ export function ProjectSettingsDialog({
   };
 
   const handleSave = async () => {
+    if (!mounted.current || savePending.current) return;
     if (!name.trim()) {
       toast.error('Project name is required');
       return;
@@ -164,6 +181,8 @@ export function ProjectSettingsDialog({
       defaultModelId,
       ...(sameProjectChatDefaults(chatDefaults, project.chatDefaults) ? {} : { chatDefaults }),
     };
+    savePending.current = true;
+    const owner = lifetime.current;
     setIsSaving(true);
     try {
       await webManagedCloudProjects.updateProject(project.id, {
@@ -171,6 +190,7 @@ export function ProjectSettingsDialog({
         description: trimmedDescription || null,
       });
 
+      if (owner !== lifetime.current) return;
       onUpdate(project.id, {
         ...updates,
         instructions: updates.instructions ?? undefined,
@@ -179,9 +199,13 @@ export function ProjectSettingsDialog({
       toast.success('Project updated');
       onOpenChange(false);
     } catch (error) {
+      if (owner !== lifetime.current) return;
       toast.error(toUserMessage(error, 'Failed to update project'));
     } finally {
-      setIsSaving(false);
+      if (owner === lifetime.current) {
+        savePending.current = false;
+        setIsSaving(false);
+      }
     }
   };
 
@@ -222,159 +246,161 @@ export function ProjectSettingsDialog({
 
           {/* Scrollable body */}
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-            {/* Project name with emoji affordance */}
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="ps-project-name"
-                className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-              >
-                Project name
-              </Label>
-              <div className="relative">
-                <span
-                  aria-hidden="true"
-                  className="absolute start-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
+            <fieldset disabled={isSaving} className="min-w-0 space-y-5 border-0 p-0">
+              {/* Project name with emoji affordance */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="ps-project-name"
+                  className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground"
                 >
-                  {project.iconEmoji ? (
-                    <span className="text-base leading-none">{project.iconEmoji}</span>
-                  ) : (
-                    <Smile className="h-4 w-4" aria-hidden="true" />
-                  )}
-                </span>
-                <Input
-                  id="ps-project-name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Project name"
-                  autoComplete="off"
-                  maxLength={100}
-                  className="h-11 rounded-xl bg-muted/40 ps-10"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void handleSave();
-                  }}
-                />
+                  Project name
+                </Label>
+                <div className="relative">
+                  <span
+                    aria-hidden="true"
+                    className="absolute start-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
+                  >
+                    {project.iconEmoji ? (
+                      <span className="text-base leading-none">{project.iconEmoji}</span>
+                    ) : (
+                      <Smile className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </span>
+                  <Input
+                    id="ps-project-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Project name"
+                    autoComplete="off"
+                    maxLength={100}
+                    className="h-11 rounded-xl bg-muted/40 ps-10"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void handleSave();
+                    }}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="ps-description"
-                className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-              >
-                Description
-              </Label>
-              <Textarea
-                id="ps-description"
-                aria-describedby="ps-description-count"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What is this project for?"
-                maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
-                rows={2}
-                className="resize-y rounded-xl bg-muted/40"
-              />
-              <p id="ps-description-count" className="text-end text-sm text-muted-foreground">
-                {description.length.toLocaleString()} /{' '}
-                {PROJECT_DESCRIPTION_MAX_LENGTH.toLocaleString()}
-              </p>
-            </div>
-
-            {/* Instructions */}
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="ps-instructions"
-                className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground"
-              >
-                Instructions
-              </Label>
-              <p id="ps-instructions-hint" className="text-xs text-muted-foreground">
-                Set context and customize how AGI responds in this project.
-              </p>
-              <Textarea
-                id="ps-instructions"
-                aria-describedby="ps-instructions-hint ps-instructions-count"
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder={`e.g. "Respond in Spanish. Reference the latest documentation. Keep answers short and focused."`}
-                maxLength={PROJECT_INSTRUCTIONS_MAX_LENGTH}
-                rows={5}
-                className="resize-y rounded-xl bg-muted/40"
-              />
-              <p id="ps-instructions-count" className="text-end text-sm text-muted-foreground">
-                {instructions.length.toLocaleString()} /{' '}
-                {PROJECT_INSTRUCTIONS_MAX_LENGTH.toLocaleString()}
-              </p>
-            </div>
-
-            <ProjectDefaultModelField value={defaultModelId} onChange={setDefaultModelId} />
-
-            <ProjectChatDefaultsField value={chatDefaults} onChange={setChatDefaults} />
-
-            <div className="space-y-1.5">
-              <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Personalization
-              </p>
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={usesAccountInstructions}
-                  onChange={(e) => setUsesAccountInstructions(e.target.checked)}
-                  className="mt-0.5"
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="ps-description"
+                  className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                >
+                  Description
+                </Label>
+                <Textarea
+                  id="ps-description"
+                  aria-describedby="ps-description-count"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What is this project for?"
+                  maxLength={PROJECT_DESCRIPTION_MAX_LENGTH}
+                  rows={2}
+                  className="resize-y rounded-xl bg-muted/40"
                 />
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-xs text-foreground">
-                    Use your profile and instructions for AGI
-                  </span>
-                  <span className="text-caption text-muted-foreground">
-                    {usesAccountInstructions
-                      ? 'Chats here also follow your profile and Instructions for AGI from Settings > General, alongside this project\u2019s instructions.'
-                      : 'Chats here follow only this project\u2019s instructions. Your name, work, about you and Instructions for AGI are left out.'}
-                  </span>
-                </span>
-              </label>
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={usesAccountStyle}
-                  onChange={(e) => setUsesAccountStyle(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-xs text-foreground">Use your response style</span>
-                  <span className="text-caption text-muted-foreground">
-                    {usesAccountStyle
-                      ? 'Replies here use the style, length and language you chose in Settings.'
-                      : 'Replies here ignore your saved style, length and language settings.'}
-                  </span>
-                </span>
-              </label>
-            </div>
+                <p id="ps-description-count" className="text-end text-sm text-muted-foreground">
+                  {description.length.toLocaleString()} /{' '}
+                  {PROJECT_DESCRIPTION_MAX_LENGTH.toLocaleString()}
+                </p>
+              </div>
 
-            <div className="space-y-1.5">
-              <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Memory
-              </p>
-              <label className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={usesGlobalMemory}
-                  onChange={(e) => setUsesGlobalMemory(e.target.checked)}
-                  className="mt-0.5"
+              {/* Instructions */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="ps-instructions"
+                  className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                >
+                  Instructions
+                </Label>
+                <p id="ps-instructions-hint" className="text-xs text-muted-foreground">
+                  Set context and customize how AGI responds in this project.
+                </p>
+                <Textarea
+                  id="ps-instructions"
+                  aria-describedby="ps-instructions-hint ps-instructions-count"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder={`e.g. "Respond in Spanish. Reference the latest documentation. Keep answers short and focused."`}
+                  maxLength={PROJECT_INSTRUCTIONS_MAX_LENGTH}
+                  rows={5}
+                  className="resize-y rounded-xl bg-muted/40"
                 />
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-xs text-foreground">
-                    Use memories from outside this project
+                <p id="ps-instructions-count" className="text-end text-sm text-muted-foreground">
+                  {instructions.length.toLocaleString()} /{' '}
+                  {PROJECT_INSTRUCTIONS_MAX_LENGTH.toLocaleString()}
+                </p>
+              </div>
+
+              <ProjectDefaultModelField value={defaultModelId} onChange={setDefaultModelId} />
+
+              <ProjectChatDefaultsField value={chatDefaults} onChange={setChatDefaults} />
+
+              <div className="space-y-1.5">
+                <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Personalization
+                </p>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={usesAccountInstructions}
+                    onChange={(e) => setUsesAccountInstructions(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-xs text-foreground">
+                      Use your profile and instructions for AGI
+                    </span>
+                    <span className="text-caption text-muted-foreground">
+                      {usesAccountInstructions
+                        ? 'Chats here also follow your profile and Instructions for AGI from Settings > General, alongside this project\u2019s instructions.'
+                        : 'Chats here follow only this project\u2019s instructions. Your name, work, about you and Instructions for AGI are left out.'}
+                    </span>
                   </span>
-                  <span className="text-caption text-muted-foreground">
-                    {usesGlobalMemory
-                      ? 'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.'
-                      : 'Chats here use only this project\u2019s memories. Nothing from your other chats is included.'}
+                </label>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={usesAccountStyle}
+                    onChange={(e) => setUsesAccountStyle(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-xs text-foreground">Use your response style</span>
+                    <span className="text-caption text-muted-foreground">
+                      {usesAccountStyle
+                        ? 'Replies here use the style, length and language you chose in Settings.'
+                        : 'Replies here ignore your saved style, length and language settings.'}
+                    </span>
                   </span>
-                </span>
-              </label>
-              <ProjectMemoryPanel projectId={project.id} projectName={project.name} />
-            </div>
+                </label>
+              </div>
+
+              <div className="space-y-1.5">
+                <p className="text-caption font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Memory
+                </p>
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={usesGlobalMemory}
+                    onChange={(e) => setUsesGlobalMemory(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-xs text-foreground">
+                      Use memories from outside this project
+                    </span>
+                    <span className="text-caption text-muted-foreground">
+                      {usesGlobalMemory
+                        ? 'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.'
+                        : 'Chats here use only this project\u2019s memories. Nothing from your other chats is included.'}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+            <ProjectMemoryPanel projectId={project.id} projectName={project.name} />
 
             {/* Knowledge Files */}
             <div className="space-y-2">

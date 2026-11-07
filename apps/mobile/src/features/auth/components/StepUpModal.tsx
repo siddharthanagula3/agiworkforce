@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { useSession } from '@clerk/expo';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useAuthStore } from '@/src/features/auth/store';
-import { requestStepUpGrant, type StepUpChallenge, type StepUpLevel } from '../services/stepUp';
+import { requestStepUpGrant, type StepUpChallenge, type StepUpSession } from '../services/stepUp';
 
-type ActiveSession = NonNullable<ReturnType<typeof useSession>['session']>;
-type Verification = Awaited<ReturnType<ActiveSession['startVerification']>>;
+type Verification = Awaited<ReturnType<StepUpSession['startVerification']>>;
 type SecondFactorStrategy = 'totp' | 'backup_code';
 
 type Prompt =
@@ -78,125 +76,163 @@ interface StepUpModalProps {
   onSatisfied: (token: string) => void;
 }
 
-export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalProps) {
+export function StepUpModal(props: StepUpModalProps) {
+  const [binding] = useState(() => props);
+  const { challenge, onCancel, onSatisfied } = binding;
   const colors = useThemeColors();
-  const { session } = useSession();
   const signOut = useAuthStore((state) => state.signOut);
   const [prompt, setPrompt] = useState<Prompt>({ kind: 'loading' });
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const latest = useRef({ session, challenge, onSatisfied });
-  latest.current = { session, challenge, onSatisfied };
-
-  const show = useCallback((next: Prompt) => {
-    setValue('');
-    setPrompt(next);
-  }, []);
+  const lifecycle = useRef({ mounted: false, operation: 0, locked: false });
+  const current = useCallback(
+    () => lifecycle.current.mounted && challenge.isCurrent(),
+    [challenge],
+  );
+  const show = useCallback(
+    (next: Prompt) => {
+      if (!current()) return;
+      setValue('');
+      setPrompt(next);
+    },
+    [current],
+  );
 
   const flow = useMemo(() => {
-    const giveUp = (message: string) => {
+    const session = challenge.identity.session;
+    const owns = (operation: number) => current() && lifecycle.current.operation === operation;
+    const giveUp = (operation: number, message: string) => {
+      if (!owns(operation)) return;
       setError(message);
       show({ kind: 'retry' });
     };
-
-    const activeSession = (): ActiveSession => {
-      const current = latest.current.session;
-      if (!current) throw new Error('You are signed out. Sign in again to continue.');
-      return current;
-    };
-
-    async function finish(): Promise<void> {
-      const current = latest.current.challenge;
-      const token = await activeSession().getToken({ skipCache: true });
-      if (!token) {
-        giveUp('You are signed out. Sign in again to continue.');
+    async function advance(operation: number, verification: Verification): Promise<void> {
+      if (!owns(operation)) return;
+      const next = promptFor(verification);
+      if (next) {
+        show(next);
         return;
       }
-      const outcome = await requestStepUpGrant(current.action, current.resourceId, token);
-      if (outcome.kind === 'granted') latest.current.onSatisfied(outcome.token);
-      else if (outcome.kind === 'verify')
-        giveUp('That confirmation did not reach the server. Try again.');
-      else giveUp(outcome.message);
-    }
-
-    async function advance(verification: Verification): Promise<void> {
-      const next = promptFor(verification);
-      if (next) show(next);
-      else await finish();
-    }
-
-    async function begin(level: StepUpLevel): Promise<void> {
-      show({ kind: 'loading' });
-      try {
-        await advance(await activeSession().startVerification({ level }));
-      } catch (cause) {
-        giveUp(verificationFailure(cause, 'Confirmation could not start. Try again.'));
+      const token = await session.getToken({ skipCache: true });
+      if (!owns(operation)) return;
+      if (!token) {
+        giveUp(operation, 'You are signed out. Sign in again to continue.');
+        return;
       }
+      const outcome = await requestStepUpGrant(challenge.action, challenge.resourceId, token, {
+        accountEpoch: challenge.identity.account,
+        signal: challenge.signal,
+      });
+      if (!owns(operation)) return;
+      if (outcome.kind === 'granted') onSatisfied(outcome.token);
+      else if (outcome.kind === 'verify')
+        giveUp(operation, 'That confirmation did not reach the server. Try again.');
+      else giveUp(operation, outcome.message);
     }
-
-    return { activeSession, advance, begin };
-  }, [show]);
-
-  useEffect(() => {
-    void flow.begin(challenge.level);
-  }, [challenge, flow]);
-
-  const run = useCallback(
-    async (work: () => Promise<Verification | void>, fallback: string) => {
+    async function run(
+      work: (operation: number) => Promise<Verification | void>,
+      fallback: string,
+      restart = false,
+    ): Promise<void> {
+      if (!current() || lifecycle.current.locked) return;
+      lifecycle.current.locked = true;
+      const operation = ++lifecycle.current.operation;
       setBusy(true);
       setError(null);
       try {
-        const verification = await work();
-        if (verification) await flow.advance(verification);
+        const verification = await work(operation);
+        if (!owns(operation)) return;
+        if (verification) await advance(operation, verification);
       } catch (cause) {
-        setError(verificationFailure(cause, fallback));
+        if (!owns(operation)) return;
+        const message = verificationFailure(cause, fallback);
+        if (restart) giveUp(operation, message);
+        else setError(message);
       } finally {
-        setBusy(false);
+        if (owns(operation)) {
+          lifecycle.current.locked = false;
+          setBusy(false);
+        }
       }
-    },
-    [flow],
+    }
+    const begin = () =>
+      run(
+        async () => {
+          show({ kind: 'loading' });
+          return session.startVerification({ level: challenge.level });
+        },
+        'Confirmation could not start. Try again.',
+        true,
+      );
+    return { session, owns, run, begin };
+  }, [challenge, current, onSatisfied, show]);
+
+  useEffect(() => {
+    lifecycle.current.mounted = true;
+    lifecycle.current.locked = false;
+    void flow.begin();
+    return () => {
+      lifecycle.current.mounted = false;
+      lifecycle.current.operation += 1;
+      lifecycle.current.locked = false;
+    };
+  }, [flow]);
+
+  const renderedOperation = lifecycle.current.operation;
+  const interactionCurrent = useCallback(
+    () =>
+      current() && lifecycle.current.operation === renderedOperation && !lifecycle.current.locked,
+    [current, renderedOperation],
   );
-
   const entered = value.trim();
-
   const submit = useCallback(() => {
-    if (busy || !entered) return;
-    const session = flow.activeSession;
+    if (!interactionCurrent() || !entered) return;
     if (prompt.kind === 'second_factor') {
-      void run(
-        () =>
-          session().attemptSecondFactorVerification({ strategy: prompt.strategy, code: entered }),
+      void flow.run(
+        async () =>
+          flow.session.attemptSecondFactorVerification({
+            strategy: prompt.strategy,
+            code: entered,
+          }),
         'That code was not accepted.',
       );
     } else if (prompt.kind === 'password') {
-      void run(
-        () => session().attemptFirstFactorVerification({ strategy: 'password', password: value }),
+      void flow.run(
+        async () =>
+          flow.session.attemptFirstFactorVerification({ strategy: 'password', password: value }),
         'That password was not accepted.',
       );
     } else if (prompt.kind === 'email_code') {
-      void run(
-        () => session().attemptFirstFactorVerification({ strategy: 'email_code', code: entered }),
+      void flow.run(
+        async () =>
+          flow.session.attemptFirstFactorVerification({ strategy: 'email_code', code: entered }),
         'That code was not accepted.',
       );
     }
-  }, [busy, entered, flow, prompt, run, value]);
+  }, [interactionCurrent, entered, flow, prompt, value]);
 
   const sendEmailCode = useCallback(
-    (emailAddressId: string, destination: string | null) =>
-      run(async () => {
-        await flow
-          .activeSession()
-          .prepareFirstFactorVerification({ strategy: 'email_code', emailAddressId });
-        show({ kind: 'email_code', emailAddressId, destination });
-      }, 'The code could not be sent. Try again.'),
-    [flow, run, show],
+    (emailAddressId: string, destination: string | null) => {
+      if (!interactionCurrent()) return;
+      return flow.run(async (operation) => {
+        await flow.session.prepareFirstFactorVerification({
+          strategy: 'email_code',
+          emailAddressId,
+        });
+        if (flow.owns(operation)) show({ kind: 'email_code', emailAddressId, destination });
+      }, 'The code could not be sent. Try again.');
+    },
+    [flow, interactionCurrent, show],
   );
-
-  const retry = useCallback(() => {
-    void flow.begin(challenge.level);
-  }, [challenge, flow]);
+  const cancel = useCallback(() => {
+    if (!current()) return;
+    lifecycle.current.operation += 1;
+    lifecycle.current.mounted = false;
+    setValue('');
+    onCancel();
+  }, [current, onCancel]);
 
   const inputLabel =
     prompt.kind === 'second_factor'
@@ -212,7 +248,7 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
       visible
       transparent
       animationType="fade"
-      onRequestClose={onCancel}
+      onRequestClose={cancel}
       accessibilityViewIsModal
     >
       <KeyboardAvoidingView style={styles.flex} behavior={keyboardAvoidingBehavior('modal')}>
@@ -233,7 +269,9 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
                 <Text style={[styles.label, { color: colors.textSecondary }]}>{inputLabel}</Text>
                 <TextInput
                   value={value}
-                  onChangeText={setValue}
+                  onChangeText={(next) => {
+                    if (interactionCurrent()) setValue(next);
+                  }}
                   editable={!busy}
                   autoFocus
                   autoCapitalize="none"
@@ -280,12 +318,14 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
               <PressableBox
                 accessibilityRole="button"
                 disabled={busy}
-                onPress={() =>
+                onPress={() => {
+                  if (!interactionCurrent()) return;
+                  lifecycle.current.operation += 1;
                   show({
                     ...prompt,
                     strategy: prompt.strategy === 'totp' ? 'backup_code' : 'totp',
-                  })
-                }
+                  });
+                }}
               >
                 <Text style={[styles.link, { color: colors.textPrimary }]}>
                   {prompt.strategy === 'totp'
@@ -313,7 +353,7 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
             ) : null}
 
             <View style={styles.actions}>
-              <Button title="Cancel" variant="ghost" disabled={busy} onPress={onCancel} />
+              <Button title="Cancel" variant="ghost" onPress={cancel} />
               {prompt.kind === 'email_offer' ? (
                 <Button
                   title="Send code"
@@ -321,9 +361,21 @@ export function StepUpModal({ challenge, onCancel, onSatisfied }: StepUpModalPro
                   onPress={() => void sendEmailCode(prompt.emailAddressId, prompt.destination)}
                 />
               ) : prompt.kind === 'unavailable' ? (
-                <Button title="Sign in again" onPress={() => void signOut()} />
+                <Button
+                  title="Sign in again"
+                  onPress={() => {
+                    if (!interactionCurrent()) return;
+                    cancel();
+                    void signOut();
+                  }}
+                />
               ) : prompt.kind === 'retry' ? (
-                <Button title="Try again" onPress={retry} />
+                <Button
+                  title="Try again"
+                  onPress={() => {
+                    if (interactionCurrent()) void flow.begin();
+                  }}
+                />
               ) : inputLabel ? (
                 <Button title="Confirm" loading={busy} disabled={!entered} onPress={submit} />
               ) : null}

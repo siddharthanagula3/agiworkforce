@@ -1,6 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+
+const mockApprovalFetch = jest.fn();
+jest.mock('@/services/preferences', () => ({
+  fetchToolApprovalNamespace: (...args: unknown[]) => mockApprovalFetch(...args),
+  savePreferenceNamespace: jest.fn(async () => undefined),
+}));
 
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
@@ -44,6 +50,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('@/lib/mmkv', () => ({
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
     if (store?.persist?.rehydrate) store.persist.rehydrate();
@@ -71,6 +78,12 @@ jest.mock('../src/features/memory/store', () => {
   return { useMemoryStore };
 });
 
+import {
+  activateCloudAccount,
+  __resetCloudAccountSessionForTests,
+} from '../src/features/auth/services/cloudAccountSession';
+import { useAuthStore } from '../src/features/auth/store';
+import { ApprovalPolicySummary } from '../src/features/settings/cloud-connectors/ApprovalPolicySummary';
 import { TOOL_APPROVAL_POLICY_OPTIONS } from '@agiworkforce/types';
 import CapabilitiesScreen from '../src/features/settings/capabilities';
 import { useWaitlistStore } from '../src/features/waitlist/store';
@@ -81,6 +94,8 @@ import { useSettingsStore } from '../stores/settingsStore';
 describe('Capabilities settings screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null });
     useWaitlistStore.setState({
       joined: false,
       email: undefined,
@@ -276,5 +291,42 @@ describe('Capabilities settings screen', () => {
       research: true,
       imageGen: false,
     });
+  });
+
+  it('shows shared loading and initial-load error in both approval summaries', async () => {
+    activateCloudAccount('summary-owner');
+    useAuthStore.setState({
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'summary-owner',
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    let reject!: (error: Error) => void;
+    mockApprovalFetch.mockReturnValueOnce(
+      new Promise((_resolve, no) => {
+        reject = no;
+      }),
+    );
+    const screen = render(
+      <>
+        <CapabilitiesScreen />
+        <ApprovalPolicySummary label="Permissions" helper="Approval summary" />
+      </>,
+    );
+    expect(mockApprovalFetch).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByLabelText('Action approvals. Choose how AGI asks before tool actions. Loading…'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Permissions. Loading…' })).toBeTruthy();
+    await act(async () => {
+      reject(new Error('offline'));
+      await Promise.resolve();
+    });
+    expect(
+      screen.getByLabelText(
+        'Action approvals. Choose how AGI asks before tool actions. Unavailable',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Permissions. Unavailable' })).toBeTruthy();
   });
 });

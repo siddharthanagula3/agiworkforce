@@ -115,15 +115,26 @@ describe('t', () => {
 
 describe('applyLlmEdit in a translated editor', () => {
   const editor = {
-    document: { languageId: 'typescript', uri: { fsPath: '/mock/workspace/a.ts' } },
+    document: {
+      languageId: 'typescript',
+      uri: vscode.Uri.file('/mock/workspace/a.ts'),
+      version: 1,
+      isClosed: false,
+    },
+    edit: vi.fn(),
   } as unknown as vscode.TextEditor;
   const selection = { isEmpty: false } as unknown as vscode.Selection;
   const response = '```typescript\nconst x = 1;\n```';
+  const editOptions = {
+    expectedDocument: { uri: editor.document.uri, version: editor.document.version },
+  };
 
   it('prompts in the editor language', async () => {
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
 
-    await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
+    await withLanguageAsync('ja', () =>
+      applyLlmEdit(editor, selection, response, 'Refactor', editOptions),
+    );
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       'AGI Code: Refactor の結果を適用しますか？',
@@ -137,11 +148,13 @@ describe('applyLlmEdit in a translated editor', () => {
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
       'その場に適用' as unknown as undefined,
     );
-    vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(true);
+    vi.mocked(editor.edit).mockResolvedValue(true);
 
-    await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
+    await withLanguageAsync('ja', () =>
+      applyLlmEdit(editor, selection, response, 'Refactor', editOptions),
+    );
 
-    expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+    expect(editor.edit).toHaveBeenCalledTimes(1);
     expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
   });
 
@@ -149,9 +162,11 @@ describe('applyLlmEdit in a translated editor', () => {
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
       'その場に適用' as unknown as undefined,
     );
-    vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(false);
+    vi.mocked(editor.edit).mockResolvedValue(false);
 
-    await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
+    await withLanguageAsync('ja', () =>
+      applyLlmEdit(editor, selection, response, 'Refactor', editOptions),
+    );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'AGI Code: 編集を適用できませんでした, ドキュメントが変更された可能性があります。',

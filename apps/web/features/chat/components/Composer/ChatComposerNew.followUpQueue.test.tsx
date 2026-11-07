@@ -117,3 +117,14 @@ describe('follow-up queue holds more than one message (COMPOSER-005)', () => {
     expect(onSend.mock.calls[0]?.[0]).toBe('typo here');
   });
 });
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
+});

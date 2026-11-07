@@ -105,6 +105,7 @@ export interface MemoryToolContext {
   source: string;
   temporaryChat: boolean;
   projectId?: string | null;
+  signal?: AbortSignal;
 }
 
 const TEMPORARY_CHAT_MEMORY_MESSAGE =
@@ -142,6 +143,7 @@ async function saveMemory(
     organizationId: context.organizationId,
     projectId: context.projectId ?? null,
     source: context.source,
+    signal: context.signal,
   });
   const eligibility = await ports.checkEligibility(parsed.data.fact);
   if (!eligibility.eligible) {
@@ -217,6 +219,7 @@ async function forgetMemory(
     organizationId: context.organizationId,
     projectId: context.projectId ?? null,
     source: context.source,
+    signal: context.signal,
   });
   const matches = await ports.find(parsed.data.subject);
   if (matches.length === 0) {
@@ -234,6 +237,7 @@ export async function executeMemoryTool(
   args: Record<string, unknown>,
   context: MemoryToolContext,
 ): Promise<MemoryToolResult> {
+  context.signal?.throwIfAborted();
   if (name === SAVE_MEMORY_TOOL_NAME) return saveMemory(args, context);
   if (name === SEARCH_MEMORY_TOOL_NAME) return searchMemory(args, context);
   if (name === FORGET_MEMORY_TOOL_NAME) return forgetMemory(args, context);

@@ -131,6 +131,7 @@ test('staging accepts both eligible triggers without a persistent URL and reject
   ]) {
     const context = {
       vars: {},
+      needs: { 'deployment-intent': { outputs: { allowed: 'true' } } },
       github: {
         event_name: eventName,
         sha: 'b'.repeat(40),
@@ -139,9 +140,79 @@ test('staging accepts both eligible triggers without a persistent URL and reject
       },
     };
     assert.equal(runInNewContext(job.if, context, { timeout: 1000 }), expected);
+    context.needs['deployment-intent'].outputs.allowed = 'false';
+    assert.equal(runInNewContext(job.if, context, { timeout: 1000 }), false);
   }
   assert.equal(job.environment.url, '${{ steps.deploy.outputs.url }}');
   assert.ok(!job.steps.some((step) => /vercel alias/.test(step.run ?? '')));
+});
+
+test('automatic deployment intent gates every surface and queue mutation without changing CI', () => {
+  const command =
+    'node scripts/production-deploy-scope.mjs --automatic-deployment >> "$GITHUB_OUTPUT"';
+  const relay = readWorkflow(REPO_ROOT, contract.releaseReadiness.relay.workflow);
+  const productionIntent = workflow.jobs.scope.steps.find((step) => step.id === 'intent');
+  const queueIntent = queueWorkflow.jobs.cleanup.steps.find((step) => step.id === 'intent');
+  const relayIntent = relay.jobs.gate.steps.find((step) => step.id === 'intent');
+  for (const intent of [productionIntent, queueIntent, relayIntent]) {
+    assert.equal(intent.run, command);
+    assert.equal(intent['continue-on-error'], undefined);
+  }
+  assert.equal(relayIntent.if, "github.event_name == 'workflow_run'");
+  const productionSteps = workflow.jobs.scope.steps.filter(
+    (step) => step.id === 'scope' || step.id === 'sandbox',
+  );
+  assert.equal(productionSteps.length, 2);
+  const queueSteps = queueWorkflow.jobs.cleanup.steps.filter(
+    (step) =>
+      step.name === 'Install canonical workflow parser without lifecycle scripts' ||
+      step.name === 'Cancel only superseded production runs that have not deployed',
+  );
+  assert.equal(queueSteps.length, 2);
+  for (const step of [...productionSteps, ...queueSteps]) {
+    assert.equal(step.if, "steps.intent.outputs.allowed == 'true'");
+    for (const allowed of ['false', '', 'true']) {
+      assert.equal(
+        runInNewContext(step.if, { steps: { intent: { outputs: { allowed } } } }),
+        allowed === 'true',
+      );
+    }
+  }
+  const relayScope = relay.jobs.gate.steps.find((step) => step.id === 'scope');
+  assert.equal(
+    relayScope.if,
+    "github.event_name != 'workflow_run' || steps.intent.outputs.allowed == 'true'",
+  );
+  for (const event_name of ['workflow_run', 'workflow_dispatch', 'pull_request']) {
+    for (const allowed of ['false', '', 'true']) {
+      assert.equal(
+        runInNewContext(relayScope.if, {
+          github: { event_name },
+          steps: { intent: { outputs: { allowed } } },
+        }),
+        event_name !== 'workflow_run' || allowed === 'true',
+      );
+    }
+  }
+  assert.equal(stagingWorkflow.jobs.deploy.needs, 'deployment-intent');
+  const stagingIntent = stagingWorkflow.jobs['deployment-intent'];
+  assert.equal(stagingIntent.permissions.contents, 'read');
+  assert.equal(stagingIntent.environment, undefined);
+  assert.equal(stagingIntent.outputs.allowed, '${{ steps.intent.outputs.allowed }}');
+  const resolver = stagingIntent.steps.find((step) => step.id === 'intent');
+  assert.equal(
+    resolver.run.trim(),
+    [
+      'set -euo pipefail',
+      'if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then',
+      '  echo "allowed=true" >> "$GITHUB_OUTPUT"',
+      'else',
+      `  ${command}`,
+      'fi',
+    ].join('\n'),
+  );
+  const ci = readWorkflow(REPO_ROOT, 'ci.yml');
+  assert.ok(!JSON.stringify(ci.jobs).includes('--automatic-deployment'));
 });
 
 test('protected staging requires the bypass secret before migrations or deployment', () => {

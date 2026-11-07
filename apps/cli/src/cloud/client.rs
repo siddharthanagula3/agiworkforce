@@ -174,6 +174,7 @@ impl Route {
 pub struct CloudClient {
     base: String,
     jwt: String,
+    auth_base: String,
     owner: String,
     http: reqwest::Client,
 }
@@ -206,6 +207,36 @@ impl CloudClient {
         Ok(Self {
             base,
             jwt,
+            auth_base: crate::app_server::account::device_auth_base(),
+            owner,
+            http,
+        })
+    }
+
+    pub(crate) fn policy_context() -> Result<tier_cache::ManagedRequestContext, CloudError> {
+        let context = tier_cache::ManagedRequestContext::capture()
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        if context.owner.is_none() {
+            return Err(CloudError::Transport("Managed account identity is unreadable".to_string()));
+        }
+        Ok(context)
+    }
+
+    pub(crate) fn from_managed_context(
+        context: &tier_cache::ManagedRequestContext,
+    ) -> Result<Self, CloudError> {
+        let jwt = context.jwt.as_ref().ok_or(CloudError::SignedOut)?;
+        let owner = crate::auth::jwt_subject(jwt)
+            .filter(|_| context.owner.is_some())
+            .ok_or_else(|| CloudError::Transport("Managed account identity is unreadable".to_string()))?;
+        let http = reqwest::Client::builder()
+            .timeout(CLOUD_TIMEOUT)
+            .build()
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        Ok(Self {
+            base: context.base.clone(),
+            jwt: jwt.clone(),
+            auth_base: crate::app_server::account::device_auth_base(),
             owner,
             http,
         })
@@ -232,7 +263,7 @@ impl CloudClient {
         )
     }
 
-    async fn exchange(builder: reqwest::RequestBuilder) -> Result<Reply, CloudError> {
+    async fn exchange(&self, builder: reqwest::RequestBuilder) -> Result<Reply, CloudError> {
         let response = builder
             .send()
             .await
@@ -249,14 +280,14 @@ impl CloudClient {
             return Err(CloudError::UpgradeRequired(Box::new(error)));
         }
         if status == 401 {
-            tier_cache::invalidate_tier_cache();
+            tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
         Ok(Reply { status, body })
     }
 
-    async fn send<T: DeserializeOwned>(builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
-        let reply = Self::exchange(builder).await?;
+    async fn send<T: DeserializeOwned>(&self, builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
+        let reply = self.exchange(builder).await?;
         if !reply.is_success() {
             return Err(CloudError::Api {
                 status: reply.status,
@@ -266,29 +297,34 @@ impl CloudClient {
         serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
     }
 
-    /// Send, and on a 401 renew the session once and send again. A token the
-    /// server refuses before it was due to expire (a passkey enrolled, the
-    /// device unlinked) would otherwise fail every call while the account still
-    /// looked signed in. A refresh that is refused too, or a second 401, forgets
-    /// the credential, so the next status reads signed out and the user, or the
-    /// desktop's account sync, signs in again.
+    // A retry retains this request's deployment and session. Resolving a fresh
+    // client here could replay the old account's body under a new login.
     async fn send_renewing<T: DeserializeOwned>(
         &self,
         build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
     ) -> Result<T, CloudError> {
-        match Self::send(build(self)).await {
+        match self.send(build(self)).await {
             Err(CloudError::SessionExpired) => {}
             other => return other,
         }
         use crate::app_server::account::{
             forget_refused_session, recover_rejected_session, RejectedSessionRecovery,
         };
-        match recover_rejected_session(&self.jwt).await {
-            RejectedSessionRecovery::Renewed => {
-                let renewed = CloudClient::connect_managed()?;
-                match Self::send(build(&renewed)).await {
+        match recover_rejected_session(&self.jwt, &self.base, &self.auth_base).await {
+            RejectedSessionRecovery::Renewed(jwt) => {
+                let renewed = CloudClient {
+                    base: self.base.clone(),
+                    jwt,
+                    auth_base: self.auth_base.clone(),
+                    owner: self.owner.clone(),
+                    http: self.http.clone(),
+                };
+                match renewed.send(build(&renewed)).await {
                     Err(CloudError::SessionExpired) => {
-                        forget_refused_session();
+                        forget_refused_session(&renewed.jwt).map_err(|error| CloudError::Api {
+                            status: 401,
+                            message: format!("The rejected credential could not be removed: {error:#}"),
+                        })?;
                         Err(CloudError::SessionExpired)
                     }
                     other => other,
@@ -352,7 +388,7 @@ impl CloudClient {
         body: &B,
         timeout: Duration,
     ) -> Result<T, CloudError> {
-        Self::send(
+        self.send(
             self.request(reqwest::Method::POST, path)
                 .header("Idempotency-Key", idempotency_key)
                 .timeout(timeout)
@@ -375,7 +411,7 @@ impl CloudClient {
         if let Some(key) = idempotency_key {
             builder = builder.header("Idempotency-Key", key);
         }
-        Self::exchange(builder).await
+        self.exchange(builder).await
     }
 
     /// Read a hosted file the account owns. Media the account stores is served
@@ -394,7 +430,7 @@ impl CloudClient {
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         let status = response.status().as_u16();
         if status == 401 {
-            tier_cache::invalidate_tier_cache();
+            tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
         if !(200..300).contains(&status) {
@@ -452,7 +488,7 @@ impl CloudClient {
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         let status = response.status().as_u16();
         if status == 401 {
-            tier_cache::invalidate_tier_cache();
+            tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
         if !(200..300).contains(&status) {
@@ -662,5 +698,159 @@ mod tests {
             message: "boom".to_string()
         }
         .is_boundary());
+    }
+
+    #[tokio::test]
+    async fn account_skill_sync_preserves_companion_bytes_instead_of_preview_envelopes() {
+        use std::collections::HashMap;
+
+        use axum::extract::{Path, Query};
+        use axum::http::{header, StatusCode};
+        use axum::response::IntoResponse;
+        use axum::routing::get;
+        use axum::{Json, Router};
+        use serde_json::json;
+
+        const ORIGINAL_SKILL: &str = "---\nname: fixture-sync\ndescription: Read the bundled references.\nversion: 1.2.3\nallow_implicit: false\nrequires:\n  tools: [fixture-read]\n  env: [FIXTURE_SKILL_TOKEN]\n  mcp: [notion]\n---\n\nRead the original companion resources.\n";
+
+        async fn companion(
+            Path(path): Path<String>,
+            Query(query): Query<HashMap<String, String>>,
+        ) -> axum::response::Response {
+            let (bytes, binary) = match path.as_str() {
+                "SKILL.md" => (ORIGINAL_SKILL.as_bytes().to_vec(), false),
+                "references/a guide.md" => (b"first\nsecond\n".to_vec(), false),
+                "assets/sample.bin" => (vec![0, 255, 1, 13, 10], true),
+                _ => return StatusCode::NOT_FOUND.into_response(),
+            };
+            if query.get("download").map(String::as_str) == Some("1") {
+                return ([(header::CONTENT_TYPE, "application/octet-stream")], bytes)
+                    .into_response();
+            }
+            if binary {
+                return StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response();
+            }
+            Json(json!({
+                "file": {
+                    "path": path,
+                    "size": bytes.len(),
+                    "content": String::from_utf8(bytes).unwrap()
+                }
+            }))
+            .into_response()
+        }
+
+        let router = Router::new()
+            .route(
+                "/api/skills",
+                get(|| async {
+                    Json(json!({
+                        "skills": [{
+                            "name": "fixture-sync",
+                            "description": "Read the bundled references.",
+                            "downloadable": true,
+                            "lifecycle": "included"
+                        }]
+                    }))
+                }),
+            )
+            .route(
+                "/api/skills/fixture-sync",
+                get(|| async { Json(json!({ "body": "Read the companion resources." })) }),
+            )
+            .route(
+                "/api/skills/fixture-sync/files",
+                get(|| async {
+                    Json(json!({
+                        "files": [
+                            { "path": "SKILL.md", "size": ORIGINAL_SKILL.len() },
+                            { "path": "references/a guide.md", "size": 13 },
+                            { "path": "assets/sample.bin", "size": 5 }
+                        ]
+                    }))
+                }),
+            )
+            .route("/api/skills/fixture-sync/files/{*path}", get(companion));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = CloudClient {
+            base: format!("http://{}", listener.local_addr().unwrap()),
+            jwt: "fixture-token".to_string(),
+            auth_base: format!("http://{}/api", listener.local_addr().unwrap()),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let result = crate::cloud::skills::fetch_account_skills(&client).await;
+        server.abort();
+        let synced = result.expect("companion files must use the raw download contract");
+        let dir = tempfile::tempdir().unwrap();
+        crate::cloud::skills::write_account_skills(dir.path(), &synced).unwrap();
+
+        let entry = dir.path().join("fixture-sync/SKILL.md");
+        assert_eq!(std::fs::read_to_string(&entry).unwrap(), ORIGINAL_SKILL);
+        let loaded = crate::skills::load_skill(&entry).expect("the original entry loads");
+        assert_eq!(loaded.version.as_deref(), Some("1.2.3"));
+        assert!(!loaded.allow_implicit);
+        assert_eq!(loaded.required_tools, vec!["fixture-read"]);
+        assert_eq!(loaded.required_env_vars, vec!["FIXTURE_SKILL_TOKEN"]);
+        assert_eq!(loaded.required_connections, vec!["notion"]);
+
+        assert_eq!(
+            (
+                std::fs::read(dir.path().join("fixture-sync/references/a guide.md")).unwrap(),
+                std::fs::read(dir.path().join("fixture-sync/assets/sample.bin")).unwrap(),
+            ),
+            (b"first\nsecond\n".to_vec(), vec![0, 255, 1, 13, 10])
+        );
+    }
+
+    #[tokio::test]
+    async fn authored_skill_sync_keeps_the_body_path_without_an_original_entry_file() {
+        use axum::routing::get;
+        use axum::{Json, Router};
+        use serde_json::json;
+
+        let router = Router::new()
+            .route(
+                "/api/skills",
+                get(|| async {
+                    Json(json!({
+                        "skills": [{
+                            "name": "fixture-authored",
+                            "description": "Keep the authored instructions.",
+                            "lifecycle": "included",
+                            "downloadable": false
+                        }]
+                    }))
+                }),
+            )
+            .route(
+                "/api/skills/fixture-authored",
+                get(|| async { Json(json!({"body": "Authored instructions.\n"})) }),
+            )
+            .route(
+                "/api/skills/fixture-authored/files",
+                get(|| async { Json(json!({"files": [{"path": "SKILL.md", "size": 23}]})) }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = CloudClient {
+            base: format!("http://{}", listener.local_addr().unwrap()),
+            jwt: "fixture-token".to_string(),
+            auth_base: format!("http://{}/api", listener.local_addr().unwrap()),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let result = crate::cloud::skills::fetch_account_skills(&client).await;
+        server.abort();
+        let synced = result.expect("authored skills need no original entry download");
+        assert_eq!(
+            (synced[0].name.as_str(), synced[0].document.as_str(), &synced[0].files),
+            (
+                "fixture-authored",
+                "---\nname: fixture-authored\ndescription: Keep the authored instructions.\n---\n\nAuthored instructions.\n",
+                &Vec::<(String, Vec<u8>)>::new()
+            )
+        );
     }
 }

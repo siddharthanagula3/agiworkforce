@@ -1,5 +1,7 @@
 'use client';
 
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { openUpgrade } from '@shared/lib/app-commands';
 import { CircleAlert, X } from '@agiworkforce/icons';
@@ -133,13 +135,21 @@ export type VoiceSurfaceVariant =
   (typeof VOICE_SURFACE_VARIANT)[keyof typeof VOICE_SURFACE_VARIANT];
 
 export interface VoiceModeSurfaceProps {
+  managed: boolean;
   variant: VoiceSurfaceVariant;
   turnActive: boolean;
   conversationId: string | null;
   onSend: (text: string) => boolean;
-  onStartWorkTask?: (goal: string) => boolean;
-  onEnsureConversation: () => Promise<string | null>;
-  onTranscript: (conversationId: string, turn: VoiceTranscriptTurn) => void;
+  onStartWorkTask?: (goal: string, conversationId: string, authority: RequestAuthority) => boolean;
+  onEnsureConversation: (
+    authority: RequestAuthority,
+    bindConversation: (id: string) => void,
+  ) => Promise<string | null>;
+  onTranscript: (
+    conversationId: string,
+    turn: VoiceTranscriptTurn,
+    authority: RequestAuthority,
+  ) => void;
   onNewChat: () => void;
   onOpenLibrary: () => void;
   onOpenConnectors: () => void;
@@ -149,6 +159,7 @@ export interface VoiceModeSurfaceProps {
 }
 
 export function VoiceModeSurface({
+  managed,
   variant,
   turnActive,
   conversationId,
@@ -162,21 +173,19 @@ export function VoiceModeSurface({
   onIntelligenceChange,
   onVisualFrame,
 }: VoiceModeSurfaceProps) {
-  const handleTranscript = useCallback(
-    (id: string, turn: VoiceTranscriptTurn) => {
-      setCaptions((lines) => appendVoiceCaption(lines, turn));
-      onTranscript(id, turn);
-    },
-    [onTranscript],
-  );
+  const handleCaption = useCallback((turn: VoiceTranscriptTurn) => {
+    setCaptions((lines) => appendVoiceCaption(lines, turn));
+  }, []);
 
   const session = useVoiceSession({
+    managed,
     turnActive,
     conversationId,
     onSend,
     ...(onStartWorkTask ? { onStartWorkTask } : {}),
     onEnsureConversation,
-    onTranscript: handleTranscript,
+    onTranscript,
+    onCaption: handleCaption,
   });
   const focusMode = useVoiceSessionStore((store) => store.focusMode);
   const toggleFocusMode = useVoiceSessionStore((store) => store.toggleFocusMode);

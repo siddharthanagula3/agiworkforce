@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...(await original<typeof import('@/features/settings/hooks/use-preference-owner')>()),
+  usePreferenceOwner: () => null,
+}));
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -5,6 +10,11 @@ import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
 import { SharedLinksSection } from './SharedLinksSection';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import {
+  admitWorkspace,
+  observeWorkspaceOwner,
+} from '@/features/workspaces/lib/workspace-admission';
 type Original0 = typeof import('@features/sites/services/sites-service');
 type ScanModule0 = typeof import('@/lib/sentry-shared');
 type ScanModule1 = typeof import('@agiworkforce/ui');
@@ -24,17 +34,43 @@ const mocks = vi.hoisted(() => ({
   historyStats: vi.fn(),
 }));
 
-/**
- * Stable stub for the shared `useConfirm` destructive-confirm hook
- * (shell-nav-ia-gap-01 remainder). PrivacySection and ArchivedChatsSection now
- * route their bulk-delete/bulk-archive confirmations through the same
- * AlertDialog wrapper as WebAppShell/WebChatPage instead of `window.confirm`.
- * same stub shape as apps/web/shared/components/layout/WebAppShell.test.tsx.
- */
-const confirmStub = vi.hoisted(() => ({
-  confirm: vi.fn(async (_options: { title: string; description: string }) => true),
-  dialog: null as React.ReactNode,
+const session = {
+  userId: 'manager-a',
+  sessionId: 'manager-session',
+  isCurrent: () => true,
+  getToken: async () => 'manager-token',
+};
+vi.mock('@/lib/identity/useSessionSnapshot', () => ({ useSessionSnapshot: () => () => session }));
+vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
+  ...(await original<typeof import('@/features/workspaces/hooks/use-workspaces')>()),
+  useAccountWorkspaces: () => {
+    const owner = observeWorkspaceOwner(session)!;
+    admitWorkspace(owner, owner.epoch, JSON.stringify(['personal', 'personal', null]));
+    return {
+      data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null },
+      refetch: vi.fn(),
+      requiresReload: false,
+      isSwitching: false,
+    };
+  },
 }));
+
+// Bulk intent behavior lives in BulkConversationControls.test.tsx, using the
+// actual owner/admission/transport stack. This suite checks section reachability.
+vi.mock('../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => (
+    <>
+      <button>Archive all</button>
+      <button>Delete all</button>
+    </>
+  ),
+}));
+vi.mock('../components/UsOnlyRoutingPanel', () => ({ UsOnlyRoutingPanel: () => null }));
+vi.mock('../components/ProductAnalyticsConsentRow', () => ({
+  ProductAnalyticsConsentRow: () => null,
+}));
+vi.mock('../components/MarketingEmailConsentRow', () => ({ MarketingEmailConsentRow: () => null }));
+vi.mock('../components/NamedProviderConsentRows', () => ({ NamedProviderConsentRows: () => null }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
@@ -44,9 +80,10 @@ vi.mock('@features/sites/services/sites-service', async (importOriginal) => ({
   ...(await importOriginal<Original0>()),
   listPublishedArtifactVersions: vi.fn(async () => []),
   republishArtifactVersion: vi.fn(async () => undefined),
-  listPublishedSites: async (...args: unknown[]) => ({
+  listPublishedSitesPage: async (...args: unknown[]) => ({
     sites: await mocks.listPublished(...args),
     workspace: null,
+    nextCursor: null,
   }),
   unpublishArtifact: (...args: unknown[]) => mocks.unpublish(...args),
 }));
@@ -59,8 +96,8 @@ vi.mock('../services/conversation-data-service', () => ({
   deleteManagedConversation: (...args: unknown[]) => mocks.deleteConversation(...args),
   applyBulkConversationAction: (...args: unknown[]) => mocks.bulkAction(...args),
   fetchConversationHistoryStats: (...args: unknown[]) => mocks.historyStats(...args),
-  listSharedLinks: (...args: unknown[]) => mocks.listShares(...args),
-  revokeSharedLink: (...args: unknown[]) => mocks.revokeShare(...args),
+  listSharedLinks: (request: RequestAuthority) => mocks.listShares(request),
+  revokeSharedLink: (token: string, request: RequestAuthority) => mocks.revokeShare(token, request),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -69,7 +106,8 @@ vi.mock('@shared/stores/web-auth-store', () => ({
   ) => selector({ subscription: { status: 'active', tier: 'pro' } }),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: vi.fn(async () => ({ shareTelemetry: false })),
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
@@ -82,7 +120,6 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   Switch: ({ checked }: { checked: boolean }) => <span role="switch" aria-checked={checked} />,
-  useConfirm: () => confirmStub,
 }));
 
 const archivedConversation = {
@@ -120,6 +157,7 @@ const storeConversation = {
 describe('Web conversation data settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    observeWorkspaceOwner(null);
     mocks.listArchived.mockResolvedValue({
       conversations: [archivedConversation],
       hasMore: false,
@@ -134,7 +172,7 @@ describe('Web conversation data settings', () => {
     mocks.restoreDeleted.mockResolvedValue(restoredWire);
     mocks.deleteConversation.mockResolvedValue(undefined);
     mocks.bulkAction.mockResolvedValue(1);
-    mocks.listShares.mockResolvedValue([]);
+    mocks.listShares.mockResolvedValue({ shares: [], complete: true });
     mocks.revokeShare.mockResolvedValue(undefined);
     mocks.listPublished.mockResolvedValue([]);
     mocks.unpublish.mockResolvedValue(undefined);
@@ -162,7 +200,12 @@ describe('Web conversation data settings', () => {
     expect(await screen.findByText('Archived planning')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalledWith('conversation-1'));
+    await waitFor(() =>
+      expect(mocks.restoreArchived).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ organizationId: null }),
+      ),
+    );
     expect(screen.getByText('Restored “Archived planning”.')).toBeInTheDocument();
     expect(useChatStore.getState().conversations[0]?.isArchived).toBe(false);
   });
@@ -181,23 +224,26 @@ describe('Web conversation data settings', () => {
     expect(restored?.isArchived).toBe(false);
   });
 
-  it('keeps the next page aligned after a restore removes a row', async () => {
-    mocks.listArchived.mockResolvedValue({
-      conversations: [archivedConversation],
-      hasMore: true,
-      nextOffset: 20,
-    });
-
+  it('rebuilds a readable archived snapshot before admitting another page after restore', async () => {
+    const next = { ...archivedConversation, id: 'conversation-2', title: 'Next chat' };
+    mocks.listArchived
+      .mockReset()
+      .mockResolvedValueOnce({
+        conversations: [archivedConversation],
+        hasMore: true,
+        nextOffset: 1,
+      })
+      .mockResolvedValueOnce({ conversations: [next], hasMore: true, nextOffset: 1 })
+      .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 1 });
     render(<ArchivedChatsSection />);
-
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalled());
-
-    mocks.listArchived.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 19 });
+    await screen.findByText('Next chat');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-
-    await waitFor(() => expect(mocks.listArchived).toHaveBeenLastCalledWith(19));
+    await waitFor(() =>
+      expect(mocks.listArchived).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)),
+    );
+    expect(mocks.listArchived.mock.calls[1]?.[0]).toBe(0);
   });
 
   it('restores a deleted chat once, without a duplicate sidebar row', async () => {
@@ -206,29 +252,37 @@ describe('Web conversation data settings', () => {
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalledWith('conversation-1'));
+    await waitFor(() =>
+      expect(mocks.restoreDeleted).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ organizationId: null }),
+      ),
+    );
     const rows = useChatStore.getState().conversations.filter(({ id }) => id === 'conversation-1');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.isArchived).toBe(false);
   });
 
-  it('keeps the next deleted page aligned after a restore removes a row', async () => {
-    mocks.listDeleted.mockResolvedValue({
-      conversations: [archivedConversation],
-      hasMore: true,
-      nextOffset: 20,
-    });
-
+  it('rebuilds deleted pagination after a confirmed restore', async () => {
+    const next = { ...archivedConversation, id: 'conversation-2', title: 'Next deleted chat' };
+    mocks.listDeleted
+      .mockReset()
+      .mockResolvedValueOnce({
+        conversations: [archivedConversation],
+        hasMore: true,
+        nextOffset: 1,
+      })
+      .mockResolvedValueOnce({ conversations: [next], hasMore: true, nextOffset: 1 })
+      .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 1 });
     render(<DeletedChatsSection />);
-
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalled());
-
-    mocks.listDeleted.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 19 });
+    await screen.findByText('Next deleted chat');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-
-    await waitFor(() => expect(mocks.listDeleted).toHaveBeenLastCalledWith(19));
+    await waitFor(() =>
+      expect(mocks.listDeleted).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)),
+    );
+    expect(mocks.listDeleted.mock.calls[1]?.[0]).toBe(0);
   });
 
   it('moves every archived chat in the current workspace only after confirmation', async () => {
@@ -237,46 +291,118 @@ describe('Web conversation data settings', () => {
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Delete all archived' }));
 
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_archived'));
-    expect(confirmStub.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Delete all archived chats in this workspace?',
-        description: expect.stringContaining('current workspace'),
-        variant: 'destructive',
-      }),
+    expect(mocks.bulkAction).not.toHaveBeenCalled();
+    mocks.listArchived.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 0 });
+    const buttons = screen.getAllByRole('button', { name: 'Delete all archived' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+    await waitFor(() =>
+      expect(mocks.bulkAction).toHaveBeenCalledWith(
+        'delete_archived',
+        expect.objectContaining({ organizationId: null }),
+      ),
     );
-    expect(screen.getByText('No archived chats')).toBeInTheDocument();
+    expect(await screen.findByText('No archived chats')).toBeInTheDocument();
   });
 
   it('lists and revokes account-owned shared links', async () => {
-    mocks.listShares.mockResolvedValue([
-      {
-        token: 'share-token',
-        title: 'Shared planning',
-        shareUrl: 'https://agiworkforce.com/share/share-token',
-        modelId: null,
-        provider: null,
-        messageCount: 3,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        expiresAt: '2026-08-01T00:00:00.000Z',
-        expired: false,
-      },
-    ]);
+    mocks.listShares.mockResolvedValue({
+      complete: true,
+      shares: [
+        {
+          token: 'share-token',
+          title: 'Shared planning',
+          shareUrl: 'https://agiworkforce.com/share/share-token',
+          modelId: null,
+          provider: null,
+          messageCount: 3,
+          createdAt: '2026-07-01T00:00:00.000Z',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          expired: false,
+        },
+      ],
+    });
 
     render(<SharedLinksSection />);
 
     expect(await screen.findByText('Shared planning')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute(
-      'href',
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(open).toHaveBeenCalledWith(
       'https://agiworkforce.com/share/share-token',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(mocks.listShares).toHaveBeenCalledWith(
+      expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
 
     expect(mocks.revokeShare).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
-    await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token'));
+    await waitFor(() =>
+      expect(mocks.revokeShare).toHaveBeenCalledWith(
+        'share-token',
+        expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
+      ),
+    );
     expect(screen.getByText('No shared links')).toBeInTheDocument();
+  });
+
+  it('does not describe an incomplete empty inventory as having no shared links', async () => {
+    mocks.listShares.mockResolvedValue({ shares: [], complete: false });
+
+    render(<SharedLinksSection />);
+
+    expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
+    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.queryByText('No shared links')).toBeNull();
+  });
+
+  it('keeps incomplete guidance after revoking the last displayed link', async () => {
+    const shareUrl = 'https://agiworkforce.com/share/share-token';
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    mocks.listShares.mockResolvedValue({
+      complete: false,
+      shares: [
+        {
+          token: 'share-token',
+          title: 'Shared planning',
+          shareUrl,
+          modelId: null,
+          provider: null,
+          messageCount: 3,
+          visibility: 'public',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          expired: false,
+        },
+      ],
+    });
+
+    render(<SharedLinksSection />);
+
+    await screen.findByText('Shared planning');
+    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(open).toHaveBeenCalledWith(shareUrl, '_blank', 'noopener,noreferrer');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByText('Copied the link for “Shared planning”.');
+    expect(writeText).toHaveBeenCalledWith(shareUrl);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    expect(mocks.revokeShare).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
+
+    expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
+    expect(mocks.revokeShare).toHaveBeenCalledWith(
+      'share-token',
+      expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
+    );
+    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.queryByText('No shared links')).toBeNull();
+    expect(mocks.listShares).toHaveBeenCalledTimes(1);
   });
 
   it('exposes archive-all, delete-all, archived, and shared-link controls in Privacy', async () => {
@@ -294,20 +420,8 @@ describe('Web conversation data settings', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Restore archived chats or permanently delete them.')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
-    expect(confirmStub.confirm).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        title: 'Archive all chats in this workspace?',
-        description: expect.stringContaining('current workspace'),
-      }),
-    );
-    expect(useChatStore.getState().conversations[0]?.isArchived).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-    expect(mocks.routerReplace).toHaveBeenCalledWith('/chat');
-    expect(useChatStore.getState().conversations).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Archive all' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete all' })).toBeInTheDocument();
   });
 
   it('asks for the export archive and says the download link is emailed when it will be', async () => {
@@ -345,80 +459,5 @@ describe('Web conversation data settings', () => {
     expect(
       await screen.findByText(/email you a download link when it's ready/i),
     ).toBeInTheDocument();
-  });
-
-  it('scopes delete-all by the current-workspace total, not the pages the sidebar holds', async () => {
-    mocks.historyStats.mockResolvedValue({
-      conversationCount: 812,
-      activeConversationCount: 800,
-      messageCount: 9001,
-    });
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('812');
-    expect(description).toContain('current workspace');
-    expect(description).not.toContain('in your account');
-    expect(description).not.toContain(`${useChatStore.getState().conversations.length} chat`);
-  });
-
-  it('states the number of active chats before archiving all of them', async () => {
-    mocks.historyStats.mockResolvedValue({
-      conversationCount: 812,
-      activeConversationCount: 640,
-      messageCount: 9001,
-    });
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
-
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('640');
-    expect(description).not.toContain('812');
-  });
-
-  it('falls back to the unnumbered archive text when the count cannot be read', async () => {
-    mocks.historyStats.mockRejectedValue(new Error('offline'));
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
-
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('Every chat in the current workspace');
-    expect(description).not.toMatch(/\d/);
-  });
-
-  it('does not claim a soft delete is irreversible', async () => {
-    mocks.historyStats.mockResolvedValue({
-      conversationCount: 3,
-      activeConversationCount: 3,
-      messageCount: 9,
-    });
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).not.toMatch(/cannot be undone/i);
-    expect(description).toMatch(/restore/i);
-  });
-
-  it('falls back to an unnumbered workspace scope when the total cannot be read', async () => {
-    mocks.historyStats.mockRejectedValue(new Error('offline'));
-
-    render(<PrivacySection />);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
-
-    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('Every chat in the current workspace');
-    expect(description).not.toContain('in your account');
-    expect(description).not.toMatch(/\ball \d+ chat/i);
   });
 });

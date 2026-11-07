@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -22,14 +22,17 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId, sessionIdentity } = await getSessionAccountDb(
+    request,
+    TWO_FACTOR_SCOPE,
+  );
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
   requireAuthenticatorEnrollment();
 
-  if (!(await readSecondFactorStatus(db, userId)).authenticator) {
+  if (!(await readSecondFactorStatus(db, userId, sessionIdentity.subject)).authenticator) {
     throw createError.badRequest('2FA is not enabled on this account');
   }
 
@@ -42,7 +45,9 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   });
 
   const newCodes = generateBackupCodes();
-  await getIdentityProvider().registerSecondFactor(userId, { backupCodes: newCodes });
+  await getIdentityProvider().registerSecondFactor(sessionIdentity.subject, {
+    backupCodes: newCodes,
+  });
 
   logger.info({ userId, count: newCodes.length }, '2FA backup codes regenerated');
 
@@ -59,6 +64,7 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   // account holder has to hear about even when they made it.
   await announceTwoFactorChange({
     userId,
+    identitySubject: sessionIdentity.subject,
     event: 'backup_codes_regenerated',
     request,
     organizationId,

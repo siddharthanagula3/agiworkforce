@@ -48,6 +48,23 @@ function classify(
 }
 
 describe('classifyTaskLocally, image_generation', () => {
+  it.each([
+    'Generate four images of fictional workspaces.',
+    'Create two photographs of a mountain.',
+    'Make multiple variations of a portrait.',
+  ])('requires conversational tool orchestration for %s', (message) => {
+    expect(classify(message).type).toBe('agentic');
+  });
+  it.each([
+    'Draw a flowchart for the signup process.',
+    'Render a UI gallery with forms, cards, carousels and math.',
+    'Write seven reusable prompts about illustration and image generation.',
+    'Write an email requesting leave today.',
+    'Format a document headed current progress.',
+  ])('routes by the requested output instead of words in its content: %s', (message) => {
+    expect(classify(message).type).not.toMatch(/image_generation|research/u);
+  });
+
   it('matches /image slash command', () => {
     expect(classify('/image a sunset over mountains')).toEqual({
       type: 'image_generation',
@@ -88,12 +105,12 @@ describe('classifyTaskLocally, image_generation', () => {
     expect(classify('draw an illustration of a dog').type).toBe('image_generation');
   });
 
-  it('matches "generate mockup"', () => {
-    expect(classify('generate a mockup for the homepage').type).toBe('image_generation');
+  it('keeps a homepage mockup on the text and artifact route', () => {
+    expect(classify('generate a mockup for the homepage').type).not.toBe('image_generation');
   });
 
-  it('matches "create wireframe"', () => {
-    expect(classify('create a wireframe for the signup page').type).toBe('image_generation');
+  it('keeps a signup wireframe on the text and artifact route', () => {
+    expect(classify('create a wireframe for the signup page').type).not.toBe('image_generation');
   });
 
   it('matches "make a photo"', () => {

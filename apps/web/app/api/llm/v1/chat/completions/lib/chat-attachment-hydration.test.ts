@@ -62,6 +62,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/pdf',
       byteSize: pdf.byteLength,
@@ -81,7 +82,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
 
     expect(messages[0]?.content[1]).toMatchObject({
       type: 'text',
@@ -111,7 +112,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, freeLimit),
+      hydrateChatAttachments(messages, 'user-1', undefined, freeLimit, null),
     ).rejects.toMatchObject({
       message: `You can attach up to ${freeLimit} files to one message.`,
     });
@@ -124,6 +125,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/pdf',
       byteSize: pdf.byteLength,
@@ -135,7 +137,7 @@ describe('hydrateChatAttachments', () => {
     mocks.readStoredMedia.mockResolvedValue({ data: pdf, contentType: 'application/pdf' });
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
 
     const filePart = partsOf(messages[0])[1];
     const decoded = Buffer.from(
@@ -154,6 +156,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/pdf',
       storagePathname: 'chat-attachments/user-1/key.pdf',
@@ -171,7 +174,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).resolves.toBeDefined();
 
     // Named, because a turn can carry several files and the reader has to know
@@ -193,7 +196,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
 
     expect(messages[0]?.content).toEqual([
       {
@@ -230,6 +233,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/x-ipynb+json',
       byteSize: notebook.byteLength,
@@ -249,7 +253,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
 
     expect(messages[0]?.content[0]).toEqual({
       type: 'text',
@@ -279,6 +283,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/x-ipynb+json',
       byteSize: bytes.byteLength,
@@ -294,7 +299,7 @@ describe('hydrateChatAttachments', () => {
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).rejects.toEqual(
       expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
         status: 400,
@@ -307,6 +312,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: '32b71cf4-c0d1-4cc7-b6c4-776ece82f137',
       userId: 'other-user',
+      organizationId: null,
       deletedAt: null,
       storagePathname: 'chat-attachments/other-user/key.pdf',
     });
@@ -323,13 +329,119 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).rejects.toEqual(
       expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
         status: 404,
         code: 'attachment_not_found',
       }),
     );
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { admitted: null, stored: 'workspace-A' },
+    { admitted: 'workspace-A', stored: null },
+    { admitted: 'workspace-A', stored: 'workspace-B' },
+  ])(
+    'rejects a current attachment outside the admitted workspace: %j',
+    async ({ admitted, stored }) => {
+      mocks.getMediaAssetById.mockResolvedValue({
+        id: 'asset-1',
+        userId: 'user-1',
+        organizationId: stored,
+        deletedAt: null,
+        storagePathname: 'private/file.txt',
+        metadata: { filename: 'private-name.txt' },
+      });
+      const messages = [
+        { role: 'user', content: [{ type: 'file', file: { asset_id: 'asset-1' } }] },
+      ];
+
+      await expect(
+        hydrateChatAttachments(
+          messages,
+          'user-1',
+          undefined,
+          PAID_ATTACHMENTS_PER_MESSAGE,
+          admitted,
+        ),
+      ).rejects.toEqual(expect.objectContaining({ status: 404, code: 'attachment_not_found' }));
+      expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+    },
+  );
+
+  it('degrades history from another workspace without reading bytes or revealing its filename', async () => {
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: 'asset-1',
+      userId: 'user-1',
+      organizationId: 'workspace-A',
+      deletedAt: null,
+      storagePathname: 'private/file.txt',
+      metadata: { filename: 'private-name.txt' },
+    });
+    const messages = [
+      { role: 'user', content: [{ type: 'file', file: { asset_id: 'asset-1' } }] },
+      { role: 'assistant', content: 'Earlier answer' },
+      { role: 'user', content: 'Continue' },
+    ];
+
+    const attachments = await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
+    );
+    expect(attachments).toEqual([]);
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+    expect(JSON.stringify(messages)).not.toContain('private-name');
+  });
+
+  it.each([null, 'workspace-A'])(
+    'hydrates a file in the admitted workspace %s',
+    async (organizationId) => {
+      mocks.getMediaAssetById.mockResolvedValue({
+        id: 'asset-1',
+        userId: 'user-1',
+        organizationId,
+        kind: 'file',
+        mimeType: 'text/plain',
+        storagePathname: 'private/file.txt',
+        metadata: { filename: 'notes.txt' },
+        deletedAt: null,
+      });
+      mocks.readStoredMedia.mockResolvedValue({
+        data: Buffer.from('hello'),
+        contentType: 'text/plain',
+      });
+      const messages = [
+        { role: 'user', content: [{ type: 'file', file: { asset_id: 'asset-1' } }] },
+      ];
+
+      const attachments = await hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        organizationId,
+      );
+      expect(attachments).toHaveLength(1);
+      expect(mocks.readStoredMedia).toHaveBeenCalledWith('private/file.txt');
+    },
+  );
+
+  it('does not read storage when an owned workspace asset has no pathname', async () => {
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: 'asset-1',
+      userId: 'user-1',
+      organizationId: null,
+      deletedAt: null,
+      storagePathname: null,
+      metadata: { filename: 'notes.txt' },
+    });
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: 'asset-1' } }] }];
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
@@ -341,6 +453,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
       id,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/plain',
       storagePathname: `chat-attachments/user-1/${id}.txt`,
@@ -363,7 +476,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).resolves.toBeDefined();
 
     const parts = partsOf(messages[0]);
@@ -383,6 +496,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/plain',
       storagePathname: 'chat-attachments/user-1/truncated.txt',
@@ -395,7 +509,7 @@ describe('hydrateChatAttachments', () => {
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).resolves.toBeDefined();
 
     expect(partsOf(messages[0])[0]?.text).toBe(
@@ -427,6 +541,7 @@ describe('hydrateChatAttachments', () => {
       mocks.getMediaAssetById.mockResolvedValue({
         id: rottedId,
         userId: 'user-1',
+        organizationId: null,
         kind: 'image',
         mimeType: 'image/png',
         storagePathname: `chat-attachments/user-1/${rottedId}.png`,
@@ -440,7 +555,7 @@ describe('hydrateChatAttachments', () => {
       const messages = conversationWithRottedHistory();
 
       await expect(
-        hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+        hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
       ).resolves.toBeDefined();
 
       expect(partsOf(messages[2])).toEqual([
@@ -451,7 +566,13 @@ describe('hydrateChatAttachments', () => {
     it('substitutes a note the model can answer around, naming the file', async () => {
       const messages = conversationWithRottedHistory();
 
-      await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+      await hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      );
 
       const historyParts = partsOf(messages[0]);
       expect(historyParts[0]).toEqual({ type: 'text', text: 'What is in these?' });
@@ -464,7 +585,13 @@ describe('hydrateChatAttachments', () => {
     it('says nothing a reader could not act on', async () => {
       const messages = conversationWithRottedHistory();
 
-      await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+      await hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      );
 
       const note = partsOf(messages[0])[1]?.text ?? '';
       expect(note).toContain('IMG_2215.PNG');
@@ -486,6 +613,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/vnd.ms-excel',
       storagePathname: 'chat-attachments/user-1/sheet.xls',
@@ -499,7 +627,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).rejects.toEqual(
       expect.objectContaining<Partial<ChatAttachmentHydrationError>>({
         status: 400,
@@ -513,6 +641,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/vnd.ms-excel',
       storagePathname: 'chat-attachments/user-1/sheet.xls',
@@ -526,7 +655,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).resolves.toBeDefined();
 
     expect(partsOf(messages[0])[0]?.text).toBe(
@@ -542,6 +671,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
       id,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/plain',
       storagePathname: `chat-attachments/user-1/${id}.txt`,
@@ -559,7 +689,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).resolves.toBeDefined();
 
     expect(partsOf(messages[2])[1]?.file?.filename).toBe('new-notes.txt');
@@ -574,6 +704,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
       id,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: id === txtId ? 'text/plain' : 'text/csv',
       storagePathname: `chat-attachments/user-1/${id}`,
@@ -593,7 +724,7 @@ describe('hydrateChatAttachments', () => {
       },
     ];
 
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
 
     const parts = partsOf(messages[0]);
     expect(parts[1]).toEqual({ type: 'text', text: '[attached file: notes.txt (text/plain)]' });
@@ -606,6 +737,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
       id,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/plain',
       storagePathname: `chat-attachments/user-1/${id}.txt`,
@@ -625,7 +757,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     await expect(
-      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE),
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
     ).resolves.toBeDefined();
 
     expect(partsOf(messages[21])[1]?.file?.filename).toBe('file-attached-now.txt');
@@ -654,6 +786,7 @@ describe('hydrateChatAttachments', () => {
       return {
         id,
         userId: 'user-1',
+        organizationId: null,
         kind: 'file',
         mimeType: 'text/plain',
         storagePathname: `chat-attachments/user-1/${id}.txt`,
@@ -671,7 +804,7 @@ describe('hydrateChatAttachments', () => {
     ];
 
     const startedAt = Date.now();
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
     const elapsedMs = Date.now() - startedAt;
 
     expect(peakInFlight).toBeGreaterThan(1);
@@ -686,6 +819,7 @@ describe('hydrateChatAttachments', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/csv',
       byteSize: 7,
@@ -696,7 +830,7 @@ describe('hydrateChatAttachments', () => {
     mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('a,b,c\n1') });
     const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
 
-    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE);
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
 
     expect(partsOf(messages[0])).toEqual([
       { type: 'text', text: '[attached file: report.csv (text/csv)]' },
@@ -730,6 +864,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/csv',
       byteSize: csv.byteLength,
@@ -753,6 +888,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
       'user-1',
       undefined,
       PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
     );
 
     expect(staged).toEqual([
@@ -770,6 +906,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
       id,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/csv',
       byteSize: bytesById[id]!.byteLength,
@@ -792,6 +929,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
       'user-1',
       undefined,
       PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
     );
 
     expect(staged.map((entry) => entry.filename)).toEqual(['second.csv']);
@@ -811,6 +949,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'application/x-ipynb+json',
       byteSize: notebook.byteLength,
@@ -826,6 +965,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
       'user-1',
       undefined,
       PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
     );
 
     expect(staged).toHaveLength(1);
@@ -839,6 +979,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     mocks.getMediaAssetById.mockResolvedValue({
       id: assetId,
       userId: 'user-1',
+      organizationId: null,
       kind: 'file',
       mimeType: 'text/csv',
       byteSize: 3,
@@ -854,6 +995,7 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
       'user-1',
       undefined,
       PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
     );
 
     expect(staged).toEqual([]);

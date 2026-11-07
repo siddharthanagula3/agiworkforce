@@ -124,7 +124,7 @@ beforeEach(() => {
   mockGetUserScopedDb.mockResolvedValue({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'caller',
-    organizationId: null,
+    organizationId: ORG,
   });
 });
 
@@ -225,7 +225,7 @@ describe('GET /api/settings/organization/shared', () => {
       mockGetUserScopedDb.mockResolvedValue({
         db: { query: (...args: unknown[]) => mockQuery(...args) },
         userId: 'caller',
-        organizationId: null,
+        organizationId: ORG,
       });
       respondFor(role);
       const body = (await (await get()).json()) as { canManageSharing: boolean };

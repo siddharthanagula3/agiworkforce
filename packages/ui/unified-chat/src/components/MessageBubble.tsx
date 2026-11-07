@@ -816,7 +816,7 @@ export function MessageBubble({
           <LegacyWebSearchCard key={search.id} search={search} />
         ))}
 
-      <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] min-w-0 max-w-full wrap-anywhere">
+      <div className="chat-response-body text-[var(--chat-text-primary)] min-w-0 max-w-full wrap-anywhere">
         {isStreaming && !message.content.trim() && !canonicalActivity ? (
           <StreamingThinkingStatus />
         ) : (

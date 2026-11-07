@@ -62,6 +62,8 @@ export * from './provider';
 
 export * from './model-catalog';
 
+export * from './reasoning-settings';
+
 export * from './provider-offering-label';
 
 export * from './flagship-routing';

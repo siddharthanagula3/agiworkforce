@@ -117,4 +117,26 @@ describe('GET /api/cron/purge-deleted-organizations', () => {
       }),
     );
   });
+
+  it('counts a rejected erasure as failed and continues with the next due workspace', async () => {
+    mocks.query.mockResolvedValue([{ id: 'org-locked-failed' }, { id: 'org-next' }]);
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) => {
+      if (id === 'org-locked-failed') throw new Error('lockdown unavailable');
+      return baseReport(id);
+    });
+
+    const res = await GET(request() as never);
+    const body = (await res.json()) as { purged: number; failed: number };
+
+    expect(body.purged).toBe(1);
+    expect(body.failed).toBe(1);
+    expect(mocks.eraseOrganizationData).toHaveBeenNthCalledWith(2, 'org-next');
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'organization_deletion_completed',
+        detail: expect.objectContaining({ resourceId: 'org-next' }),
+      }),
+    );
+  });
 });

@@ -48,6 +48,12 @@ describe('library client mapping', () => {
     );
   });
 
+  it('passes eligible kinds before the hosted page limit', () => {
+    expect(libraryListPath({ kind: ['image', 'file'], limit: 6 })).toBe(
+      '/api/library?kind=image%2Cfile&limit=6&offset=0&sort=modified',
+    );
+  });
+
   it('passes a selected sort to the hosted Library route', () => {
     expect(libraryListPath({ sort: 'name' })).toBe('/api/library?limit=24&offset=0&sort=name');
     expect(libraryListPath({ sort: 'oldest' })).toBe('/api/library?limit=24&offset=0&sort=oldest');

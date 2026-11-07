@@ -1,4 +1,6 @@
 import JSZip from 'jszip';
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { PRESENTATION_PREVIEW_TOO_LARGE } from '@features/chat/lib/office-file-preview';
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { PptxFilePreview, isPptxFile } from './PptxFilePreview';
@@ -34,5 +36,18 @@ describe('PptxFilePreview', () => {
     expect(
       await screen.findByText('This presentation could not be opened for preview.'),
     ).toBeInTheDocument();
+  });
+
+  it('explains when presentation text exceeds the preview budget', async () => {
+    const zip = new JSZip();
+    zip.file(
+      'ppt/slides/slide1.xml',
+      `<sld><sp><p><t>${'x'.repeat(MAX_FILE_TEXT_CHARS)}</t></p></sp></sld>`,
+    );
+    render(
+      <PptxFilePreview source={await zip.generateAsync({ type: 'blob' })} fileName="large.pptx" />,
+    );
+    expect(await screen.findByText(PRESENTATION_PREVIEW_TOO_LARGE)).toBeInTheDocument();
+    expect(screen.queryByTestId('pptx-file-preview')).not.toBeInTheDocument();
   });
 });

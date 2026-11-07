@@ -4,6 +4,24 @@ const CLOUD_CACHE_OWNER_KEY = 'cloud-cache-owner-id';
 
 let runtimeOwnerId: string | null = null;
 let accountEpoch = 0;
+const epochListeners = new Set<() => void>();
+
+export function subscribeCloudAccountEpochChange(listener: () => void): () => void {
+  epochListeners.add(listener);
+  return () => {
+    epochListeners.delete(listener);
+  };
+}
+
+function notifyCloudAccountEpochChange(): void {
+  for (const listener of epochListeners) {
+    try {
+      listener();
+    } catch (error) {
+      console.warn('[auth] Cloud account transition listener failed:', error);
+    }
+  }
+}
 
 export interface CloudAccountEpoch {
   ownerId: string;
@@ -34,18 +52,26 @@ export function activateCloudAccount(userId: string): CloudAccountActivation {
   const changed = previousOwnerId !== ownerId;
   if (changed) accountEpoch += 1;
 
+  const runtimeChanged = runtimeOwnerId !== ownerId;
   runtimeOwnerId = ownerId;
-  storage.set(CLOUD_CACHE_OWNER_KEY, ownerId);
+  try {
+    storage.set(CLOUD_CACHE_OWNER_KEY, ownerId);
+  } finally {
+    if (runtimeChanged || changed) notifyCloudAccountEpochChange();
+  }
   return { ownerId, previousOwnerId, changed };
 }
 
 export function invalidateCloudAccount(): void {
   const persistedOwnerId = storage.getString(CLOUD_CACHE_OWNER_KEY)?.trim() || null;
-  if (runtimeOwnerId !== null || persistedOwnerId !== null) {
-    accountEpoch += 1;
-  }
+  const changed = runtimeOwnerId !== null || persistedOwnerId !== null;
+  if (changed) accountEpoch += 1;
   runtimeOwnerId = null;
-  storage.delete(CLOUD_CACHE_OWNER_KEY);
+  try {
+    storage.delete(CLOUD_CACHE_OWNER_KEY);
+  } finally {
+    if (changed) notifyCloudAccountEpochChange();
+  }
 }
 
 export function captureCloudAccountEpoch(): CloudAccountEpoch | null {
@@ -80,4 +106,5 @@ export function isStaleCloudAccountOperation(
 export function __resetCloudAccountSessionForTests(): void {
   runtimeOwnerId = null;
   accountEpoch = 0;
+  epochListeners.clear();
 }

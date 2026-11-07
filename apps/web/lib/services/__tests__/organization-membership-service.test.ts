@@ -69,8 +69,8 @@ describe('leaveOrganization', () => {
     expect(deletion?.[1]).toEqual([ORG_A, 'user-1']);
     expect(String(deletion?.[0])).toMatch(/organization_id = \$1 and user_id = \$2/i);
     expect(h.execute).toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.user_settings'),
-      ['user-1', 'personal'],
+      expect.stringContaining("settings #>> '{workspace,activeOrganizationId}' = $3"),
+      ['user-1', 'personal', ORG_A],
     );
   });
 
@@ -87,6 +87,37 @@ describe('leaveOrganization', () => {
 
     expect(h.query.mock.calls[1]?.[1]).toEqual([ORG_A, 'user-1']);
     expect(h.query.mock.calls.at(-1)?.[1]).toEqual([ORG_A, 'user-1']);
+  });
+
+  it('does not clear a selection when no membership was removed', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member()])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      leaveOrganization(h.db, { userId: 'user-1', organizationId: ORG_A }),
+    ).rejects.toMatchObject({ statusCode: 409 });
+    expect(h.execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects the leave when conditional selection cleanup fails', async () => {
+    const h = harness();
+    const failure = new Error('selection cleanup failed');
+    h.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member()])
+      .mockResolvedValueOnce([{ organization_id: ORG_A, role: 'member' }]);
+    h.execute.mockRejectedValueOnce(failure);
+
+    await expect(leaveOrganization(h.db, { userId: 'user-1', organizationId: ORG_A })).rejects.toBe(
+      failure,
+    );
   });
 
   it('points a sole owner at the workspace decommission flow instead of leaving', async () => {
@@ -161,8 +192,10 @@ describe('leaveOrganization', () => {
     expect(h.execute.mock.calls[0]?.[1]).toEqual([ORG_A, 'user-1']);
     expect(String(h.execute.mock.calls[1]?.[0])).toContain("set role = 'owner'");
     expect(h.execute.mock.calls[1]?.[1]).toEqual([ORG_A, 'successor-user']);
-    expect(String(h.execute.mock.calls[2]?.[0])).toContain('insert into public.user_settings');
-    expect(h.execute.mock.calls[2]?.[1]).toEqual(['user-1', 'personal']);
+    expect(String(h.execute.mock.calls[2]?.[0])).toContain(
+      "settings #>> '{workspace,activeOrganizationId}' = $3",
+    );
+    expect(h.execute.mock.calls[2]?.[1]).toEqual(['user-1', 'personal', ORG_A]);
   });
 
   function queueOwnerLeaving(successorRows: unknown[]) {

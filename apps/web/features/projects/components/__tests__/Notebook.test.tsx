@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
@@ -120,6 +120,99 @@ describe('notebook sources', () => {
     const uploaded = (service.upload.mock.calls[0]![0] as { file: File }).file;
     expect(uploaded.name).toBe('Notes.md');
     expect(await uploaded.text()).toBe('# Ideas\n\nSecond idea');
+  });
+
+  it('retains unsaved notes across collapse without reloading', async () => {
+    service.list.mockResolvedValue([]);
+    render(<ProjectNotes projectId="project-1" readOnly={false} />);
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    fireEvent.change(await screen.findByLabelText('Notes text'), { target: { value: 'Unsaved' } });
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    expect(await screen.findByLabelText('Notes text')).toHaveValue('Unsaved');
+    expect(service.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains newer typing while acknowledging only the submitted notes', async () => {
+    service.list.mockResolvedValue([]);
+    let finish!: (value: unknown) => void;
+    service.upload.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const onSaved = vi.fn();
+    render(<ProjectNotes projectId="project-1" readOnly={false} onSaved={onSaved} />);
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    const editor = await screen.findByLabelText('Notes text');
+    fireEvent.change(editor, { target: { value: 'Submitted' } });
+    fireEvent.click(screen.getByTestId('project-notes-save'));
+    fireEvent.change(editor, { target: { value: 'Newer draft' } });
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    await act(async () => finish({}));
+    expect(await screen.findByLabelText('Notes text')).toHaveValue('Newer draft');
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(service.list).toHaveBeenCalledTimes(1);
+    expect(service.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a save receipt after project replacement', async () => {
+    service.list.mockResolvedValue([]);
+    let finish!: (value: unknown) => void;
+    service.upload.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const onSaved = vi.fn();
+    const view = render(<ProjectNotes projectId="project-1" readOnly={false} onSaved={onSaved} />);
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    fireEvent.change(await screen.findByLabelText('Notes text'), { target: { value: 'Old' } });
+    fireEvent.click(screen.getByTestId('project-notes-save'));
+    view.rerender(<ProjectNotes projectId="project-2" readOnly={false} onSaved={onSaved} />);
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    expect(await screen.findByLabelText('Notes text')).toHaveValue('');
+    await act(async () => finish({}));
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Notes text')).toHaveValue('');
+  });
+
+  it('retries failed loading only when explicitly requested', async () => {
+    service.list.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([]);
+    render(<ProjectNotes projectId="project-1" readOnly={false} />);
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    await screen.findByText('Your notes could not be loaded.');
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    expect(service.list).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByLabelText('Notes text')).toHaveValue('');
+    expect(service.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('admits only one explicit retry while its load is pending', async () => {
+    let finish!: (value: unknown[]) => void;
+    service.list.mockRejectedValueOnce(new Error('offline')).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<ProjectNotes projectId="project-1" readOnly={false} />);
+    fireEvent.click(screen.getByTestId('project-notes-toggle'));
+    const retry = await screen.findByRole('button', { name: 'Try again' });
+    act(() => {
+      fireEvent.click(retry);
+      fireEvent.click(retry);
+    });
+    expect(service.list).toHaveBeenCalledTimes(2);
+    await act(async () => finish([]));
+    fireEvent.change(await screen.findByLabelText('Notes text'), { target: { value: 'Retained' } });
+    expect(screen.getByLabelText('Notes text')).toHaveValue('Retained');
   });
 
   it('offers one-click quiz, flashcards, learning overview and infographic outputs', () => {

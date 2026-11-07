@@ -2372,27 +2372,54 @@ pub mod connectors {
         allowed()
     }
 
-    fn cache() -> &'static Mutex<Option<Option<ConnectorAccessPolicy>>> {
-        static CACHE: OnceLock<Mutex<Option<Option<ConnectorAccessPolicy>>>> = OnceLock::new();
+    struct ConnectorPolicyRead {
+        owner: String,
+        policy: Option<ConnectorAccessPolicy>,
+    }
+
+    impl ConnectorPolicyRead {
+        fn reusable_for(&self, owner: Option<&str>) -> Option<Option<ConnectorAccessPolicy>> {
+            (owner == Some(self.owner.as_str())).then(|| self.policy.clone())
+        }
+    }
+
+    fn cache() -> &'static Mutex<Option<ConnectorPolicyRead>> {
+        static CACHE: OnceLock<Mutex<Option<ConnectorPolicyRead>>> = OnceLock::new();
         CACHE.get_or_init(|| Mutex::new(None))
     }
 
     /// Fail-open as the web gate is: an unread policy must not stop a member
     /// whose workspace permits everything. The server gate is authoritative.
     pub fn cached_policy() -> Option<ConnectorAccessPolicy> {
-        cache().lock().ok()?.clone().flatten()
+        #[cfg(test)]
+        if let Some(policy) = TEST_CONNECTOR_POLICY.with(|slot| slot.borrow().clone()) {
+            return policy;
+        }
+        let context = CloudClient::policy_context().ok()?;
+        context.with_current(|| {
+            let slot = cache().lock().ok()?;
+            let read = slot.as_ref()?;
+            read.reusable_for(context.owner.as_deref()).flatten()
+        }).flatten()
     }
 
-    pub fn set_cached_policy(policy: Option<ConnectorAccessPolicy>) {
-        if let Ok(mut slot) = cache().lock() {
-            *slot = Some(policy);
-        }
+    #[cfg(test)]
+    thread_local! {
+        static TEST_CONNECTOR_POLICY: std::cell::RefCell<Option<Option<ConnectorAccessPolicy>>> =
+            const { std::cell::RefCell::new(None) };
     }
 
-    pub fn clear_cached_policy() {
-        if let Ok(mut slot) = cache().lock() {
-            *slot = None;
+    #[cfg(test)]
+    pub fn with_test_connector_policy<T>(policy: Option<ConnectorAccessPolicy>, run: impl FnOnce() -> T) -> T {
+        struct Restore(Option<Option<ConnectorAccessPolicy>>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                TEST_CONNECTOR_POLICY.with(|slot| slot.replace(self.0.take()));
+            }
         }
+        let previous = TEST_CONNECTOR_POLICY.with(|slot| slot.replace(Some(policy)));
+        let _restore = Restore(previous);
+        run()
     }
 
     /// Reads the workspace policy from the same endpoint every other surface
@@ -2400,15 +2427,27 @@ pub mod connectors {
     pub async fn fetch_workspace_policy(
         privacy: PrivacyMode,
     ) -> Result<Option<ConnectorAccessPolicy>, CloudError> {
-        let client = CloudClient::connect(privacy)?;
+        if privacy != PrivacyMode::Managed {
+            return Err(CloudError::NotManaged(privacy));
+        }
+        let context = CloudClient::policy_context()?;
+        let client = CloudClient::from_managed_context(&context)?;
         let response: PolicyResponse = client.get(CONNECTOR_POLICY_PATH, &[]).await?;
         let policy = if response.configured {
             response.policy
         } else {
             None
         };
-        set_cached_policy(policy.clone());
-        Ok(policy)
+        context.with_current(|| {
+            if let (Some(owner), Ok(mut slot)) = (context.owner.as_ref(), cache().lock()) {
+                *slot = Some(ConnectorPolicyRead { owner: owner.clone(), policy: policy.clone() });
+            }
+            policy
+        }).ok_or_else(account_changed)
+    }
+
+    fn account_changed() -> CloudError {
+        CloudError::Transport("Managed account changed; retry the policy read".to_string())
     }
 
     /// What a tool that runs on this machine in any privacy mode, such as
@@ -2426,9 +2465,6 @@ pub mod connectors {
 
     const UNREADABLE_RETRY: std::time::Duration = std::time::Duration::from_secs(60);
 
-    /// One read per signed-in account: the stored sign-in's subject keys it,
-    /// so a /login as someone else or a /logout never reuses another
-    /// account's rules.
     struct LocalToolRead {
         owner: Option<String>,
         policy: LocalToolPolicy,
@@ -2441,7 +2477,7 @@ pub mod connectors {
         fn reusable_for(&self, owner: &Option<String>) -> Option<LocalToolPolicy> {
             let fresh = !matches!(self.policy, LocalToolPolicy::Unreadable(_))
                 || self.read_at.elapsed() < UNREADABLE_RETRY;
-            (&self.owner == owner && fresh).then(|| self.policy.clone())
+            (owner.is_some() && &self.owner == owner && fresh).then(|| self.policy.clone())
         }
     }
 
@@ -2461,15 +2497,51 @@ pub mod connectors {
         .is_some()
     }
 
+    #[cfg(test)]
+    mod policy_owner_tests {
+        use super::*;
+
+        #[test]
+        fn connector_policy_fixture_restores_nested_and_unwound_scopes() {
+            let before = TEST_CONNECTOR_POLICY.with(|slot| slot.borrow().clone());
+            with_test_connector_policy(None, || {
+                let result = std::panic::catch_unwind(|| {
+                    with_test_connector_policy(Some(ConnectorAccessPolicy::default()), || {
+                        assert!(cached_policy().is_some());
+                        panic!("fixture unwind");
+                    });
+                });
+                assert!(result.is_err());
+                assert!(cached_policy().is_none());
+            });
+            assert_eq!(TEST_CONNECTOR_POLICY.with(|slot| slot.borrow().clone()), before);
+        }
+
+        #[test]
+        fn advisory_policy_and_unrestricted_answers_require_the_original_owner() {
+            let read = ConnectorPolicyRead { owner: "deployment_session_a".to_string(), policy: None };
+            assert_eq!(read.reusable_for(Some("deployment_session_a")), Some(None));
+            assert_eq!(read.reusable_for(Some("deployment_session_b")), None);
+            assert_eq!(read.reusable_for(None), None);
+        }
+
+        #[test]
+        fn local_policy_never_reuses_an_unidentified_authority() {
+            assert!(!cached_read_reusable(None, LocalToolPolicy::Unrestricted, std::time::Duration::ZERO, None));
+            assert!(!cached_read_reusable(
+                Some("deployment_session_a"), LocalToolPolicy::Unrestricted,
+                std::time::Duration::ZERO, Some("deployment_session_b"),
+            ));
+            assert!(cached_read_reusable(
+                Some("anonymous_deployment"), LocalToolPolicy::Unrestricted,
+                std::time::Duration::ZERO, Some("anonymous_deployment"),
+            ));
+        }
+    }
+
     fn local_tool_cache() -> &'static Mutex<Option<LocalToolRead>> {
         static CACHE: OnceLock<Mutex<Option<LocalToolRead>>> = OnceLock::new();
         CACHE.get_or_init(|| Mutex::new(None))
-    }
-
-    fn signed_in_owner() -> Option<String> {
-        crate::tier_cache::load_jwt()
-            .filter(|jwt| !jwt.trim().is_empty())
-            .map(|jwt| crate::auth::jwt_subject(&jwt).unwrap_or_else(|| "unknown".to_string()))
     }
 
     /// Called on /login and /logout so the next tool call reads afresh.
@@ -2479,9 +2551,8 @@ pub mod connectors {
         }
     }
 
-    /// Decides the policy from one read. A 403 or 404 means no workspace
-    /// governs this account; any other failure refuses only when this account
-    /// is known to belong to a workspace.
+    // Preserve the endpoint's existing 403/404 compatibility behavior; these
+    // statuses are not proof that the account has no workspace membership.
     pub fn local_tool_policy_from(
         read: Result<Option<ConnectorAccessPolicy>, CloudError>,
         workspace_member: bool,
@@ -2528,15 +2599,21 @@ pub mod connectors {
     /// Read once per process with the stored sign-in; the read sends nothing
     /// of the session. An unreadable result is retried after a minute.
     pub async fn policy_for_local_tools() -> LocalToolPolicy {
-        let owner = signed_in_owner();
-        if let Some(policy) = local_tool_cache()
-            .lock()
-            .ok()
-            .and_then(|slot| slot.as_ref().and_then(|read| read.reusable_for(&owner)))
-        {
+        let context = match CloudClient::policy_context() {
+            Ok(context) => context,
+            Err(error) => return local_tool_policy_from(Err(error), true),
+        };
+        let cached = context.with_current(|| {
+            local_tool_cache().lock().ok()
+                .and_then(|slot| slot.as_ref().and_then(|read| read.reusable_for(&context.owner)))
+        });
+        let Some(cached) = cached else {
+            return local_tool_policy_from(Err(account_changed()), true);
+        };
+        if let Some(policy) = cached {
             return policy;
         }
-        let (read, workspace_member) = match CloudClient::connect_managed() {
+        let (read, workspace_member) = match CloudClient::from_managed_context(&context) {
             Ok(client) => {
                 let read = client
                     .get::<PolicyResponse>(CONNECTOR_POLICY_PATH, &[])
@@ -2551,17 +2628,19 @@ pub mod connectors {
                 };
                 (read, member)
             }
-            Err(error) => (Err(error), false),
+            Err(error) => (Err(error), context.jwt.is_some()),
         };
         let policy = local_tool_policy_from(read, workspace_member);
-        if let Ok(mut slot) = local_tool_cache().lock() {
-            *slot = Some(LocalToolRead {
-                owner,
-                policy: policy.clone(),
-                read_at: std::time::Instant::now(),
-            });
-        }
-        policy
+        context.with_current(|| {
+            if let Ok(mut slot) = local_tool_cache().lock() {
+                *slot = Some(LocalToolRead {
+                    owner: context.owner.clone(),
+                    policy: policy.clone(),
+                    read_at: std::time::Instant::now(),
+                });
+            }
+            policy
+        }).unwrap_or_else(|| local_tool_policy_from(Err(account_changed()), true))
     }
 
     pub fn prefetch_workspace_policy(privacy: PrivacyMode) {
@@ -3013,7 +3092,7 @@ mod tests {
     #[test]
     fn workspace_mcp_slash_lists_refusals_when_no_server_connected() {
         crate::cloud::workspace_policy::with_test_policy(
-            serde_json::json!({"code": {"allowMcpServers": false}}),
+            serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
             || {
                 crate::mcp::with_test_configs(
                     std::collections::HashMap::from([(
@@ -3996,8 +4075,8 @@ mod chrome_state_tests {
 #[cfg(test)]
 mod connector_contract_tests {
     use super::connectors::{
-        clear_cached_policy, evaluate_connector_access, evaluate_mcp_host_access,
-        evaluate_plugin_access, mcp_host_matches, set_cached_policy, AccessCode,
+        evaluate_connector_access, evaluate_mcp_host_access,
+        evaluate_plugin_access, mcp_host_matches, with_test_connector_policy, AccessCode,
         ConnectorAccessPolicy, CONNECTOR_POLICY_PATH,
     };
     use super::render_install_app;
@@ -4129,19 +4208,20 @@ mod connector_contract_tests {
 
     #[test]
     fn a_blocked_connector_stops_the_cli_install_flow() {
-        clear_cached_policy();
-        assert!(render_install_app("GitHub").contains("https://github.com/apps"));
+        with_test_connector_policy(None, || {
+            assert!(render_install_app("GitHub").contains("https://github.com/apps"));
+        });
 
         let mut blocked = policy();
         blocked.blocked_connectors = vec!["GitHub".to_string()];
-        set_cached_policy(Some(blocked));
-        let rendered = render_install_app("GitHub");
-        assert!(
-            !rendered.contains("https://github.com/apps"),
-            "the CLI still offered an install URL the workspace blocked: {rendered}"
-        );
-        assert!(rendered.contains("has blocked the \"github\" connector"));
-        clear_cached_policy();
+        with_test_connector_policy(Some(blocked), || {
+            let rendered = render_install_app("GitHub");
+            assert!(
+                !rendered.contains("https://github.com/apps"),
+                "the CLI still offered an install URL the workspace blocked: {rendered}"
+            );
+            assert!(rendered.contains("has blocked the \"github\" connector"));
+        });
     }
 }
 

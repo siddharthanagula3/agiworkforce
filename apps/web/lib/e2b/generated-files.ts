@@ -45,7 +45,7 @@ const MIME_BY_EXT: Record<string, string> = {
   ts: 'text/typescript',
 };
 
-export type SandboxSnapshot = Map<string, number>;
+export type SandboxSnapshot = Map<string, { byteSize: number; modifiedAt?: string }>;
 
 function mimeFor(fileName: string): string {
   const ext = fileName.toLowerCase().split('.').pop() ?? '';
@@ -75,7 +75,11 @@ async function listWorkspace(executor: E2BExecutor): Promise<SandboxFileEntry[]>
 export async function snapshotSandboxFiles(executor: E2BExecutor): Promise<SandboxSnapshot> {
   const snapshot: SandboxSnapshot = new Map();
   try {
-    for (const f of await listWorkspace(executor)) snapshot.set(f.path, f.byteSize);
+    for (const f of await listWorkspace(executor))
+      snapshot.set(f.path, {
+        byteSize: f.byteSize,
+        ...(f.modifiedAt ? { modifiedAt: f.modifiedAt } : {}),
+      });
   } catch (err) {
     logger.warn({ err }, '[e2b] baseline snapshot failed; proceeding with empty baseline');
   }
@@ -107,7 +111,12 @@ export async function harvestGeneratedFiles(params: {
     return { files: [], failedCount: 0 };
   }
 
-  const changed = files.filter((f) => baseline.get(f.path) !== f.byteSize);
+  const changed = files.filter((file) => {
+    const previous = baseline.get(file.path);
+    return (
+      !previous || previous.byteSize !== file.byteSize || previous.modifiedAt !== file.modifiedAt
+    );
+  });
   if (changed.length === 0) return { files: [], failedCount: 0 };
   if (!canPersist) {
     logger.warn(

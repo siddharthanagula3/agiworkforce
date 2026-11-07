@@ -1,10 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  CONNECTORS_COMING_SOON_LABEL,
-  CONNECTORS_COMING_SOON_MESSAGE,
-  connectorsReleased,
-} from '@agiworkforce/types';
+import { CONNECTORS_COMING_SOON_LABEL, connectorsReleased } from '@agiworkforce/types';
 
 vi.mock('@/features/connectors/hooks/use-connectors', async (importOriginal) => ({
   ...(await importOriginal<UseConnectorsModule>()),
@@ -37,7 +33,7 @@ describe('schedule controls while connectors are coming soon', () => {
       />,
     );
 
-    expect(screen.getByText(CONNECTORS_COMING_SOON_MESSAGE)).toBeInTheDocument();
+    expect(screen.getByText('Connectors for scheduled runs are coming soon.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Connect one' })).toBeNull();
     expect(screen.queryByText(/No connectors are connected/)).toBeNull();
   });

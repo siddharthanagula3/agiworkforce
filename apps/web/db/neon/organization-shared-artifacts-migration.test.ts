@@ -127,3 +127,18 @@ describe('0185 the grant table has no FOR ALL policy', () => {
     );
   });
 });
+
+describe('0395 owner revocation preserves the 0185 recursion boundary', () => {
+  const sql = readMigration('0395_published_artifact_audience_revocation.sql');
+
+  it('uses the bounded definer helper, never a plain ownership SELECT or FOR ALL', () => {
+    const policy = sql.match(
+      /create policy organization_shared_artifacts_publication_owner_read[\s\S]*?;/u,
+    )?.[0];
+    expect(policy).toBeDefined();
+    expect(policy).toContain('for select to app_rls');
+    expect(policy).toContain('public.app_owns_published_artifact(published_artifact_id)');
+    expect(policy).not.toMatch(/exists|from public\.published_artifacts/iu);
+    expect(sql).not.toMatch(/on public\.organization_shared_artifacts for all/i);
+  });
+});

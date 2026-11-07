@@ -532,7 +532,7 @@ describe('artifacts help article follows the implemented publishing controls', (
 
   it('limits the invited audience to people added by email', () => {
     expect(preview).toMatch(
-      /artifactAudience\?\.current === 'invited' && publishedToken && \(\s*<div[^>]*>\s*<SiteViewersEditor token=\{publishedToken\} \/>/u,
+      /artifactAudience\?\.current === 'invited' && publishedToken && \(\s*<div[^>]*>\s*<SiteViewersEditor key=\{`\$\{artifact\.id\}:\$\{publishedToken\}`\} token=\{publishedToken\} \/>/u,
     );
     expect(preview).toContain('Only the people you add by email can open it after signing in.');
     expect(fileText('features/sites/components/SiteViewersEditor.tsx')).toContain(
@@ -559,9 +559,11 @@ describe('artifacts help article follows the implemented publishing controls', (
   });
 
   it('unpublishes from the Published artifacts list and tells the owner the link no longer works', () => {
-    expect(settings).toContain('await unpublishArtifact(artifact.token);');
+    expect(settings).toContain('await unpublishArtifact(artifact.token, request);');
     expect(settings).toContain('The link no longer works.');
-    expect(settings).toContain("{busy ? 'Unpublishing…' : 'Unpublish'}");
+    expect(settings).toContain(
+      "{view.actionToken === artifact.token && view.confirmation ? 'Unpublishing…' : 'Unpublish'}",
+    );
     expect(article).toContain('**Published artifacts** list with **Unpublish** on each one');
   });
 });

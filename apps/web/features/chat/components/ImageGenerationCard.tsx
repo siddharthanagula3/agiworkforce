@@ -16,7 +16,7 @@ import {
   Send,
   Library,
 } from 'lucide-react';
-import { Spinner, useDialogKeyboard, useMenuKeyboard } from '@agiworkforce/ui';
+import { Spinner, useDialogKeyboard, useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   getImageAspectOptionsForModel,
@@ -911,8 +911,18 @@ function ResultCard({
   onShare,
   onKeep,
 }: ResultCardProps) {
+  const { t } = useUiTranslation('chat');
   const modelLabel = getImageModelLabel(modelId);
-  const [imgError, setImgError] = useState(false);
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const [loadedImage, setLoadedImage] = useState<string | null>(null);
+  const imgError = failedImage === imageUrl;
+  const imgLoaded = loadedImage === imageUrl;
+  const imageRef = useCallback(
+    (element: HTMLImageElement | null) => {
+      if (element?.complete && element.naturalWidth > 0) setLoadedImage(imageUrl);
+    },
+    [imageUrl],
+  );
   const [imgAttempt, setImgAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -959,7 +969,13 @@ function ResultCard({
 
   return (
     <div className="mt-3 w-full max-w-[420px]">
-      <div className="group relative overflow-hidden rounded-2xl border border-border/30 bg-muted/20">
+      <div
+        className={cn(
+          'group relative overflow-hidden rounded-2xl border border-border/30 bg-muted/20',
+          !imgError && !imgLoaded && imageAspectClass(aspectRatio),
+        )}
+        data-generated-image-state={imgError ? 'failed' : imgLoaded ? 'loaded' : 'loading'}
+      >
         {imgError ? (
           <div
             className="flex h-[280px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground"
@@ -972,7 +988,8 @@ function ResultCard({
                 type="button"
                 onClick={() => {
                   setImgAttempt((current) => current + 1);
-                  setImgError(false);
+                  setFailedImage(null);
+                  setLoadedImage(null);
                 }}
                 className="rounded-full border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
               >
@@ -982,14 +999,25 @@ function ResultCard({
           </div>
         ) : (
           <img
-            key={imgAttempt}
+            key={`${imageUrl}-${imgAttempt}`}
+            ref={imageRef}
             src={imageUrl}
             alt={prompt}
             className="w-full object-contain"
             style={{ maxHeight: 420 }}
-            onError={() => setImgError(true)}
+            onLoad={() => setLoadedImage(imageUrl)}
+            onError={() => {
+              setFailedImage(imageUrl);
+              setLoadedImage(null);
+            }}
           />
         )}
+
+        {!imgError && !imgLoaded ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <Spinner size="sm" aria-label={t('markdown.loadingImage', 'Loading image')} />
+          </div>
+        ) : null}
 
         {!imgError && (
           <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-quick">

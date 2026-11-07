@@ -1,8 +1,10 @@
+import { beginPublicationCleanup } from '@features/sites/stores/published-sites-store';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { authService, AuthUser } from '@shared/services/authentication-manager';
 import { logger } from '@shared/lib/logger';
+import { useMediaStore } from './media-store';
 import {
   clerkSessionCookieValue,
   hasClerkSessionCookie,
@@ -201,41 +203,47 @@ function purgeStorageKeys(area: Storage | undefined, patterns: readonly RegExp[]
  * than an all-or-nothing one.
  */
 export async function cleanupAllStores(): Promise<void> {
-  const results = await Promise.allSettled(
-    USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
-      try {
-        const mod = await load();
-        if (!mod || typeof mod !== 'object') return;
-        for (const exported of Object.values(mod as Record<string, unknown>)) {
-          const handle = asZustandStore(exported);
-          if (!handle) continue;
-          resetStoreState(handle);
-          if (hasPersistApi(handle)) handle.persist?.clearStorage();
-        }
-        for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
-          if (MODULE_ACCOUNT_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
-            (exported as () => void)();
+  // This fences publication work across common cleanup, not cookie/session identity.
+  const finishPublicationCleanup = beginPublicationCleanup();
+  try {
+    const results = await Promise.allSettled(
+      USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
+        try {
+          const mod = await load();
+          if (!mod || typeof mod !== 'object') return;
+          for (const exported of Object.values(mod as Record<string, unknown>)) {
+            const handle = asZustandStore(exported);
+            if (!handle) continue;
+            resetStoreState(handle);
+            if (hasPersistApi(handle)) handle.persist?.clearStorage();
           }
+          for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
+            if (MODULE_ACCOUNT_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
+              (exported as () => void)();
+            }
+          }
+        } catch (error) {
+          logger.error(`Error cleaning up ${label} on logout:`, error);
+          throw error;
         }
-      } catch (error) {
-        logger.error(`Error cleaning up ${label} on logout:`, error);
-        throw error;
-      }
-    }),
-  );
-  const failedCount = results.filter((result) => result.status === 'rejected').length;
-
-  if (typeof window !== 'undefined') {
-    purgeAppOwnedStorage(window.localStorage);
-    purgeAppOwnedStorage(window.sessionStorage);
-  }
-
-  if (failedCount === 0) {
-    logger.auth('All stores cleaned up on logout');
-  } else {
-    logger.auth(
-      `Store cleanup on logout completed with ${failedCount} of ${USER_SCOPED_STORE_MODULES.length} module(s) failing; see preceding errors`,
+      }),
     );
+    const failedCount = results.filter((result) => result.status === 'rejected').length;
+
+    if (typeof window !== 'undefined') {
+      purgeAppOwnedStorage(window.localStorage);
+      purgeAppOwnedStorage(window.sessionStorage);
+    }
+
+    if (failedCount === 0) {
+      logger.auth('All stores cleaned up on logout');
+    } else {
+      logger.auth(
+        `Store cleanup on logout completed with ${failedCount} of ${USER_SCOPED_STORE_MODULES.length} module(s) failing; see preceding errors`,
+      );
+    }
+  } finally {
+    finishPublicationCleanup();
   }
 }
 
@@ -284,17 +292,21 @@ function recordCacheScope(id: string): void {
   }
 }
 
-async function cancelWorkspaceBoundOperations(): Promise<void> {
+async function cancelWorkspaceBoundOperations(isCurrent: () => boolean): Promise<void> {
   await Promise.allSettled(
     USER_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
       try {
         const mod = await load();
-        if (!mod || typeof mod !== 'object') return;
+        if (!isCurrent() || !mod || typeof mod !== 'object') return;
         for (const exported of Object.values(mod as Record<string, unknown>)) {
+          if (!isCurrent()) return;
           const handle = asZustandStore(exported);
           if (!handle) continue;
           const state = handle.getState();
-          for (const method of IN_FLIGHT_CANCEL_METHODS) invokeStateMethod(state, method);
+          for (const method of IN_FLIGHT_CANCEL_METHODS) {
+            if (!isCurrent()) return;
+            invokeStateMethod(state, method);
+          }
         }
       } catch (error) {
         logger.error(`Error cancelling in-flight work in ${label}:`, error);
@@ -303,17 +315,19 @@ async function cancelWorkspaceBoundOperations(): Promise<void> {
   );
 }
 
-async function cleanupWorkspaceStores(): Promise<void> {
+async function cleanupWorkspaceStores(isCurrent: () => boolean): Promise<void> {
   await Promise.allSettled(
     WORKSPACE_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
       try {
         const mod = await load();
-        if (!mod || typeof mod !== 'object') return;
+        if (!isCurrent() || !mod || typeof mod !== 'object') return;
         for (const exported of Object.values(mod as Record<string, unknown>)) {
+          if (!isCurrent()) return;
           const handle = asZustandStore(exported);
           if (handle) resetStoreState(handle, WORKSPACE_RESET_METHODS);
         }
         for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
+          if (!isCurrent()) return;
           if (MODULE_WORKSPACE_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
             (exported as () => void)();
           }
@@ -323,6 +337,7 @@ async function cleanupWorkspaceStores(): Promise<void> {
       }
     }),
   );
+  if (!isCurrent()) return;
   purgeStorageKeys(window.localStorage, WORKSPACE_STORAGE_KEY_PATTERNS);
   purgeStorageKeys(window.sessionStorage, WORKSPACE_STORAGE_KEY_PATTERNS);
 }
@@ -332,8 +347,12 @@ async function cleanupWorkspaceStores(): Promise<void> {
  * the work the previous scope started and drops its cached content before the
  * new scope can read it. Returns true when a change was acted on.
  */
-export async function applyCacheScope(scope: CacheScopeSelector): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+export async function applyCacheScope(
+  scope: CacheScopeSelector,
+  ownerIsCurrent?: () => boolean,
+): Promise<boolean> {
+  const isCurrent = ownerIsCurrent ?? (() => true);
+  if (typeof window === 'undefined' || !isCurrent()) return false;
 
   const recorded = readRecordedCacheScope();
   const previous = cacheScopeSegments(recorded);
@@ -354,9 +373,14 @@ export async function applyCacheScope(scope: CacheScopeSelector): Promise<boolea
     return false;
   }
 
-  await cancelWorkspaceBoundOperations();
-  if (previous.account === next.account) await cleanupWorkspaceStores();
+  if (ownerIsCurrent && previous.account !== next.account) {
+    throw new Error('Account cache scope is still resolving. Reload the page.');
+  }
+  await cancelWorkspaceBoundOperations(isCurrent);
+  if (!isCurrent()) return false;
+  if (previous.account === next.account) await cleanupWorkspaceStores(isCurrent);
   else await cleanupAllStores();
+  if (!isCurrent()) return false;
   recordCacheScope(nextId);
   logger.auth(`Cache scope changed from ${recorded} to ${nextId}; local caches dropped`);
   return true;
@@ -471,6 +495,7 @@ export const useAuthStore = create<AuthState>()(
         if (!hasClerkSessionCookie()) {
           _resolvedFromSessionToken = token;
           _sessionSettled = true;
+          useMediaStore.getState().reset();
           set({ user: null, isAuthenticated: false, isLoading: false, initialized: true });
           return;
         }

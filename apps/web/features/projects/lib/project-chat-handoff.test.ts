@@ -43,6 +43,7 @@ const meta: Required<ComposerSendMeta> = {
   projectId: 'project-1',
   webSearchEnabled: true,
   thinkingEnabled: true,
+  thinkingEffort: 'medium',
   codeExecutionEnabled: true,
   officeCreationEnabled: true,
   officeOutputFormat: 'docx',

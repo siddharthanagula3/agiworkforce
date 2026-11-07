@@ -252,7 +252,13 @@ export function getSelectableModelById(id: string): ModelDef | undefined {
 export function isFreeQuotaTurnModelId(id: string): boolean {
   const offering = getProviderOffering(id);
   if (!offering?.quotaProbeProtocol) return false;
-  return offering.category === 'chat' && offering.quotaProbeProtocol === 'chat';
+  if (offering.category === 'chat') return offering.quotaProbeProtocol === 'chat';
+  if (offering.category === 'image') {
+    return (
+      offering.quotaProbeProtocol === 'image-sync' || offering.quotaProbeProtocol === 'image-async'
+    );
+  }
+  return offering.category === 'video' && offering.quotaProbeProtocol === 'video-async';
 }
 
 export function isCloudManagedModelId(id: string): boolean {

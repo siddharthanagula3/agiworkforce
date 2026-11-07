@@ -22,7 +22,7 @@ import {
 import {
   listSharedProjects,
   requireOrgMember,
-  resolveOrgMembership,
+  resolveOrgMembershipForOrganization,
   type SharedProjectSummary,
 } from '@/lib/services/org-sharing-service';
 import { canSeeMemberEmails } from '@agiworkforce/types';
@@ -56,8 +56,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
 
   const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
   const canManageSharing = permissions.has('sharing.manage');

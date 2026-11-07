@@ -1129,6 +1129,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             );
             cancelSource.dispose();
 
+            if (result.status === 'not-reviewed') {
+              vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${result.reason}`);
+              return undefined;
+            }
+
             if (result.diagnosticCount === 0) {
               vscode.window.showInformationMessage(t('review.noIssues'));
             } else {

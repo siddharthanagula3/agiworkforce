@@ -31,12 +31,21 @@ async function handleLeave(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const parsed = LeaveSchema.safeParse(await request.json().catch(() => ({})));
+  const bodyText = await request.text();
+  let body: unknown = {};
+  if (bodyText !== '') {
+    try {
+      body = JSON.parse(bodyText) as unknown;
+    } catch {
+      throw createError.validation('Invalid request body');
+    }
+  }
+  const parsed = LeaveSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
   const db = getNeonDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!organizationId) {
     throw createError.notFound('Select a workspace before leaving it');
   }
@@ -118,6 +127,9 @@ async function handleLeave(request: NextRequest) {
 
   return NextResponse.json({
     message: 'You left the workspace',
+    organizationId: result.organizationId,
+    userId,
+    successorUserId: result.successorUserId,
     revoked: {
       sessions: deprovision.sessionsRevoked,
       deviceTokens: deprovision.deviceTokensRevoked,

@@ -231,7 +231,7 @@ export async function sendAccountSecurityEnabledEmail(
 
   const summary =
     'Advanced Account Security was turned on for your AGI account. Every sign-in now needs one of the passkeys or security keys that were added, and your other devices were signed out.';
-  const undo = `If this was not you, turn it off with the link below. It signs everyone out and resets your password, and it does not need a passkey. It works until ${input.undoExpiresAt}. Afterwards, choose a new password with Forgot password on the sign-in screen.`;
+  const undo = `If this was not you, use the link below to turn off Advanced Account Security without a passkey. This permanently removes its recovery keys and the saved passkey and security-key registrations that existed when it was turned on. Session sign-out and password protection are attempted, but account recovery may need further attention. Review your sign-in methods and active sessions afterwards. The link works until ${input.undoExpiresAt}.`;
   const ignore = 'If it was you, you can ignore this email.';
   const result = await sendTransactionalEmail({
     from,

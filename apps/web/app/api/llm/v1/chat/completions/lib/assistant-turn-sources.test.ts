@@ -373,14 +373,36 @@ describe('AssistantTurnSourceCollector', () => {
   it('replaces a re-emitted file in place rather than listing it twice', () => {
     const collector = new AssistantTurnSourceCollector();
     collector.ingestWireEvent(generatedFilesEvent([wireFile('chart.png'), wireFile('data.csv')]));
-    collector.ingestWireEvent(
-      generatedFilesEvent([wireFile('chart.png', { id: 'asset-final', byte_count: 99 })]),
-    );
+    collector.ingestWireEvent(generatedFilesEvent([wireFile('chart.png', { byte_count: 99 })]));
 
     const files = collector.generatedFilesSnapshot();
     expect(files).toHaveLength(2);
-    expect(files?.[0]).toMatchObject({ fileName: 'chart.png', id: 'asset-final', byteCount: 99 });
+    expect(files?.[0]).toMatchObject({
+      fileName: 'chart.png',
+      id: 'asset-chart.png',
+      byteCount: 99,
+    });
     expect(files?.[1]?.fileName).toBe('data.csv');
+  });
+
+  it('retains distinct files with the same name and persists validated render identity', () => {
+    const collector = new AssistantTurnSourceCollector();
+    const renderIdentity = `matplotlib-v1:33333333-3333-4333-8333-333333333333:${'a'.repeat(64)}`;
+    collector.ingestWireEvent(
+      generatedFilesEvent([
+        wireFile('chart.png', { id: 'first', render_identity: renderIdentity }),
+        wireFile('chart.png', {
+          id: 'second',
+          uri: '/api/files/second',
+          render_identity: 'untrusted',
+        }),
+      ]),
+    );
+    expect(collector.generatedFilesSnapshot()).toMatchObject([
+      { id: 'first', renderIdentity },
+      { id: 'second' },
+    ]);
+    expect(collector.generatedFilesSnapshot()?.[1]?.renderIdentity).toBeUndefined();
   });
 
   it('drops a file the shared wire parser rejects, exactly as the client does', () => {

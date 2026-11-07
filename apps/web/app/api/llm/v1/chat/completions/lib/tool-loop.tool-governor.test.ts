@@ -1,3 +1,4 @@
+import { createManagedToolInventoryMessage } from './request-processor';
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 type ScanModule0 = typeof import('undici');
 
@@ -52,6 +53,11 @@ import { e2bExecutionToolDefs, EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-too
 import { functionToolName } from './tool-loop-routing';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { resolveNativeSearchMaxUses } from './request-processor';
+import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from './managed-tool-inventory';
+import {
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
 
 const REPEATED_QUERY = 'best crm 2026';
 const NEAR_IDENTICAL_QUERY = 'Best CRM, 2026?';
@@ -269,11 +275,23 @@ describe('tool loop · unavailable tool withdrawal', () => {
 
     const processed = makeProcessed(e2bExecutionToolDefs());
     processed.llmRequest.tool_choice = 'required';
+    processed.chatSurface = 'web';
+    processed.managedToolInventoryVersion = CHAT_SYSTEM_PROMPT_PINNED_VERSION;
+    processed.llmRequest.messages.unshift(
+      createManagedToolInventoryMessage(processed.llmRequest.tools),
+    );
+    const source = structuredClone(processed.llmRequest.messages);
 
     await collect(runToolLoop(processed, { approvalMode: 'auto' }));
 
     expect(offeredToolNames(1)).toHaveLength(0);
     expect(requestAt(1)?.tool_choice).toBeUndefined();
+    const request = factoryMocks.streamRequest.mock.calls[1]?.[2] as ProcessedRequest['llmRequest'];
+    expect(
+      request.messages.find((message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME)
+        ?.content,
+    ).toBe(chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION)['no_tools']);
+    expect(processed.llmRequest.messages).toEqual(source);
   });
 });
 

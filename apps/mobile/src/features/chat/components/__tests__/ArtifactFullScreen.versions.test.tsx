@@ -32,6 +32,7 @@ jest.mock('../MessageContentRenderer', () => ({ renderMarkdownContent: () => nul
 jest.mock('../GeneratedFileCard', () => ({ GeneratedFileCard: () => null }));
 
 jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
+  ...jest.requireActual('@/src/features/auth/services/cloudAccountSession'),
   captureCloudAccountEpoch: () => null,
 }));
 

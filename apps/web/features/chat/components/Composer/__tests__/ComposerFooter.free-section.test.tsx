@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@shared/config/llm');
 type ScanModule1 = typeof import('zustand/middleware');
 
+type OriginalWebChatStoreModule = typeof import('@shared/stores/web-chat-store');
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined, replace: () => undefined }),
   usePathname: () => '/chat',
@@ -63,7 +65,8 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
   getBestAutoModeForTier: () => 'fixture-free-router',
 }));
 
-vi.mock('@shared/stores/web-chat-store', () => ({
+vi.mock('@shared/stores/web-chat-store', async (importOriginal) => ({
+  ...(await importOriginal<OriginalWebChatStoreModule>()),
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ activeConversationId: null, conversations: [], messages: [] }),
 }));

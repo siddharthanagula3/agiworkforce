@@ -2,9 +2,60 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-30
+Last updated: 2026-11-02
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, chat and surface polish], 2026-10-31
+
+### Fixed
+
+- Quiet-hours release times follow the actual timezone transition, including
+  daylight saving gaps and repeated hours, without delaying the boundary by
+  the current seconds or milliseconds.
+- VS Code inline proposals preserve text changed while generation or review is
+  pending, recheck trust and cancellation, and use versioned editor transactions.
+- Isolated VS Code test launches use memory-only secret storage, preventing
+  synthetic test credentials from prompting for a missing macOS login Keychain.
+- Imported plugin skills preserve declared requirements, version and source identity;
+  cached records without their declarations are refreshed before use.
+- Account skill sync retains the original entry file and its declared requirements
+  for downloadable bundled skills; authored skills keep their existing body path.
+- Malformed generated tables with extra cells retain their complete selectable
+  source, with working copy and expand controls, instead of losing trailing text.
+- Chat respects refusals of public web search inside lists of disallowed actions
+  while keeping a requested connector available.
+- Mobile keeps an explicitly selected skill when a Cloud message is queued
+  offline and sent after reconnecting or restarting the app.
+- Mobile skill previews show the companion text itself, and account skill sync
+  downloads original file bytes, including binary resources.
+- Managed chats keep the model's tool list aligned with the tools offered on
+  each step, including discovered connectors and approval continuations.
+- Web connector tools remain available after approval and interrupted turns;
+  completed or refused actions reach a terminal activity state. Authorization
+  now requires persistent secure token storage in development as well as production.
+- Chat capability summaries describe selective connectors only in eligible
+  account turns. Artifact and registered-agent connector guidance stays closed,
+  and the approvals page explains the current selective availability.
+- Skill editors retain drafts after failed saves and keep mobile error messages,
+  keyboard focus and footer controls inside the scrolling form.
+- Plugin installation and enablement refresh available skills immediately.
+  Readiness repair reloads metadata without reinstalling, and plugin-owned
+  connector toggles change only the rows requiring a transition.
+- Chat keeps readable typography on small screens, distinct headings, selectable
+  underline, and aligned reading and composer columns on large displays.
+- Writing and email controls use quieter framing, hide empty recipients, return
+  cleanly from editing, and resize long subjects. Form validation and keyboard
+  choices retain usable touch targets.
+- Service notices reserve space above content and scroll below navigation.
+  Buttons and fields no longer inherit transitions on layout properties.
+- Mobile uses shared chat typography, neutral Stop controls, larger touch
+  targets and wrapping message actions. Assistant content exposes its own
+  accessibility elements; draft Copy/Share preserves visible edits and email
+  recipients. Local preview editors explain how to keep changes.
+- Extension writing views preserve copy content, avoid repeated email headers,
+  and follow their host themes. Retained desktop row menus are keyboard
+  reachable, and workspace controls have room above the primary composer row.
 
 ## [Unreleased, database transfer and idle activity], 2026-10-30
 

@@ -3,11 +3,13 @@ import 'server-only';
 import type { z } from 'zod';
 
 import { createError } from '@/lib/errors';
+import { PayloadCeilingExceededError } from '@/lib/payload-ceiling';
 
 export async function readJsonBody<T = unknown>(request: Request): Promise<T> {
   try {
     return (await request.json()) as T;
-  } catch {
+  } catch (error) {
+    if (error instanceof PayloadCeilingExceededError) throw error;
     throw createError.validation('Invalid JSON body');
   }
 }

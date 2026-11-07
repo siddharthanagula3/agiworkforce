@@ -159,3 +159,23 @@ describe('ConnectorCapabilitiesPanel', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+it('refreshes account state once when live discovery fails', () => {
+  capabilities.result = {
+    catalog: null,
+    loading: false,
+    error: 'Discovery failed',
+    retry: vi.fn(),
+  };
+  const onUnavailable = vi.fn();
+  const view = render(
+    <ConnectorCapabilitiesPanel connectorRef="linear" connected onUnavailable={onUnavailable} />,
+  );
+  expect(onUnavailable).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Live capabilities could not be loaded.')).toBeVisible();
+  expect(screen.queryByText(/offers no tools, resources or prompts/)).toBeNull();
+  view.rerender(
+    <ConnectorCapabilitiesPanel connectorRef="linear" connected onUnavailable={onUnavailable} />,
+  );
+  expect(onUnavailable).toHaveBeenCalledTimes(1);
+});

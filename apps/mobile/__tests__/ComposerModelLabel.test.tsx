@@ -90,6 +90,7 @@ describe('composer model label', () => {
     expect(getByTestId('chat.composer.model').props.accessibilityLabel).toContain(
       `Model: ${getShortDisplayName(effortModel!.id, tier)}`,
     );
+    expect(getByTestId('chat.composer.model')).toHaveStyle({ minHeight: 44, minWidth: 44 });
   });
 
   it('suffixes the effort the next turn will carry', () => {

@@ -176,7 +176,7 @@ export async function assertFreeSpaceFor(requiredBytes: number): Promise<void> {
   } catch {
     return;
   }
-  if (!Number.isFinite(freeBytes) || freeBytes <= 0) return;
+  if (!Number.isFinite(freeBytes) || freeBytes < 0) return;
   const needed = requiredBytes + FREE_SPACE_HEADROOM_BYTES;
   if (freeBytes >= needed) return;
   throw new ModelDownloadError(
@@ -466,8 +466,61 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   return record;
 }
 
-export async function deleteDownloadedModel(modelId: string): Promise<void> {
-  await deleteAsync(modelDir(modelId), { idempotent: true });
+export function modelRemovalUnsupportedReason(model: InstalledModel): string | null {
+  const unsupported =
+    'This model does not have a supported file-removal method here yet. The model will remain installed.';
+  if (
+    !documentDirectory ||
+    model.runtime !== 'local' ||
+    model.format !== 'gguf' ||
+    model.id.length === 0 ||
+    model.id.length > MAX_MODEL_ID_CHARS ||
+    !/^[a-zA-Z0-9._-]+$/.test(model.id) ||
+    model.id === '.' ||
+    model.id === '..' ||
+    model.local_path !== modelFilePath(model.id, 'gguf')
+  ) {
+    return unsupported;
+  }
+
+  if (model.capabilities !== null) {
+    try {
+      const capabilities: unknown = JSON.parse(model.capabilities);
+      if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) {
+        return unsupported;
+      }
+      const managedBy = (capabilities as Record<string, unknown>).managedBy;
+      if (managedBy !== undefined && managedBy !== 'llama.rn') return unsupported;
+    } catch {
+      return unsupported;
+    }
+  }
+  return null;
+}
+
+export async function deleteDownloadedModel(expected: InstalledModel): Promise<void> {
+  const unsupported = modelRemovalUnsupportedReason(expected);
+  if (unsupported) throw new Error(unsupported);
+
+  const current = await getInstalledModel(expected.id);
+  const identityFields = [
+    'id',
+    'runtime',
+    'format',
+    'local_path',
+    'installed_at',
+    'sha256',
+    'size_bytes',
+    'capabilities',
+  ] as const;
+  if (
+    !current ||
+    modelRemovalUnsupportedReason(current) ||
+    identityFields.some((field) => current[field] !== expected[field])
+  ) {
+    throw new Error('The installed model changed. Refresh Storage before trying again.');
+  }
+  await deleteAsync(modelDir(current.id), { idempotent: true });
 }
 
 export async function getModelStorageBytes(): Promise<number> {

@@ -92,6 +92,7 @@ jest.mock('@/lib/mmkv', () => {
 
 import ChatScreen from '../app/(app)/chat/[id]';
 import { useChatStore } from '../stores/chatStore';
+import { useProjectStore } from '../src/features/projects/store';
 
 function seedThread(overrides: Record<string, unknown> = {}): void {
   useChatStore.setState({
@@ -114,6 +115,36 @@ function seedThread(overrides: Record<string, unknown> = {}): void {
 describe('Thread header', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useProjectStore.setState({ projects: [], activeProjectId: null });
+  });
+
+  it('keeps project navigation and source controls distinct beside a long title', () => {
+    const project = {
+      id: 'local-project',
+      name: 'A project with a long name',
+      description: '',
+      instructions: '',
+      createdAt: '2026-10-31T00:00:00.000Z',
+      updatedAt: '2026-10-31T00:00:00.000Z',
+    };
+    useProjectStore.setState({ projects: [project], activeProjectId: project.id });
+    seedThread({ projectId: project.id, title: 'A conversation title with more detail' });
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByRole('button', { name: 'Open project sources' })).toHaveStyle({
+      width: 44,
+      height: 44,
+    });
+    expect(
+      screen.getByRole('button', {
+        name: `Active project: ${project.name}. Tap to view details.`,
+      }),
+    ).toHaveStyle({ height: 44, minWidth: 44, flexShrink: 1 });
+    expect(
+      screen.getByRole('button', {
+        name: 'A conversation title with more detail. Open conversation menu',
+      }),
+    ).toHaveStyle({ minWidth: 44, minHeight: 44 });
   });
 
   it('shows the conversation title and opens the conversation menu from it', () => {
@@ -121,6 +152,13 @@ describe('Thread header', () => {
     const screen = render(<ChatScreen />);
 
     expect(screen.getByText('Quarterly plan')).toBeTruthy();
+    for (const name of ['Open menu', 'New chat', 'Conversation menu']) {
+      expect(screen.getByRole('button', { name })).toHaveStyle({ width: 44, height: 44 });
+    }
+    expect(screen.getByLabelText('Quarterly plan. Open conversation menu')).toHaveStyle({
+      minWidth: 44,
+      minHeight: 44,
+    });
     fireEvent.press(screen.getByLabelText('Quarterly plan. Open conversation menu'));
 
     expect(screen.getByTestId('conversation-action-pin')).toBeTruthy();

@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...(await original<typeof import('@/features/settings/hooks/use-preference-owner')>()),
+  usePreferenceOwner: () => null,
+}));
+
 /**
  * Account deletion used to exist twice: AccountSection's dialog-based flow
  * (the canonical one, which signs the user out after a successful deletion)
@@ -21,6 +26,10 @@ import { render, screen } from '@testing-library/react';
 import React from 'react';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
+
+vi.mock('../../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => null,
+}));
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -56,7 +65,8 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
   setTelemetryConsentCache: vi.fn(),
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));

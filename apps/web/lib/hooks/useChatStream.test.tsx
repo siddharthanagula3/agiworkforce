@@ -45,14 +45,16 @@ const authMocks = vi.hoisted(() => ({
   isSignedIn: true,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
     getToken: authMocks.getToken,
     userId: authMocks.userId,
     isSignedIn: authMocks.isSignedIn,
     isLoaded: true,
-  }),
-}));
+    sessionId: 'session-1',
+  }));
+});
 
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: async () => 'csrf-token',
@@ -1522,7 +1524,9 @@ describe('useChatStream', () => {
           );
         }
         if (url === `${MANAGED_RUN_PATH}?after=0&limit=100`) {
-          expect(init?.headers).toEqual({ Authorization: 'Bearer session-token' });
+          expect(Object.fromEntries(new Headers(init?.headers))).toEqual({
+            authorization: 'Bearer session-token',
+          });
           return new Response(
             JSON.stringify(
               managedRunSnapshot(
@@ -1708,9 +1712,9 @@ describe('useChatStream', () => {
       act(() => result.current.stopGeneration());
       await send;
       await vi.waitFor(() => expect(cancellationCalls).toHaveLength(1));
-      const headers = cancellationCalls[0]?.init?.headers as Record<string, string>;
-      expect(headers).toEqual({
-        Authorization: 'Bearer session-token',
+      const headers = new Headers(cancellationCalls[0]?.init?.headers);
+      expect(Object.fromEntries(headers)).toEqual({
+        authorization: 'Bearer session-token',
         'x-csrf-token': 'csrf-token',
       });
       expect(streamController).toBeDefined();
@@ -1751,8 +1755,8 @@ describe('useChatStream', () => {
           ([input, init]) => String(input) === MANAGED_RUN_PATH && init?.method === 'POST',
         );
       expect(cancellationCalls).toHaveLength(1);
-      expect(cancellationCalls[0]?.[1]?.headers).toEqual({
-        Authorization: 'Bearer session-token',
+      expect(Object.fromEntries(new Headers(cancellationCalls[0]?.[1]?.headers))).toEqual({
+        authorization: 'Bearer session-token',
         'x-csrf-token': 'csrf-token',
       });
       expect(useChatStore.getState().messages[0]?.turnDetachable).toBeUndefined();
@@ -1967,7 +1971,7 @@ describe('useChatStream', () => {
       const recovery = deferredResponse();
       vi.mocked(fetch).mockReturnValue(recovery.promise);
       const { result } = renderHook(() => useChatStream());
-      expect(fetch).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
       act(() => result.current.stopGeneration());
 
       await act(async () =>
@@ -2091,14 +2095,18 @@ describe('useChatStream', () => {
         ),
       );
       await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
-      expect(
+      const cancellationHeaders = new Headers(
         vi
           .mocked(fetch)
           .mock.calls.find(
             ([input, init]) =>
               String(input) === managedCloudAgentRunPath(NEXT_RUN_ID) && init?.method === 'POST',
           )?.[1]?.headers,
-      ).toEqual({ Authorization: 'Bearer next-session-token', 'x-csrf-token': 'csrf-token' });
+      );
+      expect(Object.fromEntries(cancellationHeaders)).toEqual({
+        authorization: 'Bearer next-session-token',
+        'x-csrf-token': 'csrf-token',
+      });
     });
 
     it('keeps the same recovered run cancellation claimed after an old owner settles', async () => {
@@ -2709,10 +2717,12 @@ describe('useChatStream', () => {
 
   describe('completions retry fetches a fresh token', () => {
     it('does not reuse the send-time token for the silent empty-turn retry', async () => {
-      authMocks.getToken
-        .mockResolvedValueOnce('token-at-send')
-        .mockResolvedValueOnce('token-at-send')
-        .mockResolvedValue('token-after-expiry');
+      authMocks.getToken.mockImplementation(async () => {
+        const firstCompletionDispatched = vi
+          .mocked(fetch)
+          .mock.calls.some(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+        return firstCompletionDispatched ? 'token-after-expiry' : 'token-at-send';
+      });
 
       mockSseStream([]);
       mockSseStream([{ choices: [{ delta: { content: 'answer' }, finish_reason: 'stop' }] }]);
@@ -2730,7 +2740,7 @@ describe('useChatStream', () => {
       expect(completionCalls).toHaveLength(2);
 
       const authorization = (call: (typeof completionCalls)[number]) =>
-        ((call[1]?.headers ?? {}) as Record<string, string>)['Authorization'];
+        new Headers(call[1]?.headers).get('Authorization');
 
       expect(authorization(completionCalls[0]!)).toBe('Bearer token-at-send');
       expect(authorization(completionCalls[1]!)).toBe('Bearer token-after-expiry');
@@ -4219,7 +4229,7 @@ describe('useChatStream', () => {
       .mocked(fetch)
       .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
     expect(assistant?.id).toBeTruthy();
-    expect((llmCall?.[1]?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+    expect(new Headers(llmCall?.[1]?.headers).get('Idempotency-Key')).toBe(
       `agi.chat.web.send.${assistant?.id}`,
     );
   });
@@ -4497,5 +4507,114 @@ describe('the transcript says what the turn is actually waiting for', () => {
     });
 
     expect(runningSummaries()).toEqual([]);
+  });
+});
+
+describe('recovered cancellation authority stays separate from retired replay authority', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('stops the verified new-account run without authorizing an old assistant continuation', async () => {
+    useChatStore.getState().reset();
+    useThinkingStore.getState().setEnabled(false);
+    useFreeTrialStore.getState().clearLimitReached();
+    authMocks.userId = 'user-1';
+    authMocks.isSignedIn = true;
+    authMocks.getToken.mockResolvedValue('session-token');
+    restoreRecoveredConversation();
+    const cancellations: RequestInit[] = [];
+    const completionRequests: RequestInit[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === RECOVERY_PATH) {
+        return new Response(
+          JSON.stringify({
+            runs:
+              authMocks.userId === 'user-2'
+                ? [{ ...recoveredRunSnapshot('running', NEXT_RUN_ID).run, userId: 'user-2' }]
+                : [],
+          }),
+        );
+      }
+      if (url === managedCloudAgentRunPath(NEXT_RUN_ID) && init?.method === 'POST') {
+        cancellations.push(init);
+        return new Response(
+          JSON.stringify({
+            run: { ...recoveredRunSnapshot('cancelled', NEXT_RUN_ID).run, userId: 'user-2' },
+          }),
+        );
+      }
+      if (url.includes('/messages')) {
+        const body = JSON.parse(String(init?.body)) as { id: string };
+        return new Response(JSON.stringify({ message: { id: body.id } }));
+      }
+      if (url.includes('/chat/completions') && init?.method === 'POST') {
+        completionRequests.push(init);
+        return new Response(
+          `data: ${JSON.stringify({
+            choices: [
+              { delta: { content: 'Account A unfinished answer' }, finish_reason: 'length' },
+            ],
+          })}\n\ndata: [DONE]\n\n`,
+        );
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender, unmount } = renderHook(() => useChatStream());
+    try {
+      await act(async () => {
+        await result.current.sendMessage('Account A private draft', {
+          conversationId: RECOVERED_CONVERSATION_ID,
+          model: NON_REASONING_CHAT_MODEL,
+        });
+      });
+      const oldAssistant = useChatStore
+        .getState()
+        .messages.find((message) => message.role === 'assistant');
+      expect(oldAssistant?.metadata?.finishReason).toBe('length');
+      expect(oldAssistant?.content).toBe('Account A unfinished answer');
+      expect(completionRequests).toHaveLength(1);
+
+      act(() => {
+        authMocks.userId = 'user-2';
+        authMocks.getToken.mockResolvedValue('next-session-token');
+        useChatStore.getState().addMessage(
+          {
+            id: '22222222-2222-4222-8222-222222222223',
+            role: 'user',
+            content: 'Account B pending server turn',
+            parentId: oldAssistant!.id,
+            createdAt: new Date().toISOString(),
+          },
+          RECOVERED_CONVERSATION_ID,
+        );
+        useChatStore
+          .getState()
+          .setActiveLeaf(RECOVERED_CONVERSATION_ID, '22222222-2222-4222-8222-222222222223');
+        rerender();
+      });
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(true));
+      act(() => result.current.stopGeneration(RECOVERED_CONVERSATION_ID));
+      await vi.waitFor(() => expect(cancellations).toHaveLength(1));
+      await vi.waitFor(() => expect(useChatStore.getState().isLoading).toBe(false));
+      expect(new Headers(cancellations[0]?.headers).get('Authorization')).toBe(
+        'Bearer next-session-token',
+      );
+      expect(cancellations[0]?.credentials).toBe('omit');
+
+      await act(async () => {
+        await result.current.continueGeneration(oldAssistant!.id);
+      });
+      expect(completionRequests).toHaveLength(1);
+      expect(
+        useChatStore.getState().messages.find((message) => message.id === oldAssistant!.id)
+          ?.content,
+      ).toBe('Account A unfinished answer');
+    } finally {
+      unmount();
+    }
   });
 });

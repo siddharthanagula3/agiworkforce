@@ -1,10 +1,11 @@
+jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => 'local-export-id') }));
 const mockWriteAsStringAsync = jest.fn().mockResolvedValue(undefined);
 const mockShareAsync = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
   documentDirectory: 'file:///documents/',
-  getInfoAsync: jest.fn().mockResolvedValue({ exists: true, isDirectory: true, size: 0 }),
+  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
   makeDirectoryAsync: jest.fn().mockResolvedValue(undefined),
   deleteAsync: jest.fn().mockResolvedValue(undefined),
   writeAsStringAsync: (...args: unknown[]) => mockWriteAsStringAsync(...args),
@@ -76,11 +77,21 @@ import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useArtifactStore } from '../src/features/artifacts/store';
+import {
+  activateCloudAccount,
+  invalidateCloudAccount,
+  __resetCloudAccountSessionForTests,
+} from '../src/features/auth/services/cloudAccountSession';
 import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
 describe('DSAR export local stores', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useArtifactStore.setState({ artifacts: [] });
     useChatMessageStore.setState({
       conversations: [
         {
@@ -144,6 +155,73 @@ describe('DSAR export local stores', () => {
     useSettingsStore.setState({ reduceSensitiveContent: true });
   });
 
+  it('keeps device-owned exports account-free even across account changes', () => {
+    const snapshot = buildLocalDataExportSnapshot();
+    expect(snapshot.assertAuthority).toBeUndefined();
+    activateCloudAccount('account-b');
+    expect(snapshot.conversations?.[0]?.id).toBe('local-conv-1');
+  });
+
+  it('binds captured Cloud settings to the original account without serializing authority', () => {
+    activateCloudAccount('account-a');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const snapshot = buildLocalDataExportSnapshot();
+    expect(snapshot.assertAuthority).toBeDefined();
+    expect(JSON.stringify(snapshot)).not.toContain('assertAuthority');
+    invalidateCloudAccount();
+    expect(() => snapshot.assertAuthority?.()).toThrow('Cloud account changed');
+  });
+
+  it('refuses mismatched Cloud artifacts without deleting device records', () => {
+    activateCloudAccount('account-a');
+    useArtifactStore.setState({
+      artifacts: [
+        {
+          id: 'foreign',
+          title: 'Foreign',
+          kind: 'code',
+          content: 'private',
+          ageLabel: '',
+          sourceLabel: '',
+          accentColor: '',
+          previewLines: [],
+          provenance: { scope: 'cloud', ownerId: 'account-b' },
+        },
+      ],
+    });
+    expect(() => buildLocalDataExportSnapshot()).toThrow('matched to the active account');
+    expect(useArtifactStore.getState().artifacts).toHaveLength(1);
+  });
+
+  it('does not write a captured Cloud snapshot after logout', async () => {
+    activateCloudAccount('account-a');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const snapshot = buildLocalDataExportSnapshot();
+    invalidateCloudAccount();
+    await expect(exportAllUserData(undefined, snapshot)).rejects.toThrow('Cloud account changed');
+    expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+    expect(mockShareAsync).not.toHaveBeenCalled();
+  });
+
+  it('stops a captured Cloud snapshot while SQLite collection is pending', async () => {
+    const { listConversations } = jest.requireMock('../storage/conversations');
+    let release!: (rows: unknown[]) => void;
+    listConversations.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    activateCloudAccount('account-a');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const exporting = exportAllUserData(undefined, buildLocalDataExportSnapshot());
+    const rejected = expect(exporting).rejects.toThrow('Cloud account changed');
+    invalidateCloudAccount();
+    release([]);
+    await rejected;
+    expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+    expect(mockShareAsync).not.toHaveBeenCalled();
+  });
+
   it('exports MMKV-backed local conversations, projects, and settings', async () => {
     await exportAllUserData(undefined, buildLocalDataExportSnapshot());
 
@@ -179,7 +257,7 @@ describe('DSAR export local stores', () => {
       }),
     );
     expect(mockShareAsync).toHaveBeenCalledWith(
-      'file:///cache/dsar_exports/agi_data_export.json',
+      'file:///cache/dsar_exports/local-export-id/agi_data_export.json',
       expect.objectContaining({ mimeType: 'application/json' }),
     );
   });

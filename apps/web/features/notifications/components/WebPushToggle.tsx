@@ -7,19 +7,19 @@ import {
   enableWebPush,
   isWebPushSupported,
   readNotificationPermission,
-  registerNotificationWorker,
+  readNotificationWorker,
 } from '../lib/web-push-client';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 
 type ToggleState = 'unsupported' | 'desktop' | 'blocked' | 'off' | 'on';
 
 const STATE_DESCRIPTION: Record<ToggleState, string> = {
-  unsupported: 'This browser cannot receive notifications.',
+  unsupported: 'Browser push is unavailable here.',
   desktop:
-    'The desktop app notifies you through macOS, so there is nothing to turn on here. Choose what it tells you about in General desktop settings, under Agent notifications.',
+    'The desktop app uses system notifications. Manage Agent notifications in General desktop settings.',
   blocked: 'Notifications are blocked for this site in your browser settings.',
   off: 'Get told when a run finishes, fails, or needs your approval.',
-  on: 'This browser will be notified when a run finishes.',
+  on: 'Registered in this browser.',
 };
 
 export interface WebPushToggleState {
@@ -32,6 +32,7 @@ export interface WebPushToggleState {
 
 export function useWebPushToggle(): WebPushToggleState {
   const [state, setState] = useState<ToggleState>('unsupported');
+  const [subscribed, setSubscribed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -45,9 +46,10 @@ export function useWebPushToggle(): WebPushToggleState {
     let refreshId = 0;
     const refresh = async () => {
       const currentRefreshId = ++refreshId;
-      const registration = await registerNotificationWorker();
-      const subscription = await registration?.pushManager.getSubscription();
+      const registration = await readNotificationWorker();
+      const subscription = await registration?.pushManager.getSubscription().catch(() => null);
       if (!active || currentRefreshId !== refreshId) return;
+      setSubscribed(Boolean(subscription));
       if (readNotificationPermission() === 'denied') {
         setState('blocked');
         return;
@@ -76,10 +78,12 @@ export function useWebPushToggle(): WebPushToggleState {
     try {
       if (!next) {
         await disableWebPush();
+        setSubscribed(false);
         setState('off');
         return;
       }
       const result = await enableWebPush();
+      setSubscribed(result === 'enabled');
       setState(result === 'enabled' ? 'on' : result === 'denied' ? 'blocked' : 'off');
     } finally {
       setBusy(false);
@@ -89,7 +93,7 @@ export function useWebPushToggle(): WebPushToggleState {
   const interactive = state === 'off' || state === 'on';
 
   return {
-    checked: state === 'on',
+    checked: subscribed,
     disabled: busy || !interactive,
     unavailable: !interactive,
     description: STATE_DESCRIPTION[state],

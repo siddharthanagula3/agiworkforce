@@ -11,11 +11,18 @@ import {
 
 type TypesModule = typeof import('@agiworkforce/types');
 
-const connectorRelease = vi.hoisted(() => ({ released: true }));
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => connectorRelease.released,
-}));
+const connectorRelease = vi.hoisted(() => ({ released: true, selective: false }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) =>
+      connectorRelease.released || (connectorRelease.selective && original.connectorReleased(id)),
+    hasReleasedConnectors: () =>
+      connectorRelease.released || (connectorRelease.selective && original.hasReleasedConnectors()),
+  };
+});
 
 const openSettings = vi.fn();
 
@@ -220,5 +227,34 @@ describe('ComposerPluginsMenu while connectors are coming soon', () => {
     fireEvent.click(item);
     expect(openSettings).not.toHaveBeenCalled();
     expect(props.onSetConnectorEnabled).not.toHaveBeenCalled();
+  });
+});
+
+describe('ComposerPluginsMenu with selective release', () => {
+  afterEach(() => {
+    connectorRelease.released = true;
+    connectorRelease.selective = false;
+  });
+  it('offers only a released runtime ID and retains per-chat toggle behavior', () => {
+    connectorRelease.released = false;
+    connectorRelease.selective = true;
+    const props = renderMenu({
+      connectors: [
+        ...CONNECTORS,
+        {
+          id: 'notion-alias',
+          toolId: 'custom-notion',
+          label: 'Custom Notion',
+          name: 'Custom Notion',
+          iconBg: '',
+          iconText: 'N',
+        },
+      ],
+    });
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Gmail' })).toBeNull();
+    expect(screen.queryByRole('menuitemcheckbox', { name: 'Custom Notion' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Notion' }));
+    expect(props.onSetConnectorEnabled).toHaveBeenCalledWith('notion', false);
+    expect(screen.getByRole('menuitem', { name: COMPOSER_CONNECTORS_CONNECT_LABEL })).toBeTruthy();
   });
 });

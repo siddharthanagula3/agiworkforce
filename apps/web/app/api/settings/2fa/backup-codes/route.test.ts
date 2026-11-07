@@ -15,14 +15,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
-}));
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({
+vi.mock('@/lib/server/session-account', () => ({
+  getSessionAccountDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'user-1',
     organizationId: null,
+    sessionIdentity: { subject: 'native-user-1', sessionId: 'session-1' },
   })),
 }));
 vi.mock('@/lib/logger', () => ({
@@ -49,7 +47,8 @@ vi.mock('@/lib/security-audit', () => ({
 
 process.env['CSRF_SECRET'] = 'backup-codes-step-up-secret-long-enough-here';
 
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { createError } from '@/lib/errors';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step-up/grant-token';
 import { POST } from './route';
@@ -77,6 +76,8 @@ function grant() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.query.mockReset();
+  mocks.readSecondFactorStatus.mockReset();
   vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
   resetStepUpSigningKeyCache();
   mocks.readSecondFactorStatus.mockResolvedValue(ENROLLED);
@@ -152,6 +153,7 @@ describe('POST /api/settings/2fa/backup-codes', () => {
     expect(mocks.identityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
+        identitySubject: 'native-user-1',
         event: 'backup_codes_regenerated',
         detail: expect.objectContaining({ count: 2 }),
       }),
@@ -161,7 +163,7 @@ describe('POST /api/settings/2fa/backup-codes', () => {
   it('replaces the whole set the provider holds, so no code from the old one still works', async () => {
     await POST(request(grant()));
 
-    expect(mocks.registerSecondFactor).toHaveBeenCalledWith('user-1', {
+    expect(mocks.registerSecondFactor).toHaveBeenCalledWith('native-user-1', {
       backupCodes: ['cccc3333', 'dddd4444'],
     });
     expect(mocks.query).not.toHaveBeenCalled();
@@ -202,9 +204,25 @@ describe('POST /api/settings/2fa/backup-codes', () => {
   it('stays reachable for a member whose workspace requires two-factor', async () => {
     await POST(request(grant()));
 
-    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.readSecondFactorStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'native-user-1',
+    );
+    expect(getSessionAccountDb).toHaveBeenCalledWith(expect.anything(), {
       mfaEnrollment: true,
       resolveOrganization: false,
     });
   });
+});
+
+it('stops regeneration when the session-account boundary rejects the credential', async () => {
+  vi.mocked(getSessionAccountDb).mockRejectedValueOnce(createError.unauthorized());
+
+  const response = await POST(request(grant()));
+
+  expect(response.status).toBe(401);
+  expect(mocks.query).not.toHaveBeenCalled();
+  expect(mocks.readSecondFactorStatus).not.toHaveBeenCalled();
+  expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
 });

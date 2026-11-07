@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { IdentityProvider, IdentitySession } from '@agiworkforce/identity';
 
+import { assertActiveSessionPage } from '@/lib/server/active-session-page';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { revokeEveryMobileIntentToken } from '@/lib/server/mobile-intent-tokens';
@@ -19,7 +20,7 @@ const REVOKE_MAX_ATTEMPTS = 3;
 const REVOKE_BACKOFF_BASE_MS = 500;
 const REVOKE_BACKOFF_CEILING_MS = 30_000;
 const RATE_LIMITED_STATUS = 429;
-const ALREADY_GONE_STATUSES: ReadonlySet<number> = new Set([400, 404]);
+const ALREADY_GONE_STATUSES: ReadonlySet<number> = new Set([404]);
 
 export interface ActiveIdentitySessions {
   sessions: IdentitySession[];
@@ -55,6 +56,10 @@ export async function listActiveIdentitySessions(
     limit: PAGE_SIZE,
     offset: 0,
   });
+  assertActiveSessionPage(response.sessions, userId);
+  if (!Number.isSafeInteger(response.totalCount) || response.totalCount < 0) {
+    throw new Error('Identity provider returned an invalid active session count');
+  }
   const sessions = [...response.sessions];
   const totalCount = Math.max(response.totalCount, sessions.length);
 
@@ -161,10 +166,11 @@ export async function revokeEveryOtherSession(
   identity: IdentitySessionOperations,
   userId: string,
   currentSessionId: string | null,
+  identitySubject: string = userId,
 ): Promise<RevokeSweep> {
   let sweep: RevokeSweep;
   try {
-    sweep = await sweepOtherSessions(identity, userId, currentSessionId);
+    sweep = await sweepOtherSessions(identity, identitySubject, currentSessionId);
   } catch (error) {
     await revokeIntentTokensAfterSweep(userId);
     throw error;
@@ -174,7 +180,7 @@ export async function revokeEveryOtherSession(
 
 async function sweepOtherSessions(
   identity: IdentitySessionOperations,
-  userId: string,
+  identitySubject: string,
   currentSessionId: string | null,
 ): Promise<RevokeSweep> {
   const ended: string[] = [];
@@ -189,24 +195,20 @@ async function sweepOtherSessions(
   // The attempted set stops a session the provider refuses to revoke from being
   // retried for ever.
   for (let pass = 0; pass < MAX_REVOKE_PASSES; pass++) {
-    const page = await identity.listUserSessions(userId, {
-      status: SESSION_STATUS_ACTIVE,
-      limit: PAGE_SIZE,
-      offset: 0,
-    });
-
+    const page = await listActiveIdentitySessions(identity, identitySubject);
     const foundCurrent = page.sessions.find((session) => session.id === currentSessionId);
     currentSession = foundCurrent ?? currentSession;
     if (pass === 0) {
-      const total = Math.max(page.totalCount, page.sessions.length);
-      targetCount = Math.max(0, total - (foundCurrent ? 1 : 0));
+      targetCount = Math.max(0, page.totalCount - (foundCurrent ? 1 : 0));
     }
 
     const pending = page.sessions.filter(
       (session) => session.id !== currentSessionId && !attempted.has(session.id),
     );
     if (pending.length === 0) {
-      return { ended, alreadyGone, failed, currentSession, incomplete: false, targetCount };
+      const incomplete =
+        page.truncated || page.sessions.some((session) => session.id !== currentSessionId);
+      return { ended, alreadyGone, failed, currentSession, incomplete, targetCount };
     }
 
     for (const session of pending) attempted.add(session.id);

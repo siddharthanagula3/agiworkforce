@@ -45,8 +45,13 @@ jest.mock('@/src/features/chat/draftStore', () => ({
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: 'cloud' }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: 'cloud' }),
+    {
+      getState: () => ({ appMode: 'cloud' }),
+      subscribe: jest.fn(() => jest.fn()),
+    },
+  ),
 }));
 
 jest.mock('@/src/features/chat/components/AttachmentPreview', () => {

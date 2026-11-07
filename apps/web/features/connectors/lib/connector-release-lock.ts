@@ -2,6 +2,8 @@ import {
   CONNECTORS_COMING_SOON_DETAIL,
   CONNECTORS_COMING_SOON_LABEL,
   CONNECTORS_COMING_SOON_MESSAGE,
+  connectorReleased,
+  hasReleasedConnectors,
 } from '@agiworkforce/types';
 import type {
   DirectoryAdapter,
@@ -17,6 +19,7 @@ export const PLUGIN_CONNECTORS_COMING_SOON_NOTE =
   'Connectors are coming soon, so these servers are not added when you install it.';
 
 export function lockConnectorEntry(entry: DirectoryEntry): DirectoryEntry {
+  if (connectorReleased(entry.id)) return entry;
   const locked: DirectoryEntry = { ...entry, connectableMode: 'coming-soon' };
   delete locked.statusLabel;
   delete locked.installNotice;
@@ -27,17 +30,23 @@ export function lockConnectorSection(section: DirectorySection): DirectorySectio
   return {
     ...section,
     entries: section.entries.map(lockConnectorEntry),
-    locked: { label: CONNECTORS_COMING_SOON_LABEL, message: CONNECTORS_COMING_SOON_DETAIL },
+    ...(!hasReleasedConnectors()
+      ? { locked: { label: CONNECTORS_COMING_SOON_LABEL, message: CONNECTORS_COMING_SOON_DETAIL } }
+      : {}),
   };
 }
 
 function lockDetail(section: DirectorySectionKey, detail: DirectoryDetail): DirectoryDetail {
   if (detail.kind === 'connector') {
+    const related = detail.related?.map(lockConnectorEntry);
+    if (connectorReleased(detail.id)) {
+      return { ...detail, ...(related ? { related } : {}) };
+    }
     return {
       ...detail,
       connectableMode: 'coming-soon',
       setupNotice: CONNECTORS_COMING_SOON_DETAIL,
-      ...(detail.related ? { related: detail.related.map(lockConnectorEntry) } : {}),
+      ...(related ? { related } : {}),
     };
   }
   if (section !== 'plugins' || detail.kind !== 'plugin') return detail;
@@ -89,10 +98,16 @@ export function lockConnectorDirectory(adapter: DirectoryAdapter): DirectoryAdap
     ...(connectors ? { connectors: lockConnectorSection(connectors) } : {}),
     ...(loadDetail ? { loadDetail: lockedDetailLoader(loadDetail) } : {}),
   };
-  const install = refuseConnectors(adapter.install, async () => CONNECTORS_COMING_SOON_MESSAGE);
+  const install = adapter.install;
+  if (install) {
+    locked.install = (section, id) =>
+      section === CONNECTORS_SECTION && !connectorReleased(id)
+        ? Promise.resolve(CONNECTORS_COMING_SOON_MESSAGE)
+        : install(section, id);
+  }
   const requestCredentials = refuseConnectors(adapter.requestCredentials, () => undefined);
   const createEntry = refuseConnectors(adapter.createEntry, () => undefined);
-  if (install) locked.install = install;
+
   if (requestCredentials) locked.requestCredentials = requestCredentials;
   if (createEntry) locked.createEntry = createEntry;
   return locked;

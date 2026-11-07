@@ -8,7 +8,7 @@ import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,
@@ -21,7 +21,7 @@ import {
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { classifyAssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
-import { AssistantSurface } from './AssistantSurface';
+import { AssistantSurface, canRenderAssistantSurface } from './AssistantSurface';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
@@ -491,17 +491,21 @@ function renderTextSegment(
       const headerText = headerMatch[2]!;
       const sectionId = context.sectionId?.(headerText.replace(/\s+#+\s*$/, ''), level) ?? null;
       const onHeadingLayout = context.onHeadingLayout;
-      const fontSizes: Record<number, number> = { 1: 22, 2: 19, 3: 17, 4: 15 };
+      const headingTypography =
+        level === 1
+          ? chatTypography.heading1
+          : level === 2
+            ? chatTypography.heading2
+            : chatTypography.heading3;
       nodes.push(
         <Text
           key={`${keyBase}-h${level}-${idx}`}
+          accessibilityRole="header"
           style={{
-            fontSize: fontSizes[level] ?? 15,
-            fontWeight: '700',
+            ...headingTypography,
             color: renderColors.textPrimary,
             marginTop: 8,
             marginBottom: 4,
-            lineHeight: (fontSizes[level] ?? 15) * 1.35,
           }}
           selectable
           {...(sectionId && onHeadingLayout
@@ -547,10 +551,9 @@ function renderTextSegment(
         >
           <Text
             style={{
-              fontSize: typeScale.subhead,
+              ...chatTypography.body,
               fontStyle: 'italic',
               color: renderColors.textSecondary,
-              lineHeight: 21,
             }}
             selectable
           >
@@ -578,9 +581,8 @@ function renderTextSegment(
             >
               <Text
                 style={{
-                  fontSize: typeScale.body,
+                  ...chatTypography.body,
                   color: renderColors.teal,
-                  lineHeight: 22,
                   ...(item.ordered
                     ? { minWidth: 18, textAlign: 'right' as const }
                     : { width: 12, textAlign: 'center' as const }),
@@ -590,9 +592,8 @@ function renderTextSegment(
               </Text>
               <Text
                 style={{
-                  fontSize: typeScale.body,
+                  ...chatTypography.body,
                   color: renderColors.textPrimary,
-                  lineHeight: 22,
                   flex: 1,
                 }}
                 selectable
@@ -698,7 +699,7 @@ function renderTextSegment(
       nodes.push(
         <Text
           key={`${keyBase}-p-${idx}`}
-          style={{ color: renderColors.textPrimary, fontSize: typeScale.body, lineHeight: 23 }}
+          style={{ ...chatTypography.body, color: renderColors.textPrimary }}
           selectable
         >
           {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
@@ -854,7 +855,7 @@ export function renderMarkdownContent(
       const codeContent = match[4].trim();
       const fenceLanguage = match[3]?.trim().split(/\s+/)[0] ?? '';
       const classified = classifyAssistantFence(fenceLanguage, codeContent);
-      if (classified.kind !== 'code') {
+      if (canRenderAssistantSurface(classified)) {
         elements.push(
           <AssistantSurface
             key={`surface-${keyCounter++}`}

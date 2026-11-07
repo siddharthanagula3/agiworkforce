@@ -211,7 +211,7 @@ describe('mobile provider-funded Free catalogue', () => {
       ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol,
     )?.[0];
 
-    it('is never a Free turn model, even when the server lists a ready image model', async () => {
+    it('recognizes image turn protocols without listing images as chat choices', async () => {
       if (!imageKey) throw new Error('Expected an image offering in the generated catalog.');
       activateCloudAccount('account-a');
       getMock.mockResolvedValue({
@@ -233,7 +233,7 @@ describe('mobile provider-funded Free catalogue', () => {
       });
 
       await expect(ensureReadyFreeQuotaChatOffering(imageKey)).resolves.toBeNull();
-      expect(isFreeQuotaTurnModelId(imageKey)).toBe(false);
+      expect(isFreeQuotaTurnModelId(imageKey)).toBe(true);
     });
   });
 });

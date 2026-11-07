@@ -12,6 +12,7 @@ import { scheduleArtifactIndexing } from './index-artifacts';
 import { scheduleConversationTitleGeneration } from './generate-title';
 import { serverProvisionalTitle } from '@/lib/chat-title';
 import { resolveSavedMessageSourceUrls } from './resolve-source-urls';
+import { refuseEditedAssistantOverwrite } from '@/lib/server/assistant-content-edits';
 import {
   assertParentInConversation,
   conversationIsUnbranched,
@@ -114,7 +115,14 @@ export async function persistConversationMessage(input: {
           INSERT_MESSAGE_SQL,
           insertParams(resolveParentId(requestedMessage.parentId, lockedLeafMessageId)),
         );
-        if (!inserted) throw createError.validation('Message id belongs to another conversation');
+        if (!inserted) {
+          await refuseEditedAssistantOverwrite({
+            db: tx,
+            ...scope,
+            messageId: requestedMessage.id,
+          });
+          throw createError.validation('Message id belongs to another conversation');
+        }
 
         await setActiveLeaf(tx, scope, inserted.id);
         return inserted;
@@ -126,7 +134,10 @@ export async function persistConversationMessage(input: {
     throw createError.internal('Failed to save message');
   }
 
-  if (!persisted) throw createError.internal('Failed to save message');
+  if (!persisted) {
+    await refuseEditedAssistantOverwrite({ db, ...scope, messageId: requestedMessage.id });
+    throw createError.internal('Failed to save message');
+  }
 
   if (requestedMessage.role === 'assistant') {
     scheduleArtifactIndexing({
@@ -134,7 +145,7 @@ export async function persistConversationMessage(input: {
       userId: scope.userId,
       conversationId: scope.conversationId,
       messageId: persisted.id,
-      content: requestedMessage.content.trim(),
+      content: persisted.content,
       ...(storedMetadata['artifactDerivation'] === EXPLICIT_ARTIFACT_DERIVATION_POLICY
         ? { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY }
         : {}),

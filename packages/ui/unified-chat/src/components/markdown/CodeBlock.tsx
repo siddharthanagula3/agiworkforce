@@ -22,6 +22,7 @@ import { HighlightedCode } from './HighlightedCode';
 import { MermaidDiagram } from './MermaidDiagram';
 import { reactNodeText } from './reactNodeText';
 import { useIsStreamTail } from './streamTailContext';
+import { HtmlCodePreview } from './HtmlCodePreview';
 import './codeBlock.css';
 
 type CopyState = 'idle' | 'copied' | 'failed';
@@ -205,13 +206,19 @@ function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCode
         </div>
       </div>
       {language === 'html' ? (
-        <iframe
-          title={t('markdown.htmlPreview', 'HTML preview')}
-          sandbox="allow-scripts"
-          srcDoc={code}
-          data-html-preview=""
-          className="h-48 w-full border-b border-[var(--chat-code-border)] bg-[var(--chat-code-bg)]"
-        />
+        isStreamTail ? (
+          <p
+            role="status"
+            className="border-b border-[var(--chat-code-border)] px-4 py-3 text-sm text-[var(--chat-text-secondary)]"
+          >
+            {t(
+              'markdown.preparingHtmlPreview',
+              'The HTML preview will appear when this block is complete.',
+            )}
+          </p>
+        ) : (
+          <HtmlCodePreview code={code} />
+        )
       ) : null}
       <div className="code-block-body code-block-body-scroll">
         <pre tabIndex={0} aria-label={blockLabel}>
@@ -281,7 +288,7 @@ export const CodeBlock = ({
 }) => {
   const isStreamTail = useIsStreamTail();
   const match = LANGUAGE_CLASS_PATTERN.exec(className || '');
-  const language = match?.[1] ?? '';
+  const language = match?.[1]?.toLowerCase() ?? '';
   const code = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
 
   const chart =

@@ -1,5 +1,9 @@
 import type { Message } from '@shared/stores/web-chat-store';
 
+type ApprovalMessage = Pick<Message, 'role'> & {
+  metadata?: Pick<NonNullable<Message['metadata']>, 'cloudApproval' | 'tools'>;
+};
+
 type MessageTool = NonNullable<NonNullable<Message['metadata']>['tools']>[number];
 
 export function isAwaitingToolApproval(tool: MessageTool): boolean {
@@ -11,15 +15,19 @@ export function isAwaitingToolApproval(tool: MessageTool): boolean {
   );
 }
 
-function pendingApprovalsIn(message: Message): number {
+function pendingApprovalsIn(message: ApprovalMessage): number {
   if (message.role !== 'assistant') return 0;
   const projection = message.metadata?.cloudApproval;
   if (projection) return projection.calls.filter((call) => !call.approvalDecision).length;
   return (message.metadata?.tools ?? []).filter(isAwaitingToolApproval).length;
 }
 
+export function hasPendingMessageApproval(message: ApprovalMessage): boolean {
+  return pendingApprovalsIn(message) > 0;
+}
+
 export function hasPendingApproval(messages: readonly Message[]): boolean {
-  return messages.some((message) => pendingApprovalsIn(message) > 0);
+  return messages.some(hasPendingMessageApproval);
 }
 
 export function countPendingApprovals(

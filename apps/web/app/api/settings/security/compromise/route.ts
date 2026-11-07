@@ -62,11 +62,6 @@ async function readResponseId(request: NextRequest): Promise<string> {
   return responseId;
 }
 
-/**
- * The way out of a lockdown. Nothing else in the product can clear
- * password_reset_required, so a false positive would otherwise hold the account
- * for ever.
- */
 async function handleResolve(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-account-compromise-resolve');
   if (rateLimitResponse) return rateLimitResponse;

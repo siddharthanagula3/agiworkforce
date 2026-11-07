@@ -202,6 +202,93 @@ describe('artifact account provenance', () => {
 });
 
 describe('offline queue account provenance', () => {
+  it('persists the selected Cloud skill and restores it before replay', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const intent = {
+      conversationId: 'skill-conversation',
+      content: 'Use the selected skill.',
+      model: AUTO_MODEL_ID,
+      provenance: CLOUD_A_PROVENANCE,
+      skillName: 'queued-skill',
+    };
+    offlineQueueModule.offlineQueue.enqueue(intent);
+    const saved = mockMmkv.get('offline_queue_v1');
+    expect(JSON.parse(saved ?? '[]')[0]).toMatchObject({ skillName: intent.skillName });
+
+    offlineQueueModule.offlineQueue.clear();
+    mockMmkv.set('offline_queue_v1', saved ?? '[]');
+    offlineQueueModule.offlineQueue.restoreFromStorage();
+    const send = jest.fn().mockResolvedValue(undefined);
+    await offlineQueueModule.offlineQueue.processQueue(send);
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining(intent));
+    expect(offlineQueueModule.offlineQueue.getQueue()).toEqual([]);
+  });
+
+  it('keeps distinct selected skills as distinct queued intents', () => {
+    const intent = {
+      conversationId: 'skill-conversation',
+      content: 'Compare this answer.',
+      model: AUTO_MODEL_ID,
+      provenance: CLOUD_A_PROVENANCE,
+    };
+    const first = { ...intent, skillName: 'first-skill' };
+    const second = { ...intent, skillName: 'second-skill' };
+    offlineQueueModule.offlineQueue.enqueue(first);
+    offlineQueueModule.offlineQueue.enqueue(second);
+
+    expect(offlineQueueModule.offlineQueue.getQueue()).toHaveLength(2);
+  });
+
+  it('keeps distinct model choices as distinct queued intents', () => {
+    const intent = {
+      conversationId: 'model-conversation',
+      content: 'Compare this answer.',
+      model: AUTO_MODEL_ID,
+      provenance: CLOUD_A_PROVENANCE,
+    };
+    offlineQueueModule.offlineQueue.enqueue(intent);
+    offlineQueueModule.offlineQueue.enqueue({ ...intent, model: 'fixture-other-model' });
+
+    expect(offlineQueueModule.offlineQueue.getQueue()).toHaveLength(2);
+  });
+
+  it.each([null, '', '   ', 42, {}, []])(
+    'refuses invalid persisted skill metadata instead of replaying without it: %j',
+    (skillName) => {
+      mockMmkv.set(
+        'offline_queue_v1',
+        JSON.stringify([
+          {
+            id: 'invalid-skill',
+            conversationId: 'skill-conversation',
+            content: 'Use a selected skill.',
+            model: AUTO_MODEL_ID,
+            queuedAt: '2026-11-01T00:00:00.000Z',
+            retryCount: 0,
+            provenance: CLOUD_A_PROVENANCE,
+            skillName,
+          },
+        ]),
+      );
+      offlineQueueModule.offlineQueue.restoreFromStorage();
+
+      expect(offlineQueueModule.offlineQueue.getQueue()).toEqual([]);
+    },
+  );
+
+  it('does not carry an account skill into a Local queued turn', () => {
+    const intent = {
+      conversationId: 'local-conversation',
+      content: 'Local prompt',
+      model: 'fixture-local-model',
+      provenance: LOCAL_PROVENANCE,
+      skillName: 'account-skill',
+    };
+    expect(() => offlineQueueModule.offlineQueue.enqueue(intent)).toThrow();
+    expect(offlineQueueModule.offlineQueue.getQueue()).toEqual([]);
+  });
+
   it('registers persisted queue restoration for encrypted-MMKV readiness', () => {
     expect(mockWhenMmkvReady).toHaveBeenCalled();
   });
@@ -249,6 +336,20 @@ describe('offline queue account provenance', () => {
         provenance: CLOUD_A_PROVENANCE,
       }),
     ).toThrow('inactive account');
+  });
+
+  it('validates the active account before returning an already-queued duplicate', () => {
+    const intent = {
+      conversationId: 'cloud-conversation-a',
+      content: 'Account A prompt',
+      model: AUTO_MODEL_ID,
+      provenance: CLOUD_A_PROVENANCE,
+    };
+    offlineQueueModule.offlineQueue.enqueue(intent);
+    mockActiveCloudOwnerId = 'user-b';
+
+    expect(() => offlineQueueModule.offlineQueue.enqueue(intent)).toThrow('inactive account');
+    expect(offlineQueueModule.offlineQueue.getQueue()).toHaveLength(1);
   });
 
   it('never replays an account-A Cloud prompt while account B is active', async () => {

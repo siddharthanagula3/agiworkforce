@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Boxes, FileText, MessageSquareText, Wrench } from 'lucide-react';
 
 import type { ConnectorCapabilityCatalog } from '@agiworkforce/cloud-contracts';
@@ -142,11 +142,16 @@ function CapabilityGroup({
 export function ConnectorCapabilitiesPanel({
   connectorRef,
   connected,
+  onUnavailable,
 }: {
   connectorRef: string;
   connected: boolean;
+  onUnavailable?: () => void | Promise<void>;
 }) {
   const { catalog, loading, error, retry } = useConnectorCapabilities(connectorRef, connected);
+  useEffect(() => {
+    if (error) void onUnavailable?.();
+  }, [error, onUnavailable]);
   const [pendingPromptName, setPendingPromptName] = useState<string | null>(null);
   const [selectedToolName, setSelectedToolName] = useState<string | null>(null);
   const [promptArguments, setPromptArguments] = useState<Record<string, string>>({});

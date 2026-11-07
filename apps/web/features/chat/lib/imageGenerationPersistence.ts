@@ -1,3 +1,4 @@
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
   saveMessageToDb,
   notifyPersistenceFailure,
@@ -6,12 +7,15 @@ import {
 import { CHAT_MESSAGE_PERSISTENCE_TIMEOUT_MS } from '@shared/config/network';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 
-type AuthTokenProvider = () => Promise<string>;
+type AuthTokenProvider = (() => Promise<string>) & { authority?: RequestAuthority };
+
+export function mediaPersistenceToken(authority: RequestAuthority): AuthTokenProvider {
+  return Object.assign(() => authority.getToken(), { authority });
+}
 type UpdateMessageFn = (id: string, updates: Partial<Message>) => void;
 
 export type ImageMessagePersistenceResult =
-  | { ok: true; messageId: string }
-  | { ok: false; error: unknown };
+  { ok: true; messageId: string } | { ok: false; error: unknown };
 
 async function withImageMessagePersistenceDeadline<T>(
   save: (signal: AbortSignal) => Promise<T>,
@@ -80,12 +84,13 @@ export async function persistImageGenerationUserMessage(params: {
         signal,
       }),
     );
+    getAuthToken.authority?.assertCurrent();
     if (saved?.id && saved.id !== messageId) {
       updateMessage(messageId, { id: saved.id });
     }
     return { ok: true, messageId: saved.id };
   } catch (err) {
-    notifyPersistenceFailure('user', err);
+    if (getAuthToken.authority?.isCurrent() ?? true) notifyPersistenceFailure('user', err);
     return { ok: false, error: err };
   }
 }
@@ -116,12 +121,13 @@ export async function persistImageGenerationAssistantMessage(params: {
         { signal },
       ),
     );
+    getAuthToken.authority?.assertCurrent();
     if (saved?.id && saved.id !== messageId) {
       updateMessage(messageId, { id: saved.id });
     }
     return { ok: true, messageId: saved.id };
   } catch (err) {
-    notifyPersistenceFailure('assistant', err);
+    if (getAuthToken.authority?.isCurrent() ?? true) notifyPersistenceFailure('assistant', err);
     return { ok: false, error: err };
   }
 }

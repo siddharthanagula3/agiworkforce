@@ -1,4 +1,8 @@
 import 'server-only';
+import {
+  CONTEXT_POLICY_RESTART_CODE,
+  CONTEXT_POLICY_RESTART_MESSAGE,
+} from '@/lib/services/context-policy-snapshot';
 
 import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { upstreamFailureCopy } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
@@ -25,11 +29,14 @@ export async function failCloudAgentWorkflow(
 
   const input = parseCloudAgentWorkflowInput(rawInput);
   captureWorkerFailure(error, { worker: CLOUD_AGENT_WORKER_NAME, jobId: input.runId });
-  const failure = upstreamFailureCopy(error, input.processed.provider, {
-    requestedModel: input.processed.requestedModel,
-    isolatedCredential:
-      input.billing.kind === 'free_trial' && input.billing.promotion?.isolated === true,
-  });
+  const failure =
+    error instanceof Error && error.message === CONTEXT_POLICY_RESTART_MESSAGE
+      ? { message: CONTEXT_POLICY_RESTART_MESSAGE, code: CONTEXT_POLICY_RESTART_CODE }
+      : upstreamFailureCopy(error, input.processed.provider, {
+          requestedModel: input.processed.requestedModel,
+          isolatedCredential:
+            input.billing.kind === 'free_trial' && input.billing.promotion?.isolated === true,
+        });
   const db = getNeonDb();
   const snapshot = await getCloudAgentRun(db, {
     userId: input.userId,

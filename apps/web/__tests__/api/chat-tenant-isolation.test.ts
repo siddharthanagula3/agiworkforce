@@ -119,6 +119,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk, IDOR guard (#17)', ()
   it('rejects (400, not silent success) a message id owned by another conversation', async () => {
     mockQuery.mockResolvedValueOnce([{ id: ATTACKER_CONVERSATION_ID }]);
     mockQuery.mockResolvedValueOnce([]);
+    mockQuery.mockResolvedValueOnce([]);
 
     const res = await postBulkMessages(
       makeJsonRequest(
@@ -129,6 +130,17 @@ describe('POST /api/chat/conversations/[id]/messages/bulk, IDOR guard (#17)', ()
     );
 
     expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: { message: 'Message id belongs to another conversation' },
+    });
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    expect(mockQuery).toHaveBeenNthCalledWith(
+      3,
+      expect.stringMatching(
+        /message\.id = \$1::uuid[\s\S]*message\.conversation_id = \$2::uuid[\s\S]*conversation\.user_id = \$3[\s\S]*conversation\.organization_id is not distinct from \$4::uuid/,
+      ),
+      [VICTIM_MESSAGE_ID, ATTACKER_CONVERSATION_ID, ATTACKER, null],
+    );
   });
 
   it('still 404s when the URL conversation is not owned by the caller', async () => {

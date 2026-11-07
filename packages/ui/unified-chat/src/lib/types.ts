@@ -106,6 +106,7 @@ export interface GeneratedFileEntry {
   byteCount: number;
   kind: string;
   checksumSha256?: string;
+  renderIdentity?: string;
   surface?: 'artifact' | 'file';
   previewable?: boolean;
 }

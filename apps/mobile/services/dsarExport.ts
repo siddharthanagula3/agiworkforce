@@ -1,13 +1,12 @@
 import {
   cacheDirectory,
   documentDirectory,
-  getInfoAsync,
-  makeDirectoryAsync,
   deleteAsync,
   writeAsStringAsync,
   EncodingType,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { withDsarTemporaryFile } from './dsarTemporaryFile';
 import Constants from 'expo-constants';
 import { listConversations } from '@/storage/conversations';
 import { getMessagesForConversation } from '@/storage/messages';
@@ -168,6 +167,7 @@ interface DsarExportPayload {
 }
 
 export interface DsarSupplementalLocalData {
+  assertAuthority?: () => void;
   conversations?: DsarConversation[];
   local_projects?: DsarLocalProject[];
   mobile_settings?: DsarMobileSettings | null;
@@ -210,14 +210,17 @@ function getAppVersion(): string | null {
   return Constants.expoConfig?.version ?? null;
 }
 
-async function collectConversations(): Promise<DsarConversation[]> {
+async function collectConversations(assertActive: () => void): Promise<DsarConversation[]> {
   const convs = await listConversations({ limit: 10_000 });
+  assertActive();
   const allArchived = await listConversations({ archived: true, limit: 10_000 });
+  assertActive();
   const all: Conversation[] = [...convs, ...allArchived];
 
   const result: DsarConversation[] = [];
   for (const conv of all) {
     const msgs = await getMessagesForConversation(conv.id, { limit: 10_000 });
+    assertActive();
     const dsarMessages: DsarMessage[] = msgs.map((m: Message): DsarMessage => ({
       id: m.id,
       role: m.role,
@@ -291,7 +294,6 @@ function collectComplianceLedger(): DsarComplianceLedger {
 }
 
 const EXPORT_DIR = `${cacheDirectory}dsar_exports/`;
-const EXPORT_FILE = `${EXPORT_DIR}agi_data_export.json`;
 
 function mergeSupplementalConversations(
   conversations: DsarConversation[],
@@ -306,13 +308,21 @@ function mergeSupplementalConversations(
 export async function exportAllUserData(
   onProgress?: DsarProgressCallback,
   supplemental: DsarSupplementalLocalData = {},
+  assertCallerActive: () => void = () => {},
 ): Promise<void> {
-  const notify = (stage: DsarExportProgress['stage'], done: number, total: number) =>
+  const assertActive = () => {
+    assertCallerActive();
+    supplemental.assertAuthority?.();
+  };
+  assertActive();
+  const notify = (stage: DsarExportProgress['stage'], done: number, total: number) => {
+    assertActive();
     onProgress?.({ stage, done, total });
+  };
 
   notify('conversations', 0, 1);
   const conversations = mergeSupplementalConversations(
-    await collectConversations(),
+    await collectConversations(assertActive),
     supplemental.conversations,
   );
   notify('conversations', 1, 1);
@@ -365,32 +375,28 @@ export async function exportAllUserData(
     compliance_ledger,
   };
 
-  notify('writing', 0, 1);
-  const info = await getInfoAsync(EXPORT_DIR);
-  if (!info.exists) {
-    await makeDirectoryAsync(EXPORT_DIR, { intermediates: true });
-  }
-  await writeAsStringAsync(EXPORT_FILE, JSON.stringify(payload, null, 2), {
-    encoding: EncodingType.UTF8,
+  await withDsarTemporaryFile('agi_data_export.json', assertActive, async (uri) => {
+    notify('writing', 0, 1);
+    await writeAsStringAsync(uri, JSON.stringify(payload, null, 2), {
+      encoding: EncodingType.UTF8,
+    });
+    notify('writing', 1, 1);
+    notify('sharing', 0, 1);
+    const canShare = await Sharing.isAvailableAsync();
+    assertActive();
+    if (!canShare) throw new Error('Sharing is not available on this device.');
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/json',
+      dialogTitle: 'Save your AGI data export',
+      UTI: 'public.json',
+    });
   });
-  notify('writing', 1, 1);
-
-  notify('sharing', 0, 1);
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) {
-    throw new Error('Sharing is not available on this device.');
-  }
-  await Sharing.shareAsync(EXPORT_FILE, {
-    mimeType: 'application/json',
-    dialogTitle: 'Save your AGI data export',
-    UTI: 'public.json',
-  });
-  notify('sharing', 1, 1);
-
-  await deleteAsync(EXPORT_FILE, { idempotent: true });
 }
 
 export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): Promise<void> {
+  const { useAuthStore } = await import('@/src/features/auth/store');
+  await useAuthStore.getState().signOut();
+
   const { closeDb, getDb } = await import('@/storage/db');
 
   const db = await getDb();

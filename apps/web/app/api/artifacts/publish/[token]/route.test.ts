@@ -22,7 +22,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-const { DELETE } = await import('./route');
+const { DELETE, GET } = await import('./route');
 
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -82,6 +82,76 @@ describe('DELETE /api/artifacts/publish/[token]', () => {
     const { createError } = await import('@/lib/errors');
     mocks.scopedDb.mockRejectedValue(createError.unauthorized());
     expect((await call(TOKEN)).status).toBe(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
+
+// UNRUN: direct owner metadata lookup HTTP fixtures.
+describe('GET /api/artifacts/publish/[token]', () => {
+  const detail = (token = TOKEN) =>
+    GET(new NextRequest(`https://agiworkforce.com/api/artifacts/publish/${token}`), {
+      params: Promise.resolve({ token }),
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.scopedDb.mockResolvedValue({
+      db: { query: (...args: unknown[]) => mocks.query(...args) },
+      userId: 'user-1',
+      organizationId: null,
+    });
+    mocks.query.mockResolvedValue([]);
+  });
+
+  it('returns exact owner metadata even for an invited publication without reading the list', async () => {
+    mocks.query.mockResolvedValue([
+      {
+        token: TOKEN,
+        artifact_id: 'artifact-1',
+        conversation_id: null,
+        title: 'Older site',
+        kind: 'html',
+        language: null,
+        content_chars: 10,
+        version: 3,
+        visibility: 'invited',
+        created_at: '2020-01-01T00:00:00.000Z',
+        updated_at: '2020-01-01T00:00:00.000Z',
+      },
+    ]);
+    const response = await detail();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.artifact).toMatchObject({ token: TOKEN, visibility: 'invited', contentChars: 10 });
+    expect(body.artifact).not.toHaveProperty('content');
+    expect(body.workspace).toBeNull();
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.query.mock.calls[0]![1]).toEqual([TOKEN, 'user-1']);
+    expect(mocks.csrf).not.toHaveBeenCalled();
+  });
+
+  it('uses the same 404 for absent and nonowned rows', async () => {
+    expect((await detail()).status).toBe(404);
+    expect(mocks.query.mock.calls[0]![0]).toContain('where token = $1 and user_id = $2');
+  });
+
+  it('rejects malformed tokens before querying', async () => {
+    expect((await detail('short')).status).toBe(404);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('requires owner authentication', async () => {
+    const { createError } = await import('@/lib/errors');
+    mocks.scopedDb.mockRejectedValue(createError.unauthorized());
+    expect((await detail()).status).toBe(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('honors the read rate limit before querying', async () => {
+    mocks.rateLimit.mockResolvedValue(NextResponse.json({ error: 'limited' }, { status: 429 }));
+    expect((await detail()).status).toBe(429);
     expect(mocks.query).not.toHaveBeenCalled();
   });
 });

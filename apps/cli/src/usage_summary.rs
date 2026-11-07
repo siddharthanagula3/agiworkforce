@@ -354,11 +354,15 @@ pub fn usage_mode() -> UsageMode {
 }
 
 pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchError> {
-    let body = fetch_account_body(jwt, USAGE_PATH).await?;
-    let usage =
-        parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
-    tier_cache::adopt_server_plan(usage.entitled_plan_tier());
-    Ok(usage)
+    let context = tier_cache::ManagedRequestContext::for_token(jwt).map_err(UsageFetchError::Other)?;
+    fetch_account_usage_for(&context).await
+}
+
+pub(crate) async fn fetch_account_usage_for(context: &tier_cache::ManagedRequestContext) -> Result<AccountUsage, UsageFetchError> {
+    let body = fetch_account_body_for(context, USAGE_PATH).await?;
+    let usage = parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
+    tier_cache::adopt_server_plan(context, usage.entitled_plan_tier());
+    context.with_current(|| usage).ok_or_else(|| UsageFetchError::Other(anyhow::anyhow!("Managed account changed; retry usage")))
 }
 
 pub async fn fetch_turn_settlement(
@@ -435,14 +439,13 @@ pub async fn fetch_usage_history(jwt: &str) -> Result<UsageHistory, UsageFetchEr
 }
 
 async fn fetch_account_body(jwt: &str, path: &str) -> Result<String, UsageFetchError> {
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
-    let base = tier_cache::resolve_agi_api_base(&raw_base).ok_or_else(|| {
-        UsageFetchError::Other(anyhow::anyhow!(
-            "AGIWORKFORCE_API_BASE must be an https agiworkforce.com host"
-        ))
-    })?;
+    let context = tier_cache::ManagedRequestContext::for_token(jwt).map_err(UsageFetchError::Other)?;
+    fetch_account_body_for(&context, path).await
+}
 
+async fn fetch_account_body_for(context: &tier_cache::ManagedRequestContext, path: &str) -> Result<String, UsageFetchError> {
+    let jwt = context.jwt.as_deref().ok_or_else(|| UsageFetchError::Other(anyhow::anyhow!("Managed account is signed out")))?;
+    let base = &context.base;
     let client = reqwest::Client::builder()
         .timeout(USAGE_FETCH_TIMEOUT)
         .build()
@@ -460,7 +463,7 @@ async fn fetch_account_body(jwt: &str, path: &str) -> Result<String, UsageFetchE
 
     let status = response.status().as_u16();
     if tier_cache::status_invalidates_tier(status) {
-        tier_cache::invalidate_tier_cache();
+        context.invalidate_if_current_token();
         let detail = response
             .text()
             .await
@@ -475,10 +478,8 @@ async fn fetch_account_body(jwt: &str, path: &str) -> Result<String, UsageFetchE
         )));
     }
 
-    response
-        .text()
-        .await
-        .map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))
+    let body = response.text().await.map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))?;
+    context.with_current(|| body).ok_or_else(|| UsageFetchError::Other(anyhow::anyhow!("Managed account changed; retry usage")))
 }
 
 pub async fn account_lines() -> Vec<String> {

@@ -1,4 +1,13 @@
-import { fetchSharedLinks, revokeSharedLink } from '@/src/features/shared-links/service';
+import {
+  fetchSharedLinks,
+  revokeSharedLink,
+  type SharedLinksRequestOptions,
+} from '@/src/features/shared-links/service';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+  captureCloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
@@ -24,16 +33,22 @@ const row = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('shared links service', () => {
+  let options: SharedLinksRequestOptions;
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('fixture-account');
+    const accountEpoch = captureCloudAccountEpoch();
+    if (!accountEpoch) throw new Error('Missing fixture account');
+    options = { accountEpoch };
   });
 
   it('lists the account own shares from the real endpoint', async () => {
     mockGet.mockResolvedValue({ shares: [row()] });
 
-    const links = await fetchSharedLinks();
+    const links = await fetchSharedLinks(options);
 
-    expect(mockGet).toHaveBeenCalledWith('/api/share');
+    expect(mockGet).toHaveBeenCalledWith('/api/share', options);
     expect(links).toHaveLength(1);
     expect(links[0]).toMatchObject({ token: 'tok-1', title: 'Planning session', expired: false });
   });
@@ -41,25 +56,25 @@ describe('shared links service', () => {
   it('drops rows that cannot be opened or revoked', async () => {
     mockGet.mockResolvedValue({ shares: [row(), { title: 'broken' }, row({ token: '' })] });
 
-    const links = await fetchSharedLinks();
+    const links = await fetchSharedLinks(options);
     expect(links).toHaveLength(1);
   });
 
   it('returns an empty list when the response has no shares array', async () => {
     mockGet.mockResolvedValue({});
-    await expect(fetchSharedLinks()).resolves.toEqual([]);
+    await expect(fetchSharedLinks(options)).resolves.toEqual([]);
   });
 
   it('preserves the server expiry verdict rather than recomputing it', async () => {
     mockGet.mockResolvedValue({ shares: [row({ expired: true })] });
-    const links = await fetchSharedLinks();
+    const links = await fetchSharedLinks(options);
     expect(links[0]?.expired).toBe(true);
   });
 
   it('encodes the token when revoking', async () => {
     mockDelete.mockResolvedValue(undefined);
-    await revokeSharedLink('a/b c');
-    expect(mockDelete).toHaveBeenCalledWith('/api/share/a%2Fb%20c');
+    await revokeSharedLink('a/b c', options);
+    expect(mockDelete).toHaveBeenCalledWith('/api/share/a%2Fb%20c', options);
   });
 
   it('treats revoking a link that is already gone as done', async () => {
@@ -67,6 +82,34 @@ describe('shared links service', () => {
       jest.requireActual<typeof import('@/services/apiErrors')>('@/services/apiErrors');
     mockDelete.mockRejectedValueOnce(new ApiHttpError('Share not found', 404));
 
-    await expect(revokeSharedLink('gone')).resolves.toBeUndefined();
+    await expect(revokeSharedLink('gone', options)).resolves.toBeUndefined();
+  });
+
+  it('refuses a stale original account before listing or revoking', async () => {
+    activateCloudAccount('replacement-account');
+    await expect(fetchSharedLinks(options)).rejects.toMatchObject({
+      name: 'StaleCloudAccountOperationError',
+    });
+    await expect(revokeSharedLink('old', options)).rejects.toMatchObject({
+      name: 'StaleCloudAccountOperationError',
+    });
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it('does not accept a late 404 after the original account retires', async () => {
+    const { ApiHttpError } =
+      jest.requireActual<typeof import('@/services/apiErrors')>('@/services/apiErrors');
+    let reject!: (error: Error) => void;
+    mockDelete.mockReturnValueOnce(
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+    );
+    const pending = revokeSharedLink('old', options);
+    const settled = pending.catch((error: unknown) => error);
+    activateCloudAccount('replacement-account');
+    reject(new ApiHttpError('Share not found', 404));
+    expect(await settled).toMatchObject({ name: 'StaleCloudAccountOperationError' });
   });
 });

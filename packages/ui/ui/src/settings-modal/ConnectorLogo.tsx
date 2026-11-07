@@ -44,6 +44,7 @@ import {
   siModelcontextprotocol,
   siMongodb,
   siN8n,
+  siNeon,
   siNotion,
   siOllama,
   siPagerduty,
@@ -106,6 +107,7 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   circleci: siCircleci,
   vercel: siVercel,
   n8n: siN8n,
+  neon: siNeon,
 
   confluence: siConfluence,
   atlassian: siAtlassian,

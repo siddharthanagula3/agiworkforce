@@ -8,6 +8,7 @@ import {
   WORKSPACE_FEATURES,
   WORKSPACE_REASONING_EFFORTS,
   isWorkspaceReasoningEffort,
+  isWorkspaceCountryRestrictionActive,
   DEFAULT_WORKSPACE_CODE_CONTROLS,
   WORKSPACE_CODE_TOGGLE_KEYS,
   type AdminPolicy,
@@ -234,7 +235,16 @@ export function parseWorkspaceControlsLayer(value: unknown): WorkspaceControlsLa
   }
 
   const countries = readCountries(record['allowedCountries']);
-  if (countries !== undefined) layer.allowedCountries = countries;
+  if (countries !== undefined) {
+    layer.allowedCountries = countries;
+    // A malformed nonempty stored restriction must not become unrestricted after filtering.
+    layer.countryRestrictionActive =
+      record['countryRestrictionActive'] === true ||
+      (record['allowedCountries'] as unknown[]).length > 0;
+  } else if (record['countryRestrictionActive'] === true) {
+    layer.allowedCountries = [];
+    layer.countryRestrictionActive = true;
+  }
 
   const surfaces = readSurfaces(record['allowedSurfaces']);
   if (surfaces !== undefined) layer.allowedSurfaces = surfaces;
@@ -254,6 +264,7 @@ export function readWorkspaceControls(metadata: Record<string, unknown> | null):
     defaultModelId: layer.defaultModelId ?? null,
     maxReasoningEffort: layer.maxReasoningEffort ?? null,
     allowedCountries: layer.allowedCountries ?? [],
+    countryRestrictionActive: isWorkspaceCountryRestrictionActive(layer),
     allowedSurfaces: layer.allowedSurfaces ?? null,
   };
 }
@@ -587,7 +598,25 @@ function controlsImpacts(from: unknown, to: unknown): PolicyChangeImpact[] {
     });
   }
 
-  for (const key of ['allowedCountries', 'allowedSurfaces'] as const) {
+  const beforeCountry = isWorkspaceCountryRestrictionActive(before as WorkspaceControlsLayer);
+  const afterCountry = isWorkspaceCountryRestrictionActive(after as WorkspaceControlsLayer);
+  if (
+    beforeCountry !== afterCountry ||
+    JSON.stringify(before['allowedCountries']) !== JSON.stringify(after['allowedCountries'])
+  ) {
+    impacts.push({
+      key: 'controls.allowedCountries',
+      from: beforeCountry ? (before['allowedCountries'] ?? []) : null,
+      to: afterCountry ? (after['allowedCountries'] ?? []) : null,
+      direction: !afterCountry
+        ? 'widens'
+        : !beforeCountry
+          ? 'narrows'
+          : listDirection(before['allowedCountries'] ?? [], after['allowedCountries'] ?? [], false),
+    });
+  }
+
+  for (const key of ['allowedSurfaces'] as const) {
     if (JSON.stringify(before[key]) === JSON.stringify(after[key])) continue;
     const beforeList = before[key] ?? [];
     const afterList = after[key] ?? [];

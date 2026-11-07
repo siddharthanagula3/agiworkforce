@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-18
+Last updated: 2026-11-02
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -95,6 +95,37 @@ built on `execpolicy`, `utils-absolute-path` and `utils-image`. `mcp` and
 `sandbox-policy` and `worktree` rather than reimplementing them; the CLI adds
 `app-server`, `command-registry` and `utils-image`, and nothing depends on
 `licensing` yet.
+
+### MCP host and client boundary
+
+The TypeScript remote MCP path uses `packages/tools/mcp` and the official
+`@modelcontextprotocol/client` dependency declared in its manifest. The SDK owns
+transport framing, protocol negotiation, discovery, pagination and request
+execution. The host supplies bearer tokens through the SDK `AuthProvider`, so
+the SDK constructs the authentication header. Web's existing `lib/connectors`
+broker owns encrypted account
+credentials, issuer/resource binding, PKCE, refresh and revocation. Shared catalog
+aggregation forwards typed connection failures to that host. The host excludes
+failed handshakes from usable capabilities; protocol fallback remains an SDK
+decision.
+
+An authorization failure permits one refresh of the existing grant for the same
+account. A transport failure remains an unavailable connection rather than destroying
+an OAuth grant. The existing credential lifecycle retains ownership of
+revocation and user-initiated disconnect.
+Forbidden requests do not expand scopes. Failed handshakes are unavailable,
+rather than successful empty capability catalogs. The settings surface refreshes
+its account state after failed discovery. Existing tool policy gates and
+execution receipts remain separate from discovery; an admitted schema is not
+permission to execute it. Private discovery/resource caches retain their
+[existing account and endpoint boundaries](docs/architecture/cache-rules.md).
+
+This boundary follows the
+[dated MCP architecture](https://modelcontextprotocol.io/docs/2026-07-28/learn/architecture)
+and the official SDK's
+[authentication failure guidance](https://github.com/modelcontextprotocol/typescript-sdk/blob/v2.3.1/docs/troubleshooting.md).
+The native Rust MCP implementation remains owned by `crates/agiworkforce-mcp`; sharing the
+product contract does not merge Local and Account Cloud execution.
 
 ## Load-bearing seams
 

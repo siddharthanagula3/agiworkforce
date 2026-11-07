@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 
 type CsrfModule = typeof import('@/lib/csrf');
 type RateLimitModule = typeof import('@/lib/rate-limit');
@@ -12,6 +13,10 @@ type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  rootQuery: vi.fn(),
+  transaction: vi.fn(),
+  inspect: vi.fn(),
+  permission: vi.fn(),
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   scopedDb: vi.fn(),
@@ -41,6 +46,7 @@ vi.mock('@/lib/services/organization-permission-service', async (importOriginal)
     SHARE_INTO_WORKSPACE_DENIED_MESSAGE: 'read-only',
     requireOrganizationPermission: vi.fn(
       async (_userId: string, _organizationId: string, permission: string, message: string) => {
+        mocks.permission(_userId, _organizationId, permission, message);
         if (!mocks.permissions.has(permission)) throw createError.forbidden(message);
       },
     ),
@@ -60,19 +66,27 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+vi.mock('@/lib/security/outbound-content-inspection', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security/outbound-content-inspection')>()),
+  inspectOutboundContent: (...args: unknown[]) => mocks.inspect(...args),
+}));
 
 const { PATCH } = await import('./route');
 
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const ORG = '11111111-1111-4111-8111-111111111111';
+const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
 const ARTIFACT = '33333333-3333-4333-8333-333333333333';
 
-function call(body: unknown, token = TOKEN) {
+function call(body: unknown, token = TOKEN, organizationId?: string) {
   return PATCH(
     new NextRequest(`https://agiworkforce.com/api/artifacts/publish/${token}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(organizationId ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId } : {}),
+      },
     }),
     { params: Promise.resolve({ token }) },
   );
@@ -95,47 +109,35 @@ function artifactRow(visibility: 'public' | 'organization' | 'invited') {
   };
 }
 
-/**
- * The route issues four statements in order: active-workspace resolution, the
- * membership row, the owner's artifact lookup, then the share write and the
- * visibility update. Answering by statement shape keeps the test honest about
- * which query it is standing in for.
- */
-function respond(visibility: 'public' | 'organization' | 'invited') {
-  return (sql: string) => {
+// This SQL model does not establish PostgreSQL RLS or concurrent transaction behavior.
+function respond(
+  visibility: 'public' | 'organization' | 'invited',
+  existingGrant: string | null = ORG,
+) {
+  let grant = existingGrant;
+  return (sql: string, params: unknown[] = []) => {
     const text = String(sql);
-    if (text.includes('organization_members')) {
-      return [{ organization_id: ORG, role: 'owner' }];
-    }
-    if (text.includes('activeOrganizationId') || text.includes('user_settings')) {
-      return [{ organization_id: ORG }];
-    }
     if (text.includes('organization_shared_artifacts')) {
-      return [
-        {
-          organization_id: ORG,
-          published_artifact_id: ARTIFACT,
-          token: TOKEN,
-          artifact_id: 'artifact-1',
-          title: 'Plan',
-          kind: 'markdown',
-          visibility,
-          owner_user_id: 'user-1',
-          shared_by_user_id: 'user-1',
-          created_at: '2026-09-13T00:00:00.000Z',
-        },
-      ];
+      if (text.includes('delete from')) {
+        expect(params).toEqual([ARTIFACT, grant]);
+        const removed = grant;
+        grant = null;
+        return removed ? [{ organization_id: removed, published_artifact_id: ARTIFACT }] : [];
+      }
+      if (text.includes('insert into')) grant = String(params[0]);
+      return grant ? [{ organization_id: grant, published_artifact_id: ARTIFACT }] : [];
     }
     if (text.includes('live_artifacts')) {
       return [{ uses_connectors: mocks.usesConnectors }];
     }
     if (text.includes('update public.published_artifacts')) {
-      return [artifactRow(visibility)];
+      return [{ ...artifactRow(visibility), title: params[4] ?? 'Plan' }];
     }
     if (text.includes('published_artifacts')) {
-      return [{ id: ARTIFACT }];
+      return [artifactRow('organization')];
     }
-    return [];
+    if (text.includes('web_conversations')) return [];
+    throw new Error(`Unexpected SQL: ${text}`);
   };
 }
 
@@ -147,9 +149,20 @@ beforeEach(() => {
   mocks.canShareArtifacts.mockResolvedValue(true);
   mocks.usesConnectors = false;
   mocks.sharingGate.mockResolvedValue(null);
-  mocks.query.mockImplementation(async (sql: string) => respond('organization')(sql));
+  mocks.query.mockImplementation(respond('organization', null));
+  mocks.rootQuery.mockImplementation(() => {
+    throw new Error('Audience query escaped transaction');
+  });
+  mocks.transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) =>
+    work({ query: mocks.query }),
+  );
+  mocks.inspect.mockImplementation(async ({ value }: { value: string }) => ({
+    action: 'allowed',
+    value,
+    findings: [],
+  }));
   mocks.scopedDb.mockResolvedValue({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    db: { query: mocks.rootQuery, transaction: mocks.transaction },
     userId: 'user-1',
     organizationId: ORG,
   });
@@ -157,7 +170,7 @@ beforeEach(() => {
 
 describe('PATCH /api/artifacts/publish/[token]', () => {
   it('asks the workspaces the publication is stored under before reopening its public link', async () => {
-    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+    mocks.query.mockImplementation(respond('public'));
     mocks.sharingGate.mockResolvedValue(
       Response.json({ error: { code: 'external_sharing_disabled' } }, { status: 403 }),
     );
@@ -170,7 +183,7 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect(
       statements.some((sql) => sql.includes('delete from public.organization_shared_artifacts')),
     ).toBe(false);
-    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('update public.published_artifacts'))).toBe(false);
   });
 
   it('does not ask the external sharing policy for a move into the workspace', async () => {
@@ -192,7 +205,7 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect(
       statements.some((sql) => sql.includes('insert into public.organization_shared_artifacts')),
     ).toBe(true);
-    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(true);
+    expect(statements.some((sql) => sql.includes('set visibility = $4'))).toBe(true);
   });
 
   it('refuses a read-only viewer before any grant row is written', async () => {
@@ -202,19 +215,23 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
 
     expect(response.status).toBe(403);
     const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements.some((sql) => sql.includes('organization_shared_artifacts'))).toBe(false);
-    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+    expect(
+      statements.some((sql) =>
+        /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql),
+      ),
+    ).toBe(false);
+    expect(statements.some((sql) => sql.includes('update public.published_artifacts'))).toBe(false);
   });
 
   it('still lets a viewer withdraw their own artifact from the workspace', async () => {
     mocks.permissions = new Set(['content.read']);
-    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+    mocks.query.mockImplementation(respond('public'));
 
     expect((await call({ visibility: 'public' })).status).toBe(200);
   });
 
   it('drops the grant row when the audience goes back to public', async () => {
-    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+    mocks.query.mockImplementation(respond('public'));
 
     const response = await call({ visibility: 'public' });
 
@@ -231,7 +248,7 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
   });
 
   it('limits the page to invited people and drops any workspace grant', async () => {
-    mocks.query.mockImplementation(async (sql: string) => respond('invited')(sql));
+    mocks.query.mockImplementation(respond('invited'));
 
     const response = await call({ visibility: 'invited' });
 
@@ -244,18 +261,22 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
   });
 
   it('lets someone outside any workspace share with invited people', async () => {
-    mocks.query.mockImplementation(async (sql: string) => {
-      const text = String(sql);
-      if (text.includes('organization_members') || text.includes('user_settings')) return [];
-      if (text.includes('update public.published_artifacts')) return [artifactRow('invited')];
-      return [];
+    mocks.query.mockImplementation(respond('invited', null));
+    mocks.scopedDb.mockResolvedValue({
+      db: { query: mocks.rootQuery, transaction: mocks.transaction },
+      userId: 'user-1',
+      organizationId: null,
     });
 
     const response = await call({ visibility: 'invited' });
 
     expect(response.status).toBe(200);
     const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements.some((sql) => sql.includes('organization_shared_artifacts'))).toBe(false);
+    expect(
+      statements.some((sql) =>
+        /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql),
+      ),
+    ).toBe(false);
   });
 
   it('rejects an audience the schema does not model', async () => {
@@ -270,7 +291,11 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
   });
 
   it('refuses when the caller belongs to no workspace', async () => {
-    mocks.query.mockImplementation(async () => []);
+    mocks.scopedDb.mockResolvedValue({
+      db: { query: mocks.rootQuery, transaction: mocks.transaction },
+      userId: 'user-1',
+      organizationId: null,
+    });
     expect((await call({ visibility: 'organization' })).status).toBe(403);
   });
 
@@ -293,12 +318,12 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect(
       statements.some((sql) => sql.includes('insert into public.organization_shared_artifacts')),
     ).toBe(false);
-    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('update public.published_artifacts'))).toBe(false);
   });
 
   it('refuses to make an artifact with connected apps public and changes nothing', async () => {
     mocks.usesConnectors = true;
-    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+    mocks.query.mockImplementation(respond('public'));
 
     const response = await call({ visibility: 'public' });
 
@@ -307,14 +332,77 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
       'not available on publicly shared artifacts',
     );
     const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements.some((sql) => sql.includes('organization_shared_artifacts'))).toBe(false);
-    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+    expect(
+      statements.some((sql) =>
+        /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql),
+      ),
+    ).toBe(false);
+    expect(statements.some((sql) => sql.includes('update public.published_artifacts'))).toBe(false);
   });
 
   it('lets an artifact with connected apps move to invited people', async () => {
     mocks.usesConnectors = true;
-    mocks.query.mockImplementation(async (sql: string) => respond('invited')(sql));
+    mocks.query.mockImplementation(respond('invited'));
 
     expect((await call({ visibility: 'invited' })).status).toBe(200);
+  });
+
+  it('forwards mocked authoritative resolver B without querying saved A again', async () => {
+    mocks.query.mockImplementation(respond('organization', ORG));
+    mocks.scopedDb.mockImplementation(async (request: NextRequest) => {
+      expect(request.headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(OTHER_ORG);
+      return {
+        db: { query: mocks.rootQuery, transaction: mocks.transaction },
+        userId: 'user-1',
+        organizationId: OTHER_ORG,
+      };
+    });
+    const response = await call({ visibility: 'organization' }, TOKEN, OTHER_ORG);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ organizationId: OTHER_ORG });
+    expect(mocks.canShareArtifacts).toHaveBeenCalledWith(OTHER_ORG);
+    expect(mocks.permission).toHaveBeenCalledWith(
+      'user-1',
+      OTHER_ORG,
+      'content.share',
+      expect.any(String),
+    );
+    expect(mocks.rootQuery).not.toHaveBeenCalled();
+    expect(
+      mocks.query.mock.calls.some(([sql]) => /user_settings|organization_members/.test(sql)),
+    ).toBe(false);
+  });
+
+  it('puts an inspected combined rename in the audience transaction with no separate rename', async () => {
+    mocks.query.mockImplementation(respond('invited'));
+    mocks.inspect.mockResolvedValue({ action: 'redacted', value: 'Safe name', findings: [] });
+    const response = await call({ visibility: 'invited', title: 'Unsafe name' });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ title: 'Safe name', visibility: 'invited' });
+    const writes = mocks.query.mock.calls.filter(([sql]) =>
+      sql.includes('update public.published_artifacts'),
+    );
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.[1]).toEqual([ARTIFACT, TOKEN, 'user-1', 'invited', 'Safe name']);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.rootQuery).not.toHaveBeenCalled();
+  });
+
+  it('propagates a gate refusal out of the transaction before returning its response', async () => {
+    mocks.query.mockImplementation(respond('public'));
+    mocks.sharingGate.mockResolvedValue(Response.json({ error: 'blocked' }, { status: 403 }));
+    const outcomes: string[] = [];
+    mocks.transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) => {
+      try {
+        const result = await work({ query: mocks.query });
+        outcomes.push('commit');
+        return result;
+      } catch (error) {
+        outcomes.push('rollback');
+        throw error;
+      }
+    });
+    expect((await call({ visibility: 'public' })).status).toBe(403);
+    expect(outcomes).toEqual(['rollback']);
   });
 });

@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import {
   FREE_QUOTA_CATALOGUE_PATH,
   FreeQuotaCatalogueSchema,
+  chooseLimitedFreeMedia,
+  freeMediaAvailability,
+  isFreeMediaCategory,
+  limitedFreeMedia,
+  orderedReadyFreeMedia,
+  type FreeQuotaMediaCategory,
   type FreeQuotaCatalogue,
   type FreeQuotaModel,
 } from '@agiworkforce/cloud-contracts';
@@ -110,4 +116,48 @@ export async function ensureReadyFreeQuotaChatOffering(
 ): Promise<FreeQuotaModel | null> {
   await useFreeQuotaCatalogueStore.getState().refresh();
   return getReadyFreeQuotaChatOffering(key);
+}
+
+function currentAccountCatalogue(account: CloudAccountEpoch): FreeQuotaCatalogue | null {
+  const state = useFreeQuotaCatalogueStore.getState();
+  return isCloudAccountEpochCurrent(account) &&
+    state.account?.ownerId === account.ownerId &&
+    state.account.epoch === account.epoch
+    ? state.catalogue
+    : null;
+}
+
+export async function ensureReadyFreeQuotaOffering(key: string): Promise<FreeQuotaModel | null> {
+  const account = captureCloudAccountEpoch();
+  if (!account) return null;
+  await useFreeQuotaCatalogueStore.getState().refresh();
+  const catalogue = currentAccountCatalogue(account);
+  if (!catalogue) return null;
+  const model = catalogue.models.find((entry) => entry.key === key);
+  if (!model || !isFreeMediaCategory(model.category)) return getReadyFreeQuotaChatOffering(key);
+  if (freeMediaAvailability(catalogue, model.category) !== 'offered') return null;
+  const offer = limitedFreeMedia(catalogue, model.category);
+  if (!offer || offer.remainingToday <= 0) return null;
+  return (
+    orderedReadyFreeMedia(catalogue, model.category).find((entry) => entry.key === key) ?? null
+  );
+}
+
+export type LimitedFreeMediaChoice =
+  { status: 'offered'; model: string } | { status: 'not_offered' | 'unknown' };
+
+export async function ensureLimitedFreeMediaModel(
+  category: FreeQuotaMediaCategory,
+  account: CloudAccountEpoch,
+): Promise<LimitedFreeMediaChoice> {
+  if (!isCloudAccountEpochCurrent(account)) return { status: 'unknown' };
+  await useFreeQuotaCatalogueStore.getState().refresh();
+  const catalogue = currentAccountCatalogue(account);
+  const availability = freeMediaAvailability(catalogue, category);
+  if (availability !== 'offered') return { status: availability };
+  const offer = limitedFreeMedia(catalogue, category);
+  if (!offer) return { status: 'unknown' };
+  if (offer.remainingToday <= 0) return { status: 'not_offered' };
+  const model = chooseLimitedFreeMedia(catalogue, category);
+  return model ? { status: 'offered', model } : { status: 'unknown' };
 }

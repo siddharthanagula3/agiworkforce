@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
@@ -8,11 +9,15 @@ const {
   mockNeonQuery,
   mockResolveSharedProjectScope,
   mockResolveActiveOrganizationId,
+  mockSavedOrganizationId,
+  mockPermissions,
 } = vi.hoisted(() => ({
   mockRlsQuery: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockResolveSharedProjectScope: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
+  mockSavedOrganizationId: vi.fn(),
+  mockPermissions: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -35,6 +40,14 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   resolveSharedProjectScope: mockResolveSharedProjectScope,
+}));
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  resolveActiveOrganizationId: mockSavedOrganizationId,
+}));
+vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  resolveOrganizationPermissions: mockPermissions,
 }));
 
 import { GET as LIST_PROJECTS } from '../route';
@@ -67,8 +80,135 @@ function listRequest(): never {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRlsQuery.mockReset();
   mockResolveSharedProjectScope.mockResolvedValue(null);
   mockResolveActiveOrganizationId.mockResolvedValue(null);
+});
+
+describe('project reads with real shared scope and mocked request-scope receipt', () => {
+  const SAVED_ORG = '22222222-2222-4222-8222-222222222222';
+
+  beforeEach(async () => {
+    const real = await vi.importActual<ScanModule0>('@/lib/services/org-sharing-service');
+    mockResolveSharedProjectScope.mockImplementation(real.resolveSharedProjectScope);
+    mockSavedOrganizationId.mockResolvedValue(SAVED_ORG);
+    mockPermissions.mockResolvedValue(new Set());
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
+  });
+
+  function request(detail: boolean, explicit: boolean): never {
+    return new Request(`http://localhost:3000/api/projects${detail ? `/${SHARED_PROJECT}` : ''}`, {
+      headers: explicit ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: ORG } : {},
+    }) as never;
+  }
+
+  function respondWithMembership(membership: unknown[], failure?: Error) {
+    mockRlsQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from public.organization_members')) {
+        if (failure) throw failure;
+        return membership;
+      }
+      if (sql.includes('from public.organization_shared_projects')) {
+        return sql.includes("a.access = 'write'") ? [] : [{ project_id: SHARED_PROJECT }];
+      }
+      if (sql.includes('p.user_id = $2')) return [];
+      if (sql.includes('from user_projects p')) {
+        return [projectRow({ organization_id: ORG, is_org_shared: true })];
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+  }
+
+  it.each([
+    ['list explicit', false, true],
+    ['list headerless', false, false],
+    ['detail explicit', true, true],
+    ['detail headerless', true, false],
+  ] as const)(
+    'reads B with a mocked %s receipt despite saved A',
+    async (_label, detail, explicit) => {
+      respondWithMembership([{ organization_id: ORG, role: 'member' }]);
+      const response = detail
+        ? await GET_PROJECT(request(detail, explicit), {
+            params: Promise.resolve({ id: SHARED_PROJECT }),
+          })
+        : await LIST_PROJECTS(request(detail, explicit));
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(detail ? body.project.id : body.projects[0].id).toBe(SHARED_PROJECT);
+      expect(mockResolveSharedProjectScope).toHaveBeenCalledWith(
+        expect.anything(),
+        'member-1',
+        ORG,
+      );
+      expect(mockSavedOrganizationId).not.toHaveBeenCalled();
+      expect(mockNeonQuery).not.toHaveBeenCalled();
+      expect(mockPermissions).not.toHaveBeenCalled();
+      const membership = mockRlsQuery.mock.calls.find(([sql]) =>
+        sql.includes('from public.organization_members'),
+      )!;
+      expect(membership[0]).toMatch(
+        /organization_id = \$1 and user_id = \$2[\s\S]*status = 'active'/,
+      );
+      expect(membership[1]).toEqual([ORG, 'member-1']);
+      for (const [sql, params] of mockRlsQuery.mock.calls) {
+        expect(params).not.toContain(SAVED_ORG);
+        if (sql.includes('from public.organization_shared_projects')) {
+          expect(sql).toMatch(/s\.organization_id = \$1/);
+          expect(params).toEqual([ORG, 'member-1']);
+        }
+      }
+      const [sql, params] = mockRlsQuery.mock.calls.at(-1)!;
+      expect(sql).toMatch(
+        detail
+          ? /p\.organization_id is not distinct from \$4::uuid/
+          : /p\.organization_id is not distinct from \$5::uuid/,
+      );
+      expect(params[detail ? 2 : 3]).toEqual([SHARED_PROJECT]);
+      expect(params[detail ? 3 : 4]).toBe(ORG);
+    },
+  );
+
+  it.each([
+    ['missing', []],
+    ['mismatched', [{ organization_id: SAVED_ORG, role: 'member' }]],
+  ])('does not read shares for %s exact membership', async (_label, membership) => {
+    respondWithMembership(membership as unknown[]);
+    const response = await GET_PROJECT(request(true, false), {
+      params: Promise.resolve({ id: SHARED_PROJECT }),
+    });
+    expect(response.status).toBe(404);
+    expect(mockRlsQuery).toHaveBeenCalledTimes(2);
+    expect(
+      mockRlsQuery.mock.calls.some(([sql]) => sql.includes('organization_shared_projects')),
+    ).toBe(false);
+    expect(mockSavedOrganizationId).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on membership errors without querying shares', async () => {
+    respondWithMembership([], new Error('membership unavailable'));
+    const response = await LIST_PROJECTS(request(false, true));
+    expect(response.status).toBe(500);
+    expect(mockRlsQuery).toHaveBeenCalledTimes(1);
+    expect(mockSavedOrganizationId).not.toHaveBeenCalled();
+  });
+
+  it('keeps Personal list and detail free of organization lookups despite saved A', async () => {
+    mockResolveActiveOrganizationId.mockResolvedValue(null);
+    mockRlsQuery.mockResolvedValue([]);
+    const list = await LIST_PROJECTS(request(false, false));
+    const detail = await GET_PROJECT(request(true, false), {
+      params: Promise.resolve({ id: SHARED_PROJECT }),
+    });
+    expect(list.status).toBe(200);
+    expect(detail.status).toBe(404);
+    expect(mockRlsQuery).toHaveBeenCalledTimes(2);
+    expect(mockRlsQuery.mock.calls[0]![1][3]).toEqual([]);
+    expect(mockRlsQuery.mock.calls[0]![1][4]).toBeNull();
+    expect(mockRlsQuery.mock.calls[1]![1]).toEqual([SHARED_PROJECT, 'member-1', null]);
+    expect(mockSavedOrganizationId).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/projects · shared projects', () => {
@@ -288,5 +428,6 @@ describe('the payload says which projects the caller may write', () => {
     const body = (await response.json()) as { project: { isOrgShared: boolean } };
 
     expect(body.project.isOrgShared).toBe(false);
+    expect(mockResolveSharedProjectScope).not.toHaveBeenCalled();
   });
 });

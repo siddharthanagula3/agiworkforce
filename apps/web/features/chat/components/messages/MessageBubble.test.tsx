@@ -6,6 +6,7 @@ import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { AVAILABLE_MODELS } from '@shared/stores/model-store';
 import { regenerateModelOptions } from '@features/chat/lib/regenerate-model-options';
 import {
+  MAX_FILE_TEXT_CHARS,
   getModelMetadataById,
   getModels,
   getProviderOfferings,
@@ -22,7 +23,10 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { getImageModelLabel } from '../../lib/imageGenerationOptions';
-import { clearWorkbookSheetCache } from '../../lib/office-file-preview';
+import {
+  WORKBOOK_PREVIEW_TOO_LARGE,
+  PRESENTATION_PREVIEW_TOO_LARGE,
+} from '../../lib/office-file-preview';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 const IMAGE_MODEL_ID = getModels({
@@ -697,7 +701,7 @@ describe('MessageBubble', () => {
       },
     );
 
-    it('keeps "Thinking..." for a pending free-quota chat turn', () => {
+    it('shows generation progress without claiming reasoning for a pending free-quota chat turn', () => {
       render(
         <MessageBubble
           message={makeMessage({
@@ -710,7 +714,8 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.getByText('Generating response…')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).toBeNull();
       expect(screen.queryByTestId('media-generation-placeholder')).toBeNull();
     });
 
@@ -1036,10 +1041,11 @@ describe('MessageBubble', () => {
   });
 
   describe('streaming state', () => {
-    it('shows "Thinking..." when streaming with empty content', () => {
+    it('shows generation progress when streaming with empty content', () => {
       const msg = makeMessage({ isStreaming: true, content: '' });
       render(<MessageBubble message={msg} />);
-      expect(screen.getByText('Thinking...')).toBeInTheDocument();
+      expect(screen.getByText('Generating response…')).toBeInTheDocument();
+      expect(screen.queryByText('Thinking...')).toBeNull();
     });
 
     it('shows a concrete response activity instead of the generic thinking fallback', () => {
@@ -1120,6 +1126,52 @@ describe('MessageBubble', () => {
         expect(screen.getByLabelText('Message copied')).toBeInTheDocument();
       });
     });
+
+    it('cancels the pending copy-feedback reset when the turn unmounts', async () => {
+      vi.useFakeTimers();
+      const timeout = vi.spyOn(globalThis, 'setTimeout');
+      const clear = vi.spyOn(globalThis, 'clearTimeout');
+      const view = render(<MessageBubble message={makeMessage({ content: 'copy me' })} />);
+      try {
+        await act(async () => fireEvent.click(screen.getByLabelText('Copy message')));
+        expect(screen.getByLabelText('Message copied')).toBeInTheDocument();
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('copy me');
+        const index = timeout.mock.calls.findLastIndex(([, delay]) => delay === 2000);
+        expect(index).toBeGreaterThanOrEqual(0);
+        const handle = timeout.mock.results[index]!.value;
+        view.unmount();
+        expect(clear).toHaveBeenCalledWith(handle);
+      } finally {
+        view.unmount();
+        timeout.mockRestore();
+        clear.mockRestore();
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not schedule feedback if the clipboard completes after the turn unmounts', async () => {
+      vi.useFakeTimers();
+      let finishCopy!: () => void;
+      const writeText = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishCopy = resolve;
+          }),
+      );
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const view = render(<MessageBubble message={makeMessage({ content: 'copy me' })} />);
+      try {
+        fireEvent.click(screen.getByLabelText('Copy message'));
+        expect(writeText).toHaveBeenCalledWith('copy me');
+        view.unmount();
+        const pending = vi.getTimerCount();
+        await act(async () => finishCopy());
+        expect(vi.getTimerCount()).toBe(pending);
+      } finally {
+        view.unmount();
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('pin indicator', () => {
@@ -1139,13 +1191,17 @@ describe('MessageBubble', () => {
   describe('action row visibility', () => {
     const HOVER_GATE = 'group-hover:opacity-100';
 
-    it('hides the row on an earlier assistant turn until hover or focus', () => {
+    it('hides the row on an earlier assistant turn until hover or focus', async () => {
+      const user = userEvent.setup();
       render(<MessageBubble message={makeMessage({ role: 'assistant', content: 'Earlier' })} />);
       const row = screen.getByTestId('message-action-row');
       expect(row).toHaveClass('opacity-0');
       expect(row).toHaveClass(HOVER_GATE);
       expect(row).toHaveClass('group-focus-within:opacity-100');
-      expect(row).toHaveClass('flex-nowrap');
+      const copy = screen.getByRole('button', { name: 'Copy message' });
+      await user.tab();
+      expect(copy).toHaveFocus();
+      expect(row).toContainElement(document.activeElement as HTMLElement);
     });
 
     it('keeps the row visible on the latest assistant turn', () => {
@@ -1982,7 +2038,6 @@ describe('MessageBubble', () => {
 
     const WORKBOOK_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     const DECK_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    beforeEach(() => clearWorkbookSheetCache());
 
     const workbookFile = genFile({
       id: 'gf-xlsx',
@@ -2080,6 +2135,98 @@ describe('MessageBubble', () => {
         vi.unstubAllGlobals();
       }
     });
+
+    it.each([false, true])(
+      'explains an oversized workbook and retains download (saved: %s)',
+      async (saved) => {
+        const oversized = await new JSZip()
+          .file(
+            'xl/worksheets/sheet1.xml',
+            `<worksheet><row><c r="A1"><v>${'x'.repeat(MAX_FILE_TEXT_CHARS + 1)}</v></c></row></worksheet>`,
+          )
+          .generateAsync({ type: 'arraybuffer' });
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(() => Promise.resolve(new Response(oversized))),
+        );
+        const messageId = `message-office-oversized-${saved}`;
+        try {
+          if (saved) saveOfficePreviewArtifacts(messageId);
+          render(
+            <MessageBubble
+              message={makeMessage({
+                id: messageId,
+                role: 'assistant',
+                content: 'File attached.',
+                metadata: { generatedFiles: [workbookFile] },
+              })}
+            />,
+          );
+
+          expect(
+            await screen.findByText(`budget.xlsx: ${WORKBOOK_PREVIEW_TOO_LARGE}`),
+          ).toBeTruthy();
+          if (saved) {
+            expect(screen.getByRole('button', { name: 'Download budget.xlsx' })).toBeTruthy();
+            expect(cardFormatLine('budget.xlsx')).toContain('Spreadsheet · XLSX');
+          } else {
+            const download = screen.getByTestId('deliverable-card');
+            expect(download.getAttribute('href')).toBe(workbookFile.uri);
+            expect(download.getAttribute('download')).toBe(workbookFile.fileName);
+            expect(screen.queryByRole('button', { name: 'Open artifact: budget.xlsx' })).toBeNull();
+          }
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      },
+    );
+
+    it.each([false, true])(
+      'explains an oversized presentation and retains download (saved: %s)',
+      async (saved) => {
+        const oversized = await new JSZip()
+          .file(
+            'ppt/slides/slide1.xml',
+            `<sld><sp><p><t>${'x'.repeat(MAX_FILE_TEXT_CHARS)}</t></p></sp></sld>`,
+          )
+          .generateAsync({ type: 'arraybuffer' });
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(() => Promise.resolve(new Response(oversized))),
+        );
+        const messageId = `message-presentation-oversized-${saved}`;
+        try {
+          if (saved) saveOfficePreviewArtifacts(messageId);
+          render(
+            <MessageBubble
+              message={makeMessage({
+                id: messageId,
+                role: 'assistant',
+                content: 'File attached.',
+                metadata: { generatedFiles: [deckFile] },
+              })}
+            />,
+          );
+
+          expect(
+            await screen.findByText(`workshop.pptx: ${PRESENTATION_PREVIEW_TOO_LARGE}`),
+          ).toBeTruthy();
+          if (saved) {
+            expect(screen.getByRole('button', { name: 'Download workshop.pptx' })).toBeTruthy();
+            expect(cardFormatLine('workshop.pptx')).toContain('Slides · PPTX');
+          } else {
+            const download = screen.getByTestId('deliverable-card');
+            expect(download.getAttribute('href')).toBe(deckFile.uri);
+            expect(download.getAttribute('download')).toBe(deckFile.fileName);
+            expect(
+              screen.queryByRole('button', { name: 'Open artifact: workshop.pptx' }),
+            ).toBeNull();
+          }
+        } finally {
+          vi.unstubAllGlobals();
+        }
+      },
+    );
 
     it('keeps a saved workbook and deck on their file format and file download while the previews load again', async () => {
       const workbook = await workbookBytes();

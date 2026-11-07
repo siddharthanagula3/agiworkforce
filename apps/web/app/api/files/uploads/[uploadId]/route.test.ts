@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
     head: vi.fn(),
   },
   completeChatAttachmentUpload: vi.fn(),
+  findCompletedChatAttachment: vi.fn(),
+  findProjectKnowledgeFileByChecksum: vi.fn(),
   registerProjectKnowledgeFile: vi.fn(),
   deleteProjectKnowledgeObject: vi.fn(),
   session: {
@@ -46,12 +48,12 @@ vi.mock('@/lib/server/product-analytics', () => ({
 vi.mock('@/lib/server/chat-attachment-completion', () => ({
   completeChatAttachmentUpload: (...args: unknown[]) =>
     mocks.completeChatAttachmentUpload(...(args as [])),
-  findCompletedChatAttachment: vi.fn(async () => null),
+  findCompletedChatAttachment: mocks.findCompletedChatAttachment,
   resolveTemporaryChatUpload: vi.fn(async () => false),
   resolveUploadSourceSurface: () => 'web',
 }));
 vi.mock('@/lib/server/project-knowledge-files', () => ({
-  findProjectKnowledgeFileByChecksum: vi.fn(async () => null),
+  findProjectKnowledgeFileByChecksum: mocks.findProjectKnowledgeFileByChecksum,
   registerProjectKnowledgeFile: (...args: unknown[]) =>
     mocks.registerProjectKnowledgeFile(...(args as [])),
 }));
@@ -91,6 +93,8 @@ beforeEach(() => {
   mocks.session.kind = 'chat-attachment';
   mocks.session.projectId = null;
   mocks.session.sourceSurface = null;
+  mocks.findCompletedChatAttachment.mockResolvedValue(null);
+  mocks.findProjectKnowledgeFileByChecksum.mockResolvedValue(null);
   mocks.store.uploadPart.mockImplementation(
     async ({ partNumber, body }: { partNumber: number; body: Uint8Array }) => ({
       partNumber,
@@ -142,6 +146,28 @@ describe('PUT a relayed part', () => {
 });
 
 describe('POST to complete', () => {
+  it('returns an existing receipt before reading multipart storage', async () => {
+    const attachment = {
+      id: '3f1c0c9e-7b6a-4a2e-8f1d-2b9c6a5e4d31',
+      name: 'report.pdf',
+      mimeType: 'application/pdf',
+      byteCount: 12,
+      type: 'file',
+      url: '/api/files/3f1c0c9e-7b6a-4a2e-8f1d-2b9c6a5e4d31',
+    };
+    mocks.findCompletedChatAttachment.mockResolvedValueOnce(attachment);
+    mocks.store.listUploadedParts.mockRejectedValue(new Error('Storage unavailable'));
+
+    const response = await POST(completeRequest(), context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ kind: 'chat-attachment', attachment });
+    expect(mocks.store.listUploadedParts).not.toHaveBeenCalled();
+    expect(mocks.store.completeMultipartUpload).not.toHaveBeenCalled();
+    expect(mocks.store.head).not.toHaveBeenCalled();
+    expect(mocks.completeChatAttachmentUpload).not.toHaveBeenCalled();
+  });
+
   it('joins the parts before the chat attachment pipeline reads them', async () => {
     const response = await POST(completeRequest(), context);
 
@@ -158,7 +184,7 @@ describe('POST to complete', () => {
     );
   });
 
-  it('deletes an assembled project source its project refuses, and records nothing', async () => {
+  it('retains an assembled project source after a non-safety registration refusal', async () => {
     const { createError } = await import('@/lib/errors');
     mocks.session.kind = 'knowledge-file';
     mocks.session.projectId = 'project-1';
@@ -170,7 +196,12 @@ describe('POST to complete', () => {
     const response = await POST(completeRequest(), context);
 
     expect(response.status).toBe(400);
-    expect(mocks.deleteProjectKnowledgeObject).toHaveBeenCalledWith(mocks.session.key);
+    expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+    expect(mocks.findProjectKnowledgeFileByChecksum).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', organizationId: null, projectId: 'project-1' }),
+      mocks.session.checksumSha256,
+      mocks.session.key,
+    );
     expect(mocks.completeChatAttachmentUpload).not.toHaveBeenCalled();
   });
 });

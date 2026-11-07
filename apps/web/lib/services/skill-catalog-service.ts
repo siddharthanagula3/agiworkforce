@@ -24,6 +24,9 @@ import {
 } from '@agiworkforce/skills';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { ManagedSkillTitleSchema } from '@agiworkforce/cloud-contracts';
+import { codeRanges } from '@agiworkforce/utils/markdown-source';
+import { markdownToDocumentBlocks } from '@agiworkforce/unified-chat/markdown-document';
 
 import {
   findInstalledDirectorySkillWithFiles,
@@ -50,6 +53,32 @@ const CACHE_TTL_MS = 60_000;
 
 let skillCache: { value: Skill[]; expiresAt: number } | null = null;
 let executableSkillCache: { directory: Skill[]; value: Skill[] } | null = null;
+const summaryTitles = new WeakMap<Skill, { contentHash: string; title: string | undefined }>();
+
+export function managedSkillTitle(skill: Skill): string | undefined {
+  const cached = summaryTitles.get(skill);
+  if (cached && cached.contentHash === skill.contentHash) return cached.title;
+  const source = skill.body || '';
+  const code = codeRanges(source);
+  let title: string | undefined;
+  for (const heading of source.matchAll(/^ {0,3}#[ \t]+([^\r\n]*)/gm)) {
+    if (code.some(([start, end]) => heading.index >= start && heading.index < end)) continue;
+    if (!ManagedSkillTitleSchema.safeParse(heading[1]).success) break;
+    const [block] = markdownToDocumentBlocks(heading[0]);
+    if (block?.kind !== 'heading') break;
+    const text = block.inlines
+      .map((inline) =>
+        inline.kind === 'text' ? inline.text : inline.kind === 'math' ? inline.tex : ' ',
+      )
+      .join('')
+      .replace(/\s+/g, ' ');
+    const parsed = ManagedSkillTitleSchema.safeParse(text);
+    title = parsed.success ? parsed.data : undefined;
+    break;
+  }
+  summaryTitles.set(skill, { contentHash: skill.contentHash, title });
+  return title;
+}
 
 function skillPluginOwner(skill: Skill): string | null {
   const owner = skill.frontmatter['plugin'];

@@ -13,7 +13,9 @@ export function preprocessMath(content: string): string {
     SINGLE_LINE_DISPLAY_MATH,
     (match: string, lead: string, body: string, offset: number) => {
       const open = offset + match.indexOf('$$', lead.length);
-      if (code.some(([start, end]) => open >= start && open < end)) return match;
+      if (body.includes('$$') || code.some(([start, end]) => open >= start && open < end)) {
+        return match;
+      }
       return `${lead}\n$$\n${body.trim()}\n$$\n`;
     },
   );

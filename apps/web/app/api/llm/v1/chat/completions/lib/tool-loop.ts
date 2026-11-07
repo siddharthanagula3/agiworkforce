@@ -107,7 +107,7 @@ import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-aud
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
-import type { RouteOutcomeClass } from '@agiworkforce/routing';
+import { isSelfContainedResponseRequest, type RouteOutcomeClass } from '@agiworkforce/routing';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
 
@@ -163,6 +163,11 @@ import {
   toolDirectoryToolDef,
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
+import {
+  createToolSchemaState,
+  ToolSchemaStateSchema,
+  type ToolSchemaState,
+} from './tool-schema-state';
 import { stageTurnAttachments, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { researchDomainAllowed, type ResearchDomainPolicy } from './research-sources';
 import {
@@ -318,7 +323,11 @@ import {
   isRequiredExecutionToolChoice,
   resolveCodeExecutionRequirement,
 } from '@/lib/code-execution/required-execution';
-import { extractTextContent, type ProcessedRequest } from './request-processor';
+import {
+  extractTextContent,
+  managedToolInventoryProviderView,
+  type ProcessedRequest,
+} from './request-processor';
 import {
   addToolSpend,
   createObservedProviderUsage,
@@ -540,6 +549,7 @@ export interface ResumeApproval {
 }
 
 export interface ToolLoopApprovalCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -555,6 +565,7 @@ export interface ToolLoopApprovalCheckpoint {
 }
 
 export interface ToolLoopInputCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -573,6 +584,7 @@ export interface ToolLoopInputCheckpoint {
 }
 
 export interface ToolLoopDeviceCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -597,6 +609,7 @@ export interface ResumeFromPause {
 }
 
 export interface ToolLoopPauseCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -606,6 +619,7 @@ export interface ToolLoopPauseCheckpoint {
 }
 
 export interface ToolLoopInvocationCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -629,6 +643,7 @@ export interface ToolLoopInvocationCheckpoint {
  * a second time, so the pause can never become a spin.
  */
 export interface ToolLoopStepBudgetCheckpoint {
+  toolSchemaState?: ToolSchemaState;
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
@@ -955,6 +970,7 @@ export function canonicalToolSummary(
   const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return server ? `Using ${server} connector` : 'Using connector';
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
+  if (toolName === TOOL_DIRECTORY_TOOL_NAME) return 'Load connector tools';
 
   if (toolName === 'generate_image' || toolName === 'edit_image') {
     const phrase = toolStatusPhrase(toolName) ?? 'Creating image';
@@ -1468,26 +1484,33 @@ export const TOOL_LOOP_STREAM_LIMITS = {
   keepRecentToolResults: KEEP_RECENT_TOOL_RESULTS,
 } as const;
 
-/**
- * Bound a tool-call promise: resolve to an error result if it exceeds
- * `timeoutMs` (a hung tool can't wedge the turn) or if it rejects (one tool
- * can't crash the whole batch). Never rejects. Exported for unit tests.
- */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
+  options: { drainOnError?: boolean } = {},
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
+  let failed = false;
+  let firstError: unknown;
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
+    while (!failed && next < items.length) {
       const index = next++;
-      results[index] = await fn(items[index]!, index);
+      try {
+        results[index] = await fn(items[index]!, index);
+      } catch (error) {
+        if (!options.drainOnError) throw error;
+        if (!failed) {
+          failed = true;
+          firstError = error;
+        }
+      }
     }
   };
   const workerCount = Math.max(1, Math.min(limit, items.length));
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (failed) throw firstError;
   return results;
 }
 
@@ -1581,18 +1604,18 @@ function timedOutWriteMessage(toolName: string, timeoutMs: number): string {
   );
 }
 
-/**
- * The deadline stops the call, not just the wait: `abort` is the controller
- * whose signal the executor was given. A write that ran out of time may still
- * have landed, so it is reported as unknown rather than as failed.
- */
+// Abort is cooperative: a timed-out write may still land, so its outcome is unknown.
 export function withToolTimeout(
   run: Promise<ToolLoopToolResult>,
   toolName: string,
   timeoutMs: number,
-  onTimeout: { abort?: AbortController; write?: boolean } = {},
+  onTimeout: {
+    abort?: AbortController;
+    write?: boolean;
+    shouldPropagateExecutionError?: (error: unknown) => boolean;
+  } = {},
 ): Promise<ToolLoopToolResult> {
-  return new Promise<ToolLoopToolResult>((resolve) => {
+  return new Promise<ToolLoopToolResult>((resolve, reject) => {
     const timer = setTimeout(() => {
       onTimeout.abort?.abort(new Error(`Tool ${toolName} exceeded its ${timeoutMs}ms deadline`));
       resolve({
@@ -1609,6 +1632,10 @@ export function withToolTimeout(
       },
       (err: unknown) => {
         clearTimeout(timer);
+        if (onTimeout.shouldPropagateExecutionError?.(err)) {
+          reject(err);
+          return;
+        }
         resolve({
           content: toolFailureMessage(toolName, err),
           isError: true,
@@ -2110,11 +2137,13 @@ function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, 
 function callerScopedDb(
   executionContext: { organizationId: string | null } | undefined,
   userId: string,
+  signal?: AbortSignal,
 ): DatabaseAdapter {
-  return createClaimedUserScopedDb(getNeonDb(), {
-    userId,
-    organizationId: executionContext?.organizationId ?? null,
-  });
+  return createClaimedUserScopedDb(
+    getNeonDb(),
+    { userId, organizationId: executionContext?.organizationId ?? null },
+    { signal },
+  );
 }
 
 function googleHostedServerIdsOf(tools: readonly WebMcpToolDef[]): ReadonlySet<string> {
@@ -2198,6 +2227,7 @@ async function runMcpTool(
     planTier?: string | null;
     usageAttribution?: UsageAttribution;
     webSearchMaxResults?: number;
+    webSearchRequired?: boolean;
     webSearchDomainPolicy?: ResearchDomainPolicy | null;
     surface?: string | null;
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
@@ -2223,6 +2253,7 @@ async function runMcpTool(
     latestUserMessage?: string;
   },
 ): Promise<ToolLoopToolResult> {
+  executionContext?.signal?.throwIfAborted();
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
     if (!availableTools.has(SKILL_TOOL_NAME)) {
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
@@ -2294,7 +2325,8 @@ async function runMcpTool(
       return { content: 'A signed-in account is required to create a schedule.', isError: true };
     }
     return executeScheduleTool(toolCall.args, {
-      db: callerScopedDb(executionContext, executionContext.userId),
+      db: callerScopedDb(executionContext, executionContext.userId, executionContext.signal),
+      signal: executionContext.signal,
       userId: executionContext.userId,
       clientTimeZone: executionContext.clientTimeZone,
       temporaryChat: executionContext.temporaryChat === true,
@@ -2354,7 +2386,8 @@ async function runMcpTool(
       return { content: GOOGLE_USER_DATA_MEMORY_REFUSAL, isError: true };
     }
     return executeMemoryTool(toolCall.qualifiedName, toolCall.args, {
-      db: callerScopedDb(executionContext, executionContext.userId),
+      db: callerScopedDb(executionContext, executionContext.userId, executionContext.signal),
+      signal: executionContext.signal,
       userId: executionContext.userId,
       organizationId: executionContext.organizationId,
       source: memoryToolSource(executionContext.surface),
@@ -2495,6 +2528,7 @@ async function runMcpTool(
       surface: executionContext.surface ?? null,
       conversationId: executionContext.conversationId ?? null,
       latestAttachedImage: executionContext.latestAttachedImage ?? (() => null),
+      userMessage: executionContext.latestUserMessage ?? '',
     });
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
@@ -2546,6 +2580,16 @@ async function runMcpTool(
   if (isWebSearchTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    if (
+      executionContext?.webSearchRequired !== true &&
+      isSelfContainedResponseRequest(executionContext?.latestUserMessage ?? '')
+    ) {
+      return {
+        content:
+          'This request can be answered from the conversation. Write or render the requested output without web search. No web search was performed.',
+        isError: true,
+      };
     }
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
@@ -2857,7 +2901,16 @@ export function isToolOffered(
   qualifiedName: string,
   mcpTools: WebMcpToolDef[],
   availableTools: ReadonlySet<string>,
+  hostToolDefs?: readonly WebMcpToolDef[],
 ): boolean {
+  if (
+    qualifiedName === TOOL_DIRECTORY_TOOL_NAME ||
+    qualifiedName === TOOL_RESULT_READER_TOOL_NAME
+  ) {
+    return hostToolDefs
+      ? hostToolDefs.some((tool) => tool.qualifiedName === qualifiedName)
+      : availableTools.has(qualifiedName);
+  }
   if (qualifiedName === SKILL_TOOL_NAME) return availableTools.has(SKILL_TOOL_NAME);
   if (isManagedOfficeFileTool(qualifiedName)) {
     return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
@@ -3628,15 +3681,29 @@ export async function* runToolLoop(
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const turnToolProhibition = processed.turnToolProhibition;
   const mcpTools = turnToolProhibition?.allTools ? [] : (options.mcpTools ?? []);
+  const connectorPermissions = processed.toolLockdown
+    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
+    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
+  const schemaTools = mcpTools.filter(
+    (tool) =>
+      !connectorPermissions.isDenied(tool.qualifiedName) &&
+      !connectorPermissions.isConnectorDenied(tool.serverId),
+  );
+  const currentSchemaNames = new Set(schemaTools.map((tool) => tool.qualifiedName));
+  const restoredSchemaState = ToolSchemaStateSchema.safeParse(processed.toolSchemaState);
   const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
   const toolSchemaSelection = selectToolSchemas({
-    tools: mcpTools,
+    tools: schemaTools,
     turnText: lastUserTurnText(processed.chatRequest?.messages),
+    pinnedQualifiedNames: restoredSchemaState.success
+      ? restoredSchemaState.data.loadedQualifiedNames.filter((name) => currentSchemaNames.has(name))
+      : [],
   });
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
+  processed.toolSchemaState = createToolSchemaState(loadedToolNames);
   let deferredToolSchemas = toolSchemaSelection.deferred;
   const toolResultOwner = toolResultOwnerForTurn({
     userId: options.userId,
@@ -3645,7 +3712,7 @@ export async function* runToolLoop(
   });
   const earlierStoredResults = await listConversationToolResults(toolResultOwner);
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
-    const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
+    const loaded = schemaTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));
     const directory = toolDirectoryToolDef(deferredToolSchemas);
     const storedResults =
       earlierStoredResults.length > 0 ||
@@ -3664,13 +3731,25 @@ export async function* runToolLoop(
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
     const raw = args['names'];
     const query = typeof args['query'] === 'string' ? args['query'] : '';
-    const matched = query ? searchToolsByKeyword(mcpTools, query) : [];
+    const matched = query ? searchToolsByKeyword(schemaTools, query) : [];
     const requested = [
       ...(Array.isArray(raw) ? raw.filter((name) => typeof name === 'string') : []),
       ...matched.map((tool) => tool.qualifiedName),
     ];
-    const loaded = expandDeferredToolSchemas(mcpTools, requested);
+    const loaded = expandDeferredToolSchemas(schemaTools, requested);
+    const nextState = ToolSchemaStateSchema.safeParse({
+      loadedQualifiedNames: [
+        ...new Set([...loadedToolNames, ...loaded.map((tool) => tool.qualifiedName)]),
+      ],
+    });
+    if (!nextState.success) {
+      return {
+        content: 'The loaded tool schema state exceeds this turn’s metadata limit.',
+        isError: true,
+      };
+    }
     for (const tool of loaded) loadedToolNames.add(tool.qualifiedName);
+    processed.toolSchemaState = createToolSchemaState(loadedToolNames);
     deferredToolSchemas = deferredToolSchemas.filter(
       (entry) => !loadedToolNames.has(entry.qualifiedName),
     );
@@ -3700,6 +3779,7 @@ export async function* runToolLoop(
   const availableTools = new Set([
     ...mcpTools.map((tool) => tool.qualifiedName),
     ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
+    ...(deferredToolSchemas.length > 0 ? [TOOL_DIRECTORY_TOOL_NAME] : []),
   ]);
   const externalToolSchemas = new Map<string, unknown>(
     mcpTools.map((tool) => [tool.qualifiedName, tool.inputSchema]),
@@ -3742,9 +3822,6 @@ export async function* runToolLoop(
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  const connectorPermissions = processed.toolLockdown
-    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
-    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   function decisionTimeLevel(qualifiedName: string): ConnectorToolPermissionLevel | undefined {
@@ -4972,10 +5049,27 @@ export async function* runToolLoop(
         });
       }
       if (tc.qualifiedName === TOOL_DIRECTORY_TOOL_NAME) {
+        if (!isToolOffered(tc.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())) {
+          return Promise.resolve({
+            content: 'The connector tool directory is not available on this turn.',
+            isError: true,
+          });
+        }
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
       }
       if (tc.qualifiedName === TOOL_RESULT_READER_TOOL_NAME) {
-        return readStoredToolResult(toolResultOwner, tc.args);
+        if (!isToolOffered(tc.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())) {
+          return Promise.resolve({
+            content: 'Stored tool results are not available on this turn.',
+            isError: true,
+          });
+        }
+        return withToolTimeout(
+          readStoredToolResult(toolResultOwner, tc.args),
+          tc.qualifiedName,
+          nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, maxDurationMs, now() - startedAt),
+          { shouldPropagateExecutionError: options.shouldPropagateExecutionError },
+        );
       }
       const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
       if (argumentProblem) {
@@ -5099,6 +5193,7 @@ export async function* runToolLoop(
               googleUserDataRouted: processed.googleUserData === true,
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
               latestUserMessage: lastUserTurnText(processed.chatRequest?.messages),
+              webSearchRequired: processed.searchRequirement?.required === true,
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {
@@ -5180,14 +5275,23 @@ export async function* runToolLoop(
         run,
         tc.qualifiedName,
         nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, maxDurationMs, now() - startedAt),
-        { abort: callAbort, write: !isReadOnlyTool(tc.qualifiedName) },
+        {
+          abort: callAbort,
+          write: !isReadOnlyTool(tc.qualifiedName),
+          shouldPropagateExecutionError: options.shouldPropagateExecutionError,
+        },
       );
     };
 
-    const parallelResults = await mapWithConcurrency(readOnly, readOnlyConcurrency, async (tc) => {
-      const result = await executeTool(tc);
-      return { tc, ...result };
-    });
+    const parallelResults = await mapWithConcurrency(
+      readOnly,
+      readOnlyConcurrency,
+      async (tc) => {
+        const result = await executeTool(tc);
+        return { tc, ...result };
+      },
+      { drainOnError: true },
+    );
     results.push(...parallelResults);
 
     for (const tc of mutating) {
@@ -5456,6 +5560,7 @@ export async function* runToolLoop(
 
       await recordGroundingSpend(true);
       await options.onInputCheckpoint?.({
+        toolSchemaState: createToolSchemaState(loadedToolNames),
         sessionId,
         turnId,
         nextEventSequence: eventStream.nextSequence(),
@@ -5555,6 +5660,7 @@ export async function* runToolLoop(
             );
           }
         } catch (err) {
+          if (options.shouldPropagateExecutionError?.(err)) throw err;
           logger.error(
             {
               provider: processed.provider,
@@ -5704,6 +5810,26 @@ export async function* runToolLoop(
 
       const toRun: PendingToolCall[] = [];
       let requiredSearchCouldNotRun = false;
+      function* finishUnexecutedResumeTool(
+        call: PendingToolCall,
+        content: string,
+        legacyIsError: boolean,
+      ): Generator<Uint8Array> {
+        yield encoder.encode(
+          toolResultEvent(call.id, call.qualifiedName, content, legacyIsError, responseModel),
+        );
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'tool-execution-end',
+            toolCallId: call.id,
+            name: call.qualifiedName,
+            output: toAgentEventJson(content),
+            isError: true,
+            elapsedMs: 0,
+          }),
+        );
+        messages.push({ role: 'tool', content, tool_call_id: call.id });
+      }
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
         const deviceResult = resumeDeviceByCallId.get(p.id);
@@ -5758,15 +5884,10 @@ export async function* runToolLoop(
               p.qualifiedName,
               blockedToolResultMessage(p.qualifiedName),
             );
-            yield encoder.encode(
-              toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-            );
-            messages.push({
-              role: 'tool',
-              content,
-              tool_call_id: p.id,
-            });
-          } else if (isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
+            yield* finishUnexecutedResumeTool(p, content, true);
+          } else if (
+            isToolOffered(p.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())
+          ) {
             toRun.push(p);
           } else {
             const content = await applyToolResultSecretPolicy(
@@ -5774,14 +5895,7 @@ export async function* runToolLoop(
               p.qualifiedName,
               `Tool "${p.qualifiedName}" is not available and was not executed.`,
             );
-            yield encoder.encode(
-              toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-            );
-            messages.push({
-              role: 'tool',
-              content,
-              tool_call_id: p.id,
-            });
+            yield* finishUnexecutedResumeTool(p, content, true);
           }
           continue;
         }
@@ -5808,17 +5922,10 @@ export async function* runToolLoop(
             p.qualifiedName,
             blockedToolResultMessage(p.qualifiedName),
           );
-          yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-          );
-          messages.push({
-            role: 'tool',
-            content,
-            tool_call_id: p.id,
-          });
+          yield* finishUnexecutedResumeTool(p, content, true);
         } else if (
           decision === 'approved' &&
-          isToolOffered(p.qualifiedName, mcpTools, availableTools)
+          isToolOffered(p.qualifiedName, mcpTools, availableTools, offeredMcpToolDefs())
         ) {
           toRun.push(p);
         } else if (decision === 'approved') {
@@ -5830,14 +5937,7 @@ export async function* runToolLoop(
             p.qualifiedName,
             `Tool "${p.qualifiedName}" is not available and was not executed.`,
           );
-          yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
-          );
-          messages.push({
-            role: 'tool',
-            content,
-            tool_call_id: p.id,
-          });
+          yield* finishUnexecutedResumeTool(p, content, true);
         } else {
           if (searchRequired && isWebSearchTool(p.qualifiedName)) {
             requiredSearchCouldNotRun = true;
@@ -5847,14 +5947,7 @@ export async function* runToolLoop(
             p.qualifiedName,
             TOOL_DENIED_MESSAGE,
           );
-          yield encoder.encode(
-            toolResultEvent(p.id, p.qualifiedName, content, false, responseModel),
-          );
-          messages.push({
-            role: 'tool',
-            content,
-            tool_call_id: p.id,
-          });
+          yield* finishUnexecutedResumeTool(p, content, false);
         }
       }
 
@@ -5951,6 +6044,7 @@ export async function* runToolLoop(
         pauseChunks.push(encoder.encode(pausedEmitted.sse));
         await recordGroundingSpend(true);
         await options.onPauseCheckpoint({
+          toolSchemaState: createToolSchemaState(loadedToolNames),
           sessionId,
           turnId,
           nextEventSequence: eventStream.nextSequence(),
@@ -5976,6 +6070,7 @@ export async function* runToolLoop(
           }
           await recordGroundingSpend(true);
           await options.onInvocationCheckpoint({
+            toolSchemaState: createToolSchemaState(loadedToolNames),
             sessionId,
             turnId,
             nextEventSequence: eventStream.nextSequence(),
@@ -6053,6 +6148,12 @@ export async function* runToolLoop(
           freeModelPromotionStepSizing(stepRequest.tools),
         );
       }
+      stepRequest.messages = managedToolInventoryProviderView(
+        messages,
+        stepRequest.tools,
+        processed.chatSurface === 'api' ? undefined : processed.managedToolInventoryVersion,
+        callerOwnedTools,
+      );
       if (processed.freeTrial) {
         const spent = freeTurnCost();
         const fitted = freeTrialSpend?.exhausted()
@@ -6898,6 +6999,7 @@ export async function* runToolLoop(
 
           await recordGroundingSpend(true);
           await options.onDeviceCheckpoint({
+            toolSchemaState: createToolSchemaState(loadedToolNames),
             sessionId,
             turnId,
             nextEventSequence: eventStream.nextSequence(),
@@ -6978,6 +7080,7 @@ export async function* runToolLoop(
 
         await recordGroundingSpend(true);
         await options.onApprovalCheckpoint?.({
+          toolSchemaState: createToolSchemaState(loadedToolNames),
           sessionId,
           turnId,
           nextEventSequence: eventStream.nextSequence(),
@@ -7046,6 +7149,7 @@ export async function* runToolLoop(
       );
       await recordGroundingSpend(true);
       await options.onStepBudgetCheckpoint({
+        toolSchemaState: createToolSchemaState(loadedToolNames),
         sessionId,
         turnId,
         nextEventSequence: eventStream.nextSequence(),

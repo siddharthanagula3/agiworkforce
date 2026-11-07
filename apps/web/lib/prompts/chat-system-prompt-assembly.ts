@@ -40,6 +40,7 @@ export interface ArtifactMarkers {
 
 export interface ChatTurnState {
   readonly toolNames: readonly string[];
+  readonly includeToolInventory?: boolean;
   readonly codeExecutionUnavailable?: boolean;
   readonly researchUnavailable?: boolean;
   readonly attachmentSandboxPaths?: readonly string[];
@@ -47,6 +48,7 @@ export interface ChatTurnState {
   readonly memory?: ChatTurnMemory;
   /** Present when the surface renders artifacts, so the prompt can name their markers. */
   readonly artifactMarkers?: ArtifactMarkers;
+  readonly richInlineBlocks?: boolean;
   /** The window.agi runtime text; absent means sent, as every version before 7 assumed. */
   readonly artifactRuntime?: boolean;
   readonly artifactConnectors?: boolean;
@@ -86,6 +88,25 @@ function productCapabilityBlock(
 function describeTool(sections: ChatSystemPromptSections, name: string): string {
   const description = chatSystemPromptSection(sections, `${TOOL_SECTION_PREFIX}${name}`);
   return description ? `- ${name}, ${description}` : `- ${name}`;
+}
+
+export function renderChatToolInventory(
+  sections: ChatSystemPromptSections,
+  toolNames: readonly string[],
+  bareToolNames?: ReadonlySet<string>,
+): string {
+  if (toolNames.length === 0) return chatSystemPromptSection(sections, 'no_tools');
+  return [
+    [
+      chatSystemPromptSection(sections, 'tools_heading'),
+      ...toolNames.map((name) =>
+        bareToolNames?.has(name) ? `- ${name}` : describeTool(sections, name),
+      ),
+    ].join('\n'),
+    chatSystemPromptSection(sections, 'tools_reality'),
+  ]
+    .filter((block) => block.length > 0)
+    .join('\n\n');
 }
 
 export function assembleChatSystemPrompt(
@@ -132,12 +153,8 @@ export function assembleChatSystemPrompt(
   ];
 
   if (toolNames.length > 0) {
-    blocks.push(
-      [section('tools_heading'), ...toolNames.map((name) => describeTool(sections, name))].join(
-        '\n',
-      ),
-      section('tools_reality'),
-    );
+    if (state.includeToolInventory !== false)
+      blocks.push(renderChatToolInventory(sections, toolNames));
 
     blocks.push(hasSearch ? section('search') : section('search_unavailable'));
     blocks.push(hasSearch || hasFetch ? section('citations') : section('citations_none'));
@@ -155,7 +172,9 @@ export function assembleChatSystemPrompt(
 
     if (hasFileCreation) blocks.push(section('file_creation'));
   } else {
-    blocks.push(section('no_tools'), section('citations_none'));
+    if (state.includeToolInventory !== false)
+      blocks.push(renderChatToolInventory(sections, toolNames));
+    blocks.push(section('citations_none'));
   }
 
   blocks.push(section('user_documents'), section('people_and_privacy'), section('refusal_style'));
@@ -169,7 +188,11 @@ export function assembleChatSystemPrompt(
         reactMarker: state.artifactMarkers.react,
         mermaidMarker: state.artifactMarkers.mermaid,
       }),
-      section('inline_blocks'),
+      section(
+        state.richInlineBlocks === false && sections['inline_blocks_unavailable'] !== undefined
+          ? 'inline_blocks_unavailable'
+          : 'inline_blocks',
+      ),
     );
   }
   if (state.artifactRuntime !== false) {

@@ -869,6 +869,11 @@ async function runScheduledAgent(
       text: `Scheduled execution skipped: ${accessDecision.reason}`,
       model: task.model ?? 'auto',
       billingStatus: accessDecision.code,
+      cancellation: {
+        reason: 'managed_compute_access_denied',
+        code: accessDecision.code,
+        message: accessDecision.reason,
+      },
     };
   }
 

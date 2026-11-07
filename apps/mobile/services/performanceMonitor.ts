@@ -123,11 +123,10 @@ const BENCHMARK_PROMPT =
 
 export async function runBenchmark(opts: {
   modelId: string;
-  backend: BackendName;
   generate: (opts: {
     prompt: string;
     onToken: (tok: string) => void;
-  }) => Promise<{ text: string; tokenCount: number }>;
+  }) => Promise<{ text: string; tokenCount: number; runtime: BackendName; aborted: boolean }>;
 }): Promise<BenchmarkResult> {
   const thermalState = getThermalState();
   const startTs = Date.now();
@@ -151,6 +150,8 @@ export async function runBenchmark(opts: {
     peakMemoryMB = await memorySampler.stop();
   }
 
+  if (result.aborted) throw new Error('Benchmark was interrupted. No result was saved.');
+
   const endTs = Date.now();
   const promptTokens = Math.ceil(BENCHMARK_PROMPT.length / 4);
   const durationSec = Math.max((endTs - startTs) / 1000, 0.001);
@@ -162,7 +163,7 @@ export async function runBenchmark(opts: {
   const benchmarkResult: BenchmarkResult = {
     ts: startTs,
     modelId: opts.modelId,
-    backend: opts.backend,
+    backend: result.runtime,
     tokensPerSecond,
     firstTokenLatencyMs,
     peakMemoryMB,

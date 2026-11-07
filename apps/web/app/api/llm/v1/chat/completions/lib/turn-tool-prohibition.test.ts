@@ -25,6 +25,24 @@ const R8_FIXTURE =
   'Can you find and continue our earlier picnic discussion? Use the earlier conversations, not the runbook, saved memory, or web search. If you cannot search those chats, say so.';
 
 describe('resolveTurnToolProhibition', () => {
+  it('refuses public search while retaining the requested connector tools', () => {
+    const text =
+      'Read only the attached resource. Do not search my workspace, edit anything, use public web search, or generate images.';
+    const prohibition = resolveTurnToolProhibition(text, WEB);
+    expect(prohibition).toEqual({ allTools: false, codeExecution: false, webSearch: true });
+    const request = {
+      web_search: true,
+      web_fetch: true,
+      connector_tools_enabled: true,
+    } as ChatCompletionRequest;
+    applyTurnToolProhibition(request, prohibition);
+    expect(request).toMatchObject({
+      web_search: false,
+      web_fetch: false,
+      connector_tools_enabled: true,
+    });
+  });
+
   it.each([
     ['R10-Q01', R10_FIXTURE],
     ['TOOLS-01', R11_FIXTURE],

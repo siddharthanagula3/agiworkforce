@@ -4,6 +4,21 @@ import type { InteractiveCard } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
+import { ChatStreamRuntimeProvider } from '../ChatStreamRuntimeProvider';
+
+const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
+
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
+    getToken: authMocks.getToken,
+    userId: 'user-1',
+    isSignedIn: true,
+    isLoaded: true,
+    sessionId: 'session-1',
+  }));
+});
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -87,9 +102,18 @@ function storedCard(): InteractiveCard | undefined {
     ?.interactiveCards?.[0];
 }
 
+function renderCard(card: InteractiveCard) {
+  return render(
+    <ChatStreamRuntimeProvider>
+      <InteractiveCardBlock cards={[card]} />
+    </ChatStreamRuntimeProvider>,
+  );
+}
+
 describe('InteractiveCardBlock, response channel', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
+    authMocks.getToken.mockResolvedValue('session-token');
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -102,7 +126,7 @@ describe('InteractiveCardBlock, response channel', () => {
     const card = decode(envelope);
     seedTranscript(card);
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Send answers' })).toBeInTheDocument();
@@ -119,7 +143,7 @@ describe('InteractiveCardBlock, response channel', () => {
       }),
     );
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
     await act(async () => {
       screen.getByRole('button', { name: 'Relaxed' }).click();
     });
@@ -158,7 +182,7 @@ describe('InteractiveCardBlock, response channel', () => {
       answers: [{ questionId: 'q1', kind: 'options', optionIds: ['o1'], labels: ['Relaxed'] }],
     });
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
     await act(async () => {
       screen.getByRole('button', { name: 'Relaxed' }).click();
     });
@@ -187,7 +211,7 @@ describe('InteractiveCardBlock, response channel', () => {
       settledResponse({ status: 'dismissed', dismissedAt: '2026-08-05T10:05:00.000Z' }),
     );
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
     await act(async () => {
       screen.getByRole('button', { name: "I'll just type it" }).click();
     });
@@ -205,7 +229,7 @@ describe('InteractiveCardBlock, response channel', () => {
     seedTranscript(card);
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 409 }));
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
     await act(async () => {
       screen.getByRole('button', { name: 'Relaxed' }).click();
     });
@@ -236,7 +260,7 @@ describe('InteractiveCardBlock, response channel', () => {
   });
 
   it('renders read-only when no message in the transcript carries the card', () => {
-    render(<InteractiveCardBlock cards={[decode(envelope)]} />);
+    renderCard(decode(envelope));
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send answers' })).not.toBeInTheDocument();
@@ -246,7 +270,7 @@ describe('InteractiveCardBlock, response channel', () => {
     const card = decode(envelope);
     seedTranscript(card, { isTemporary: true });
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
   });
@@ -258,7 +282,7 @@ describe('InteractiveCardBlock, response channel', () => {
       useChatStore.getState().startStreaming(MESSAGE_ID, CONVERSATION_ID);
     });
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
   });
@@ -274,7 +298,7 @@ describe('InteractiveCardBlock, response channel', () => {
     const card = decode(lapsed);
     seedTranscript(card);
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send answers' })).not.toBeInTheDocument();
@@ -286,7 +310,7 @@ describe('InteractiveCardBlock, response channel', () => {
     const card = decode(secret);
     seedTranscript(card);
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send answers' })).not.toBeInTheDocument();
@@ -305,7 +329,7 @@ describe('InteractiveCardBlock, response channel', () => {
       const card = decode(open);
       seedTranscript(card);
 
-      render(<InteractiveCardBlock cards={[card]} />);
+      renderCard(card);
       expect(screen.getByRole('button', { name: 'Relaxed' })).toBeEnabled();
 
       act(() => {
@@ -330,7 +354,7 @@ describe('InteractiveCardBlock, response channel', () => {
     const card = decode(open);
     seedTranscript(card);
 
-    render(<InteractiveCardBlock cards={[card]} />);
+    renderCard(card);
 
     expect(screen.getByRole('button', { name: 'Relaxed' })).toBeEnabled();
   });

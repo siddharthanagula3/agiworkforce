@@ -255,6 +255,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     organizationId,
     connectorId,
     isCustom: Boolean(!provider && discovered),
+    url: provider?.mcpUrl ?? discovered?.mcpUrl ?? null,
     request,
     surface: resolveCloudChatSurface(request),
   });

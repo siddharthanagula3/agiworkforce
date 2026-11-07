@@ -216,7 +216,14 @@ beforeEach(() => {
     replies: [],
   });
   mocks.readEnrolledAt.mockResolvedValue(null);
-  mocks.revokeEveryOtherSession.mockResolvedValue({ ended: ['sess_1', 'sess_2'] });
+  mocks.revokeEveryOtherSession.mockResolvedValue({
+    ended: ['sess_1', 'sess_2'],
+    alreadyGone: [],
+    failed: [],
+    incomplete: false,
+    currentSession: undefined,
+    targetCount: 2,
+  });
   mocks.finishIntentRevocation.mockResolvedValue(true);
 });
 
@@ -303,10 +310,40 @@ describe('POST /api/support/staff/tickets/[ticketId]/recovery', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.finishIntentRevocation).toHaveBeenCalledWith(
-      { ended: ['sess_1', 'sess_2'] },
+      expect.objectContaining({ ended: ['sess_1', 'sess_2'], failed: [], incomplete: false }),
       CUSTOMER,
     );
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'account_recovery_completed', outcome: 'failure' }),
+    );
   });
+
+  it.each([
+    { failed: ['sess_left'], incomplete: false },
+    { failed: [], incomplete: true },
+  ])(
+    'reports unfinished provider cleanup $failed/$incomplete despite intent success',
+    async (partial) => {
+      const sweep = {
+        ended: ['sess_1'],
+        alreadyGone: [],
+        currentSession: undefined,
+        targetCount: 2,
+        ...partial,
+      };
+      mocks.revokeEveryOtherSession.mockResolvedValue(sweep);
+      mocks.finishIntentRevocation.mockResolvedValue(true);
+
+      const response = await POST(request({ action: 'remove_second_factor' }), context());
+
+      expect(response.status).toBe(400);
+      expect(mocks.removeSecondFactor).toHaveBeenCalled();
+      expect(mocks.finishIntentRevocation).toHaveBeenCalledWith(sweep, CUSTOMER);
+      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'account_recovery_completed', outcome: 'failure' }),
+      );
+    },
+  );
 
   it('adds the new sign-in email and makes it primary', async () => {
     mocks.getUser.mockResolvedValue({ emailAddresses: [] });
@@ -351,6 +388,7 @@ describe('POST /api/support/staff/tickets/[ticketId]/recovery', () => {
       expect.objectContaining({
         userId: OPERATOR,
         eventType: 'account_recovery_completed',
+        outcome: 'success',
         detail: expect.objectContaining({ resourceId: CUSTOMER }),
       }),
     );

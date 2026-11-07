@@ -11,15 +11,19 @@ export function sessionAbsoluteLifetimeMs(): number {
   const configured = process.env[SESSION_ABSOLUTE_LIFETIME_HOURS_ENV]?.trim();
   if (!configured) return DEFAULT_ABSOLUTE_LIFETIME_HOURS * HOUR_MS;
 
-  const hours = Number(configured);
-  if (!Number.isFinite(hours) || hours <= 0) {
+  const lifetimeMs = Number(configured) * HOUR_MS;
+  if (!Number.isFinite(lifetimeMs) || lifetimeMs <= 0) {
     return DEFAULT_ABSOLUTE_LIFETIME_HOURS * HOUR_MS;
   }
-  return hours * HOUR_MS;
+  return lifetimeMs;
+}
+
+export function isFiniteSessionTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 export function sessionAbsoluteDeadline(createdAt: number | null): number | null {
-  return createdAt === null ? null : createdAt + sessionAbsoluteLifetimeMs();
+  return isFiniteSessionTimestamp(createdAt) ? createdAt + sessionAbsoluteLifetimeMs() : null;
 }
 
 export function hasOutlivedAbsoluteLifetime(createdAt: number | null, now: number): boolean {
@@ -39,7 +43,7 @@ export interface SessionLifetime {
 }
 
 export function hasOutlivedIdleLifetime(expireAt: number | null, now: number): boolean {
-  return expireAt !== null && expireAt <= now;
+  return isFiniteSessionTimestamp(expireAt) && expireAt <= now;
 }
 
 /**

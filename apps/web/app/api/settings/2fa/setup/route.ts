@@ -3,10 +3,10 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import { getIdentityProvider } from '@/lib/server/identity';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { logger } from '@/lib/logger';
 import {
@@ -27,10 +27,15 @@ async function handleSetup2FA(request: NextRequest) {
 
   requireAuthenticatorEnrollment();
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
-  const { email } = await getClerkAuthUser(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId, sessionIdentity } = await getSessionAccountDb(
+    request,
+    TWO_FACTOR_SCOPE,
+  );
+  const identityUser = await getIdentityProvider().getUser(sessionIdentity.subject);
+  if (!identityUser || identityUser.id !== sessionIdentity.subject)
+    throw createError.unauthorized();
 
-  if ((await readSecondFactorStatus(db, userId)).authenticator) {
+  if ((await readSecondFactorStatus(db, userId, sessionIdentity.subject)).authenticator) {
     logger.warn({ userId }, '2FA setup refused: account already enrolled');
     throw createError.conflict(
       'Two-factor authentication is already on. Turn it off before setting up a new authenticator.',
@@ -46,7 +51,7 @@ async function handleSetup2FA(request: NextRequest) {
   });
 
   const secret = generateTOTPSecret();
-  const otpauthUrl = generateOTPAuthURL(secret, email ?? userId);
+  const otpauthUrl = generateOTPAuthURL(secret, identityUser.primaryEmail ?? userId);
 
   let encryptedSecret: string;
   try {

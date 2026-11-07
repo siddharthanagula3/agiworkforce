@@ -1,0 +1,61 @@
+.content {
+  container-type: inline-size;
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: start;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--settings-border);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.description {
+  min-width: 0;
+}
+
+.control {
+  min-width: 0;
+  width: 100%;
+  align-self: start;
+}
+
+.switchControl {
+  display: flex;
+  min-height: var(--space-6);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.switchControl > button {
+  position: relative;
+}
+
+@container (min-width: 32rem) {
+  .rows {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+}
+
+@media (pointer: coarse) {
+  .control {
+    min-height: var(--space-7);
+  }
+
+  .switchControl > button::after {
+    position: absolute;
+    inset: calc(-1 * var(--space-3)) 0;
+    content: '';
+  }
+}

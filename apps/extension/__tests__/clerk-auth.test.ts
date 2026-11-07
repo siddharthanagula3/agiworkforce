@@ -33,6 +33,27 @@ async function importClerkAuth() {
   return import('../src/features/cloud-bridge/clerkAuth');
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function ownedClient() {
+  return {
+    session: {
+      id: 'session-a',
+      user: { id: 'user-a' },
+      getToken: vi.fn().mockResolvedValue(sessionToken('user-a', 'session-a')),
+    },
+    user: { id: 'user-a' },
+  };
+}
+
 describe('Clerk Chrome Extension auth', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -59,6 +80,147 @@ describe('Clerk Chrome Extension auth', () => {
     process.env = { ...ORIGINAL_ENV };
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  describe('background client ownership', () => {
+    beforeEach(() => {
+      process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+      process.env['CLERK_SYNC_HOST'] = 'http://localhost';
+      vi.stubGlobal('document', undefined);
+    });
+
+    it('does not evict a refreshed client when the older creation rejects', async () => {
+      const oldCreation = deferred<ReturnType<typeof ownedClient>>();
+      const current = ownedClient();
+      createClerkClient.mockReturnValueOnce(oldCreation.promise).mockResolvedValueOnce(current);
+      const auth = await importClerkAuth();
+      const failure = new Error('old creation failed');
+      const oldResult = expect(auth.getFreshClerkAuthContext()).rejects.toBe(failure);
+
+      await expect(auth.getFreshClerkAuthContext(true)).resolves.toMatchObject({
+        token: sessionToken('user-a', 'session-a'),
+      });
+      oldCreation.reject(failure);
+      await oldResult;
+      await expect(auth.getFreshClerkAuthContext()).resolves.toMatchObject({
+        token: sessionToken('user-a', 'session-a'),
+      });
+      expect(createClerkClient).toHaveBeenCalledTimes(2);
+    });
+
+    it('evicts the current failed creation so a later read can retry', async () => {
+      const failure = new Error('creation failed');
+      createClerkClient.mockRejectedValueOnce(failure).mockResolvedValueOnce(ownedClient());
+      const auth = await importClerkAuth();
+
+      await expect(auth.getFreshClerkAuthContext()).rejects.toBe(failure);
+      await expect(auth.getFreshClerkAuthContext()).resolves.toMatchObject({
+        token: sessionToken('user-a', 'session-a'),
+      });
+      expect(createClerkClient).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([false, true])(
+      'rejects obsolete creation before reading its session (signed out: %s)',
+      async (signedOut) => {
+        const old = ownedClient();
+        const oldCreation = deferred<ReturnType<typeof ownedClient> | { session: null }>();
+        createClerkClient
+          .mockReturnValueOnce(oldCreation.promise)
+          .mockResolvedValueOnce(ownedClient());
+        const auth = await importClerkAuth();
+        const oldResult = expect(auth.getFreshClerkAuthContext()).rejects.toThrow(/origin-bound/);
+
+        await auth.getFreshClerkAuthContext(true);
+        oldCreation.resolve(signedOut ? { session: null } : old);
+        await oldResult;
+        expect(old.session.getToken).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      { renewal: false, token: null },
+      { renewal: false, token: sessionToken('user-a', 'session-a') },
+      { renewal: true, token: null },
+      { renewal: true, token: sessionToken('user-a', 'session-a') },
+    ])('rejects a retired client after token completion %j', async ({ renewal, token }) => {
+      const old = ownedClient();
+      const pendingToken = deferred<string | null>();
+      const tokenStarted = deferred<void>();
+      old.session.getToken.mockReset();
+      if (renewal) {
+        old.session.getToken.mockResolvedValueOnce(
+          sessionToken('user-a', 'session-a', { azp: null }),
+        );
+      }
+      old.session.getToken.mockImplementationOnce(() => {
+        tokenStarted.resolve();
+        return pendingToken.promise;
+      });
+      createClerkClient.mockResolvedValueOnce(old).mockResolvedValueOnce(ownedClient());
+      const auth = await importClerkAuth();
+      const oldResult = expect(auth.getFreshClerkAuthContext()).rejects.toThrow(/origin-bound/);
+      await tokenStarted.promise;
+
+      await auth.getFreshClerkAuthContext(true);
+      pendingToken.resolve(token);
+      await oldResult;
+      expect(old.session.getToken).toHaveBeenCalledTimes(renewal ? 2 : 1);
+    });
+
+    it.each(['session object', 'account id', 'session id'])(
+      'rejects a changed %s before a null token result',
+      async (change) => {
+        const clerk = ownedClient();
+        const pendingToken = deferred<string | null>();
+        const tokenStarted = deferred<void>();
+        const getToken = clerk.session.getToken.mockImplementationOnce(() => {
+          tokenStarted.resolve();
+          return pendingToken.promise;
+        });
+        createClerkClient.mockResolvedValue(clerk);
+        const auth = await importClerkAuth();
+        const result = expect(auth.getFreshClerkAuthContext()).rejects.toThrow(/origin-bound/);
+        await tokenStarted.promise;
+
+        if (change === 'session object') clerk.session = { ...clerk.session };
+        if (change === 'account id') clerk.user.id = 'user-b';
+        if (change === 'session id') clerk.session.id = 'session-b';
+        pendingToken.resolve(null);
+        await result;
+        expect(getToken).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it.each([false, true])(
+      'preserves a current null token result (renewal: %s)',
+      async (renewal) => {
+        const clerk = ownedClient();
+        clerk.session.getToken.mockReset();
+        if (renewal) {
+          clerk.session.getToken.mockResolvedValueOnce(
+            sessionToken('user-a', 'session-a', { azp: null }),
+          );
+        }
+        clerk.session.getToken.mockResolvedValueOnce(null);
+        createClerkClient.mockResolvedValue(clerk);
+        const auth = await importClerkAuth();
+
+        await expect(auth.getFreshClerkAuthContext()).resolves.toBeNull();
+        expect(clerk.session.getToken).toHaveBeenCalledTimes(renewal ? 2 : 1);
+      },
+    );
+
+    it('preserves token retrieval errors without renewing', async () => {
+      const clerk = ownedClient();
+      const failure = new Error('token retrieval failed');
+      clerk.session.getToken.mockRejectedValueOnce(failure);
+      createClerkClient.mockResolvedValue(clerk);
+      const auth = await importClerkAuth();
+
+      await expect(auth.getFreshClerkAuthContext()).rejects.toBe(failure);
+      expect(clerk.session.getToken).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not load the SDK when the publishable key is absent', async () => {

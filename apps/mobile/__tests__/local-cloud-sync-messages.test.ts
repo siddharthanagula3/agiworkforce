@@ -1,29 +1,28 @@
 jest.mock('../services/api', () => ({
   api: { get: jest.fn(), post: jest.fn() },
-}));
-jest.mock('../services/managedCloudChat', () => ({
-  managedCloudChat: { createConversation: jest.fn() },
+  apiFetch: jest.fn(),
 }));
 
-import { api } from '../services/api';
-import { managedCloudChat } from '../services/managedCloudChat';
+import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
+import { api, apiFetch } from '../services/api';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
-import { syncLocalConversationsToCloud } from '../src/features/settings/data-controls/localCloudSyncService';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  prepareLocalCloudSync,
+  syncLocalConversationsToCloud,
+} from '../src/features/settings/data-controls/localCloudSyncService';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
 import {
   activateCloudAccount,
   __resetCloudAccountSessionForTests,
 } from '../src/features/auth/services/cloudAccountSession';
 
-const mockPost = api.post as jest.MockedFunction<typeof api.post>;
-const mockCreateConversation = managedCloudChat.createConversation as jest.MockedFunction<
-  typeof managedCloudChat.createConversation
->;
-
-const CONVERSATION_ID = '0190a000-0000-7000-8000-0000000000c1';
-
+const mockPost = api.post as jest.Mock;
+const mockFetch = apiFetch as jest.Mock;
+const localId = 'conv_123_fixture';
+const cloudId = '0190a000-0000-7000-8000-000000000f51';
 const conversation: ConversationSummary = {
-  id: CONVERSATION_ID,
+  id: localId,
   title: 'Local chat',
   updatedAt: '2026-06-01T00:00:00.000Z',
   createdAt: '2026-06-01T00:00:00.000Z',
@@ -31,141 +30,185 @@ const conversation: ConversationSummary = {
   pinned: false,
   executionMode: 'local',
 };
-
-const localMessages: ChatMessage[] = [
-  { id: 'm1', role: 'user', content: 'Hello there' } as ChatMessage,
-  {
-    id: 'm2',
-    role: 'assistant',
-    content: 'Hi! How can I help?',
-    model: 'fixture-model',
-  } as ChatMessage,
+const messages: ChatMessage[] = [
+  { id: 'm1', role: 'user', content: 'Hello' } as ChatMessage,
+  { id: 'm2', role: 'assistant', content: 'Hi', model: SYNTHETIC_LOCAL_MODEL_ID } as ChatMessage,
 ];
+function run(plan = prepareLocalCloudSync(), controller = new AbortController()) {
+  return syncLocalConversationsToCloud(plan, controller.signal, () => {});
+}
 
-function seedLocalStore() {
+beforeEach(() => {
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('account-a');
+  useChatAppModeStore.setState({ appMode: 'cloud' });
   useChatMessageStore.setState({
     conversations: [conversation],
-    messages: { [CONVERSATION_ID]: localMessages },
+    messages: { [localId]: messages },
   });
-}
-
-const SERVER_CONVERSATION_ID = '0190a000-0000-7000-8000-000000000f51';
-const BULK_PATH = `/api/chat/conversations/${SERVER_CONVERSATION_ID}/messages/bulk`;
-
-function cloudConversationFixture(id: string) {
-  return {
-    id,
-    title: 'Local chat',
-    model: null,
-    projectId: null,
-    pinned: false,
-    createdAt: '2026-06-01T00:00:00.000Z',
-    updatedAt: '2026-06-01T00:00:00.000Z',
-  } as Awaited<ReturnType<typeof managedCloudChat.createConversation>>;
-}
-
-describe('syncLocalConversationsToCloud', () => {
-  beforeEach(() => {
-    __resetCloudAccountSessionForTests();
-    activateCloudAccount('account-a');
-    mockPost.mockReset();
-    mockCreateConversation.mockReset();
-    mockCreateConversation.mockResolvedValue(cloudConversationFixture(SERVER_CONVERSATION_ID));
-    seedLocalStore();
-  });
-
-  it('creates the cloud conversation through the shared client with an idempotent id', async () => {
-    mockPost.mockResolvedValue({ saved: 2 });
-
-    await syncLocalConversationsToCloud();
-
-    expect(mockCreateConversation).toHaveBeenCalledWith({
-      id: CONVERSATION_ID,
-      title: 'Local chat',
-    });
-  });
-
-  it('sends message bodies to the bulk endpoint, not just the conversation shell', async () => {
-    mockPost.mockImplementation(async (path: string) => {
-      if (path === BULK_PATH) {
-        return { saved: 2 };
-      }
-      throw new Error(`Unexpected path: ${path}`);
-    });
-
-    const result = await syncLocalConversationsToCloud();
-
-    const bulkCall = mockPost.mock.calls.find(([path]) => path === BULK_PATH);
-    expect(bulkCall).toBeDefined();
-    const [, body] = bulkCall as [string, { messages: Array<{ role: string; content: string }> }];
-    expect(body.messages).toEqual([
-      { role: 'user', content: 'Hello there', model: undefined },
-      { role: 'assistant', content: 'Hi! How can I help?', model: 'fixture-model' },
-    ]);
-
-    expect(result.conversationsSynced).toBe(1);
-    expect(result.messagesSynced).toBe(2);
-    expect(result.errors).toEqual([]);
-  });
-
-  it('reports an error instead of success when the server only partially accepts messages', async () => {
-    mockPost.mockImplementation(async (path: string) => {
-      if (path === BULK_PATH) {
-        return { saved: 1 };
-      }
-      throw new Error(`Unexpected path: ${path}`);
-    });
-
-    const result = await syncLocalConversationsToCloud();
-
-    expect(result.conversationsSynced).toBe(0);
-    expect(result.messagesSynced).toBe(0);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]).toMatch(/1\/2 messages/);
-  });
-
-  it('hides unexpected server diagnostics from the partial-sync report', async () => {
-    mockPost.mockRejectedValueOnce(new Error('private storage bucket and provider token'));
-
-    const result = await syncLocalConversationsToCloud();
-
-    expect(result.errors).toEqual([
-      'Could not sync "Local chat": Check your connection and try again.',
-    ]);
-  });
-
-  it('stops before uploading messages if the Cloud account changes after chat creation', async () => {
-    let resolveConversation!: (value: ReturnType<typeof cloudConversationFixture>) => void;
-    mockCreateConversation.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveConversation = resolve;
+  mockPost.mockReset().mockResolvedValue({ saved: 2 });
+  mockFetch.mockReset().mockImplementation(
+    async (_path: string, init: RequestInit) =>
+      ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          conversation: {
+            id: JSON.parse(init.body as string).id,
+            title: 'Local chat',
+            model: null,
+            project_id: null,
+            pinned: false,
+            starred: false,
+            archived: false,
+            is_temporary: false,
+            created_at: conversation.createdAt,
+            updated_at: conversation.updatedAt,
+          },
         }),
-    );
+      }) as Response,
+  );
+});
 
-    const pending = syncLocalConversationsToCloud();
-    activateCloudAccount('account-b');
-    resolveConversation(cloudConversationFixture(SERVER_CONVERSATION_ID));
-
-    await expect(pending).rejects.toThrow('Cloud account changed');
-    expect(mockPost).not.toHaveBeenCalled();
+it('freezes ordinary non-UUID local data and binds the original epoch through both transports', async () => {
+  const plan = prepareLocalCloudSync();
+  useChatMessageStore.setState({ conversations: [], messages: {} });
+  const result = await run(plan);
+  expect(result).toEqual({
+    conversationsSynced: 1,
+    messagesSynced: 2,
+    errors: [],
+    outcomeUnknown: false,
   });
-
-  it('does not report an old-account sync as complete if the account changes during upload', async () => {
-    let resolveUpload!: (value: { saved: number }) => void;
-    mockPost.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveUpload = resolve;
-        }),
-    );
-
-    const pending = syncLocalConversationsToCloud();
-    await Promise.resolve();
-    expect(mockPost).toHaveBeenCalledTimes(1);
-    activateCloudAccount('account-b');
-    resolveUpload({ saved: 2 });
-
-    await expect(pending).rejects.toThrow('Cloud account changed');
+  expect(plan.conversations[0].id).not.toBe(localId);
+  expect(Object.isFrozen(plan.conversations[0].messages[0])).toBe(true);
+  expect(mockFetch).toHaveBeenCalledWith('/api/chat/conversations', expect.anything(), {
+    accountEpoch: plan.account,
+    signal: expect.anything(),
   });
+  expect(mockPost).toHaveBeenCalledWith(
+    `/api/chat/conversations/${plan.conversations[0].id}/messages/bulk`,
+    {
+      messages: [
+        { role: 'user', content: 'Hello', model: undefined },
+        { role: 'assistant', content: 'Hi', model: SYNTHETIC_LOCAL_MODEL_ID },
+      ],
+    },
+    { accountEpoch: plan.account, signal: expect.anything() },
+  );
+  await expect(run(plan)).rejects.toThrow('already been started');
+});
+
+it('refuses Local mode without changing mode or dispatching', () => {
+  useChatAppModeStore.setState({ appMode: 'local' });
+  expect(() => prepareLocalCloudSync()).toThrow('Switch chat');
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('rejects an old plan after account A to B to A', async () => {
+  const plan = prepareLocalCloudSync();
+  activateCloudAccount('account-b');
+  activateCloudAccount('account-a');
+  await expect(run(plan)).rejects.toThrow('Cloud account changed');
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('blocks the real shared-client header await boundary before apiFetch', async () => {
+  const pending = run();
+  activateCloudAccount('account-b');
+  await expect(pending).rejects.toThrow('Cloud account changed');
+  expect(mockFetch).not.toHaveBeenCalled();
+  expect(mockPost).not.toHaveBeenCalled();
+});
+
+it('does not revive an aborted operation after mode returns to Cloud', async () => {
+  const controller = new AbortController();
+  const pending = run(prepareLocalCloudSync(), controller);
+  useChatAppModeStore.setState({ appMode: 'local' });
+  controller.abort();
+  useChatAppModeStore.setState({ appMode: 'cloud' });
+  await expect(pending).rejects.toThrow();
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('excludes temporary chats and counts capped and ineligible content without editing originals', () => {
+  const originals = Array.from({ length: 52 }, (_, i) => ({
+    ...conversation,
+    id: `conv_${i}`,
+    temporary: i === 0,
+  }));
+  const many = Array.from({ length: 101 }, (_, i) => ({ ...messages[0], id: `m${i}` }));
+  useChatMessageStore.setState({
+    conversations: originals,
+    messages: { conv_1: [...many, { ...messages[0], isStreaming: true }] },
+  });
+  const plan = prepareLocalCloudSync();
+  expect(plan.temporaryChatsExcluded).toBe(1);
+  expect(plan.conversationsOmitted).toBe(1);
+  expect(plan.conversations).toHaveLength(1);
+  expect(plan.emptyChatsExcluded).toBe(49);
+  expect(plan.messageCount).toBe(100);
+  expect(plan.messagesOmitted).toBe(2);
+  expect(useChatMessageStore.getState().conversations).toBe(originals);
+});
+
+it('counts acknowledged partial messages separately from fully copied chats', async () => {
+  mockPost.mockResolvedValue({ saved: 1 });
+  const result = await run();
+  expect(result.conversationsSynced).toBe(0);
+  expect(result.messagesSynced).toBe(1);
+  expect(result.errors).toHaveLength(1);
+  expect(result.outcomeUnknown).toBe(false);
+});
+
+it.each([
+  undefined,
+  null,
+  {},
+  { saved: -1 },
+  { saved: 3 },
+  { saved: 0.5 },
+  { saved: '2' },
+  { saved: NaN },
+])('treats malformed receipt %p as unknown without retrying', async (receipt) => {
+  mockPost.mockResolvedValue(receipt);
+  const result = await run();
+  expect(result.outcomeUnknown).toBe(true);
+  expect(result.messagesSynced).toBe(0);
+  expect(result.conversationsSynced).toBe(0);
+  expect(mockPost).toHaveBeenCalledTimes(1);
+});
+
+it('preserves Local data and hides diagnostics on an interrupted response', async () => {
+  mockPost.mockRejectedValue(new Error('private provider diagnostics'));
+  const result = await run();
+  expect(result.outcomeUnknown).toBe(true);
+  expect(result.errors.join(' ')).not.toContain('private provider');
+  expect(useChatMessageStore.getState().messages[localId]).toBe(messages);
+});
+
+it('stops on an unexpected create destination without uploading or retrying', async () => {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    status: 201,
+    json: async () => ({
+      conversation: {
+        id: cloudId,
+        title: 'Unexpected destination',
+        model: null,
+        project_id: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        is_temporary: false,
+        created_at: conversation.createdAt,
+        updated_at: conversation.updatedAt,
+      },
+    }),
+  } as Response);
+  const result = await run();
+  expect(result.outcomeUnknown).toBe(true);
+  expect(result.conversationsSynced).toBe(0);
+  expect(mockPost).not.toHaveBeenCalled();
+  expect(mockFetch).toHaveBeenCalledTimes(1);
 });

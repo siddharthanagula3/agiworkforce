@@ -103,7 +103,7 @@ describe('UpgradeWaitlistDialog', () => {
     expect(confirmation).toHaveTextContent(
       'We’ll email ada@example.com when you can upgrade to Pro.',
     );
-    expect(confirmation).toHaveFocus();
+    await waitFor(() => expect(confirmation).toHaveFocus());
     expect(screen.getByRole('heading', { name: 'You’re on the Pro waitlist' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Join upgrade waitlist' })).toBeNull();
     expect(waitlistMocks.join).toHaveBeenCalledWith(request);
@@ -127,7 +127,7 @@ describe('UpgradeWaitlistDialog', () => {
     expect(confirmation).toHaveTextContent(
       'We’ll email ada@example.com when you can upgrade to Pro.',
     );
-    expect(confirmation).toHaveFocus();
+    await waitFor(() => expect(confirmation).toHaveFocus());
     expect(screen.getByRole('heading', { name: 'You’re on the Pro waitlist' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Join upgrade waitlist' })).toBeNull();
     expect(screen.getByLabelText('Access code')).toBeEnabled();

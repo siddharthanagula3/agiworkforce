@@ -384,10 +384,17 @@ export interface HostNotifyRequest {
 export interface HostUpdateAvailability {
   available: boolean;
   currentVersion: string;
+  /** Restart target when ready; empty if that staged identity is unknown. */
   version: string;
   publishedAt?: string;
   downloadUrl: string;
   installsAutomatically?: boolean;
+  nativeUpdateState?: 'unsupported' | 'idle' | 'checking' | 'downloading' | 'ready' | 'failed';
+  /** Null means a package is staged but its version is unknown. */
+  stagedVersion?: string | null;
+  /** Published metadata, independent of the staged package identified by version. */
+  latestVersion?: string;
+  metadataError?: string;
   readyToInstall?: boolean;
   downloading?: boolean;
   /** ISO timestamp of the shell's most recent check, scheduled or asked for. */

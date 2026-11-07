@@ -2,7 +2,7 @@
 
 Status: Current standing guidance and dated research seed
 Owner: Founder + product/architecture leads
-Last updated: 2026-10-24
+Last updated: 2026-11-02
 
 **Repository location:** `docs/product/competitive-guidance.md`
 **Research baseline:** announcements dated on or before **September 21, 2026**.
@@ -25,6 +25,11 @@ official documentation, founder decisions, or the trust-boundary contract.
 ## 1. Mission and authority
 
 You are developing AGI Workforce as one connected AI ecosystem. Treat current ChatGPT and Claude as the primary references for familiar, polished user experiences. Use Perplexity, Gemini, Manus, and xAI/Grok as additional references for research, multimodal interaction, agentic work, local/cloud execution, coding, extensibility, and related workflows.
+
+Use Claude as the primary product reference for skills, plugins and connectors.
+Use current Cursor and Antigravity evidence for editor, workspace, execution and
+review workflows. Their permission defaults do not override AGI Workforce's
+trust boundaries or approval policy.
 
 The desired result is close functional and interaction parity: a person accustomed to the relevant competitor should understand how to accomplish the equivalent task in AGI Workforce without learning an unnecessarily different product. Study the actual journey, information hierarchy, layout, affordances, state transitions, output quality, and failure recovery, not merely screenshots of the home page.
 
@@ -134,6 +139,29 @@ These cadences are our proposed operating policy, not claims about competitor pr
 Cache dated findings, follow changes, and read the relevant documents deeply. Do not repeatedly reread every vendor’s entire website for a minor CSS fix. If research is blocked, label the uncertainty, avoid irreversible guesses, and continue independent authorized work.
 
 The September 21 baseline below is not a permanent cutoff. Refresh it against the real date of future work. Undated live documentation read on September 22 is current guidance, not proof of an archived September 21 interface.
+
+### 3.4 Architecture edge-case acceptance
+
+Compare the job a person can complete, including equivalent parent controls;
+an absent component identifier does not establish a missing feature. A protocol
+type, registry entry or contract alone does not establish a usable surface.
+
+For each affected lifecycle, identify its canonical owner, capture the state
+before asynchronous work, and test success, refusal, cancellation, retry,
+duplicate completion, stale ownership and restoration after reopening. Include
+account/workspace changes, permission revocation, partial output, unavailable
+dependencies, resource limits and timezone transitions where applicable.
+
+Record source inspection, mocked execution, live local dependencies, native UI
+and production observations separately. A remount is not a server-backed reopen;
+a terminal database row is not proof that an external side effect stopped.
+Require positive controls, fixture isolation and nonzero executed test counts.
+Exercise every registered adapter at a shared seam before claiming conformance.
+Missing coverage is an open check, not a confirmed product defect. Passing a
+finite suite never establishes every possible edge case or competitor parity.
+
+The current execution queue and dated primary references are in
+[`audit/live-check/architecture-edge-case-conformance.md`](../../audit/live-check/architecture-edge-case-conformance.md).
 
 ## 4. Dated research seed: changes that must not be replaced with old assumptions
 

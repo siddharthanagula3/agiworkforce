@@ -6,6 +6,7 @@ import { ApiHttpError, api, apiFetch } from '@/services/api';
 import { getAuthHeaders } from '@/services/authSession';
 import {
   ManagedSkillsResponseSchema,
+  ManagedSkillFilePreviewResponseSchema,
   type ManagedSkillSource,
   type ManagedSkillSummary,
 } from '@agiworkforce/cloud-contracts';
@@ -174,7 +175,13 @@ export async function fetchSkillFileText(name: string, path: string): Promise<st
   assertSkillsAvailable();
   const response = await apiFetch(skillFilePath(name, path), { method: 'GET' });
   if (!response.ok) throw new ApiHttpError(`Could not open ${path}.`, response.status);
-  return response.text();
+  const parsed = ManagedSkillFilePreviewResponseSchema.safeParse(
+    await response.json().catch(() => null),
+  );
+  if (!parsed.success || parsed.data.file.path !== path) {
+    throw new Error('Skills returned an invalid response.');
+  }
+  return parsed.data.file.content;
 }
 
 export async function updatePersonalSkill(name: string, draft: SkillDraftInput): Promise<void> {

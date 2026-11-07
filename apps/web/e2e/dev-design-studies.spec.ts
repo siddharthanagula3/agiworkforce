@@ -5,6 +5,17 @@ const STUDIES = ['/dev/mockup-fidelity', '/dev/review', '/dev/review/web'] as co
 
 test.describe('design study pages', () => {
   test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' } as never);
+  test('the renderer fixture respects the declared server mode', async ({ page }) => {
+    const response = await page.goto('/dev/renderer-probe?case=math&conversation=release-boundary');
+    const fixture = page.locator('[data-renderer-conversation]');
+    if (process.env['QA_PRODUCTION_SERVER'] === '1') {
+      expect(response?.status()).toBe(404);
+      await expect(fixture).toHaveCount(0);
+    } else {
+      expect(response?.status()).toBe(200);
+      await expect(fixture).toBeVisible();
+    }
+  });
   for (const route of STUDIES) {
     test(`${route} renders its study without a script error or sideways scroll`, async ({
       page,

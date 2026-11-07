@@ -334,6 +334,10 @@ export interface ArtifactProseSplit {
   after: string;
 }
 
+export type ArtifactProseOptions = Pick<DeriveArtifactsOptions, 'include' | 'minCodeLines'> & {
+  keepInline?: (block: DerivedCodeBlock) => boolean;
+};
+
 /**
  * The prose on either side of the last artifact block, with every artifact
  * block removed, so a surface can show the artifact where the model put it
@@ -342,13 +346,14 @@ export interface ArtifactProseSplit {
 export function splitProseAroundArtifacts(
   markdown: string,
   artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
-  options: Pick<DeriveArtifactsOptions, 'include' | 'minCodeLines'> = {},
+  options: ArtifactProseOptions = {},
 ): ArtifactProseSplit {
   if (artifacts.length === 0) return { before: markdown.trim(), after: '' };
   const wanted = new Set(artifacts.map((a) => normalizeWhitespace(a.content)));
   const blocks = extractCodeBlocks(markdown);
   let lastEnd = -1;
   for (const block of blocks) {
+    if (options.keepInline?.(block)) continue;
     if (
       wanted.has(normalizeWhitespace(block.content)) ||
       blockIncluded(block, options.include ?? 'renderable', options.minCodeLines ?? 4)
@@ -371,7 +376,7 @@ function normalizeWhitespace(value: string): string {
 export function removeArtifactBlocks(
   markdown: string,
   artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
-  options: Pick<DeriveArtifactsOptions, 'include' | 'minCodeLines'> = {},
+  options: ArtifactProseOptions = {},
 ): string {
   if (artifacts.length === 0) return markdown.trim();
   const wanted = new Set(artifacts.map((a) => normalizeWhitespace(a.content)));
@@ -379,6 +384,7 @@ export function removeArtifactBlocks(
   let cleaned = markdown;
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     const block = blocks[i]!;
+    if (options.keepInline?.(block)) continue;
     if (
       wanted.has(normalizeWhitespace(block.content)) ||
       blockIncluded(block, options.include ?? 'renderable', options.minCodeLines ?? 4)

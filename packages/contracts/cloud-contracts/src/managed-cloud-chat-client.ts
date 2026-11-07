@@ -113,12 +113,17 @@ const RATE_LIMITED_STATUS = 429;
 const SERVER_ERROR_STATUS_FLOOR = 500;
 
 export class ManagedCloudChatHttpError extends Error {
+  readonly code?: string;
+  readonly reason?: string;
   constructor(
     message: string,
     readonly status: number,
+    details?: { code?: string; reason?: string },
   ) {
     super(message);
     this.name = 'ManagedCloudChatHttpError';
+    this.code = details?.code;
+    this.reason = details?.reason;
   }
 }
 
@@ -148,7 +153,19 @@ async function responseError(response: Response): Promise<ManagedCloudChatHttpEr
           typeof (raw as Record<string, unknown>)['message'] === 'string'
         ? ((raw as Record<string, unknown>)['message'] as string)
         : `HTTP ${response.status}`;
-  return new ManagedCloudChatHttpError(`HTTP ${response.status}: ${message}`, response.status);
+  const errorBody = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  const details = errorBody?.['details'];
+  const reason =
+    details &&
+    typeof details === 'object' &&
+    'reason' in details &&
+    typeof details.reason === 'string'
+      ? details.reason
+      : undefined;
+  return new ManagedCloudChatHttpError(`HTTP ${response.status}: ${message}`, response.status, {
+    ...(typeof errorBody?.['code'] === 'string' ? { code: errorBody['code'] } : {}),
+    ...(reason ? { reason } : {}),
+  });
 }
 
 async function parseContract<T>(

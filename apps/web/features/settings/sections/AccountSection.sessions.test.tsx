@@ -1,3 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
+import { queryKeys } from '@shared/stores/query-client';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountSection } from './AccountSection';
@@ -31,15 +34,9 @@ vi.mock('../components/Settings/ApiKeys', () => ({
   ApiKeysManager: () => <div>Scoped API key manager</div>,
 }));
 
-// This suite only exercises session management, not account deletion (see
-// AccountSection.delete.test.tsx for the real useDeleteAccount integration,
-// including a QueryClientProvider). Stub the hook here so mounting
-// AccountSection doesn't require a QueryClient just to render session rows.
 vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
   ...(await importOriginal()),
   useOrganizationOverview: () => ({ data: undefined }),
-  // The pane now carries a Recent activity panel under the sessions list; this
-  // file has no QueryClient, and these tests are about sessions.
   useUserActivity: () => ({ data: [], isPending: false, error: null, refetch: vi.fn() }),
   useDeleteAccount: () => ({
     mutate: vi.fn(),
@@ -116,7 +113,7 @@ describe('AccountSection active sessions', () => {
       throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(await screen.findByText(/Showing 2 of 2500 sessions\./)).toBeInTheDocument();
     expect(
@@ -138,7 +135,7 @@ describe('AccountSection active sessions', () => {
       throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     await screen.findByText('Mobile Safari 19');
     expect(screen.queryByText(/Showing \d+ of \d+ sessions/)).not.toBeInTheDocument();
@@ -152,7 +149,7 @@ describe('AccountSection active sessions', () => {
       throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     await screen.findByText('Mobile Safari 19');
     expect(screen.getByRole('columnheader', { name: 'Location' })).toHaveClass(
@@ -186,7 +183,7 @@ describe('AccountSection active sessions', () => {
       throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(await screen.findByText('Mobile Safari 19')).toBeInTheDocument();
     expect(screen.getAllByText('Chicago, US')).toHaveLength(2);
@@ -209,7 +206,7 @@ describe('AccountSection active sessions', () => {
       throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(await screen.findByDisplayValue('user-1')).toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: 'Copy user ID' })).toBeEnabled();
@@ -223,7 +220,7 @@ describe('AccountSection active sessions', () => {
       throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
-    render(<AccountSection />);
+    renderAccountSection();
     await screen.findByText('Chrome 140');
 
     expect(screen.queryByRole('button', { name: 'Log out of all devices' })).toBeNull();
@@ -238,7 +235,7 @@ describe('AccountSection active sessions', () => {
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutSignal);
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('Timed out', 'TimeoutError'));
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     expect(
       await screen.findByText('Active sessions took too long to load. Please try again.'),
@@ -248,3 +245,13 @@ describe('AccountSection active sessions', () => {
     timeoutSpy.mockRestore();
   });
 });
+
+function renderAccountSection() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.settings.accountDeletionStatus(), NO_PENDING_ACCOUNT_DELETION);
+  return render(
+    <QueryClientProvider client={client}>
+      <AccountSection />
+    </QueryClientProvider>,
+  );
+}

@@ -19,7 +19,12 @@ import {
   resolveSubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
 } from '@/lib/server/subscription-owner-handoff';
-import { ownsPaidPlanForTopUp } from '@/lib/services/mobile-iap-ledger-service';
+import {
+  hasWithdrawnStoreConsent,
+  ownsPaidPlanForTopUp,
+  STORE_PURCHASE_CONSENT_WITHDRAWN,
+} from '@/lib/services/mobile-iap-ledger-service';
+import { PLAN_CHANGE_REFUSED_DURING_DELETION } from '@/lib/services/billing-plan-change-gate';
 
 const QuerySchema = z.object({
   platform: z.enum(['ios', 'android']),
@@ -84,6 +89,10 @@ async function handleCatalog(
     });
   }
 
+  const consumableProductIds = catalog.products
+    .filter((product) => product.kind === 'top_up')
+    .map((product) => product.productId);
+
   type SubRow = Pick<
     SubscriptionRow,
     | 'plan_tier'
@@ -97,6 +106,34 @@ async function handleCatalog(
   let subscriptionsUnavailableReason: string | null = null;
   try {
     const { db: ownRows } = await getUserScopedDb(request, { resolveOrganization: false });
+    const [accountState] = await ownRows.query<{ deletion_scheduled: boolean }>(
+      `select (deletion_scheduled_for is not null) as deletion_scheduled
+         from public.profiles where id = $1 limit 1`,
+      [userId],
+    );
+    if (typeof accountState?.deletion_scheduled !== 'boolean') {
+      throw new Error('Purchase catalogue account state is unavailable');
+    }
+    if (accountState.deletion_scheduled) {
+      return NextResponse.json({
+        enabled: false,
+        platform: parsed.data.platform,
+        appAccountToken: null,
+        products: [],
+        unavailableReason: PLAN_CHANGE_REFUSED_DURING_DELETION,
+        consumableProductIds,
+      });
+    }
+    if (await hasWithdrawnStoreConsent(getNeonDb(), userId)) {
+      return NextResponse.json({
+        enabled: false,
+        platform: parsed.data.platform,
+        appAccountToken: null,
+        products: [],
+        unavailableReason: STORE_PURCHASE_CONSENT_WITHDRAWN,
+        consumableProductIds,
+      });
+    }
     const subRows = await ownRows.query<SubRow>(
       `select plan_tier, status, stripe_subscription_id,
               apple_original_transaction_id, google_purchase_token, current_period_end
@@ -109,7 +146,10 @@ async function handleCatalog(
       subscriptionsUnavailableReason = subscriptionOwnerHandoffConflictMessage(handoff);
     }
   } catch (error) {
-    logger.error({ error, userId }, 'Failed to read the plan for the purchase catalogue');
+    logger.error(
+      { error, userId },
+      'Failed to read the account and plan for the purchase catalogue',
+    );
     throw createError.serviceUnavailable(
       'Billing details could not be verified. No purchase was started; please retry.',
     );
@@ -139,9 +179,7 @@ async function handleCatalog(
     ),
     unavailableReason: null,
     subscriptionsUnavailableReason,
-    consumableProductIds: catalog.products
-      .filter((product) => product.kind === 'top_up')
-      .map((product) => product.productId),
+    consumableProductIds,
     ...(parsed.data.platform === 'android'
       ? { androidReplacementModes: getMobileIapAndroidReplacementModes() }
       : {}),

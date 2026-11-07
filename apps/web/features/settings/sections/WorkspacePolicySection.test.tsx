@@ -15,8 +15,9 @@ vi.mock('../hooks/use-settings-queries', () => ({
   useUpdateWorkspacePolicy: () => ({ mutate: mockUpdate, isPending: false }),
 }));
 
-vi.mock('../services/user-preferences', () => ({
-  default: { get2FAStatus: () => mockTwoFactorStatus() },
+vi.mock('../hooks/use-mfa-readers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../hooks/use-mfa-readers')>()),
+  useMfaStatus: () => mockTwoFactorStatus(),
 }));
 
 import { WorkspacePolicySection } from './WorkspacePolicySection';
@@ -79,7 +80,7 @@ function renderSection() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockTwoFactorStatus.mockResolvedValue({
+  mockTwoFactorStatus.mockReturnValue({
     data: { enabled: false, backupCodesReady: false, enrollmentAvailable: true },
   });
 });
@@ -113,6 +114,37 @@ describe('WorkspacePolicySection security controls', () => {
     await user.click(screen.getByRole('button', { name: /save policy/i }));
 
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ requireMfa: true }));
+  });
+
+  it('does not describe unreadable enrollment availability as confirmed disabled setup', () => {
+    mockOverview.mockReturnValue(overview());
+    mockTwoFactorStatus.mockReturnValue({
+      data: undefined,
+      error: new Error('Unavailable'),
+      isLoading: false,
+    });
+    renderSection();
+    expect(screen.getByLabelText('Require multi-factor authentication')).toBeDisabled();
+    expect(screen.getByText(/availability could not be confirmed/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/members cannot set up an authenticator app yet/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('allows an existing requirement to be turned off when enrollment status is unreadable', async () => {
+    const user = userEvent.setup();
+    mockOverview.mockReturnValue(overview({ policy: policy({ requireMfa: true }) }));
+    mockTwoFactorStatus.mockReturnValue({
+      data: undefined,
+      error: new Error('Unavailable'),
+      isLoading: false,
+    });
+    renderSection();
+    const toggle = screen.getByLabelText('Require multi-factor authentication');
+    expect(toggle).toBeEnabled();
+    await user.click(toggle);
+    await user.click(screen.getByRole('button', { name: /save policy/i }));
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ requireMfa: false }));
   });
 
   it('turns workspace memory on and saves it', async () => {

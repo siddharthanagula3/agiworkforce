@@ -9,6 +9,7 @@ const {
   MockProjectKnowledgeExtractionError,
   mockResolveActiveOrganizationId,
   mockSealProjectKnowledgeObject,
+  mockDeleteProjectKnowledgeObject,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
@@ -16,6 +17,7 @@ const {
   MockProjectKnowledgeExtractionError: class ProjectKnowledgeExtractionError extends Error {},
   mockResolveActiveOrganizationId: vi.fn(),
   mockSealProjectKnowledgeObject: vi.fn(),
+  mockDeleteProjectKnowledgeObject: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -53,11 +55,14 @@ vi.mock('@/lib/server/project-knowledge-extraction', () => ({
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   getProjectKnowledgeObject: vi.fn(),
-  deleteProjectKnowledgeObject: vi.fn(),
+  deleteProjectKnowledgeObject: mockDeleteProjectKnowledgeObject,
   sealProjectKnowledgeObject: mockSealProjectKnowledgeObject,
+  sealedProjectKnowledgeKey: (key: string) => key.replace(/\/([^/]+)$/, '/sealed/$1'),
 }));
 
 import { GET, POST } from '@/app/api/projects/[id]/knowledge-files/route';
+import { findProjectKnowledgeFileByChecksum } from '@/lib/server/project-knowledge-files';
+import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';
 
 const UPLOADED_KEY = 'knowledge-files/projects/proj-1/spec.pdf';
 const SEALED_KEY = 'knowledge-files/projects/proj-1/sealed/spec.pdf';
@@ -99,6 +104,53 @@ function makePostRequest(projectId: string, body: unknown): NextRequest {
 }
 
 const routeContext = (id: string) => ({ params: Promise.resolve({ id }) });
+
+describe('completed project upload lookup query', () => {
+  it('binds current project access, uploader, checksum and the exact sealed upload key', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+    const organizationId = '11111111-1111-4111-8111-111111111111';
+    const scope = {
+      db: { query } as Parameters<typeof findProjectKnowledgeFileByChecksum>[0]['db'],
+      projectId: 'proj-1',
+      userId: 'user-abc',
+      organizationId,
+    };
+
+    await expect(
+      findProjectKnowledgeFileByChecksum(scope, CHECKSUM, UPLOADED_KEY),
+    ).resolves.toBeNull();
+
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(READABLE_PROJECT_SCOPE_SQL), [
+      'proj-1',
+      'user-abc',
+      organizationId,
+      CHECKSUM,
+      SEALED_KEY,
+    ]);
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain('join user_projects p on p.id = f.project_id');
+    expect(sql).toContain('f.added_by_user_id = $2');
+    expect(sql).toContain('f.checksum_sha256 = $4');
+    expect(sql).toContain('f.storage_uri = $5');
+    expect(sql).toContain('f.deleted_at is null');
+    expect(sql).toContain('f.superseded_at is null');
+
+    await expect(
+      findProjectKnowledgeFileByChecksum(
+        scope,
+        CHECKSUM,
+        'knowledge-files/projects/proj-1/other.pdf',
+      ),
+    ).resolves.toBeNull();
+    expect(query.mock.calls[1]?.[1]).toEqual([
+      'proj-1',
+      'user-abc',
+      organizationId,
+      CHECKSUM,
+      'knowledge-files/projects/proj-1/sealed/other.pdf',
+    ]);
+  });
+});
 
 describe('GET /api/projects/[id]/knowledge-files', () => {
   beforeEach(() => {
@@ -145,6 +197,32 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       contentType: 'application/pdf',
     });
     mockSealProjectKnowledgeObject.mockResolvedValue(SEALED_KEY);
+    mockDeleteProjectKnowledgeObject.mockResolvedValue(undefined);
+  });
+
+  it('retains staging when the sealed source cannot be registered', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockRejectedValueOnce(new Error('Registration unavailable'));
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+        sourceSurface: 'web',
+        storageUri: UPLOADED_KEY,
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(500);
+    expect(mockSealProjectKnowledgeObject).toHaveBeenCalledOnce();
+    expect(mockDeleteProjectKnowledgeObject).not.toHaveBeenCalled();
   });
 
   it('returns 400 when required fields are missing', async () => {
@@ -222,6 +300,14 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     );
 
     expect(res.status).toBe(201);
+    expect(mockDeleteProjectKnowledgeObject).toHaveBeenCalledWith(UPLOADED_KEY);
+    const registrationIndex = mockNeonQuery.mock.calls.findIndex((call) =>
+      String(call[0]).includes('insert into project_knowledge_files'),
+    );
+    expect(registrationIndex).toBeGreaterThanOrEqual(0);
+    expect(mockDeleteProjectKnowledgeObject.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockNeonQuery.mock.invocationCallOrder[registrationIndex]!,
+    );
     const json = (await res.json()) as { file: Record<string, unknown> };
     expect(json.file['id']).toBe('file-1');
     expect(json.file['fileName']).toBe('spec.pdf');
@@ -440,6 +526,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message ?? '').toMatch(/changed during its safety check/i);
+    expect(mockDeleteProjectKnowledgeObject).toHaveBeenCalledWith(UPLOADED_KEY);
     expect(
       mockNeonQuery.mock.calls.some((call) =>
         String(call?.[0] ?? '').includes('insert into project_knowledge_files'),

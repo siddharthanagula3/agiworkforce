@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Brain } from 'lucide-react';
 import { getModelReasoning } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
@@ -17,10 +16,6 @@ export function ThinkingControl({ modelId, disabled, className }: ThinkingContro
   const reasoning = getModelReasoning(modelId);
   const alwaysOn = isAlwaysOnReasoningModel(reasoning);
   const showsSwitch = showsThinkingSwitch(reasoning);
-
-  useEffect(() => {
-    if (alwaysOn && !thinkingEnabled) setThinking(true);
-  }, [alwaysOn, thinkingEnabled, setThinking]);
 
   if (alwaysOn) {
     return (

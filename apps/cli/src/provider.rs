@@ -239,6 +239,7 @@ pub async fn format_model_list_with_discovery(config: &crate::config::CliConfig)
         crate::local_models::discover_all(config),
         crate::models::gateway_models::discover_gateway_models(),
     );
+    let gateway = gateway.and_then(crate::models::gateway_models::current_discovery);
     match gateway {
         Ok(catalog) => {
             out.push('\n');

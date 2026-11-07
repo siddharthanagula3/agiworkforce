@@ -1,3 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
+import { queryKeys } from '@shared/stores/query-client';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AccountSection } from './AccountSection';
@@ -26,8 +29,6 @@ vi.mock('../components/Settings/ApiKeys', () => ({
 
 vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
   ...(await importOriginal()),
-  // The pane now carries a Recent activity panel under the sessions list; these
-  // files have no QueryClient, and these tests are about other rows.
   useUserActivity: () => ({ data: [], isPending: false, error: null, refetch: vi.fn() }),
   useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
@@ -62,7 +63,7 @@ describe('AccountSection row density', () => {
       }),
     );
 
-    render(<AccountSection />);
+    renderAccountSection();
 
     await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
     expect(screen.queryByText(/loading/i)).toBeNull();
@@ -70,3 +71,13 @@ describe('AccountSection row density', () => {
     expect(document.querySelector('[class*="rounded-lg border"]')).toBeNull();
   });
 });
+
+function renderAccountSection() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.settings.accountDeletionStatus(), NO_PENDING_ACCOUNT_DELETION);
+  return render(
+    <QueryClientProvider client={client}>
+      <AccountSection />
+    </QueryClientProvider>,
+  );
+}

@@ -32,6 +32,55 @@ const UNRELATED_TOOL = {
 describe('resolveWebSearchRequirement', () => {
   const base = { webSearchEnabled: undefined, agiWorkRun: false, researchTask: false };
 
+  it.each([
+    'Write an email requesting leave today.',
+    'Render a complete UI gallery using the current chat components.',
+    'Create a document with seven reusable prompts for image generation.',
+    'Visualize these numbers in a line chart: 3, 5, 7.',
+    'Calculate 19 * 27.',
+  ])('neither forces nor offers search for self-contained output: %s', (userMessage) => {
+    const requirement = resolveWebSearchRequirement({
+      ...base,
+      webSearchEnabled: true,
+      researchTask: true,
+      userMessage,
+    });
+    expect(requirement).toEqual({ required: false, source: null });
+    expect(
+      shouldOfferWebSearchForTurn({
+        webSearchEnabled: true,
+        modelPolicy: undefined,
+        surface: 'web',
+        userMessage,
+        requirement,
+      }),
+    ).toBe(false);
+  });
+
+  it.each([
+    'Write an email about the latest news with sources.',
+    'Render a chart; search the web for current exchange rates.',
+    'Write an overview; check the web for accurate background.',
+    'Write a report after you search on the internet for supporting facts.',
+    'Write a report using official documentation as sources.',
+    'Render a control named "Do not search the web", then check the web for facts.',
+  ])(
+    'preserves a search when a rendered or written answer needs external facts: %s',
+    (userMessage) => {
+      const requirement = resolveWebSearchRequirement({ ...base, userMessage });
+      expect(requirement.required).toBe(true);
+      expect(
+        shouldOfferWebSearchForTurn({
+          webSearchEnabled: true,
+          modelPolicy: undefined,
+          surface: 'web',
+          userMessage,
+          requirement,
+        }),
+      ).toBe(true);
+    },
+  );
+
   beforeEach(() => {
     vi.mocked(annotateActiveSpan).mockClear();
   });

@@ -49,6 +49,23 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
+function scheduledDeletionResponse(
+  request: NextRequest,
+  scheduledFor: string,
+  alreadyScheduled = false,
+): NextResponse {
+  const outcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
+  return NextResponse.json(
+    {
+      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.`,
+      scheduledFor,
+      status: outcome.status,
+      statusReason: deletionReceiptReason(outcome),
+    },
+    { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+  );
+}
+
 function isPaidSubscription(
   subscription: SubscriptionInfo | null,
 ): subscription is SubscriptionInfo {
@@ -291,7 +308,8 @@ async function handleDelete(request: NextRequest) {
         `update profiles
          set deletion_requested_at = $1,
              deletion_scheduled_for = $2
-         where id = $3`,
+         where id = $3
+           and deletion_scheduled_for is null`,
         [new Date().toISOString(), scheduledFor, userId],
       );
     } catch (updateErr: unknown) {
@@ -307,6 +325,38 @@ async function handleDelete(request: NextRequest) {
       );
     }
     if (scheduledRows === 0) {
+      const [existing] = await db.query<{ deletion_scheduled_for: string | Date | null }>(
+        `select deletion_scheduled_for from profiles where id = $1`,
+        [userId],
+      );
+      if (existing) {
+        const existingDeadline = existing.deletion_scheduled_for;
+        if (existingDeadline !== null) {
+          const deadlineMs =
+            existingDeadline instanceof Date
+              ? existingDeadline.getTime()
+              : Date.parse(existingDeadline);
+          if (Number.isFinite(deadlineMs) && deadlineMs > Date.now()) {
+            return scheduledDeletionResponse(
+              request,
+              existingDeadline instanceof Date ? existingDeadline.toISOString() : existingDeadline,
+              true,
+            );
+          }
+          return NextResponse.json(
+            {
+              error: Number.isFinite(deadlineMs)
+                ? 'Account deletion is already scheduled and its cancellation window has closed. The schedule was not changed. This does not confirm that erasure is complete.'
+                : 'The existing account deletion schedule could not be verified. The schedule was not changed.',
+            },
+            { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+          );
+        }
+        return NextResponse.json(
+          { error: 'Account deletion state changed. Refresh before trying again.' },
+          { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+        );
+      }
       logger.error({ userId }, 'Account deletion matched no profiles row; nothing was scheduled');
       return NextResponse.json(
         {
@@ -332,15 +382,7 @@ async function handleDelete(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      {
-        message: `Account deletion scheduled. Erasing your account and all its data starts 24 hours from now, on the first daily erasure run after that. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
-        scheduledFor,
-        status: scheduledOutcome.status,
-        statusReason: deletionReceiptReason(scheduledOutcome),
-      },
-      { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
-    );
+    return scheduledDeletionResponse(request, scheduledFor);
   } catch (err) {
     logger.error({ userId, err }, 'Unexpected error during account deletion');
     return NextResponse.json(

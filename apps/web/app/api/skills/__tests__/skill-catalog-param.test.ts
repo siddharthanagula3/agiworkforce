@@ -144,6 +144,34 @@ describe('GET /api/skills catalog parameter', () => {
     mockInstallTotals.mockResolvedValue(new Map());
   });
 
+  it('projects a plain friendly heading title without changing the canonical skill ID or description', async () => {
+    const entry = {
+      ...skill('triage-nda'),
+      body: '# **NDA** [Triage](https://example.test)\n\nInstructions.',
+      contentHash: 'title-fixture',
+    };
+    mockResolveInstalled.mockResolvedValueOnce([entry]);
+    const response = await GET(get('http://localhost:3000/api/skills'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.skills[0]).toMatchObject({
+      name: 'triage-nda',
+      title: 'NDA Triage',
+      description: entry.description,
+    });
+  });
+
+  it('keeps heading-free legacy summaries valid without inventing a title', async () => {
+    const response = await GET(get('http://localhost:3000/api/skills'));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.skills[0]).toMatchObject({
+      name: INSTALLED.name,
+      description: INSTALLED.description,
+    });
+    expect(body.skills[0]).not.toHaveProperty('title');
+  });
+
   it('reports a measured install total only for skills that have one', async () => {
     mockInstallTotals.mockResolvedValueOnce(new Map([['code-review', 1_834]]));
     const response = await GET(get('http://localhost:3000/api/skills?catalog=all'));

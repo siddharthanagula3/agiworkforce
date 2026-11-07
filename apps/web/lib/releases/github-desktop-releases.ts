@@ -83,7 +83,16 @@ export interface SignedDesktopUpdaterAsset {
   signature: DesktopReleaseAsset;
 }
 
+export class DesktopReleaseLookupError extends Error {
+  constructor() {
+    super('Desktop release information is temporarily unavailable.');
+    this.name = 'DesktopReleaseLookupError';
+  }
+}
+
 interface FetchDesktopReleaseOptions {
+  /** Distinguish failed lookup from a successfully observed absence. */
+  throwOnError?: boolean;
   owner?: string;
   repo?: string;
   revalidateSeconds?: number;
@@ -266,10 +275,14 @@ export async function fetchLatestDesktopRelease(
       );
       if (!response.ok) {
         logger.warn({ status: response.status }, 'GitHub desktop release request failed');
+        if (options.throwOnError) throw new DesktopReleaseLookupError();
         return null;
       }
 
       const payload: unknown = await response.json();
+      if (options.throwOnError && !githubReleaseListSchema.safeParse(payload).success) {
+        throw new DesktopReleaseLookupError();
+      }
       if (!Array.isArray(payload)) {
         return selectLatestDesktopRelease(payload, channel, options.tagPrefix);
       }
@@ -282,6 +295,7 @@ export async function fetchLatestDesktopRelease(
           { owner, repo, maxPages: MAX_RELEASE_PAGES },
           'GitHub desktop release pagination exceeded safety limit',
         );
+        if (options.throwOnError) throw new DesktopReleaseLookupError();
         return null;
       }
     }
@@ -289,6 +303,9 @@ export async function fetchLatestDesktopRelease(
     return null;
   } catch (error) {
     logger.warn({ error }, 'GitHub desktop release request failed');
+    if (options.throwOnError) {
+      throw error instanceof DesktopReleaseLookupError ? error : new DesktopReleaseLookupError();
+    }
     return null;
   }
 }

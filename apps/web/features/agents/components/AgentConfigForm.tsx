@@ -38,10 +38,12 @@ import {
 } from '@agiworkforce/types';
 
 import type { ScheduleModelOption } from '@/lib/schedules/schedule-models';
+import { AgentSkillSelection } from './AgentSkillSelection';
 
 export interface AgentChoice {
   id: string;
   name: string;
+  description?: string;
 }
 
 export interface AgentChoiceList {
@@ -662,11 +664,7 @@ export function AgentConfigForm({
             <p className="text-sm text-muted-foreground">{CONNECTORS_COMING_SOON_MESSAGE}</p>
           </div>
         )}
-        <SelectionField
-          legend="Skills"
-          help="The agent can load only the skills checked here."
-          allLabel="Every skill turned on for the person chatting"
-          emptyCopy="No skills are turned on."
+        <AgentSkillSelection
           list={skills}
           selected={draft.skillNames}
           disabled={disabled}

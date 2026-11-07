@@ -37,10 +37,16 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
+      - name: Read candidate deployment intent
+        id: intent
+        run: node scripts/production-deploy-scope.mjs --automatic-deployment >> "$GITHUB_OUTPUT"
+
       - name: Install canonical workflow parser without lifecycle scripts
+        if: steps.intent.outputs.allowed == 'true'
         run: pnpm install --filter . --frozen-lockfile --ignore-scripts
 
       - name: Cancel only superseded production runs that have not deployed
+        if: steps.intent.outputs.allowed == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 0

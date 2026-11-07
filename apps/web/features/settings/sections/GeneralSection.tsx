@@ -603,6 +603,10 @@ function ReasoningEffortRow() {
             );
           })}
         </select>
+        <p className="text-xs text-muted-foreground">
+          Global default. Each chat can override it; the composer shows the setting supported by its
+          model.
+        </p>
         <HelpArticleLink docId="models-and-reasoning" label="Choosing a model and effort" />
       </div>
     </Row>
@@ -1061,8 +1065,6 @@ function LiveVoicePaceRow() {
 
 function ReadAloudVoiceRow() {
   const { isSupported, voices, voiceUri, setVoiceUri, speak, stop, isSpeaking } = useTTS();
-
-  useEffect(() => () => stop(), [stop]);
 
   if (!isSupported || voices.length === 0) {
     return (

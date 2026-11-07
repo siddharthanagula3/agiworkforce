@@ -73,7 +73,7 @@ async function handleGetMemories(request: NextRequest) {
         and coalesce(c.is_temporary, false) = false
        where m.user_id = $1 and ${activeMemoryPredicate('m.')}
          and ${workspaceMemoryPredicate(4, 'm.')}
-       order by m.pinned desc, m.updated_at desc
+       order by m.pinned desc, m.updated_at desc, m.id desc
        limit $2 offset $3`,
       [userId, limit + 1, offset, organizationId ?? null],
     );

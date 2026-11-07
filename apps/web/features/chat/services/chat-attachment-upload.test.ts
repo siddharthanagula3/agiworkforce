@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { uploadChatAttachments } from './chat-attachment-upload';
 import {
   PICTURE_NEEDLE,
@@ -14,7 +15,7 @@ vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: csrfMocks.getCsrfToken }));
 
 describe('uploadChatAttachments', () => {
   beforeEach(() => {
-    csrfMocks.getCsrfToken.mockResolvedValue('csrf-token');
+    csrfMocks.getCsrfToken.mockReset().mockResolvedValue('csrf-token');
   });
 
   it('presigns, uploads, and completes an owner-scoped attachment', async () => {
@@ -52,7 +53,13 @@ describe('uploadChatAttachments', () => {
     const file = new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' });
     const onStatus = vi.fn();
 
-    await expect(uploadChatAttachments([file], { onStatus })).resolves.toEqual([
+    const authority = createRequestAuthority({
+      userId: 'owner-a',
+      sessionId: 'session-a',
+      isCurrent: () => true,
+      getToken: async () => 'owner-a-token',
+    });
+    await expect(uploadChatAttachments([file], { onStatus }, authority)).resolves.toEqual([
       expect.objectContaining({ assetId: id, name: 'brief.pdf', type: 'file' }),
     ]);
     expect(onStatus.mock.calls.map(([status]) => status.phase)).toEqual([
@@ -71,6 +78,82 @@ describe('uploadChatAttachments', () => {
       '/api/uploads/chat-attachment/complete',
       expect.objectContaining({ method: 'POST' }),
     );
+    const presignInit = fetchMock.mock.calls[0]![1] as RequestInit;
+    const storageInit = fetchMock.mock.calls[1]![1] as RequestInit;
+    const completeInit = fetchMock.mock.calls[2]![1] as RequestInit;
+    expect(new Headers(presignInit.headers).get('Authorization')).toBe('Bearer owner-a-token');
+    expect(new Headers(completeInit.headers).get('Authorization')).toBe('Bearer owner-a-token');
+    expect(new Headers(storageInit.headers).has('Authorization')).toBe(false);
+    expect([presignInit.credentials, storageInit.credentials, completeInit.credentials]).toEqual([
+      'omit',
+      'omit',
+      'omit',
+    ]);
+  });
+
+  it('does not dispatch when the original session retires during CSRF preparation', async () => {
+    let resolveCsrf!: (value: string) => void;
+    csrfMocks.getCsrfToken.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveCsrf = resolve;
+        }),
+    );
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const authority = createRequestAuthority({
+      userId: 'owner-a',
+      sessionId: 'session-a',
+      isCurrent: () => true,
+      getToken: async () => 'owner-a-token',
+    });
+    const upload = uploadChatAttachments(
+      [new File(['hello'], 'notes.txt', { type: 'text/plain' })],
+      {},
+      authority,
+    );
+    const rejected = expect(upload).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(csrfMocks.getCsrfToken).toHaveBeenCalled());
+    authority.retire();
+    resolveCsrf('csrf-token');
+    await rejected;
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not use a presign decoded after the session changes', async () => {
+    let resolveBody!: (value: unknown) => void;
+    const response = new Response(null, { status: 200 });
+    vi.spyOn(response, 'json').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBody = resolve;
+        }),
+    );
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal('fetch', fetchMock);
+    let current = true;
+    const authority = createRequestAuthority({
+      userId: 'owner-a',
+      sessionId: 'session-a',
+      isCurrent: () => current,
+      getToken: async () => 'owner-a-token',
+    });
+    const upload = uploadChatAttachments(
+      [new File(['hello'], 'notes.txt', { type: 'text/plain' })],
+      {},
+      authority,
+    );
+    const rejected = expect(upload).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(response.json).toHaveBeenCalled());
+    current = false;
+    resolveBody({
+      storageKey: 'chat-attachments/owner-a/notes.txt',
+      uploadUrl: 'https://upload.example.test/signed',
+      uploadMethod: 'PUT',
+      uploadHeaders: {},
+    });
+    await rejected;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('reports the exact failed file without inventing byte progress', async () => {

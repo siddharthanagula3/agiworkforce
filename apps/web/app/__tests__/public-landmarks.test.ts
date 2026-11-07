@@ -94,7 +94,6 @@ function landmarkReport(fileName: string, source: string): LandmarkReport {
 }
 
 const UNTARGETED_MAIN_ALLOWLIST: Record<string, string> = {
-  'app/dev/renderer-probe/page.tsx': 'development-only probe, not reachable in production',
   'app/dev/token-probe/page.tsx': 'development-only probe, not reachable in production',
   'app/operator/support/page.tsx': 'signed-in operator console, no marketing chrome',
   'features/admin/pages/AdminConsolePage.tsx': 'signed-in admin console, no marketing chrome',

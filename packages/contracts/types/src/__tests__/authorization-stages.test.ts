@@ -41,6 +41,18 @@ function denialCodeOf(
 }
 
 describe('the five stages are separate answers, not one boolean', () => {
+  it('denies active-empty country asks without changing permission-only projections', () => {
+    const restricted = subject({
+      controls: {
+        ...DEFAULT_WORKSPACE_CONTROLS,
+        countryRestrictionActive: true,
+        allowedCountries: [],
+      },
+    });
+    expect(evaluateAuthorization(restricted, { country: 'US' }).allowed).toBe(false);
+    expect(evaluateAuthorization(restricted, { country: null }).allowed).toBe(false);
+    expect(evaluateAuthorization(restricted, { permission: 'content.read' }).allowed).toBe(true);
+  });
   it('gives every denial code exactly one stage, drawn from the stage list', () => {
     for (const code of ENTERPRISE_DENIAL_CODES) {
       const stage = ENTERPRISE_DENIAL_STAGE[code];

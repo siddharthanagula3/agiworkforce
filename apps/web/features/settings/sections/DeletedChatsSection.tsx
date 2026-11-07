@@ -1,16 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-
-import { useChatStore } from '@shared/stores/web-chat-store';
-import { toWebConversation } from '@/lib/hooks/useConversations';
-import {
-  listDeletedConversations,
-  restoreDeletedConversation,
-  type ArchivedConversationSummary,
-} from '../services/conversation-data-service';
+import { useManagedChatList } from '../hooks/useManagedChatList';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
-import { toUserMessage } from '@/lib/user-error-message';
 
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
@@ -34,81 +25,9 @@ const actionButtonStyle = {
 } as const;
 
 export function DeletedChatsSection() {
-  const [conversations, setConversations] = useState<ArchivedConversationSummary[]>([]);
-  const [nextOffset, setNextOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [actionId, setActionId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const upsertConversationInStore = useChatStore((state) => state.upsertConversation);
-
-  const loadFirstPage = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    setLoadFailed(false);
-    try {
-      const page = await listDeletedConversations(0, signal);
-      setConversations(page.conversations);
-      setNextOffset(page.nextOffset);
-      setHasMore(page.hasMore);
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      setLoadFailed(true);
-      setError(toUserMessage(caught, 'Failed to load deleted chats'));
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadFirstPage(controller.signal);
-    return () => controller.abort();
-  }, [loadFirstPage]);
-
-  const handleLoadMore = async () => {
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const page = await listDeletedConversations(nextOffset);
-      setConversations((current) => {
-        const ids = new Set(current.map((conversation) => conversation.id));
-        return [
-          ...current,
-          ...page.conversations.filter((conversation) => !ids.has(conversation.id)),
-        ];
-      });
-      setNextOffset(page.nextOffset);
-      setHasMore(page.hasMore);
-    } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to load more deleted chats'));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  const handleRestore = async (conversation: ArchivedConversationSummary) => {
-    setActionId(conversation.id);
-    setError(null);
-    setNotice(null);
-    try {
-      const restored = await restoreDeletedConversation(conversation.id);
-      setConversations((current) => current.filter(({ id }) => id !== conversation.id));
-      // The row left the server's deleted list too, so every later row moved down
-      // one. Holding the old offset would step over the row that took its place.
-      setNextOffset((offset) => Math.max(0, offset - 1));
-      upsertConversationInStore(toWebConversation(restored));
-      setNotice(`Restored “${conversation.title}”.`);
-    } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to restore deleted chat'));
-    } finally {
-      setActionId(null);
-    }
-  };
+  const manager = useManagedChatList('deleted');
+  const { conversations, hasMore, loading, loadingMore, actionId, error, loadFailed, notice } =
+    manager;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -146,7 +65,7 @@ export function DeletedChatsSection() {
       {error ? (
         <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {error}{' '}
-          <button type="button" onClick={() => void loadFirstPage()} style={actionButtonStyle}>
+          <button type="button" onClick={manager.retry} style={actionButtonStyle}>
             Retry
           </button>
         </div>
@@ -190,7 +109,7 @@ export function DeletedChatsSection() {
           </div>
         ) : (
           conversations.map((conversation, index) => {
-            const busy = actionId === conversation.id;
+            const busy = !manager.ready;
             return (
               <div
                 key={conversation.id}
@@ -224,7 +143,7 @@ export function DeletedChatsSection() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void handleRestore(conversation)}
+                  onClick={() => manager.restore(conversation)}
                   disabled={busy}
                   style={{
                     ...actionButtonStyle,
@@ -232,7 +151,7 @@ export function DeletedChatsSection() {
                     cursor: busy ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {busy ? 'Restoring…' : 'Restore'}
+                  {actionId === conversation.id ? 'Restoring…' : 'Restore'}
                 </button>
               </div>
             );
@@ -243,8 +162,8 @@ export function DeletedChatsSection() {
       {hasMore ? (
         <button
           type="button"
-          onClick={() => void handleLoadMore()}
-          disabled={loadingMore}
+          onClick={manager.loadMore}
+          disabled={!manager.ready}
           style={{
             ...actionButtonStyle,
             alignSelf: 'flex-start',

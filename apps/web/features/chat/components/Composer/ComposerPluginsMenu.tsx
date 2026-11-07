@@ -9,7 +9,7 @@ import {
   Spinner,
   useMenuKeyboard,
 } from '@agiworkforce/ui';
-import { connectorsReleased } from '@agiworkforce/types';
+import { connectorReleased, hasReleasedConnectors } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { ConnectorsComingSoonMenuItem } from '@/features/connectors/components/ConnectorsComingSoonMenuItem';
 import { buildSettingsBrowseHash } from '@/features/directory';
@@ -70,7 +70,7 @@ export function ComposerPluginsMenu({
   const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { openSettings } = useSettingsModal();
-  const released = connectorsReleased();
+  const released = hasReleasedConnectors();
   const isOpen = open ?? internalOpen;
   const setOpen = useCallback(
     (next: boolean) => {
@@ -82,7 +82,13 @@ export function ComposerPluginsMenu({
   );
   const close = useCallback(() => setOpen(false), [setOpen]);
 
-  const offered = released ? connectors : EMPTY_CONNECTORS;
+  const offered = useMemo(
+    () =>
+      released
+        ? connectors.filter((connector) => connectorReleased(connectorToggleId(connector)))
+        : EMPTY_CONNECTORS,
+    [connectors, released],
+  );
   const visible = useMemo(
     () => offered.filter((connector) => matchesQuery(connector, query)),
     [offered, query],

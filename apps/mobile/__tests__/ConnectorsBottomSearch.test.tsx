@@ -53,6 +53,7 @@ jest.mock('@/src/features/chat/store/appModeStore', () => {
   const state = { appMode: 'cloud', setAppMode: jest.fn() };
   const store = (selector: (s: typeof state) => unknown) => selector(state);
   store.getState = () => state;
+  store.subscribe = jest.fn(() => jest.fn());
   return { useChatAppModeStore: store };
 });
 
@@ -63,12 +64,24 @@ jest.mock('@/src/features/billing/store', () => ({
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
-  useAuthStore: (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
+  useAuthStore: Object.assign(
+    (selector: (s: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState, subscribe: jest.fn(() => jest.fn()) },
+  ),
 }));
 
 jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
+  subscribeCloudAccountEpochChange: jest.fn(() => jest.fn()),
   captureCloudAccountEpoch: () => ({ ownerId: 'user-a', epoch: 1 }),
   isCloudAccountEpochCurrent: () => true,
+}));
+
+jest.mock('@/services/preferences', () => ({
+  fetchToolApprovalNamespace: jest.fn(async () => ({
+    settings: { defaultPolicy: 'auto_approve_read_only' },
+    autonomousToolApprovalsAllowed: true,
+  })),
+  savePreferenceNamespace: jest.fn(async () => undefined),
 }));
 
 const mockFetchDirectory = jest.fn();

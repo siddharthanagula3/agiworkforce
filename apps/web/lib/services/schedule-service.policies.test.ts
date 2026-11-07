@@ -441,6 +441,81 @@ describe('condition watches', () => {
 });
 
 describe('announcing a finished run', () => {
+  it('records policy refusal without a retry or completion notification', async () => {
+    const { db, query } = finalizeDatabase(taskRow, { ...runRow, status: 'cancelled' });
+    const cancellation = {
+      reason: 'managed_compute_access_denied' as const,
+      code: 'subscription_inactive',
+      message: 'Subscription inactive',
+    };
+    const result = await processClaimedScheduleRun(
+      db,
+      claim(),
+      vi.fn(async () => ({ text: 'Skipped', model: 'auto-balanced', cancellation })),
+      { timeoutMs: 1_000, now: () => new Date('2026-09-17T12:00:05.000Z') },
+    );
+
+    expect(result.status).toBe('cancelled');
+    const calls = query.mock.calls as unknown as [string, unknown[]][];
+    const runParams = calls.find(([sql]) => sql.includes('update scheduled_task_runs'))?.[1];
+    expect(runParams?.[0]).toBe('cancelled');
+    expect(JSON.parse(runParams?.[3] as string)).toMatchObject({ cancellation });
+    expect(runParams?.[4]).toBe(cancellation.message);
+    const taskParams = calls.find(([sql]) => sql.includes('update scheduled_tasks'))?.[1];
+    expect(taskParams?.[3]).toBe('2026-09-18T12:00:00.000Z');
+    expect(taskParams?.slice(6, 8)).toEqual([0, null]);
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it.each(['cancelled', 'awaiting_approval'])(
+    'does not announce completion when another worker persisted %s',
+    async (status) => {
+      const query = vi.fn(async (sql: string) => {
+        if (sql.includes('for update')) return [taskRow];
+        if (sql.includes('update scheduled_task_runs')) return [];
+        if (sql.includes('select * from scheduled_task_runs')) return [{ ...runRow, status }];
+        return [];
+      });
+
+      await processClaimedScheduleRun(
+        database(query),
+        claim(),
+        vi.fn(async () => ({ text: 'done', model: 'auto-balanced' })),
+        { timeoutMs: 1_000, now: () => new Date('2026-09-17T12:00:05.000Z') },
+      );
+
+      expect(mocks.enqueueJob).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])(
+    'announces the persisted terminal status after a race (throw=%s)',
+    async (throws) => {
+      const query = vi.fn(async (sql: string) => {
+        if (sql.includes('for update')) return [taskRow];
+        if (sql.includes('update scheduled_task_runs')) return [];
+        if (sql.includes('select * from scheduled_task_runs'))
+          return [{ ...runRow, status: 'timeout' }];
+        return [];
+      });
+
+      await processClaimedScheduleRun(
+        database(query),
+        claim(),
+        vi.fn(async () => {
+          if (throws) throw new Error('late failure');
+          return { text: 'done', model: 'auto-balanced' };
+        }),
+        { timeoutMs: 1_000, now: () => new Date('2026-09-17T12:00:05.000Z') },
+      );
+
+      expect(mocks.enqueueJob).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ payload: expect.objectContaining({ status: 'timeout' }) }),
+      );
+    },
+  );
+
   it('queues the notification rather than delivering it inside the run', async () => {
     const { db } = finalizeDatabase(taskRow, { ...runRow, status: 'success' });
     const executor = vi.fn(async () => ({ text: 'done', model: 'auto-balanced' }));

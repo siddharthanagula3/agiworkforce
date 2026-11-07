@@ -1,6 +1,15 @@
 import 'server-only';
+import {
+  contextPolicySnapshotIsCurrent,
+  CONTEXT_POLICY_RESTART_CODE,
+  CONTEXT_POLICY_RESTART_MESSAGE,
+} from '@/lib/services/context-policy-snapshot';
 
-import { GENERATED_FILE_SURFACES, parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import {
+  GENERATED_FILE_SURFACES,
+  GENERATED_FIGURE_IDENTITY_PATTERN,
+  parseInteractiveCardDelta,
+} from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
@@ -192,6 +201,7 @@ const GeneratedFileWireSchema = z
     byte_count: z.number().nonnegative(),
     kind: z.string(),
     checksum_sha256: z.string(),
+    render_identity: z.string().regex(GENERATED_FIGURE_IDENTITY_PATTERN).optional(),
     surface: z.enum(GENERATED_FILE_SURFACES),
     previewable: z.boolean(),
   })
@@ -510,6 +520,7 @@ function workflowContinuation(
   input: CloudAgentWorkflowInput,
   serving: ProcessedRequest,
   checkpoint: {
+    toolSchemaState?: ProcessedRequest['toolSchemaState'];
     sessionId: string;
     turnId: string;
     nextEventSequence: number;
@@ -524,6 +535,7 @@ function workflowContinuation(
         ...input,
         processed: {
           ...processed,
+          toolSchemaState: checkpoint.toolSchemaState,
           llmRequest: {
             ...processed.llmRequest,
             messages: retargetMessagesToModel(
@@ -563,6 +575,19 @@ export async function executeCloudAgentWorkflowInvocation(
   // rather than the managed per-step reservation -- durable is a transport
   // choice, not a licence to skip the tier's budget.
   const processed = rehydrateCloudAgentWorkflowRequest(input, managedUsageDb);
+  if (
+    !(await contextPolicySnapshotIsCurrent(
+      managedUsageDb,
+      input.userId,
+      processed.organizationId ?? null,
+      processed.contextPolicySnapshot,
+    ))
+  ) {
+    throw Object.assign(new FatalError(CONTEXT_POLICY_RESTART_MESSAGE), {
+      code: CONTEXT_POLICY_RESTART_CODE,
+    });
+  }
+
   const reloadConnectorPermissions = async () =>
     scopeConnectorPermissionsToTurn(
       await loadConnectorToolPermissions(
@@ -748,6 +773,8 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           events: checkpoint.events,
@@ -768,6 +795,8 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -789,6 +818,8 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,
@@ -812,6 +843,8 @@ export async function executeCloudAgentWorkflowInvocation(
             processed.turnAttachments,
             processed.modelSelection,
             processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
           ),
           messages: checkpoint.messages,
           pendingToolCalls: checkpoint.pendingToolCalls,

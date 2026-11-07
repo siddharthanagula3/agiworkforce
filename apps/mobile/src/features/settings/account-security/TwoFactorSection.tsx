@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,8 +17,12 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/Common';
+import {
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import type { UseStepUp } from '@/src/features/auth/hooks/useStepUp';
-import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
+import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
 import { toUserMessage } from '@/services/userMessage';
 import {
   regenerateBackupCodes,
@@ -32,8 +36,8 @@ import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSaf
 
 type Stage =
   | { name: 'idle' }
-  | { name: 'enrolling'; secret: string; otpauthUrl: string }
-  | { name: 'codes'; codes: string[] };
+  | { name: 'enrolling'; account: CloudAccountEpoch; secret: string; otpauthUrl: string }
+  | { name: 'codes'; account: CloudAccountEpoch; codes: string[] };
 
 function ActionButton({
   label,
@@ -79,17 +83,42 @@ function ActionButton({
 
 export function TwoFactorSection({
   status,
+  account,
   statusLabel,
   withStepUp,
   onChanged,
 }: {
   status: AccountSecurityStatus | null;
+  account: CloudAccountEpoch | null;
   statusLabel: string;
   withStepUp: UseStepUp['withStepUp'];
   onChanged: () => void;
 }) {
   const colors = useThemeColors();
-  const [stage, setStage] = useState<Stage>({ name: 'idle' });
+  const [storedStage, setStage] = useState<Stage>({ name: 'idle' });
+  const stage: Stage =
+    storedStage.name === 'idle' || isCloudAccountEpochCurrent(storedStage.account)
+      ? storedStage
+      : { name: 'idle' };
+  const operation = useRef(0);
+  useEffect(
+    () => () => {
+      operation.current += 1;
+    },
+    [],
+  );
+  const stageVersion = operation.current;
+  const closeStage = () => {
+    if (
+      stageVersion !== operation.current ||
+      (stage.name !== 'idle' && !isCloudAccountEpochCurrent(stage.account))
+    )
+      return;
+    operation.current += 1;
+    setStage({ name: 'idle' });
+    setCode('');
+    setBusy(false);
+  };
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const enabled = status?.twoFactorEnabled === true;
@@ -101,50 +130,73 @@ export function TwoFactorSection({
   }, []);
 
   const startSetup = useCallback(async () => {
+    if (!isCloudAccountEpochCurrent(account)) return;
+    const request = ++operation.current;
+    const current = () => operation.current === request && isCloudAccountEpochCurrent(account);
     setBusy(true);
     try {
-      const setup = await withStepUp('two_factor.enable', null, (headers) =>
-        startAuthenticatorSetup(headers),
-      );
+      const setup = await withStepUp('two_factor.enable', null, (headers) => {
+        if (!current()) throw new StepUpCancelledError();
+        return startAuthenticatorSetup(headers, account);
+      });
+      if (!current()) return;
       setCode('');
-      setStage({ name: 'enrolling', ...setup });
+      setStage({ name: 'enrolling', account, ...setup });
     } catch (error) {
-      fail('Could not start setup', error);
+      if (current()) fail('Could not start setup', error);
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
-  }, [fail, withStepUp]);
+  }, [account, fail, withStepUp]);
 
   const verify = useCallback(async () => {
+    if (
+      stageVersion !== operation.current ||
+      stage.name !== 'enrolling' ||
+      !isCloudAccountEpochCurrent(stage.account)
+    )
+      return;
+    const owner = stage.account;
+    const request = ++operation.current;
+    const current = () => operation.current === request && isCloudAccountEpochCurrent(owner);
     setBusy(true);
     try {
-      const codes = await verifyAuthenticatorCode(code.trim());
+      const codes = await verifyAuthenticatorCode(code.trim(), owner);
+      if (!current()) return;
       setCode('');
-      setStage({ name: 'codes', codes });
+      setStage({ name: 'codes', account: owner, codes });
       onChanged();
     } catch (error) {
-      fail('That code did not work', error);
+      if (current()) fail('That code did not work', error);
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
-  }, [code, fail, onChanged]);
+  }, [code, fail, onChanged, stage, stageVersion]);
 
   const regenerate = useCallback(async () => {
+    if (!isCloudAccountEpochCurrent(account)) return;
+    const request = ++operation.current;
+    const current = () => operation.current === request && isCloudAccountEpochCurrent(account);
     setBusy(true);
     try {
-      const codes = await withStepUp('two_factor.regenerate_backup_codes', null, (headers) =>
-        regenerateBackupCodes(headers),
-      );
-      setStage({ name: 'codes', codes });
+      const codes = await withStepUp('two_factor.regenerate_backup_codes', null, (headers) => {
+        if (!current()) throw new StepUpCancelledError();
+        return regenerateBackupCodes(headers, account);
+      });
+      if (!current()) return;
+      setStage({ name: 'codes', account, codes });
       onChanged();
     } catch (error) {
-      fail('Could not generate backup codes', error);
+      if (current()) fail('Could not generate backup codes', error);
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
-  }, [fail, onChanged, withStepUp]);
+  }, [account, fail, onChanged, withStepUp]);
 
   const turnOff = useCallback(() => {
+    if (!isCloudAccountEpochCurrent(account)) return;
+    const request = ++operation.current;
+    const current = () => operation.current === request && isCloudAccountEpochCurrent(account);
     Alert.alert(
       'Turn off two-factor sign-in?',
       'Signing in will need only your password or sign-in method, and your backup codes stop working.',
@@ -154,24 +206,26 @@ export function TwoFactorSection({
           text: 'Turn off',
           style: 'destructive',
           onPress: () => {
+            if (!current()) return;
             void (async () => {
               setBusy(true);
               try {
-                await withStepUp('two_factor.disable', null, (headers) =>
-                  turnOffTwoFactor(headers),
-                );
-                onChanged();
+                await withStepUp('two_factor.disable', null, (headers) => {
+                  if (!current()) throw new StepUpCancelledError();
+                  return turnOffTwoFactor(headers, account);
+                });
+                if (current()) onChanged();
               } catch (error) {
-                fail('Could not turn off two-factor sign-in', error);
+                if (current()) fail('Could not turn off two-factor sign-in', error);
               } finally {
-                setBusy(false);
+                if (current()) setBusy(false);
               }
             })();
           },
         },
       ],
     );
-  }, [fail, onChanged, withStepUp]);
+  }, [account, fail, onChanged, withStepUp]);
 
   const codesText = stage.name === 'codes' ? stage.codes.join('\n') : '';
 
@@ -223,7 +277,7 @@ export function TwoFactorSection({
         transparent
         animationType="slide"
         statusBarTranslucent
-        onRequestClose={() => (stage.name === 'enrolling' ? setStage({ name: 'idle' }) : null)}
+        onRequestClose={() => (stage.name === 'enrolling' ? closeStage() : null)}
       >
         <KeyboardAvoidingView
           accessibilityViewIsModal
@@ -276,7 +330,17 @@ export function TwoFactorSection({
                   <ActionButton
                     label="Open authenticator app"
                     onPress={() => {
+                      if (
+                        stageVersion !== operation.current ||
+                        !isCloudAccountEpochCurrent(stage.account)
+                      )
+                        return;
                       Linking.openURL(stage.otpauthUrl).catch(() => {
+                        if (
+                          stageVersion !== operation.current ||
+                          !isCloudAccountEpochCurrent(stage.account)
+                        )
+                          return;
                         Alert.alert(
                           'No authenticator app found',
                           'Copy the setup key and add it to your authenticator app by hand.',
@@ -286,12 +350,25 @@ export function TwoFactorSection({
                   />
                   <ActionButton
                     label="Copy setup key"
-                    onPress={() => void Clipboard.setStringAsync(stage.secret)}
+                    onPress={() => {
+                      if (
+                        stageVersion === operation.current &&
+                        isCloudAccountEpochCurrent(stage.account)
+                      )
+                        void Clipboard.setStringAsync(stage.secret);
+                    }}
                   />
                 </View>
                 <TextInput
                   value={code}
-                  onChangeText={(next) => setCode(next.replace(/\D/g, '').slice(0, 6))}
+                  onChangeText={(next) => {
+                    if (
+                      stageVersion !== operation.current ||
+                      !isCloudAccountEpochCurrent(stage.account)
+                    )
+                      return;
+                    setCode(next.replace(/\D/g, '').slice(0, 6));
+                  }}
                   placeholder="6-digit code"
                   placeholderTextColor={colors.textMuted}
                   keyboardType="number-pad"
@@ -309,7 +386,7 @@ export function TwoFactorSection({
                   }}
                 />
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-                  <ActionButton label="Cancel" onPress={() => setStage({ name: 'idle' })} />
+                  <ActionButton label="Cancel" onPress={closeStage} />
                   <ActionButton
                     label="Turn on"
                     primary
@@ -353,11 +430,22 @@ export function TwoFactorSection({
                 <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                   <ActionButton
                     label="Copy codes"
-                    onPress={() => void Clipboard.setStringAsync(codesText)}
+                    onPress={() => {
+                      if (
+                        stageVersion === operation.current &&
+                        isCloudAccountEpochCurrent(stage.account)
+                      )
+                        void Clipboard.setStringAsync(codesText);
+                    }}
                   />
                   <ActionButton
                     label="Save or share"
                     onPress={() => {
+                      if (
+                        stageVersion !== operation.current ||
+                        !isCloudAccountEpochCurrent(stage.account)
+                      )
+                        return;
                       Share.share({
                         title: 'AGI backup codes',
                         message: codesText,
@@ -365,11 +453,7 @@ export function TwoFactorSection({
                     }}
                   />
                 </View>
-                <ActionButton
-                  label="I saved these codes"
-                  primary
-                  onPress={() => setStage({ name: 'idle' })}
-                />
+                <ActionButton label="I saved these codes" primary onPress={closeStage} />
               </>
             ) : null}
           </ScrollView>

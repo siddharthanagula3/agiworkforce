@@ -1,4 +1,4 @@
-import { useCallback, forwardRef, useEffect, useMemo, useState } from 'react';
+import { useCallback, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, View, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
@@ -70,6 +70,10 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
+import {
+  useLibraryPickerScope,
+  type LibraryPickerScope,
+} from '@/src/features/library/useLibraryPickerScope';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { useCapability } from '@/src/lib/Capabilities';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
@@ -77,6 +81,7 @@ import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStor
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
+  destinationKey: string;
   onCamera: () => void;
   onPhotos: () => void;
   onPasteImage?: () => void;
@@ -107,12 +112,13 @@ interface LibraryPick {
 
 type CloudLibraryState =
   | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; picks: LibraryPick[] }
-  | { status: 'error' };
+  | { status: 'loading'; scope: LibraryPickerScope }
+  | { status: 'ready'; scope: LibraryPickerScope; request: number; picks: LibraryPick[] }
+  | { status: 'error'; scope: LibraryPickerScope };
 
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
   {
+    destinationKey,
     onCamera,
     onPhotos,
     onPasteImage,
@@ -295,13 +301,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       }));
   }, [appMode, localConversations, localMessages]);
 
-  const [cloudLibrary, setCloudLibrary] = useState<CloudLibraryState>({ status: 'idle' });
+  const pickerScope = useLibraryPickerScope(destinationKey);
+  const [isOpen, setIsOpen] = useState(false);
+  const libraryRequest = useRef(0);
+  const [storedCloudLibrary, setCloudLibrary] = useState<CloudLibraryState>({ status: 'idle' });
   const loadCloudLibrary = useCallback(() => {
-    setCloudLibrary({ status: 'loading' });
-    fetchLibraryPage({ limit: LIBRARY_PICKER_SIZE })
-      .then((page) =>
+    if (appMode !== 'cloud' || !pickerScope.isCurrent()) return;
+    const request = ++libraryRequest.current;
+    setCloudLibrary({ status: 'loading', scope: pickerScope });
+    fetchLibraryPage({ limit: LIBRARY_PICKER_SIZE, kind: ['image', 'file'] })
+      .then((page) => {
+        if (!pickerScope.isCurrent() || request !== libraryRequest.current) return;
         setCloudLibrary({
           status: 'ready',
+          scope: pickerScope,
+          request,
           picks: page.assets
             .filter((asset) => asset.kind !== 'video')
             .map((asset) => ({
@@ -318,10 +332,26 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 assetId: asset.id,
               },
             })),
-        }),
-      )
-      .catch(() => setCloudLibrary({ status: 'error' }));
-  }, []);
+        });
+      })
+      .catch(() => {
+        if (pickerScope.isCurrent() && request === libraryRequest.current)
+          setCloudLibrary({ status: 'error', scope: pickerScope });
+      });
+  }, [appMode, pickerScope]);
+  useEffect(() => {
+    if (isOpen) loadCloudLibrary();
+    return () => {
+      libraryRequest.current += 1;
+    };
+  }, [isOpen, loadCloudLibrary]);
+  const cloudLibrary: CloudLibraryState =
+    storedCloudLibrary.status !== 'idle' &&
+    storedCloudLibrary.scope === pickerScope &&
+    pickerScope.isCurrent()
+      ? storedCloudLibrary
+      : { status: 'idle' };
+
   const libraryPicks =
     appMode === 'cloud'
       ? cloudLibrary.status === 'ready'
@@ -336,6 +366,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   }, [hapticsEnabled]);
 
   const closeSheet = useCallback(() => {
+    libraryRequest.current += 1;
     if (ref && 'current' in ref && ref.current) {
       ref.current.close();
     }
@@ -378,12 +409,14 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   }, [haptic, closeSheet, onFile]);
 
   const handleAttachFromLibrary = useCallback(
-    (pick: LibraryPick) => {
+    (pick: LibraryPick, request?: number) => {
+      if (!pickerScope.isCurrent()) return;
+      if (appMode === 'cloud' && request !== libraryRequest.current) return;
       haptic();
       closeSheet();
       onAttachFromLibrary(pick.attachment);
     },
-    [closeSheet, haptic, onAttachFromLibrary],
+    [appMode, closeSheet, haptic, onAttachFromLibrary, pickerScope],
   );
 
   // Handing off to another sheet keeps this one on screen while it animates
@@ -473,12 +506,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       index={-1}
       accessible={false}
       onChange={(index) => {
+        setIsOpen(index >= 0);
         if (index < 0) {
+          libraryRequest.current += 1;
           setHandoff(null);
           return;
         }
         if (onPasteImage) void clipboardHasImage().then(setClipboardImage);
-        if (appMode === 'cloud' && cloudLibrary.status !== 'loading') loadCloudLibrary();
       }}
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
@@ -666,7 +700,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 {libraryPicks.map((pick) => (
                   <PressableBox
                     key={pick.id}
-                    onPress={() => handleAttachFromLibrary(pick)}
+                    onPress={() =>
+                      handleAttachFromLibrary(
+                        pick,
+                        cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
+                      )
+                    }
                     accessibilityRole="button"
                     accessibilityLabel={`Attach ${pick.fileName} from Library`}
                     style={{

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@clerk/nextjs', () => ({ useAuth: vi.fn() }));
+vi.mock('@clerk/nextjs', () => ({ useAuth: vi.fn(), useClerk: vi.fn() }));
 
 import { readLoadedMessageMetadata } from './useConversations';
 

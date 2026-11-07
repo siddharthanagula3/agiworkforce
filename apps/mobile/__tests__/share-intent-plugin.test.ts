@@ -93,6 +93,61 @@ describe('withAGIShareIntent patchMainActivity', () => {
     expect(out).toContain('contentResolver.getType(uri) ?: "application/octet-stream"');
   });
 
+  it('reserves an exclusive staging file before opening the output stream', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain(
+      'val target = try {\n      File.createTempFile("shared-", suffix, inbox)',
+    );
+    expect(out).toContain(
+      '} catch (error: Exception) {\n      return null\n    }\n    val bytes = try',
+    );
+    expect(out.indexOf('File.createTempFile(')).toBeLessThan(out.indexOf('target.outputStream()'));
+    expect(out).not.toContain('val target = File(inbox,');
+    expect(out).not.toContain('val safeName =');
+  });
+
+  it('retains a bounded safe extension for generic-MIME document parsing', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('fileName.substringAfterLast(\'.\', "")');
+    expect(out).toContain('.takeIf { it.matches(Regex("[A-Za-z0-9]{1,16}")) }');
+    expect(out).toContain('?.let { ".${it}" } ?: ".bin"');
+    expect(out).toContain('File.createTempFile("shared-", suffix, inbox)');
+    expect(out).toContain('.put("fileName", fileName)');
+    expect(out).toContain('.put("mimeType", mimeType)');
+    expect(out).toContain('contentResolver.getType(uri) ?: "application/octet-stream"');
+    expect(out).toContain('output.write(buffer, 0, read)');
+  });
+
+  it('cleans up only its reserved target when the copy fails', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    const copyMethod = out.slice(
+      out.indexOf('private fun copySharedStream(uri:'),
+      out.indexOf('private fun sharedDisplayName('),
+    );
+    expect(copyMethod).toContain('if (bytes == null || bytes < 0L) {\n      target.delete()');
+    expect(copyMethod.match(/\.delete\(\)/g)).toHaveLength(1);
+    expect(copyMethod).not.toContain('listFiles');
+    expect(copyMethod).not.toContain('File(inbox,');
+    expect(copyMethod).toContain('.put("uri", Uri.fromFile(target).toString())');
+  });
+
+  it('reports native text clipping through the existing preview flag', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('appendQueryParameter("text", text.take(MAX_SHARED_TEXT_CHARS))');
+    expect(out).toContain(
+      'if (text.length > MAX_SHARED_TEXT_CHARS) {\n            appendQueryParameter("truncated", "1")',
+    );
+  });
+
+  it('leaves legacy marker-bearing activities unchanged, requiring clean regeneration', () => {
+    const legacy = STOCK_MAIN_ACTIVITY.replace(
+      '  override fun getMainComponentName()',
+      '  private fun rewriteShareIntent(intent: Intent): Intent = intent\n\n  override fun getMainComponentName()',
+    );
+    expect(patchMainActivity(legacy)).toBe(legacy);
+    expect(patchMainActivity(legacy)).not.toContain('File.createTempFile(');
+  });
+
   it('prunes the cached inbox so a share does not accumulate copies', () => {
     const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
     expect(out).toContain('private fun pruneSharedInbox(inbox: File)');

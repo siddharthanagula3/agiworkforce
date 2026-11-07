@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { View, Modal, Alert, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Image } from 'expo-image';
@@ -43,7 +43,14 @@ function isDirectlyDisplayableUri(imageUrl: string | null): imageUrl is string {
   return DIRECTLY_DISPLAYABLE_URI.test(imageUrl.trim());
 }
 
-export function ImageFullScreen({
+export function ImageFullScreen(props: ImageFullScreenProps) {
+  if (!props.visible || !props.imageUrl) return null;
+  return (
+    <ImageFullScreenOwner key={`${props.imageUrl}:${props.allowEphemeral ?? false}`} {...props} />
+  );
+}
+
+function ImageFullScreenOwner({
   imageUrl,
   prompt,
   model,
@@ -56,7 +63,57 @@ export function ImageFullScreen({
   deleteMessage,
   reportTarget,
 }: ImageFullScreenProps) {
-  const [editing, setEditing] = useState(false);
+  const [editSession, setEditSession] = useState<number | null>(null);
+  const editSessionRef = useRef<number | null>(null);
+  const editSequenceRef = useRef(0);
+  const lifetimeRef = useRef<symbol | null>(null);
+  const operationRef = useRef<symbol | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const retire = useCallback(() => {
+    lifetimeRef.current = null;
+    operationRef.current = null;
+    editSessionRef.current = null;
+    if (feedbackTimerRef.current !== null) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = null;
+  }, []);
+
+  useLayoutEffect(() => {
+    lifetimeRef.current = Symbol('image viewer lifetime');
+    return retire;
+  }, [retire]);
+
+  const beginAction = useCallback(() => {
+    const lifetime = lifetimeRef.current;
+    if (!lifetime || operationRef.current || editSessionRef.current) return null;
+    const operation = Symbol('image viewer action');
+    operationRef.current = operation;
+    if (feedbackTimerRef.current !== null) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = null;
+    setSaved(false);
+    setCopied(false);
+    const isCurrent = () => lifetimeRef.current === lifetime && operationRef.current === operation;
+    return {
+      isCurrent,
+      finish: () => {
+        if (isCurrent()) operationRef.current = null;
+      },
+      showFeedback: (action: 'save' | 'copy') => {
+        if (!isCurrent()) return;
+        if (action === 'save') setSaved(true);
+        else setCopied(true);
+        const timer = setTimeout(() => {
+          if (lifetimeRef.current !== lifetime || feedbackTimerRef.current !== timer) return;
+          feedbackTimerRef.current = null;
+          setSaved(false);
+          setCopied(false);
+        }, 2000);
+        feedbackTimerRef.current = timer;
+      },
+    };
+  }, []);
   const [reporting, setReporting] = useState(false);
   const settingsCaption = imageSettingsCaption(model, aspectRatio);
   const insets = useSafeAreaInsets();
@@ -140,59 +197,89 @@ export function ImageFullScreen({
     ],
   }));
 
-  const handleShare = useCallback(async () => {
-    if (!imageUrl) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await shareGeneratedImage(imageUrl);
-    } catch {
-      Alert.alert('Could not share image', 'Save the image and try again.');
-    }
-  }, [imageUrl]);
+  const runAction = useCallback(
+    async (kind: 'share' | 'save' | 'copy') => {
+      if (!imageUrl) return;
+      const action = beginAction();
+      if (!action) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try {
+        const options = { isCurrent: action.isCurrent };
+        if (kind === 'share') await shareGeneratedImage(imageUrl, undefined, options);
+        else if (kind === 'save') await saveGeneratedImageToPhotos(imageUrl, undefined, options);
+        else await copyGeneratedImage(imageUrl, options);
+        if (kind !== 'share') action.showFeedback(kind);
+      } catch (error) {
+        if (action.isCurrent()) {
+          Alert.alert(
+            `Could not ${kind} image`,
+            kind === 'save'
+              ? toUserMessage(error, 'Try again in a moment.')
+              : kind === 'share'
+                ? 'Save the image and try again.'
+                : 'Try again in a moment.',
+          );
+        }
+      } finally {
+        action.finish();
+      }
+    },
+    [beginAction, imageUrl],
+  );
 
-  const [saved, setSaved] = useState(false);
-  const handleSave = useCallback(async () => {
-    if (!imageUrl) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await saveGeneratedImageToPhotos(imageUrl);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (error) {
-      Alert.alert('Could not save image', toUserMessage(error, 'Try again in a moment.'));
-    }
-  }, [imageUrl]);
-
-  const [copied, setCopied] = useState(false);
-  const handleCopy = useCallback(async () => {
-    if (!imageUrl) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await copyGeneratedImage(imageUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      Alert.alert('Could not copy image', 'Try again in a moment.');
-    }
-  }, [imageUrl]);
+  const handleShare = useCallback(() => runAction('share'), [runAction]);
+  const handleSave = useCallback(() => runAction('save'), [runAction]);
+  const handleCopy = useCallback(() => runAction('copy'), [runAction]);
 
   const handleDelete = useCallback(() => {
     if (!onDelete) return;
-    Alert.alert('Delete this image?', deleteMessage, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: onDelete },
-    ]);
-  }, [deleteMessage, onDelete]);
+    const action = beginAction();
+    if (!action) return;
+    Alert.alert(
+      'Delete this image?',
+      deleteMessage,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: action.finish },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (!action.isCurrent()) return;
+            action.finish();
+            onDelete();
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: action.finish },
+    );
+  }, [beginAction, deleteMessage, onDelete]);
+
+  const handleStartEdit = useCallback(() => {
+    if (!lifetimeRef.current || operationRef.current || editSessionRef.current) return;
+    const session = ++editSequenceRef.current;
+    editSessionRef.current = session;
+    setEditSession(session);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    if (!lifetimeRef.current || !editSession || editSessionRef.current !== editSession) return;
+    editSessionRef.current = null;
+    setEditSession(null);
+  }, [editSession]);
 
   const handleSubmitEdit = useCallback(
     (edit: ImageAreaEdit) => {
-      setEditing(false);
+      if (!lifetimeRef.current || !editSession || editSessionRef.current !== editSession) return;
+      editSessionRef.current = null;
+      setEditSession(null);
       onEditArea?.(edit);
     },
-    [onEditArea],
+    [editSession, onEditArea],
   );
 
   const handleClose = useCallback(() => {
+    if (!lifetimeRef.current) return;
+    retire();
     scale.value = 1;
     savedScale.value = 1;
     translateX.value = 0;
@@ -201,7 +288,7 @@ export function ImageFullScreen({
     savedTranslateY.value = 0;
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose]);
+  }, [onClose, retire]);
 
   if (!imageUrl) return null;
 
@@ -236,7 +323,7 @@ export function ImageFullScreen({
           >
             {onEditArea && !directUri ? (
               <PressableBox
-                onPress={() => setEditing(true)}
+                onPress={handleStartEdit}
                 style={{
                   padding: 10,
                   borderRadius: 8,
@@ -435,11 +522,12 @@ export function ImageFullScreen({
           />
         ) : null}
       </GestureHandlerRootView>
-      {onEditArea ? (
+      {onEditArea && editSession ? (
         <ImageAreaEditor
+          key={editSession}
           imagePath={imageUrl}
-          visible={editing}
-          onCancel={() => setEditing(false)}
+          visible
+          onCancel={handleCancelEdit}
           onSubmit={handleSubmitEdit}
         />
       ) : null}

@@ -14,6 +14,8 @@
  * @packageDocumentation
  */
 
+import { withoutQuotedRequestMaterial } from './quoted-request-material';
+
 const SEARCH_VERB_PHRASES: readonly string[] = [
   'search the web',
   'search on the web',
@@ -72,6 +74,8 @@ const CITATION_PHRASES: readonly string[] = [
   'provide sources',
   'include sources',
   'source it',
+  'using official documentation',
+  'using official sources',
 ];
 
 const LINK_REQUEST_PHRASES: readonly string[] = ['give me the link', 'send me the link'];
@@ -148,12 +152,15 @@ const REFUSED_LIST_PATTERN = new RegExp(
 const REFUSED_LIST_SEPARATOR = /,\s*(?:(?:or|nor)\s+)?|\s(?:or|nor)\s+/giu;
 const WHITESPACE_CHARACTER = /\s/u;
 const LIST_CLOSING_CONJUNCTION = /\b(?:or|nor)\b/iu;
+const DIRECT_LIST_PROHIBITION = /\b(?:do[^\S\n]+not|don['\u2019]?t|never)[^\S\n]*$/iu;
+const EPISTEMIC_CAUTION =
+  /^(?:guess(?:ing)?|speculat(?:e|ing)|assum(?:e|ing)|hallucinat(?:e|ing)|improvis(?:e|ing)|invent(?:ing)?|make\s+(?:guesses|assumptions|things\s+up))\b/iu;
 const REFUSED_ITEM_TRAILING_QUALIFIER =
   /(?:\s+(?:at\s+all|this\s+time|for\s+(?:this(?:\s+one)?|now)|here|today|now|please|either|again))+$/u;
 const REFUSED_ITEM_LEADING_FILLER =
   /^(?:(?:use|using|run|running|call|calling|do|doing|perform|performing|make|making|execute|executing|access|accessing|invoke|invoking|any|a|an|the|your|some|external|outside|other|extra|additional)\s+)+/u;
 const REFUSED_WEB_SEARCH_ITEM =
-  /^(?:(?:(?:web|internet|online|live|public)\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?(?:\s+tools?)?|(?:the\s+)?(?:public\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$/u;
+  /^(?:(?:(?:public\s+)?(?:web|internet|online|live)\s+|public\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?(?:\s+tools?)?|(?:the\s+)?(?:public\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$/u;
 const PRIVATE_SCOPE_ONLY_PATTERN =
   /\b(?:(?:only|just)\s+(?:search|use|check|look\s+(?:in|at|through)|draw\s+on)|(?:search|use|check)\s+only(?:\s+(?:in|through))?)\s+(?:my|our)\s+(?:own\s+)?(?:private\s+)?(?:(?:past|earlier|previous|prior|old|saved|other)\s+)?(?:chats?|conversations?|(?:chat\s+)?history|memor(?:y|ies)|files?|documents?|notes?)\b/iu;
 
@@ -168,12 +175,15 @@ function normalizeRefusedItem(item: string): string {
 }
 
 /**
- * A refusal governs a list only when the list is unambiguous: "a or b", or a
- * comma list closed by ", or". "Don't guess, check the docs or search the web"
- * refuses the guess and asks for the rest, so a comma list without that closing
- * comma refuses its first item alone.
+ * Direct action prohibitions also govern lists without an Oxford comma.
+ * An introductory constraint or caution against guessing does not negate the
+ * subsequent lookup commands in "Don't guess, check the docs or search the web".
  */
-function refusedItemsOfClause(clause: string, offset: number): RefusedItem[] {
+function refusedItemsOfClause(
+  clause: string,
+  offset: number,
+  directProhibition: boolean,
+): RefusedItem[] {
   const segments: RefusedItem[] = [];
   const separators: string[] = [];
   let cursor = 0;
@@ -201,7 +211,10 @@ function refusedItemsOfClause(clause: string, offset: number): RefusedItem[] {
     if (LIST_CLOSING_CONJUNCTION.test(separator)) lastOr = index;
   });
   const closedList =
-    lastOr === 0 || (lastOr > 0 && separators[lastOr]!.trimStart().startsWith(','));
+    lastOr === 0 ||
+    (lastOr > 0 &&
+      (separators[lastOr]!.trimStart().startsWith(',') ||
+        (directProhibition && !EPISTEMIC_CAUTION.test(segments[0]?.text.trim() ?? ''))));
   const refused = closedList ? segments.slice(0, lastOr + 2) : segments.slice(0, 1);
   return refused
     .map((segment) => ({
@@ -217,7 +230,11 @@ function refusedItemsOf(text: string): RefusedItem[] {
   for (const match of text.matchAll(REFUSED_LIST_PATTERN)) {
     const clause = match[1] ?? '';
     const clauseStart = match.index + match[0].length - clause.length;
-    items.push(...refusedItemsOfClause(clause, clauseStart));
+    const prefixEnd = match[0].length - clause.length;
+    const directProhibition = DIRECT_LIST_PROHIBITION.test(
+      match[0].slice(Math.max(0, prefixEnd - 80), prefixEnd),
+    );
+    items.push(...refusedItemsOfClause(clause, clauseStart, directProhibition));
   }
   return items;
 }
@@ -248,6 +265,79 @@ const URL_FETCH_ACTION_PATTERN =
   /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
 const URL_FETCH_OPT_OUT_PATTERN =
   /\b(?:do\s+not|don't|dont|never|avoid)\s+(?:fetch|open|read)\s+(?:(?:this|that|the|these|those|any)\s+)?(?:url|link|page|https?:\/\/)/iu;
+const REQUEST_FENCE_START = /^\s*(`{3,}|~{3,})/u;
+const UI_SEARCH_LABEL =
+  /^[^\S\n]*(?:(?:and|or)\s+|,\s*)?(?:[\p{L}\p{N}_-]+\s+){0,3}(?:checkbox(?:es)?|check\s+boxes?|toggles?|switch(?:es)?|options?|fields?|labels?|controls?)\b/iu;
+const EXPLICIT_LOOKUP_PREFIX = /\b(?:use|run|perform|do|call)\s+(?:(?:a|an|the)\s+)?$/iu;
+export const WEB_SEARCH_REQUEST_EDGE_CHARS = 280;
+export const WEB_SEARCH_LONG_MESSAGE_CHARS = WEB_SEARCH_REQUEST_EDGE_CHARS * 3;
+const REQUEST_PARAGRAPH_BREAK = /\n\s*\n/u;
+
+function searchRequestText(text: string): string {
+  const lines: string[] = [];
+  let fence = '';
+  for (const line of text.split('\n')) {
+    const marker = REQUEST_FENCE_START.exec(line)?.[1] ?? '';
+    if (fence) {
+      if (
+        marker[0] === fence[0] &&
+        marker.length >= fence.length &&
+        line.trimStart().slice(marker.length).trim() === ''
+      )
+        fence = '';
+    } else if (marker) {
+      fence = marker;
+    } else {
+      lines.push(line);
+    }
+  }
+  return withoutQuotedRequestMaterial(lines.join('\n'), { singleQuotes: true });
+}
+
+export function webSearchRequestText(text: string): string {
+  const request = searchRequestText(text);
+  if (request.length <= WEB_SEARCH_LONG_MESSAGE_CHARS) return request;
+  const paragraphs = request
+    .split(REQUEST_PARAGRAPH_BREAK)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return `${(paragraphs[0] ?? '').slice(0, WEB_SEARCH_REQUEST_EDGE_CHARS)}\n${(paragraphs[paragraphs.length - 1] ?? '').slice(-WEB_SEARCH_REQUEST_EDGE_CHARS)}`;
+}
+
+function asksForWebLookup(text: string): boolean {
+  let cursor = 0;
+  while (cursor < text.length) {
+    const match = SEARCH_VERB_PATTERN.exec(text.slice(cursor));
+    if (!match) return false;
+    const start = cursor + match.index;
+    cursor = start + match[0].length;
+    if (text[start - 1] === '-' || text[start - 1] === '_') continue;
+    const ambiguousLabel = /^web\s+search(?:es)?$|^search\s+and$/iu.test(match[0]);
+    if (
+      ambiguousLabel &&
+      UI_SEARCH_LABEL.test(text.slice(cursor)) &&
+      !EXPLICIT_LOOKUP_PREFIX.test(text.slice(Math.max(0, start - 40), start))
+    )
+      continue;
+    return true;
+  }
+  return false;
+}
+
+export function explicitWebSearchRequestSignals(text: string): ExplicitSearchIntentSignal[] {
+  if (!text) return [];
+  const request = webSearchRequestText(text);
+  if (!request || hasExplicitWebSearchOptOut(request)) return [];
+  const signals: ExplicitSearchIntentSignal[] = [];
+  if (asksForWebLookup(request)) signals.push('search_verb');
+  if (RECENCY_PATTERN.test(request)) signals.push('recency');
+  if (asksForWebSources(request)) signals.push('sources');
+  return signals;
+}
+
+export function hasExplicitWebSearchRequestOptOut(text: string): boolean {
+  return hasExplicitWebSearchOptOut(webSearchRequestText(text));
+}
 
 export type ExplicitSearchIntentSignal = 'search_verb' | 'recency' | 'sources';
 

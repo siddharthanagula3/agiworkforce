@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 const renderMock = vi.fn();
 const initializeMock = vi.fn();
@@ -23,6 +24,30 @@ describe('MermaidDiagram', () => {
     clearMermaidSvgCache();
   });
 
+  it('expands the same sanitized SVG in one dialog mount and returns focus without rerendering the diagram', async () => {
+    renderMock.mockResolvedValue({
+      svg: '<svg id="expanded-diagram" viewBox="0 0 240 100"><g><text>Start</text></g></svg>',
+    });
+    const view = render(<MermaidDiagram source={FLOWCHART} />);
+    await waitFor(() =>
+      expect(view.container.querySelector('[data-mermaid="ready"] svg')).toBeTruthy(),
+    );
+    const trigger = screen.getByRole('button', { name: 'Expand diagram' });
+    const user = userEvent.setup();
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Diagram' });
+    expect(dialog.querySelector('svg#expanded-diagram')).toBeTruthy();
+    expect(view.container.querySelector('[data-mermaid="ready"] svg')).toBeNull();
+    expect(document.querySelectorAll('#expanded-diagram')).toHaveLength(1);
+    expect(renderMock).toHaveBeenCalledTimes(1);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(view.container.querySelector('[data-mermaid="ready"] svg')).toBeTruthy();
+    expect(document.querySelectorAll('#expanded-diagram')).toHaveLength(1);
+    expect(document.activeElement).toBe(trigger);
+    expect(renderMock).toHaveBeenCalledTimes(1);
+  });
+
   it('draws a diagram when the source parses', async () => {
     renderMock.mockResolvedValue({ svg: '<svg><g><text>Start</text></g></svg>' });
     const { container } = render(<MermaidDiagram source={FLOWCHART} />);
@@ -32,6 +57,33 @@ describe('MermaidDiagram', () => {
     });
     expect(renderMock.mock.calls[0]?.[2]).toBeInstanceOf(HTMLElement);
     expect((renderMock.mock.calls[0]?.[2] as HTMLElement).isConnected).toBe(false);
+  });
+
+  it('retains a trusted label size and natural canvas while removing Mermaid styles', async () => {
+    renderMock.mockResolvedValue({
+      svg: '<svg width="100%" viewBox="0 0 1200 320" style="max-width:1200px;font-size:2px"><style>.timeline-node .node-bkg { fill: black; }</style><g class="timeline-node section--1"><path class="node-bkg node-default" d="M0 0h200v50H0Z"/><text>Build</text></g></svg>',
+    });
+    const { container } = render(<MermaidDiagram source="timeline\nBuild : Compile" />);
+    await waitFor(() => expect(container.querySelector('[data-mermaid="ready"]')).toBeTruthy());
+    const svg = container.querySelector('svg');
+    expect(svg?.getAttribute('font-size')).toBe('14px');
+    expect(svg?.getAttribute('width')).toBe('1200');
+    expect(svg?.getAttribute('height')).toBe('320');
+    expect(svg?.querySelector('.timeline-node .node-bkg')).toBeTruthy();
+    expect(svg?.querySelector('style')).toBeNull();
+    expect(svg?.hasAttribute('style')).toBe(false);
+    expect(screen.getByRole('region', { name: 'Diagram' })).toHaveProperty('tabIndex', 0);
+  });
+
+  it('renders a Markdown diagram outside code preformatted semantics', async () => {
+    renderMock.mockResolvedValue({ svg: '<svg viewBox="0 0 640 120"><text>User</text></svg>' });
+    const { MarkdownContent } = await import('../MarkdownContent');
+    const { container } = render(
+      <MarkdownContent content={`\`\`\`mermaid\n${FLOWCHART}\n\`\`\``} />,
+    );
+    await waitFor(() => expect(container.querySelector('[data-mermaid="ready"]')).toBeTruthy());
+    expect(container.querySelector('[data-mermaid="ready"]')?.closest('pre')).toBeNull();
+    expect(container.querySelector('.code-block-container')).toBeNull();
   });
 
   it('passes the drawn markup through the package sanitizer', async () => {

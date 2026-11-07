@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@agiworkforce/ui';
 import { Check, Copy, Download } from 'lucide-react';
 
@@ -12,25 +12,38 @@ export function RecoveryKeysSheet({
   keys,
   saved,
   onSavedChange,
+  isCurrent,
 }: {
   keys: readonly string[];
   saved: boolean;
+  isCurrent: () => boolean;
   onSavedChange: (saved: boolean) => void;
 }) {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
   const copyKeys = useCallback(async () => {
+    if (!isCurrent()) return;
     try {
       await navigator.clipboard.writeText(`${keys.join('\n')}\n`);
+      if (!mounted.current || !isCurrent()) return;
       setCopyError(null);
       setCopied(true);
     } catch (error) {
+      if (!mounted.current || !isCurrent()) return;
       setCopyError(toUserMessage(error, 'Copying was blocked. Download the keys instead.'));
     }
-  }, [keys]);
+  }, [keys, isCurrent]);
 
   const downloadKeys = useCallback(() => {
+    if (!isCurrent()) return;
     const blob = new Blob([`${keys.join('\n')}\n`], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -38,7 +51,7 @@ export function RecoveryKeysSheet({
     link.download = RECOVERY_KEYS_FILE_NAME;
     link.click();
     URL.revokeObjectURL(url);
-  }, [keys]);
+  }, [keys, isCurrent]);
 
   return (
     <div className="space-y-3">
@@ -77,7 +90,9 @@ export function RecoveryKeysSheet({
         <input
           type="checkbox"
           checked={saved}
-          onChange={(event) => onSavedChange(event.target.checked)}
+          onChange={(event) => {
+            if (isCurrent()) onSavedChange(event.target.checked);
+          }}
         />
         I saved my recovery keys somewhere safe
       </label>

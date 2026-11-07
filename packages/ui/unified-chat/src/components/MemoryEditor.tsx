@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
 import { MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
 import { translateUiPlural, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
@@ -56,6 +56,8 @@ export interface MemoryEditorProps {
 export type MemoryEditorSyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
 
 export interface MemoryEditorDataAdapter {
+  isCurrent?: () => boolean;
+  mutationBlocked?: boolean;
   scope?: 'local' | 'cloud';
   facts: MemoryFact[];
   syncStatus: MemoryEditorSyncStatus;
@@ -67,39 +69,54 @@ export interface MemoryEditorDataAdapter {
   clear: () => Promise<unknown> | unknown;
 }
 
-export function MemoryEditor({
+export function MemoryEditor(props: MemoryEditorProps) {
+  return props.adapter ? (
+    <MemoryEditorContent {...props} adapter={props.adapter} />
+  ) : (
+    <LegacyMemoryEditor {...props} />
+  );
+}
+
+function LegacyMemoryEditor(props: MemoryEditorProps) {
+  const state = useMemoryStore();
+  return <MemoryEditorContent {...props} adapter={state} />;
+}
+
+function MemoryEditorContent({
   title = 'Memory',
   description = 'Things the assistant should remember about you across conversations.',
   hideClearAll = false,
   className,
   adapter,
   conversationHref,
-}: MemoryEditorProps) {
+}: MemoryEditorProps & { adapter: MemoryEditorDataAdapter }) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
-  const localFacts = useMemoryStore((s) => s.facts);
-  const localAdd = useMemoryStore((s) => s.add);
-  const localUpdate = useMemoryStore((s) => s.update);
-  const localSetPinned = useMemoryStore((s) => s.setPinned);
-  const localRemove = useMemoryStore((s) => s.remove);
-  const localClear = useMemoryStore((s) => s.clear);
-  const localSyncStatus = useMemoryStore((s) => s.syncStatus);
-  const localHydrateFromServer = useMemoryStore((s) => s.hydrateFromServer);
-  const facts = adapter?.facts ?? localFacts;
-  const add = adapter?.add ?? localAdd;
-  const update = adapter?.update ?? localUpdate;
-  const setPinned = adapter?.setPinned ?? localSetPinned;
-  const remove = adapter?.remove ?? localRemove;
-  const clear = adapter?.clear ?? localClear;
-  const syncStatus = adapter?.syncStatus ?? localSyncStatus;
-  const hydrateFromServer = adapter?.hydrateFromServer ?? localHydrateFromServer;
+  const { facts, add, update, setPinned, remove, clear, syncStatus, hydrateFromServer } = adapter;
+  const pinUnavailableDescriptionId = useId();
   const isAccountScoped = adapter?.scope === 'cloud';
+  const lifetime = useRef<object | null>(null);
+  useEffect(() => {
+    const generation = {};
+    lifetime.current = generation;
+    return () => {
+      lifetime.current = null;
+    };
+  }, []);
+  const capture = useCallback(() => {
+    const generation = lifetime.current;
+    return () =>
+      generation !== null && lifetime.current === generation && (adapter.isCurrent?.() ?? true);
+  }, [adapter.isCurrent]);
 
   const [draft, setDraft] = useState('');
+  const draftRevision = useRef(0);
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  const editRevision = useRef(0);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
+  const cloudMutationPending = useRef(false);
 
   useEffect(() => {
     void hydrateFromServer().catch(() => undefined);
@@ -115,47 +132,60 @@ export function MemoryEditor({
   );
   const groups = useMemo(() => (query ? [] : groupFacts(visibleFacts)), [query, visibleFacts]);
 
-  // An optimistic adapter has already applied the change by the time this
-  // awaits, so `mutating` gates only the control that started the request. It
-  // used to disable every row's Save and Delete until the round trip finished,
-  // which is the exact latency an optimistic update exists to remove.
-  const runMutation = useCallback(async (action: () => Promise<unknown> | unknown) => {
-    setMutating(true);
-    setMutationError(null);
-    try {
-      await action();
-    } catch (error) {
-      // The adapter has already put the list back; this says why, so a row that
-      // reappears (or vanishes again) is not mistaken for a glitch.
-      setMutationError(toUserMessage(error, 'Could not update memory. Try again.'));
-    } finally {
-      setMutating(false);
-    }
-  }, []);
+  const runMutation = useCallback(
+    async (action: () => Promise<unknown> | unknown) => {
+      const current = capture();
+      if (
+        !current() ||
+        adapter.mutationBlocked ||
+        (isAccountScoped && cloudMutationPending.current)
+      )
+        return;
+      if (isAccountScoped) cloudMutationPending.current = true;
+      setMutating(true);
+      setMutationError(null);
+      try {
+        await action();
+      } catch (error) {
+        if (current())
+          setMutationError(
+            toUserMessage(
+              error,
+              'Could not confirm the memory change. Check your saved memories before trying again.',
+            ),
+          );
+      } finally {
+        cloudMutationPending.current = false;
+        if (current()) setMutating(false);
+      }
+    },
+    [capture, adapter.mutationBlocked, isAccountScoped],
+  );
 
   const onSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const next = draft.trim();
       if (!next) return;
-      // Cleared up front, not after the round trip. With an optimistic adapter
-      // the row is already in the list, so leaving the text in the box showed
-      // it twice and read as a double submit.
-      setDraft('');
+      const current = capture();
+      if (!current()) return;
+      const revision = draftRevision.current;
+      if (!isAccountScoped) setDraft('');
       void runMutation(async () => {
         try {
           await add(next);
+          if (current() && isAccountScoped && draftRevision.current === revision) setDraft('');
         } catch (error) {
-          // Handed back so the user can retry without retyping.
-          setDraft(next);
+          if (current() && !isAccountScoped && draftRevision.current === revision) setDraft(next);
           throw error;
         }
       });
     },
-    [draft, add, runMutation],
+    [draft, add, runMutation, capture, isAccountScoped],
   );
 
   const onBeginEdit = useCallback((fact: MemoryFact) => {
+    editRevision.current += 1;
     setEditingId(fact.id);
     setEditDraft(fact.text);
   }, []);
@@ -163,24 +193,30 @@ export function MemoryEditor({
   const onSaveEdit = useCallback(
     (id: string) => {
       const next = editDraft.trim();
-      // Closed up front for the same reason: the adapter has already applied
-      // the new text to the row behind it, and an editor left open over a row
-      // that disagrees with it is the confusing state. A failure rolls the row
-      // back and says so, and the row is editable again.
-      setEditingId(null);
-      setEditDraft('');
+      const current = capture();
+      if (!current()) return;
+      const revision = editRevision.current;
+      if (!isAccountScoped) {
+        setEditingId(null);
+        setEditDraft('');
+      }
       void runMutation(async () => {
         if (!next) {
           await remove(id);
         } else {
           await update(id, next);
         }
+        if (current() && isAccountScoped && editRevision.current === revision) {
+          setEditingId(null);
+          setEditDraft('');
+        }
       });
     },
-    [editDraft, remove, update, runMutation],
+    [editDraft, remove, update, runMutation, capture, isAccountScoped],
   );
 
   const onCancelEdit = useCallback(() => {
+    editRevision.current += 1;
     setEditingId(null);
     setEditDraft('');
   }, []);
@@ -188,8 +224,11 @@ export function MemoryEditor({
   const editingFact = editingId ? facts.find((fact) => fact.id === editingId) : undefined;
   const dirty =
     draft.trim() !== '' ||
-    (editingFact !== undefined && editDraft.trim() !== editingFact.text.trim());
+    (editingFact !== undefined && editDraft.trim() !== editingFact.text.trim()) ||
+    (isAccountScoped && editingId !== null && editingFact === undefined && editDraft.trim() !== '');
   const discardEdits = useCallback(() => {
+    draftRevision.current += 1;
+    editRevision.current += 1;
     setDraft('');
     setEditingId(null);
     setEditDraft('');
@@ -225,7 +264,10 @@ export function MemoryEditor({
           <>
             <textarea
               value={editDraft}
-              onChange={(e) => setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
+              onChange={(e) => {
+                editRevision.current += 1;
+                setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS));
+              }}
               aria-label={`Editing memory: ${fact.text}`}
               rows={2}
               className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
@@ -241,7 +283,7 @@ export function MemoryEditor({
               <button
                 type="button"
                 onClick={() => void onSaveEdit(fact.id)}
-                disabled={fact.pending}
+                disabled={fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)}
                 className="rounded-compact bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
               >
                 Save
@@ -253,7 +295,7 @@ export function MemoryEditor({
             <button
               type="button"
               onClick={() => onBeginEdit(fact)}
-              disabled={fact.pending}
+              disabled={fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)}
               className="text-start text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] disabled:cursor-default"
               aria-label={`Edit memory: ${fact.text}`}
             >
@@ -289,8 +331,17 @@ export function MemoryEditor({
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => runMutation(() => setPinned(fact.id, !fact.pinned))}
-                  disabled={fact.pending}
+                  onClick={() => {
+                    if (!setPinned || fact.pending) return;
+                    void runMutation(() => setPinned(fact.id, !fact.pinned));
+                  }}
+                  disabled={
+                    !setPinned ||
+                    fact.pending ||
+                    adapter.mutationBlocked ||
+                    (isAccountScoped && mutating)
+                  }
+                  aria-describedby={!setPinned ? pinUnavailableDescriptionId : undefined}
                   aria-pressed={fact.pinned === true}
                   aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
                   className={cn(
@@ -317,7 +368,9 @@ export function MemoryEditor({
                       onConfirm: () => runMutation(() => remove(fact.id)),
                     })
                   }
-                  disabled={fact.pending}
+                  disabled={
+                    fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)
+                  }
                   className="rounded-compact p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
                   aria-label={`Delete memory fact`}
                 >
@@ -341,9 +394,34 @@ export function MemoryEditor({
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}
-          <p className="text-xs text-[var(--chat-text-muted)]">
-            {syncStatusLabel(syncStatus, isAccountScoped)}
-          </p>
+          {!isAccountScoped ? (
+            <p className="text-xs text-[var(--chat-text-muted)]">
+              {syncStatusLabel(syncStatus, isAccountScoped)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {isAccountScoped ? (
+        <div role="status" className="text-xs text-[var(--chat-text-muted)]">
+          <p>{syncStatusLabel(syncStatus, true)}</p>
+          {adapter.mutationBlocked ? (
+            <p>
+              A change could not be confirmed. Check your saved memories and reload before making
+              another change.
+            </p>
+          ) : null}
+          {syncStatus === 'error' ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (capture()()) void hydrateFromServer().catch(() => undefined);
+              }}
+              className="rounded-compact px-2 py-1 text-[var(--chat-text-primary)]"
+            >
+              Reload memories
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -355,7 +433,10 @@ export function MemoryEditor({
         <div className="flex items-start gap-2">
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
+            onChange={(e) => {
+              draftRevision.current += 1;
+              setDraft(e.target.value.slice(0, MAX_FACT_CHARS));
+            }}
             aria-label="Add a new fact"
             placeholder="Example: I prefer Python over JavaScript for data work."
             rows={2}
@@ -364,7 +445,7 @@ export function MemoryEditor({
           />
           <button
             type="submit"
-            disabled={draft.trim().length === 0 || mutating}
+            disabled={draft.trim().length === 0 || mutating || adapter.mutationBlocked}
             className={cn(
               'shrink-0 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               draft.trim().length === 0
@@ -384,6 +465,11 @@ export function MemoryEditor({
           {mutationError}
         </p>
       ) : null}
+      {!setPinned && facts.length > 0 ? (
+        <p id={pinUnavailableDescriptionId} className="text-caption text-[var(--chat-text-muted)]">
+          Pinning is not available for this memory source.
+        </p>
+      ) : null}
 
       {facts.length > 0 ? (
         <input
@@ -398,6 +484,25 @@ export function MemoryEditor({
       ) : null}
 
       {/* Existing facts */}
+      {isAccountScoped && editingId !== null && !editingFact ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-[var(--chat-text-muted)]">
+            The saved fact is no longer in the loaded list. Your unsaved edit is kept here.
+          </p>
+          <textarea
+            aria-label="Unsaved memory edit"
+            value={editDraft}
+            onChange={(event) => {
+              editRevision.current += 1;
+              setEditDraft(event.target.value.slice(0, MAX_FACT_CHARS));
+            }}
+            className="rounded-md border bg-[var(--chat-surface-base)] p-2 text-[var(--chat-text-primary)]"
+          />
+          <button type="button" onClick={onCancelEdit}>
+            Discard edit
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
         {facts.length === 0 ? (
           <p
@@ -405,7 +510,9 @@ export function MemoryEditor({
             style={{ borderColor: 'var(--chat-border)' }}
           >
             {isAccountScoped
-              ? 'No cloud memory facts yet. Add one above and it will be available to your Managed Cloud conversations.'
+              ? syncStatus === 'synced'
+                ? 'No cloud memory facts yet. Add one above and it will be available to your Managed Cloud conversations.'
+                : 'Cloud memory facts are not loaded.'
               : 'No local memory facts yet. Add one above and it will be available to conversations on this device.'}
           </p>
         ) : visibleFacts.length === 0 ? (
@@ -444,7 +551,7 @@ export function MemoryEditor({
           <button
             type="button"
             onClick={onClearAll}
-            disabled={mutating}
+            disabled={mutating || adapter.mutationBlocked}
             className="rounded-compact px-2 py-1 text-xs font-medium text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)]"
           >
             Forget everything
@@ -491,7 +598,7 @@ function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolea
       case 'synced':
         return 'Saved to your Managed Cloud account, available on every signed-in device.';
       case 'error':
-        return 'Couldn’t reach your Managed Cloud memory. Device-local memory was not used.';
+        return 'Couldn’t refresh your Managed Cloud memory. The loaded list may be out of date. Device-local memory was not used.';
       case 'unavailable':
         return 'Managed Cloud memory is unavailable.';
       case 'idle':

@@ -101,3 +101,76 @@ describe('parseGeminiStream CRLF framing (live wire shape)', () => {
     });
   });
 });
+
+describe('Gemini UTF-8 chunk invariance', () => {
+  const text = 'Résumé 🙂 漢字 العربية हिन्दी e\u0301 👨‍👩‍👧‍👦\nExact source.';
+  const code = 'print("資料/naïve🙂.ts")';
+  const wire = [
+    `data: ${JSON.stringify({
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [{ text }, { functionCall: { name: 'execute_code', args: { code } } }],
+          },
+          index: 0,
+        },
+      ],
+    })}`,
+    `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text: '', thoughtSignature: 'signed' }] }, finishReason: 'STOP', index: 0 }] })}`,
+    '',
+  ].join('\r\n\r\n');
+  const bytes = new TextEncoder().encode(wire);
+
+  async function assertPartition(cuts: readonly number[]): Promise<void> {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        let previous = 0;
+        for (const end of [...cuts, bytes.length]) {
+          controller.enqueue(bytes.slice(previous, end));
+          previous = end;
+        }
+        controller.close();
+      },
+    });
+    const chunks = await collect(stream);
+    expect(
+      chunks
+        .filter((chunk) => chunk.type === 'text-delta')
+        .map((chunk) => chunk.delta)
+        .join(''),
+    ).toBe(text);
+    const argumentsJson = chunks
+      .filter((chunk) => chunk.type === 'tool-use-delta')
+      .map((chunk) => chunk.deltaJson)
+      .join('');
+    expect(JSON.parse(argumentsJson)).toEqual({ code });
+    expect(chunks.filter((chunk) => chunk.type === 'tool-use-start')).toHaveLength(1);
+    expect(chunks.filter((chunk) => chunk.type === 'tool-use-end')).toHaveLength(1);
+    expect(chunks.filter((chunk) => chunk.type === 'stop')).toEqual([
+      { type: 'stop', reason: 'tool_use', providerFinishReason: 'STOP' },
+    ]);
+  }
+
+  it('preserves text and tool arguments at every single byte cut', async () => {
+    for (let cut = 1; cut < bytes.length; cut += 1) await assertPartition([cut]);
+  });
+
+  it('preserves one-byte chunks including UTF-8 and CRLF boundaries', async () => {
+    await assertPartition(Array.from({ length: bytes.length - 1 }, (_, index) => index + 1));
+  });
+
+  it('preserves deterministic multi-chunk partitions', async () => {
+    for (let seed = 1; seed <= 64; seed += 1) {
+      let state = seed;
+      let position = 0;
+      const cuts: number[] = [];
+      while (position < bytes.length) {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        position += 1 + (state % 13);
+        if (position < bytes.length) cuts.push(position);
+      }
+      await assertPartition(cuts);
+    }
+  });
+});

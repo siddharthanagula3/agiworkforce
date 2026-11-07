@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/deadline-policy');
 
@@ -96,6 +97,7 @@ function makeInput(): CloudAgentWorkflowInput {
     runId: RUN_ID,
     userId: 'user-1',
     processed: {
+      contextPolicySnapshot: contextPolicySnapshotFixture(),
       requestId: 'agi.chat.web.send.turn-1',
       chatRequest: { model: 'claude-test', messages: [], work_mode: 'agiwork' },
       requestedModel: 'claude-test',

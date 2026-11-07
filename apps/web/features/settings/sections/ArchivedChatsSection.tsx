@@ -1,19 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useConfirm, useUiTranslation, translateUiPlural } from '@agiworkforce/ui';
+import { ConfirmDialog } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { toWebConversation } from '@/lib/hooks/useConversations';
-import {
-  applyBulkConversationAction,
-  deleteManagedConversation,
-  listArchivedConversations,
-  restoreArchivedConversation,
-  type ArchivedConversationSummary,
-} from '../services/conversation-data-service';
+import { useManagedChatList } from '../hooks/useManagedChatList';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
-import { toUserMessage } from '@/lib/user-error-message';
 
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
@@ -37,166 +27,40 @@ const actionButtonStyle = {
 } as const;
 
 export function ArchivedChatsSection() {
-  const { plural } = useUiTranslation('settings');
-  const router = useRouter();
-  // Destructive-action confirmation (shell-nav-ia-gap-01 remainder), same
-  // shared AlertDialog wrapper as PrivacySection and WebChatPage, replacing
-  // native `window.confirm()` for both the single-chat and delete-all-archived
-  // actions below.
-  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
-  const [conversations, setConversations] = useState<ArchivedConversationSummary[]>([]);
-  const [nextOffset, setNextOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [actionId, setActionId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const upsertConversationInStore = useChatStore((state) => state.upsertConversation);
-  const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const manager = useManagedChatList('archived');
+  const { conversations, hasMore, loading, loadingMore, actionId, error, loadFailed, notice } =
+    manager;
   const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
-
-  const loadFirstPage = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    setLoadFailed(false);
-    try {
-      const page = await listArchivedConversations(0, signal);
-      setConversations(page.conversations);
-      setNextOffset(page.nextOffset);
-      setHasMore(page.hasMore);
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      setLoadFailed(true);
-      setError(toUserMessage(caught, 'Failed to load archived chats'));
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadFirstPage(controller.signal);
-    return () => controller.abort();
-  }, [loadFirstPage]);
-
-  const handleLoadMore = async () => {
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const page = await listArchivedConversations(nextOffset);
-      setConversations((current) => {
-        const ids = new Set(current.map((conversation) => conversation.id));
-        return [
-          ...current,
-          ...page.conversations.filter((conversation) => !ids.has(conversation.id)),
-        ];
-      });
-      setNextOffset(page.nextOffset);
-      setHasMore(page.hasMore);
-    } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to load more archived chats'));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  const dropFromList = (id: string) => {
-    setConversations((current) => current.filter((conversation) => conversation.id !== id));
-    // The row left the server's archived list too, so every later row moved down
-    // one. Holding the old offset would step over the row that took its place.
-    setNextOffset((offset) => Math.max(0, offset - 1));
-  };
-
-  const handleRestore = async (conversation: ArchivedConversationSummary) => {
-    setActionId(conversation.id);
-    setError(null);
-    setNotice(null);
-    try {
-      const restored = await restoreArchivedConversation(conversation.id);
-      dropFromList(conversation.id);
-      upsertConversationInStore(toWebConversation(restored));
-      setNotice(`Restored “${conversation.title}”.`);
-    } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to restore archived chat'));
-    } finally {
-      setActionId(null);
-    }
-  };
-
-  const handleDelete = async (conversation: ArchivedConversationSummary) => {
-    const label = conversation.title ? `“${conversation.title}”` : 'this archived chat';
-    const confirmed = await confirmDestructive({
-      title: 'Delete archived chat?',
-      description: `${label.charAt(0).toUpperCase()}${label.slice(1)} moves to Deleted chats and leaves your history. You can restore it from Settings > Deleted chats.`,
-      confirmText: 'Delete chat',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-    setActionId(conversation.id);
-    setError(null);
-    setNotice(null);
-    try {
-      await deleteManagedConversation(conversation.id);
-      dropFromList(conversation.id);
-      deleteConversationFromStore(conversation.id);
-      if (activeConversationId === conversation.id) router.replace('/chat');
-      setNotice(`Deleted “${conversation.title}”.`);
-    } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to delete archived chat'));
-    } finally {
-      setActionId(null);
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    const scope = hasMore
-      ? 'Every archived chat'
-      : plural('counts.allArchivedChats', conversations.length, {
-          one: 'All {{count}} archived chat',
-          other: 'All {{count}} archived chats',
-        });
-    const confirmed = await confirmDestructive({
-      title: 'Delete all archived chats in this workspace?',
-      description: `${scope} in the current workspace will be removed from your history. Chats that are not archived are not affected. You can restore them from Settings > Deleted chats.`,
-      confirmText: 'Delete all archived',
-      variant: 'destructive',
-    });
-    if (!confirmed) return;
-    setActionId('all');
-    setError(null);
-    setNotice(null);
-    try {
-      const affectedCount = await applyBulkConversationAction('delete_archived');
-      for (const conversation of conversations) {
-        deleteConversationFromStore(conversation.id);
-      }
-      if (activeConversationId && conversations.some(({ id }) => id === activeConversationId)) {
-        router.replace('/chat');
-      }
-      setConversations([]);
-      setHasMore(false);
-      setNotice(
-        translateUiPlural('settings', 'counts.deletedArchivedChats', affectedCount, {
-          one: 'Deleted {{count}} archived chat.',
-          other: 'Deleted {{count}} archived chats.',
-        }),
-      );
-    } catch (caught) {
-      setError(toUserMessage(caught, 'Failed to delete archived chats'));
-    } finally {
-      setActionId(null);
-    }
-  };
+  const confirmation = manager.confirmation;
 
   const hasStreamingChat = streamingConversationIds.length > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      {destructiveConfirmDialog}
+      {confirmation ? (
+        <ConfirmDialog
+          open
+          title={
+            confirmation.action === 'delete_archived'
+              ? 'Delete all archived chats in this workspace?'
+              : 'Delete archived chat?'
+          }
+          description={
+            confirmation.action === 'delete_archived'
+              ? 'Every archived chat in this workspace will leave your history. Other chats are not affected. You can restore deleted chats from Recently deleted for 30 days.'
+              : `“${confirmation.row!.title}” will leave your history. You can restore it from Recently deleted for 30 days.`
+          }
+          confirmText={
+            confirmation.action === 'delete_archived' ? 'Delete all archived' : 'Delete chat'
+          }
+          variant="destructive"
+          onConfirm={manager.confirm}
+          onCancel={manager.cancel}
+          onOpenChange={(open) => {
+            if (!open) manager.cancel();
+          }}
+        />
+      ) : null}
       <div>
         <SettingsSectionLink
           section="privacy"
@@ -230,7 +94,7 @@ export function ArchivedChatsSection() {
       {error ? (
         <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {error}{' '}
-          <button type="button" onClick={() => void loadFirstPage()} style={actionButtonStyle}>
+          <button type="button" onClick={manager.retry} style={actionButtonStyle}>
             Retry
           </button>
         </div>
@@ -274,7 +138,7 @@ export function ArchivedChatsSection() {
           </div>
         ) : (
           conversations.map((conversation, index) => {
-            const busy = actionId === conversation.id || actionId === 'all';
+            const busy = !manager.ready;
             const streaming = streamingConversationIds.includes(conversation.id);
             return (
               <div
@@ -311,7 +175,7 @@ export function ArchivedChatsSection() {
                 <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
                   <button
                     type="button"
-                    onClick={() => void handleRestore(conversation)}
+                    onClick={() => manager.restore(conversation)}
                     disabled={busy}
                     style={{ ...actionButtonStyle, cursor: busy ? 'not-allowed' : 'pointer' }}
                   >
@@ -319,7 +183,7 @@ export function ArchivedChatsSection() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleDelete(conversation)}
+                    onClick={() => manager.remove(conversation)}
                     disabled={busy || streaming}
                     style={{
                       ...actionButtonStyle,
@@ -339,8 +203,8 @@ export function ArchivedChatsSection() {
       {hasMore ? (
         <button
           type="button"
-          onClick={() => void handleLoadMore()}
-          disabled={loadingMore}
+          onClick={manager.loadMore}
+          disabled={!manager.ready}
           style={{ ...actionButtonStyle, alignSelf: 'center' }}
         >
           {loadingMore ? 'Loading…' : 'Load more'}
@@ -351,12 +215,12 @@ export function ArchivedChatsSection() {
         <div>
           <button
             type="button"
-            onClick={() => void handleDeleteAll()}
-            disabled={actionId !== null || hasStreamingChat}
+            onClick={manager.removeAll}
+            disabled={!manager.ready || hasStreamingChat}
             style={{
               ...actionButtonStyle,
               color: 'var(--chat-accent-primary-text)',
-              cursor: actionId !== null || hasStreamingChat ? 'not-allowed' : 'pointer',
+              cursor: !manager.ready || hasStreamingChat ? 'not-allowed' : 'pointer',
             }}
           >
             {actionId === 'all' ? 'Deleting…' : 'Delete all archived'}

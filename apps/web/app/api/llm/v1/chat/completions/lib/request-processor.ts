@@ -1,4 +1,18 @@
 import 'server-only';
+import {
+  captureContextPolicySnapshot,
+  contextPolicySnapshotsMatch,
+  contextPolicySnapshotIsCurrent,
+  CONTEXT_POLICY_RESTART_CODE,
+  CONTEXT_POLICY_RESTART_MESSAGE,
+  type ContextPolicySnapshot,
+} from '@/lib/services/context-policy-snapshot';
+import { withoutToolSchemaState, type ToolSchemaState } from './tool-schema-state';
+import {
+  isManagedToolInventoryVersion,
+  MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+  type ManagedToolInventoryFields,
+} from './managed-tool-inventory';
 import { resolveUsageCreditsNotice } from '@/lib/server/usage-credits-notice';
 import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 import {
@@ -10,6 +24,9 @@ import {
 } from '@/lib/agents/agent-turn-config';
 
 import { randomUUID } from 'node:crypto';
+import { isAppError } from '@agiworkforce/utils';
+import { assertAssistantContinuationSeed } from '@/lib/server/assistant-content-edits';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -26,6 +43,8 @@ import type {
 import { managedChatIdempotencyPurpose } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   IMAGE_CARD_KIND,
+  EDIT_IMAGE_TOOL_NAME,
+  GENERATE_IMAGE_TOOL_NAME,
   getPlanMaxAttachmentsPerMessage,
   normalizeResearchDeliverable,
   RESEARCH_GUIDANCE_MAX_CHARS,
@@ -123,6 +142,8 @@ import {
 import {
   imageChatToolDefinitions,
   imageChatToolOffer,
+  imageChatSourceAvailable,
+  latestTurnImage,
 } from '@/app/api/media/image/lib/image-chat-tools';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
@@ -136,7 +157,7 @@ import {
 import {
   hasExplicitWebFetchIntent,
   hasExplicitWebSearchIntent,
-  hasExplicitWebSearchOptOut,
+  hasExplicitWebSearchRequestOptOut as hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
 import { MEMORY_COMMAND_KINDS, extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
@@ -257,6 +278,8 @@ import {
   assessModelSwitchCache,
   classifyTaskFamily,
   classifyTaskLocally,
+  classifyImageToolIntent,
+  imageToolIntentAllows,
   detectIndicScript,
   emptyRuntimeState,
   estimateTokens,
@@ -310,9 +333,16 @@ import {
   productArtifactConnectors,
   productCapabilityFacts,
 } from '@/lib/prompts/product-capability-facts';
-import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
-import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
-import type { ChatTurnMemory } from '@/lib/prompts/chat-system-prompt-assembly';
+import {
+  promptStampsFor,
+  resolvePromptText,
+  type ResolvePromptOptions,
+} from '@/lib/prompts/prompt-registry';
+import { CHAT_SYSTEM_PROMPT_ID, chatSystemPromptSections } from '@/lib/prompts/chat-system-prompt';
+import {
+  renderChatToolInventory,
+  type ChatTurnMemory,
+} from '@/lib/prompts/chat-system-prompt-assembly';
 import type { PromptId } from '@/lib/prompts/prompt-manifest';
 import {
   orderInstructionBlocks,
@@ -444,6 +474,8 @@ import {
   buildCapabilityPreamble,
   chatSystemPromptDescribesProductCapabilities,
   chatSystemPromptDescribesSetup,
+  extractToolNames,
+  resolveChatSystemPrompt,
   servingModelFor,
   type ChatSetup,
   type ModelSelection,
@@ -769,6 +801,14 @@ export const ChatCompletionRequestSchema = z
   });
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
+
+export function parseChatCompletionRequestBody(body: unknown) {
+  return ChatCompletionRequestSchema.safeParse(
+    body && typeof body === 'object' && !Array.isArray(body)
+      ? withoutToolSchemaState(body as Record<string, unknown>)
+      : body,
+  );
+}
 
 /**
  * The tool fields as the caller sent them, before the server adds tools or
@@ -1242,9 +1282,13 @@ export function imageToolsForTurn(
     surface: CloudChatSurface;
     toolsCapable: boolean;
     planTier: string | null | undefined;
+    userMessage: string;
+    hasSourceImage?: boolean;
   },
 ): ReturnType<typeof imageChatToolDefinitions> {
+  const intent = classifyImageToolIntent(params.userMessage);
   if (
+    intent === null ||
     !params.toolsCapable ||
     request.stream !== true ||
     request.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) !== true
@@ -1252,7 +1296,15 @@ export function imageToolsForTurn(
     return [];
   }
   const offer = imageChatToolOffer(params.planTier, params.surface);
-  return offer ? imageChatToolDefinitions(offer) : [];
+  return offer
+    ? imageChatToolDefinitions(offer).filter(
+        (tool) =>
+          (tool.function.name === GENERATE_IMAGE_TOOL_NAME &&
+            imageToolIntentAllows(intent, 'generate', params.hasSourceImage === true)) ||
+          (tool.function.name === EDIT_IMAGE_TOOL_NAME &&
+            imageToolIntentAllows(intent, 'edit', params.hasSourceImage === true)),
+      )
+    : [];
 }
 
 export function validationRefusalMessage(error: z.ZodError): string {
@@ -1337,6 +1389,7 @@ export function resolveManagedUsageLeaseSeconds(
 }
 
 export type ProcessedRequest = {
+  toolSchemaState?: ToolSchemaState;
   requestId: string;
   chatSurface: CloudChatSurface;
   /**
@@ -1363,6 +1416,8 @@ export type ProcessedRequest = {
   pastChatSources?: readonly PastChatCitation[];
   memoryCitations?: readonly ManagedMemoryCitation[];
   assistantMessageId?: string | undefined;
+  assistantContinuationSeed?: string;
+  assistantContentEditRevision?: string;
   assistantParentId?: string | undefined;
   userMessageId?: string | undefined;
   autoMemoryFacts?: string[];
@@ -1389,6 +1444,7 @@ export type ProcessedRequest = {
    * to ask, so the gate's choice is allow or deny.
    */
   sensitiveContextPresent?: boolean;
+  contextPolicySnapshot?: ContextPolicySnapshot;
   untrustedContextPresent?: boolean;
   toolApprovalPolicy?: ToolApprovalPolicy;
   toolLockdown?: boolean;
@@ -1409,6 +1465,7 @@ export type ProcessedRequest = {
   fallbackReason: string | undefined;
   originalModel: string;
   modelSelection?: ModelSelection;
+  managedToolInventoryVersion?: number;
   /**
    * The model Auto left, and why, when this turn escalated off
    * the conversation's pinned model. Null on every turn that did not move.
@@ -1516,14 +1573,16 @@ export type ProcessedRequest = {
   routeAffinity?: ServedRouteAffinity;
   llmRequest: {
     model: string;
-    messages: Array<{
-      role: 'system' | 'user' | 'assistant' | 'tool';
-      content: string;
-      multimodal_content?: unknown[];
-      tool_calls?: unknown[];
-      tool_call_id?: string;
-      __canonicalThinking?: ThinkingBlock[];
-    }>;
+    messages: Array<
+      ManagedToolInventoryFields & {
+        role: 'system' | 'user' | 'assistant' | 'tool';
+        content: string;
+        multimodal_content?: unknown[];
+        tool_calls?: unknown[];
+        tool_call_id?: string;
+        __canonicalThinking?: ThinkingBlock[];
+      }
+    >;
     temperature?: number;
     max_tokens: number;
     stream?: boolean;
@@ -1786,6 +1845,97 @@ export function composeManagedSystemPreamble(input: {
   return dynamicBlock
     ? `${stableBlock}${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicBlock}`
     : stableBlock;
+}
+
+interface InventorySourceMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  name?: string;
+  __managedToolInventoryVersion?: unknown;
+}
+
+export interface ManagedToolInventoryMessage extends ManagedToolInventoryFields {
+  role: 'system';
+  content: string;
+  name: typeof MANAGED_TOOL_INVENTORY_MESSAGE_NAME;
+  __managedToolInventoryVersion: number;
+}
+
+function inventoryForVersion(
+  version: number,
+  tools: unknown[] | undefined,
+  bareToolNames?: ReadonlySet<string>,
+): string {
+  if (!isManagedToolInventoryVersion(version))
+    throw new Error('Invalid managed tool inventory prompt version');
+  return renderChatToolInventory(
+    chatSystemPromptSections(version),
+    extractToolNames(tools),
+    bareToolNames,
+  );
+}
+
+export function createManagedToolInventoryMessage(
+  tools: unknown[] | undefined,
+  promptSelection?: ResolvePromptOptions,
+  bareToolNames?: ReadonlySet<string>,
+): ManagedToolInventoryMessage {
+  const { version } = resolveChatSystemPrompt(promptSelection);
+  return {
+    role: 'system',
+    name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    __managedToolInventoryVersion: version,
+    content: inventoryForVersion(version, tools, bareToolNames),
+  };
+}
+
+export function managedToolInventoryProviderView<T extends InventorySourceMessage>(
+  messages: T[],
+  tools: unknown[] | undefined,
+  managedVersion: number | undefined,
+  bareToolNames?: ReadonlySet<string>,
+): Array<T | ManagedToolInventoryMessage> {
+  if (managedVersion === undefined) return messages;
+  if (!isManagedToolInventoryVersion(managedVersion))
+    throw new Error('Invalid managed tool inventory prompt version');
+  const slots = messages
+    .map((message, index) => ({ message, index }))
+    .filter(
+      ({ message }) =>
+        message.role === 'system' && message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    );
+  if (slots.length > 1) throw new Error('Duplicate managed tool inventory messages');
+  const slot = slots[0];
+  if (slot) {
+    const version = slot.message.__managedToolInventoryVersion;
+    if (typeof version !== 'number')
+      throw new Error('Missing managed tool inventory prompt version');
+    const content = inventoryForVersion(version, tools, bareToolNames);
+    return messages.map((message, index) =>
+      index === slot.index
+        ? {
+            ...message,
+            content: message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY)
+              ? `${SYSTEM_PROMPT_CACHE_BOUNDARY}${content}`
+              : content,
+          }
+        : message,
+    );
+  }
+
+  const firstNonSystem = messages.findIndex((message) => message.role !== 'system');
+  const insertAt = firstNonSystem === -1 ? messages.length : firstNonSystem;
+  const hasCacheBoundary = messages
+    .slice(0, insertAt)
+    .some((message) => message.content.includes(SYSTEM_PROMPT_CACHE_BOUNDARY));
+  const content = inventoryForVersion(managedVersion, tools, bareToolNames);
+  const inventory: ManagedToolInventoryMessage = {
+    role: 'system',
+    name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    __managedToolInventoryVersion: managedVersion,
+    content: hasCacheBoundary ? content : `${SYSTEM_PROMPT_CACHE_BOUNDARY}${content}`,
+  };
+  return [...messages.slice(0, insertAt), inventory, ...messages.slice(insertAt)];
 }
 
 export interface ManagedMemoryPolicyRead {
@@ -2974,7 +3124,18 @@ async function freeTrialBudgetReachedResponse(
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_TOTAL_LENGTH = 1000000;
 
+function contextPolicyRestartResponse(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { error: { message: CONTEXT_POLICY_RESTART_MESSAGE, code: CONTEXT_POLICY_RESTART_CODE } },
+      { status: 409 },
+    ),
+  };
+}
+
 export interface ProcessRequestOptions {
+  contextPolicySnapshot?: ContextPolicySnapshot;
   workspaceControls?: ResolvedWorkspaceControls | null;
   scopedDbPromise?: Promise<UserScopedDb>;
   turnToolProhibition?: TurnToolProhibition | null;
@@ -3300,7 +3461,7 @@ async function processAdmittedRequest(
       }
     }
   }
-  const validationResult = ChatCompletionRequestSchema.safeParse(body);
+  const validationResult = parseChatCompletionRequestBody(body);
   if (!validationResult.success) {
     return {
       ok: false,
@@ -3359,6 +3520,22 @@ async function processAdmittedRequest(
   const scopedDbPromise =
     options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
+
+  const contextPolicyScope = await scopedDbPromise;
+  const currentContextPolicySnapshot = await captureContextPolicySnapshot(
+    contextPolicyScope.db,
+    userId,
+    contextPolicyScope.organizationId,
+  );
+  if (
+    !currentContextPolicySnapshot ||
+    (options.contextPolicySnapshot !== undefined &&
+      !contextPolicySnapshotsMatch(options.contextPolicySnapshot, currentContextPolicySnapshot))
+  ) {
+    return contextPolicyRestartResponse();
+  }
+
+  const contextPolicySnapshot = options.contextPolicySnapshot ?? currentContextPolicySnapshot;
 
   const conversationIdForHealthSpace = chatRequest.conversation_id;
   const healthSpacePromise: Promise<string | null> = conversationIdForHealthSpace
@@ -3555,6 +3732,8 @@ async function processAdmittedRequest(
         studyInstruction: string | null;
         conversationInstruction: string | null;
         agentTurn: AgentTurnConfig | null;
+        assistantContinuationSeed?: string;
+        assistantContentEditRevision?: string;
       }
     | ProcessFailure
   > = chatRequest.conversation_id
@@ -3616,6 +3795,21 @@ async function processAdmittedRequest(
               ),
             };
           }
+
+          const lastAssistant = [...chatRequest.messages]
+            .reverse()
+            .find((message) => message.role === 'assistant');
+          const assistantContinuation =
+            chatRequest.assistant_message_id && !ownedRows[0].is_temporary
+              ? await assertAssistantContinuationSeed({
+                  db: scoped.db,
+                  userId,
+                  organizationId: scoped.organizationId ?? null,
+                  conversationId,
+                  messageId: chatRequest.assistant_message_id,
+                  seed: lastAssistant ? extractTextContent(lastAssistant.content) : null,
+                })
+              : null;
 
           if (ownedRows[0].project_id) {
             try {
@@ -3693,8 +3887,37 @@ async function processAdmittedRequest(
             studyInstruction,
             conversationInstruction: conversationInstructionBlock(ownedRows[0].instructions),
             agentTurn,
+            ...(assistantContinuation !== null
+              ? {
+                  assistantContinuationSeed: assistantContinuation.content,
+                  assistantContentEditRevision: assistantContinuation.editRevision,
+                }
+              : {}),
           };
         } catch (error) {
+          const details = isAppError(error) ? error.details : null;
+          if (
+            isAppError(error) &&
+            typeof details === 'object' &&
+            details !== null &&
+            'reason' in details &&
+            details.reason === ASSISTANT_CONTENT_CHANGED_REASON
+          ) {
+            return {
+              ok: false,
+              response: NextResponse.json(
+                {
+                  error: {
+                    message: error.message,
+                    type: 'invalid_request_error',
+                    code: ASSISTANT_CONTENT_CHANGED_REASON,
+                    details: { reason: ASSISTANT_CONTENT_CHANGED_REASON },
+                  },
+                },
+                { status: 409 },
+              ),
+            };
+          }
           logger.error(
             { error, userId, conversationId: chatRequest.conversation_id },
             'Managed conversation ownership lookup failed',
@@ -3905,6 +4128,7 @@ async function processAdmittedRequest(
           userId,
           (filename) => truncatedAttachments.push(filename),
           getPlanMaxAttachmentsPerMessage(subscription.plan_tier),
+          contextPolicyScope.organizationId,
         ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),
@@ -3965,6 +4189,7 @@ async function processAdmittedRequest(
         surface: chatSurface,
         memoryEnabled: chatRequest.memory_enabled,
         policy: managedMemoryPolicy,
+        organizationContextPolicy: contextPolicySnapshot.policy,
         query: lastUserMessageText(chatRequest),
         projectContext: ownership.projectContext,
         pastChatLinksShown: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
@@ -3996,8 +4221,8 @@ async function processAdmittedRequest(
 
   if (chatRequest.mcp_context) {
     try {
+      const scoped = await scopedDbPromise;
       if (chatRequest.conversation_id) {
-        const scoped = await scopedDbPromise;
         if (
           await connectorIdsReadGoogleUserData(
             scoped.db,
@@ -4009,7 +4234,11 @@ async function processAdmittedRequest(
           await markConversationGoogleUserData(scoped.db, userId, chatRequest.conversation_id);
         }
       }
-      const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
+      const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context, {
+        organizationId: scoped.organizationId,
+        request,
+        allowSelective: !ownership.agentTurn,
+      });
       if (context) {
         chatRequest.messages.unshift({ role: 'system', content: context });
         dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'untrusted_context');
@@ -5654,6 +5883,17 @@ async function processAdmittedRequest(
     chatRequest.code_execution && !cloudExecutionSwitchedOff
       ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
       : 0;
+  if (
+    !(await contextPolicySnapshotIsCurrent(
+      contextPolicyScope.db,
+      userId,
+      contextPolicyScope.organizationId,
+      contextPolicySnapshot,
+    ))
+  ) {
+    return contextPolicyRestartResponse();
+  }
+
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
@@ -5914,13 +6154,15 @@ async function processAdmittedRequest(
   const staticSourceMessages = chatRequest.messages.filter(
     (msg) => !dynamicSystemMessageRefs.has(msg),
   );
-  const internalMessages = staticSourceMessages.map((msg) => ({
-    role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
-    content: extractTextContent(msg.content),
-    multimodal_content: Array.isArray(msg.content) ? (msg.content as unknown[]) : undefined,
-    tool_calls: msg.tool_calls as unknown[] | undefined,
-    tool_call_id: msg.tool_call_id,
-  }));
+  const internalMessages: ProcessedRequest['llmRequest']['messages'] = staticSourceMessages.map(
+    (msg) => ({
+      role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
+      content: extractTextContent(msg.content),
+      multimodal_content: Array.isArray(msg.content) ? (msg.content as unknown[]) : undefined,
+      tool_calls: msg.tool_calls as unknown[] | undefined,
+      tool_call_id: msg.tool_call_id,
+    }),
+  );
   const dynamicSkillMemoryText = orderInstructionBlocks(dynamicSystemBlocks)
     .map((block) => block.text)
     .filter((text) => text.length > 0)
@@ -5949,6 +6191,7 @@ async function processAdmittedRequest(
     requirement: searchRequirement,
     modelPolicy: webSearchToolOfferPolicy,
     surface: chatSurface,
+    userMessage: lastUserText,
     userOptOut:
       chatSurface === 'web' &&
       chatRequest.search_requested !== true &&
@@ -5998,6 +6241,23 @@ async function processAdmittedRequest(
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
+  const imageIntent = classifyImageToolIntent(lastUserText);
+  const imageSourceAvailable =
+    (imageIntent === 'edit' || imageIntent === 'continuation') &&
+    chatRequest.stream === true &&
+    imageCardsAsked &&
+    resolvedModelCaps?.tools !== false &&
+    canUseBillingPlanCapability(subscription.plan_tier, 'image_generation') &&
+    !imagesSwitchedOff &&
+    agentAllowsImageGeneration(ownership.agentTurn) &&
+    (await imageChatSourceAvailable({
+      userId,
+      organizationId: contextPolicyScope.organizationId,
+      db: (await scopedDbPromise).db,
+      conversationId: chatRequest.conversation_id ?? null,
+      latestAttachedImage: () =>
+        latestTurnImage({ turnAttachments, messages: chatRequest.messages }),
+    }));
   const imageTools =
     imagesSwitchedOff || !agentAllowsImageGeneration(ownership.agentTurn)
       ? []
@@ -6005,6 +6265,8 @@ async function processAdmittedRequest(
           surface: chatSurface,
           toolsCapable: resolvedModelCaps?.tools ?? true,
           planTier: subscription.plan_tier,
+          userMessage: lastUserText,
+          hasSourceImage: imageSourceAvailable,
         });
   if (imageTools.length > 0) {
     resolvedTools = [...(resolvedTools ?? []), ...imageTools];
@@ -6095,6 +6357,7 @@ async function processAdmittedRequest(
   }
 
   let connectorsAllowed: boolean | undefined;
+  let managedToolInventoryVersion: number | undefined;
   if (chatSurface !== 'api') {
     const turnMemory = chatTurnMemoryFor({
       read: managedMemoryPolicyRead,
@@ -6115,6 +6378,7 @@ async function processAdmittedRequest(
           tier: subscription.plan_tier,
           surface: chatSurface,
           cloudExecutionDeploymentEnabled: e2bProvisioningReady(),
+          allowSelectiveConnectors: !ownership.agentTurn,
           exclusions: await productCapabilityExclusions({
             request,
             userId,
@@ -6139,13 +6403,21 @@ async function processAdmittedRequest(
                 organizationId,
                 subscriptionTier: subscription.plan_tier,
                 chatSurface,
+                allowSelective: !ownership.agentTurn,
               }),
             ),
           ])
         : [false, undefined];
     connectorsAllowed = allowedForTurn;
+    const toolInventory = createManagedToolInventoryMessage(
+      resolvedTools,
+      promptSelection,
+      new Set(extractToolNames(callerToolFields.tools)),
+    );
+    managedToolInventoryVersion = toolInventory.__managedToolInventoryVersion;
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
+      includeToolInventory: false,
       surface: chatSurface,
       researchUnavailable,
       timeZone: chatRequest.client_timezone,
@@ -6157,7 +6429,12 @@ async function processAdmittedRequest(
         productCapabilities !== undefined &&
         productArtifactConnectors(subscription.plan_tier, productCapabilities),
       ...(productCapabilities ? { productCapabilities } : {}),
-      promptSelection,
+      promptSelection: {
+        variants: {
+          ...promptSelection.variants,
+          [CHAT_SYSTEM_PROMPT_ID]: managedToolInventoryVersion,
+        },
+      },
       servingModel: servingModelFor(chatRequest.model, modelSelection),
       chatSetup: chatSetupFor({
         chatRequest,
@@ -6215,6 +6492,12 @@ async function processAdmittedRequest(
         tool_call_id: undefined,
       });
     }
+    const firstNonSystemIndex = internalMessages.findIndex((message) => message.role !== 'system');
+    internalMessages.splice(
+      firstNonSystemIndex === -1 ? internalMessages.length : firstNonSystemIndex,
+      0,
+      toolInventory,
+    );
   } else {
     if (dynamicTurnInstruction) {
       internalMessages.unshift({
@@ -6497,6 +6780,7 @@ async function processAdmittedRequest(
     conversationIsTemporary,
     healthSpaceProjectId: await healthSpacePromise,
     googleUserData: (await googleUserDataPromise) !== null,
+    contextPolicySnapshot,
     ...(ownership.ok && ownership.projectSources?.length
       ? { projectSources: ownership.projectSources }
       : {}),
@@ -6507,6 +6791,12 @@ async function processAdmittedRequest(
       ? { memoryCitations: sentCitations.memoryCitations }
       : {}),
     assistantMessageId: chatRequest.assistant_message_id,
+    ...(ownership.assistantContinuationSeed !== undefined
+      ? { assistantContinuationSeed: ownership.assistantContinuationSeed }
+      : {}),
+    ...(ownership.assistantContentEditRevision !== undefined
+      ? { assistantContentEditRevision: ownership.assistantContentEditRevision }
+      : {}),
     assistantParentId: chatRequest.assistant_parent_id,
     ...(chatRequest.user_message ? { userMessageId: chatRequest.user_message.id } : {}),
     autoMemoryFacts,
@@ -6521,6 +6811,7 @@ async function processAdmittedRequest(
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
     ...(toolLockdown ? { toolLockdown: true } : {}),
     ...(connectorsAllowed === undefined ? {} : { connectorsAllowed }),
+    ...(managedToolInventoryVersion === undefined ? {} : { managedToolInventoryVersion }),
     ...(ownership.agentTurn ? { agentTurn: ownership.agentTurn } : {}),
     requestedModel,
     ...(selectedModel ? { selectedModel } : {}),

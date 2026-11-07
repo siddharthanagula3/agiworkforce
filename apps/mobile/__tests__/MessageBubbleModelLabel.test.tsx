@@ -184,6 +184,41 @@ describe('MessageBubble model label', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
   });
 
+  it('wraps full-size response actions and keeps variant selection reachable', () => {
+    const onSelectVariant = jest.fn();
+    const message: ChatMessage = {
+      id: 'answer-2',
+      role: 'assistant',
+      content: 'A complete answer.',
+      createdAt: '2026-10-31T00:00:00.000Z',
+    };
+    const view = render(
+      <MessageBubble
+        message={message}
+        onRetryMessage={jest.fn()}
+        onReaction={jest.fn()}
+        variant={{ index: 1, total: 3, previousId: 'answer-1', nextId: 'answer-3' }}
+        onSelectVariant={onSelectVariant}
+      />,
+    );
+
+    expect(view.getByLabelText('Message actions')).toHaveStyle({ flexWrap: 'wrap' });
+    for (const name of [
+      'Copy',
+      'Read aloud',
+      'More message actions for AGI',
+      'Regenerate response',
+      'Good response',
+      'Bad response',
+      'Previous response',
+      'Next response',
+    ]) {
+      expect(view.getByRole('button', { name })).toHaveStyle({ width: 44, height: 44 });
+    }
+    fireEvent.press(view.getByRole('button', { name: 'Next response' }));
+    expect(onSelectVariant).toHaveBeenCalledWith('answer-3');
+  });
+
   it('follows the stored rating when a failed write restores the previous value', () => {
     const message: ChatMessage = {
       id: 'm-rated',
@@ -227,9 +262,7 @@ describe('MessageBubble model label', () => {
 
     expect(getByText(new RegExp(LOCAL_MODEL_LABEL))).toBeTruthy();
     expect(queryByText(DEFAULT_LOCAL_MODEL_ID)).toBeNull();
-    expect(
-      getByLabelText(`${LOCAL_MODEL_LABEL} message: Local AI runs on this device.`),
-    ).toBeTruthy();
+    expect(getByLabelText(`More message actions for ${LOCAL_MODEL_LABEL}`)).toBeTruthy();
   });
 
   it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {
@@ -314,7 +347,7 @@ describe('MessageBubble model label', () => {
     };
 
     const view = render(<MessageBubble message={message} />);
-    const bubble = view.getByLabelText('AGI message: Here is the current result.');
+    const bubble = view.getByLabelText('More message actions for AGI');
 
     fireEvent(bubble, 'accessibilityAction', {
       nativeEvent: { actionName: 'tool-search-1' },

@@ -3,6 +3,10 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS,
+  ManagedCloudPublishedArtifactLookupQuerySchema,
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
 } from '@agiworkforce/cloud-contracts';
@@ -45,14 +49,12 @@ import { SITE_URL } from '@/lib/seo/site';
 
 export const MAX_CONTENT_CHARS = 1_000_000;
 const MAX_TITLE_CHARS = MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS;
-const MAX_ARTIFACT_ID_CHARS = 200;
+const MAX_ARTIFACT_ID_CHARS = MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS;
 const MAX_LANGUAGE_CHARS = 50;
-const MAX_LIST_LIMIT = 200;
+const MAX_LIST_LIMIT = MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS;
 
 /**
- * Per-user cap on live published pages. Deliberately equal to the management
- * list cap: a page past that limit could never appear in its own publisher's
- * "Published artifacts" list, so it could never be found and revoked there.
+ * Per-user admission cap. Legacy list consumers read only the first page.
  */
 export const MAX_PUBLISHED_PER_USER = MAX_LIST_LIMIT;
 
@@ -234,13 +236,18 @@ export function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArti
 }
 
 interface PublishPreflightRow {
-  other_published: number | string | null;
   owned_conversations: number | string | null;
 }
 
-function countOf(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+function requirePublicationCount(value: unknown): number {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value))) {
+    throw new Error('Published artifact count is invalid');
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error('Published artifact count is invalid');
+  }
+  return parsed;
 }
 
 function toVersionNumber(value: number | string | null | undefined): number {
@@ -287,10 +294,17 @@ export function buildPublishedArtifactUrl(token: string): string {
   return `${SITE_URL}/shared-artifact/${token}`;
 }
 
-export async function publishArtifactRecord(
+async function preparePublishArtifactRecord(
   db: DatabaseAdapter,
   input: PublishArtifactRecordInput,
-): Promise<PublishedArtifact> {
+): Promise<{
+  userId: string;
+  artifactId: string;
+  conversationId: string | null;
+  title: string;
+  language: string | null;
+  content: string;
+}> {
   const userId = input.userId?.trim();
   if (!userId) throw new PublishedArtifactValidationError('userId is required');
 
@@ -324,81 +338,226 @@ export async function publishArtifactRecord(
   const language = input.language ? input.language.slice(0, MAX_LANGUAGE_CHARS) : null;
   const conversationId = input.conversationId ?? null;
 
-  const [preflight] = await db.query<PublishPreflightRow>(
+  const preflights = await db.query<PublishPreflightRow>(
     `select
-       (select count(*) from public.published_artifacts
-         where user_id = $1 and artifact_id <> $2) as other_published,
        (select count(*) from public.web_conversations
-         where id = $3::uuid and user_id = $1 and deleted_at is null) as owned_conversations`,
-    [userId, artifactId, conversationId],
+         where id = $2::uuid and user_id = $1 and deleted_at is null) as owned_conversations`,
+    [userId, conversationId],
   );
+  if (preflights.length !== 1 || !preflights[0]) {
+    throw new Error('Published artifact ownership preflight is missing');
+  }
+  const ownedConversations = requirePublicationCount(preflights[0].owned_conversations);
 
   // The RLS WITH CHECK in 0095 already refuses a foreign conversation, but it
   // refuses it by raising 42501, a 500 to the caller. Decide it here so the
   // answer is a 403 the client can act on.
-  if (conversationId && countOf(preflight?.owned_conversations) === 0) {
+  if (conversationId && ownedConversations === 0) {
     throw new PublishedArtifactOwnershipError(
       'That artifact belongs to a conversation that was deleted or that you do not own, so it cannot be published.',
     );
   }
 
-  if (countOf(preflight?.other_published) >= MAX_PUBLISHED_PER_USER) {
+  return { userId, artifactId, conversationId, title, language, content };
+}
+
+async function admitPublishedArtifact(
+  db: DatabaseAdapter,
+  userId: string,
+  artifactId: string,
+): Promise<string | null> {
+  const isolation = await db.query<{ isolation: string }>(
+    `select current_setting('transaction_isolation') as isolation`,
+  );
+  if (isolation.length !== 1 || isolation[0]?.isolation !== 'read committed') {
+    throw new Error('Published artifact admission requires read committed isolation');
+  }
+  const locks = await db.query<{ locked: boolean }>(
+    `select pg_advisory_xact_lock(hashtextextended('agi:published-artifact-quota:' || $1, 0)),
+            true as locked`,
+    [userId],
+  );
+  if (locks.length !== 1 || locks[0]?.locked !== true) {
+    throw new Error('Published artifact admission lock was not acquired');
+  }
+  // Separate statements refresh the READ COMMITTED snapshot after waiting for the owner lock.
+  const existing = await db.query<{ id: string; user_id: string; artifact_id: string }>(
+    `select id, user_id, artifact_id from public.published_artifacts
+      where user_id = $1 and artifact_id = $2
+      for update`,
+    [userId, artifactId],
+  );
+  if (!Array.isArray(existing) || existing.length > 1) {
+    throw new Error('Published artifact admission identity is invalid');
+  }
+  if (existing.length === 1) {
+    const row = existing[0];
+    if (
+      !row ||
+      typeof row.id !== 'string' ||
+      !row.id.trim() ||
+      row.user_id !== userId ||
+      row.artifact_id !== artifactId
+    ) {
+      throw new Error('Published artifact admission identity is invalid');
+    }
+    return row.id;
+  }
+  const counts = await db.query<{ published_count: number | string }>(
+    `select count(*) as published_count from public.published_artifacts where user_id = $1`,
+    [userId],
+  );
+  if (counts.length !== 1 || !counts[0]) {
+    throw new Error('Published artifact admission count is missing');
+  }
+  if (requirePublicationCount(counts[0].published_count) >= MAX_PUBLISHED_PER_USER) {
     throw new PublishedArtifactQuotaError(
       `You already have ${MAX_PUBLISHED_PER_USER} published artifacts. Unpublish one before publishing another.`,
     );
   }
+  return null;
+}
 
-  let rows: PublishedArtifactRow[];
-  try {
-    rows = await db.query<PublishedArtifactRow>(
-      `insert into public.published_artifacts (
-       token, user_id, artifact_id, conversation_id, title, kind, language, content, visibility
-     ) values (
-       $1, $2, $3, $4, $5, $6, $7, $8,
-       case when exists (
-         select 1 from public.live_artifacts live
-          where live.user_id = $2 and live.artifact_id::text = lower($3)
-       ) then 'invited' else 'public' end
-     )
-     on conflict (user_id, artifact_id) do update set
-       conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
-       title = case when published_artifacts.title = '' then excluded.title
-                    else published_artifacts.title end,
-       kind = excluded.kind,
-       language = excluded.language,
-       content = excluded.content,
-       updated_at = now()
-     returning id, token, user_id, artifact_id, conversation_id, title, kind,
-               language, content, visibility, created_at, updated_at`,
-      [
-        mintPublishToken(),
-        userId,
-        artifactId,
-        conversationId,
-        title,
-        input.kind,
-        language,
-        content,
-      ],
-    );
-  } catch (error) {
-    // The preflight and the write are not one transaction: the conversation can
-    // change hands or be deleted in between, and RLS is the one that finally says no.
-    if (isRowLevelSecurityDenial(error)) {
+export async function publishArtifactRecord(
+  db: DatabaseAdapter,
+  input: PublishArtifactRecordInput,
+): Promise<PublishedArtifact & { version: number }> {
+  return db.transaction(async (tx) => {
+    const { userId, artifactId, conversationId, title, language, content } =
+      await preparePublishArtifactRecord(tx, input);
+    const existingPublicationId = await admitPublishedArtifact(tx, userId, artifactId);
+
+    let rows: PublishedArtifactRow[];
+    try {
+      rows = await tx.query<PublishedArtifactRow>(
+        `insert into public.published_artifacts (
+         token, user_id, artifact_id, conversation_id, title, kind, language, content, visibility
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8,
+         case when exists (
+           select 1 from public.live_artifacts live
+            where live.user_id = $2 and live.artifact_id::text = lower($3)
+         ) then 'invited' else 'public' end
+       )
+       on conflict (user_id, artifact_id) do update set
+         conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
+         title = case when published_artifacts.title = '' then excluded.title
+                      else published_artifacts.title end,
+         kind = excluded.kind,
+         language = excluded.language,
+         content = excluded.content,
+         updated_at = now()
+       returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                 language, content, visibility, created_at, updated_at`,
+        [
+          mintPublishToken(),
+          userId,
+          artifactId,
+          conversationId,
+          title,
+          input.kind,
+          language,
+          content,
+        ],
+      );
+    } catch (error) {
+      if (isRowLevelSecurityDenial(error)) {
+        throw new PublishedArtifactOwnershipError(
+          'Row-level security refused the publish: the artifact is not yours to publish.',
+        );
+      }
+      throw error;
+    }
+
+    const row = rows[0];
+    if (!row) {
       throw new PublishedArtifactOwnershipError(
-        'Row-level security refused the publish: the artifact is not yours to publish.',
+        'Artifact was not published (row-level security denied the write)',
       );
     }
-    throw error;
-  }
+    if (
+      rows.length !== 1 ||
+      typeof row.id !== 'string' ||
+      !row.id.trim() ||
+      (existingPublicationId !== null && row.id !== existingPublicationId) ||
+      row.user_id !== userId ||
+      row.artifact_id !== artifactId
+    ) {
+      throw new Error('Published artifact write identity is invalid');
+    }
+    const version = await recordPublishedVersion(tx, {
+      publishedArtifactId: row.id,
+      userId: row.user_id,
+      title: row.title,
+      kind: row.kind,
+      language: row.language,
+      content: row.content,
+    });
+    return { ...rowToPublishedArtifact(row), version };
+  });
+}
 
-  const row = rows[0];
-  if (!row) {
-    throw new PublishedArtifactOwnershipError(
-      'Artifact was not published (row-level security denied the write)',
+export async function restorePublishedArtifactRecord(
+  db: DatabaseAdapter,
+  input: PublishArtifactRecordInput & { publishedArtifactId: string; token: string },
+): Promise<(PublishedArtifact & { version: number }) | null> {
+  if (!input.publishedArtifactId || !PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
+  return db.transaction(async (tx) => {
+    const { userId, artifactId, title, language, content } = await preparePublishArtifactRecord(
+      tx,
+      input,
     );
-  }
-  return rowToPublishedArtifact(row);
+
+    let rows: PublishedArtifactRow[];
+    try {
+      rows = await tx.query<PublishedArtifactRow>(
+        `update public.published_artifacts
+            set title = case when title = '' then $5 else title end,
+                kind = $6, language = $7, content = $8, updated_at = now()
+          where user_id = $1 and id = $2 and artifact_id = $3 and token = $4
+          returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                    language, content, visibility, created_at, updated_at`,
+        [
+          userId,
+          input.publishedArtifactId,
+          artifactId,
+          input.token,
+          title,
+          input.kind,
+          language,
+          content,
+        ],
+      );
+    } catch (error) {
+      if (isRowLevelSecurityDenial(error)) {
+        throw new PublishedArtifactOwnershipError(
+          'Row-level security refused the publish: the artifact is not yours to publish.',
+        );
+      }
+      throw error;
+    }
+    const row = rows[0];
+    if (rows.length === 0) return null;
+    if (
+      rows.length !== 1 ||
+      !row ||
+      row.id !== input.publishedArtifactId ||
+      row.token !== input.token ||
+      row.user_id !== userId ||
+      row.artifact_id !== artifactId
+    ) {
+      throw new Error('Published artifact restore identity is invalid');
+    }
+    const version = await recordPublishedVersion(tx, {
+      publishedArtifactId: row.id,
+      userId: row.user_id,
+      title: row.title,
+      kind: row.kind,
+      language: row.language,
+      content: row.content,
+    });
+    return { ...rowToPublishedArtifact(row), version };
+  });
 }
 
 export async function unpublishArtifactRecord(
@@ -481,32 +640,6 @@ export async function publishedArtifactUsesConnectors(
 }
 
 /**
- * Move one of the caller's own published artifacts between audiences.
- *
- * Only the publication's audience changes: the token, the content and the
- * conversation link are untouched, so switching back restores the same URL.
- */
-export async function setPublishedArtifactVisibility(
-  db: DatabaseAdapter,
-  input: { userId: string; token: string; visibility: PublishedArtifactVisibility },
-): Promise<PublishedArtifact | null> {
-  const userId = input.userId?.trim();
-  const token = input.token?.trim();
-  if (!userId || !token || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
-
-  const rows = await db.query<PublishedArtifactRow>(
-    `update public.published_artifacts
-        set visibility = $3, updated_at = now()
-      where token = $1 and user_id = $2
-      returning id, token, user_id, artifact_id, conversation_id, title, kind,
-                language, content, visibility, created_at, updated_at`,
-    [token, userId, input.visibility],
-  );
-  const row = rows[0];
-  return row ? rowToPublishedArtifact(row) : null;
-}
-
-/**
  * Rename one of the caller's own published artifacts. The name belongs to the
  * page rather than to any one version, which is why a republish keeps it.
  */
@@ -531,6 +664,143 @@ export async function renamePublishedArtifact(
   return row ? rowToPublishedArtifact(row) : null;
 }
 
+interface PublishedArtifactPageRow extends PublishedArtifactSummaryRow {
+  id: string;
+  cursor_created_at: string;
+}
+
+type PublishedArtifactCursor = { v: 1; owner: string; createdAt: string; id: string };
+
+function validCursorTimestamp(value: string): boolean {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.\d{6}Z$/.exec(value);
+  if (!parts) return false;
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return (
+    year >= 1 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= days[month - 1]! &&
+    Number(parts[4]) <= 23 &&
+    Number(parts[5]) <= 59 &&
+    Number(parts[6]) <= 59
+  );
+}
+
+function readPublishedArtifactCursor(value: string, userId: string): PublishedArtifactCursor {
+  const invalid = () => new PublishedArtifactValidationError('Invalid published artifact cursor');
+  if (
+    !value ||
+    value.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  )
+    throw invalid();
+  const bytes = Buffer.from(value, 'base64url');
+  if (bytes.toString('base64url') !== value) throw invalid();
+  let decoded: unknown;
+  try {
+    const json = bytes.toString('utf8');
+    decoded = JSON.parse(json);
+    if (JSON.stringify(decoded) !== json || !Buffer.from(json).equals(bytes)) throw invalid();
+  } catch {
+    throw invalid();
+  }
+  if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw invalid();
+  const cursor = decoded as Record<string, unknown>;
+  if (
+    Object.keys(cursor).length !== 4 ||
+    cursor.v !== 1 ||
+    cursor.owner !== userId ||
+    typeof cursor.createdAt !== 'string' ||
+    !validCursorTimestamp(cursor.createdAt) ||
+    typeof cursor.id !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(cursor.id)
+  ) {
+    throw invalid();
+  }
+  return { v: 1, owner: userId, createdAt: cursor.createdAt, id: cursor.id };
+}
+
+export async function listPublishedArtifactsPage(
+  db: DatabaseAdapter,
+  input: { userId: string; limit?: number; cursor?: string },
+): Promise<{ artifacts: PublishedArtifactSummary[]; nextCursor: string | null }> {
+  const userId = input.userId?.trim();
+  if (!userId) throw new PublishedArtifactValidationError('Publication owner is required');
+  const limit = input.limit ?? MAX_LIST_LIMIT;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_LIMIT) {
+    throw new PublishedArtifactValidationError('Invalid published artifact page size');
+  }
+  const cursor =
+    input.cursor === undefined ? null : readPublishedArtifactCursor(input.cursor, userId);
+  const rows = await db.query<PublishedArtifactPageRow>(
+    `select id, token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at,
+            to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor_created_at
+       from public.published_artifacts
+      where user_id = $1${cursor ? ' and (created_at, id) < ($3::timestamptz, $4::uuid)' : ''}
+      order by created_at desc, id desc
+      limit $2`,
+    cursor ? [userId, limit + 1, cursor.createdAt, cursor.id] : [userId, limit + 1],
+  );
+  const page = rows.slice(0, limit);
+  const boundary = page.at(-1);
+  const nextCursor =
+    rows.length > limit && boundary
+      ? Buffer.from(
+          JSON.stringify({
+            v: 1,
+            owner: userId,
+            createdAt: boundary.cursor_created_at,
+            id: boundary.id,
+          } satisfies PublishedArtifactCursor),
+        ).toString('base64url')
+      : null;
+  if (nextCursor) readPublishedArtifactCursor(nextCursor, userId);
+  return { artifacts: page.map(rowToSummary), nextCursor };
+}
+
+export async function getOwnedPublishedArtifactSummary(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string },
+): Promise<PublishedArtifactSummary | null> {
+  const userId = input.userId?.trim();
+  if (!userId || !PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
+  const [row] = await db.query<PublishedArtifactSummaryRow>(
+    `select token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at
+       from public.published_artifacts
+      where token = $1 and user_id = $2
+      limit 1`,
+    [input.token, userId],
+  );
+  return row ? rowToSummary(row) : null;
+}
+
+export async function getOwnedPublishedArtifactSummaryByArtifactId(
+  db: DatabaseAdapter,
+  input: { userId: string; artifactId: string },
+): Promise<PublishedArtifactSummary | null> {
+  const userId = input.userId?.trim();
+  const parsed = ManagedCloudPublishedArtifactLookupQuerySchema.safeParse(input);
+  if (!userId || !parsed.success) {
+    throw new PublishedArtifactValidationError('Invalid published artifact lookup');
+  }
+  const [row] = await db.query<PublishedArtifactSummaryRow>(
+    `select token, artifact_id, conversation_id, title, kind, language,
+            length(content) as content_chars, version, visibility, created_at, updated_at
+       from public.published_artifacts
+      where user_id = $1 and artifact_id = $2
+      limit 1`,
+    [userId, parsed.data.artifactId],
+  );
+  return row ? rowToSummary(row) : null;
+}
+
 export async function listPublishedArtifacts(
   db: DatabaseAdapter,
   input: { userId: string; limit?: number },
@@ -544,7 +814,7 @@ export async function listPublishedArtifacts(
             length(content) as content_chars, version, visibility, created_at, updated_at
        from public.published_artifacts
       where user_id = $1
-      order by created_at desc
+      order by created_at desc, id desc
       limit $2`,
     [userId, limit],
   );
@@ -580,13 +850,25 @@ interface PublishedVersionRow {
   created_at: string | Date;
 }
 
+function requireHistoryVersion(value: number | string | undefined): number {
+  const version = Number(value);
+  if (
+    (typeof value !== 'number' && typeof value !== 'string') ||
+    !Number.isSafeInteger(version) ||
+    version < 1
+  ) {
+    throw new Error('Published artifact history has an invalid version');
+  }
+  return version;
+}
+
 /**
  * Append this publish to the artifact's history, unless it says exactly what
  * the newest version already says. Republishing an unchanged artifact is what
  * the Publish button does on every second click, and a history full of
  * identical versions is not a history.
  */
-export async function recordPublishedVersion(
+async function recordPublishedVersion(
   db: DatabaseAdapter,
   input: {
     publishedArtifactId: string;
@@ -606,6 +888,8 @@ export async function recordPublishedVersion(
     [input.publishedArtifactId, input.userId],
   );
 
+  const newestVersion = newest ? requireHistoryVersion(newest.version) : 0;
+  let version: number;
   if (
     newest &&
     newest.content === input.content &&
@@ -613,33 +897,48 @@ export async function recordPublishedVersion(
     newest.kind === input.kind &&
     (newest.language ?? null) === input.language
   ) {
-    return toVersionNumber(newest.version);
+    version = newestVersion;
+  } else {
+    const nextVersion = requireHistoryVersion(newestVersion + 1);
+    const [inserted] = await db.query<{ version: number | string }>(
+      `insert into public.published_artifact_versions
+         (published_artifact_id, user_id, version, title, kind, language, content, parent_version_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       returning version`,
+      [
+        input.publishedArtifactId,
+        input.userId,
+        nextVersion,
+        input.title,
+        input.kind,
+        input.language,
+        input.content,
+        newest?.id ?? null,
+      ],
+    );
+    version = requireHistoryVersion(inserted?.version);
+    if (version !== nextVersion) {
+      throw new Error('Published artifact history version did not match the write');
+    }
   }
 
-  const [inserted] = await db.query<{ version: number | string }>(
-    `insert into public.published_artifact_versions
-       (published_artifact_id, user_id, version, title, kind, language, content, parent_version_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
-     returning version`,
-    [
-      input.publishedArtifactId,
-      input.userId,
-      toVersionNumber(newest?.version) + 1,
-      input.title,
-      input.kind,
-      input.language,
-      input.content,
-      newest?.id ?? null,
-    ],
-  );
-
-  const version = toVersionNumber(inserted?.version);
-  await db.execute(
+  const receipts = await db.query<{ id: string; user_id: string; version: number | string }>(
     `update public.published_artifacts
         set version = $2
-      where id = $1 and user_id = $3`,
+      where id = $1 and user_id = $3
+      returning id, user_id, version`,
     [input.publishedArtifactId, version, input.userId],
   );
+  const receipt = receipts[0];
+  if (
+    receipts.length !== 1 ||
+    !receipt ||
+    receipt.id !== input.publishedArtifactId ||
+    receipt.user_id !== input.userId ||
+    requireHistoryVersion(receipt.version) !== version
+  ) {
+    throw new Error('Published artifact version pointer was not updated');
+  }
   return version;
 }
 
@@ -721,6 +1020,56 @@ export async function readPublishedArtifactVersion(
     kind: row.kind,
     language: row.language,
     content: row.content,
+  };
+}
+
+export interface PublishedArtifactRestoreSource {
+  publication: PublishedArtifact;
+  snapshot: PublishedArtifactVersionDetail;
+}
+
+export async function readPublishedArtifactRestoreSource(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string; version: number },
+): Promise<PublishedArtifactRestoreSource | null> {
+  const userId = input.userId.trim();
+  const token = input.token.trim();
+  if (!userId || !PUBLISHED_TOKEN_REGEX.test(token)) return null;
+  if (!Number.isSafeInteger(input.version) || input.version < 1) return null;
+
+  const [row] = await db.query<
+    PublishedArtifactRow & {
+      snapshot_version: number | string;
+      snapshot_title: string;
+      snapshot_kind: string;
+      snapshot_language: string | null;
+      snapshot_content: string;
+    }
+  >(
+    `select publication.id, publication.token, publication.user_id, publication.artifact_id,
+            publication.conversation_id, publication.title, publication.kind,
+            publication.language, publication.content, publication.visibility,
+            publication.created_at, publication.updated_at,
+            snapshot.version as snapshot_version, snapshot.title as snapshot_title,
+            snapshot.kind as snapshot_kind, snapshot.language as snapshot_language,
+            snapshot.content as snapshot_content
+       from public.published_artifacts publication
+       join public.published_artifact_versions snapshot
+         on snapshot.published_artifact_id = publication.id and snapshot.user_id = $2
+      where publication.token = $1 and publication.user_id = $2 and snapshot.version = $3
+      limit 1`,
+    [token, userId, input.version],
+  );
+  if (!row) return null;
+  return {
+    publication: rowToPublishedArtifact(row),
+    snapshot: {
+      version: toVersionNumber(row.snapshot_version),
+      title: row.snapshot_title,
+      kind: row.snapshot_kind,
+      language: row.snapshot_language,
+      content: row.snapshot_content,
+    },
   };
 }
 

@@ -95,3 +95,14 @@ describe('/search asks for a search rather than allowing one', () => {
     expect(onSend.mock.calls[1]![3]?.searchRequested).toBeUndefined();
   });
 });
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
+});

@@ -32,6 +32,15 @@
 
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
 export {
+  classifyResponseOutputIntent,
+  classifyImageToolIntent,
+  imageToolIntentAllows,
+  requestsSeparateImageResources,
+  isSelfContainedResponseRequest,
+  requestsNonImageOutput,
+} from './output-intent';
+export type { ImageToolIntent, ResponseOutputIntent } from './output-intent';
+export {
   ANSWER_DEPTHS,
   ANSWER_FORMATS,
   RESPONSE_OUTPUT_TOKEN_CEILINGS,

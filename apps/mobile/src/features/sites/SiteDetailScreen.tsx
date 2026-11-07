@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Share, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -32,11 +32,14 @@ import { cloudActionError } from '@/src/shared/utils/cloudActionError';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { SITES_ROUTE } from './SitesScreen';
+import { useSiteDetailLifetime, type SiteDetailLifetime } from './useSiteDetailLifetime';
+import type { CloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import {
   SITE_VISIBILITY_LABELS,
+  SiteMutationUncertainError,
   clearSiteSharedData,
   deleteSiteAndData,
-  listPublishedSites,
+  readPublishedSite,
   listSiteVersions,
   readSiteData,
   republishSiteVersion,
@@ -53,79 +56,116 @@ interface SiteState {
   data: ManagedCloudPublishedArtifactDataResponse | null;
 }
 
-async function loadSite(token: string, signal: AbortSignal): Promise<SiteState | null> {
-  const list = await listPublishedSites(signal);
-  const site = list.sites.find((candidate) => candidate.token === token);
-  if (!site) return null;
+async function loadSite(view: SiteDetailLifetime): Promise<SiteState | null> {
+  const { token, authority } = view;
+  const { signal } = authority;
+  authority.assertCurrent();
+  const detail = await readPublishedSite(token, signal, authority);
+  authority.assertCurrent();
+  if (!detail) return null;
+  const { site, workspace } = detail;
   const [versions, data] = await Promise.all([
-    listSiteVersions(token, signal).catch(() => []),
-    readSiteData(token, signal).catch(() => null),
+    listSiteVersions(token, signal, authority).catch(() => {
+      authority.assertCurrent();
+      return [];
+    }),
+    readSiteData(token, signal, authority).catch(() => {
+      authority.assertCurrent();
+      return null;
+    }),
   ]);
-  return { site, hasWorkspace: list.workspaceMemberCount !== null, versions, data };
+  authority.assertCurrent();
+  return { site, hasWorkspace: workspace !== null, versions, data };
 }
 
 export function SiteDetailScreen() {
-  const router = useRouter();
-  const colors = useThemeColors();
   const { token: param } = useLocalSearchParams<{ token?: string }>();
   const token = typeof param === 'string' ? param : '';
   const access = useCloudFeatureAccess();
+  const view = useSiteDetailLifetime(token, access);
+  return <SiteDetailBody key={view.key} view={view} access={access} />;
+}
+
+function SiteDetailBody({
+  view,
+  access,
+}: {
+  view: SiteDetailLifetime;
+  access: CloudFeatureAccess;
+}) {
+  const router = useRouter();
+  const colors = useThemeColors();
+  const { token, authority, refresh } = view;
   const goBack = useGoBack(SITES_ROUTE);
   const { status: copyStatus, copy } = useCopyAction();
-  const [state, setState] = useState<SiteState | null | undefined>(undefined);
+  const [state, setState] = useState<SiteState | null | undefined>(token ? undefined : null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  const mutation = useRef(false);
+  const confirmation = useRef(false);
 
   useEffect(() => {
-    if (!access.ready || !token) return;
-    const controller = new AbortController();
-    loadSite(token, controller.signal)
+    if (!view.isCurrent()) return;
+    let active = true;
+    loadSite(view)
       .then((next) => {
+        if (!active || !view.isCurrent()) return;
         setState(next);
         if (next) setTitle(next.site.title);
       })
       .catch((loadError: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!active || !view.isCurrent()) return;
         setState(null);
         setError(cloudActionError(loadError, 'Could not load this site.'));
       });
-    return () => controller.abort();
-  }, [access.ready, attempt, token]);
+    return () => {
+      active = false;
+    };
+  }, [view]);
 
   const run = useCallback(
     async (key: string, action: () => Promise<unknown>, failure: string) => {
-      if (busy) return false;
+      if (!view.isCurrent() || mutation.current || confirmation.current) return false;
+      mutation.current = true;
       setBusy(key);
       setError(null);
       try {
         await action();
-        return true;
+        return view.isCurrent();
       } catch (actionError) {
-        setError(cloudActionError(actionError, failure));
+        if (view.isCurrent()) {
+          setError(
+            actionError instanceof SiteMutationUncertainError
+              ? actionError.message
+              : cloudActionError(actionError, failure),
+          );
+        }
         return false;
       } finally {
-        setBusy(null);
+        if (view.isCurrent()) {
+          mutation.current = false;
+          setBusy(null);
+        }
       }
     },
-    [busy],
+    [view],
   );
-
-  const refresh = useCallback(() => setAttempt((value) => value + 1), []);
 
   const takeDown = useCallback(
     async (withData: boolean) => {
-      if (!state) return;
+      if (!view.isCurrent() || !state || mutation.current || confirmation.current) return;
+      confirmation.current = true;
       const name = siteName(state.site);
       const confirmed = await confirmIrreversible({
         title: withData ? `Delete ${name} and its data?` : `Unpublish ${name}?`,
-        consequence: withData
-          ? 'The link stops working for everyone, and the data visitors saved in it is erased. This cannot be undone.'
-          : 'The link stops working for everyone, but the artifact stays in its chat.',
+        consequence:
+          'The link stops working for everyone, and all shared and personal data visitors saved in this site is permanently erased. The original artifact stays in its chat. The deleted data cannot be recovered.',
         actionLabel: withData ? 'Delete' : 'Unpublish',
+      }).finally(() => {
+        confirmation.current = false;
       });
-      if (!confirmed) return;
+      if (!confirmed || !view.isCurrent()) return;
       const done = await run(
         withData ? 'delete' : 'unpublish',
         () =>
@@ -133,30 +173,39 @@ export function SiteDetailScreen() {
             ? deleteSiteAndData(
                 state.site.token,
                 Boolean(state.data?.supported && state.data.shared.entryCount > 0),
+                authority,
               )
-            : unpublishSite(state.site.token),
+            : unpublishSite(state.site.token, authority),
         withData ? 'Could not delete this site.' : 'Could not unpublish this site.',
       );
-      if (done) router.replace(SITES_ROUTE as Parameters<typeof router.replace>[0]);
+      if (done && view.isCurrent())
+        router.replace(SITES_ROUTE as Parameters<typeof router.replace>[0]);
     },
-    [router, run, state],
+    [authority, router, run, state, view],
   );
 
   const clearData = useCallback(async () => {
-    if (!state) return;
+    if (!view.isCurrent() || !state || mutation.current || confirmation.current) return;
+    confirmation.current = true;
     const confirmed = await confirmIrreversible({
       title: 'Clear shared data?',
       consequence:
         'Everything visitors saved to this page for everyone is erased. Each visitor’s personal data stays theirs. This cannot be undone.',
       actionLabel: 'Clear',
+    }).finally(() => {
+      confirmation.current = false;
     });
-    if (!confirmed) return;
+    if (!confirmed || !view.isCurrent()) return;
     if (
-      await run('clear', () => clearSiteSharedData(state.site.token), 'Could not clear the data.')
+      await run(
+        'clear',
+        () => clearSiteSharedData(state.site.token, authority),
+        'Could not clear the data.',
+      )
     ) {
       refresh();
     }
-  }, [refresh, run, state]);
+  }, [authority, refresh, run, state, view]);
 
   if (!access.ready) {
     return (
@@ -171,7 +220,7 @@ export function SiteDetailScreen() {
     );
   }
 
-  if (state === undefined) {
+  if (state === undefined || (token && !view.isCurrent())) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
         <ScreenHeader title="Site" onBack={goBack} />
@@ -217,19 +266,25 @@ export function SiteDetailScreen() {
               title={copyControlLabel(copyStatus, 'Copy link')}
               size="sm"
               variant="outline"
-              onPress={() => void copy(site.shareUrl)}
+              onPress={() => {
+                if (view.isCurrent()) void copy(site.shareUrl);
+              }}
             />
             <Button
               title="Share"
               size="sm"
               variant="outline"
-              onPress={() => void Share.share({ message: site.shareUrl })}
+              onPress={() => {
+                if (view.isCurrent()) void Share.share({ message: site.shareUrl });
+              }}
             />
             <Button
               title="Open"
               size="sm"
               variant="outline"
-              onPress={() => void openUntrustedUrlInAppBrowser(site.shareUrl)}
+              onPress={() => {
+                if (view.isCurrent()) void openUntrustedUrlInAppBrowser(site.shareUrl);
+              }}
             />
             {site.conversationId ? (
               <Button
@@ -237,6 +292,7 @@ export function SiteDetailScreen() {
                 size="sm"
                 variant="outline"
                 onPress={() =>
+                  view.isCurrent() &&
                   router.push({
                     pathname: '/(app)/chat/[id]' as const,
                     params: { id: site.conversationId! },
@@ -260,7 +316,7 @@ export function SiteDetailScreen() {
                     : () =>
                         void run(
                           'visibility',
-                          () => updatePublishedSite(site.token, { visibility }),
+                          () => updatePublishedSite(site.token, { visibility }, authority),
                           'Could not change who can open this.',
                         ).then((done) => done && refresh())
                 }
@@ -277,7 +333,9 @@ export function SiteDetailScreen() {
             label="Site name"
             value={title}
             maxLength={MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS}
-            onChangeText={setTitle}
+            onChangeText={(value) => {
+              if (view.isCurrent()) setTitle(value);
+            }}
           />
           <Button
             title="Rename"
@@ -287,7 +345,7 @@ export function SiteDetailScreen() {
             onPress={() =>
               void run(
                 'rename',
-                () => updatePublishedSite(site.token, { title: title.trim() }),
+                () => updatePublishedSite(site.token, { title: title.trim() }, authority),
                 'Could not rename this site.',
               ).then((done) => done && refresh())
             }
@@ -318,7 +376,7 @@ export function SiteDetailScreen() {
                     onPress={() =>
                       void run(
                         `live:${version.version}`,
-                        () => republishSiteVersion(site, version.version),
+                        () => republishSiteVersion(site, version.version, authority),
                         'Could not put that version live.',
                       ).then((done) => done && refresh())
                     }

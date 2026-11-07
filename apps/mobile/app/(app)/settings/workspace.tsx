@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, ScrollView, RefreshControl, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,13 +41,25 @@ import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministra
 import { switchWorkspace } from '@/src/features/team/switchWorkspace';
 import { translatePlural } from '@/src/i18n/plural';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
-import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
+import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
+
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';
 
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'ready'; overview: WorkspaceOverview; members: WorkspaceMember[] }
+  | {
+      kind: 'ready';
+      account: CloudAccountEpoch;
+      overview: WorkspaceOverview;
+      members: WorkspaceMember[];
+    }
   | { kind: 'error'; message: string };
 
 function titleCase(value: string): string {
@@ -64,32 +76,71 @@ export default function WorkspaceScreen() {
   const { colors: c, statusBarStyle } = useTheme();
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
 
-  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [loadedState, setState] = useState<LoadState>({ kind: 'loading' });
+  const state: LoadState =
+    loadedState.kind === 'ready' &&
+    (!isCloudAccountEpochCurrent(loadedState.account) ||
+      loadedState.account.ownerId !== clerkUserId)
+      ? { kind: 'loading' }
+      : loadedState;
+  const readyState = useRef(state);
+  readyState.current = state;
+  const [accountRevision, setAccountRevision] = useState(0);
+  const loadRequest = useRef(0);
+  const transferRequest = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
-  const [roleTarget, setRoleTarget] = useState<WorkspaceMember | null>(null);
+  const [roleTarget, setRoleTarget] = useState<{
+    member: WorkspaceMember;
+    account: CloudAccountEpoch;
+    workspaceId: string;
+    workspaceName: string;
+    request: number;
+  } | null>(null);
   const { withStepUp, modal: stepUpModal } = useStepUp();
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const overview = await fetchWorkspaceOverview(signal);
-      if (signal?.aborted) return;
-      const members = overview.workspace
-        ? await fetchWorkspaceMembers(overview.workspace.id, signal)
-        : [];
-      if (signal?.aborted) return;
-      setState({ kind: 'ready', overview, members });
-    } catch {
-      if (signal?.aborted) return;
-      setState({
-        kind: 'error',
-        message: 'Could not load your workspace. Retry.',
-      });
-    }
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId) return;
+      const request = ++loadRequest.current;
+      const current = () =>
+        !signal?.aborted && request === loadRequest.current && isCloudAccountEpochCurrent(account);
+      try {
+        const overview = await fetchWorkspaceOverview(signal, account);
+        if (!current()) return;
+        const members = overview.workspace
+          ? await fetchWorkspaceMembers(overview.workspace.id, signal, account)
+          : [];
+        if (!current()) return;
+        setState({ kind: 'ready', account, overview, members });
+      } catch {
+        if (!current()) return;
+        setState({ kind: 'error', message: 'Could not load your workspace. Retry.' });
+      }
+    },
+    [clerkUserId],
+  );
+
+  useEffect(() => {
+    const unsubscribe = subscribeCloudAccountEpochChange(() => {
+      loadRequest.current += 1;
+      transferRequest.current += 1;
+      setRoleTarget(null);
+      setBusyMemberId(null);
+      setState({ kind: 'loading' });
+      setAccountRevision((revision) => revision + 1);
+    });
+    return () => {
+      unsubscribe();
+      loadRequest.current += 1;
+      transferRequest.current += 1;
+    };
   }, []);
 
   useEffect(() => {
@@ -97,7 +148,7 @@ export default function WorkspaceScreen() {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [appMode, isClerkSignedIn, load]);
+  }, [accountRevision, appMode, isClerkSignedIn, load]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -145,44 +196,97 @@ export default function WorkspaceScreen() {
   );
 
   const transferOwnership = useCallback(
-    (member: WorkspaceMember) => {
-      if (state.kind !== 'ready' || !state.overview.workspace) return;
-      const workspace = state.overview.workspace;
+    (intent: NonNullable<typeof roleTarget>) => {
+      const { account, member, workspaceId } = intent;
+      const ready = readyState.current;
+      if (
+        intent.request !== transferRequest.current ||
+        !isCloudAccountEpochCurrent(account) ||
+        account.ownerId !== clerkUserId ||
+        ready.kind !== 'ready' ||
+        ready.account.epoch !== account.epoch ||
+        ready.account.ownerId !== account.ownerId ||
+        ready.overview.workspace?.id !== workspaceId
+      )
+        return;
+      const request = ++transferRequest.current;
+      const current = () =>
+        request === transferRequest.current && isCloudAccountEpochCurrent(account);
       void (async () => {
         setBusyMemberId(member.id);
         try {
-          await withStepUp('organization.transfer_ownership', workspace.id, (headers) =>
-            transferWorkspaceOwnership(workspace.id, member.userId, headers),
-          );
-          await load();
+          await withStepUp('organization.transfer_ownership', workspaceId, (headers) => {
+            if (!current()) throw new StepUpCancelledError();
+            return transferWorkspaceOwnership(workspaceId, member.userId, headers, account);
+          });
+          if (current()) await load();
         } catch (error) {
-          if (isStepUpCancelled(error)) return;
-          Alert.alert('Could not transfer ownership', 'Ownership was not transferred. Retry.');
+          if (!current() || isStepUpCancelled(error)) return;
+          Alert.alert('Could not transfer ownership', 'Check the workspace before retrying.');
         } finally {
-          setBusyMemberId(null);
+          if (current()) setBusyMemberId(null);
         }
       })();
     },
-    [load, state, withStepUp],
+    [clerkUserId, load, withStepUp],
   );
 
   const isWorkspaceOwner =
     state.kind === 'ready' && state.overview.workspace?.currentUserRole === 'owner';
   const assignableRoles = WORKSPACE_ROLES.filter((role) => role !== 'owner' || isWorkspaceOwner);
+  const visibleRoleTarget =
+    roleTarget &&
+    isCloudAccountEpochCurrent(roleTarget.account) &&
+    roleTarget.request === transferRequest.current &&
+    state.kind === 'ready' &&
+    state.account.epoch === roleTarget.account.epoch &&
+    state.account.ownerId === roleTarget.account.ownerId &&
+    state.overview.workspace?.id === roleTarget.workspaceId
+      ? roleTarget
+      : null;
   const ownershipConsequence =
-    roleTarget && state.kind === 'ready' && state.overview.workspace
-      ? `${roleTarget.name} takes over billing and every admin control of ${state.overview.workspace.name}, and only they can give ownership back.`
+    visibleRoleTarget && state.kind === 'ready' && state.overview.workspace
+      ? `${visibleRoleTarget.member.name} takes over billing and every admin control of ${visibleRoleTarget.workspaceName}, and only they can give ownership back.`
       : null;
 
-  const handleChangeRole = useCallback((member: WorkspaceMember) => setRoleTarget(member), []);
+  const handleChangeRole = useCallback(
+    (member: WorkspaceMember) => {
+      if (
+        state.kind !== 'ready' ||
+        !state.overview.workspace ||
+        !isCloudAccountEpochCurrent(state.account)
+      )
+        return;
+      transferRequest.current += 1;
+      setBusyMemberId(null);
+      setRoleTarget({
+        member,
+        account: state.account,
+        workspaceId: state.overview.workspace.id,
+        workspaceName: state.overview.workspace.name,
+        request: transferRequest.current,
+      });
+    },
+    [state],
+  );
 
   const chooseRole = useCallback(
     (member: WorkspaceMember, role: WorkspaceRole) => {
+      if (
+        role === 'owner' &&
+        (!roleTarget ||
+          roleTarget.request !== transferRequest.current ||
+          !isCloudAccountEpochCurrent(roleTarget.account) ||
+          readyState.current.kind !== 'ready' ||
+          readyState.current.overview.workspace?.id !== roleTarget.workspaceId)
+      )
+        return;
       setRoleTarget(null);
-      if (role === 'owner') transferOwnership(member);
-      else applyRole(member, role);
+      if (role === 'owner') {
+        if (roleTarget?.member === member) transferOwnership(roleTarget);
+      } else applyRole(member, role);
     },
-    [applyRole, transferOwnership],
+    [applyRole, roleTarget, transferOwnership],
   );
 
   const handleRemoveMember = useCallback(
@@ -268,10 +372,14 @@ export default function WorkspaceScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
       {stepUpModal}
       <RolePickerModal
-        member={roleTarget}
+        member={visibleRoleTarget?.member ?? null}
         roles={assignableRoles}
         ownershipConsequence={ownershipConsequence}
-        onCancel={() => setRoleTarget(null)}
+        onCancel={() => {
+          if (roleTarget?.request !== transferRequest.current) return;
+          transferRequest.current += 1;
+          setRoleTarget(null);
+        }}
         onChoose={chooseRole}
       />
       <StatusBar style={statusBarStyle} />

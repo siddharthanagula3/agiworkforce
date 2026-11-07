@@ -1,16 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Globe } from 'lucide-react-native';
-import type { ManagedCloudPublishedArtifact } from '@agiworkforce/cloud-contracts';
 
+import { Button } from '@/components/ui/Button';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import {
-  captureCloudAccountEpoch,
-  isCloudAccountEpochCurrent,
-} from '@/src/features/auth/services/cloudAccountSession';
 import {
   CloudFeatureGate,
   EmptyState,
@@ -24,7 +20,21 @@ import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { cloudActionError } from '@/src/shared/utils/cloudActionError';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SITE_VISIBILITY_LABELS, listPublishedSites, siteName } from './service';
+import {
+  SITE_VISIBILITY_LABELS,
+  listPublishedSitesPage,
+  siteName,
+  type PublishedSitePage,
+} from './service';
+import { useSitesListLifetime, type SitesListLifetime } from './useSitesListLifetime';
+
+interface SitesListState {
+  view: SitesListLifetime;
+  page: { cursor: string | null; list: PublishedSitePage } | null;
+  pending: { cursor: string | null; refreshing: boolean } | null;
+  failure: { cursor: string | null; message: string } | null;
+  isCurrentRead: () => boolean;
+}
 
 export const SITES_ROUTE = '/(app)/sites';
 
@@ -33,30 +43,71 @@ export function SitesScreen() {
   const colors = useThemeColors();
   const access = useCloudFeatureAccess();
   const goBack = useGoBack('/(app)/(tabs)/chat');
-  const [sites, setSites] = useState<ManagedCloudPublishedArtifact[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const view = useSitesListLifetime(access);
+  const [state, setState] = useState<SitesListState | null>(null);
+  const visible = state?.view === view && view.isCurrent() ? state : null;
+  const displayed = useRef<SitesListState | null>(null);
+  displayed.current = visible;
+  const page = visible?.page ?? null;
+  const pending = visible?.pending ?? null;
+  const failure = visible?.failure ?? null;
+  const canUseDisplay = () =>
+    !!visible && view.isCurrent() && displayed.current === visible && visible.isCurrentRead();
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    const account = captureCloudAccountEpoch();
-    if (!account) return;
-    setError(null);
-    try {
-      const list = await listPublishedSites(signal);
-      if (isCloudAccountEpochCurrent(account)) setSites(list.sites);
-    } catch (loadError) {
-      if (signal?.aborted || !isCloudAccountEpochCurrent(account)) return;
-      setSites((current) => current ?? []);
-      setError(cloudActionError(loadError, 'Could not load your published sites.'));
-    }
-  }, []);
+  const load = useCallback(
+    async (cursor: string | null = null, refreshing = false) => {
+      const retained = displayed.current?.view === view ? displayed.current.page : null;
+      const read = view.beginRead();
+      if (!read) return;
+      setState((current) =>
+        read.isCurrent()
+          ? {
+              view,
+              page: retained,
+              pending: { cursor, refreshing },
+              failure: null,
+              isCurrentRead: read.isCurrent,
+            }
+          : current,
+      );
+      try {
+        const list = await listPublishedSitesPage(cursor, read.authority.signal, read.authority);
+        if (!read.isCurrent()) return;
+        setState((current) =>
+          read.isCurrent()
+            ? {
+                view,
+                page: { cursor, list },
+                pending: null,
+                failure: null,
+                isCurrentRead: read.isCurrent,
+              }
+            : current,
+        );
+      } catch (loadError) {
+        if (!read.isCurrent()) return;
+        const message = cloudActionError(loadError, 'Could not load your published sites.');
+        // Only this new display reauthorizes retained rows after a failed replacement.
+        setState((current) =>
+          read.isCurrent()
+            ? {
+                view,
+                page: retained,
+                pending: null,
+                failure: { cursor, message },
+                isCurrentRead: read.isCurrent,
+              }
+            : current,
+        );
+      }
+    },
+    [view],
+  );
 
   useEffect(() => {
-    if (!access.ready) return;
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [access.ready, load]);
+    void load();
+    return () => view.cancelRead();
+  }, [load, view]);
 
   if (!access.ready) {
     return (
@@ -74,30 +125,74 @@ export function SitesScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <ScreenHeader title="Published sites" onBack={goBack} />
-      {sites === null ? (
+      {!visible ? (
         <LoadingRows />
       ) : (
         <FlatList
-          data={sites}
+          data={page?.list.sites ?? []}
+          extraData={visible}
           keyExtractor={(site) => site.token}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10, flexGrow: 1 }}
           ListHeaderComponent={
             <View style={{ gap: 10, paddingBottom: 4 }}>
               <MetaText>
-                Everything of yours that is published right now. Unpublishing is the only way a page
-                comes down.
+                {page
+                  ? `${page.list.sites.length} sites on this page. ${
+                      page.list.nextCursor === undefined
+                        ? 'Page coverage is unknown.'
+                        : page.list.nextCursor === null
+                          ? 'No older sites reported.'
+                          : 'Older sites are available.'
+                    }`
+                  : 'Published sites'}
               </MetaText>
-              {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
+              {pending ? (
+                <MetaText>
+                  {page
+                    ? 'Loading a replacement page. The previous page is shown and unavailable.'
+                    : 'Loading sites…'}
+                </MetaText>
+              ) : null}
+              {failure ? (
+                <ErrorBanner
+                  message={failure.message}
+                  onRetry={() => {
+                    if (canUseDisplay() && !pending) void load(failure.cursor);
+                  }}
+                />
+              ) : null}
+              {page?.list.nextCursor ? (
+                <Button
+                  title="Older"
+                  variant="outline"
+                  disabled={!!pending}
+                  onPress={() => {
+                    if (canUseDisplay() && !pending) void load(page.list.nextCursor);
+                  }}
+                />
+              ) : null}
+              {page && page.cursor !== null ? (
+                <Button
+                  title="Back to first page"
+                  variant="outline"
+                  disabled={!!pending}
+                  onPress={() => {
+                    if (canUseDisplay() && !pending) void load(null);
+                  }}
+                />
+              ) : null}
             </View>
           }
           renderItem={({ item }) => (
             <PressableBox
-              onPress={() =>
+              onPress={() => {
+                if (!canUseDisplay() || pending) return;
                 router.push({
                   pathname: '/(app)/sites/[token]' as const,
                   params: { token: item.token },
-                })
-              }
+                });
+              }}
+              disabled={!!pending}
               accessibilityRole="button"
               accessibilityLabel={`${siteName(item)}. ${SITE_VISIBILITY_LABELS[item.visibility]}`}
               style={{
@@ -128,18 +223,30 @@ export function SitesScreen() {
             </PressableBox>
           )}
           ListEmptyComponent={
-            <EmptyState
-              Icon={Globe}
-              title="Nothing published"
-              body="Open an artifact in a Cloud chat and publish it to give it a link people can open."
-            />
+            pending ? (
+              <LoadingRows />
+            ) : (
+              <EmptyState
+                Icon={Globe}
+                title={
+                  page?.cursor === null && page.list.nextCursor === null && !failure
+                    ? 'Nothing published'
+                    : 'No sites on this page'
+                }
+                body={
+                  page?.cursor === null && page.list.nextCursor === null && !failure
+                    ? 'Open an artifact in a Cloud chat and publish it to give it a link people can open.'
+                    : 'Pull to refresh the first page or use the available page controls.'
+                }
+              />
+            )
           }
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={pending?.refreshing ?? false}
               onRefresh={() => {
-                setRefreshing(true);
-                void load().finally(() => setRefreshing(false));
+                // Refresh has no cursor authority and may supersede a same-view read.
+                if (view.isCurrent()) void load(null, true);
               }}
               tintColor={colors.textPrimary}
             />

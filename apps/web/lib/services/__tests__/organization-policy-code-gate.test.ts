@@ -16,6 +16,7 @@ import {
   DEFAULT_WORKSPACE_CODE_CONTROLS,
   WORKSPACE_CODE_TOGGLE_KEYS,
   evaluateWorkspaceCodeAct,
+  resolveWorkspaceCodeControls,
   type WorkspaceCodeAct,
   type WorkspaceCodeControls,
 } from '@agiworkforce/types';
@@ -97,6 +98,38 @@ describe('each Code connection, one control at a time', () => {
 });
 
 describe('the network allow lists', () => {
+  it('refuses disjoint effective host and MCP intersections at the server gate', async () => {
+    const code = resolveWorkspaceCodeControls(
+      {
+        ...DEFAULT_WORKSPACE_CODE_CONTROLS,
+        allowedMcpServers: ['first.example'],
+        allowedEgressHosts: ['first.example'],
+      },
+      [
+        {
+          id: 'group-rule',
+          organizationId: ORG,
+          subjectType: 'group',
+          subjectId: 'group-1',
+          updatedAt: '2026-11-04T00:00:00.000Z',
+          layer: {
+            code: { allowedMcpServers: ['other.example'], allowedEgressHosts: ['other.example'] },
+          },
+        },
+      ],
+    );
+    mocks.resolveEffectiveWorkspaceControls.mockResolvedValue({ organizationId: ORG, code });
+    for (const act of [
+      { act: 'reach_host', host: 'first.example' },
+      { act: 'use_mcp_server', server: 'other.example' },
+    ] as WorkspaceCodeAct[]) {
+      expect((await buildWorkspaceCodeGateResponse(db, 'user-1', act))?.status).toBe(403);
+    }
+    expect(
+      await buildWorkspaceCodeGateResponse(db, 'user-1', { act: 'connect_github' }),
+    ).toBeNull();
+  });
+
   it('treats an empty egress list as no rule and a named list as exhaustive', async () => {
     governedWith({ allowedEgressHosts: [] });
     await expect(

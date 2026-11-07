@@ -18,14 +18,16 @@ type ScanModule0 = typeof import('@/lib/client/csrf');
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
     getToken: authMocks.getToken,
     userId: 'user-1',
     isSignedIn: true,
     isLoaded: true,
-  }),
-}));
+    sessionId: 'session-1',
+  }));
+});
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),

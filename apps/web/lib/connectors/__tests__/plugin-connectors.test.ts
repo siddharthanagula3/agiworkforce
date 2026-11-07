@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -54,6 +55,72 @@ beforeEach(() => {
 });
 
 describe('setPluginConnectorsEnabled', () => {
+  it.each([false, true])(
+    'persists enabled=%s only for the owning user and plugin, then leaves it unchanged',
+    async (enabled) => {
+      const database = new DatabaseSync(':memory:');
+      const previousTimestamp = '2026-10-29T12:00:00.000Z';
+      const changedTimestamp = '2026-10-30T12:00:00.000Z';
+      try {
+        database.function('now', () => changedTimestamp);
+        database.exec(`
+          attach database ':memory:' as public;
+          create table public.user_custom_connectors (
+            id text primary key,
+            user_id text not null,
+            installed_by_plugin text,
+            disabled_by_plugin_at text,
+            updated_at text not null,
+            auth_header_enc text not null
+          )
+        `);
+        const rows = [
+          ['enabled', 'user-1', 'acme', null, previousTimestamp, 'credential-1'],
+          ['disabled', 'user-1', 'acme', previousTimestamp, previousTimestamp, 'credential-2'],
+          ['other-user', 'user-2', 'acme', null, previousTimestamp, 'credential-3'],
+          ['other-plugin', 'user-1', 'other', null, previousTimestamp, 'credential-4'],
+          ['manual', 'user-1', null, null, previousTimestamp, 'credential-5'],
+        ];
+        const insert = database.prepare(
+          'insert into public.user_custom_connectors values (?, ?, ?, ?, ?, ?)',
+        );
+        for (const row of rows) insert.run(...row);
+        mocks.query.mockImplementation(async (sql: string, params: [string, string, boolean]) =>
+          database.prepare(sql).all({ $1: params[0], $2: params[1], $3: Number(params[2]) }),
+        );
+
+        await setPluginConnectorsEnabled(REQUEST, 'acme', enabled);
+
+        const readRows = () =>
+          database.prepare('select * from public.user_custom_connectors order by id').all();
+        const expected = rows
+          .map(([id, userId, pluginKey, disabledAt, updatedAt, credential]) => ({
+            id,
+            user_id: userId,
+            installed_by_plugin: pluginKey,
+            disabled_by_plugin_at:
+              userId === 'user-1' && pluginKey === 'acme'
+                ? enabled
+                  ? null
+                  : (disabledAt ?? changedTimestamp)
+                : disabledAt,
+            updated_at: id === (enabled ? 'disabled' : 'enabled') ? changedTimestamp : updatedAt,
+            auth_header_enc: credential,
+          }))
+          .sort((left, right) => String(left.id).localeCompare(String(right.id)));
+        expect(readRows()).toEqual(expected);
+        expect(mocks.evict.mock.calls).toEqual([['user-1', enabled ? 'disabled' : 'enabled']]);
+
+        mocks.evict.mockClear();
+        await setPluginConnectorsEnabled(REQUEST, 'acme', enabled);
+        expect(readRows()).toEqual(expected);
+        expect(mocks.evict).not.toHaveBeenCalled();
+      } finally {
+        database.close();
+      }
+    },
+  );
+
   it('marks only the connectors that plugin added when it is turned off, and evicts them', async () => {
     await setPluginConnectorsEnabled(REQUEST, 'acme', false);
     const [sql, params] = mocks.query.mock.calls[0]!;

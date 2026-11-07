@@ -628,7 +628,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
                 aria-expanded={mobileNavOpen}
                 aria-controls="webappshell-mobile-nav"
                 onClick={openMobileNav}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring pointer-coarse:h-11 pointer-coarse:w-11"
               >
                 <Menu className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -648,7 +648,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           tabIndex={-1}
           data-shell-tier={shellLayout.tier}
           data-shell-orientation={shellLayout.orientation}
-          className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain [scrollbar-width:thin]"
+          className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain pt-[var(--agi-product-notice-inset,0px)] [scrollbar-width:thin]"
         >
           <AccountFooterProvider footer={rail ? null : footerSlot}>
             {children}

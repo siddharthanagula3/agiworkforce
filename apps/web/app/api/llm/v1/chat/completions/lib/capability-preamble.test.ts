@@ -4,6 +4,11 @@ import { EXPLICIT_ARTIFACT_MARKER_FOR } from '@agiworkforce/artifacts';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
+import {
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  CHAT_SYSTEM_PROMPT_VERSIONS,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
 
 import {
   buildCapabilityPreamble,
@@ -12,6 +17,44 @@ import {
 } from './capability-preamble';
 
 describe('capability preamble', () => {
+  it.each(CHAT_SYSTEM_PROMPT_VERSIONS.map(({ version }) => version))(
+    'preserves the default published inventory bytes for version %s',
+    (version) => {
+      const input = {
+        tools: [{ type: 'function', function: { name: 'skill' } }],
+        now: new Date('2026-11-01T12:00:00.000Z'),
+        promptSelection: { variants: { 'chat.system': version } },
+      };
+      expect(buildCapabilityPreamble({ ...input, includeToolInventory: true })).toBe(
+        buildCapabilityPreamble(input),
+      );
+    },
+  );
+
+  it.each([CHAT_SYSTEM_PROMPT_PINNED_VERSION, 8])(
+    'can defer the inventory without dropping other version %s guidance',
+    (version) => {
+      const sections = chatSystemPromptSections(version);
+      const preamble = buildCapabilityPreamble({
+        tools: [{ type: 'function', function: { name: 'web_search' } }],
+        promptSelection: { variants: { 'chat.system': version } },
+        includeToolInventory: false,
+      });
+
+      expect(preamble).not.toContain(sections['tools_heading']);
+      expect(preamble).not.toContain(sections['tools_reality']);
+      expect(preamble).toContain(sections['search']);
+      expect(preamble).toContain(sections['identity']);
+    },
+  );
+
+  it('does not freeze a no-tools declaration when inventory is deferred', () => {
+    const preamble = buildCapabilityPreamble({ tools: [], includeToolInventory: false });
+    expect(preamble).not.toContain(
+      chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION)['no_tools'],
+    );
+  });
+
   it('extracts function and provider-native tools without duplicates', () => {
     expect(
       extractToolNames([

@@ -41,6 +41,7 @@ export interface NotebookCellViewProps {
   index: number;
   canRemove: boolean;
   disabled: boolean;
+  runDisabled?: boolean;
   registerTextarea: (cellId: string, element: HTMLTextAreaElement | null) => void;
   onChangeCode: (cellId: string, code: string) => void;
   onChangeLanguage: (cellId: string, language: NotebookCell['language']) => void;
@@ -55,6 +56,7 @@ export function NotebookCellView({
   index,
   canRemove,
   disabled,
+  runDisabled = disabled,
   registerTextarea,
   onChangeCode,
   onChangeLanguage,
@@ -72,11 +74,13 @@ export function NotebookCellView({
     if (event.key !== 'Enter' || isMarkdown) return;
     if (event.shiftKey) {
       event.preventDefault();
+      if (runDisabled) return;
       onRunAndAdvance(cell.id);
       return;
     }
     if (event.metaKey || event.ctrlKey) {
       event.preventDefault();
+      if (runDisabled) return;
       onRun(cell.id);
     }
   }
@@ -126,7 +130,7 @@ export function NotebookCellView({
               type="button"
               className={styles['iconButton']}
               aria-label={`Run cell ${index + 1}`}
-              disabled={disabled || !cell.code.trim()}
+              disabled={runDisabled || !cell.code.trim()}
               onClick={() => onRun(cell.id)}
             >
               {cell.status === 'running' ? <Spinner size="sm" /> : <Play size={13} />}
@@ -175,6 +179,12 @@ export function NotebookCellView({
           ))}
         </div>
       )}
+      {cell.error &&
+        !cell.outputs.some((output) => output.kind === 'error' && output.data === cell.error) && (
+          <div className={styles['outputError']} role="alert">
+            {cell.error}
+          </div>
+        )}
     </div>
   );
 }

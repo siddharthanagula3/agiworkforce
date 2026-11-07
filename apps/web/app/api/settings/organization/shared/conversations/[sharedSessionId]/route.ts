@@ -8,7 +8,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import {
+  requireOrgMember,
+  resolveOrgMembershipForOrganization,
+} from '@/lib/services/org-sharing-service';
 import { unshareSessionFromOrganization } from '@/lib/services/org-shared-session-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { isUuid } from '@/lib/uuid';
@@ -19,7 +22,7 @@ function parseSharedSessionId(raw: string): string {
   if (!isUuid(raw)) {
     throw createError.validation('sharedSessionId must be a uuid');
   }
-  return raw;
+  return raw.toLowerCase();
 }
 
 /**
@@ -46,8 +49,10 @@ async function handleUnshare(
   const { sharedSessionId } = await context.params;
   const sessionId = parseSharedSessionId(sharedSessionId);
 
-  const { db, userId } = await getUserScopedDb(request);
-  const membership = requireOrgMember(await resolveOrgMembership(db, userId));
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const membership = requireOrgMember(
+    await resolveOrgMembershipForOrganization(db, userId, organizationId),
+  );
 
   const removed = await unshareSessionFromOrganization(db, membership.organizationId, sessionId);
   if (!removed) {

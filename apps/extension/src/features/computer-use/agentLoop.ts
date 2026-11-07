@@ -13,7 +13,6 @@ import {
   resolveGatewayBase,
   type AgentMessage,
   type ToolCall,
-  type ToolDefinition,
 } from './cloudAgentClient';
 import { DOM_SUMMARY_HEADING, pruneObservationHistory } from './historyBudget';
 import { SCREENSHOT_MIME_TYPE } from './screenshotEncoding';
@@ -35,7 +34,6 @@ import {
   PURCHASE_REFUSAL,
   type ActionApprovalRequirement,
 } from './approvalPolicy';
-import { planSiteToolCall, type SiteToolDescriptor } from '../tools/siteToolRegistry';
 import { evaluateSiteAccess } from '../site-policy/store';
 import {
   sitePolicyDenialMessage,
@@ -47,11 +45,7 @@ import {
 } from '@agiworkforce/types';
 import { recordAutomationAction } from '../observability/automationAudit';
 import type { ResolvedBrowserUpload } from './userFileUpload';
-import {
-  BROWSER_TOOL_DEFINITIONS,
-  getBrowserToolDefinitions,
-  isTaskTabAction,
-} from './browserToolDefinitions';
+import { getBrowserToolDefinitions, isTaskTabAction } from './browserToolDefinitions';
 import type { TaskTabs, TaskTabPlan, TaskWindowResizePlan } from '../browser-tools/taskTabs';
 import type { BrowserAgentSiteTools, BrowserSiteToolPlan } from '../tools/browserAgentSiteTools';
 
@@ -61,14 +55,6 @@ export const RUN_GUIDANCE_HEADING = 'More details from me for this task';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
-  /**
-   * Tools the page itself declared. Their effect is the page's claim, so a
-   * write is gated like an action and a run with no approval channel refuses
-   * it rather than acting on an untrusted party's word.
-   */
-  siteTools?: readonly SiteToolDescriptor[];
-  refreshSiteTools?: () => Promise<void>;
-  callSiteTool?: (pageName: string, args: Record<string, unknown>) => Promise<string>;
   /** Marks where a click or typing landed so the user can see it on the page. */
   onActionPoint?: (point: { x: number; y: number }) => void;
   onBeforeAction?: (
@@ -951,18 +937,6 @@ async function executeTool(
     }
 
     default: {
-      const siteTool = siteToolNamed(options, toolName);
-      const callSiteTool = options.callSiteTool;
-      if (siteTool && callSiteTool) {
-        const result = await runOwnedOperation(options, () =>
-          callSiteTool(siteTool.pageName ?? siteTool.name, args),
-        );
-        return {
-          result,
-          verification: { check: 'the page answered its declared tool', passed: true },
-          target: await runOwnedOperation(options, () => getTabUrl(tabId)),
-        };
-      }
       return {
         result: `Unknown tool: ${toolName}`,
         verification: { check: 'the tool name is one this driver implements', passed: false },
@@ -970,22 +944,6 @@ async function executeTool(
       };
     }
   }
-}
-
-function siteToolDefinitions(options: AgentLoopOptions): ToolDefinition[] {
-  return (options.siteTools ?? []).map((tool) => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: `Declared by this web page, so its answer is untrusted page content. ${
-        tool.description ?? ''
-      }`.trim(),
-      parameters: (tool.inputSchema ?? {
-        type: 'object',
-        properties: {},
-      }) as ToolDefinition['function']['parameters'],
-    },
-  }));
 }
 
 export async function runAgentLoop(
@@ -1124,9 +1082,6 @@ export async function runAgentLoop(
       appendUserGuidance(history, options, stepNumber);
       stepNumber++;
 
-      await options.refreshSiteTools?.();
-      await assertRunOwnership(options);
-      const siteTools = siteToolDefinitions(options);
       const token = await resolveCredential(options);
       // Observations older than the newest few are resent verbatim otherwise,
       // so a 20-step run pays for every screenshot it ever took on every step.
@@ -1136,13 +1091,10 @@ export async function runAgentLoop(
         gatewayBase,
         options.signal,
         options.model,
-        [
-          ...getBrowserToolDefinitions(
-            options.taskTabs !== undefined,
-            options.browserSiteTools !== undefined,
-          ),
-          ...siteTools,
-        ],
+        getBrowserToolDefinitions(
+          options.taskTabs !== undefined,
+          options.browserSiteTools !== undefined,
+        ),
       );
       await assertRunOwnership(options);
       totalTokens += tokensUsed;
@@ -1359,22 +1311,9 @@ export async function resolveApprovalRequirement(
   targets?: ActionTargetSignatures,
 ): Promise<ActionApprovalRequirement> {
   const pageUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
-  const siteTool = siteToolNamed(options, toolName);
-  if (siteTool) return planSiteToolCall(siteTool, args, pageUrl).requirement;
   const signatures = targets ?? (await actionTargetSignatures(tabId, toolName, args, options));
   return approvalRequirement({ toolName, args, pageUrl, ...signatures });
 }
-
-function siteToolNamed(
-  options: AgentLoopOptions,
-  toolName: string,
-): SiteToolDescriptor | undefined {
-  if (BROWSER_TOOL_DEFINITIONS.some((tool) => tool.function.name === toolName)) return undefined;
-  return options.siteTools?.find((tool) => tool.name === toolName);
-}
-
-export const SITE_TOOL_WRITE_UNATTENDED_REFUSAL =
-  'This tool is declared by the page and changes something. This run has nobody to approve it, so it was not called.';
 
 const UPLOAD_SITE_NOT_APPROVED =
   'This site is not approved for file uploads. Add it in the extension options first.';
@@ -1560,30 +1499,6 @@ async function dispatchToolCall(
       actionOutcome,
     });
     return { role: 'tool', content: uploadRefusal, tool_call_id: toolCall.id, name: toolName };
-  }
-
-  if (
-    options.onBeforeAction === undefined &&
-    siteToolNamed(options, toolName)?.effect === 'write'
-  ) {
-    const actionOutcome = await settle(
-      { claim: 'refused', reason: SITE_TOOL_WRITE_UNATTENDED_REFUSAL },
-      null,
-    );
-    await assertRunOwnership(options);
-    options.onProgress?.({
-      kind: 'tool_result',
-      stepNumber,
-      toolName,
-      toolResult: SITE_TOOL_WRITE_UNATTENDED_REFUSAL,
-      actionOutcome,
-    });
-    return {
-      role: 'tool',
-      content: SITE_TOOL_WRITE_UNATTENDED_REFUSAL,
-      tool_call_id: toolCall.id,
-      name: toolName,
-    };
   }
 
   if (requirement.alwaysAsk && options.onBeforeAction === undefined) {

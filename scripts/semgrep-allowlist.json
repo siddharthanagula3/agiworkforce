@@ -78,6 +78,16 @@
       "owner": "@siddhartha",
       "expires": "2027-02-28",
       "reason": "Negative privacy test fixture only. The script-shaped invalid room choice is passed to the real answerReplies validator with mocked runtime reporting, rejected as not_an_option before resolveToolInput, and asserted absent from the serialized report. It is never executed or rendered as HTML. The same rule finding in any other path must fail."
+    },
+    {
+      "rule": "javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag",
+      "paths": [
+        "packages/ui/unified-chat/src/components/markdown/__tests__/HtmlCodePreview.test.tsx",
+        "packages/ui/unified-chat/src/components/markdown/__tests__/assistantFenceEdits.test.ts"
+      ],
+      "owner": "@siddhartha",
+      "expires": "2027-02-28",
+      "reason": "Negative renderer fixtures only, reviewed against CI run 41138065885. HtmlCodePreview sends a literal script-shaped render-error through a mocked sandbox message and asserts the untrusted error is absent from the visible status. assistantFenceEdits passes literal nested script source through the Markdown editor, asserts a longer outer fence preserves it as code, and verifies reopening edits only that fence. Neither fixture executes or inserts this source into a parent DOM. Keep the scanner findings visible; the same rule in any production path must fail."
     }
   ]
 }

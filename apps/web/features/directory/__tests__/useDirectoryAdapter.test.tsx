@@ -10,7 +10,9 @@ import {
 
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type { PluginDirectoryEntry } from '@/features/plugins/server/directory/types';
+import type { ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
 
+import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 import { useDirectoryAdapter } from '../hooks/useDirectoryAdapter';
@@ -1639,6 +1641,279 @@ describe('useDirectoryAdapter plugin settings and enable', () => {
     });
 
     expect(calls).toContain('POST /api/plugins/marketplaces/source-1/refresh');
+  });
+});
+
+describe('useDirectoryAdapter plugin catalog refresh', () => {
+  const otherSkill: ManagedSkillSummary = {
+    name: 'fixture-other',
+    description: 'Another available skill.',
+    source: 'bundled',
+    lifecycle: 'included',
+    downloadable: true,
+  };
+  const researchSkill: ManagedSkillSummary = {
+    name: 'literature-review',
+    description: 'Synthesize supplied research evidence.',
+    source: 'bundled',
+    lifecycle: 'included',
+    downloadable: true,
+  };
+
+  function stubResearchPack(
+    state: {
+      installed: boolean;
+      skills: ManagedSkillSummary[];
+      enabled?: boolean;
+      enabledSkills?: string[];
+    },
+    overrides: Record<string, RouteHandler> = {},
+  ) {
+    const entry = pluginEntry('research-pack', {
+      source: 'builtin',
+      sourceFacet: 'builtin',
+      publisher: { id: 'agi', name: 'AGI', kind: 'first-party', url: null },
+      installCommand: null,
+      declaredSkills: [researchSkill.name],
+    });
+    const installation = {
+      pluginId: entry.id,
+      installedVersion: entry.version,
+      enabled: true,
+      installedAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    };
+    return stubPluginRoutes({
+      'GET /api/plugins': (url) =>
+        pluginPage(url.searchParams.get('source') === 'builtin' ? [entry] : [], 1, null),
+      'GET /api/plugins/installations': () =>
+        json({
+          installations: state.installed
+            ? [{ ...installation, enabled: state.enabled !== false }]
+            : [],
+        }),
+      'POST /api/plugins/installations': () => {
+        state.installed = true;
+        return json({ installation }, 201);
+      },
+      'GET /api/plugins/research-pack/settings': () =>
+        json({
+          settings: {
+            pluginId: entry.id,
+            enabledSkills: state.enabledSkills ?? [researchSkill.name],
+            examplePrompts: [],
+            connectors: [],
+            agents: [],
+          },
+        }),
+      'GET /api/skills': () => json({ skills: state.skills, canAuthorSkills: false }),
+      'GET /api/skills/installs': () =>
+        json({ installed: state.skills.map((skill) => skill.name) }),
+      ...overrides,
+    });
+  }
+
+  it('refreshes a nonempty preinstall catalog when a pack unlocks its skill', async () => {
+    const state = { installed: false, skills: [otherSkill] };
+    const calls = stubResearchPack(state);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadSection?.('skills');
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    expect(calls.filter((call) => call === 'GET /api/skills?catalog=all')).toHaveLength(1);
+
+    state.skills = [otherSkill, researchSkill];
+    await act(async () => {
+      await result.current.install?.('plugins', 'research-pack');
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills).toEqual([
+        { name: researchSkill.name, enabled: true, description: researchSkill.description },
+      ]),
+    );
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+    expect(calls.filter((call) => call === 'POST /api/plugins/installations')).toHaveLength(1);
+  });
+
+  it('refreshes skill removal and readdition announced while the plugin stays open', async () => {
+    const state = { installed: true, skills: [otherSkill, researchSkill] };
+    const calls = stubResearchPack(state);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description),
+    );
+
+    state.skills = [otherSkill];
+    act(() => announceSkillCatalogChanged());
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBeUndefined(),
+    );
+    expect(result.current.pluginSettings?.repairs?.[0]?.label).toContain(researchSkill.name);
+
+    state.skills = [otherSkill, { ...researchSkill, description: 'The refreshed description.' }];
+    act(() => announceSkillCatalogChanged());
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBe(
+        'The refreshed description.',
+      ),
+    );
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+    expect(calls.some((call) => call.startsWith('POST '))).toBe(false);
+  });
+
+  it('keeps a newer catalog when a preinstall response arrives after installation', async () => {
+    let resolveFirst!: (body: unknown) => void;
+    const firstBody = new Promise<unknown>((resolve) => {
+      resolveFirst = resolve;
+    });
+    let reads = 0;
+    const state = { installed: false, skills: [otherSkill] };
+    stubResearchPack(state, {
+      'GET /api/skills': () => {
+        reads += 1;
+        return reads === 1
+          ? { ok: true, status: 200, json: () => firstBody }
+          : json({ skills: state.skills, canAuthorSkills: false });
+      },
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    await waitFor(() => expect(reads).toBe(1));
+
+    state.skills = [otherSkill, researchSkill];
+    await act(async () => {
+      await result.current.install?.('plugins', 'research-pack');
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description),
+    );
+
+    await act(async () => {
+      resolveFirst({ skills: [otherSkill], canAuthorSkills: false });
+    });
+    expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description);
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+  });
+
+  it('does not flag a pack switched off when its skill leaves the catalog', async () => {
+    const state = { installed: true, enabled: true, skills: [otherSkill, researchSkill] };
+    stubResearchPack(state, {
+      'PATCH /api/plugins/installations/research-pack': (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as { enabled: boolean };
+        state.enabled = body.enabled;
+        state.skills = body.enabled ? [otherSkill, researchSkill] : [otherSkill];
+        return json({ installation: { pluginId: 'research-pack', enabled: body.enabled } });
+      },
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description),
+    );
+
+    await act(async () => {
+      await result.current.setPluginEnabled?.('research-pack', false);
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBeUndefined(),
+    );
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+
+    await act(async () => {
+      await result.current.setPluginEnabled?.('research-pack', true);
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description),
+    );
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+  });
+
+  it('does not flag a skill switched off and refreshes it when switched back on', async () => {
+    const state = {
+      installed: true,
+      enabledSkills: [researchSkill.name],
+      skills: [otherSkill, researchSkill],
+    };
+    stubResearchPack(state, {
+      'PATCH /api/plugins/research-pack/settings': (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as { enabledSkills: string[] };
+        state.enabledSkills = body.enabledSkills;
+        state.skills = body.enabledSkills.length > 0 ? [otherSkill, researchSkill] : [otherSkill];
+        return json({
+          settings: {
+            pluginId: 'research-pack',
+            enabledSkills: body.enabledSkills,
+            examplePrompts: [],
+            connectors: [],
+            agents: [],
+          },
+        });
+      },
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description),
+    );
+
+    await act(async () => {
+      await result.current.setPluginSkillEnabled?.('research-pack', researchSkill.name, false);
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills).toEqual([
+        { name: researchSkill.name, enabled: false },
+      ]),
+    );
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+
+    await act(async () => {
+      await result.current.setPluginSkillEnabled?.('research-pack', researchSkill.name, true);
+    });
+    await waitFor(() =>
+      expect(result.current.pluginSettings?.skills).toEqual([
+        { name: researchSkill.name, enabled: true, description: researchSkill.description },
+      ]),
+    );
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
+  });
+
+  it('reloads missing skill metadata without reinstalling the plugin', async () => {
+    const state = { installed: true, skills: [otherSkill] };
+    const calls = stubResearchPack(state);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+      await result.current.loadDetail?.('plugins', 'research-pack');
+    });
+    await waitFor(() => expect(result.current.pluginSettings?.repairs).toHaveLength(1));
+    expect(result.current.pluginSettings?.repairs?.[0]?.actionLabel).toBe('Reload skills');
+
+    state.skills = [otherSkill, researchSkill];
+    await act(async () => {
+      await result.current.pluginSettings?.repairs?.[0]?.run();
+    });
+
+    expect(calls.some((call) => call.startsWith('POST '))).toBe(false);
+    expect(result.current.pluginSettings?.skills[0]?.description).toBe(researchSkill.description);
+    expect(result.current.pluginSettings?.repairs).toBeUndefined();
   });
 });
 

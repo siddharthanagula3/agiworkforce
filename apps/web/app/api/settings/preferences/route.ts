@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -15,6 +15,7 @@ import {
 import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { SKILL_SETTINGS_NAMESPACE } from '@/lib/services/skill-install-service';
+import { serializeUserSettings } from '@/lib/services/user-settings-payload';
 import { autonomousToolApprovalsAvailable } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { TOOL_APPROVAL_PREFERENCE_NAMESPACE } from '@shared/types/toolApprovalPolicy';
 
@@ -39,6 +40,11 @@ interface StoredSettings {
   version: string | null;
 }
 
+type SettingsPatch = z.infer<typeof SettingsPatchSchema>;
+type SettingsWriteResult =
+  | { kind: 'saved'; row: UserSettingsRow | undefined; delta: Record<string, unknown> }
+  | { kind: 'conflict'; current: StoredSettings };
+
 function namespaceObject(settings: Record<string, unknown>, namespace: string) {
   const value = settings[namespace];
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -57,6 +63,64 @@ async function readSettings(db: ScopedDb, userId: string): Promise<StoredSetting
     [userId],
   );
   return { settings: row?.settings ?? {}, version: row?.version ?? null };
+}
+
+async function readLockedSettings(db: ScopedDb, userId: string): Promise<StoredSettings | null> {
+  const [row] = await db.query<UserSettingsRow>(
+    'select settings, updated_at::text as version from public.user_settings where user_id = $1 for update',
+    [userId],
+  );
+  return row ? { settings: row.settings ?? {}, version: row.version ?? null } : null;
+}
+
+function validatedSettingsDelta(current: Record<string, unknown>, parsed: SettingsPatch) {
+  const delta: Record<string, unknown> = parsed.namespace
+    ? {
+        [parsed.namespace]: parsed.patch
+          ? { ...namespaceObject(current, parsed.namespace), ...parsed.patch }
+          : (parsed.value ?? parsed.settings ?? {}),
+      }
+    : (parsed.settings ?? {});
+  serializeUserSettings({ ...current, ...delta });
+  return delta;
+}
+
+async function writeSettings(
+  db: ScopedDb,
+  userId: string,
+  parsed: SettingsPatch,
+): Promise<SettingsWriteResult> {
+  return db.transaction(async (tx): Promise<SettingsWriteResult> => {
+    let current = await readLockedSettings(tx, userId);
+    if (!current) {
+      const delta = validatedSettingsDelta({}, parsed);
+      const [row] = await tx.query<UserSettingsRow>(
+        `insert into public.user_settings (user_id, settings, updated_at)
+         values ($1, $2::jsonb, timezone('utc'::text, now()))
+         on conflict (user_id) do nothing
+         returning settings, updated_at::text as version`,
+        [userId, JSON.stringify(delta)],
+      );
+      if (row) return { kind: 'saved', row, delta };
+      current = await readLockedSettings(tx, userId);
+      if (!current) throw createError.internal('Settings row could not be locked');
+    }
+
+    const delta = validatedSettingsDelta(current.settings, parsed);
+    const expectedVersion = parsed.expectedVersion ?? null;
+    if (expectedVersion !== null && current.version !== expectedVersion) {
+      return { kind: 'conflict', current };
+    }
+    const [row] = await tx.query<UserSettingsRow>(
+      `update public.user_settings
+       set settings = user_settings.settings || $2::jsonb,
+           updated_at = timezone('utc'::text, now())
+       where user_id = $1
+       returning settings, updated_at::text as version`,
+      [userId, JSON.stringify(delta)],
+    );
+    return { kind: 'saved', row, delta };
+  });
 }
 
 async function handleGet(request: NextRequest) {
@@ -106,7 +170,7 @@ async function handlePut(request: NextRequest) {
 
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
-  let parsed: z.infer<typeof SettingsPatchSchema>;
+  let parsed: SettingsPatch;
   try {
     parsed = SettingsPatchSchema.parse(await request.json());
   } catch {
@@ -132,56 +196,34 @@ async function handlePut(request: NextRequest) {
     );
   }
 
-  const current = await readSettings(db, userId);
-  const expectedVersion = parsed.expectedVersion ?? null;
-
-  const delta: Record<string, unknown> = parsed.namespace
-    ? {
-        [parsed.namespace]: parsed.patch
-          ? { ...namespaceObject(current.settings, parsed.namespace), ...parsed.patch }
-          : (parsed.value ?? parsed.settings ?? {}),
-      }
-    : (parsed.settings ?? {});
-
-  const estimated = { ...current.settings, ...delta };
-  if (JSON.stringify(estimated).length > 100_000) {
-    throw createError.validation('Settings payload is too large');
-  }
-
-  let merged: Record<string, unknown> = estimated;
-  let version: string | null = current.version;
+  let result: SettingsWriteResult;
   try {
-    const [row] = await db.query<UserSettingsRow>(
-      `insert into public.user_settings (user_id, settings, updated_at)
-       values ($1, $2::jsonb, timezone('utc'::text, now()))
-       on conflict (user_id)
-       do update set settings = user_settings.settings || excluded.settings,
-                     updated_at = excluded.updated_at
-       where $3::text is null or user_settings.updated_at::text = $3::text
-       returning settings, updated_at::text as version`,
-      [userId, JSON.stringify(delta), expectedVersion],
-    );
-    if (!row && expectedVersion !== null) return settingsVersionConflict(db, userId, parsed);
-    if (row?.settings) merged = row.settings;
-    version = row?.version ?? version;
+    result = await writeSettings(db, userId, parsed);
   } catch (error) {
+    if (isAppError(error)) throw error;
     logger.error({ error, userId }, 'Failed to persist user settings');
     throw createError.internal('Failed to save settings');
   }
 
-  if (touchesActiveOrganizationNamespace(delta)) {
+  if (result.kind === 'conflict') return settingsVersionConflict(result.current, parsed);
+  if (touchesActiveOrganizationNamespace(result.delta)) {
     await invalidateActiveOrganizationCache(userId);
   }
 
-  return NextResponse.json({ settings: merged, version });
+  const row = result.row;
+  if (
+    !row?.settings ||
+    typeof row.settings !== 'object' ||
+    Array.isArray(row.settings) ||
+    typeof row.version !== 'string' ||
+    !row.version.trim()
+  ) {
+    throw createError.internal('Settings write was not confirmed');
+  }
+  return NextResponse.json({ settings: row.settings, version: row.version });
 }
 
-async function settingsVersionConflict(
-  db: ScopedDb,
-  userId: string,
-  parsed: z.infer<typeof SettingsPatchSchema>,
-): Promise<NextResponse> {
-  const latest = await readSettings(db, userId);
+function settingsVersionConflict(latest: StoredSettings, parsed: SettingsPatch): NextResponse {
   return NextResponse.json(
     {
       error: {

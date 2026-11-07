@@ -265,13 +265,16 @@ impl AccountRoute {
     }
 
     pub fn load() -> Self {
-        Self {
-            signed_in: crate::tier_cache::load_jwt().is_some(),
-            tier: crate::tier_cache::read_tier_cache().map(|cached| cached.tier),
-            plan_models: crate::tier_cache::read_plan_models_cache()
+        let Ok(context) = crate::tier_cache::ManagedRequestContext::capture() else {
+            return Self::with(false, None);
+        };
+        context.with_current(|| Self {
+            signed_in: context.jwt.is_some(),
+            tier: crate::tier_cache::read_tier_for(&context).map(|cached| cached.tier),
+            plan_models: crate::tier_cache::plan_models_for(&context)
                 .map(|models| models.into_iter().collect()),
-            capabilities: crate::tier_cache::cached_capabilities(),
-        }
+            capabilities: crate::tier_cache::capabilities_for(&context),
+        }).unwrap_or_else(|| Self::with(false, None))
     }
 
     pub fn signed_in(&self) -> bool {
@@ -871,14 +874,10 @@ pub(crate) async fn try_subscription_auth(provider: &Provider) -> Option<(String
                 );
                 continue;
             }
-            // Persist any token refreshes that happened during resolve_auth
-            let _ = crate::auth::save_auth(&auth_store);
             return Some((token, url, sub_name.to_string()));
         }
     }
 
-    // Persist any token refreshes even if none matched
-    let _ = crate::auth::save_auth(&auth_store);
     None
 }
 

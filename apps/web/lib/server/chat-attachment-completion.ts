@@ -426,8 +426,6 @@ export async function completeChatAttachmentUpload(
       'The uploaded file changed during its safety check. Upload it again.',
     );
   }
-  await purgeChatAttachmentUpload(userId, storageKey);
-
   const id = await insertMediaAsset(
     {
       userId,
@@ -453,6 +451,7 @@ export async function completeChatAttachmentUpload(
   if (!id) {
     throw createError.internal('Chat attachment storage is not provisioned');
   }
+  await purgeChatAttachmentUpload(userId, storageKey);
 
   trackProductAnalyticsEvent(
     { userId, organizationId },

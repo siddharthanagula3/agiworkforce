@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
   ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
+  connectorReleased: () => true,
+  hasReleasedConnectors: () => true,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -43,7 +45,9 @@ vi.mock('@/lib/egress-policy', () => {
 });
 
 const mockBuildMcpToolCatalog = vi.fn();
-vi.mock('@agiworkforce/mcp', () => ({
+type McpModule = typeof import('@agiworkforce/mcp');
+vi.mock('@agiworkforce/mcp', async (importOriginal) => ({
+  ...(await importOriginal<McpModule>()),
   buildMcpToolCatalog: (...a: unknown[]) => mockBuildMcpToolCatalog(...a),
   connectMcpServer: vi.fn(),
 }));

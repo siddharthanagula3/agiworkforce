@@ -127,6 +127,25 @@ describe('GET /api/files/[id]', () => {
       'user-owner',
       ASSET_ID,
       scopedDb,
+      { organizationId: null },
+    );
+    expect(mockStreamObject).not.toHaveBeenCalled();
+  });
+
+  it('passes the admitted organization to the reader rather than reselecting a workspace', async () => {
+    mockGetUserScopedDb.mockResolvedValue({
+      db: scopedDb,
+      userId: 'user-owner',
+      organizationId: 'workspace-A',
+    });
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(null);
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+    expect(res.status).toBe(404);
+    expect(mockGetActiveWorkspaceMediaAssetById).toHaveBeenCalledWith(
+      'user-owner',
+      ASSET_ID,
+      scopedDb,
+      { organizationId: 'workspace-A' },
     );
     expect(mockStreamObject).not.toHaveBeenCalled();
   });

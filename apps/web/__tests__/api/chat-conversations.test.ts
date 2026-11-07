@@ -63,6 +63,7 @@ vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
 import { GET, POST } from '@/app/api/chat/conversations/route';
 import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
+import { payloadCeilingBytes } from '@/lib/payload-ceiling';
 
 describe('Chat Conversations API', () => {
   const mockConversations = [
@@ -262,6 +263,171 @@ describe('Chat Conversations API', () => {
   });
 
   describe('POST /api/chat/conversations', () => {
+    describe('Request body admission', () => {
+      const path = '/api/chat/conversations';
+      const url = `http://localhost${path}`;
+      const headers = {
+        Authorization: 'Bearer valid-token',
+        'Content-Type': 'application/json',
+      };
+
+      it.each([undefined, '', '{}'])('preserves defaults for body %j', async (body) => {
+        mockQuery.mockResolvedValueOnce([
+          { id: 'new-conv', title: 'New conversation', model: 'auto' },
+        ]);
+
+        const response = await POST(
+          new NextRequest(url, {
+            method: 'POST',
+            headers,
+            ...(body === undefined ? {} : { body }),
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(mockAssertFreeDailyAllowance).toHaveBeenCalledOnce();
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          ['user-123', 'New conversation', 'auto', null, null, false, null, null],
+        );
+      });
+
+      it.each([
+        '{',
+        '{"isTemporary":true,',
+        '{"projectId":"proj-1",',
+        '{"id":"0190a000-0000-7000-8000-0000000000aa",',
+        ' \t\r\n ',
+      ])('refuses malformed nonempty JSON %j before allowance or writes', async (body) => {
+        const response = await POST(new NextRequest(url, { method: 'POST', headers, body }));
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid JSON body' },
+        });
+        expect(mockAssertFreeDailyAllowance).not.toHaveBeenCalled();
+        expect(mockQuery).not.toHaveBeenCalled();
+        expect(mockExecute).not.toHaveBeenCalled();
+      });
+
+      it.each(['null', '[]', 'true', '1', '"title"', '{"isTemporary":"true"}'])(
+        'retains schema refusal for JSON %j before allowance or writes',
+        async (body) => {
+          const response = await POST(new NextRequest(url, { method: 'POST', headers, body }));
+
+          expect(response.status).toBe(400);
+          await expect(response.json()).resolves.toMatchObject({
+            error: { code: 'VALIDATION_ERROR', message: 'Invalid request body' },
+          });
+          expect(mockAssertFreeDailyAllowance).not.toHaveBeenCalled();
+          expect(mockQuery).not.toHaveBeenCalled();
+          expect(mockExecute).not.toHaveBeenCalled();
+        },
+      );
+
+      it('propagates a failed body read instead of creating defaults or declaring invalid JSON', async () => {
+        const request = new NextRequest(url, { method: 'POST', headers });
+        vi.spyOn(request, 'text').mockRejectedValueOnce(new Error('Body transport failed'));
+
+        const response = await POST(request);
+
+        expect(response.status).toBe(500);
+        expect(mockAssertFreeDailyAllowance).not.toHaveBeenCalled();
+        expect(mockQuery).not.toHaveBeenCalled();
+        expect(mockExecute).not.toHaveBeenCalled();
+      });
+
+      it('propagates an undeclared stream failure before allowance or writes', async () => {
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.error(new Error('Body transport failed'));
+          },
+        });
+        const init: RequestInit & { duplex: 'half' } = {
+          method: 'POST',
+          headers,
+          body,
+          duplex: 'half',
+        };
+
+        const response = await POST(new NextRequest(url, init));
+
+        expect(response.status).toBe(500);
+        expect(mockAssertFreeDailyAllowance).not.toHaveBeenCalled();
+        expect(mockQuery).not.toHaveBeenCalled();
+        expect(mockExecute).not.toHaveBeenCalled();
+      });
+
+      it('preserves the streamed ceiling refusal without writing after the stream is cancelled', async () => {
+        const ceiling = payloadCeilingBytes(path);
+        const chunkBytes = 64 * 1024;
+        let produced = 0;
+        const cancel = vi.fn();
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (produced >= ceiling * 8) {
+              controller.close();
+              return;
+            }
+            produced += chunkBytes;
+            controller.enqueue(new Uint8Array(chunkBytes).fill(0x61));
+          },
+          cancel,
+        });
+        const init: RequestInit & { duplex: 'half' } = {
+          method: 'POST',
+          headers,
+          body,
+          duplex: 'half',
+        };
+
+        const response = await POST(new NextRequest(url, init));
+
+        expect(response.status).toBe(413);
+        expect(cancel).toHaveBeenCalledOnce();
+        expect(produced).toBeLessThan(ceiling * 4);
+        expect(mockAssertFreeDailyAllowance).not.toHaveBeenCalled();
+        expect(mockQuery).not.toHaveBeenCalled();
+        expect(mockExecute).not.toHaveBeenCalled();
+      });
+
+      it('retains declared oversized body refusal before scoped admission or writes', async () => {
+        const response = await POST(
+          new NextRequest(url, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Length': String(payloadCeilingBytes(path) + 1) },
+            body: '{}',
+          }),
+        );
+
+        expect(response.status).toBe(413);
+        expect(mockGetUserScopedDb).not.toHaveBeenCalled();
+        expect(mockAssertFreeDailyAllowance).not.toHaveBeenCalled();
+        expect(mockQuery).not.toHaveBeenCalled();
+        expect(mockExecute).not.toHaveBeenCalled();
+      });
+
+      it('retains an explicitly temporary conversation', async () => {
+        mockQuery.mockResolvedValueOnce([
+          { id: 'new-conv', title: 'New conversation', model: 'auto', is_temporary: true },
+        ]);
+
+        const response = await POST(
+          new NextRequest(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ isTemporary: true }),
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          ['user-123', 'New conversation', 'auto', null, null, true, null, null],
+        );
+      });
+    });
+
     describe('Creating Conversations', () => {
       it('should create conversation with default title and model', async () => {
         const newConv = { id: 'new-conv', title: 'New conversation', model: 'auto' };

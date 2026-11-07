@@ -204,11 +204,13 @@ if (routingManifest) {
   if (
     !sameMembers(Object.keys(routingManifest.dependencies ?? {}), [
       '@agiworkforce/model-registry',
+      '@agiworkforce/search',
       '@agiworkforce/types',
     ])
   ) {
     errors.push(`${routingPackage} production dependency set has drifted`);
   }
+  requireWorkspaceDependency(routingManifest, `${routingPath}/package.json`, searchPackage);
   if (dependencyInAnySection(routingManifest, servicesPackage)) {
     errors.push(`${routingPackage} must not depend on ${servicesPackage}`);
   }

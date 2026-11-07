@@ -2,7 +2,10 @@ import DOMPurify from 'dompurify';
 import markdownit from 'markdown-it';
 import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
-import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  markdownItFenceSource,
+  normalizeMarkdownSource,
+} from '@agiworkforce/utils/markdown-source';
 import {
   classifyAssistantFence,
   renderClassifiedFenceHtml,
@@ -174,7 +177,7 @@ md.renderer.rules['fence'] = (tokens, index) => {
   const token = tokens[index];
   const language = codeLanguage(token?.info);
   const surface = renderClassifiedFenceHtml(
-    classifyAssistantFence(language ?? '', token?.content ?? ''),
+    classifyAssistantFence(language ?? '', markdownItFenceSource(token?.content ?? '')),
     'chrome',
   );
   if (surface !== null) return surface;
@@ -484,7 +487,13 @@ function decorateAssistantSurfaces(root: HTMLElement, onFollowUp?: (text: string
               : 'Copy';
       const button = el('button', { type: 'button' }, label);
       button.addEventListener('click', () => {
-        void navigator.clipboard?.writeText(code.textContent ?? '');
+        const draft =
+          kind === 'surface:writing'
+            ? section.querySelector<HTMLElement>('pre[contenteditable]')
+            : null;
+        const text =
+          kind === 'surface:writing' ? (draft ? draft.innerText : '') : (code.textContent ?? '');
+        void navigator.clipboard?.writeText(text);
       });
       section.append(button);
     }
@@ -508,7 +517,7 @@ function decorateAssistantSurfaces(root: HTMLElement, onFollowUp?: (text: string
     }
     if (kind === 'surface:writing') {
       const draft = section.querySelector('pre');
-      if (draft) draft.setAttribute('contenteditable', 'true');
+      if (draft) draft.setAttribute('contenteditable', 'plaintext-only');
     }
     if (kind === 'surface:followups' && send) {
       for (const item of section.querySelectorAll<HTMLElement>(

@@ -76,12 +76,13 @@ export function libraryListPath(
     limit?: number;
     search?: string;
     sort?: LibrarySort;
-  } & LibraryScope,
+  } & Omit<LibraryScope, 'kind'> & { kind?: LibraryKind | readonly LibraryKind[] },
 ): string {
   const params = new URLSearchParams();
   if (input.search?.trim()) params.set('q', input.search.trim());
   if (input.origin) params.set('origin', input.origin);
-  if (input.kind) params.set('kind', input.kind);
+  if (input.kind)
+    params.set('kind', typeof input.kind === 'string' ? input.kind : input.kind.join(','));
   if (input.deleted) params.set('deleted', 'true');
   params.set('limit', String(input.limit ?? LIBRARY_PAGE_SIZE));
   params.set('offset', String(input.offset ?? 0));
@@ -95,7 +96,7 @@ export async function fetchLibraryPage(
     limit?: number;
     search?: string;
     sort?: LibrarySort;
-  } & LibraryScope,
+  } & Omit<LibraryScope, 'kind'> & { kind?: LibraryKind | readonly LibraryKind[] },
 ): Promise<LibraryPage> {
   const body = await api.get<unknown>(libraryListPath(input));
   const parsed = LibraryListResponseSchema.safeParse(body);

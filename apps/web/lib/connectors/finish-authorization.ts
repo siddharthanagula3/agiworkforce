@@ -2,9 +2,12 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 import type { ConnectorOAuthCallbackStatus } from '@agiworkforce/cloud-contracts';
-import { connectorsReleased } from '@agiworkforce/types';
+import { connectorReleased } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   getConnectorOAuthProvider,
@@ -54,13 +57,12 @@ export async function finishConnectorAuthorization(input: {
     return { returnPath: '/connectors', connectorId: '', status: 'invalid_state' };
   }
 
-  if (!connectorsReleased()) {
-    return {
-      returnPath: pending.returnPath,
-      connectorId: pending.connectorId,
-      status: 'unavailable',
-    };
-  }
+  const unavailable: ConnectorAuthorizationOutcome = {
+    returnPath: pending.returnPath,
+    connectorId: pending.connectorId,
+    status: 'unavailable',
+  };
+  if (!connectorReleased(pending.connectorId)) return unavailable;
 
   if (!authorizationResponseIssuerMatches(pending, iss)) {
     logger.warn(
@@ -75,6 +77,29 @@ export async function finishConnectorAuthorization(input: {
   }
   if (!code || code.length > MAX_CODE_LENGTH) {
     return { returnPath: pending.returnPath, connectorId: pending.connectorId, status: 'failed' };
+  }
+
+  const provider = pending.mcpUrl ? null : getConnectorOAuthProvider(pending.connectorId);
+  try {
+    const { db, userId: scopedUserId, organizationId } = await getUserScopedDb(request);
+    if (scopedUserId !== userId) return unavailable;
+    const decision = await evaluateConnectorPolicyForUser({
+      db,
+      userId,
+      organizationId,
+      connectorId: pending.connectorId,
+      isCustom: Boolean(pending.mcpUrl),
+      url: pending.mcpUrl ?? provider?.mcpUrl ?? null,
+      request,
+      surface: resolveCloudChatSurface(request),
+    });
+    if (!decision.allowed) return unavailable;
+  } catch (error) {
+    logger.warn(
+      { error, connectorId: pending.connectorId },
+      '[connector-oauth] callback policy unavailable; no credential was exchanged',
+    );
+    return unavailable;
   }
 
   if (pending.mcpUrl) {
@@ -112,7 +137,6 @@ export async function finishConnectorAuthorization(input: {
     };
   }
 
-  const provider = getConnectorOAuthProvider(pending.connectorId);
   if (!provider || !isAllowedConnectorOAuthRedirectUri(pending.redirectUri)) {
     logger.warn(
       { connectorId: pending.connectorId },

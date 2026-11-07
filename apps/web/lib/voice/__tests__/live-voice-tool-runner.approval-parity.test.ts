@@ -112,6 +112,22 @@ describe('a live voice connector approval', () => {
     expect((await call(voiceDb(), POST_COMMENT, 'approved')).status).toBe('completed');
     expect(mocks.connectorCall).toHaveBeenCalledOnce();
   });
+
+  it('honours an explicit rejection even when the current policy allows the call', async () => {
+    const saved = [{ connector_id: 'onedrive', tool_name: 'read_file', level: 'always-allow' }];
+    const result = await call(voiceDb(saved), READ_FILE, 'rejected');
+
+    expect(result.status).toBe('declined');
+    expect(mocks.connectorCall).not.toHaveBeenCalled();
+  });
+
+  it('keeps a policy denial ahead of an explicit rejection', async () => {
+    const saved = [{ connector_id: 'onedrive', tool_name: 'read_file', level: 'blocked' }];
+    const result = await call(voiceDb(saved), READ_FILE, 'rejected');
+
+    expect(result.status).toBe('blocked');
+    expect(mocks.connectorCall).not.toHaveBeenCalled();
+  });
 });
 
 describe('a conversation grant in a voice call', () => {

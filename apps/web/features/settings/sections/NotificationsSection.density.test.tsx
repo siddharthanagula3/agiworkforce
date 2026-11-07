@@ -14,12 +14,16 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+type OriginalNotificationsModule = typeof import('@/features/notifications');
+
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
 
-vi.mock('@/features/notifications', () => ({
+vi.mock('@/features/notifications', async (importOriginal) => ({
+  ...(await importOriginal<OriginalNotificationsModule>()),
   useWebPushToggle: () => mocks.webPush,
 }));
 
@@ -63,14 +67,14 @@ describe('NotificationsSection row density', () => {
   it('says why the switch is dead when the browser cannot receive notifications', async () => {
     mocks.webPush.unavailable = true;
     mocks.webPush.disabled = true;
-    mocks.webPush.description = 'This browser cannot receive notifications.';
+    mocks.webPush.description = 'Browser push is unavailable here.';
 
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     const runRow = screen.getByText('Agent run updates').closest('section');
     expect(screen.getByRole('switch', { name: 'Agent run updates' })).toBeDisabled();
-    expect(runRow?.textContent).toContain('cannot receive notifications');
+    expect(runRow?.textContent).toContain('Browser push is unavailable');
     expect(runRow?.textContent).not.toContain('Applies only to this browser');
 
     mocks.webPush.unavailable = false;
@@ -84,7 +88,27 @@ describe('NotificationsSection row density', () => {
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     const runRow = screen.getByText('Agent run updates').closest('section');
-    expect(runRow?.textContent).toContain('Applies only to this browser');
+    expect(runRow?.textContent).toContain('This browser only');
     expect(runRow?.textContent).not.toContain('blocked for this site');
   });
 });
+
+const notificationOwner = vi.hoisted(() => ({
+  incarnation: 1,
+  isCurrent: () => true,
+  session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
+}));
+vi.mock('../hooks/use-preference-owner', async (original) => ({
+  ...(await original<typeof import('../hooks/use-preference-owner')>()),
+  usePreferenceOwner: () => notificationOwner,
+}));
+vi.mock('../services/notification-preferences-client', () => ({
+  readNotificationPreferences: async () => ({
+    stored: await mocks.fetchPreferenceNamespace(),
+    version: 'v1',
+  }),
+  saveNotificationPreferences: async (_authority: unknown, patch: object) => {
+    await mocks.savePreferenceNamespace('notifications', patch, { merge: true });
+    return { stored: patch, version: 'v2' };
+  },
+}));

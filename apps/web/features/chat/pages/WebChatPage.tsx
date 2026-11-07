@@ -16,6 +16,12 @@ import {
   type ChatStatusInput,
 } from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
+import { persistAssistantFenceEdit } from '../lib/assistant-fence-persistence';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '../lib/assistant-content-edit-contract';
+import {
+  applyAssistantFenceEdit,
+  type AssistantFenceEdit,
+} from '@agiworkforce/unified-chat/assistant-fence-edits';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import {
   completionNotificationBody,
@@ -45,6 +51,11 @@ import { pickFreePoolModel } from '../lib/eligible-model';
 import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
+import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
+import {
+  useSessionSnapshot,
+  type IdentitySessionSnapshot,
+} from '@/lib/identity/useSessionSnapshot';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import {
   ToolApprovalProvider,
@@ -77,6 +88,7 @@ import {
 import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
+  mediaPersistenceToken,
   persistImageGenerationAssistantMessage,
   requireImageMessagePersistence,
   imageGenerationFailureMetadata,
@@ -127,6 +139,7 @@ import {
   resolveMessageVariantsEnabled,
 } from '../lib/message-variants-gate';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { resolveThinkingSendPolicy, type Effort } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   isSelectableModelId,
@@ -156,6 +169,7 @@ import {
   type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
+  canUseBillingPlanCapability,
   hasSelfServeUpgradePath,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -206,6 +220,9 @@ import {
   Sidebar,
   keepOpenForMenuEscape,
   useConfirmAction,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   type SidebarSession,
   type SidebarNavItem,
   type SidebarProject,
@@ -239,6 +256,7 @@ import {
   ChatComposerNew,
   SEND_GUARD_BLOCKED,
   type ComposerAttachmentUploadAttempt,
+  type ComposerSendResult,
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
@@ -283,7 +301,11 @@ import {
 import { toSidebarSessions } from '@shared/components/layout/sidebar-session-rows';
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
-import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
+import {
+  useDisabledWorkspaceFeatures,
+  useWorkspacePolicy,
+} from '@shared/hooks/use-workspace-policy';
+import { resolveLimitedFreeMedia } from '../lib/free-media-choice';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import {
   ConversationTitleMenu,
@@ -338,11 +360,11 @@ import { toast } from 'sonner';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { useUpgradePlanFlow } from '@features/billing/hooks/useUpgradePlanFlow';
 import {
-  buildAcceptedHandoffSystemMessage,
   buildWebLocalToByokPreview,
   getByokTargetProviderLabel,
   resolveRegenerateBoundaryRefusal,
   routeLocalToByokSend,
+  getProviderModeForModel,
   type WebHandoffContextCandidate,
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
@@ -405,7 +427,7 @@ import {
   type MediaPaywallRecoveryAction,
 } from '@/lib/hooks/useMediaGeneration';
 import type { VideoInputImages } from '@features/media/services/media-api-service';
-import { classifyTaskLocally } from '@agiworkforce/routing';
+import { classifyTaskLocally, requestsSeparateImageResources } from '@agiworkforce/routing';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import { explicitlyRequestsArtifact } from '@features/chat/lib/visual-intent';
 import {
@@ -447,6 +469,7 @@ type SendMeta = {
   /** `/search` on this turn: the server makes the search mandatory. */
   searchRequested?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
   officeOutputFormat?: ChatOutputFormat;
@@ -479,6 +502,7 @@ type AttachmentUploadAttempt = ComposerAttachmentUploadAttempt & {
 
 type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'status'> & {
   temporary: boolean;
+  authority: RequestAuthority;
 };
 
 /**
@@ -601,6 +625,7 @@ type PendingProviderNotice = {
   // from the follow-up queue is no longer in the composer, so declining the
   // notice has to hand its text back or it exists nowhere.
   send: {
+    session: IdentitySessionSnapshot;
     content: string;
     attachments?: File[];
     meta?: SendMeta;
@@ -810,44 +835,6 @@ export function toChatSession(conversation: Conversation, messageCount: number):
   };
 }
 
-async function saveSystemMessage(params: {
-  conversationId: string;
-  content: string;
-  metadata: MessageMetadata;
-  authToken: string;
-}): Promise<Message> {
-  const headers = await addCsrfHeaders({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${params.authToken}`,
-  });
-  const response = await fetch(`/api/chat/conversations/${params.conversationId}/messages`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      role: 'system',
-      content: params.content,
-      metadata: params.metadata,
-      skipLlm: true,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || 'Failed to save BYOK handoff context');
-  }
-
-  const data = await response.json();
-  const raw = data.message as { id?: string; created_at?: string; metadata?: MessageMetadata };
-
-  return {
-    id: raw.id ?? crypto.randomUUID(),
-    role: 'system',
-    content: params.content,
-    createdAt: raw.created_at ?? new Date().toISOString(),
-    metadata: raw.metadata ?? params.metadata,
-  };
-}
-
 /**
  * Answers with the leaf the route settled on, which is the one thing this client
  * cannot work out for itself: it may hold a single page of a long conversation,
@@ -1027,13 +1014,13 @@ async function persistDefiniteVideoStartFailure(params: {
   conversationId: string;
   messageId: string;
   publicError: string;
-  authToken: string;
+  authority: RequestAuthority;
 }): Promise<VideoStartFailureProjection> {
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${params.authToken}`,
+    Authorization: `Bearer ${await params.authority.getToken()}`,
   });
-  const response = await fetch(
+  const response = await params.authority.fetch(
     `/api/chat/conversations/${params.conversationId}/messages/${params.messageId}`,
     {
       method: 'PATCH',
@@ -1042,9 +1029,13 @@ async function persistDefiniteVideoStartFailure(params: {
     },
   );
   if (!response.ok) {
-    throw new Error(await readChatMutationError(response, 'Failed to recover video transcript'));
+    const message = await readChatMutationError(response, 'Failed to recover video transcript');
+    params.authority.assertCurrent();
+    throw new Error(message);
   }
-  return readVideoStartFailureProjection(await response.json());
+  const body = await response.json();
+  params.authority.assertCurrent();
+  return readVideoStartFailureProjection(body);
 }
 
 const MOBILE_NAV_DRAWER_ID = 'chat-mobile-navigation';
@@ -1082,10 +1073,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // instead of implying the whole chat UI switches language.
   const { t } = useTranslation(['chat', 'common']);
   const { getToken, isLoaded: authLoaded, userId } = useSession();
+  const captureSessionSnapshot = useSessionSnapshot();
+  const prestreamAuthoritiesRef = useRef(new Set<RequestAuthority>());
+  const sendPageGenerationRef = useRef<object>({});
+  useEffect(() => {
+    const generation = {};
+    sendPageGenerationRef.current = generation;
+    return () => {
+      sendPageGenerationRef.current = {};
+      for (const authority of prestreamAuthoritiesRef.current) authority.retire();
+      prestreamAuthoritiesRef.current.clear();
+    };
+  }, []);
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const sendPagePathRef = useRef(pathname);
+  sendPagePathRef.current = pathname;
   const surfaceRootHref = compact ? QUICK_ASK_PATH : NEW_CHAT_PATH;
   const surfaceConversationHref = useCallback(
     (conversationId: string) => `${surfaceRootHref}/${conversationId}`,
@@ -1395,6 +1400,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [pendingProviderNotice, setPendingProviderNotice] = useState<PendingProviderNotice | null>(
     null,
   );
+  const pendingProviderNoticeRef = useRef(pendingProviderNotice);
+  pendingProviderNoticeRef.current = pendingProviderNotice;
   const freeModelProviderNotices = useMemo(() => freeModelNotices(), []);
   const { statusOf: providerConsentStatusOf } = useNamedProviderConsents(freeModelProviderNotices);
   useEffect(() => {
@@ -1415,7 +1422,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [handoffPreview, setHandoffPreview] = useState<WebLocalToByokPreview | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
-  const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   // Whether CreateProjectDialog was opened from the composer picker (select the
   // new project as chat scope) vs the sidebar (navigate to the project page).
@@ -1455,6 +1461,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const { user: identityUser } = useCurrentUser();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
+  const mediaWorkspacePolicy = useWorkspacePolicy();
   const fastModeDisabledByWorkspace = disabledFeatures.includes('fast_mode');
   const { isUnread, toggleUnread } = useUnreadConversations();
   const { user: compatibilityUser, logout } = useAuthStore();
@@ -1731,7 +1738,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
   const workModeByConversation = useChatStore((s) => s.workModeByConversation);
   const isAgiWorkConversation = useChatStore(selectIsAgiWorkConversation(displayedConversationId));
-  const thinkingEnabled = useThinkingStore((s) => s.enabled);
+  const globalThinkingEnabled = useThinkingStore((s) => s.enabled);
+  const globalThinkingEffort = useThinkingStore((s) => s.effort);
+  const conversationThinking = useThinkingStore(
+    (s) => s.byConversation?.[displayedConversationId ?? PENDING_CONVERSATION_KEY],
+  );
+  const thinkingEnabled = resolveThinkingSendPolicy({
+    modelId: activeModelId,
+    requestedThinking: promotedModelActive
+      ? false
+      : (conversationThinking?.enabled ?? globalThinkingEnabled),
+    requestedEffort: promotedModelActive
+      ? undefined
+      : (conversationThinking?.effort ?? globalThinkingEffort),
+  }).thinkingEnabled;
   const sendPreviewToolNames = useMemo(() => {
     const names: string[] = [];
     if (composerToggles?.workMode === AGI_WORK_MODE) names.push(AGI_WORK_LABEL);
@@ -1788,6 +1808,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     (conversationId: string) => {
       adoptPendingChatToggles(conversationId);
       useStyleStore.getState().adoptSelection(PENDING_CONVERSATION_KEY, conversationId);
+      useThinkingStore
+        .getState()
+        .adoptConversationPreference(PENDING_CONVERSATION_KEY, conversationId);
     },
     [adoptPendingChatToggles],
   );
@@ -2036,7 +2059,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [showNotifBanner, setShowNotifBanner] = useState(false);
   const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingMediaJob = useMediaStore((state) =>
-    state.jobs.some((job) => job.status === 'pending' || job.status === 'generating'),
+    state.jobs.some(
+      (job) => (job.status === 'pending' || job.status === 'generating') && job.owner.isCurrent(),
+    ),
   );
   const isLongRunningTaskType =
     composerToggles?.researchEnabled === true ||
@@ -2217,6 +2242,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       content: string,
       options: {
         conversationId?: string;
+        session?: IdentitySessionSnapshot;
         attachments?: File[];
         meta?: SendMeta;
         userMessageId?: string;
@@ -2237,6 +2263,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // a DIFFERENT chat is never silently swallowed. A brand-new chat has no id
       // yet, so pre-create sends share one key -- which is exactly right: two
       // rapid submits on the empty surface must not create two conversations.
+      const session = options.session ?? captureSessionSnapshot();
+      if (localModelSelection === null && (!session || !session.isCurrent())) return false;
+      const generation = sendPageGenerationRef.current;
+      const pagePath = sendPagePathRef.current;
+      const shouldActivate = () =>
+        sendPageGenerationRef.current === generation && sendPagePathRef.current === pagePath;
+      let handedOff = false;
+      const authority =
+        localModelSelection !== null
+          ? undefined
+          : createRequestAuthority(session!, () => handedOff || shouldActivate());
+      authority?.assertCurrent();
       lastSendGuardBlockedRef.current = false;
       const sendGuardKey =
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
@@ -2290,6 +2328,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         lastSendGuardBlockedRef.current = true;
         return false;
       }
+      if (authority) prestreamAuthoritiesRef.current.add(authority);
       sendingConversationsRef.current.add(sendGuardKey);
       inFlightSendFingerprintsRef.current.set(sendGuardKey, sendFingerprint);
       let sendGuardReleased = false;
@@ -2330,6 +2369,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // Skipped when the optimistic bubble itself survived (it already carries
       // the content, with its own inline Retry).
       const abandonSend = (): false => {
+        if (authority && !authority.isCurrent()) return false;
         const survived =
           resolvedUserMessageId !== null &&
           targetConversationId !== null &&
@@ -2339,9 +2379,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (!survived) {
           parkUnsentDraft(targetConversationId, content);
           if (options.attachments?.length && attachmentsUploaded) {
-            setRestoredAttachments(options.attachments);
+            if (shouldActivate()) setRestoredAttachments(options.attachments);
           } else if (options.attachments?.length && !options.attachmentUploadAttemptId) {
-            setRestoredAttachments(options.attachments);
+            if (shouldActivate()) setRestoredAttachments(options.attachments);
           }
         }
         return false;
@@ -2352,11 +2392,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // back to the empty-chat state instead of stranding it on a dead id,
       // and park the draft where that state reads it from.
       const releaseUnresolvedPlaceholder = () => {
+        if (authority && !authority.isCurrent()) return;
         if (!clientConvId || resolvedFreshConvId) return;
         const stillHasMessages =
           (useChatStore.getState().messagesByConversation[clientConvId]?.length ?? 0) > 0;
         if (stillHasMessages) return;
-        if (!urlConversationId) {
+        if (!urlConversationId && shouldActivate()) {
           setBareChatSessionId((current) => (current === clientConvId ? null : current));
         }
         targetConversationId = null;
@@ -2371,6 +2412,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
       };
       try {
+        authority?.assertCurrent();
         const mediaOverride = freeQuotaSelection(options.meta?.modelOverrideId);
         const modelForTurn =
           mediaOverride?.category === 'image' || mediaOverride?.category === 'video'
@@ -2391,10 +2433,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           : temporaryIntent;
         const memoryCommandReport =
           !conversationIsTemporary && !localModelTurn
-            ? runExplicitMemoryCommand(content, {
-                conversationId: existingConvId || null,
-                projectId: sendProjectId ?? null,
-              })
+            ? runExplicitMemoryCommand(
+                content,
+                {
+                  conversationId: existingConvId || null,
+                  projectId: sendProjectId ?? null,
+                },
+                authority!,
+              )
             : null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
@@ -2403,6 +2449,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           // render, and without this the collision check above would miss it.
           sendingConversationsRef.current.add(clientConvId);
           inFlightSendFingerprintsRef.current.set(clientConvId, sendFingerprint);
+          useThinkingStore
+            .getState()
+            .adoptConversationPreference(PENDING_CONVERSATION_KEY, clientConvId);
           setActiveConversation(clientConvId);
           if (!urlConversationId) setBareChatSessionId(clientConvId);
         }
@@ -2421,31 +2470,41 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? async (): Promise<string | null> => {
               const c = await createConversation(NEW_CHAT_TITLE, cloudModelId, sendProjectId, {
                 isTemporary: temporaryIntent,
+                authority,
+                shouldActivate,
               });
+              authority?.assertCurrent();
               if (!c) return null;
               resolvedFreshConvId = c.id;
-              adoptPendingComposerToggles(c.id);
-              if (!urlConversationId) setBareChatSessionId(c.id);
+              if (shouldActivate()) {
+                adoptPendingComposerToggles(c.id);
+                if (!urlConversationId) setBareChatSessionId(c.id);
+              }
               // Keep the conversation bookmarkable after the first message and
               // preserve whichever chat surface created it.
-              router.replace(surfaceConversationHref(c.id));
+              if (shouldActivate()) router.replace(surfaceConversationHref(c.id));
               return c.id;
             }
           : undefined;
 
         const resolvedAttachments = options.attachments?.length
-          ? await uploadChatAttachments(options.attachments, {
-              ...(existingConvId ? { conversationId: existingConvId } : {}),
-              temporary: temporaryIntent,
-              signal: uploadController.signal,
-              ...(options.attachmentUploadAttemptId
-                ? {
-                    onStatus: (status) =>
-                      updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
-                  }
-                : {}),
-            })
+          ? await uploadChatAttachments(
+              options.attachments,
+              {
+                ...(existingConvId ? { conversationId: existingConvId } : {}),
+                temporary: temporaryIntent,
+                signal: uploadController.signal,
+                ...(options.attachmentUploadAttemptId
+                  ? {
+                      onStatus: (status) =>
+                        updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
+                    }
+                  : {}),
+              },
+              authority!,
+            )
           : undefined;
+        authority?.assertCurrent();
         releaseUploadController();
         if (uploadController.signal.aborted) {
           releaseUnresolvedPlaceholder();
@@ -2453,6 +2512,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
         attachmentsUploaded = Boolean(options.attachments?.length);
         const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
+        authority?.assertCurrent();
         if (options.attachmentUploadAttemptId) {
           setAttachmentUploadAttempts((current) =>
             current.filter((attempt) => attempt.id !== options.attachmentUploadAttemptId),
@@ -2463,14 +2523,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // durable (its row saved), not at stream end, so the edit/regenerate
         // flow drops the replaced turn's server rows then; otherwise a reload
         // mid-stream shows a duplicated user message plus the stale answer.
-        const doSend = (replacementTurnCommitted?: () => void) =>
-          sendMessage(content, {
+        const doSend = (replacementTurnCommitted?: () => void) => {
+          authority?.assertCurrent();
+          handedOff = true;
+          if (authority) prestreamAuthoritiesRef.current.delete(authority);
+          return sendMessage(content, {
+            authority,
             model: modelForTurn,
             userMessageId: resolvedUserMessageId ?? undefined,
             assistantMessageId: options.assistantMessageId,
             conversationId: convId,
             ensureConversationId,
             onTurnCommitted: () => {
+              if (authority && !authority.isCurrent()) return;
               replacementTurnCommitted?.();
               options.onTurnCommitted?.();
               releaseSendGuard();
@@ -2480,6 +2545,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             searchRequested: options.meta?.searchRequested,
             webFetch: options.meta?.webSearchEnabled,
             thinkingEnabled: options.meta?.thinkingEnabled,
+            thinkingEffort: options.meta?.thinkingEffort,
             codeExecution: options.meta?.codeExecutionEnabled,
             officeCreation: options.meta?.officeCreationEnabled,
             officeFormat: options.meta?.officeOutputFormat,
@@ -2497,8 +2563,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             routingProfile: useModelStore.getState().routingProfile,
             ...(memoryCommand ? { memoryCommand } : {}),
           });
+        };
 
         const announceDesktopCompletion = () => {
+          if (authority && !authority.isCurrent()) return;
           // A new chat's turn ran under the client placeholder, which
           // `ensureConversationId` renamed to the server's id.
           const finishedIn = resolvedFreshConvId ?? convId;
@@ -2540,6 +2608,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         announceDesktopCompletion();
         return true;
       } catch (error) {
+        if (authority && !authority.isCurrent()) return false;
         if (uploadController.signal.aborted) {
           releaseUnresolvedPlaceholder();
           return abandonSend();
@@ -2559,9 +2628,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         releaseSendGuard();
         releaseSendWindow();
         releaseUploadController();
+        if (authority) prestreamAuthoritiesRef.current.delete(authority);
+        if (!handedOff) authority?.retire();
       }
     },
     [
+      captureSessionSnapshot,
       urlConversationId,
       surfaceConversationHref,
       bareChatSessionId,
@@ -2803,14 +2875,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    */
   const executeNewImageGenerationTurn = useCallback(
     async (turn: NewImageGenerationTurn): Promise<void> => {
+      const authority = turn.authority;
+      authority.assertCurrent();
       let generatedImage: GeneratedImageResult | null = null;
-      const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+      const updateOwnMessage = (id: string, updates: Partial<Message>) => {
+        authority.assertCurrent();
         updateMessage(id, updates, turn.conversationId);
-      const getAuthToken = async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
       };
+      const getAuthToken = mediaPersistenceToken(authority);
       const resultMetadata = (imageUrl: string): MessageMetadata => ({
         toolType: 'image-generation',
         imageUrl,
@@ -2836,6 +2908,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
         },
         beforeGenerate: () => {
+          authority.assertCurrent();
           // A prompt-recovery notice has reached its commit point. Remove it
           // before the paid request starts; any later transcript failure gets
           // its own result-phase recovery using this same assistant UUID.
@@ -2860,6 +2933,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         generate: async () => {
           generatedImage = await generateImage(turn.prompt, {
             ...turn.imageRequest,
+            authority,
             cancelScope: turn.conversationId,
             conversationId: turn.conversationId,
           });
@@ -2886,8 +2960,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         },
       });
 
+      if (!authority.isCurrent()) return;
       if (outcome.status === 'prompt-persistence-failed') {
         setImageTranscriptRecovery({
+          authority,
           phase: 'prompt',
           status: 'failed',
           conversationId: turn.conversationId,
@@ -2917,8 +2993,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             getAuthToken,
             updateMessage: updateOwnMessage,
           });
+          if (!authority.isCurrent()) return;
           if (!persistence.ok) {
             setImageTranscriptRecovery({
+              authority,
               phase: 'result',
               kind: 'generation-failure',
               status: 'failed',
@@ -2938,6 +3016,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (outcome.status === 'result-persistence-failed') {
         const metadata = resultMetadata(outcome.imageUrl);
         setImageTranscriptRecovery({
+          authority,
           phase: 'result',
           status: 'failed',
           conversationId: turn.conversationId,
@@ -2954,7 +3033,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       addMessage,
       applyImageError,
       generateImage,
-      getToken,
       removeImageTranscriptRecovery,
       setImageTranscriptRecovery,
       updateMessage,
@@ -2981,6 +3059,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       // Claim the window with a balanced, idempotent release and take the
       // reentrancy key for this conversation only, so an image generation in
       // one chat does not block sends in every other chat.
+      const session = captureSessionSnapshot();
+      if (!session) return;
+      const authority = createRequestAuthority(session);
       const imageGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(imageGuardKey)) return;
       sendingConversationsRef.current.add(imageGuardKey);
@@ -3003,14 +3084,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               IMAGE_GENERATION_TITLE,
               activeModelId,
               activeProjectId,
+              { authority },
             );
+            if (!authority.isCurrent()) return;
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
               router.replace(surfaceConversationHref(fresh.id));
             }
           }
-          if (!convId) return;
+          if (!convId || !authority.isCurrent()) return;
 
           const temporary = isTemporaryConversationById(
             useChatStore.getState().conversations,
@@ -3038,6 +3121,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               convId,
             );
             await executeNewImageGenerationTurn({
+              authority,
               conversationId: convId,
               userMessageId,
               assistantMessageId,
@@ -3050,6 +3134,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           } finally {
             releaseImageTranscriptMutation(mutationIds);
           }
+        } catch (error) {
+          if (authority.isCurrent())
+            toast.error(toUserMessage(error, 'Image generation could not be started.'));
         } finally {
           sendingConversationsRef.current.delete(imageGuardKey);
           releaseSendWindow();
@@ -3057,6 +3144,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       })();
     },
     [
+      captureSessionSnapshot,
       displayedConversationId,
       surfaceConversationHref,
       urlConversationId,
@@ -3080,6 +3168,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // ---------------------------------------------------------------------------
   const handleRegenerateImageInPlace = useCallback(
     async (messageId: string, opts: ImageRevisionRequest): Promise<string> => {
+      const session = captureSessionSnapshot();
+      if (!session) throw new Error('Not authenticated');
+      const authority = createRequestAuthority(session);
       let generatedImage: GeneratedImageResult | null = null;
       const imageRequest = resolveImageGenerationRequestOptions(
         opts.aspectRatio,
@@ -3123,11 +3214,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           },
           ownerConversationId,
         );
-        const getAuthToken = async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        const getAuthToken = mediaPersistenceToken(authority);
         const finalMetadata = (imageUrl: string): MessageMetadata =>
           mergeImageGenerationMetadata(previousMetadata, {
             toolType: 'image-generation',
@@ -3167,12 +3254,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           generate: async () => {
             generatedImage = await generateImage(opts.prompt, {
               ...imageRequest,
+              authority,
               cancelScope: ownerConversationId,
               conversationId: ownerConversationId,
             });
             return generatedImage.imageUrl;
           },
           onGenerated: (imageUrl) => {
+            authority.assertCurrent();
             updateMessage(
               messageId,
               {
@@ -3196,6 +3285,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           },
         });
 
+        authority.assertCurrent();
         if (outcome.status === 'completed') {
           removeImageTranscriptRecovery(messageId);
           void notifyJobComplete({
@@ -3209,6 +3299,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (outcome.status === 'result-persistence-failed') {
           const metadata = finalMetadata(outcome.imageUrl);
           setImageTranscriptRecovery({
+            authority,
             phase: 'result',
             status: 'failed',
             conversationId: ownerConversationId,
@@ -3239,8 +3330,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             getAuthToken,
             updateMessage: (id, updates) => updateMessage(id, updates, ownerConversationId),
           });
+          authority.assertCurrent();
           if (!persistence.ok) {
             setImageTranscriptRecovery({
+              authority,
               phase: 'result',
               kind: 'generation-failure',
               status: 'failed',
@@ -3256,8 +3349,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         }
         throw generationError;
       } finally {
-        // The spinner is cleared on EVERY exit, success or failure.
-        updateMessage(messageId, { isStreaming: false }, ownerConversationId);
+        // A retired session cannot settle a replacement transcript.
+        if (authority.isCurrent())
+          updateMessage(messageId, { isStreaming: false }, ownerConversationId);
         releaseImageTranscriptMutation([messageId]);
       }
     },
@@ -3266,7 +3360,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       applyImageError,
       generateImage,
       displayedConversationId,
-      getToken,
+      captureSessionSnapshot,
       readMessageMetadata,
       releaseImageTranscriptMutation,
       removeImageTranscriptRecovery,
@@ -3277,6 +3371,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRetryImageTranscriptRecovery = useCallback(
     async (recovery: ImageTranscriptRecovery): Promise<void> => {
+      // Legacy in-memory records can bind here, but an observed owner is never replaced.
+      const session = recovery.authority ? null : captureSessionSnapshot();
+      const authority = recovery.authority ?? (session ? createRequestAuthority(session) : null);
+      if (!authority?.isCurrent()) return;
+      recovery = { ...recovery, authority };
+      setImageTranscriptRecovery(recovery);
       const mutationKeys = imageTranscriptMutationKeys(recovery);
       const ownerMessages = selectConversationMessages(recovery.conversationId)(
         useChatStore.getState(),
@@ -3334,6 +3434,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       try {
         if (recovery.phase === 'prompt') {
           await executeNewImageGenerationTurn({
+            authority,
             conversationId: recovery.conversationId,
             userMessageId: recovery.userMessageId,
             assistantMessageId: recovery.assistantMessageId,
@@ -3346,11 +3447,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           return;
         }
 
-        const getAuthToken = async () => {
-          const token = await getToken();
-          if (!token) throw new Error('Not authenticated');
-          return token;
-        };
+        const getAuthToken = mediaPersistenceToken(authority);
         requireImageMessagePersistence(
           await persistImageGenerationAssistantMessage({
             conversationId: recovery.conversationId,
@@ -3362,11 +3459,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             updateMessage: (id, updates) => updateMessage(id, updates, recovery.conversationId),
           }),
         );
+        authority.assertCurrent();
         removeImageTranscriptRecovery(recovery.assistantMessageId);
       } catch {
         // The persistence mechanic already logs and toasts its exact error. Keep
         // the durable asset + same client UUID available for another safe retry.
-        setImageTranscriptRecovery({ ...recovery, status: 'failed' });
+        if (authority.isCurrent()) setImageTranscriptRecovery({ ...recovery, status: 'failed' });
       } finally {
         releaseImageTranscriptMutation(mutationKeys);
         if (recovery.phase === 'prompt') {
@@ -3378,7 +3476,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [
       claimSendWindow,
       executeNewImageGenerationTurn,
-      getToken,
+      captureSessionSnapshot,
       releaseImageTranscriptMutation,
       removeImageTranscriptRecovery,
       setImageTranscriptRecovery,
@@ -3387,6 +3485,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const videoMessageAuthoritiesRef = useRef<Map<string, RequestAuthority>>(new Map());
+  const videoTaskAuthoritiesRef = useRef<Map<string, RequestAuthority>>(new Map());
   const watchedVideoTasksRef = useRef<Set<string>>(new Set());
   const autoResumedVideoTasksRef = useRef<Set<string>>(new Set());
   const videoInputImagesRef = useRef<Map<string, VideoInputImages>>(new Map());
@@ -3398,7 +3498,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       messageId: string;
       taskId: string;
       localJobId?: string;
+      authority?: RequestAuthority;
     }) => {
+      const existing =
+        videoTaskAuthoritiesRef.current.get(input.taskId) ??
+        input.authority ??
+        videoMessageAuthoritiesRef.current.get(input.messageId);
+      // A restored task is admitted for observation here, not assigned historical provenance.
+      const session = existing ? null : captureSessionSnapshot();
+      const authority = existing ?? (session ? createRequestAuthority(session) : null);
+      if (!authority?.isCurrent()) return;
+      autoResumedVideoTasksRef.current.add(input.taskId);
+      videoTaskAuthoritiesRef.current.set(input.taskId, authority);
+      videoMessageAuthoritiesRef.current.set(input.messageId, authority);
       if (watchedVideoTasksRef.current.has(input.taskId)) return;
       watchedVideoTasksRef.current.add(input.taskId);
 
@@ -3422,8 +3534,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
       try {
         const result = await watchVideoGeneration(input.taskId, {
+          authority,
           ...(input.localJobId ? { localJobId: input.localJobId } : {}),
           onProgress: (update) => {
+            if (!authority.isCurrent()) return;
             const running = readMessageMetadata(input.conversationId, input.messageId);
             updateMessage(
               input.messageId,
@@ -3443,6 +3557,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             );
           },
         });
+        if (!authority.isCurrent()) return;
         const current = readMessageMetadata(input.conversationId, input.messageId);
         if (result.status === 'completed') {
           videoInputImagesRef.current.delete(input.messageId);
@@ -3511,6 +3626,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       } catch (error) {
         // A status-network failure says nothing about the provider outcome.
         // Keep the task resumable and let Workflow continue unattended.
+        if (!authority.isCurrent()) return;
         const current = readMessageMetadata(input.conversationId, input.messageId);
         updateMessage(
           input.messageId,
@@ -3536,7 +3652,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         watchedVideoTasksRef.current.delete(input.taskId);
       }
     },
-    [readMessageMetadata, updateMessage, watchVideoGeneration],
+    [readMessageMetadata, updateMessage, watchVideoGeneration, captureSessionSnapshot],
   );
 
   // ---------------------------------------------------------------------------
@@ -3546,6 +3662,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     (
       prompt: string,
       videoOptions?: {
+        authority?: RequestAuthority;
         modelId?: string;
         aspectRatio?: string;
         resolution?: string;
@@ -3553,6 +3670,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         inputImages?: VideoInputImages;
       },
     ) => {
+      const session = videoOptions?.authority ? null : captureSessionSnapshot();
+      const authority =
+        videoOptions?.authority ?? (session ? createRequestAuthority(session) : null);
+      if (!authority?.isCurrent()) return;
       const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(videoGuardKey)) return;
       sendingConversationsRef.current.add(videoGuardKey);
@@ -3565,26 +3686,26 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               VIDEO_GENERATION_TITLE,
               activeModelId,
               activeProjectId,
+              { authority },
             );
+            if (!authority.isCurrent()) return;
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
               router.replace(surfaceConversationHref(fresh.id));
             }
           }
-          if (!convId) return;
+          if (!convId || !authority.isCurrent()) return;
 
           const isTemporaryConversation = isTemporaryConversationById(
             useChatStore.getState().conversations,
             convId,
           );
-          const getAuthToken = async () => {
-            const token = await getToken();
-            if (!token) throw new Error('Not authenticated');
-            return token;
-          };
-          const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+          const getAuthToken = mediaPersistenceToken(authority);
+          const updateOwnMessage = (id: string, updates: Partial<Message>) => {
+            authority.assertCurrent();
             updateMessage(id, updates, convId);
+          };
 
           const userMessageId = crypto.randomUUID();
           addMessage(
@@ -3597,6 +3718,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             convId,
           );
           let assistantMessageId = crypto.randomUUID();
+          videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
@@ -3644,13 +3766,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     updateMessage: updateOwnMessage,
                   }),
                 );
+                authority.assertCurrent();
                 assistantMessageId = persisted.messageId;
+                videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
               },
               start: () => {
+                authority.assertCurrent();
                 if (videoOptions?.inputImages) {
                   videoInputImagesRef.current.set(assistantMessageId, videoOptions.inputImages);
                 }
                 return startVideoGeneration(prompt, {
+                  authority,
                   ...(videoOptions?.modelId ? { modelId: videoOptions.modelId } : {}),
                   // Composer's aspect/quality pills. Omitted when absent so the
                   // route keeps applying its own defaults for other callers.
@@ -3677,6 +3803,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 });
               },
             });
+            if (!authority.isCurrent()) return;
             if (!startResult.ok) {
               const message = `Video was not started because the ${startResult.phase} could not be saved. Try again to recover this turn.`;
               updateOwnMessage(assistantMessageId, {
@@ -3716,12 +3843,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             });
             autoResumedVideoTasksRef.current.add(started.taskId);
             await watchVideoMessage({
+              authority,
               conversationId: convId,
               messageId: assistantMessageId,
               taskId: started.taskId,
               localJobId: started.localJobId,
             });
           } catch (err) {
+            if (!authority.isCurrent()) return;
             // A tier refusal must land as an InlinePaywallCard, not a toast or
             // a raw error bubble: ChatMessageList swaps the whole row for the
             // card whenever `metadata.paywall` is present. `isPaywall` is the
@@ -3753,7 +3882,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   conversationId: convId,
                   messageId: assistantMessageId,
                   publicError,
-                  authToken: await getAuthToken(),
+                  authority,
                 });
                 updateOwnMessage(assistantMessageId, {
                   content: projection.content,
@@ -3770,6 +3899,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   (status === 'queued' || status === 'processing')
                 ) {
                   await watchVideoMessage({
+                    authority,
                     conversationId: convId,
                     messageId: assistantMessageId,
                     taskId,
@@ -3777,6 +3907,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 }
                 return;
               } catch (projectionError) {
+                if (!authority.isCurrent()) return;
                 console.warn(
                   '[video] Definite start failure could not be projected; reload recovery remains available.',
                   projectionError,
@@ -3815,6 +3946,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               });
             }
           }
+        } catch (error) {
+          if (authority.isCurrent())
+            toast.error(toUserMessage(error, 'Video generation could not be started.'));
         } finally {
           sendingConversationsRef.current.delete(videoGuardKey);
           releaseSendWindow();
@@ -3833,7 +3967,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       startVideoGeneration,
       watchVideoMessage,
       router,
-      getToken,
+      captureSessionSnapshot,
       claimSendWindow,
       subscriptionTier,
       managedUsageSummary,
@@ -3856,14 +3990,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ) {
         continue;
       }
-      autoResumedVideoTasksRef.current.add(taskId);
       void watchVideoMessage({
         conversationId: displayedConversationId,
         messageId: message.id,
         taskId,
       });
     }
-  }, [displayedConversationId, displayedMessages, watchVideoMessage]);
+  }, [displayedConversationId, displayedMessages, watchVideoMessage, authLoaded, userId]);
 
   const handleResumeVideo = useCallback(
     (messageId: string) => {
@@ -3898,10 +4031,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         handleOpenUpgradeDialog();
         return;
       }
+      const authority = videoMessageAuthoritiesRef.current.get(messageId);
+      if (authority && !authority.isCurrent()) return;
       const failed = assistantMessage.metadata;
       const inputImages = videoInputImagesRef.current.get(messageId);
       videoInputImagesRef.current.delete(messageId);
       handleGenerateVideo(userMessage.content, {
+        authority,
         ...(inputImages ? { inputImages } : {}),
         ...(typeof failed.videoModel === 'string' ? { modelId: failed.videoModel } : {}),
         ...(typeof failed.videoAspect === 'string' ? { aspectRatio: failed.videoAspect } : {}),
@@ -3946,13 +4082,42 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [steerActiveTurn, displayedConversationId],
   );
 
+  const typedImageScopeKey = JSON.stringify([
+    userId,
+    activeModelId,
+    displayedConversationId,
+    activeProjectId,
+    conversationProjectId,
+    conversationHoldsLocalTurns(displayedMessages),
+    subscriptionTier,
+    billingPolicyReady,
+    mediaWorkspacePolicy.policy?.organizationId,
+    mediaWorkspacePolicy.policy?.revision,
+  ]);
+  const typedImageScopeRef = useRef({ key: typedImageScopeKey, revision: 0 });
+  if (typedImageScopeRef.current.key !== typedImageScopeKey) {
+    typedImageScopeRef.current = {
+      key: typedImageScopeKey,
+      revision: typedImageScopeRef.current.revision + 1,
+    };
+  }
+  useEffect(
+    () => () => {
+      typedImageScopeRef.current = { key: '', revision: typedImageScopeRef.current.revision + 1 };
+    },
+    [],
+  );
   const handleSend = useCallback(
     (
       content: string,
       attachments?: File[],
       skillId?: string,
       meta?: SendMeta,
+      voiceOwner?: { conversationId: string; authority: RequestAuthority },
     ): false | typeof SEND_GUARD_BLOCKED | void => {
+      if (voiceOwner && !voiceOwner.authority.isCurrent()) return false;
+      const session = voiceOwner?.authority.session ?? captureSessionSnapshot();
+      if (localModelSelection === null && (!session || !session.isCurrent())) return false;
       let resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
       const outgoingContent = content;
       const mediaOverride = freeQuotaSelection(resolvedMeta?.modelOverrideId);
@@ -3976,9 +4141,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       }).model;
       const providerNotice = freeModelNoticeFor(servingModelId);
       if (providerNotice && providerConsentStatusOf(providerNotice.providerId) === 'missing') {
+        if (voiceOwner) return false;
         setPendingProviderNotice({
           notice: providerNotice,
           send: {
+            session: session!,
             content: outgoingContent,
             attachments,
             meta: resolvedMeta,
@@ -3999,6 +4166,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const localTaskType = classifyTaskLocally(content, []).type;
       const hasExplicitArtifactDestination = explicitlyRequestsArtifact(content);
       if (
+        !voiceOwner &&
         !attachments?.length &&
         (localTaskType === 'image_generation' || hasExplicitArtifactDestination)
       ) {
@@ -4008,7 +4176,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...resolvedMeta,
             artifactInstruction: visualRoute.target.directive,
           };
-        } else if (!freeQuotaSelection(targetModelId)) {
+        } else if (
+          !requestsSeparateImageResources(content) &&
+          !conversationHoldsLocalTurns(displayedMessages) &&
+          (getProviderModeForModel(targetModelId) === 'ManagedGateway' ||
+            getProviderModeForModel(targetModelId) === 'ManagedNative') &&
+          !freeQuotaSelection(targetModelId)
+        ) {
           const defaultImageModel = IMAGE_MODELS[0];
           if (defaultImageModel) {
             handleGenerateImage(content, { aspectRatio: 'auto', modelId: defaultImageModel.id });
@@ -4057,6 +4231,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ]);
           }
           void sendContent(outgoingContent, {
+            ...(voiceOwner ? { conversationId: voiceOwner.conversationId } : {}),
+            session: session ?? undefined,
             attachments,
             meta: resolvedMeta,
             attachmentUploadAttemptId,
@@ -4080,6 +4256,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (lastSendGuardBlockedRef.current) return SEND_GUARD_BLOCKED;
     },
     [
+      captureSessionSnapshot,
+      localModelSelection,
       displayedConversation,
       displayedConversationId,
       displayedMessages,
@@ -4091,23 +4269,124 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const currentHandleSendRef = useRef(handleSend);
+  currentHandleSendRef.current = handleSend;
+
+  const handleComposerSend = useCallback(
+    (
+      content: string,
+      attachments?: File[],
+      skillId?: string,
+      meta?: SendMeta,
+      isCurrent?: () => boolean,
+    ): ComposerSendResult | Promise<ComposerSendResult> => {
+      if (isCurrent && !isCurrent()) return false;
+      const providerMode = getProviderModeForModel(activeModelId);
+      const typedImage =
+        !attachments?.length &&
+        !freeQuotaSelection(meta?.modelOverrideId ?? activeModelId) &&
+        !requestsSeparateImageResources(content) &&
+        !conversationHoldsLocalTurns(displayedMessages) &&
+        (providerMode === 'ManagedGateway' || providerMode === 'ManagedNative') &&
+        (classifyTaskLocally(content, []).type === 'image_generation' ||
+          explicitlyRequestsArtifact(content)) &&
+        routeVisualRequest({ prompt: content, hasSourceImage: false }).destination !== 'artifact';
+      if (!typedImage) return handleSend(content, attachments, skillId, meta);
+      if (!billingPolicyReady) {
+        toast.error('Your plan could not be checked. Please retry.');
+        return false;
+      }
+      if (canUseBillingPlanCapability(subscriptionTier, 'image_generation')) {
+        return handleSend(content, attachments, skillId, meta);
+      }
+      const session = captureSessionSnapshot();
+      if (!session || session.userId !== userId) {
+        toast.error('Your sign-in could not be verified. Your draft is unchanged; please retry.');
+        return false;
+      }
+      const scope = typedImageScopeRef.current;
+      return resolveLimitedFreeMedia('image').then((lookup) => {
+        if (
+          !session.isCurrent() ||
+          typedImageScopeRef.current !== scope ||
+          (isCurrent && !isCurrent())
+        )
+          return false;
+        if (lookup.status === 'unknown') {
+          toast.error(
+            'Free image availability could not be checked. Your draft is unchanged; please retry.',
+          );
+          return false;
+        }
+        if (lookup.status === 'not_offered') {
+          handleOpenUpgradeDialog();
+          return false;
+        }
+        return currentHandleSendRef.current(content, attachments, skillId, {
+          ...meta,
+          workMode: 'chat',
+          modelOverrideId: lookup.modelId,
+          webSearchEnabled: false,
+          codeExecutionEnabled: false,
+        });
+      });
+    },
+    [
+      activeModelId,
+      displayedMessages,
+      billingPolicyReady,
+      subscriptionTier,
+      handleSend,
+      handleOpenUpgradeDialog,
+      captureSessionSnapshot,
+      userId,
+    ],
+  );
+
   const handleAcceptProviderNotice = useCallback(async () => {
     const pending = pendingProviderNotice;
-    if (!pending) return;
-    await saveNamedProviderConsent(pending.notice, true);
-    setPendingProviderNotice(null);
-    if (!pending.send) return;
-    if (pending.send.keptInComposer) setComposerClearSignal((value) => value + 1);
-    void sendContent(pending.send.content, {
-      attachments: pending.send.attachments,
-      meta: pending.send.meta,
-    });
-  }, [pendingProviderNotice, sendContent]);
+    if (!pending || pendingProviderNoticeRef.current !== pending) return;
+    const session = pending.send?.session ?? captureSessionSnapshot();
+    if (!session?.isCurrent()) {
+      setPendingProviderNotice((current) => (current === pending ? null : current));
+      return;
+    }
+    const generation = sendPageGenerationRef.current;
+    const authority = createRequestAuthority(
+      session,
+      () =>
+        pendingProviderNoticeRef.current === pending &&
+        sendPageGenerationRef.current === generation,
+    );
+    prestreamAuthoritiesRef.current.add(authority);
+    try {
+      await saveNamedProviderConsent(pending.notice, true, authority);
+      authority.assertCurrent();
+      setPendingProviderNotice((current) => (current === pending ? null : current));
+      if (!pending.send) return;
+      if (pending.send.keptInComposer) setComposerClearSignal((value) => value + 1);
+      void sendContent(pending.send.content, {
+        session: pending.send.session,
+        conversationId: pending.send.conversationId ?? undefined,
+        attachments: pending.send.attachments,
+        meta: pending.send.meta,
+      });
+    } catch (error) {
+      if (!authority.isCurrent()) {
+        setPendingProviderNotice((current) => (current === pending ? null : current));
+        return;
+      }
+      throw error;
+    } finally {
+      prestreamAuthoritiesRef.current.delete(authority);
+      authority.retire();
+    }
+  }, [pendingProviderNotice, sendContent, captureSessionSnapshot]);
 
   const handleDeclineProviderNotice = useCallback(() => {
     const held = pendingProviderNotice?.send;
-    setPendingProviderNotice(null);
-    if (!held || held.keptInComposer) return;
+    setPendingProviderNotice((current) => (current === pendingProviderNotice ? null : current));
+    if (!held || !held.session.isCurrent() || held.keptInComposer) return;
     parkUnsentDraft(held.conversationId, held.content);
     toast.error(
       held.attachments?.length
@@ -4154,12 +4433,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   }, [pendingByokHandoff, selectedHandoffContextIds]);
 
   const closeHandoffDialog = useCallback(() => {
-    if (isConfirmingHandoff) return;
     setPendingByokHandoff(null);
     setSelectedHandoffContextIds([]);
     setHandoffPreview(null);
     setHandoffError(null);
-  }, [isConfirmingHandoff]);
+  }, []);
 
   const handleToggleHandoffContext = useCallback(
     (contextId: string) => {
@@ -4175,116 +4453,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [pendingByokHandoff],
   );
 
-  const handleConfirmHandoff = useCallback(async () => {
-    if (!pendingByokHandoff || !handoffPreview || handoffPreview.redactionReport.blocked) return;
-
-    setIsConfirmingHandoff(true);
-    setHandoffError(null);
-    // Same first-message send guard: the BYOK fork lazily creates a conversation
-    // and only commits bareChatSessionId after an async saveSystemMessage, so the
-    // stale-active reconciler must not clear the fork during that window.
-    //
-    // Balanced, idempotent release: the dispatched sendContent claims its own
-    // window, so this one must only release what it claimed.
-    const releaseSendWindow = claimSendWindow();
-
-    try {
-      const fork = await createConversation(
-        `${pendingByokHandoff.conversationTitle} (BYOK fork)`,
-        activeModelId,
-      );
-      if (!fork) throw new Error('Could not create BYOK fork conversation.');
-
-      // A temporary source chat means the user explicitly asked for this
-      // transcript not to be kept. `createConversation` always creates a
-      // persisted row, and `saveSystemMessage` writes the redacted payload to
-      // the server unconditionally, so the fork must inherit the flag BEFORE
-      // anything is written. If that write fails we refuse the fork with a
-      // visible reason rather than silently persisting an on-device transcript
-      // the user asked us not to keep.
-      const sourceIsTemporary = isTemporaryConversationById(
-        conversations,
-        pendingByokHandoff.sourceConversationId,
-      );
-      if (sourceIsTemporary) {
-        const marked = await updateConversation(fork.id, { isTemporary: true });
-        if (!marked) {
-          await deleteConversation(fork.id);
-          throw new Error(
-            'This is a temporary chat, and the BYOK fork could not be marked temporary. Nothing was sent.',
-          );
-        }
-      }
-
-      const metadata: MessageMetadata = {
-        privacyMode: 'byok',
-        providerMode: 'DirectByok',
-        handoffDraftId: handoffPreview.draft.id,
-        handoffPreviewHashSha256: handoffPreview.draft.previewHashSha256,
-        handoffSourceConversationId: pendingByokHandoff.sourceConversationId,
-      };
-      const handoffSystemContent = buildAcceptedHandoffSystemMessage(handoffPreview);
-      // Temporary forks keep the consent record client-side only: the provider
-      // history sent to the model is built from the store (useChatStream's
-      // `readConversationMessages`), so the ceremony's redacted payload still
-      // reaches the BYOK provider without a server row the user opted out of.
-      const systemMessage: Message = sourceIsTemporary
-        ? {
-            id: crypto.randomUUID(),
-            role: 'system',
-            content: handoffSystemContent,
-            createdAt: new Date().toISOString(),
-            metadata,
-          }
-        : await saveSystemMessage({
-            conversationId: fork.id,
-            content: handoffSystemContent,
-            metadata,
-            authToken: await getToken().then((token) => {
-              if (!token) throw new Error('Not authenticated');
-              return token;
-            }),
-          });
-
-      // The handoff system message belongs to the fork.
-      // `saveSystemMessage` above is awaited, so "whatever is active now" is not
-      // a safe target.
-      addMessage(systemMessage, fork.id);
-      setBareChatSessionId(fork.id);
-      router.push(surfaceRootHref);
-      setComposerClearSignal((value) => value + 1);
-      setPendingByokHandoff(null);
-      setSelectedHandoffContextIds([]);
-      setHandoffPreview(null);
-      void sendContent(pendingByokHandoff.content, {
-        conversationId: fork.id,
-        attachments: pendingByokHandoff.attachments,
-        meta: pendingByokHandoff.meta,
-      });
-    } catch (error) {
-      setHandoffError(toUserMessage(error, 'Could not create BYOK fork conversation.'));
-    } finally {
-      setIsConfirmingHandoff(false);
-      // The dispatched sendContent (conversationId already set) claimed its own
-      // window synchronously above; the fork's create→navigate window is now
-      // closed, so releasing ONLY this owner's claim is safe.
-      releaseSendWindow();
-    }
-  }, [
-    addMessage,
-    conversations,
-    createConversation,
-    deleteConversation,
-    getToken,
-    handoffPreview,
-    pendingByokHandoff,
-    router,
-    activeModelId,
-    sendContent,
-    surfaceRootHref,
-    claimSendWindow,
-    updateConversation,
-  ]);
+  const handleConfirmHandoff = useCallback(() => {
+    setHandoffError(
+      'Direct BYOK is not available on web. Nothing was sent. Your draft and attachments are unchanged.',
+    );
+  }, []);
 
   const handleNewChat = useCallback(() => {
     setAttachmentUploadAttempts((current) =>
@@ -5906,6 +6079,65 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const pendingFenceEdits = useRef(new Set<string>());
+  const handleFenceEdit = useCallback(
+    async (messageId: string, edit: AssistantFenceEdit) => {
+      const conversationId = displayedConversationId;
+      if (!conversationId) throw new Error('Open the chat before editing.');
+      if (pendingFenceEdits.current.has(messageId)) {
+        throw new Error('Another block in this message is saving. Try again when it finishes.');
+      }
+      const current = selectConversationMessages(conversationId)(useChatStore.getState()).find(
+        (message) => message.id === messageId,
+      );
+      if (!current || current.role !== 'assistant' || current.isStreaming) {
+        throw new Error('Wait for this response to finish before editing.');
+      }
+      const editedContent = applyAssistantFenceEdit(current.content, edit);
+      if (editedContent === null) {
+        throw new Error('This block changed. Reopen it before saving your edit.');
+      }
+      pendingFenceEdits.current.add(messageId);
+      try {
+        const conversation = useChatStore
+          .getState()
+          .conversations.find((item) => item.id === conversationId);
+        const localEdit = conversation?.isTemporary || current.metadata?.privacyMode === 'local';
+        const authToken = localEdit ? null : await getToken();
+        if (!localEdit && !authToken) throw new Error('Sign in again to save this edit.');
+        const saved = localEdit
+          ? { content: editedContent, editRevision: null }
+          : await persistAssistantFenceEdit({
+              conversationId,
+              messageId,
+              edit,
+              authToken: authToken!,
+            });
+        const latest = selectConversationMessages(conversationId)(useChatStore.getState()).find(
+          (message) => message.id === messageId,
+        );
+        updateMessage(
+          messageId,
+          {
+            content: saved.content,
+            ...(saved.editRevision
+              ? {
+                  metadata: {
+                    ...latest?.metadata,
+                    [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: saved.editRevision,
+                  },
+                }
+              : {}),
+          },
+          conversationId,
+        );
+      } finally {
+        pendingFenceEdits.current.delete(messageId);
+      }
+    },
+    [displayedConversationId, getToken, updateMessage],
+  );
+
   const handleReactMessage = useCallback(
     async (id: string, reactionType: 'up' | 'down' | null) => {
       if (!displayedConversationId) return;
@@ -6075,31 +6307,41 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const voiceTranscriptIdsRef = useRef(new Set<string>());
 
-  const handleVoiceEnsureConversation = useCallback(async () => {
-    if (displayedConversationId && conversations.some((c) => c.id === displayedConversationId)) {
-      return displayedConversationId;
-    }
-    const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId);
-    if (!created) return null;
-    adoptPendingComposerToggles(created.id);
-    if (!urlConversationId) setBareChatSessionId(created.id);
-    keepVoiceSessionAcrossNavigation();
-    router.replace(surfaceConversationHref(created.id));
-    return created.id;
-  }, [
-    displayedConversationId,
-    conversations,
-    createConversation,
-    activeModelId,
-    activeProjectId,
-    adoptPendingComposerToggles,
-    urlConversationId,
-    router,
-    surfaceConversationHref,
-  ]);
+  const handleVoiceEnsureConversation = useCallback(
+    async (authority: RequestAuthority, bindConversation: (id: string) => void) => {
+      authority.assertCurrent();
+      if (displayedConversationId && conversations.some((c) => c.id === displayedConversationId)) {
+        return displayedConversationId;
+      }
+      const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId, {
+        authority,
+        shouldActivate: () => false,
+      });
+      authority.assertCurrent();
+      if (!created) return null;
+      bindConversation(created.id);
+      adoptPendingComposerToggles(created.id);
+      if (!urlConversationId) setBareChatSessionId(created.id);
+      keepVoiceSessionAcrossNavigation();
+      router.replace(surfaceConversationHref(created.id));
+      return created.id;
+    },
+    [
+      displayedConversationId,
+      conversations,
+      createConversation,
+      activeModelId,
+      activeProjectId,
+      adoptPendingComposerToggles,
+      urlConversationId,
+      router,
+      surfaceConversationHref,
+    ],
+  );
 
   const handleVoiceTranscript = useCallback(
-    (conversationId: string, turn: VoiceTranscriptTurn) => {
+    (conversationId: string, turn: VoiceTranscriptTurn, authority: RequestAuthority) => {
+      if (!authority.isCurrent()) return;
       if (voiceTranscriptIdsRef.current.has(turn.turnId)) {
         updateMessage(
           turn.turnId,
@@ -6120,23 +6362,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         );
       }
       if (!turn.final) return;
-      void addCsrfHeaders({ 'Content-Type': 'application/json' })
-        .then((headers) =>
-          fetch(`/api/chat/conversations/${conversationId}/messages`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              id: turn.turnId,
-              role: turn.role,
-              content: turn.text,
-              skipLlm: true,
-            }),
+      void authority
+        .fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: turn.turnId,
+            role: turn.role,
+            content: turn.text,
+            skipLlm: true,
           }),
-        )
+        })
         .then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
         })
         .catch((error: unknown) => {
+          if (!authority.isCurrent()) return;
           console.warn('[voice] Could not save a voice turn to history:', error);
           toast.error('Part of this voice conversation could not be saved to your history.', {
             id: `voice-transcript-save-${conversationId}`,
@@ -6161,11 +6402,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const handleVoiceStartWorkTask = useCallback(
-    (goal: string) => {
-      const outcome = handleSend(goal, undefined, undefined, {
-        workMode: AGI_WORK_MODE,
-        agiWorkGoal: buildAgiWorkGoalInput(goal),
-      });
+    (goal: string, conversationId: string, authority: RequestAuthority) => {
+      if (!authority.isCurrent()) return false;
+      const outcome = handleSend(
+        goal,
+        undefined,
+        undefined,
+        {
+          workMode: AGI_WORK_MODE,
+          agiWorkGoal: buildAgiWorkGoalInput(goal),
+        },
+        { conversationId, authority },
+      );
       return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
     },
     [handleSend],
@@ -6190,7 +6438,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [handleConversationModelChange],
   );
 
+  const voiceProviderMode = getProviderModeForModel(activeModelId);
+  const voiceManaged =
+    localModelSelection === null &&
+    !conversationHoldsLocalTurns(displayedMessages) &&
+    (voiceProviderMode === 'ManagedGateway' || voiceProviderMode === 'ManagedNative');
   const voiceSurfaceProps = {
+    managed: voiceManaged,
     turnActive: isLoading || isStreaming,
     conversationId: displayedConversationId ?? null,
     onSend: handleVoiceSend,
@@ -6219,8 +6473,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? failedImageRetryRequest(lastChatMessage.metadata, Date.now())
       : undefined;
   const retryFailedImage = (messageId: string, request: ImageRevisionRequest) => {
+    const session = captureSessionSnapshot();
+    if (!session) return;
     const conversationId = displayedConversationId;
     handleRegenerateImageInPlace(messageId, request).catch((error: unknown) => {
+      if (!session.isCurrent()) return;
       const failed = conversationId
         ? readMessageMetadata(conversationId, messageId)?.errorCode === IMAGE_GENERATION_FAILED_CODE
         : false;
@@ -6613,17 +6870,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           id="main-content"
           role="main"
           tabIndex={-1}
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[320px]"
+          className={cn(
+            'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[320px]',
+            compact && !urlConversationId && 'pt-[var(--agi-product-notice-inset,0px)]',
+          )}
         >
           {compact ? (
             urlConversationId ? (
               <header
                 data-quick-ask-header=""
-                className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3"
+                className="mb-[var(--agi-product-notice-inset,0px)] flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3 pointer-coarse:h-12"
               >
                 <a
                   href={conversationHref(urlConversationId)}
-                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
                 >
                   <ExternalLink className="h-4 w-4" aria-hidden="true" />
                   {t('chat:quickAsk.openFullChat', 'Open full chat')}
@@ -6632,7 +6892,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   href={QUICK_ASK_PATH}
                   aria-label={t('chat:quickAsk.newChat', 'New chat')}
                   title={t('chat:quickAsk.newChat', 'New chat')}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:h-11 pointer-coarse:w-11"
                 >
                   <SquarePen className="h-4 w-4" aria-hidden="true" />
                 </a>
@@ -6642,7 +6902,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             <header
               data-app-header=""
               className={cn(
-                '@container relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -6659,7 +6919,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 chevron menu carries the row actions (rename, move, share,
                 print, export, branch, delete); Share keeps its own control in
                 the trailing cluster beside the drawer toggles. */}
-              <div className="flex min-w-0 flex-1 items-center gap-1">
+              <div className="flex min-w-0 flex-1 items-center gap-1 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11">
                 {isNarrowViewport && (
                   <Button
                     ref={mobileNavTriggerRef}
@@ -6669,7 +6929,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ms-1 h-8 w-8 shrink-0 p-0"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0 pointer-coarse:h-11 pointer-coarse:w-11"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -6771,12 +7031,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               in the title menu; they keep their own state and labels, so
               nothing is lost but the width.
             */}
-              <div className="flex shrink-0 items-center gap-1.5 @min-[40rem]:hidden">
+              <div className="flex shrink-0 items-center gap-1.5 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11 @min-[40rem]:hidden">
                 {hasMessages && (
                   <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
                 )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Popover>
+                  <PopoverTrigger asChild>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -6785,8 +7045,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     >
                       <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="flex w-auto flex-row gap-1.5 p-1.5">
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    aria-label={t('chat:openPanels', 'Panels')}
+                    className="flex w-auto flex-row gap-1.5 p-1.5 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11"
+                  >
                     {hasMessages && showWorkSession && (
                       <WorkSessionToggleButton
                         messages={displayedMessages}
@@ -6806,11 +7070,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     ) : null}
                     <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </PopoverContent>
+                </Popover>
               </div>
 
-              <div className="hidden shrink-0 items-center gap-1.5 @min-[40rem]:flex">
+              <div className="hidden shrink-0 items-center gap-1.5 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11 @min-[40rem]:flex">
                 {hasMessages && (
                   <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
                 )}
@@ -6978,12 +7242,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     ) : (
                       <ChatComposerNew
-                        onSend={handleSend}
+                        onSend={handleComposerSend}
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         onSteerQueuedMessage={handleSteerQueuedMessage}
                         isLoading={isLoading}
+                        awaitingApproval={Boolean(awaitingYouConversationId)}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholderEmpty')}
                         prefillText={composerPrefill}
@@ -7067,6 +7332,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                                 retryingResearchMessageId={retryingResearchMessageId}
                                 onContinue={handleContinueMessage}
                                 onEdit={handleEditMessage}
+                                onFenceEdit={handleFenceEdit}
                                 onDelete={handleDeleteMessage}
                                 onDeleteVariant={handleDeleteVariant}
                                 countVariantFollowers={countVariantFollowers}
@@ -7120,12 +7386,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       />
                     ) : (
                       <ChatComposerNew
-                        onSend={handleSend}
+                        onSend={handleComposerSend}
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         onSteerQueuedMessage={handleSteerQueuedMessage}
                         isLoading={isLoading}
+                        awaitingApproval={Boolean(awaitingYouConversationId)}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholder')}
                         onEditLastMessage={editLastUserMessage}
@@ -7278,7 +7545,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         />
       )}
       <NamedProviderNoticeDialog
-        notice={pendingProviderNotice?.notice ?? null}
+        notice={
+          pendingProviderNotice?.send && !pendingProviderNotice.send.session.isCurrent()
+            ? null
+            : (pendingProviderNotice?.notice ?? null)
+        }
         alternativeName={
           availableModels.find((model) => model.id === getBestAutoModeForTier(subscriptionTier))
             ?.name
@@ -7297,7 +7568,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           selectedContextIds={selectedHandoffContextIds}
           preview={handoffPreview}
           isBuilding={isBuildingHandoff}
-          isConfirming={isConfirmingHandoff}
           error={handoffError}
           onOpenChange={(open) => {
             if (!open) closeHandoffDialog();

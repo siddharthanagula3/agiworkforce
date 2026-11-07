@@ -1,3 +1,4 @@
+import { useLocalDataExport } from '@/src/features/settings/data-controls/useLocalDataExport';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Alert, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -11,16 +12,13 @@ import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
-import { deleteDownloadedModel, getModelStorageBytes } from '@/services/modelDownload';
 import {
-  exportAllUserData,
-  wipeAllLocalData,
-  type DsarExportProgress,
-} from '@/services/dsarExport';
-import {
-  buildLocalDataExportSnapshot,
-  resetLocalInMemoryState,
-} from '@/src/features/settings/data-controls/localDataSnapshot';
+  deleteDownloadedModel,
+  getModelStorageBytes,
+  modelRemovalUnsupportedReason,
+} from '@/services/modelDownload';
+import { wipeAllLocalData, type DsarExportProgress } from '@/services/dsarExport';
+import { resetLocalInMemoryState } from '@/src/features/settings/data-controls/localDataSnapshot';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
@@ -79,8 +77,7 @@ export default function StorageManagerScreen() {
   const setAllowCellularDownloads = useModelInstallStore((s) => s.setAllowCellularDownloads);
   const forgetInstalledModel = useModelInstallStore((s) => s.forgetInstalledModel);
 
-  const [exportProgress, setExportProgress] = useState<DsarExportProgress | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const { exporting: isExporting, progress: exportProgress, handleExport } = useLocalDataExport();
   const [isWiping, setIsWiping] = useState(false);
 
   const loadStorageInfo = useCallback(async () => {
@@ -106,26 +103,44 @@ export default function StorageManagerScreen() {
 
   const handleDeleteModel = useCallback(
     (model: InstalledModel) => {
+      const unsupported = modelRemovalUnsupportedReason(model);
+      if (unsupported) {
+        Alert.alert('Model removal unavailable', unsupported);
+        return;
+      }
       Alert.alert(
         `Delete ${model.display_name}?`,
-        `This will remove ${formatBytes(model.size_bytes ?? 0)} from your device. You can re-download it later.`,
+        'This removes the downloaded model files. You can re-download the model later.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Delete',
             style: 'destructive',
             onPress: async () => {
-              await deleteDownloadedModel(model.id);
-              await deleteInstalledModel(model.id);
-              forgetInstalledModel(model.id);
-              setModels((prev) => prev.filter((m) => m.id !== model.id));
-              setModelStorageBytes((prev) => Math.max(0, prev - (model.size_bytes ?? 0)));
+              try {
+                await deleteDownloadedModel(model);
+                await deleteInstalledModel(model.id);
+                forgetInstalledModel(model.id);
+                setModels((prev) => prev.filter((m) => m.id !== model.id));
+              } catch {
+                Alert.alert(
+                  'Model removal failed',
+                  'Could not remove the model. Refresh Storage and try again.',
+                );
+                return;
+              }
+              await loadStorageInfo().catch(() => {
+                Alert.alert(
+                  'Storage refresh failed',
+                  'The model was removed, but storage totals could not be refreshed. Reopen Storage to refresh them.',
+                );
+              });
             },
           },
         ],
       );
     },
-    [forgetInstalledModel],
+    [forgetInstalledModel, loadStorageInfo],
   );
 
   const handleClearCache = useCallback(() => {
@@ -146,22 +161,6 @@ export default function StorageManagerScreen() {
         },
       ],
     );
-  }, []);
-
-  const handleExport = useCallback(async () => {
-    setIsExporting(true);
-    setExportProgress(null);
-    try {
-      await exportAllUserData(
-        (progress) => setExportProgress(progress),
-        buildLocalDataExportSnapshot(),
-      );
-    } catch {
-      Alert.alert('Export failed', 'Could not prepare your local data export. Try again.');
-    } finally {
-      setIsExporting(false);
-      setExportProgress(null);
-    }
   }, []);
 
   const handleDeleteEverything = useCallback(() => {
@@ -232,7 +231,7 @@ export default function StorageManagerScreen() {
           <View className="gap-2">
             <View className="flex-row justify-between">
               <Text className="text-sm" style={{ color: c.textSecondary }}>
-                Downloaded models
+                Downloaded models (estimated)
               </Text>
               <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
                 {formatBytes(displayedModelStorageBytes)}
@@ -293,7 +292,7 @@ export default function StorageManagerScreen() {
             </View>
             {models.length > 0 && (
               <Text className="text-sm" style={{ color: c.textMuted }}>
-                {formatBytes(totalModelBytes)}
+                Estimated {formatBytes(totalModelBytes)}
               </Text>
             )}
           </View>
@@ -312,7 +311,7 @@ export default function StorageManagerScreen() {
                       {model.display_name}
                     </Text>
                     <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
-                      {model.runtime} · {formatBytes(model.size_bytes ?? 0)}
+                      {model.runtime} · Estimated {formatBytes(model.size_bytes ?? 0)}
                     </Text>
                   </View>
                   <Pressable

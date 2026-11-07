@@ -2,6 +2,8 @@ import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
+type TypesModule = typeof import('@agiworkforce/types');
+
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockConnectorsReleased = jest.fn(() => true);
@@ -28,10 +30,14 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
 }));
 jest.mock('@clerk/expo', () => ({ getClerkInstance: () => null }));
-jest.mock('@agiworkforce/types', () => ({
-  ...jest.requireActual('@agiworkforce/types'),
-  connectorsReleased: () => mockConnectorsReleased(),
-}));
+jest.mock('@agiworkforce/types', () => {
+  const actual = jest.requireActual<TypesModule>('@agiworkforce/types');
+  return {
+    ...actual,
+    connectorsReleased: () => mockConnectorsReleased(),
+    connectorReleased: (id: unknown) => mockConnectorsReleased() || actual.connectorReleased(id),
+  };
+});
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -204,5 +210,37 @@ describe('skill service helpers', () => {
     expect(url).toMatch(/\/api\/skills$/);
     expect(init.body).toBeInstanceOf(FormData);
     expect(init.headers).not.toHaveProperty('Content-Type');
+  });
+});
+
+describe('mobile skill selective connector availability', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+  });
+  afterEach(() => mockConnectorsReleased.mockReturnValue(true));
+  it('offers only the selected connector while the full launch remains closed', async () => {
+    activateCloudAccount('user-1');
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockParams.name = BUNDLED.name;
+    mockConnectorsReleased.mockReturnValue(false);
+    mockCatalog.mockResolvedValue([
+      { ...BUNDLED, requiredConnectors: ['notion', 'google-drive', 'huggingface'] },
+    ]);
+    mockInstalled.mockResolvedValue(new Set());
+    mockBody.mockResolvedValue('# Steps');
+    mockFiles.mockResolvedValue([]);
+    const screen = render(<SkillDetailScreen />);
+
+    await screen.findByLabelText('Connect notion');
+    expect(screen.queryByLabelText('Connect google-drive')).toBeNull();
+    expect(screen.queryByLabelText('Connect huggingface')).toBeNull();
+    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    fireEvent.press(screen.getByLabelText('Connect notion'));
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/connectors/[id]',
+      params: { id: 'notion' },
+    });
   });
 });

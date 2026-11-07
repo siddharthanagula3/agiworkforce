@@ -152,7 +152,28 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
     });
     expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
+    expect(mockDeletePrivateObject.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockInsertMediaAsset.mock.invocationCallOrder[0]!,
+    );
   });
+
+  it.each(['rejected', 'missing-id'])(
+    'retains staging after sealing when registration is %s',
+    async (outcome) => {
+      process.env['MODERATION_HASH_DENYLIST'] = 'a'.repeat(64);
+      if (outcome === 'rejected') {
+        mockInsertMediaAsset.mockRejectedValueOnce(new Error('Registration unavailable'));
+      } else {
+        mockInsertMediaAsset.mockResolvedValueOnce(null);
+      }
+      const response = await POST(completeRequest());
+      expect(response.status).toBe(500);
+      expect(mockPutPrivateObject).toHaveBeenCalledOnce();
+      expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
+      expect(mockInsertMediaAsset).toHaveBeenCalledOnce();
+      expect(mockDeletePrivateObject).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not register an attachment when the sealed write fails, and that failure is not a 400', async () => {
     mockPutPrivateObject.mockRejectedValueOnce(new Error('store unavailable'));

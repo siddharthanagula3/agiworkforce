@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ChartArtifact } from '../ChartArtifact';
@@ -52,6 +52,8 @@ function chartArtifact(content: string): Artifact {
 const twoSeries = JSON.stringify({
   type: 'bar',
   xKey: 'month',
+  x_axis: { label: 'Month' },
+  y_axis: { label: 'USD' },
   showLegend: true,
   series: [{ dataKey: 'revenue', name: 'Revenue' }, { dataKey: 'cost' }],
   data: [
@@ -94,11 +96,26 @@ describe('ChartArtifact drawing', () => {
   });
 
   it('labels the axis and legend from the spec', async () => {
-    await drawn(twoSeries, false);
+    const container = await drawn(twoSeries, false);
+    const canvas = container.querySelector<HTMLElement>('.recharts-wrapper');
+    if (!canvas) throw new Error('Chart canvas missing');
 
-    expect(await screen.findByText('Jan')).toBeDefined();
-    expect(screen.getByText('Revenue')).toBeDefined();
-    expect(screen.getByText('cost')).toBeDefined();
+    expect(await within(canvas).findByText('Jan')).toBeDefined();
+    expect(within(canvas).getByText('Revenue')).toBeDefined();
+    expect(within(canvas).getByText('cost')).toBeDefined();
+    expect(within(canvas).getByText('Month')).toBeDefined();
+    expect(within(canvas).getByText('USD')).toBeDefined();
+  });
+
+  it('exposes every plotted series value in its semantic data table', async () => {
+    await drawn(twoSeries, false);
+    fireEvent.click(screen.getByText('View chart data'));
+    const table = screen.getByRole('table', { name: 'Revenue data' });
+    expect(
+      within(table)
+        .getAllByRole('row')
+        .map((row) => row.textContent),
+    ).toEqual(['MonthRevenuecost', 'Jan104', 'Feb209']);
   });
 
   it('plots the declared x axis of the typed chart contract, not a guessed key', async () => {

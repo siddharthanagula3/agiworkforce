@@ -93,14 +93,14 @@ describe('resolveMobileImageGenerationRequest', () => {
     ).toMatchObject({ status: 'blocked', code: 'plan_required' });
   });
 
-  it('refuses a Free plan image request with the plan answer and no prompt to hand on', () => {
+  it('retains an unattached Free image prompt for an account-bound offer lookup', () => {
     const result = resolveMobileImageGenerationRequest({
       ...eligibleRequest,
       subscriptionTier: 'free',
       text: '/image a lighthouse at dusk',
     });
     expect(result).toMatchObject({ status: 'blocked', code: 'plan_required' });
-    expect(result).not.toHaveProperty('prompt');
+    expect(result).toHaveProperty('prompt', 'a lighthouse at dusk');
   });
 
   it('does not misclassify a similarly prefixed slash command', () => {

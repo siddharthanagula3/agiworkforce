@@ -48,6 +48,8 @@ export async function runInlineCommand(
   }
 
   const selectedText = editor.document.getText(explicitRange);
+  const targetSelection = new vscode.Selection(explicitRange.start, explicitRange.end);
+  const expectedDocument = { uri: editor.document.uri, version: editor.document.version };
 
   if (selectedText.trim() === '') {
     vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Select some code first.`);
@@ -94,21 +96,32 @@ export async function runInlineCommand(
     },
     async (progress, progressToken): Promise<unknown> => {
       const cancelSource = new vscode.CancellationTokenSource();
-      progressToken.onCancellationRequested(() => cancelSource.cancel());
+      const cancellation = progressToken.onCancellationRequested(() => cancelSource.cancel());
+      if (progressToken.isCancellationRequested) cancelSource.cancel();
 
       try {
+        if (cancelSource.token.isCancellationRequested) return undefined;
+        const refusal = describeOutboundRefusal(editor.document);
+        if (refusal !== null) {
+          vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${refusal}`);
+          return undefined;
+        }
         progress.report({ increment: 0 });
         const result = await chatCompletion(context.secrets, messages, cancelSource.token);
-        cancelSource.dispose();
+        if (cancelSource.token.isCancellationRequested) return undefined;
 
         progress.report({ increment: 100 });
 
         const resolution = await applyLlmEdit(
           editor,
-          new vscode.Selection(explicitRange.start, explicitRange.end),
+          targetSelection,
           result,
           commandLabel(command),
-          { autoApply: autoApplyFixes && command === 'fix' },
+          {
+            autoApply: autoApplyFixes && command === 'fix',
+            expectedDocument,
+            cancellationToken: cancelSource.token,
+          },
         );
         if (resolution) {
           trackProductEvent('code_suggestion_resolved', 'managed', {
@@ -118,8 +131,10 @@ export async function runInlineCommand(
         }
         return undefined;
       } catch (err) {
-        cancelSource.dispose();
         return err;
+      } finally {
+        cancellation.dispose();
+        cancelSource.dispose();
       }
     },
   );

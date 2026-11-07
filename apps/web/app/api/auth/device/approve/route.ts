@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { DeviceApproveResponse } from '@agiworkforce/cloud-contracts';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
+import { readDeviceCodeSignInPolicy } from '@/lib/server/device-signin-policy';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
@@ -129,7 +129,19 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     userId: authUser.userId,
     organizationId: null,
   });
-  if (!(await isDeviceCodeSignInEnabled(approverDb, authUser.userId))) {
+  const policy = await readDeviceCodeSignInPolicy(approverDb, authUser.userId);
+  if (policy === 'unavailable') {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'DEVICE_SIGNIN_POLICY_UNAVAILABLE',
+          message: 'Device sign-in settings could not be verified. Please try again shortly.',
+        },
+      },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+  if (policy === 'disabled') {
     logger.info({ userId: authUser.userId }, 'Device approval refused: device sign-in is off');
     return NextResponse.json(
       {

@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { connectorCategoryToolName } from '@agiworkforce/cloud-contracts';
 
-const { mockGetUserScopedDb, mockQuery, mockExecute, mockCsrf } = vi.hoisted(() => ({
-  mockGetUserScopedDb: vi.fn(),
-  mockQuery: vi.fn(),
-  mockExecute: vi.fn(),
-  mockCsrf: vi.fn(),
-}));
+const { mockGetUserScopedDb, mockQuery, mockExecute, mockCsrf, mockTransaction } = vi.hoisted(
+  () => ({
+    mockGetUserScopedDb: vi.fn(),
+    mockQuery: vi.fn(),
+    mockExecute: vi.fn(),
+    mockCsrf: vi.fn(),
+    mockTransaction: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
@@ -18,6 +23,7 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
 
 import { GET, PUT, DELETE } from '../route';
 import { createError } from '@/lib/errors';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 type SecurityAuditModule = typeof import('@/lib/security-audit');
 
@@ -36,19 +42,302 @@ function deleteReq(search: string): NextRequest {
   });
 }
 
+function modeledRevocationTransaction(
+  options: {
+    unsaved?: boolean;
+    deleteFailure?: boolean;
+    deferredCommit?: boolean;
+    persistBeforeCommitError?: boolean;
+  } = {},
+) {
+  const grants = [
+    { id: 'personal', user: 'user-owner', org: null, connector: 'github', tool: 'list' },
+    { id: 'workspace-a', user: 'user-owner', org: 'org-a', connector: 'github', tool: 'list' },
+    { id: 'workspace-b', user: 'user-owner', org: 'org-b', connector: 'github', tool: 'list' },
+    { id: 'other-user', user: 'other-user', org: 'org-a', connector: 'github', tool: 'list' },
+    { id: 'other-connector', user: 'user-owner', org: 'org-b', connector: 'slack', tool: 'list' },
+    {
+      id: 'other-tool',
+      user: 'user-owner',
+      org: 'org-b',
+      connector: 'github',
+      tool: 'create_issue',
+    },
+  ];
+  let committed = {
+    grants,
+    standing: [{ user: 'user-owner', connector: 'github', tool: 'list', level: 'always-allow' }],
+  };
+  const snapshot = () => ({
+    grants: committed.grants.map((grant) => ({ ...grant })),
+    standing: committed.standing.map((permission) => ({ ...permission })),
+  });
+  let reachCommit!: () => void;
+  const atCommit = new Promise<void>((resolve) => {
+    reachCommit = resolve;
+  });
+  let releaseCommit!: () => void;
+  let rejectCommit!: (error: Error) => void;
+  const commitGate = options.deferredCommit
+    ? new Promise<void>((resolve, reject) => {
+        releaseCommit = resolve;
+        rejectCommit = reject;
+      })
+    : Promise.resolve();
+  const outside = vi.fn(async () => {
+    throw new Error('Mutation escaped transaction');
+  });
+  const nested = vi.fn(async () => {
+    throw new Error('Nested transaction');
+  });
+  const transactionQuery = vi.fn();
+  const transactionExecute = vi.fn();
+  const transaction = vi.fn(async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
+    const pending = snapshot();
+    transactionQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql === 'select public.revoke_connector_tool_session_grants($1, $2) as removed') {
+        const before = pending.grants.length;
+        pending.grants = pending.grants.filter(
+          (grant) =>
+            !(
+              grant.user === 'user-owner' &&
+              grant.connector === params[0] &&
+              (params[1] === null || grant.tool === params[1])
+            ),
+        );
+        return [{ removed: before - pending.grants.length }];
+      }
+      if (sql.includes('insert into public.connector_tool_permissions')) {
+        if (options.unsaved) return [];
+        const [user, connector, names, level] = params as [string, string, string[], string];
+        for (const tool of names) {
+          pending.standing = pending.standing.filter(
+            (row) => !(row.user === user && row.connector === connector && row.tool === tool),
+          );
+          pending.standing.push({ user, connector, tool, level });
+        }
+        return names.map((tool_name) => ({ tool_name }));
+      }
+      throw new Error('Unexpected modeled query');
+    });
+    transactionExecute.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (!sql.includes('delete from public.connector_tool_permissions'))
+        throw new Error('Unexpected modeled execute');
+      if (options.deleteFailure) throw new Error('Standing delete failed');
+      const before = pending.standing.length;
+      pending.standing = pending.standing.filter(
+        (row) =>
+          !(
+            row.user === params[0] &&
+            row.connector === params[1] &&
+            (params.length === 2 || row.tool === params[2])
+          ),
+      );
+      return before - pending.standing.length;
+    });
+    const result = await operation({
+      query: transactionQuery,
+      execute: transactionExecute,
+      transaction: nested,
+    } as unknown as DatabaseAdapter);
+    reachCommit();
+    try {
+      await commitGate;
+    } catch (error) {
+      if (options.persistBeforeCommitError) committed = pending;
+      throw error;
+    }
+    committed = pending;
+    return result;
+  });
+  mockGetUserScopedDb.mockResolvedValue({
+    db: { query: outside, execute: outside, transaction },
+    userId: 'user-owner',
+    organizationId: 'org-a',
+  });
+  return {
+    snapshot,
+    transaction,
+    transactionQuery,
+    transactionExecute,
+    outside,
+    nested,
+    atCommit,
+    releaseCommit,
+    rejectCommit,
+  };
+}
+
+describe('modeled connector revocation transaction boundaries, not SQL or RLS execution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCsrf.mockResolvedValue(null);
+  });
+
+  it('PUT models revocation across personal/A/B scopes while preserving unrelated grants', async () => {
+    const fixture = modeledRevocationTransaction();
+    const response = await PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }));
+    expect(response.status).toBe(200);
+    expect(fixture.snapshot().grants.map((grant) => grant.id)).toEqual([
+      'other-user',
+      'other-connector',
+      'other-tool',
+    ]);
+    expect(fixture.snapshot().standing).toEqual([
+      { user: 'user-owner', connector: 'github', tool: 'list', level: 'needs-approval' },
+    ]);
+    expect(fixture.outside).not.toHaveBeenCalled();
+    expect(fixture.nested).not.toHaveBeenCalled();
+    expect(fixture.transaction).toHaveBeenCalledOnce();
+  });
+
+  it.each(['category', 'connector'] as const)(
+    'models %s-wide revocation without crossing principal or connector',
+    async (kind) => {
+      const fixture = modeledRevocationTransaction();
+      const response =
+        kind === 'category'
+          ? await PUT(req({ connectorId: 'github', category: 'read_only', level: 'ask' }))
+          : await DELETE(deleteReq('?connectorId=github'));
+      expect(response.status).toBe(200);
+      expect(fixture.snapshot().grants.map((grant) => grant.id)).toEqual([
+        'other-user',
+        'other-connector',
+      ]);
+      expect(fixture.transactionQuery).toHaveBeenCalledWith(
+        'select public.revoke_connector_tool_session_grants($1, $2) as removed',
+        ['github', null],
+      );
+      if (kind === 'category')
+        expect(fixture.snapshot().standing).toContainEqual({
+          user: 'user-owner',
+          connector: 'github',
+          tool: connectorCategoryToolName('read_only'),
+          level: 'needs-approval',
+        });
+      expect(fixture.outside).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['unsaved', 'deleteFailure'] as const)(
+    'preserves committed grants and settings on %s',
+    async (failure) => {
+      const fixture = modeledRevocationTransaction({ [failure]: true });
+      const before = fixture.snapshot();
+      const response =
+        failure === 'unsaved'
+          ? await PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }))
+          : await DELETE(deleteReq('?connectorId=github'));
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(fixture.transactionQuery).toHaveBeenCalledWith(
+        'select public.revoke_connector_tool_session_grants($1, $2) as removed',
+        ['github', failure === 'unsaved' ? 'list' : null],
+      );
+      expect(fixture.snapshot()).toEqual(before);
+      expect(recordAuditEvent).not.toHaveBeenCalled();
+      expect(fixture.outside).not.toHaveBeenCalled();
+      expect(fixture.transaction).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['PUT', 'DELETE'] as const)(
+    'waits for %s commit before auditing or responding',
+    async (method) => {
+      const fixture = modeledRevocationTransaction({ deferredCommit: true });
+      const before = fixture.snapshot();
+      let settled = false;
+      const response = (
+        method === 'PUT'
+          ? PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }))
+          : DELETE(deleteReq('?connectorId=github'))
+      ).then((result) => {
+        settled = true;
+        return result;
+      });
+      await fixture.atCommit;
+      expect(settled).toBe(false);
+      expect(recordAuditEvent).not.toHaveBeenCalled();
+      expect(fixture.snapshot()).toEqual(before);
+      fixture.releaseCommit();
+      expect((await response).status).toBe(200);
+      expect(recordAuditEvent).toHaveBeenCalledOnce();
+      expect(fixture.snapshot()).not.toEqual(before);
+      expect(fixture.outside).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['PUT', 'DELETE'] as const)(
+    'does not audit or retry a definitely rolled-back %s commit',
+    async (method) => {
+      const fixture = modeledRevocationTransaction({ deferredCommit: true });
+      const before = fixture.snapshot();
+      const response =
+        method === 'PUT'
+          ? PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }))
+          : DELETE(deleteReq('?connectorId=github'));
+      await fixture.atCommit;
+      fixture.rejectCommit(new Error('Commit failed'));
+      expect((await response).status).toBeGreaterThanOrEqual(500);
+      expect(fixture.snapshot()).toEqual(before);
+      expect(recordAuditEvent).not.toHaveBeenCalled();
+      expect(fixture.transaction).toHaveBeenCalledOnce();
+      expect(fixture.transactionQuery).toHaveBeenCalledTimes(method === 'PUT' ? 2 : 1);
+      expect(fixture.transactionExecute).toHaveBeenCalledTimes(method === 'DELETE' ? 1 : 0);
+      expect(fixture.outside).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['PUT', 'DELETE'] as const)(
+    'does not audit or retry an ambiguous %s commit that persisted',
+    async (method) => {
+      const fixture = modeledRevocationTransaction({
+        deferredCommit: true,
+        persistBeforeCommitError: true,
+      });
+      const before = fixture.snapshot();
+      const response =
+        method === 'PUT'
+          ? PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }))
+          : DELETE(deleteReq('?connectorId=github'));
+      await fixture.atCommit;
+      expect(fixture.snapshot()).toEqual(before);
+      expect(recordAuditEvent).not.toHaveBeenCalled();
+      fixture.rejectCommit(new Error('Commit acknowledgement lost'));
+      expect((await response).status).toBeGreaterThanOrEqual(500);
+      expect(fixture.snapshot()).not.toEqual(before);
+      expect(fixture.snapshot().grants.map((grant) => grant.id)).toEqual(
+        method === 'PUT'
+          ? ['other-user', 'other-connector', 'other-tool']
+          : ['other-user', 'other-connector'],
+      );
+      expect(recordAuditEvent).not.toHaveBeenCalled();
+      expect(fixture.transaction).toHaveBeenCalledOnce();
+      expect(fixture.transactionQuery).toHaveBeenCalledTimes(method === 'PUT' ? 2 : 1);
+      expect(fixture.transactionExecute).toHaveBeenCalledTimes(method === 'DELETE' ? 1 : 0);
+      expect(fixture.outside).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe('/api/connectors/permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUserScopedDb.mockResolvedValue({
-      db: { query: mockQuery, execute: mockExecute },
+      db: { query: mockQuery, execute: mockExecute, transaction: mockTransaction },
       userId: 'user-owner',
       organizationId: 'org-active',
     });
     mockCsrf.mockResolvedValue(null);
+    mockTransaction.mockImplementation(
+      async (operation: (tx: DatabaseAdapter) => Promise<unknown>) =>
+        operation({ query: mockQuery, execute: mockExecute } as unknown as DatabaseAdapter),
+    );
     mockQuery.mockImplementation(async (sql: string, params: unknown[]) =>
       sql.includes('insert into public.connector_tool_permissions')
         ? (params[2] as string[]).map((tool_name) => ({ tool_name }))
-        : [],
+        : sql.includes('revoke_connector_tool_session_grants')
+          ? [{ removed: 0 }]
+          : [],
     );
     mockExecute.mockResolvedValue(1);
   });
@@ -148,14 +437,12 @@ describe('/api/connectors/permissions', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
-  it('PUT revokes the active workspace conversation grants before changing standing permission', async () => {
+  it('PUT revokes account-wide grants before changing standing permission in one transaction', async () => {
     await PUT(req({ connectorId: 'github', toolName: 'get_pull_request_diff', level: 'ask' }));
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('delete from public.connector_tool_session_grants');
-    expect(sql).toContain('grant_row.user_id = $1');
-    expect(sql).toContain('conversation.user_id = grant_row.user_id');
-    expect(sql).toContain('conversation.organization_id is not distinct from $3');
-    expect(params).toEqual(['user-owner', 'github', 'org-active', 'get_pull_request_diff']);
+    expect(sql).toBe('select public.revoke_connector_tool_session_grants($1, $2) as removed');
+    expect(params).toEqual(['github', 'get_pull_request_diff']);
+    expect(mockTransaction).toHaveBeenCalledOnce();
     expect(String(mockQuery.mock.calls[1]?.[0])).toContain(
       'insert into public.connector_tool_permissions',
     );
@@ -168,6 +455,71 @@ describe('/api/connectors/permissions', () => {
     );
     expect(response.status).toBeGreaterThanOrEqual(500);
     expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(
+    [[], [{ removed: null }], [{ removed: '1' }], [{ removed: -1 }]].map((receipt) => ({
+      receipt,
+    })),
+  )(
+    'does not change standing permissions on a malformed revocation receipt %j',
+    async ({ receipt }) => {
+      mockQuery.mockResolvedValue(receipt);
+      const response = await PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }));
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(recordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it('throws an unsuccessful save inside the transaction and does not audit success', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('revoke_connector_tool_session_grants') ? [{ removed: 2 }] : [],
+    );
+    let committed = false;
+    mockTransaction.mockImplementation(
+      async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
+        const result = await operation({ query: mockQuery } as unknown as DatabaseAdapter);
+        committed = true;
+        return result;
+      },
+    );
+    const response = await PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }));
+    expect(response.status).toBe(400);
+    expect(committed).toBe(false);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('DELETE commits revocation even when no standing row exists and audits after commit', async () => {
+    mockQuery.mockResolvedValue([{ removed: 3 }]);
+    mockExecute.mockResolvedValue(0);
+    mockTransaction.mockImplementation(
+      async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
+        const result = await operation({
+          query: mockQuery,
+          execute: mockExecute,
+        } as unknown as DatabaseAdapter);
+        expect(recordAuditEvent).not.toHaveBeenCalled();
+        return result;
+      },
+    );
+    const response = await DELETE(deleteReq('?connectorId=github'));
+    expect(await response.json()).toEqual({ success: true, removed: 3 });
+    expect(mockQuery).toHaveBeenCalledWith(
+      'select public.revoke_connector_tool_session_grants($1, $2) as removed',
+      ['github', null],
+    );
+    expect(mockTransaction).toHaveBeenCalledOnce();
+    expect(recordAuditEvent).toHaveBeenCalledOnce();
+  });
+
+  it('DELETE does not audit success when the standing delete fails', async () => {
+    mockExecute.mockRejectedValueOnce(new Error('standing delete failed'));
+    const response = await DELETE(deleteReq('?connectorId=github'));
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(mockTransaction).toHaveBeenCalledOnce();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('DELETE revokes one tool verdict, owner-scoped (CON-5)', async () => {

@@ -1,12 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const connectorRelease = vi.hoisted(() => ({ released: true }));
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => connectorRelease.released,
-}));
+const connectorRelease = vi.hoisted(() => ({ released: true, selective: false }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const original = await importOriginal<TypesModule>();
+  return {
+    ...original,
+    connectorsReleased: () => connectorRelease.released,
+    connectorReleased: (id: unknown) =>
+      connectorRelease.released || (connectorRelease.selective && original.connectorReleased(id)),
+    hasReleasedConnectors: () =>
+      connectorRelease.released || (connectorRelease.selective && original.hasReleasedConnectors()),
+  };
+});
 
 vi.mock('server-only', () => ({}));
+
+const gmailAction = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/connectors/gmail-actions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/gmail-actions')>()),
+  executeGmailAction: gmailAction,
+}));
 
 const mockNeonQuery = vi.fn();
 vi.mock('@/lib/server/neon-db', () => {
@@ -52,7 +65,9 @@ vi.mock('@/lib/egress-policy', () => {
 
 const mockBuildMcpToolCatalog = vi.fn();
 const mockConnectMcpServer = vi.fn();
-vi.mock('@agiworkforce/mcp', () => ({
+type McpModule = typeof import('@agiworkforce/mcp');
+vi.mock('@agiworkforce/mcp', async (importOriginal) => ({
+  ...(await importOriginal<McpModule>()),
   buildMcpToolCatalog: (...a: unknown[]) => mockBuildMcpToolCatalog(...a),
   connectMcpServer: (...a: unknown[]) => mockConnectMcpServer(...a),
 }));
@@ -515,6 +530,27 @@ describe('organization workspace scope', () => {
 });
 
 describe('makeUserConnectorExecutor', () => {
+  it.each([ORGANIZATION_ID, null, undefined])(
+    'passes Gmail the original organization context %s unchanged',
+    async (organizationId) => {
+      stubDb({ activeConnectors: ['gmail'] });
+      gmailAction.mockResolvedValue({ content: 'fixture draft', isError: false });
+      const args = { files: ['/api/files/fixture'] };
+      const result = await makeUserConnectorExecutor('user-1', organizationId)(
+        'gmail',
+        'create_draft_with_attachments',
+        args,
+      );
+      expect(result.isError).toBe(false);
+      expect(gmailAction).toHaveBeenCalledWith(
+        'user-1',
+        'create_draft_with_attachments',
+        args,
+        organizationId,
+      );
+    },
+  );
+
   it('executes a github diff tool via the GitHub integration', async () => {
     stubDb({
       installations: [
@@ -1014,3 +1050,156 @@ describe('connector runtime while connectors are coming soon', () => {
     });
   });
 });
+
+describe('connector runtime with a selectively released catalog', () => {
+  beforeEach(() => {
+    connectorRelease.released = false;
+    connectorRelease.selective = true;
+  });
+  afterEach(() => {
+    connectorRelease.released = true;
+    connectorRelease.selective = false;
+  });
+
+  it('keeps unopted catalog callers locked before database or network access', async () => {
+    const catalog = await loadUserConnectorToolCatalog('user-unopted', { planTier: 'pro' });
+    expect(catalog.tools).toEqual([]);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
+  it('discovers only a released operator-mapped ID in a mixed connected catalog', async () => {
+    const ids = ['cloudflare', 'gmail', 'huggingface', 'stripe', 'unknown'];
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: ids.map((connectorId) => ({
+        connectorId,
+        url: `https://${connectorId}.example/mcp`,
+      })),
+    });
+    stubDb({
+      activeConnectors: ids,
+      installations: [{ installation_id: 42, account_login: 'acme' }],
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue({
+      catalog: {
+        version: 1,
+        generatedAt: 0,
+        servers: {},
+        tools: [
+          {
+            serverName: 'cloudflare',
+            safeServerName: 'cloudflare',
+            toolName: 'read_project',
+            inputSchema: { type: 'object' },
+            fallbackDescription: 'Read project',
+          },
+        ],
+      },
+      handles: [],
+    });
+
+    const catalog = await loadUserConnectorToolCatalog('user-selective', {
+      planTier: 'pro',
+      allowSelective: true,
+    });
+
+    expect(catalog.tools.map((tool) => tool.serverId)).toEqual(['cloudflare']);
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(1);
+    expect(Object.keys(mockBuildMcpToolCatalog.mock.calls[0]?.[0] as object)).toEqual([
+      'cloudflare',
+    ]);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('github_installations')),
+    ).toBe(false);
+  });
+
+  it.each([
+    'gmail',
+    'huggingface',
+    'stripe',
+    'dir-notion',
+    'custom-notion',
+    'orgmcp-abc123def0',
+    'unknown',
+  ])(
+    'refuses %s capability discovery and handles before any database or network access',
+    async (connectorId) => {
+      const operation = vi.fn();
+      await expect(
+        loadUserConnectorCapabilityCatalog('user-selective', connectorId, { allowSelective: true }),
+      ).resolves.toBeNull();
+      await expect(
+        withUserConnectorMcpHandle('user-selective', connectorId, operation, {
+          allowSelective: true,
+        }),
+      ).resolves.toBeNull();
+      expect(mockNeonQuery).not.toHaveBeenCalled();
+      expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+      expect(mockConnectMcpServer).not.toHaveBeenCalled();
+      expect(operation).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['gmail', 'huggingface', 'stripe', 'custom-notion', 'orgmcp-abc123def0', 'dir-notion'])(
+    'refuses %s execution before a remote call',
+    async (connectorId) => {
+      process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+        connectors: [{ connectorId, url: 'https://blocked.example/mcp' }],
+      });
+      stubDb({ activeConnectors: [connectorId] });
+      const result = await makeUserConnectorExecutor('user-selective')(
+        connectorId,
+        'read_records',
+        {},
+      );
+      expect(result).toMatchObject({
+        handled: true,
+        isError: true,
+        content: 'Connectors are coming soon.',
+      });
+      expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+      expect(mockConnectMcpServer).not.toHaveBeenCalled();
+      expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('connector runtime when its execution gate is unreadable', () => {
+  it('refuses the call instead of continuing to the provider', async () => {
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: [{ connectorId: 'notion', url: 'https://mcp.notion.example/mcp' }],
+    });
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('connector_call_events'))
+        return Promise.reject(new Error('gate unavailable'));
+      return Promise.resolve(sql.includes('user_connectors') ? [{ connector_id: 'notion' }] : []);
+    });
+    const callTool = vi
+      .fn()
+      .mockResolvedValue({ content: [{ type: 'text', text: 'provider result' }] });
+    mockConnectMcpServer.mockResolvedValue({ serverName: 'notion', callTool, close: vi.fn() });
+
+    const result = await makeUserConnectorExecutor('user-gate-unreadable')(
+      'notion',
+      'read_page',
+      {},
+    );
+
+    expect(result).toEqual({
+      handled: true,
+      isError: true,
+      content: 'Connector availability could not be checked. Try again.',
+    });
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('connector_call_events')),
+    ).toBe(true);
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+    expect(callTool).not.toHaveBeenCalled();
+  });
+});
+
+type DiscoveryPolicyGateModule = typeof import('@/lib/services/connector-policy-gate');
+vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<DiscoveryPolicyGateModule>()),
+  evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
+}));

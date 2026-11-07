@@ -1,5 +1,5 @@
 import type { LifecycleStatus } from '@agiworkforce/types';
-import { getAuthToken } from '@shared/lib/get-auth-token';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
 import type {
   ManagedMediaImageAspectRatio,
@@ -72,14 +72,6 @@ export interface VideoStatusResponse {
   error?: string;
 }
 
-async function requireAuthToken(): Promise<string> {
-  const token = await getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated. Please sign in to continue.');
-  }
-  return token;
-}
-
 function createWebMediaIdempotencyKey(
   operation: ManagedMediaOperation,
   operationId: string = crypto.randomUUID(),
@@ -93,15 +85,15 @@ function createWebMediaIdempotencyKey(
 
 export async function generateImages(
   request: ImageGenerationRequest,
+  authority: RequestAuthority,
 ): Promise<ImageGenerationResponse> {
   const idempotencyKey = createWebMediaIdempotencyKey('image');
-  const token = await requireAuthToken();
+  authority.assertCurrent();
 
-  const response = await fetch('/api/media/image/generate', {
+  const response = await authority.fetch('/api/media/image/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
       'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(request),
@@ -111,6 +103,7 @@ export async function generateImages(
     error?: string | { message?: string };
   };
 
+  authority.assertCurrent();
   if (!response.ok) {
     const errMsg =
       typeof data.error === 'string'
@@ -196,40 +189,51 @@ async function readApiError(response: Response, fallback: string): Promise<Media
 
 export async function generateVideo(
   request: VideoGenerationRequest,
+  authority: RequestAuthority,
 ): Promise<VideoGenerationResponse> {
   const idempotencyKey = createWebMediaIdempotencyKey('video', request.assistant_message_id);
-  const token = await requireAuthToken();
+  authority.assertCurrent();
 
-  const response = await fetch('/api/media/video/generate', {
+  const response = await authority.fetch('/api/media/video/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
       'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(request),
   });
 
   if (!response.ok) {
-    throw await readApiError(response, `Video generation failed (${response.status})`);
+    const error = await readApiError(response, `Video generation failed (${response.status})`);
+    authority.assertCurrent();
+    throw error;
   }
 
-  return (await response.json()) as VideoGenerationResponse;
+  const data = (await response.json()) as VideoGenerationResponse;
+  authority.assertCurrent();
+  return data;
 }
 
-export async function getVideoStatus(taskId: string): Promise<VideoStatusResponse> {
-  const token = await requireAuthToken();
+export async function getVideoStatus(
+  taskId: string,
+  authority: RequestAuthority,
+): Promise<VideoStatusResponse> {
+  authority.assertCurrent();
 
-  const response = await fetch(`/api/media/video/status?task_id=${encodeURIComponent(taskId)}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
+  const response = await authority.fetch(
+    `/api/media/video/status?task_id=${encodeURIComponent(taskId)}`,
+    {
+      method: 'GET',
     },
-  });
+  );
 
   if (!response.ok) {
-    throw await readApiError(response, `Failed to get video status (${response.status})`);
+    const error = await readApiError(response, `Failed to get video status (${response.status})`);
+    authority.assertCurrent();
+    throw error;
   }
 
-  return (await response.json()) as VideoStatusResponse;
+  const data = (await response.json()) as VideoStatusResponse;
+  authority.assertCurrent();
+  return data;
 }

@@ -4,18 +4,22 @@ import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
 import {
   FREE_ALLOWANCE_EXHAUSTED_CODE,
+  FREE_QUOTA_CHAT_DAILY_USE_KIND,
   FREE_QUOTA_FALLBACK_REQUEST_KEY,
   FreeLimitSchema,
 } from '@agiworkforce/cloud-contracts';
+import { CHINESE_HQ_PROVIDER_IDS, namedProviderConsentRecord } from '@agiworkforce/compliance';
 import { getProviderOfferings, getDefaultModelFor } from '@agiworkforce/types';
 import {
   credentialSha256,
   freeQuotaEndsOn,
+  readFreeQuotaDailyUse,
   readFreeQuotaState,
   recordFreeQuotaHold,
   recordFreeQuotaSuspension,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
+import { freeModelProviderNotice } from '@/lib/named-provider-consent';
 import { loadFreePools, type FreeAutoRoute } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import {
@@ -372,6 +376,64 @@ describe('the shipped Free Auto route', () => {
   it('reaches ready chat allocations the fallback ranking leaves out', () => {
     expect(readyKeys.length).toBeGreaterThan(ranking.length);
     expect(ranking.filter((key) => readyKeys.includes(key)).length).toBeGreaterThan(0);
+  });
+});
+
+describe('named-provider consent before the quota-first turn', () => {
+  const notice = freeModelProviderNotice(getProviderOfferings()[FIRST]!.provider);
+  if (!notice) throw new Error('The first ready allocation must have a provider notice');
+  const providerId = notice.providerId;
+  const accepted = namedProviderConsentRecord({
+    notice,
+    accepted: true,
+    surface: 'web',
+    now: new Date(NOW),
+  });
+  const otherProviderId = CHINESE_HQ_PROVIDER_IDS.find((id) => id !== providerId);
+  if (!otherProviderId) throw new Error('The fixture requires a different named provider');
+
+  async function expectConsentRefusal() {
+    mocks.stream.mockResolvedValue(answered());
+
+    const { response, tried } = await tryFirst();
+
+    expect(response).toBeNull();
+    expect(tried).toBe(FIRST);
+    expect(mocks.consent).toHaveBeenCalledTimes(1);
+    expect(mocks.consent).toHaveBeenCalledWith((await scopedDb()).db, 'fixture-user', providerId);
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(mocks.otherProvider).not.toHaveBeenCalled();
+    expect(mocks.persistUser).not.toHaveBeenCalled();
+    expect(mocks.persistAnswer).not.toHaveBeenCalled();
+    for (const key of readyKeys) expect(await metered(key)).toBe(0);
+    expect(
+      await readFreeQuotaDailyUse(mocks.store!, {
+        userId: 'fixture-user',
+        category: FREE_QUOTA_CHAT_DAILY_USE_KIND,
+        nowMs: Date.now(),
+      }),
+    ).toBe(0);
+  }
+
+  it.each([
+    ['absent', null],
+    ['revoked', { ...accepted, accepted: false }],
+    [
+      'for stale wording',
+      { ...accepted, disclosureVersion: `${accepted.disclosureVersion}-stale` },
+    ],
+    ['for another provider', { ...accepted, providerId: otherProviderId }],
+  ])('returns control to ordinary routing when consent is %s', async (_label, consent) => {
+    mocks.consent.mockResolvedValue(consent);
+
+    await expectConsentRefusal();
+  });
+
+  it('returns control to ordinary routing when consent cannot be read', async () => {
+    mocks.consent.mockRejectedValue(new Error('Consent store unavailable'));
+
+    await expectConsentRefusal();
   });
 });
 

@@ -174,7 +174,19 @@ export async function loadOrganizationContextPolicy(
   db: ManagedMemoryContextDb,
   organizationId: string | null | undefined,
 ): Promise<OrganizationContextPolicy> {
-  if (!organizationId) return OPEN_ORGANIZATION_CONTEXT_POLICY;
+  const read = await readOrganizationContextPolicy(db, organizationId);
+  return read.readable ? read.policy : CLOSED_ORGANIZATION_CONTEXT_POLICY;
+}
+
+export type OrganizationContextPolicyRead =
+  | { readonly readable: true; readonly policy: OrganizationContextPolicy }
+  | { readonly readable: false };
+
+export async function readOrganizationContextPolicy(
+  db: ManagedMemoryContextDb,
+  organizationId: string | null | undefined,
+): Promise<OrganizationContextPolicyRead> {
+  if (!organizationId) return { readable: true, policy: OPEN_ORGANIZATION_CONTEXT_POLICY };
   try {
     const [row] = await db.query<{
       allow_memory: boolean;
@@ -187,19 +199,22 @@ export async function loadOrganizationContextPolicy(
         limit 1`,
       [organizationId],
     );
-    if (!row) return CLOSED_ORGANIZATION_CONTEXT_POLICY;
+    if (!row) return { readable: true, policy: CLOSED_ORGANIZATION_CONTEXT_POLICY };
     return {
-      allowMemory: row.allow_memory === true,
-      allowPastChats: row.allow_memory === true,
-      allowConnectorResults: row.allow_connector_context === true,
-      allowWebResults: row.allow_web_result_context === true,
+      readable: true,
+      policy: {
+        allowMemory: row.allow_memory === true,
+        allowPastChats: row.allow_memory === true,
+        allowConnectorResults: row.allow_connector_context === true,
+        allowWebResults: row.allow_web_result_context === true,
+      },
     };
   } catch (error) {
     logger.error(
       { error, organizationId },
       '[managed-memory] organization context policy read failed; every source class closed',
     );
-    return CLOSED_ORGANIZATION_CONTEXT_POLICY;
+    return { readable: false };
   }
 }
 
@@ -720,9 +735,11 @@ export async function memoryWriteAdmission(
 export async function writeConsolidatedMemory(
   db: ManagedMemoryContextDb,
   write: ConsolidatedMemoryWrite,
-  options: { policies?: MemoryWritePolicies } = {},
+  options: { policies?: MemoryWritePolicies; signal?: AbortSignal } = {},
 ): Promise<ConsolidatedMemoryRow | null> {
+  options.signal?.throwIfAborted();
   const decision = await memoryWriteAdmission(db, write, options);
+  options.signal?.throwIfAborted();
   if (!decision.eligible) {
     if (CONTENT_REFUSAL_REASONS.has(decision.reason)) {
       recordDenial({
@@ -742,6 +759,7 @@ export async function writeConsolidatedMemory(
 
   const topic = memoryConflictTopic(write.content);
   const topicPatterns = topic ? topic.prefixes.map((prefix) => `${prefix} %`) : [];
+  options.signal?.throwIfAborted();
   const [row] = await db.query<ConsolidatedMemoryRow>(
     `with incoming as materialized (
        select coalesce($2::uuid, gen_random_uuid()) as id,

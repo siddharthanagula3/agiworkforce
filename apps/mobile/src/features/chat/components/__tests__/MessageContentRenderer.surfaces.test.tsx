@@ -16,6 +16,21 @@ function joinedText(view: { toJSON: () => unknown }): string {
 }
 
 describe('mobile mixed assistant reply', () => {
+  it.each([
+    ['form', 'title: Choices\ntext: Name | Sample\nsubmit: Apply'],
+    ['card', 'title: Project\n\nA readable body.'],
+    ['stats', 'Requests | 120 | This month'],
+    ['carousel', 'One | First description\nTwo | Second description'],
+  ])('keeps unsupported %s content readable and copyable', async (language, source) => {
+    const onFollowUp = jest.fn();
+    const view = renderReply(`\`\`\`${language}\n${source}\n\`\`\``, onFollowUp);
+    expect(joinedText(view)).toContain(language);
+    expect(screen.queryByTestId('answer-surface-tool')).toBeNull();
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Copy code' })));
+    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(source);
+    expect(onFollowUp).not.toHaveBeenCalled();
+  });
+
   it('renders one mixed reply in order, with chart values, fallbacks, copy, follow-up, and one email after growth', async () => {
     const partial = renderReply(MIXED_REPLY_THROUGH_EMAIL);
     expect(partial.getAllByTestId('answer-surface-email')).toHaveLength(1);
@@ -46,6 +61,7 @@ describe('mobile mixed assistant reply', () => {
       'More prose.',
     ]) {
       const next = text.indexOf(part, at + 1);
+      if (next <= at) throw new Error(`Missing or reordered mixed reply segment: ${part}`);
       expect(next).toBeGreaterThan(at);
       at = next;
     }

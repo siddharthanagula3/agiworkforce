@@ -1,3 +1,4 @@
+import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -27,15 +28,24 @@ vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const session = createClerkSessionFixture(
+    () => ({
+      getToken: async () => 'fixture-token',
+      isLoaded: true,
+      userId: 'fixture-user',
+      isSignedIn: true,
+      sessionId: 'fixture-session',
+    }),
+    { signOut: vi.fn() },
+  );
+  return {
+    ...session,
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -103,7 +113,8 @@ vi.mock('../../components/messages/ChatMessageList', () => ({
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useChatStreamRuntime: () => ({
     sendMessage: vi.fn(),
     stopGeneration: vi.fn(),
@@ -113,7 +124,15 @@ vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
 }));
 vi.mock('../../hooks/use-artifact-cloud-sync', () => ({ useArtifactCloudSync: vi.fn() }));
 vi.mock('../../hooks/use-share-conversation', () => ({
-  useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
+  useShareConversation: () => ({
+    share: vi.fn(),
+    isSharing: false,
+    view: null,
+    isViewCurrent: () => false,
+    workspacePending: false,
+    workspaceUnavailable: false,
+    inventoryIncomplete: false,
+  }),
 }));
 vi.mock('../../hooks/use-conversation-branches', () => ({
   useConversationBranches: () => ({
@@ -236,6 +255,8 @@ vi.mock('../../services/document-export-service', () => ({
 }));
 
 import WebChatPage from '../WebChatPage';
+
+const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 function seedConversation(): void {
@@ -288,7 +309,7 @@ describe('WebChatPage conversation export (WEB-42)', () => {
 
   it('downloads the open conversation when the header export entry point is used', async () => {
     const user = userEvent.setup();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
 
     await user.click(await screen.findByTestId('conversation-export'));
 

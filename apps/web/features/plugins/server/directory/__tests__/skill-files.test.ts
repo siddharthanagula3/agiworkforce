@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { PLUGIN_DIRECTORY_MAX_SKILLS_PER_INSTALL } from '../constants';
 import { fetchPluginSkillFiles, parseSkillFile } from '../skill-files';
+import { hashSkillContent } from '@agiworkforce/skills';
 import { LOCATION } from './fixtures';
 
 const SKILL = [
@@ -15,12 +16,23 @@ const SKILL = [
 ].join('\n');
 
 describe('parseSkillFile', () => {
+  it('preserves declared frontmatter and hashes the entire source', () => {
+    const source =
+      '---\nname: guarded-skill\ndescription: A guarded skill\nversion: 1.2.3\nrequires:\n  tools: [fixture-tool]\n---\nInstructions.';
+    expect(parseSkillFile('skills/guarded/SKILL.md', source)).toMatchObject({
+      frontmatter: { version: '1.2.3', requires: { tools: ['fixture-tool'] } },
+      contentHash: hashSkillContent(Buffer.from(source)),
+    });
+  });
+
   it('reads the name and description from frontmatter and keeps the body', () => {
     expect(parseSkillFile('skills/background-removal/SKILL.md', SKILL)).toEqual({
       name: 'background-removal',
       description: 'Remove backgrounds',
       body: '# Steps\nDo it.',
       path: 'skills/background-removal/SKILL.md',
+      frontmatter: { name: 'background-removal', description: 'Remove backgrounds' },
+      contentHash: hashSkillContent(Buffer.from(SKILL)),
     });
   });
 

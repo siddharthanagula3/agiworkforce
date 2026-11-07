@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { ManagedCloudPublishedArtifactPublishResponseSchema } from '@agiworkforce/cloud-contracts';
 
 type CsrfModule = typeof import('@/lib/csrf');
 type RateLimitModule = typeof import('@/lib/rate-limit');
@@ -15,6 +16,8 @@ type ScanModule1 = typeof import('@/lib/services/organization-policy-gate');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  txQuery: vi.fn(),
+  transaction: vi.fn(),
   execute: vi.fn(async (..._args: unknown[]) => undefined),
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
@@ -22,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     db: {
       query: (...args: unknown[]) => mocks.query(...args),
       execute: (...args: unknown[]) => mocks.execute(...args),
+      transaction: (...args: unknown[]) => mocks.transaction(...args),
     },
     userId: 'user-1',
     organizationId: null as string | null,
@@ -101,7 +105,7 @@ function isInsert(sql: unknown): boolean {
 }
 
 function insertCall(): [string, unknown[]] {
-  const call = mocks.query.mock.calls.find(([sql]) => isInsert(sql));
+  const call = mocks.txQuery.mock.calls.find(([sql]) => isInsert(sql));
   if (!call) throw new Error('the publish route never issued the insert');
   return call as [string, unknown[]];
 }
@@ -138,6 +142,30 @@ const VALID_BODY = {
   content: '<h1>hi</h1>',
 };
 
+function scopedDatabase() {
+  return {
+    query: (...args: unknown[]) => mocks.query(...args),
+    execute: (...args: unknown[]) => mocks.execute(...args),
+    transaction: (...args: unknown[]) => mocks.transaction(...args),
+  };
+}
+
+beforeEach(() => {
+  mocks.query.mockReset();
+  mocks.query.mockResolvedValue([]);
+  mocks.txQuery.mockReset();
+  mocks.txQuery.mockImplementation(routeVersionQueries({}));
+  mocks.transaction.mockReset();
+  mocks.transaction.mockImplementation(async (callback) => callback({ query: mocks.txQuery }));
+});
+
+afterEach(() => {
+  expect(
+    mocks.query.mock.calls.some(([sql]) => /^\s*(insert|update|delete)\b/i.test(String(sql))),
+  ).toBe(false);
+  expect(mocks.execute).not.toHaveBeenCalled();
+});
+
 describe('POST /api/artifacts/publish', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,10 +174,7 @@ describe('POST /api/artifacts/publish', () => {
     mocks.secretMode.mockResolvedValue({ mode: 'warn', organizationId: null });
     mocks.query.mockResolvedValue([publishRow()]);
     mocks.scopedDb.mockResolvedValue({
-      db: {
-        query: (...args: unknown[]) => mocks.query(...args),
-        execute: (...args: unknown[]) => mocks.execute(...args),
-      },
+      db: scopedDatabase(),
       userId: 'user-1',
       organizationId: null,
     });
@@ -175,7 +200,7 @@ describe('POST /api/artifacts/publish', () => {
     ]);
     const lookup = mocks.query.mock.calls.find(([sql]) => String(sql).includes('union all'));
     expect(lookup?.[1]).toEqual(['user-1', 'artifact-1', conversationId]);
-    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('returns a public URL and the token for a valid publish', async () => {
@@ -183,9 +208,14 @@ describe('POST /api/artifacts/publish', () => {
     expect(response.status).toBe(201);
 
     const body = await response.json();
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.parse(body).artifactId).toBe(
+      'artifact-1',
+    );
     expect(body.token).toBe(TOKEN);
     expect(body.shareUrl).toContain(`/shared-artifact/${TOKEN}`);
     expect(body.sandboxed).toBe(true);
+    expect(body.version).toBe(1);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 
   it('redacts a secret found in the artifact content before it is stored', async () => {
@@ -194,7 +224,7 @@ describe('POST /api/artifacts/publish', () => {
       postRequest({ ...VALID_BODY, content: `<script>const key='${stripeKey}'</script>` }),
     );
 
-    const call = mocks.query.mock.calls.find(([sql]) =>
+    const call = mocks.txQuery.mock.calls.find(([sql]) =>
       String(sql).includes('insert into public.published_artifacts'),
     );
     const params = call![1] as unknown[];
@@ -230,7 +260,7 @@ describe('POST /api/artifacts/publish', () => {
     const response = await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
 
     expect(response.status).toBe(400);
-    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+    expect(mocks.transaction).not.toHaveBeenCalled();
     const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
       eventType: string;
       organizationId: string | null;
@@ -248,7 +278,7 @@ describe('POST /api/artifacts/publish', () => {
     const response = await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
 
     expect(response.status).toBe(400);
-    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it('redacts rather than warns, because a published link is world readable', async () => {
@@ -308,22 +338,18 @@ describe('POST /api/artifacts/publish', () => {
   });
 
   it('answers 403, not 500, when the conversation belongs to somebody else', async () => {
-    mocks.query.mockImplementation(async (sql: unknown) =>
-      isInsert(sql) ? [publishRow()] : [{ other_published: 0, owned_conversations: 0 }],
-    );
+    mocks.txQuery.mockImplementation(routeVersionQueries({ ownedConversations: 0 }));
 
     const response = await POST(
       postRequest({ ...VALID_BODY, conversationId: '11111111-1111-4111-8111-111111111111' }),
     );
 
     expect(response.status).toBe(403);
-    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+    expect(mocks.txQuery.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
   it('publishes when the conversation is the callers own', async () => {
-    mocks.query.mockImplementation(async (sql: unknown) =>
-      isInsert(sql) ? [publishRow()] : [{ other_published: 0, owned_conversations: 1 }],
-    );
+    mocks.txQuery.mockImplementation(routeVersionQueries({ ownedConversations: 1 }));
 
     const response = await POST(
       postRequest({ ...VALID_BODY, conversationId: '11111111-1111-4111-8111-111111111111' }),
@@ -334,10 +360,8 @@ describe('POST /api/artifacts/publish', () => {
 
   it('refuses a publish past the per-user cap with an actionable 409', async () => {
     const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
-    mocks.query.mockImplementation(async (sql: unknown) =>
-      isInsert(sql)
-        ? [publishRow()]
-        : [{ other_published: MAX_PUBLISHED_PER_USER, owned_conversations: 0 }],
+    mocks.txQuery.mockImplementation(
+      routeVersionQueries({ publishedCount: MAX_PUBLISHED_PER_USER }),
     );
 
     const response = await POST(postRequest(VALID_BODY));
@@ -346,7 +370,7 @@ describe('POST /api/artifacts/publish', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { message: expect.stringContaining('Unpublish one') },
     });
-    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+    expect(mocks.txQuery.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
   it('propagates a 401 from the auth boundary instead of publishing anonymously', async () => {
@@ -356,6 +380,70 @@ describe('POST /api/artifacts/publish', () => {
     expect(response.status).toBe(401);
     expect(mocks.query).not.toHaveBeenCalled();
   });
+
+  it('republishes an existing page over the cap without changing its URL', async () => {
+    const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
+    mocks.txQuery.mockImplementation(
+      routeVersionQueries({
+        publishedCount: MAX_PUBLISHED_PER_USER + 1,
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+      }),
+    );
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).token).toBe(TOKEN);
+    expect(
+      mocks.txQuery.mock.calls.some(([sql]) => String(sql).includes('as published_count')),
+    ).toBe(false);
+  });
+
+  it('does not return success until the transaction commit promise resolves', async () => {
+    let reachCommit!: () => void;
+    const reachedCommit = new Promise<void>((resolve) => {
+      reachCommit = resolve;
+    });
+    let finishCommit!: () => void;
+    const commit = new Promise<void>((resolve) => {
+      finishCommit = resolve;
+    });
+    mocks.transaction.mockImplementation(async (callback) => {
+      const result = await callback({ query: mocks.txQuery });
+      reachCommit();
+      await commit;
+      return result;
+    });
+    let settled = false;
+    const response = POST(postRequest(VALID_BODY)).then((result) => {
+      settled = true;
+      return result;
+    });
+    await reachedCommit;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+    expect(
+      mocks.txQuery.mock.calls.filter(([sql]) =>
+        String(sql).includes('insert into public.published_artifact_versions'),
+      ),
+    ).toHaveLength(1);
+    finishCommit();
+    expect((await response).status).toBe(201);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+  }, 1_000);
+
+  it('surfaces an uncertain commit rejection without retrying or claiming rollback', async () => {
+    mocks.transaction.mockImplementation(async (callback) => {
+      await callback({ query: mocks.txQuery });
+      throw new Error('commit outcome unknown');
+    });
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(500);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.txQuery.mock.calls.filter(([sql]) => isInsert(sql))).toHaveLength(1);
+  });
 });
 
 describe('GET /api/artifacts/publish', () => {
@@ -363,10 +451,7 @@ describe('GET /api/artifacts/publish', () => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
     mocks.scopedDb.mockResolvedValue({
-      db: {
-        query: (...args: unknown[]) => mocks.query(...args),
-        execute: (...args: unknown[]) => mocks.execute(...args),
-      },
+      db: scopedDatabase(),
       userId: 'user-1',
       organizationId: null,
     });
@@ -428,10 +513,7 @@ describe('GET /api/artifacts/publish', () => {
 
   it("scopes the list to the caller, so another user's sites never appear", async () => {
     mocks.scopedDb.mockResolvedValue({
-      db: {
-        query: (...args: unknown[]) => mocks.query(...args),
-        execute: (...args: unknown[]) => mocks.execute(...args),
-      },
+      db: scopedDatabase(),
       userId: 'user-2',
       organizationId: null,
     });
@@ -441,7 +523,7 @@ describe('GET /api/artifacts/publish', () => {
 
     const [sql, params] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('where user_id = $1');
-    expect(params).toEqual(['user-2', 200]);
+    expect(params).toEqual(['user-2', 201]);
   });
 
   it('answers 401 to a signed-out caller without reading anything', async () => {
@@ -491,15 +573,45 @@ function versionRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function routeVersionQueries(handlers: { newest?: unknown[]; insertedVersion?: unknown[] }) {
-  return async (sql: unknown, ..._rest: unknown[]) => {
+function routeVersionQueries(handlers: {
+  newest?: unknown[];
+  insertedVersion?: unknown[];
+  ownedConversations?: number;
+  publishedCount?: number;
+  existingRows?: unknown[];
+}) {
+  return async (sql: unknown, params: unknown[]) => {
     const text = String(sql);
     if (text.includes('insert into public.published_artifact_versions')) {
-      return handlers.insertedVersion ?? [{ version: 3 }];
+      return handlers.insertedVersion ?? [{ version: params[2] }];
     }
     if (text.includes('from public.published_artifact_versions')) return handlers.newest ?? [];
-    if (isInsert(sql)) return [publishRow()];
-    return [{ other_published: 0, owned_conversations: 1 }];
+    if (isInsert(sql)) {
+      return [
+        publishRow({ title: params[4], kind: params[5], language: params[6], content: params[7] }),
+      ];
+    }
+    if (text.includes('update public.published_artifacts')) {
+      return [{ id: params[0], user_id: params[2], version: params[1] }];
+    }
+    if (text.includes("current_setting('transaction_isolation')")) {
+      return [{ isolation: 'read committed' }];
+    }
+    if (text.includes('pg_advisory_xact_lock')) return [{ locked: true }];
+    if (text.includes('from public.published_artifacts') && text.includes('for update')) {
+      return handlers.existingRows ?? [];
+    }
+    if (text.includes('as published_count')) {
+      return [{ published_count: handlers.publishedCount ?? 0 }];
+    }
+    if (text.includes('as owned_conversations')) {
+      return [
+        {
+          owned_conversations: handlers.ownedConversations ?? 1,
+        },
+      ];
+    }
+    throw new Error(`Unexpected transaction query: ${text}`);
   };
 }
 
@@ -510,32 +622,30 @@ describe('published artifact version history', () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.secretMode.mockResolvedValue({ mode: 'warn', organizationId: null });
     mocks.scopedDb.mockResolvedValue({
-      db: {
-        query: (...args: unknown[]) => mocks.query(...args),
-        execute: (...args: unknown[]) => mocks.execute(...args),
-      },
+      db: scopedDatabase(),
       userId: 'user-1',
       organizationId: null,
     });
   });
 
   it('publishing twice records each version, chained to the one before it', async () => {
-    mocks.query.mockImplementation(
+    mocks.txQuery.mockImplementation(
       routeVersionQueries({ newest: [], insertedVersion: [{ version: 1 }] }),
     );
     const first = await POST(postRequest(VALID_BODY));
     expect((await first.json()).version).toBe(1);
 
-    mocks.query.mockImplementation(
+    mocks.txQuery.mockImplementation(
       routeVersionQueries({
         newest: [versionRow()],
         insertedVersion: [{ version: 2 }],
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
       }),
     );
     const second = await POST(postRequest({ ...VALID_BODY, content: '<h1>v2</h1>' }));
     expect((await second.json()).version).toBe(2);
 
-    const [, params] = mocks.query.mock.calls
+    const [, params] = mocks.txQuery.mock.calls
       .filter(([sql]) => String(sql).includes('insert into public.published_artifact_versions'))
       .at(-1) as [string, unknown[]];
     expect(params[2]).toBe(2);
@@ -543,12 +653,17 @@ describe('published artifact version history', () => {
   });
 
   it('does not append a version when the republish says the same thing', async () => {
-    mocks.query.mockImplementation(routeVersionQueries({ newest: [versionRow({ version: 4 })] }));
+    mocks.txQuery.mockImplementation(
+      routeVersionQueries({
+        newest: [versionRow({ version: 4 })],
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+      }),
+    );
     const response = await POST(postRequest({ ...VALID_BODY, content: '<h1>v1</h1>' }));
 
     expect((await response.json()).version).toBe(4);
     expect(
-      mocks.query.mock.calls.some(([sql]) =>
+      mocks.txQuery.mock.calls.some(([sql]) =>
         String(sql).includes('insert into public.published_artifact_versions'),
       ),
     ).toBe(false);
@@ -567,10 +682,7 @@ describe('POST /api/artifacts/publish workspace audience', () => {
       String(sql).includes('organization_members') ? [{ member_count: 7 }] : [publishRow()],
     );
     mocks.scopedDb.mockResolvedValue({
-      db: {
-        query: (...args: unknown[]) => mocks.query(...args),
-        execute: (...args: unknown[]) => mocks.execute(...args),
-      },
+      db: scopedDatabase(),
       userId: 'user-1',
       organizationId: ORG,
     });
@@ -596,5 +708,95 @@ describe('POST /api/artifacts/publish workspace audience', () => {
     expect(
       mocks.query.mock.calls.some(([sql]) => String(sql).includes('organization_members')),
     ).toBe(false);
+  });
+
+  // UNRUN: enrichment failure must precede any publication transaction.
+  it('fails its workspace read before starting the publication transaction', async () => {
+    mocks.canShareArtifacts.mockResolvedValue(true);
+    let transactionCompleted = false;
+    mocks.transaction.mockImplementation(async (callback) => {
+      const result = await callback({ query: mocks.txQuery });
+      transactionCompleted = true;
+      return result;
+    });
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes('organization_members')) {
+        expect(transactionCompleted).toBe(false);
+        throw new Error('workspace summary unavailable');
+      }
+      return [];
+    });
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(500);
+    expect(transactionCompleted).toBe(false);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+});
+
+// UNRUN: owner inventory HTTP pagination fixtures.
+describe('GET published artifact page validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.scopedDb.mockResolvedValue({
+      db: scopedDatabase(),
+      userId: 'user-1',
+      organizationId: null,
+    });
+    mocks.query.mockResolvedValue([]);
+  });
+
+  it.each([
+    'limit=0',
+    'limit=201',
+    'limit=1.5',
+    'limit=NaN',
+    'limit=1&limit=2',
+    'cursor=',
+    'cursor=x&cursor=y',
+  ])('rejects invalid page query before any publication read: %s', async (query) => {
+    const response = await GET(
+      new NextRequest(`https://agiworkforce.com/api/artifacts/publish?${query}`),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('adds explicit exhaustion metadata while retaining legacy keys', async () => {
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
+    expect(await response.json()).toEqual({
+      artifacts: [],
+      workspace: null,
+      pageInfo: { nextCursor: null },
+    });
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  });
+
+  it('returns a continuation for the last displayed row and follows it without anchor lookup', async () => {
+    const first = {
+      ...publishRow({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }),
+      content_chars: 10,
+      cursor_created_at: '2026-11-07T12:34:56.123456Z',
+    };
+    mocks.query.mockResolvedValueOnce([
+      first,
+      { ...first, id: '99999999-9999-4999-8999-999999999999' },
+    ]);
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/artifacts/publish?limit=1'),
+    );
+    const body = await response.json();
+    expect(body.artifacts).toHaveLength(1);
+    expect(body.artifacts[0]).not.toHaveProperty('content');
+    const cursor = body.pageInfo.nextCursor;
+    expect(typeof cursor).toBe('string');
+    const next = await GET(
+      new NextRequest(`https://agiworkforce.com/api/artifacts/publish?limit=1&cursor=${cursor}`),
+    );
+    expect((await next.json()).pageInfo).toEqual({ nextCursor: null });
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+    expect(mocks.query.mock.calls[1]![1]).toEqual(['user-1', 2, first.cursor_created_at, first.id]);
   });
 });

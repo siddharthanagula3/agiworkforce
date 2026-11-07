@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { TWO_FACTOR_SCOPE } from './lib/scope';
 import { logger } from '@/lib/logger';
 import { requireStepUp } from '@/lib/server/step-up-auth';
@@ -20,8 +20,8 @@ async function handleGet2FAStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
-  const status = await readSecondFactorStatus(db, userId);
+  const { db, userId, sessionIdentity } = await getSessionAccountDb(request, TWO_FACTOR_SCOPE);
+  const status = await readSecondFactorStatus(db, userId, sessionIdentity.subject);
 
   return NextResponse.json({
     enabled: status.authenticator,
@@ -34,12 +34,15 @@ async function handleDisable2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId, sessionIdentity } = await getSessionAccountDb(
+    request,
+    TWO_FACTOR_SCOPE,
+  );
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const status = await readSecondFactorStatus(db, userId);
+  const status = await readSecondFactorStatus(db, userId, sessionIdentity.subject);
   if (!status.authenticator) {
     return NextResponse.json({ success: true, message: '2FA was not enabled' });
   }
@@ -52,7 +55,7 @@ async function handleDisable2FA(request: NextRequest) {
     endpoint: ENDPOINT,
   });
 
-  await getIdentityProvider().removeSecondFactor(userId);
+  await getIdentityProvider().removeSecondFactor(sessionIdentity.subject);
   await db.query('delete from user_two_factor where user_id = $1', [userId]);
   await rememberMfaEnrollment(userId, false);
 
@@ -60,6 +63,7 @@ async function handleDisable2FA(request: NextRequest) {
 
   await announceTwoFactorChange({
     userId,
+    identitySubject: sessionIdentity.subject,
     event: 'two_factor_disabled',
     request,
     organizationId,

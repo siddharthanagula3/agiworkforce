@@ -43,6 +43,7 @@ import {
   type ConnectorExecutionChannel,
 } from '@/lib/connectors/catalog';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
+import { TOOL_DIRECTORY_TOOL_NAME } from './tool-schema-state';
 import {
   isBrowserCommand,
   isDestructiveTool,
@@ -98,6 +99,13 @@ export interface ToolMetadata {
 }
 
 export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({
+  [TOOL_DIRECTORY_TOOL_NAME]: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
   agi_reconnect: {
     actionClass: 'read',
     reversible: true,
@@ -896,7 +904,7 @@ export function resolveConnectorToolMetadata(
 ): ToolMetadata {
   return (
     CONNECTOR_TOOL_METADATA[connectorId]?.[toolName] ??
-    PLATFORM_TOOL_METADATA[toolName] ??
+    (toolName === TOOL_DIRECTORY_TOOL_NAME ? undefined : PLATFORM_TOOL_METADATA[toolName]) ??
     undeclaredToolMetadata(annotations)
   );
 }

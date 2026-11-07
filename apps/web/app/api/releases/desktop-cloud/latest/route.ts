@@ -5,6 +5,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
   DESKTOP_CLOUD_TAG_PREFIX,
+  DesktopReleaseLookupError,
+  type StableDesktopRelease,
   fetchLatestDesktopRelease,
   resolveDesktopCloudReleaseRepository,
 } from '@/lib/releases/github-desktop-releases';
@@ -25,10 +27,20 @@ async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise
     );
   }
 
-  const release = await fetchLatestDesktopRelease('stable', {
-    tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
-    ...resolveDesktopCloudReleaseRepository(),
-  });
+  let release: StableDesktopRelease | null;
+  try {
+    release = await fetchLatestDesktopRelease('stable', {
+      tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
+      ...resolveDesktopCloudReleaseRepository(),
+      throwOnError: true,
+    });
+  } catch (error) {
+    if (!(error instanceof DesktopReleaseLookupError)) throw error;
+    return NextResponse.json(
+      { error: { code: 'RELEASE_LOOKUP_UNAVAILABLE', message: error.message } },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
 
   const arm64Installer = release?.assets.find(
     (asset) => asset.name.endsWith('.dmg') && /arm64|aarch64/i.test(asset.name),

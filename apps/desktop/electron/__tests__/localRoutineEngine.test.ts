@@ -82,6 +82,16 @@ async function launched(f: ReturnType<typeof fixture>) {
   await vi.waitFor(() => expect(f.dependencies.start).toHaveBeenCalledOnce());
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('device-owned local routine lifecycle', () => {
   it('persists a unique claim before any launch, deduplicates sweeps and releases awake state', async () => {
     const f = fixture();
@@ -168,6 +178,277 @@ describe('device-owned local routine lifecycle', () => {
     await expect(f.engine.remove(routine.id)).rejects.toThrow(/ownership record was retained/);
     expect(f.engine.state().routines).toHaveLength(1);
     expect(f.engine.state().routines[0]!.pausedReason).toMatch(/not acknowledged/);
+  });
+
+  it('retains a paused pending start until its exact returned turn acknowledges cancellation', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    const cancel = deferred<void>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.dependencies.cancel = vi.fn(() => cancel.promise);
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+
+    await f.engine.setEnabled(routine.id, false);
+    await f.engine.setEnabled(routine.id, false);
+    await expect(f.engine.setEnabled(routine.id, true)).rejects.toThrow(/not acknowledged/);
+    expect(vi.mocked(f.dependencies.start).mock.calls[0]![4]()).toBe(false);
+    expect(f.engine.state().routines[0]).toMatchObject({
+      schedule: { enabled: false },
+      runs: [{ state: 'starting' }],
+    });
+    expect(f.engine.state().routines[0]!.runs[0]!.finishedAt).toBeUndefined();
+    expect(f.release).toHaveBeenCalledOnce();
+
+    f.engine.note('root', { ...finished(), turnId: 'another-actor-turn' });
+    expect(f.engine.state().routines[0]!.runs[0]!.turnId).toBeUndefined();
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.dependencies.cancel).toHaveBeenCalledWith('root', 'thread', 'turn'),
+    );
+    expect(f.engine.state().routines[0]!.runs[0]!.finishedAt).toBeUndefined();
+    cancel.resolve();
+    await vi.waitFor(() => expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('cancelled'));
+    expect(f.dependencies.cancel).toHaveBeenCalledOnce();
+    expect(f.engine.state().routines[0]!.pausedReason).toBeNull();
+  });
+
+  it('refuses removal before the returned turn is known and after its cancellation fails', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.dependencies.cancel = vi.fn(async () => {
+      throw new Error('interrupt timed out');
+    });
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+
+    await expect(f.engine.remove(routine.id)).rejects.toThrow(/ownership record was retained/);
+    expect(f.engine.state().routines).toHaveLength(1);
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.pausedReason).toMatch(/not acknowledged/),
+    );
+    await expect(f.engine.remove(routine.id)).rejects.toThrow(/ownership record was retained/);
+    await f.engine.setEnabled(routine.id, false);
+    expect(f.dependencies.cancel).toHaveBeenCalledOnce();
+    expect(f.engine.state().routines[0]!.runs[0]!.finishedAt).toBeUndefined();
+
+    f.engine.note('root', finished());
+    expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('completed');
+    await f.engine.remove(routine.id);
+    expect(f.engine.state().routines).toHaveLength(0);
+  });
+
+  it('keeps a suspended pending generation stopped after wake without replaying it', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    await f.engine.suspend();
+    f.engine.resume();
+    f.advance(60_000);
+    await f.engine.tick();
+    expect(vi.mocked(f.dependencies.start).mock.calls[0]![4]()).toBe(false);
+    expect(f.dependencies.start).toHaveBeenCalledOnce();
+    expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('starting');
+
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('interrupted'),
+    );
+    expect(f.dependencies.cancel).toHaveBeenCalledWith('root', 'thread', 'turn');
+    expect(f.engine.state().routines[0]!.schedule.enabled).toBe(true);
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+
+  it('does not infer turn ownership from events after an unacknowledged start', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    start.reject(new Error('turn/start timed out'));
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.pausedReason).toMatch(/effects are unknown/),
+    );
+    await expect(f.engine.setEnabled(routine.id, true)).rejects.toThrow(/outcome is unknown/);
+    f.engine.note('root', { type: 'turn-started', threadId: 'thread', turnId: 'turn' });
+    f.engine.note('root', finished());
+    await expect(f.engine.remove(routine.id)).rejects.toThrow(/ownership record was retained/);
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+    expect(f.engine.state().routines[0]).toMatchObject({
+      schedule: { enabled: false },
+      runs: [{ state: 'starting' }],
+    });
+    expect(f.engine.state().routines[0]!.runs[0]!.turnId).toBeUndefined();
+    expect(f.engine.state().routines[0]!.runs[0]!.finishedAt).toBeUndefined();
+  });
+
+  it('applies a buffered terminal event only after the returned turn matches it', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    await f.engine.setEnabled(routine.id, false);
+    expect(f.engine.note('root', finished())).toEqual({ notify: false });
+    expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('starting');
+    start.resolve('turn');
+    await vi.waitFor(() => expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('completed'));
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+    expect(f.engine.state().routines[0]!.pausedReason).toBeNull();
+  });
+
+  it('restores buffered input state without reacquiring awake state for a stop request', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    await f.engine.setEnabled(routine.id, false);
+    f.engine.note('root', {
+      type: 'user-input-requested',
+      threadId: 'thread',
+      turnId: 'turn',
+      requestId: 'input',
+      question: 'Continue?',
+    });
+    f.engine.note('root', {
+      type: 'user-input-answered',
+      threadId: 'thread',
+      turnId: 'turn',
+      requestId: 'input',
+      cancelled: true,
+    });
+    start.resolve('turn');
+    await vi.waitFor(() => expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('cancelled'));
+    expect(f.dependencies.keepAwake).toHaveBeenCalledOnce();
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a matching unanswered input received before startup acknowledgment', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    f.engine.note('root', {
+      type: 'user-input-requested',
+      threadId: 'thread',
+      turnId: 'turn',
+      requestId: 'input',
+      question: 'Continue?',
+    });
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('awaiting_input'),
+    );
+    expect(f.release).toHaveBeenCalledOnce();
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+  });
+
+  it('can cancel before session creation completes without dispatching a model turn', async () => {
+    const f = fixture();
+    const session = deferred<string>();
+    f.dependencies.createSession = vi.fn(() => session.promise);
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await f.engine.tick();
+    await f.engine.setEnabled(routine.id, false);
+    session.resolve('thread');
+    await vi.waitFor(() => expect(f.engine.state().routines[0]!.runs[0]!.threadId).toBe('thread'));
+    expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('cancelled');
+    expect(f.dependencies.start).not.toHaveBeenCalled();
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+  });
+
+  it('cancels a late returned turn after persistence failure stops the engine', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    f.dependencies.save = vi.fn(() => {
+      throw new Error('disk full');
+    });
+    await expect(f.engine.setEnabled(routine.id, false)).rejects.toThrow('disk full');
+    expect(f.engine.state().routines[0]!.runs[0]!.finishedAt).toBeUndefined();
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.dependencies.cancel).toHaveBeenCalledWith('root', 'thread', 'turn'),
+    );
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('interrupted'),
+    );
+    expect(f.dependencies.cancel).toHaveBeenCalledOnce();
+    expect(f.engine.state().error).toMatch(/store could not be written/);
+  });
+
+  it('bounds unidentified lifecycle evidence and stops only the returned turn on overflow', async () => {
+    const f = fixture();
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    for (let index = 0; index < 101; index += 1) {
+      f.engine.note('root', {
+        type: 'user-input-requested',
+        threadId: 'thread',
+        turnId: 'another-actor-turn',
+        requestId: `input-${index}`,
+        question: 'Continue?',
+      });
+    }
+    expect(f.engine.state().routines[0]!.schedule.enabled).toBe(false);
+    expect(f.engine.state().routines[0]!.pausedReason).toMatch(/outcome is unknown/);
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('interrupted'),
+    );
+    expect(f.dependencies.cancel).toHaveBeenCalledOnce();
+    expect(f.dependencies.cancel).toHaveBeenCalledWith('root', 'thread', 'turn');
+  });
+
+  it('does not overwrite a confirmed terminal event when cancellation later rejects', async () => {
+    const f = fixture();
+    const cancel = deferred<void>();
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    f.dependencies.cancel = vi.fn(() => cancel.promise);
+    const paused = f.engine.setEnabled(routine.id, false);
+    await vi.waitFor(() => expect(f.dependencies.cancel).toHaveBeenCalledOnce());
+    f.engine.note('root', finished());
+    cancel.reject(new Error('interrupt timed out'));
+    await paused;
+    expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('completed');
+    expect(f.engine.state().routines[0]!.pausedReason).toBeNull();
+  });
+
+  it('does not dispatch a queued cancellation after the owned turn already finished', async () => {
+    const f = fixture();
+    const routine = f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    const paused = f.engine.setEnabled(routine.id, false);
+    f.engine.note('root', finished());
+    await paused;
+    expect(f.dependencies.cancel).not.toHaveBeenCalled();
+    expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('completed');
   });
 
   it('does not launch if durable claim persistence fails', async () => {

@@ -96,6 +96,8 @@ export type NotebookUploadResult = z.infer<typeof uploadSchema>;
 export interface NotebookApiDependencies {
   fetchImpl?: typeof fetch;
   getCsrfToken?: () => Promise<string>;
+  bearerAuthenticated?: boolean;
+  assertCurrent?: () => void;
 }
 
 export interface NotebookApi {
@@ -158,19 +160,25 @@ function apiError(body: unknown, status: number): NotebookApiError {
 export function createNotebookApi(dependencies: NotebookApiDependencies = {}): NotebookApi {
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const getCsrfToken = dependencies.getCsrfToken ?? getBrowserCsrfToken;
+  const assertCurrent = dependencies.assertCurrent ?? (() => undefined);
+  const mutationHeaders = async () =>
+    dependencies.bearerAuthenticated ? {} : { 'x-csrf-token': await getCsrfToken() };
 
   async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
     let response: Response;
     try {
-      response = await fetchImpl(path, { credentials: 'include', ...init });
+      assertCurrent();
+      response = await fetchImpl(path, {
+        credentials: dependencies.bearerAuthenticated ? 'omit' : 'include',
+        ...init,
+      });
     } catch (error) {
+      assertCurrent();
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
-      throw new NotebookApiError(
-        'Could not reach managed Code. Check your connection and retry.',
-        0,
-      );
+      throw new NotebookApiError('Could not confirm the managed Code response.', 0);
     }
     const body = await responseBody(response);
+    assertCurrent();
     if (!response.ok) throw apiError(body, response.status);
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
@@ -185,7 +193,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
         `/api/code/sessions/${encodeURIComponent(sessionId)}/notebook/execute`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-csrf-token': await getCsrfToken() },
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
           body: JSON.stringify(input),
           signal,
         },
@@ -197,7 +205,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
         `/api/code/sessions/${encodeURIComponent(sessionId)}/notebook/run-all`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-csrf-token': await getCsrfToken() },
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
           body: JSON.stringify(input),
           signal,
         },
@@ -219,7 +227,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
         `/api/code/sessions/${encodeURIComponent(sessionId)}/notebook/files`,
         {
           method: 'POST',
-          headers: { 'x-csrf-token': await getCsrfToken() },
+          headers: await mutationHeaders(),
           body: formData,
           signal,
         },

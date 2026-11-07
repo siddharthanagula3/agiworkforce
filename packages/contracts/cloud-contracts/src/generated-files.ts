@@ -9,6 +9,15 @@ import {
 export const GENERATED_FILE_SURFACES = ['artifact', 'file'] as const;
 export type GeneratedFileSurface = (typeof GENERATED_FILE_SURFACES)[number];
 
+export const GENERATED_FIGURE_IDENTITY_PATTERN =
+  /^matplotlib-v1:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{64}$/;
+
+export function readGeneratedFigureIdentity(value: unknown): string | undefined {
+  return typeof value === 'string' && GENERATED_FIGURE_IDENTITY_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
 export const GeneratedFileWireSchema = z.object({
   id: z.string().min(1),
   file_name: z.string().min(1),
@@ -17,6 +26,7 @@ export const GeneratedFileWireSchema = z.object({
   byte_count: z.number().nonnegative(),
   kind: z.string(),
   checksum_sha256: z.string().optional(),
+  render_identity: z.string().regex(GENERATED_FIGURE_IDENTITY_PATTERN).optional().catch(undefined),
   surface: z.enum(GENERATED_FILE_SURFACES).default('file').catch('file'),
   previewable: z.boolean().default(false).catch(false),
 });

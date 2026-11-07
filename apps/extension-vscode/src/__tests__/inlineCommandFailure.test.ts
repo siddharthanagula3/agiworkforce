@@ -50,7 +50,9 @@ describe('inline command failure handling', () => {
   });
 
   it('lets the progress notification close before it asks the user anything', () => {
-    expect(inline).toMatch(/catch \(err\) \{\s*cancelSource\.dispose\(\);\s*return err;\s*\}/u);
+    expect(inline).toMatch(/catch \(err\) \{\s*return err;\s*\} finally \{/u);
+    expect(inline).toContain('cancellation.dispose()');
+    expect(inline).toContain('cancelSource.dispose()');
     expect(inline.indexOf('showCloudUtilityErrorActions(failure')).toBeGreaterThan(
       inline.indexOf('const failure = await vscode.window.withProgress('),
     );

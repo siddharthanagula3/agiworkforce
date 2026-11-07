@@ -201,6 +201,7 @@ describe('runToolLoop, manual approval suspend', () => {
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
     expect(onApprovalCheckpoint).toHaveBeenCalledWith({
+      toolSchemaState: { loadedQualifiedNames: [GITHUB_TOOL] },
       sessionId: 'req-1',
       turnId: 'req-1',
       nextEventSequence: 6,

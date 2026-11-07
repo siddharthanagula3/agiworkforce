@@ -17,6 +17,7 @@ vi.mock('react-i18next', () => ({
           'sidebar.actions.rename': 'Rename',
           'sidebar.actions.archive': 'Archive',
           'sidebar.actions.delete': 'Delete',
+          'sidebar.projects.newChat': 'New chat in project',
         }) as Record<string, string>
       )[key] ?? key,
   }),
@@ -40,11 +41,15 @@ vi.mock('../../chat/conversationExport', async (importOriginal) => {
 });
 
 import { ConversationRow } from '../ConversationRow';
+import { ProjectRow } from '../ProjectRow';
 
 type AppmodestoreModule = typeof import('../../../stores/appModeStore');
 type ConversationexportModule = typeof import('../../chat/conversationExport');
 
-function renderRow(onDelete = vi.fn()) {
+function renderRow(
+  onDelete = vi.fn(),
+  options: { active?: boolean; openMenu?: boolean; onSelect?: (id: string) => void } = {},
+) {
   render(
     <ConversationRow
       conversation={{
@@ -56,8 +61,8 @@ function renderRow(onDelete = vi.fn()) {
         updatedAt: new Date('2026-10-01T10:00:00Z'),
         executionMode: 'local_only',
       }}
-      active
-      onSelect={vi.fn()}
+      active={options.active ?? true}
+      onSelect={options.onSelect ?? vi.fn()}
       onRename={vi.fn()}
       onDelete={onDelete}
       onTogglePin={vi.fn()}
@@ -67,7 +72,9 @@ function renderRow(onDelete = vi.fn()) {
       onMoveToProject={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+  if (options.openMenu !== false) {
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+  }
   return onDelete;
 }
 
@@ -78,6 +85,74 @@ describe('ConversationRow export and delete', () => {
   });
 
   afterEach(() => cleanup());
+
+  it('opens an inactive chat menu by keyboard without selecting the chat and restores focus', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    renderRow(vi.fn(), { active: false, openMenu: false, onSelect });
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Budget review' })).toHaveFocus();
+    await user.tab();
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(onSelect).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('reaches both inactive project actions without opening the project', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const onNewChat = vi.fn();
+    render(
+      <ProjectRow
+        project={{
+          id: 'project-1',
+          name: 'Launch planning',
+          description: '',
+          customInstructions: '',
+          files: [],
+          conversationIds: [],
+          isArchived: false,
+          createdAt: '2026-10-01T10:00:00Z',
+          updatedAt: '2026-10-01T10:00:00Z',
+        }}
+        active={false}
+        accentColor="var(--chat-text-secondary)"
+        onOpen={onOpen}
+        onNewChat={onNewChat}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onArchive={vi.fn()}
+      />,
+    );
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Launch planning' })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'New chat in project' })).toHaveFocus();
+    await user.tab();
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    expect(trigger).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+    await user.tab({ shift: true });
+    await user.keyboard('{Enter}');
+    expect(onNewChat).toHaveBeenCalledWith('project-1');
+    expect(onOpen).not.toHaveBeenCalled();
+  });
 
   it('exports a Local chat as Markdown or PDF from the row menu', async () => {
     const user = userEvent.setup();

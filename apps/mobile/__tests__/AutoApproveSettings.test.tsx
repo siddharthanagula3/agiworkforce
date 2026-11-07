@@ -8,6 +8,11 @@ import {
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
 } from '@agiworkforce/types';
 
+const mockHistoryGet = jest.fn();
+jest.mock('@/services/api', () => ({
+  api: { get: (...args: unknown[]) => mockHistoryGet(...args) },
+}));
+
 const mockFetchNamespace = jest.fn();
 const mockSaveNamespace = jest.fn();
 
@@ -44,6 +49,7 @@ jest.mock('@/services/preferences', () => ({
 }));
 
 jest.mock('@/lib/mmkv', () => ({
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
     if (store?.persist?.rehydrate) store.persist.rehydrate();
@@ -56,6 +62,11 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 import AutoApproveScreen from '../app/(app)/settings/auto-approve';
+import {
+  activateCloudAccount,
+  __resetCloudAccountSessionForTests,
+} from '../src/features/auth/services/cloudAccountSession';
+import { getToolApprovalPolicySnapshot } from '../src/features/settings/tool-approvals/toolApprovalPolicyOwner';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -72,6 +83,11 @@ function rowLabel(option: (typeof TOOL_APPROVAL_POLICY_OPTIONS)[number]): string
 describe('Action approvals settings screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockHistoryGet.mockResolvedValue({ approvals: [] });
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('user-1');
+    useAuthStore.setState({ isClerkLoaded: true, clerkUserId: 'user-1' });
+    mockAutonomyAllowed = true;
     mockFetchNamespace.mockResolvedValue({ defaultPolicy: DEFAULT_TOOL_APPROVAL_POLICY });
     mockSaveNamespace.mockResolvedValue(undefined);
     useSettingsStore.setState({ toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY });
@@ -97,6 +113,7 @@ describe('Action approvals settings screen', () => {
     expect(useSettingsStore.getState().toolApprovalPolicy).toBe('auto_approve_read_only');
     expect(mockFetchNamespace).not.toHaveBeenCalled();
     expect(mockSaveNamespace).not.toHaveBeenCalled();
+    expect(mockHistoryGet).not.toHaveBeenCalled();
   });
 
   it('offers the autonomous policy as its own row', () => {
@@ -115,19 +132,30 @@ describe('Action approvals settings screen', () => {
     const screen = render(<AutoApproveScreen />);
 
     await waitFor(() =>
-      expect(mockFetchNamespace).toHaveBeenCalledWith(TOOL_APPROVAL_PREFERENCE_NAMESPACE),
+      expect(mockFetchNamespace).toHaveBeenCalledWith(
+        TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+        expect.objectContaining({
+          accountEpoch: expect.objectContaining({ ownerId: 'user-1' }),
+          signal: expect.anything(),
+        }),
+      ),
     );
     await waitFor(() =>
-      expect(useSettingsStore.getState().toolApprovalPolicy).toBe('auto_approve_read_only'),
+      expect(getToolApprovalPolicySnapshot().policy).toBe('auto_approve_read_only'),
     );
 
     await act(async () => {
       fireEvent.press(screen.getByLabelText(rowLabel(TOOL_APPROVAL_POLICY_OPTIONS[0])));
     });
 
-    expect(mockSaveNamespace).toHaveBeenCalledWith(TOOL_APPROVAL_PREFERENCE_NAMESPACE, {
-      defaultPolicy: 'ask_every_time',
-    });
+    expect(mockSaveNamespace).toHaveBeenCalledWith(
+      TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+      { defaultPolicy: 'ask_every_time' },
+      expect.objectContaining({
+        accountEpoch: expect.objectContaining({ ownerId: 'user-1' }),
+        signal: expect.anything(),
+      }),
+    );
   });
 
   it('restores the previous policy and says so when the server rejects the write', async () => {
@@ -136,7 +164,11 @@ describe('Action approvals settings screen', () => {
     mockSaveNamespace.mockRejectedValue(new Error('Preference service unavailable'));
 
     const screen = render(<AutoApproveScreen />);
-    await waitFor(() => expect(mockFetchNamespace).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByLabelText(rowLabel(READ_ONLY)).props.accessibilityState.disabled).toBe(
+        false,
+      ),
+    );
 
     await act(async () => {
       fireEvent.press(screen.getByLabelText(rowLabel(READ_ONLY)));
@@ -145,11 +177,16 @@ describe('Action approvals settings screen', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          'Your approval default could not be saved. Check your connection and try again.',
+          'Your approval default could not be saved. The server may have received the change. Retry to reload it.',
         ),
       ).toBeTruthy(),
     );
     expect(screen.queryByText('Preference service unavailable')).toBeNull();
+    expect(getToolApprovalPolicySnapshot()).toMatchObject({
+      policy: DEFAULT_TOOL_APPROVAL_POLICY,
+      status: 'error',
+      ready: true,
+    });
     expect(useSettingsStore.getState().toolApprovalPolicy).toBe(DEFAULT_TOOL_APPROVAL_POLICY);
   });
 
@@ -171,5 +208,36 @@ describe('Action approvals settings screen', () => {
 
     expect(mockSaveNamespace).not.toHaveBeenCalled();
     mockAutonomyAllowed = true;
+  });
+
+  it('keeps a failed initial Cloud load unselected and offers a working Retry', async () => {
+    mockFetchNamespace.mockRejectedValueOnce(new Error('offline'));
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
+    activateCloudAccount('user-1');
+    const screen = render(<AutoApproveScreen />);
+    const retry = await screen.findByLabelText('Retry loading approval default');
+    for (const option of TOOL_APPROVAL_POLICY_OPTIONS) {
+      expect(screen.getByLabelText(rowLabel(option)).props.accessibilityState).toMatchObject({
+        selected: false,
+        disabled: true,
+      });
+    }
+    mockFetchNamespace.mockResolvedValueOnce({ defaultPolicy: 'auto_approve_read_only' });
+    fireEvent.press(retry);
+    await waitFor(() =>
+      expect(screen.getByLabelText(rowLabel(READ_ONLY)).props.accessibilityState).toMatchObject({
+        selected: true,
+        disabled: false,
+      }),
+    );
+  });
+
+  it('does not offer a dead Retry while signed out', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null });
+    const screen = render(<AutoApproveScreen />);
+    expect(screen.getByText('Sign in to load your account approval default.')).toBeTruthy();
+    expect(screen.queryByLabelText('Retry loading approval default')).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
   buildToolApprovalPolicyRows,
@@ -9,6 +9,16 @@ import {
   toolApprovalPolicySentence,
   TOOL_APPROVAL_PRECEDENCE,
 } from '@/lib/tool-approval-view';
+
+type ProductTypesModule = typeof import('@agiworkforce/types');
+
+const connectorRelease = vi.hoisted(() => ({ any: true, all: false }));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<ProductTypesModule>()),
+  hasReleasedConnectors: () => connectorRelease.any,
+  connectorsReleased: () => connectorRelease.all,
+}));
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
@@ -47,6 +57,11 @@ function documentedReadOnlyVerdicts(): Map<string, string> {
 }
 
 describe('AgentPermissionsPage', () => {
+  beforeEach(() => {
+    connectorRelease.any = true;
+    connectorRelease.all = false;
+  });
+
   it('states when the page was last updated', () => {
     render(<AgentPermissionsPage />);
 
@@ -117,5 +132,37 @@ describe('AgentPermissionsPage', () => {
       }
     }
     expect(disagreements, disagreements.join('\n')).toEqual([]);
+  });
+
+  it.each([
+    {
+      any: false,
+      all: false,
+      disclosure: 'Connectors are coming soon, and none can be connected yet.',
+    },
+    {
+      any: true,
+      all: false,
+      disclosure:
+        'Selected connectors can be connected when your plan, region and provider setup permit them.',
+    },
+    {
+      any: true,
+      all: true,
+      disclosure:
+        'Released connectors can be connected when your plan, region and provider setup permit them.',
+    },
+  ])('discloses connector availability for any=$any, all=$all', ({ any, all, disclosure }) => {
+    connectorRelease.any = any;
+    connectorRelease.all = all;
+
+    render(<AgentPermissionsPage />);
+
+    expect(screen.getByRole('heading', { name: 'What connectors request.' })).toBeInTheDocument();
+    expect(screen.getByText(disclosure, { exact: false })).toBeInTheDocument();
+    if (any) {
+      expect(screen.queryByText(/none can be connected yet/)).not.toBeInTheDocument();
+      expect(screen.getByText(/listing alone does not grant access/)).toBeInTheDocument();
+    }
   });
 });

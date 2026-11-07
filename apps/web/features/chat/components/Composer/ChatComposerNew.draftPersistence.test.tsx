@@ -21,7 +21,8 @@ import { ChatComposerNew } from './ChatComposerNew';
  * that never reached the unmount cleanup, and the same sign-out and
  * cross-conversation rules the memory-only path already holds.
  */
-const { editorHandle, editorProps } = vi.hoisted(() => ({
+const { editorHandle, editorProps, draftIdentityMock } = vi.hoisted(() => ({
+  draftIdentityMock: { generation: 0 },
   editorHandle: {
     setText: vi.fn(),
     insertText: vi.fn(),
@@ -116,6 +117,7 @@ function draftStorageKeys(): string[] {
 function simulateDocumentReload() {
   useChatStore.setState({
     draftsByConversation: {},
+    draftOwnersByConversation: {},
     draftContent: '',
     composerTogglesByConversation: {},
   });
@@ -129,6 +131,7 @@ beforeEach(() => {
   useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
   useChatStore.setState({
     draftsByConversation: {},
+    draftOwnersByConversation: {},
     draftContent: '',
     composerTogglesByConversation: {},
     activeConversationId: null,
@@ -333,4 +336,62 @@ describe('the unsaved surface', () => {
 
     expect(textarea().value).toBe(DRAFT);
   });
+});
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const capture = () => {
+    const generation = draftIdentityMock.generation;
+    return { isCurrent: () => generation === draftIdentityMock.generation };
+  };
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+  };
+});
+
+describe('composer cleanup draft ownership', () => {
+  it('does not replace an accepted empty-clear owner when navigation parks an empty composer', async () => {
+    useChatStore.getState().clearDraftContent('conv-1');
+    const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+    const owner = useChatStore.getState().draftOwnersByConversation['conv-1'];
+    view.unmount();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useChatStore.getState().draftOwnersByConversation['conv-1']).toBe(owner);
+  });
+
+  it('does not replace a newer draft slot during same-identity teardown', async () => {
+    const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+    typeInTextarea(DRAFT);
+    view.unmount();
+    useChatStore.getState().setDraftContent('new identity text', 'conv-1');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useChatStore.getState().getDraftContent('conv-1')).toBe('new identity text');
+  });
+});
+
+it('does not attempt cleanup parking after only the identity changes', async () => {
+  const original = useChatStore.getState().setDraftContent;
+  const setDraftContent = vi.fn(original);
+  useChatStore.setState({ setDraftContent });
+  try {
+    const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+    typeInTextarea(DRAFT);
+    const owner = useChatStore.getState().draftOwnersByConversation['conv-1'];
+    setDraftContent.mockClear();
+    view.unmount();
+    draftIdentityMock.generation += 1;
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(useChatStore.getState().draftOwnersByConversation['conv-1']).toBe(owner);
+    expect(setDraftContent).not.toHaveBeenCalled();
+  } finally {
+    useChatStore.setState({ setDraftContent: original });
+  }
 });

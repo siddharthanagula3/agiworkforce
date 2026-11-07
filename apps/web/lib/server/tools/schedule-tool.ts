@@ -106,6 +106,7 @@ export interface ScheduleToolContext {
   userId: string;
   clientTimeZone?: string | undefined;
   temporaryChat: boolean;
+  signal?: AbortSignal;
 }
 
 function refused(message: string): { content: string; isError: boolean } {
@@ -116,6 +117,7 @@ export async function executeScheduleTool(
   args: Record<string, unknown>,
   context: ScheduleToolContext,
 ): Promise<{ content: string; isError: boolean }> {
+  context.signal?.throwIfAborted();
   const parsed = ScheduleArgs.safeParse(args);
   if (!parsed.success) {
     return {
@@ -142,12 +144,16 @@ export async function executeScheduleTool(
 
   try {
     const planTier = await resolveEntitledPlanTier(context.db, context.userId);
+    context.signal?.throwIfAborted();
     const schedule = await context.db.transaction(async (tx) => {
+      context.signal?.throwIfAborted();
       await tx.execute('select pg_advisory_xact_lock(hashtext($1))', [
         `scheduled_tasks:${context.userId}`,
       ]);
+      context.signal?.throwIfAborted();
       await assertScheduleQuota(tx, context.userId, planTier);
-      return createSchedule(tx, context.userId, input, { planTier });
+      context.signal?.throwIfAborted();
+      return createSchedule(tx, context.userId, input, { planTier, signal: context.signal });
     });
     return {
       content: JSON.stringify({
@@ -160,6 +166,7 @@ export async function executeScheduleTool(
       isError: false,
     };
   } catch (error) {
+    if (context.signal?.aborted && error === context.signal.reason) throw error;
     if (
       error instanceof ScheduleLimitError ||
       error instanceof ScheduleValidationError ||

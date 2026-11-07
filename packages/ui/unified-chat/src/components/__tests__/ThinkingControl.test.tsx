@@ -35,12 +35,12 @@ describe('ThinkingControl', () => {
     useModelStore.setState({ thinkingEnabled: false });
   });
 
-  it('renders a static always-on badge and snaps the store on for a model that cannot disable thinking', () => {
+  it('renders required reasoning without overwriting the saved global preference', () => {
     render(<ThinkingControl modelId={alwaysOnModelId} />);
 
     expect(screen.getByTestId('thinking-always-on')).toBeTruthy();
     expect(screen.queryByRole('switch')).toBeNull();
-    expect(useModelStore.getState().thinkingEnabled).toBe(true);
+    expect(useModelStore.getState().thinkingEnabled).toBe(false);
   });
 
   it('renders an operable switch for a model with a real on/off contract', async () => {

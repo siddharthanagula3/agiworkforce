@@ -5,7 +5,7 @@ import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   Check,
@@ -18,7 +18,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   Volume2,
-  Share2,
+  MoreHorizontal,
   Square,
   ShieldAlert,
   Quote,
@@ -364,7 +364,7 @@ function VariantPager({
         disabled={!previousId}
         accessibilityRole="button"
         accessibilityLabel={`Previous ${noun}`}
-        style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ChevronLeft size={16} color={previousId ? colors.textSecondary : colors.textMuted} />
       </PressableBox>
@@ -376,7 +376,7 @@ function VariantPager({
         disabled={!nextId}
         accessibilityRole="button"
         accessibilityLabel={`Next ${noun}`}
-        style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
       >
         <ChevronRight size={16} color={nextId ? colors.textSecondary : colors.textMuted} />
       </PressableBox>
@@ -476,6 +476,7 @@ function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  speechOwner?: voiceOutput.VoiceOutputOwner | null;
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
@@ -508,19 +509,30 @@ function MessageActionButton({
   icon: Icon,
   onPress,
   color,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   label: string;
   icon: React.ComponentType<{ size?: number; color?: string }>;
   onPress: () => void;
   color: string;
+  accessibilityActions?: AccessibilityActionInfo[];
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }) {
   return (
     <PressableBox
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={10}
-      style={{ padding: 6, borderRadius: 8 }}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
+      style={{
+        width: 44,
+        height: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radii.md,
+      }}
     >
       <Icon size={16} color={color} />
     </PressableBox>
@@ -529,6 +541,7 @@ function MessageActionButton({
 
 export const MessageBubble = memo(function MessageBubble({
   message,
+  speechOwner,
   onDeleteMessage,
   onRetryMessage,
   onEditImageArea,
@@ -849,30 +862,46 @@ export const MessageBubble = memo(function MessageBubble({
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
+  const speechRef = useRef<voiceOutput.VoiceOutputHandle | null>(null);
+  const speechScopeRef = useRef<object | null>(null);
+  const speechScope = useMemo(() => ({}), [message.id, message.content, speechOwner]);
+
+  useLayoutEffect(() => {
+    const scope = speechScope;
+    speechScopeRef.current = scope;
+    setIsSpeaking(false);
+    return () => {
+      if (speechScopeRef.current !== scope) return;
+      speechScopeRef.current = null;
+      const speech = speechRef.current;
+      speechRef.current = null;
+      void speech?.stop().catch(() => undefined);
+    };
+  }, [speechScope, setIsSpeaking]);
 
   const handleToggleReadAloud = useCallback(() => {
-    if (isSpeaking) {
-      void voiceOutput.stop();
+    if (speechScopeRef.current !== speechScope) return;
+    const previous = speechRef.current;
+    if (previous) {
+      speechRef.current = null;
+      void previous.stop().catch(() => undefined);
       setIsSpeaking(false);
       return;
     }
-    void voiceOutput.stop();
+    const scope = speechScope;
+    if (!speechOwner?.isCurrent()) return;
+    const speech = speechOwner.start(message.content, {
+      ...voiceOutput.speechOptionsFromSettings(),
+      serverVoice: speechOwner.source?.scope === 'cloud',
+    });
+    speechRef.current = speech;
     setIsSpeaking(true);
-    void voiceOutput
-      .speak(message.content, {
-        ...voiceOutput.speechOptionsFromSettings(),
-        serverVoice: appMode === 'cloud',
-        onDone: () => setIsSpeaking(false),
-        onStopped: () => setIsSpeaking(false),
-      })
-      .catch(() => setIsSpeaking(false));
-  }, [appMode, isSpeaking, message.content, setIsSpeaking]);
-
-  useEffect(() => {
-    return () => {
-      if (isSpeaking) void voiceOutput.stop();
-    };
-  }, [isSpeaking]);
+    void speech.done.then(() => {
+      if (speechRef.current !== speech || speechScopeRef.current !== scope) return;
+      speechRef.current = null;
+      setIsSpeaking(false);
+    });
+  }, [speechOwner, speechScope, message.content, setIsSpeaking]);
 
   const handleShowExport = useCallback(() => {
     setShowExportSheet(true);
@@ -1173,6 +1202,7 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const imageWidth = Math.min(width - 80, 320);
+  const isGroupedMessage = !isAssistant && !canonicalActivity;
 
   const messageContent = (
     <Animated.View
@@ -1183,14 +1213,21 @@ export const MessageBubble = memo(function MessageBubble({
       className="px-4 py-4"
     >
       <PressableBox
+        testID="chat.message.content"
         onLongPress={handleLongPress}
         delayLongPress={400}
-        accessible={!canonicalActivity}
-        accessibilityLabel={`${isUser ? 'Your' : roleLabel} message: ${message.content?.slice(0, 100) || 'empty'}`}
-        accessibilityHint="Double tap and hold for message actions"
-        accessibilityRole="text"
-        accessibilityActions={accessibilityActionsList}
-        onAccessibilityAction={handleAccessibilityAction}
+        accessible={isGroupedMessage}
+        focusable={isGroupedMessage}
+        importantForAccessibility={isGroupedMessage ? 'auto' : 'no'}
+        accessibilityLabel={
+          isGroupedMessage
+            ? `${isUser ? 'Your' : roleLabel} message: ${message.content?.slice(0, 100) || 'empty'}`
+            : undefined
+        }
+        accessibilityHint={isGroupedMessage ? 'Double tap and hold for message actions' : undefined}
+        accessibilityRole={isGroupedMessage ? 'text' : undefined}
+        accessibilityActions={isGroupedMessage ? accessibilityActionsList : undefined}
+        onAccessibilityAction={isGroupedMessage ? handleAccessibilityAction : undefined}
       >
         <View style={{ alignItems: isUser ? 'flex-end' : 'flex-start' }}>
           {isUser && message.isQueued && (
@@ -1425,7 +1462,7 @@ export const MessageBubble = memo(function MessageBubble({
             ))}
 
             {contentElements.length > 0 ? (
-              <View>
+              <View key={message.id}>
                 {contentElements}
                 {message.isStreaming && <StreamingIndicator label={streamingLabel} />}
               </View>
@@ -1453,6 +1490,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {isAssistant && (message.type === 'image' || message.imageUrl) && message.imageUrl && (
               <GeneratedImage
+                key={`${message.id}:${message.imageUrl}`}
                 imageUrl={message.imageUrl}
                 revisedPrompt={message.revisedPrompt}
                 width={imageWidth}
@@ -1509,6 +1547,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {isAssistant && (message.type === 'video' || message.videoUrl) && message.videoUrl && (
               <GeneratedVideo
+                key={`${message.id}:${message.videoUrl}`}
                 videoUrl={message.videoUrl}
                 thumbnailUrl={message.videoThumbnailUrl}
                 width={imageWidth}
@@ -1860,73 +1899,80 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       </PressableBox>
 
-      {/* Assistant action row (ChatGPT-style, always visible). These actions were
-          previously only reachable via a hidden 400ms long-press sheet (copy/retry/
-          export/delete) or an undiscoverable double-tap (reactions); surface the core
-          ones inline so a completed answer has visible affordances. Reuses the existing
-          copyToClipboard / onRetryMessage / onReaction handlers, the active thumb also
-          replaces the old standalone reaction badge. */}
-      {isAssistant && !message.isStreaming && message.content.trim() ? (
+      {isAssistant && message.content.trim() ? (
         <View
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 10 }}
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 2,
+            paddingLeft: 10,
+          }}
           accessibilityLabel="Message actions"
         >
-          {variant && onSelectVariant ? (
-            <VariantPager variant={variant} noun="response" onSelect={onSelectVariant} />
-          ) : null}
-          <MessageActionButton
-            label={copyControlLabel(copyStatus, 'Copy')}
-            icon={copyStatus === 'copied' ? Check : copyStatus === 'failed' ? TriangleAlert : Copy}
-            onPress={() => void copy(message.content)}
-            color={
-              copyStatus === 'copied'
-                ? themeColors.agentSuccess
-                : copyStatus === 'failed'
-                  ? themeColors.agentError
-                  : themeColors.textMuted
-            }
-          />
-          {/* Read aloud, reuses the on-device TTS service the voice companion
-              already uses. Toggles, so a long answer can be stopped without
-              waiting it out. */}
-          <MessageActionButton
-            label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
-            icon={isSpeaking ? Square : Volume2}
-            onPress={handleToggleReadAloud}
-            color={isSpeaking ? themeColors.teal : themeColors.textMuted}
-          />
-          {/* Share/export, the same sheet the long-press menu opens, surfaced
-              inline to match the reference apps. */}
-          <MessageActionButton
-            label="Share message"
-            icon={Share2}
-            onPress={handleShowExport}
-            color={themeColors.textMuted}
-          />
-          {onRetryMessage ? (
-            <MessageActionButton
-              label="Regenerate response"
-              icon={RefreshCw}
-              onPress={() => onRetryMessage(message.id)}
-              color={themeColors.textMuted}
-            />
-          ) : null}
-          {onReaction ? (
+          {!message.isStreaming ? (
             <>
+              {variant && onSelectVariant ? (
+                <VariantPager variant={variant} noun="response" onSelect={onSelectVariant} />
+              ) : null}
               <MessageActionButton
-                label="Good response"
-                icon={ThumbsUp}
-                onPress={() => applyReaction('thumbsUp')}
-                color={reaction === 'thumbsUp' ? themeColors.agentSuccess : themeColors.textMuted}
+                label={copyControlLabel(copyStatus, 'Copy')}
+                icon={
+                  copyStatus === 'copied' ? Check : copyStatus === 'failed' ? TriangleAlert : Copy
+                }
+                onPress={() => void copy(message.content)}
+                color={
+                  copyStatus === 'copied'
+                    ? themeColors.agentSuccess
+                    : copyStatus === 'failed'
+                      ? themeColors.agentError
+                      : themeColors.textMuted
+                }
               />
               <MessageActionButton
-                label="Bad response"
-                icon={ThumbsDown}
-                onPress={() => applyReaction('thumbsDown')}
-                color={reaction === 'thumbsDown' ? themeColors.agentError : themeColors.textMuted}
+                label={isSpeaking ? 'Stop reading aloud' : 'Read aloud'}
+                icon={isSpeaking ? Square : Volume2}
+                onPress={handleToggleReadAloud}
+                color={isSpeaking ? themeColors.teal : themeColors.textMuted}
               />
+              {onRetryMessage ? (
+                <MessageActionButton
+                  label="Regenerate response"
+                  icon={RefreshCw}
+                  onPress={() => onRetryMessage(message.id)}
+                  color={themeColors.textMuted}
+                />
+              ) : null}
+              {onReaction ? (
+                <>
+                  <MessageActionButton
+                    label="Good response"
+                    icon={ThumbsUp}
+                    onPress={() => applyReaction('thumbsUp')}
+                    color={
+                      reaction === 'thumbsUp' ? themeColors.agentSuccess : themeColors.textMuted
+                    }
+                  />
+                  <MessageActionButton
+                    label="Bad response"
+                    icon={ThumbsDown}
+                    onPress={() => applyReaction('thumbsDown')}
+                    color={
+                      reaction === 'thumbsDown' ? themeColors.agentError : themeColors.textMuted
+                    }
+                  />
+                </>
+              ) : null}
             </>
           ) : null}
+          <MessageActionButton
+            label={`More message actions for ${roleLabel}`}
+            icon={MoreHorizontal}
+            onPress={handleLongPress}
+            color={themeColors.textMuted}
+            accessibilityActions={accessibilityActionsList}
+            onAccessibilityAction={handleAccessibilityAction}
+          />
         </View>
       ) : null}
 
@@ -1947,6 +1993,7 @@ export const MessageBubble = memo(function MessageBubble({
       />
 
       <ImageFullScreen
+        key={`${message.id}:${fullScreenImageUrl}`}
         imageUrl={fullScreenImageUrl}
         prompt={message.imageGenPrompt ?? message.revisedPrompt}
         model={message.model}
@@ -1976,10 +2023,6 @@ export const MessageBubble = memo(function MessageBubble({
         }
       />
 
-      {/* VoiceOver rotor actions cannot reach the nested timeline controls while
-          the message wrapper owns the accessibility focus. Open the same
-          structured sheet used by the visible timeline instead of exposing a
-          raw provider/tool JSON alert. */}
       <ToolCallDetailsSheet tool={accessibilityTool} onClose={() => setAccessibilityTool(null)} />
 
       {isAssistant && (

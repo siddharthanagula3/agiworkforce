@@ -5,7 +5,7 @@ import { isIdentityRequestRejected } from '@agiworkforce/identity';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getSessionAccountDb } from '@/lib/server/session-account';
 import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -20,11 +20,12 @@ import { requireAuthenticatorEnrollment } from '@/lib/authenticator-enrollment';
 
 async function registerSignInFactor(
   userId: string,
+  subject: string,
   totpSecret: string,
   backupCodes: readonly string[],
 ): Promise<void> {
   try {
-    await getIdentityProvider().registerSecondFactor(userId, { totpSecret, backupCodes });
+    await getIdentityProvider().registerSecondFactor(subject, { totpSecret, backupCodes });
   } catch (error) {
     if (!isIdentityRequestRejected(error)) throw error;
     logger.error(
@@ -43,7 +44,10 @@ async function handleVerify2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId, sessionIdentity } = await getSessionAccountDb(
+    request,
+    TWO_FACTOR_SCOPE,
+  );
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -77,7 +81,7 @@ async function handleVerify2FA(request: NextRequest) {
   }
 
   const backupCodes = generateBackupCodes();
-  await registerSignInFactor(userId, secret, backupCodes);
+  await registerSignInFactor(userId, sessionIdentity.subject, secret, backupCodes);
   await db.query('delete from user_two_factor where user_id = $1', [userId]);
   await rememberMfaEnrollment(userId, true);
 
@@ -85,6 +89,7 @@ async function handleVerify2FA(request: NextRequest) {
 
   await announceTwoFactorChange({
     userId,
+    identitySubject: sessionIdentity.subject,
     event: 'two_factor_enabled',
     request,
     organizationId,

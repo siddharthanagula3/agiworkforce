@@ -11,14 +11,16 @@ const authMocks = vi.hoisted(() => ({
   isSignedIn: true,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } = await import('../identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
     getToken: authMocks.getToken,
     userId: authMocks.userId,
     isSignedIn: authMocks.isSignedIn,
     isLoaded: true,
-  }),
-}));
+    sessionId: 'session-1',
+  }));
+});
 
 vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: async () => 'csrf-token',

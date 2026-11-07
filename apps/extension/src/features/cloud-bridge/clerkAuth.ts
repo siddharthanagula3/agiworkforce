@@ -72,15 +72,18 @@ function getClientOptions() {
   return { publishableKey, syncHost: syncHost.origin };
 }
 
-async function getNativeClient(forceRefresh = false): Promise<ClerkClient> {
+function getNativeClient(forceRefresh = false): Promise<ClerkClient> {
   assertClerkExtensionAuthConfigured();
   if (forceRefresh) nativeClient = null;
-  nativeClient ??= createClerkClient({ ...getClientOptions(), background: true }).catch(
-    (error: unknown) => {
-      nativeClient = null;
-      throw error;
-    },
-  );
+  if (!nativeClient) {
+    const clientRequest = createClerkClient({ ...getClientOptions(), background: true }).catch(
+      (error: unknown) => {
+        if (nativeClient === clientRequest) nativeClient = null;
+        throw error;
+      },
+    );
+    nativeClient = clientRequest;
+  }
   return nativeClient;
 }
 
@@ -169,16 +172,34 @@ export async function getFreshClerkAuthContext(
   if (!isClerkExtensionAuthConfigured()) return null;
   if (!isBackgroundServiceWorker()) return requestBackgroundAuthContext(forceRefresh);
 
-  const clerk = await getNativeClient(forceRefresh);
+  const clientRequest = getNativeClient(forceRefresh);
+  const clerk = await clientRequest;
+  if (nativeClient !== clientRequest) {
+    throw new Error('Unable to obtain an origin-bound AGI Cloud session. Try again.');
+  }
   const session = clerk.session;
   if (!session) return null;
+  const accountId = clerk.user?.id ?? session.user?.id;
+  const sessionId = session.id;
+  const assertCurrentSession = (): void => {
+    if (
+      nativeClient !== clientRequest ||
+      clerk.session !== session ||
+      (clerk.user?.id ?? session.user?.id) !== accountId ||
+      session.id !== sessionId
+    ) {
+      throw new Error('Unable to obtain an origin-bound AGI Cloud session. Try again.');
+    }
+  };
   const extensionOrigin = chrome.runtime.getURL('').replace(/\/$/u, '');
   const requiresOriginBoundToken = session.lastActiveToken?.jwt?.claims.azp !== extensionOrigin;
   let token = await session.getToken({ skipCache: forceRefresh || requiresOriginBoundToken });
+  assertCurrentSession();
   if (!token) return null;
   let owner = resolveSessionOwner(clerk, session, token);
   if (clerk.session !== session || !owner || !validExtensionCredential({ token, owner })) {
     token = await session.getToken({ skipCache: true });
+    assertCurrentSession();
     if (!token) return null;
     owner = resolveSessionOwner(clerk, session, token);
     if (clerk.session !== session || !owner || !validExtensionCredential({ token, owner })) {

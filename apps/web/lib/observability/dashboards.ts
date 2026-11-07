@@ -824,6 +824,23 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         aggregation: 'p99',
         groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
       },
+      {
+        id: 'postgres-cache-read-rate',
+        title: 'Postgres cache reads by outcome',
+        metric: METRIC_NAME.cacheReads,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.cacheCategory),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.cacheOutcome),
+        ],
+      },
+      {
+        id: 'postgres-cache-value-bytes-rate',
+        title: 'Postgres cache value bytes read per second',
+        metric: METRIC_NAME.cacheValueBytes,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.cacheCategory)],
+      },
     ],
   },
   {

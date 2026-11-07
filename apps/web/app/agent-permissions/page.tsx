@@ -21,6 +21,7 @@ import {
   TOOL_APPROVAL_PRECEDENCE,
 } from '@/lib/tool-approval-view';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
+import { connectorsReleased, hasReleasedConnectors } from '@agiworkforce/types';
 
 export const metadata = buildMetadata({
   title: 'Approvals',
@@ -36,7 +37,7 @@ const SECTIONS = [
   { label: 'A block is enforced on the server', id: 'blocking' },
   { label: 'Computer use in Chrome', id: 'browser-permissions' },
   { label: 'Local execution, local approval', id: 'desktop-permissions' },
-  { label: 'What connectors will request', id: 'connectors' },
+  { label: 'What connectors request', id: 'connectors' },
   { label: 'Every way to take access back', id: 'revocation' },
 ] as const;
 
@@ -76,6 +77,9 @@ const REVOKE: { k: string; v: string }[] = [
 ];
 
 export default function AgentPermissionsPage() {
+  const anyConnectorReleased = hasReleasedConnectors();
+  const allConnectorsReleased = connectorsReleased();
+
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
@@ -87,8 +91,8 @@ export default function AgentPermissionsPage() {
           lede={
             <>
               The exact default authority of the agent on each surface, the limits of the
-              protections we ship, the connector scopes requested once connectors open, and every
-              way to take access back.{' '}
+              protections we ship, the connector scopes requested when you connect, and every way to
+              take access back.{' '}
               <strong>It states the limits of these protections as well as what they do.</strong>{' '}
               The rules that govern how you use it are at{' '}
               <a href="/acceptable-use" className="agi-ds-link">
@@ -342,12 +346,17 @@ export default function AgentPermissionsPage() {
                   <div>
                     <Eyebrow>Connectors</Eyebrow>
                     <h2 className="agi-ds-h2" id="agi-perm-connectors-title">
-                      What connectors will request.
+                      What connectors request.
                     </h2>
                     <Prose>
-                      Connectors are coming soon, and none can be connected yet. The connector
-                      directory is larger than what will be connectable when they open. This section
-                      describes what is requested then, not the wider roadmap.
+                      {anyConnectorReleased
+                        ? allConnectorsReleased
+                          ? 'Released connectors can be connected when your plan, region and provider setup permit them.'
+                          : 'Selected connectors can be connected when your plan, region and provider setup permit them.'
+                        : 'Connectors are coming soon, and none can be connected yet.'}{' '}
+                      A directory listing alone does not grant access. Entries marked Coming soon or
+                      Needs setup cannot be connected. This section describes the credentials
+                      requested when you connect.
                     </Prose>
                   </div>
 

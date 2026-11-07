@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { StoredObjectTooLargeError } from './object-storage';
 
 const egress = vi.hoisted(() => ({ fetch: vi.fn(), privateHosts: new Set<string>() }));
 
@@ -19,6 +20,8 @@ const putObject = vi.fn();
 const putPrivateObject = vi.fn();
 const getObject = vi.fn();
 const getPrivateObject = vi.fn();
+const getBoundedObject = vi.fn();
+const getBoundedPrivateObject = vi.fn();
 const getObjectStream = vi.fn();
 const getPrivateObjectStream = vi.fn();
 const deleteObject = vi.fn();
@@ -33,11 +36,14 @@ const copyFile = vi.fn();
 const stat = vi.fn();
 const createReadStream = vi.fn();
 
-vi.mock('./object-storage', () => ({
+vi.mock('./object-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./object-storage')>()),
   putObject: (...args: unknown[]) => putObject(...args),
   putPrivateObject: (...args: unknown[]) => putPrivateObject(...args),
   getObject: (...args: unknown[]) => getObject(...args),
   getPrivateObject: (...args: unknown[]) => getPrivateObject(...args),
+  getBoundedObject: (...args: unknown[]) => getBoundedObject(...args),
+  getBoundedPrivateObject: (...args: unknown[]) => getBoundedPrivateObject(...args),
   getObjectStream: (...args: unknown[]) => getObjectStream(...args),
   getPrivateObjectStream: (...args: unknown[]) => getPrivateObjectStream(...args),
   deleteObject: (...args: unknown[]) => deleteObject(...args),
@@ -539,5 +545,110 @@ describe('storeMedia', () => {
     expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
     expect(getObject).not.toHaveBeenCalled();
     expect(deleteObject).not.toHaveBeenCalled();
+  });
+});
+
+describe('bounded stored media reads', () => {
+  const privatePath =
+    'private-media/file/0123456789abcdef0123456789abcdef/11111111-1111-4111-8111-111111111111.txt';
+  const localPath = privatePath.replace('private-media/', 'local-dev-media/');
+  const attachmentPath = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.png';
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubEnv('NODE_ENV', 'development');
+    isObjectStorageConfigured.mockReturnValue(true);
+    isPrivateObjectStorageConfigured.mockReturnValue(true);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([privatePath, attachmentPath, `${attachmentPath}.scanned`])(
+    'uses the private bounded reader for %s',
+    async (pathname) => {
+      const stored = { data: Buffer.from('ok'), contentType: 'text/plain' };
+      getBoundedPrivateObject.mockResolvedValue(stored);
+      await expect(readStoredMedia(pathname, 2)).resolves.toEqual(stored);
+      expect(getBoundedPrivateObject).toHaveBeenCalledWith(pathname, 2);
+      expect(getPrivateObject).not.toHaveBeenCalled();
+      expect(getBoundedObject).not.toHaveBeenCalled();
+    },
+  );
+
+  it('uses bounded public reads only for public keys or missing legacy private keys', async () => {
+    getBoundedPrivateObject.mockResolvedValue(null);
+    getBoundedObject.mockResolvedValue({ data: Buffer.from('ok') });
+    await readStoredMedia(attachmentPath, 2);
+    expect(getBoundedObject).toHaveBeenCalledWith(attachmentPath, 2);
+    await readStoredMedia('media/legacy.txt', 2);
+    expect(getBoundedObject).toHaveBeenCalledWith('media/legacy.txt', 2);
+    expect(getObject).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back after a private size refusal or for a missing sealed key', async () => {
+    const failure = new StoredObjectTooLargeError(attachmentPath, 2);
+    getBoundedPrivateObject.mockRejectedValueOnce(failure).mockResolvedValueOnce(null);
+    await expect(readStoredMedia(attachmentPath, 2)).rejects.toBe(failure);
+    await expect(readStoredMedia(`${attachmentPath}.scanned`, 2)).resolves.toBeNull();
+    expect(getBoundedObject).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, 0.5, Infinity, NaN])('refuses invalid budget %s before storage', async (limit) => {
+    await expect(readStoredMedia(privatePath, limit)).rejects.toBeInstanceOf(RangeError);
+    expect(getBoundedPrivateObject).not.toHaveBeenCalled();
+  });
+
+  it('refuses advertised local oversize before opening a stream', async () => {
+    stat.mockResolvedValue({ size: 3 });
+    await expect(readStoredMedia(localPath, 2)).rejects.toBeInstanceOf(StoredObjectTooLargeError);
+    expect(createReadStream).not.toHaveBeenCalled();
+    expect(readFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['exact cap', 2, [Buffer.from('ok')], false],
+    ['zero-byte file', 0, [], false],
+    ['growth after stat', 2, [Buffer.from('ok'), Buffer.from('!')], true],
+  ] as const)(
+    'counts local bytes and destroys the stream: %s',
+    async (_label, limit, chunks, fails) => {
+      stat.mockResolvedValue({ size: limit });
+      const destroy = vi.fn();
+      createReadStream.mockReturnValue({
+        destroy,
+        async *[Symbol.asyncIterator]() {
+          yield* chunks;
+        },
+      });
+      const result = readStoredMedia(localPath, limit);
+      if (fails) await expect(result).rejects.toBeInstanceOf(StoredObjectTooLargeError);
+      else
+        await expect(result).resolves.toEqual({
+          data: Buffer.concat(chunks),
+          contentType: undefined,
+        });
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(readFile).not.toHaveBeenCalled();
+    },
+  );
+
+  it('destroys a failed local stream and preserves the read error', async () => {
+    stat.mockResolvedValue({ size: 1 });
+    const failure = new Error('read failed');
+    const destroy = vi.fn();
+    createReadStream.mockReturnValue({
+      destroy,
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('a');
+        throw failure;
+      },
+    });
+    await expect(readStoredMedia(localPath, 2)).rejects.toBe(failure);
+    expect(destroy).toHaveBeenCalledOnce();
+  });
+
+  it('preserves missing local files as null', async () => {
+    stat.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+    await expect(readStoredMedia(localPath, 2)).resolves.toBeNull();
+    expect(createReadStream).not.toHaveBeenCalled();
   });
 });

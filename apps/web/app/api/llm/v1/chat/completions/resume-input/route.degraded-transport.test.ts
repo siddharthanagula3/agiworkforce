@@ -1,3 +1,4 @@
+type RequestProcessorModule = typeof import('../lib/request-processor');
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 type ScanModule0 = typeof import('../lib/managed-failover');
@@ -53,7 +54,8 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 }));
 
 const mockProcessRequest = vi.fn();
-vi.mock('../lib/request-processor', () => ({
+vi.mock('../lib/request-processor', async (importOriginal) => ({
+  ...(await importOriginal<RequestProcessorModule>()),
   processRequest: (...args: unknown[]) => mockProcessRequest(...args),
   toManagedSkillFromUserSkill: vi.fn(),
   resolveNativeSearchMaxUses: () => 3,

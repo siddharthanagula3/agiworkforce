@@ -19,6 +19,7 @@ export function ProductAnalyticsConsentRow() {
       unavailableLabel="Your product analytics choice could not be loaded."
       readGranted={readProductAnalyticsConsent}
       onSaved={applyAnalyticsConsentLocally}
+      onWithdrawalRequested={() => applyAnalyticsConsentLocally(false)}
     />
   );
 }

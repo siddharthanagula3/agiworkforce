@@ -12,6 +12,7 @@ export interface QueuedMessage {
   conversationId: string;
   content: string;
   model: string;
+  skillName?: string;
   queuedAt: string;
   retryCount: number;
   provenance: OfflineQueueProvenance;
@@ -34,6 +35,7 @@ interface PersistedQueueEntry {
   conversationId: string;
   content: string;
   model: string;
+  skillName?: string;
   queuedAt: string;
   retryCount: number;
   provenance: OfflineQueueProvenance;
@@ -60,8 +62,14 @@ function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
     Number.isInteger(entry.retryCount) &&
     entry.retryCount >= 0 &&
     entry.retryCount <= MAX_RETRY_COUNT &&
-    isOfflineQueueProvenance(entry.provenance)
+    isOfflineQueueProvenance(entry.provenance) &&
+    (entry.skillName === undefined ||
+      (entry.provenance.scope === 'cloud' && isQueuedSkillName(entry.skillName)))
   );
+}
+
+function isQueuedSkillName(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function normalizedOwnerId(ownerId: unknown): string | null {
@@ -97,7 +105,8 @@ function hasSameProvenance(left: OfflineQueueProvenance, right: OfflineQueueProv
 
 class OfflineMessageQueue {
   private queue: QueuedMessage[] = [];
-  private _isProcessing: boolean = false;
+  private generation = 0;
+  private processor: { generation: number } | null = null;
   private listeners = new Set<() => void>();
   private failureListeners = new Set<(entry: QueuedMessage, error: Error) => void>();
 
@@ -144,11 +153,12 @@ class OfflineMessageQueue {
     this.notify();
     try {
       const entries: PersistedQueueEntry[] = this.queue.map(
-        ({ id, conversationId, content, model, queuedAt, retryCount, provenance }) => ({
+        ({ id, conversationId, content, model, skillName, queuedAt, retryCount, provenance }) => ({
           id,
           conversationId,
           content,
           model,
+          skillName,
           queuedAt,
           retryCount,
           provenance,
@@ -186,8 +196,6 @@ class OfflineMessageQueue {
 
   /**
    * Add a message to the end of the queue.
-   * Ignores duplicates by conversationId + content to prevent double-queuing
-   * the same message on rapid reconnect cycles.
    *
    * @param onSuccess - Called after the message is successfully sent.
    * @param onFailure - Called if the message is dropped after exhausting retries.
@@ -196,11 +204,20 @@ class OfflineMessageQueue {
     msg: Omit<QueuedMessage, 'id' | 'queuedAt' | 'retryCount' | 'onSuccess' | 'onFailure'>,
     callbacks?: { onSuccess?: () => void; onFailure?: (error: Error) => void },
   ): QueuedMessage {
+    const provenance = requireOfflineQueueProvenance(msg.provenance);
+    if (
+      msg.skillName !== undefined &&
+      (provenance.scope !== 'cloud' || !isQueuedSkillName(msg.skillName))
+    ) {
+      throw new Error('A queued account skill requires Cloud scope and a non-empty name');
+    }
     const duplicate = this.queue.find(
       (q) =>
         q.conversationId === msg.conversationId &&
         q.content === msg.content &&
-        hasSameProvenance(q.provenance, msg.provenance),
+        q.model === msg.model &&
+        q.skillName === msg.skillName &&
+        hasSameProvenance(q.provenance, provenance),
     );
     if (duplicate) return duplicate;
 
@@ -211,7 +228,7 @@ class OfflineMessageQueue {
 
     const entry: QueuedMessage = {
       ...msg,
-      provenance: requireOfflineQueueProvenance(msg.provenance),
+      provenance,
       id: `qmsg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       queuedAt: new Date().toISOString(),
       retryCount: 0,
@@ -233,79 +250,87 @@ class OfflineMessageQueue {
   }
 
   get isProcessing(): boolean {
-    return this._isProcessing;
+    return this.processor !== null;
   }
 
-  async processQueue(sendFn: (msg: QueuedMessage) => Promise<void>): Promise<void> {
-    if (this._isProcessing || this.queue.length === 0) return;
+  async processQueue(
+    sendFn: (msg: QueuedMessage) => Promise<void>,
+    isReady: () => boolean = () => true,
+  ): Promise<void> {
+    if (this.processor || this.queue.length === 0) return;
 
-    this._isProcessing = true;
+    const processor = { generation: this.generation };
+    this.processor = processor;
+    const ownsQueue = () =>
+      this.processor === processor && processor.generation === this.generation;
 
-    while (this.queue.length > 0) {
-      const unsafeCloudEntry = this.queue.find((queued) => {
-        if (queued.provenance.scope !== 'cloud') return false;
-        const currentAccount = captureCloudAccountEpoch();
-        return !currentAccount || currentAccount.ownerId !== queued.provenance.ownerId;
-      });
-      if (unsafeCloudEntry) {
-        this.dropEntry(
-          unsafeCloudEntry,
-          new Error('Queued Cloud prompt belongs to a different or expired account'),
-        );
-        continue;
-      }
-
-      const currentMode = useChatAppModeStore.getState().appMode;
-      const entry = this.queue.find((queued) => queued.provenance.scope === currentMode);
-      if (!entry) break;
-      const account = entry.provenance.scope === 'cloud' ? captureCloudAccountEpoch() : null;
-
-      try {
-        await sendFn(entry);
-        if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
-          this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
+    try {
+      while (ownsQueue() && this.queue.length > 0) {
+        if (!isReady()) break;
+        const unsafeCloudEntry = this.queue.find((queued) => {
+          if (queued.provenance.scope !== 'cloud') return false;
+          const currentAccount = captureCloudAccountEpoch();
+          return !currentAccount || currentAccount.ownerId !== queued.provenance.ownerId;
+        });
+        if (unsafeCloudEntry) {
+          this.dropEntry(
+            unsafeCloudEntry,
+            new Error('Queued Cloud prompt belongs to a different or expired account'),
+          );
           continue;
         }
-        this.queue = this.queue.filter((q) => q.id !== entry.id);
-        this.persistToStorage();
+
+        const currentMode = useChatAppModeStore.getState().appMode;
+        const entry = this.queue.find((queued) => queued.provenance.scope === currentMode);
+        if (!entry) break;
+        const account = entry.provenance.scope === 'cloud' ? captureCloudAccountEpoch() : null;
+
         try {
-          entry.onSuccess?.();
-        } catch (cbErr) {
-          console.warn('[OfflineQueue] onSuccess callback error:', cbErr);
-        }
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        if (!this.queue.some((queued) => queued.id === entry.id)) {
-          continue;
-        }
-        if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
-          this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
-          continue;
-        }
-        entry.retryCount += 1;
-
-        if (entry.retryCount >= MAX_RETRY_COUNT) {
-          this.queue = this.queue.filter((q) => q.id !== entry.id);
+          await sendFn(entry);
+          if (!ownsQueue()) break;
+          if (!this.queue.includes(entry)) continue;
+          if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
+            this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
+            continue;
+          }
+          this.queue = this.queue.filter((queued) => queued !== entry);
           this.persistToStorage();
-          this.reportFailure(entry, error);
-          continue;
+          try {
+            entry.onSuccess?.();
+          } catch (cbErr) {
+            console.warn('[OfflineQueue] onSuccess callback error:', cbErr);
+          }
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          if (!ownsQueue()) break;
+          if (!this.queue.includes(entry)) continue;
+          if (entry.provenance.scope === 'cloud' && !isCloudAccountEpochCurrent(account)) {
+            this.dropEntry(entry, new Error('Cloud account changed while replaying queued prompt'));
+            continue;
+          }
+          entry.retryCount += 1;
+
+          if (entry.retryCount >= MAX_RETRY_COUNT) {
+            this.dropEntry(entry, error);
+            continue;
+          }
+
+          this.persistToStorage();
+          const delay = backoffDelay(entry.retryCount - 1);
+          await sleep(delay);
+          break;
         }
-
-        this.persistToStorage();
-        const delay = backoffDelay(entry.retryCount - 1);
-        await sleep(delay);
-        break;
       }
+    } finally {
+      if (this.processor === processor) this.processor = null;
     }
-
-    this._isProcessing = false;
   }
 
   clear(): void {
+    this.generation += 1;
     const cleared = this.queue;
     this.queue = [];
     for (const entry of cleared) this.reportFailure(entry, new Error('Queue cleared'));
-    this._isProcessing = false;
     this.persistToStorage();
   }
 
@@ -326,7 +351,8 @@ class OfflineMessageQueue {
   }
 
   private dropEntry(entry: QueuedMessage, error: Error): void {
-    this.queue = this.queue.filter((queued) => queued.id !== entry.id);
+    if (!this.queue.includes(entry)) return;
+    this.queue = this.queue.filter((queued) => queued !== entry);
     this.persistToStorage();
     this.reportFailure(entry, error);
   }

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Download, Film, Play } from 'lucide-react-native';
@@ -20,7 +20,11 @@ export interface GeneratedVideoProps {
 
 type LoadingAction = 'play' | 'save';
 
-export function GeneratedVideo({
+export function GeneratedVideo(props: GeneratedVideoProps) {
+  return <GeneratedVideoOwner key={props.videoUrl} {...props} />;
+}
+
+function GeneratedVideoOwner({
   videoUrl,
   thumbnailUrl,
   width,
@@ -33,38 +37,57 @@ export function GeneratedVideo({
   const [playerOpen, setPlayerOpen] = useState(false);
   const [loading, setLoading] = useState<LoadingAction | null>(null);
 
-  const ensurePlayer = useCallback(async (): Promise<LocalVideoPlayer> => {
-    if (player) return player;
-    const prepared = await prepareLocalVideoPlayer(videoUrl, colors.black);
-    setPlayer(prepared);
-    return prepared;
-  }, [colors.black, player, videoUrl]);
+  const lifetimeRef = useRef<symbol | null>(null);
+  const operationRef = useRef<symbol | null>(null);
 
-  const play = useCallback(async () => {
-    if (loading) return;
-    setLoading('play');
-    try {
-      await ensurePlayer();
-      setPlayerOpen(true);
-    } catch {
-      Alert.alert('Could not play the video', 'Check your connection and try again.');
-    } finally {
-      setLoading(null);
-    }
-  }, [ensurePlayer, loading]);
+  useLayoutEffect(() => {
+    const lifetime = Symbol('video lifetime');
+    lifetimeRef.current = lifetime;
+    return () => {
+      if (lifetimeRef.current === lifetime) {
+        lifetimeRef.current = null;
+        operationRef.current = null;
+      }
+    };
+  }, []);
 
-  const save = useCallback(async () => {
-    if (loading) return;
-    setLoading('save');
-    try {
-      const prepared = await ensurePlayer();
-      await shareFile(prepared.videoUri);
-    } catch {
-      Alert.alert('Could not save the video', 'Check your connection and try again.');
-    } finally {
-      setLoading(null);
-    }
-  }, [ensurePlayer, loading]);
+  const runAction = useCallback(
+    async (action: LoadingAction) => {
+      const lifetime = lifetimeRef.current;
+      if (!lifetime || operationRef.current) return;
+      const operation = Symbol('video action');
+      operationRef.current = operation;
+      const isCurrent = () =>
+        lifetimeRef.current === lifetime && operationRef.current === operation;
+      setLoading(action);
+      try {
+        const prepared = player ?? (await prepareLocalVideoPlayer(videoUrl, colors.black));
+        if (!isCurrent()) return;
+        setPlayer(prepared);
+        if (action === 'play') {
+          setPlayerOpen(true);
+        } else {
+          await shareFile(prepared.videoUri, { isCurrent });
+        }
+      } catch {
+        if (isCurrent()) {
+          Alert.alert(
+            action === 'play' ? 'Could not play the video' : 'Could not save the video',
+            'Check your connection and try again.',
+          );
+        }
+      } finally {
+        if (isCurrent()) {
+          operationRef.current = null;
+          setLoading(null);
+        }
+      }
+    },
+    [colors.black, player, videoUrl],
+  );
+
+  const play = useCallback(() => runAction('play'), [runAction]);
+  const save = useCallback(() => runAction('save'), [runAction]);
 
   const closePlayer = useCallback(() => setPlayerOpen(false), []);
 

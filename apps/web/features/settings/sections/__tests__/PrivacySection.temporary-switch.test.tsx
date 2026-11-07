@@ -1,3 +1,8 @@
+vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
+  ...(await original<typeof import('@/features/settings/hooks/use-preference-owner')>()),
+  usePreferenceOwner: () => null,
+}));
+
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +11,10 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
+
+vi.mock('../../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => null,
+}));
 
 vi.mock('../../components/UsOnlyRoutingPanel', async (importOriginal) => ({
   ...(await importOriginal<UsOnlyRoutingPanelModule>()),

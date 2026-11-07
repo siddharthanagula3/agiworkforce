@@ -306,6 +306,17 @@ class WorkspaceEdit {
     this._edits.push({ type: 'replace', uri, range, newText });
   }
 
+  entries(): Array<[Uri, Array<{ range: Range; newText: string }>]> {
+    const grouped = new Map<string, [Uri, Array<{ range: Range; newText: string }>]>();
+    for (const edit of this._edits) {
+      if (edit.type !== 'replace' || !edit.range || edit.newText === undefined) continue;
+      const entry = grouped.get(edit.uri.toString()) ?? [edit.uri, []];
+      entry[1].push({ range: edit.range, newText: edit.newText });
+      grouped.set(edit.uri.toString(), entry);
+    }
+    return [...grouped.values()];
+  }
+
   deleteFile(uri: Uri): void {
     this._edits.push({ type: 'deleteFile', uri });
   }
@@ -492,7 +503,10 @@ export const window = {
   withProgress: vi.fn(
     async (_options: unknown, task: (progress: unknown, token: unknown) => Promise<void>) => {
       const progress = { report: vi.fn() };
-      const token = { isCancellationRequested: false, onCancellationRequested: vi.fn() };
+      const token = {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => new Disposable()),
+      };
       return task(progress, token);
     },
   ),

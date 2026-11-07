@@ -1,12 +1,18 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
+import { getCsrfToken } from '@/lib/client/csrf';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { toUserMessage } from '@/lib/user-error-message';
 
 import type { DeveloperProject } from '../types';
+import { useDeveloperQuery, type DeveloperQueryScope } from './use-developer-query';
 
 export const DEVELOPER_PROJECTS_QUERY_KEY = ['developers', 'projects'] as const;
 
@@ -16,6 +22,13 @@ export interface DeveloperProjectDraft {
   name: string;
   monthlyCreditLimit: number | null;
 }
+
+export interface ProjectMutationScope {
+  readonly request: RequestAuthority;
+  readonly organizationId: string | null;
+}
+
+export class ProjectMutationRejectedError extends Error {}
 
 export async function readDeveloperApiError(response: Response, fallback: string): Promise<string> {
   const body = (await response.json().catch(() => null)) as {
@@ -31,37 +44,84 @@ export async function readDeveloperApiError(response: Response, fallback: string
 }
 
 async function projectRequest(
+  scope: ProjectMutationScope,
   url: string,
   method: 'POST' | 'PATCH' | 'DELETE',
   body: unknown,
   fallback: string,
+  expectedProjectId?: string,
 ): Promise<DeveloperProject> {
-  const response = await sendAuthorizedJson(url, { method, body });
-  if (!response.ok) throw new Error(await readDeveloperApiError(response, fallback));
-  const payload = (await response.json()) as { project: DeveloperProject };
+  scope.request.assertCurrent();
+  const csrfToken = await getCsrfToken();
+  scope.request.assertCurrent();
+  const response = await scope.request.fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': csrfToken,
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]:
+        scope.organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) {
+    const message = await readDeveloperApiError(response, fallback);
+    scope.request.assertCurrent();
+    if (response.status >= 400 && response.status < 500) {
+      throw new ProjectMutationRejectedError(message);
+    }
+    throw new Error(message);
+  }
+  const payload = (await response.json()) as { project?: DeveloperProject } | null;
+  scope.request.assertCurrent();
+  if (
+    !payload?.project ||
+    typeof payload.project.id !== 'string' ||
+    !payload.project.id ||
+    (expectedProjectId !== undefined && payload.project.id !== expectedProjectId)
+  ) {
+    throw new Error('The project update receipt could not be confirmed.');
+  }
   return payload.project;
 }
 
-export function useDeveloperProjects() {
-  return useQuery<DeveloperProject[], Error>({
-    queryKey: DEVELOPER_PROJECTS_QUERY_KEY,
-    queryFn: async () => {
-      const response = await sendAuthorizedJson(PROJECTS_PATH, { method: 'GET' });
-      if (!response.ok) {
-        throw new Error(await readDeveloperApiError(response, 'Projects could not be loaded.'));
-      }
-      const payload = (await response.json()) as { projects: DeveloperProject[] };
-      return payload.projects;
-    },
+async function readDeveloperProjects({
+  request,
+  headers,
+}: DeveloperQueryScope): Promise<DeveloperProject[]> {
+  const response = await request.fetch(PROJECTS_PATH, {
+    method: 'GET',
+    cache: 'no-store',
+    headers,
   });
+  if (!response.ok) {
+    throw new Error(await readDeveloperApiError(response, 'Projects could not be loaded.'));
+  }
+  const payload = (await response.json()) as { projects: DeveloperProject[] };
+  return payload.projects;
+}
+
+export function useDeveloperProjects() {
+  return useDeveloperQuery(DEVELOPER_PROJECTS_QUERY_KEY, readDeveloperProjects);
 }
 
 export function useCreateDeveloperProject() {
   const queryClient = useQueryClient();
-  return useMutation<DeveloperProject, Error, DeveloperProjectDraft>({
-    mutationFn: (draft) =>
-      projectRequest(PROJECTS_PATH, 'POST', draft, 'The project could not be created.'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY }),
+  return useMutation<
+    DeveloperProject,
+    Error,
+    { scope: ProjectMutationScope; draft: DeveloperProjectDraft }
+  >({
+    retry: false,
+    mutationFn: ({ scope, draft }) =>
+      projectRequest(scope, PROJECTS_PATH, 'POST', draft, 'The project could not be created.'),
+    onSuccess: (_project, { scope }) => {
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY });
+      }
+    },
+    // The owner-bound control presents failures, not a global mutation toast.
+    onError: () => undefined,
   });
 }
 
@@ -70,33 +130,47 @@ export function useUpdateDeveloperProject() {
   return useMutation<
     DeveloperProject,
     Error,
-    { projectId: string; patch: Partial<DeveloperProjectDraft> }
+    { scope: ProjectMutationScope; projectId: string; patch: Partial<DeveloperProjectDraft> }
   >({
-    mutationFn: ({ projectId, patch }) =>
+    retry: false,
+    mutationFn: ({ scope, projectId, patch }) =>
       projectRequest(
+        scope,
         `${PROJECTS_PATH}/${encodeURIComponent(projectId)}`,
         'PATCH',
         patch,
         'The project could not be saved.',
+        projectId,
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY }),
+    onSuccess: (_project, { scope }) => {
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY });
+      }
+    },
+    onError: () => undefined,
   });
 }
 
 export function useArchiveDeveloperProject() {
   const queryClient = useQueryClient();
-  return useMutation<DeveloperProject, Error, string>({
-    mutationFn: (projectId) =>
+  return useMutation<DeveloperProject, Error, { scope: ProjectMutationScope; projectId: string }>({
+    retry: false,
+    mutationFn: ({ scope, projectId }) =>
       projectRequest(
+        scope,
         `${PROJECTS_PATH}/${encodeURIComponent(projectId)}`,
         'DELETE',
         undefined,
         'The project could not be archived.',
+        projectId,
       ),
-    onSuccess: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() }),
-      ]),
+    onSuccess: (_project, { scope }) => {
+      if (!scope.request.isCurrent()) return;
+      void queryClient.invalidateQueries({ queryKey: DEVELOPER_PROJECTS_QUERY_KEY });
+      if (scope.request.isCurrent()) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.settings.apiKeys() });
+      }
+    },
+    onError: () => undefined,
   });
 }

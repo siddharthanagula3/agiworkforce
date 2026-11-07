@@ -21,11 +21,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { LifecycleStatus } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
-import { apiFetch } from '@/services/api';
+import { LIVE_VOICE_SESSION_PATH, type LiveVoiceAuthority } from './liveVoiceAuthority';
+export { LIVE_VOICE_SESSION_PATH } from './liveVoiceAuthority';
 import { CloudProviderConsentRequiredError, ensureCloudSendConsent } from '@/services/llmGate';
 import { LIVE_VOICE_MESSAGE, liveVoiceUnavailableReason } from './liveVoiceAvailability';
-
-export const LIVE_VOICE_SESSION_PATH = '/api/voice/live/sessions';
 
 const EVENTS_CHANNEL = 'oai-events';
 const ICE_GATHERING_TIMEOUT_MS = 10_000;
@@ -101,6 +100,7 @@ export interface LiveVoiceSessionCallbacks {
 }
 
 export interface LiveVoiceSessionOptions {
+  authority: LiveVoiceAuthority;
   voice: string | null;
   conversationId: string | null;
   language: string | null;
@@ -175,19 +175,22 @@ function microphoneError(error: unknown): LiveVoiceSessionError {
   return new LiveVoiceSessionError(LIVE_VOICE_MESSAGE.connectionFailed, 'microphone_failed');
 }
 
-function waitForIceGathering(peer: RTCPeerConnection): Promise<void> {
+function waitForIceGathering(peer: RTCPeerConnection, signal: AbortSignal): Promise<void> {
   if (peer.iceGatheringState === 'complete') return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(finish, ICE_GATHERING_TIMEOUT_MS);
     function finish() {
       clearTimeout(timer);
       eventsOf(peer).removeEventListener('icegatheringstatechange', onChange);
+      signal.removeEventListener('abort', finish);
       resolve();
     }
     function onChange() {
       if (peer.iceGatheringState === 'complete') finish();
     }
     eventsOf(peer).addEventListener('icegatheringstatechange', onChange);
+    signal.addEventListener('abort', finish, { once: true });
+    if (signal.aborted) finish();
   });
 }
 
@@ -203,6 +206,10 @@ export class LiveVoiceSession {
   private disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private speaking = false;
   private started = false;
+  private readonly authority: LiveVoiceAuthority;
+  private releaseSetup: (() => void) | null = null;
+  private settlementPromise: Promise<void> | null = null;
+  private closePromise: Promise<LiveSessionClosed> | null = null;
   private closing = false;
   private disposed = false;
   private clientEventSeq = 0;
@@ -223,7 +230,9 @@ export class LiveVoiceSession {
     channel: ReturnType<RTCPeerConnection['createDataChannel']>,
     created: CreateSessionResponse,
     callbacks: LiveVoiceSessionCallbacks,
+    authority: LiveVoiceAuthority,
   ) {
+    this.authority = authority;
     this.microphone = microphone;
     this.peer = peer;
     this.channel = channel;
@@ -251,45 +260,80 @@ export class LiveVoiceSession {
   }
 
   static async start(options: LiveVoiceSessionOptions): Promise<LiveVoiceSession> {
+    const { authority } = options;
+    authority.assertCurrent();
     const unavailable = liveVoiceUnavailableReason();
     if (unavailable) throw new LiveVoiceSessionError(unavailable, 'unsupported');
     try {
       await ensureCloudSendConsent();
+      authority.assertCurrent();
     } catch (error) {
       if (!(error instanceof CloudProviderConsentRequiredError)) throw error;
       throw new LiveVoiceSessionError(error.message, error.code);
     }
-
-    let microphone: MediaStream;
-    try {
-      microphone = await mediaDevices.getUserMedia({ audio: true });
-    } catch (error) {
-      throw microphoneError(error);
-    }
-
-    const peer = new RTCPeerConnection();
-    const channel = peer.createDataChannel(EVENTS_CHANNEL);
-    const inbox: string[] = [];
+    let microphone: MediaStream | null = null;
+    let peer: RTCPeerConnection | null = null;
+    let channel: ReturnType<RTCPeerConnection['createDataChannel']> | null = null;
     let session: LiveVoiceSession | null = null;
-    const teardown = () => {
-      microphone.getTracks().forEach((track) => track.stop());
-      peer.close();
+    let created: CreateSessionResponse | null = null;
+    let released = false;
+    const remoteTracks = new Set<{ stop: () => void }>();
+    const release = () => {
+      released = true;
+      microphone?.getTracks().forEach((track) => track.stop());
+      for (const track of remoteTracks) track.stop();
+      remoteTracks.clear();
+      channel?.close();
+      peer?.close();
     };
-
-    eventsOf<{ data?: unknown }>(channel).addEventListener('message', (event) => {
-      const payload = String(event.data ?? '');
-      if (session) session.handleMessage(payload);
-      else inbox.push(payload);
-    });
-    microphone.getTracks().forEach((track) => peer.addTrack(track, microphone));
-
+    const abort = () => {
+      if (session?.closing && authority.isIdentityCurrent()) return;
+      if (session) session.dispose();
+      else release();
+    };
+    authority.signal.addEventListener('abort', abort, { once: true });
     try {
+      try {
+        microphone = await mediaDevices.getUserMedia({ audio: true });
+      } catch (error) {
+        authority.assertCurrent();
+        throw microphoneError(error);
+      }
+      authority.assertCurrent();
+      peer = new RTCPeerConnection();
+      eventsOf<{ track?: { stop: () => void }; streams?: MediaStream[] }>(peer).addEventListener(
+        'track',
+        (event) => {
+          const tracks = [
+            ...(event.streams ?? []).flatMap((stream) => stream.getTracks()),
+            ...(event.track ? [event.track] : []),
+          ];
+          if (released || session?.closing || !authority.isCurrent()) {
+            tracks.forEach((track) => track.stop());
+            return;
+          }
+          tracks.forEach((track) => remoteTracks.add(track));
+        },
+      );
+      channel = peer.createDataChannel(EVENTS_CHANNEL);
+      const inbox: string[] = [];
+      eventsOf<{ data?: unknown }>(channel).addEventListener('message', (event) => {
+        if (released) return;
+        const payload = String(event.data ?? '');
+        if (session) session.handleMessage(payload);
+        else if (authority.isCurrent()) inbox.push(payload);
+      });
+      const activePeer = peer;
+      microphone.getTracks().forEach((track) => activePeer.addTrack(track, microphone!));
       const offer = await peer.createOffer({});
+      authority.assertCurrent();
       await peer.setLocalDescription(offer);
-      await waitForIceGathering(peer);
+      authority.assertCurrent();
+      await waitForIceGathering(peer, authority.signal);
+      authority.assertCurrent();
       const sdp = peer.localDescription?.sdp;
       if (!sdp) throw new LiveVoiceSessionError(LIVE_VOICE_MESSAGE.connectionFailed, 'no_offer');
-      const response = await apiFetch(LIVE_VOICE_SESSION_PATH, {
+      const response = await authority.fetch(LIVE_VOICE_SESSION_PATH, {
         method: 'POST',
         body: JSON.stringify({
           sdp,
@@ -303,20 +347,61 @@ export class LiveVoiceSession {
         }),
       });
       if (!response.ok) throw await readErrorMessage(response);
-      const created = (await response.json()) as CreateSessionResponse;
+      created = (await response.json()) as CreateSessionResponse;
+      authority.assertCurrent();
       await peer.setRemoteDescription(
         new RTCSessionDescription({ type: 'answer', sdp: created.sdp }),
       );
-      session = new LiveVoiceSession(microphone, peer, channel, created, options.callbacks);
+      authority.assertCurrent();
+      session = new LiveVoiceSession(
+        microphone,
+        peer,
+        channel,
+        created,
+        options.callbacks,
+        authority,
+      );
+      session.releaseSetup = () => {
+        authority.signal.removeEventListener('abort', abort);
+        release();
+      };
       session.watchConnection();
       for (const payload of inbox) session.handleMessage(payload);
+      authority.assertCurrent();
+      if (session.disposed) throw new Error('Voice session ended during setup');
       return session;
     } catch (error) {
-      teardown();
-      throw error instanceof LiveVoiceSessionError
+      authority.signal.removeEventListener('abort', abort);
+      session?.dispose();
+      release();
+      if (created?.sessionId) {
+        void authority
+          .closeCreated(created.sessionId, {
+            reason: 'setup_failed',
+            seconds: session?.lastUsageSeconds ?? 0,
+          })
+          .catch((cleanupError: unknown) => {
+            console.warn('[liveVoice] The created session close was not recorded:', cleanupError);
+          });
+      }
+      throw error instanceof LiveVoiceSessionError || !authority.isCurrent()
         ? error
         : new LiveVoiceSessionError(LIVE_VOICE_MESSAGE.connectionFailed, 'connection_failed');
     }
+  }
+
+  settle(closed: LiveSessionClosed): Promise<void> {
+    this.settlementPromise ??= settleLiveVoiceSession(
+      this.authority,
+      this.sessionId,
+      closed,
+      this.backendUsage,
+    );
+    return this.settlementPromise;
+  }
+
+  extend(block: number): Promise<LiveVoiceExtension> {
+    return extendLiveVoiceSession(this.authority, this.sessionId, block);
   }
 
   get backendUsage(): LiveVoiceBackendUsage | null {
@@ -332,12 +417,13 @@ export class LiveVoiceSession {
   }
 
   private async callTool(request: LiveVoiceToolCallRequest): Promise<LiveVoiceToolCallResponse> {
-    const response = await apiFetch(liveVoiceToolCallPath(this.sessionId), {
+    const response = await this.authority.fetch(liveVoiceToolCallPath(this.sessionId), {
       method: 'POST',
       body: JSON.stringify(request),
     });
     if (!response.ok) throw await readErrorMessage(response);
     const parsed = LiveVoiceToolCallResponseSchema.parse(await response.json());
+    this.authority.assertCurrent();
     if (
       request.name !== LIVE_VOICE_WORK_TASK_TOOL ||
       parsed.status !== 'completed' ||
@@ -445,7 +531,12 @@ export class LiveVoiceSession {
     this.send({ type: muted ? 'session.input_audio.mute' : 'session.input_audio.unmute' });
   }
 
-  async close(): Promise<LiveSessionClosed> {
+  close(): Promise<LiveSessionClosed> {
+    this.closePromise ??= this.closeOnce();
+    return this.closePromise;
+  }
+
+  private async closeOnce(): Promise<LiveSessionClosed> {
     if (this.disposed) return { reason: 'disposed', seconds: this.usageSeconds };
     this.closing = true;
     this.microphone.getTracks().forEach((track) => track.stop());
@@ -469,6 +560,8 @@ export class LiveVoiceSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.releaseSetup?.();
+    this.releaseSetup = null;
     this.toolBridge.dispose();
     this.stopTimers();
     this.microphone.getTracks().forEach((track) => track.stop());
@@ -477,6 +570,11 @@ export class LiveVoiceSession {
   }
 
   private send(event: Record<string, unknown>): void {
+    if (
+      this.disposed ||
+      (event['type'] !== 'session.close' && (this.closing || !this.authority.isCurrent()))
+    )
+      return;
     if (this.channel.readyState !== 'open') return;
     if (!this.started && event['type'] !== 'session.close') return;
     this.clientEventSeq += 1;
@@ -487,6 +585,7 @@ export class LiveVoiceSession {
 
   private watchConnection(): void {
     eventsOf(this.peer).addEventListener('connectionstatechange', () => {
+      if (this.closing || this.disposed) return;
       const state = this.peer.connectionState;
       if (state === 'connected') {
         this.clearDisconnectTimer();
@@ -505,6 +604,7 @@ export class LiveVoiceSession {
 
   private fail(): void {
     if (this.closing || this.disposed) return;
+    this.finalizeTurns();
     if (this.started && this.callbacks.onConnectionLost) {
       this.callbacks.onConnectionLost(LIVE_VOICE_MESSAGE.connectionDropped);
     } else {
@@ -512,7 +612,6 @@ export class LiveVoiceSession {
         this.started ? LIVE_VOICE_MESSAGE.connectionDropped : LIVE_VOICE_MESSAGE.connectionFailed,
       );
     }
-    this.finalizeTurns();
     this.dispose();
   }
 
@@ -523,6 +622,26 @@ export class LiveVoiceSession {
     } catch {
       return;
     }
+    if (this.disposed) return;
+    if (this.closing) {
+      if (!this.authority.isIdentityCurrent()) {
+        this.dispose();
+        return;
+      }
+      if (parsed.type === 'response.event') {
+        this.backendMeter.observe(parsed['event'] as { type?: string } | undefined);
+        return;
+      }
+      if (
+        ![
+          'session.closed',
+          'session.usage.updated',
+          'session.input_transcript.delta',
+          'session.output_transcript.delta',
+        ].includes(parsed.type)
+      )
+        return;
+    } else if (!this.authority.isCurrent()) return;
     switch (parsed.type) {
       case 'session.started': {
         this.started = true;
@@ -687,23 +806,17 @@ export class LiveVoiceSession {
 }
 
 export async function settleLiveVoiceSession(
+  authority: LiveVoiceAuthority,
   sessionId: string,
   closed: LiveSessionClosed,
   backend: LiveVoiceBackendUsage | null = null,
 ): Promise<void> {
   try {
-    const response = await apiFetch(
-      `${LIVE_VOICE_SESSION_PATH}/${encodeURIComponent(sessionId)}/close`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          seconds: closed.seconds ?? 0,
-          reason: closed.reason,
-          ...(backend ? { backend } : {}),
-        }),
-      },
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    await authority.closeCreated(sessionId, {
+      seconds: closed.seconds ?? 0,
+      reason: closed.reason,
+      ...(backend ? { backend } : {}),
+    });
   } catch (error) {
     console.warn('[liveVoice] The live session close was not recorded:', error);
   }
@@ -718,11 +831,12 @@ export type LiveVoiceExtension =
  * was reached and when it resets.
  */
 export async function extendLiveVoiceSession(
+  authority: LiveVoiceAuthority,
   sessionId: string,
   block: number,
 ): Promise<LiveVoiceExtension> {
   try {
-    const response = await apiFetch(
+    const response = await authority.fetch(
       `${LIVE_VOICE_SESSION_PATH}/${encodeURIComponent(sessionId)}/extend`,
       { method: 'POST', body: JSON.stringify({ block }) },
     );

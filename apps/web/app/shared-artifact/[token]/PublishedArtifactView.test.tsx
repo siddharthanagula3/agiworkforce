@@ -1,10 +1,37 @@
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PublishedArtifactView } from './PublishedArtifactView';
 
 const routerPush = vi.hoisted(() => vi.fn());
 const copySharedArtifactToChat = vi.hoisted(() => vi.fn());
+const identity = vi.hoisted(() => ({
+  loaded: true,
+  signedIn: false,
+  current: true,
+  sessionId: 'session-a',
+}));
+const artifactUpsert = vi.hoisted(() => vi.fn());
+vi.mock('@/features/chat/stores/artifacts-store', () => ({
+  useArtifactsStore: { getState: () => ({ upsertArtifact: artifactUpsert }) },
+}));
+vi.mock('@/lib/identity/useSessionSnapshot', () => ({
+  useSessionSnapshot: () => () => {
+    if (!identity.loaded || !identity.signedIn || !identity.current) return null;
+    const sessionId = identity.sessionId;
+    let retired = false;
+    return {
+      userId: 'account-a',
+      sessionId,
+      isCurrent: () => {
+        if (!identity.current || !identity.signedIn || identity.sessionId !== sessionId)
+          retired = true;
+        return !retired;
+      },
+      getToken: async () => 'token-a',
+    };
+  },
+}));
 const runtimeState = vi.hoisted(() => ({ signInNeeded: false, granted: [] as string[][] }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: routerPush }) }));
@@ -74,9 +101,9 @@ vi.mock('next/link', () => ({
 
 vi.mock('@/lib/identity/client', () => ({
   useSession: () => ({
-    isLoaded: true,
-    isSignedIn: false,
-    userId: null,
+    isLoaded: identity.loaded,
+    isSignedIn: identity.signedIn,
+    userId: identity.signedIn ? 'account-a' : null,
     getToken: async () => null,
   }),
 }));
@@ -97,6 +124,11 @@ const TOKEN = 'tok_shared';
 
 describe('PublishedArtifactView', () => {
   beforeEach(() => {
+    identity.loaded = true;
+    identity.signedIn = false;
+    identity.current = true;
+    identity.sessionId = 'session-a';
+    artifactUpsert.mockReset();
     routerPush.mockReset();
     copySharedArtifactToChat.mockReset();
     runtimeState.signInNeeded = false;
@@ -234,4 +266,172 @@ describe('PublishedArtifactView', () => {
     );
     expect(screen.queryByTestId('artifact-runtime-refresh-data')).toBeNull();
   });
+});
+
+describe('published copy ownership', () => {
+  beforeEach(() => {
+    identity.loaded = true;
+    identity.signedIn = true;
+    identity.current = true;
+    identity.sessionId = 'session-a';
+    routerPush.mockReset();
+    artifactUpsert.mockReset();
+    copySharedArtifactToChat.mockReset();
+  });
+
+  it('does not redirect while identity is loading or capture is inconsistent', () => {
+    identity.loaded = false;
+    const view = render(
+      <PublishedArtifactView {...BASE} kind="text" content="copy" token={TOKEN} />,
+    );
+    fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+    identity.loaded = true;
+    identity.current = false;
+    view.rerender(<PublishedArtifactView {...BASE} kind="text" content="copy" token={TOKEN} />);
+    fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(copySharedArtifactToChat).not.toHaveBeenCalled();
+  });
+
+  it.each(['source', 'account', 'unmount'])(
+    'ignores a late receipt after %s retirement',
+    async (retirement) => {
+      let resolve!: (value: unknown) => void;
+      copySharedArtifactToChat.mockImplementation(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      );
+      const view = render(
+        <PublishedArtifactView {...BASE} kind="text" content="copy" token={TOKEN} />,
+      );
+      fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+      if (retirement === 'source') {
+        view.rerender(
+          <PublishedArtifactView {...BASE} kind="text" content="changed" token={TOKEN} />,
+        );
+        view.rerender(<PublishedArtifactView {...BASE} kind="text" content="copy" token={TOKEN} />);
+      } else if (retirement === 'account') identity.current = false;
+      else view.unmount();
+      await act(async () => {
+        resolve({ kind: 'copied', conversationId: 'chat-a', artifact: {} });
+      });
+      await waitFor(() => expect(copySharedArtifactToChat).toHaveBeenCalledTimes(1));
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(artifactUpsert).not.toHaveBeenCalled();
+    },
+  );
+
+  it('publishes a successful current copy and navigates', async () => {
+    const artifact = { id: 'artifact-a' };
+    copySharedArtifactToChat.mockResolvedValue({
+      kind: 'copied',
+      conversationId: 'chat-a',
+      artifact,
+    });
+    render(<PublishedArtifactView {...BASE} kind="text" content="copy" token={TOKEN} />);
+    fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith('/chat/chat-a'));
+    expect(artifactUpsert).toHaveBeenCalledWith(artifact);
+  });
+
+  it('reports a known chat with an unconfirmed save without redirecting', async () => {
+    copySharedArtifactToChat.mockResolvedValue({ kind: 'unconfirmed', conversationId: 'chat-a' });
+    render(<PublishedArtifactView {...BASE} kind="text" content="copy" token={TOKEN} />);
+    fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('A chat was created');
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(artifactUpsert).not.toHaveBeenCalled();
+  });
+});
+
+it('keeps a successor busy when an earlier source copy finishes', async () => {
+  identity.loaded = true;
+  identity.signedIn = true;
+  identity.current = true;
+  copySharedArtifactToChat.mockReset();
+  routerPush.mockReset();
+  let resolveEarlier!: (value: unknown) => void;
+  let resolveLater!: (value: unknown) => void;
+  copySharedArtifactToChat
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolveEarlier = done;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolveLater = done;
+        }),
+    );
+  const view = render(
+    <PublishedArtifactView {...BASE} kind="text" content="earlier" token={TOKEN} />,
+  );
+  fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+  view.rerender(<PublishedArtifactView {...BASE} kind="text" content="later" token={TOKEN} />);
+  fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+  fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+  expect(copySharedArtifactToChat).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    resolveEarlier({ kind: 'unconfirmed', conversationId: 'earlier' });
+  });
+  expect(screen.getByTestId('published-artifact-save-copy')).toBeDisabled();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  await act(async () => {
+    resolveLater({ kind: 'unconfirmed', conversationId: 'later' });
+  });
+  expect(screen.getByTestId('published-artifact-save-copy')).not.toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('A chat was created');
+  expect(routerPush).not.toHaveBeenCalled();
+});
+
+it('retires a previous session for the same account and enables a fresh copy', async () => {
+  identity.loaded = true;
+  identity.signedIn = true;
+  identity.current = true;
+  identity.sessionId = 'session-a';
+  copySharedArtifactToChat.mockReset();
+  routerPush.mockReset();
+  artifactUpsert.mockReset();
+  let resolveEarlier!: (value: unknown) => void;
+  let resolveLater!: (value: unknown) => void;
+  copySharedArtifactToChat
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolveEarlier = done;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolveLater = done;
+        }),
+    );
+  const props = { ...BASE, kind: 'text' as const, content: 'copy', token: TOKEN };
+  const view = render(<PublishedArtifactView {...props} />);
+  fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+  expect(screen.getByTestId('published-artifact-save-copy')).toBeDisabled();
+  identity.sessionId = 'session-b';
+  view.rerender(<PublishedArtifactView {...props} />);
+  expect(screen.getByTestId('published-artifact-save-copy')).not.toBeDisabled();
+  expect(screen.getByTestId('published-artifact-save-copy')).toHaveTextContent(
+    'Save a copy to my chats',
+  );
+  fireEvent.click(screen.getByTestId('published-artifact-save-copy'));
+  expect(copySharedArtifactToChat).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    resolveEarlier({ kind: 'copied', conversationId: 'earlier', artifact: {} });
+  });
+  expect(routerPush).not.toHaveBeenCalled();
+  expect(artifactUpsert).not.toHaveBeenCalled();
+  expect(screen.getByTestId('published-artifact-save-copy')).toBeDisabled();
+  await act(async () => {
+    resolveLater({ kind: 'copied', conversationId: 'later', artifact: { id: 'later' } });
+  });
+  expect(routerPush).toHaveBeenCalledWith('/chat/later');
+  expect(artifactUpsert).toHaveBeenCalledTimes(1);
 });

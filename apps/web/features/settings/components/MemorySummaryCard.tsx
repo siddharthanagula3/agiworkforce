@@ -7,8 +7,12 @@ import {
   type MemorySummaryResponse,
 } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
-import { addCsrfHeaders } from '@/lib/client/csrf';
-import { apiErrorMessage } from '@/lib/client/api-error-message';
+import {
+  useCloudMemory,
+  useCloudMemorySnapshot,
+  useMemoryView,
+} from '@/features/memory/use-cloud-memory';
+import type { CloudMemoryController } from '@/features/memory/cloud-memory-controller';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const LOAD_FAILED = 'Your memory summary could not be loaded.';
@@ -18,12 +22,6 @@ type CardState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'ready'; data: MemorySummaryResponse };
-
-async function readResponse(response: Response, fallback: string): Promise<MemorySummaryResponse> {
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(apiErrorMessage(body, fallback));
-  return MemorySummaryResponseSchema.parse(body);
-}
 
 const buttonStyle = {
   height: 34,
@@ -66,40 +64,68 @@ function SummaryList({ heading, lines }: { heading: string; lines: readonly stri
 }
 
 export function MemorySummaryCard({ memoryCount }: { memoryCount: number }) {
+  const controller = useCloudMemory();
+  return controller ? (
+    <OwnedMemorySummaryCard
+      key={controller.key}
+      controller={controller}
+      memoryCount={memoryCount}
+    />
+  ) : null;
+}
+
+function OwnedMemorySummaryCard({
+  controller,
+}: {
+  controller: CloudMemoryController;
+  memoryCount: number;
+}) {
+  const { revision } = useCloudMemorySnapshot(controller);
+  const capture = useMemoryView(controller);
   const [state, setState] = useState<CardState>({ status: 'loading' });
   const [writing, setWriting] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const current = capture();
+    if (!current()) return;
     setState({ status: 'loading' });
     try {
-      const response = await fetch(MANAGED_MEMORY_SUMMARY_PATH, { credentials: 'include' });
-      setState({ status: 'ready', data: await readResponse(response, LOAD_FAILED) });
+      const data = await controller.request(
+        MANAGED_MEMORY_SUMMARY_PATH,
+        {},
+        (body) => MemorySummaryResponseSchema.parse(body),
+        { current },
+      );
+      if (current()) setState({ status: 'ready', data });
     } catch (error) {
-      setState({ status: 'error', message: toUserMessage(error, LOAD_FAILED) });
+      if (current()) setState({ status: 'error', message: toUserMessage(error, LOAD_FAILED) });
     }
-  }, []);
+  }, [controller, capture]);
 
   useEffect(() => {
     void load();
-  }, [load, memoryCount]);
+  }, [load, revision]);
 
   const write = useCallback(async () => {
+    const current = capture();
+    if (!current()) return;
     setWriting(true);
     setWriteError(null);
     try {
-      const response = await fetch(MANAGED_MEMORY_SUMMARY_PATH, {
-        method: 'POST',
-        credentials: 'include',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-      });
-      setState({ status: 'ready', data: await readResponse(response, WRITE_FAILED) });
+      const data = await controller.request(
+        MANAGED_MEMORY_SUMMARY_PATH,
+        { method: 'POST' },
+        (body) => MemorySummaryResponseSchema.parse(body),
+        { current, mutation: true },
+      );
+      if (current()) setState({ status: 'ready', data });
     } catch (error) {
-      setWriteError(toUserMessage(error, WRITE_FAILED));
+      if (current()) setWriteError(toUserMessage(error, WRITE_FAILED));
     } finally {
-      setWriting(false);
+      if (current()) setWriting(false);
     }
-  }, []);
+  }, [controller, capture]);
 
   const data = state.status === 'ready' ? state.data : null;
   const hasSummary =

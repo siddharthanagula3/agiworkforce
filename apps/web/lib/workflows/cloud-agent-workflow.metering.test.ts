@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -124,6 +125,7 @@ function makeInput(billing: CloudAgentWorkflowInput['billing']): CloudAgentWorkf
     runId: RUN_ID,
     userId: 'user-1',
     processed: {
+      contextPolicySnapshot: contextPolicySnapshotFixture(),
       requestId: 'agi.chat.web.send.turn-1',
       chatRequest: { model: 'claude-test', messages: [], work_mode: 'agiwork' },
       requestedModel: 'claude-test',
@@ -189,6 +191,77 @@ describe('durable invocation rebuilds the request on the side its reservation ca
       })(),
     );
     mocks.settle.mockResolvedValue(undefined);
+  });
+
+  it.each([
+    ['initial queued invocation', false],
+    ['queued continuation', true],
+  ] as const)('refuses a legacy %s before provider or tool work', async (_label, continued) => {
+    const input = makeInput(MANAGED_BILLING);
+    delete input.processed.contextPolicySnapshot;
+    if (continued) {
+      input.continuation = {
+        eventSessionId: RUN_ID,
+        eventTurnId: 'turn-1',
+        initialEventSequence: 3,
+        initialCompletedSteps: 1,
+        invocationContinuation: true,
+      };
+    }
+    await expect(executeCloudAgentWorkflowInvocation(input)).rejects.toThrow(
+      'The saved turn cannot be continued under the current context privacy policy. Start a new turn.',
+    );
+    expect(mocks.runToolLoop).not.toHaveBeenCalled();
+    expect(mocks.executeOperation).not.toHaveBeenCalled();
+    expect(mocks.settle).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['malformed snapshot', { ...contextPolicySnapshotFixture(), version: 2 }],
+    [
+      'changed context flags',
+      {
+        ...contextPolicySnapshotFixture(),
+        policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false },
+      },
+    ],
+    ['different actor', contextPolicySnapshotFixture('other-user')],
+    [
+      'different organization',
+      contextPolicySnapshotFixture('user-1', '0190a000-0000-4000-8000-000000000010'),
+    ],
+  ])('refuses %s before durable provider or tool work', async (_label, snapshot) => {
+    const input = makeInput(MANAGED_BILLING);
+    input.processed.contextPolicySnapshot = snapshot as ProcessedRequest['contextPolicySnapshot'];
+    await expect(executeCloudAgentWorkflowInvocation(input)).rejects.toThrow(
+      'The saved turn cannot be continued under the current context privacy policy. Start a new turn.',
+    );
+    expect(mocks.runToolLoop).not.toHaveBeenCalled();
+    expect(mocks.executeOperation).not.toHaveBeenCalled();
+    expect(mocks.settle).not.toHaveBeenCalled();
+  });
+
+  it('refuses unreadable organization policy before durable provider or tool work', async () => {
+    const organizationId = '0190a000-0000-4000-8000-000000000010';
+    const input = makeInput(MANAGED_BILLING);
+    input.processed.organizationId = organizationId;
+    input.processed.contextPolicySnapshot = contextPolicySnapshotFixture('user-1', organizationId);
+    db.transaction.mockImplementationOnce(async (run: (tx: typeof db) => Promise<unknown>) =>
+      run(db),
+    );
+    db.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('organization_admin_policies')) throw new Error('policy read unavailable');
+      return [];
+    });
+    await expect(executeCloudAgentWorkflowInvocation(input)).rejects.toThrow(
+      'The saved turn cannot be continued under the current context privacy policy. Start a new turn.',
+    );
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('organization_admin_policies'), [
+      organizationId,
+    ]);
+    expect(mocks.runToolLoop).not.toHaveBeenCalled();
+    expect(mocks.executeOperation).not.toHaveBeenCalled();
+    expect(mocks.settle).not.toHaveBeenCalled();
   });
 
   it('hands a free-trial turn the free reservation and no managed reservation', async () => {

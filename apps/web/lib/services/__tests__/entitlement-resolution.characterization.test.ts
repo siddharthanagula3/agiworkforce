@@ -273,6 +273,70 @@ describe('entitlement resolution characterization', () => {
     expect(mocks.getOrCreateAccount).not.toHaveBeenCalled();
   });
 
+  it.each(['funding organization', 'collection state'])(
+    'an unreadable enterprise %s cannot select another entitlement',
+    async (failureSource) => {
+      const failure = new Error(`${failureSource} unavailable`);
+      mocks.getSubscription.mockResolvedValue(
+        ownRow({ plan_tier: 'enterprise', stripe_subscription_id: null }),
+      );
+      if (failureSource === 'funding organization') {
+        mocks.privilegedQuery.mockRejectedValue(failure);
+      } else {
+        mocks.privilegedQuery.mockResolvedValue([{ organization_id: ORG }]);
+        mocks.readOrganizationCollectionState.mockRejectedValue(failure);
+      }
+
+      await expect(resolveEntitlementBundle(scopedDb, 'member-1')).rejects.toBe(failure);
+      await expect(
+        resolveEntitlementBundle(scopedDb, 'member-1', { includeSeats: false }),
+      ).rejects.toBe(failure);
+      await expect(resolveEffectiveSubscription(scopedDb, 'member-1')).rejects.toBe(failure);
+      await expect(resolveUserPersonalPlanTier(scopedDb, 'member-1')).rejects.toBe(failure);
+      expect(mocks.privilegedQuery).toHaveBeenCalledTimes(4);
+      for (const [sql] of mocks.privilegedQuery.mock.calls) {
+        expect(sql).toContain(') governing');
+      }
+      expect(mocks.getOrCreateAccount).not.toHaveBeenCalled();
+      if (failureSource === 'funding organization') {
+        expect(mocks.readOrganizationCollectionState).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('a genuinely absent enterprise funding organization leaves entitlement unchanged', async () => {
+    mocks.getSubscription.mockResolvedValue(
+      ownRow({ plan_tier: 'enterprise', stripe_subscription_id: null }),
+    );
+    mocks.privilegedQuery.mockResolvedValue([]);
+
+    await expect(
+      resolveEntitlementBundle(scopedDb, 'member-1', { includeSeats: false }),
+    ).resolves.toMatchObject({ plan: 'enterprise', entitled: true, source: 'subscription' });
+    expect(mocks.readOrganizationCollectionState).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'honors readable own enterprise collection readOnly=%s',
+    async (readOnly) => {
+      mocks.getSubscription.mockResolvedValue(
+        ownRow({ plan_tier: 'enterprise', stripe_subscription_id: null }),
+      );
+      mocks.privilegedQuery.mockResolvedValue([{ organization_id: ORG }]);
+      mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly });
+
+      await expect(
+        resolveEntitlementBundle(scopedDb, 'member-1', { includeSeats: false }),
+      ).resolves.toMatchObject({
+        plan: readOnly ? 'free' : 'enterprise',
+        entitled: !readOnly,
+        source: 'subscription',
+        denialReason: readOnly ? 'payment_required' : null,
+      });
+      expect(mocks.readOrganizationCollectionState).toHaveBeenCalledWith(expect.anything(), ORG);
+    },
+  );
+
   it('includeSeats false stops at the user own row', async () => {
     mocks.getSubscription.mockResolvedValue(null);
     mocks.privilegedQuery.mockResolvedValue([seatCandidate()]);

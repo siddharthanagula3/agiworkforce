@@ -127,6 +127,7 @@ jest.mock('../lib/mmkv', () => ({
 import { useChatStore } from '../stores/chatStore';
 import { api } from '../services/api';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { useArtifactStore } from '../src/features/artifacts/store';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
@@ -1213,6 +1214,246 @@ describe('chatStore, streaming state', () => {
   });
 
   describe('local LLM path', () => {
+    describe('deferred Local settlement', () => {
+      const finalText = [
+        '```typescript',
+        'export function answer() {',
+        '  const value = 42;',
+        '  return value;',
+        '}',
+        '```',
+      ].join('\n');
+
+      function deferred<T>() {
+        let resolve!: (value: T) => void;
+        let reject!: (reason: Error) => void;
+        const promise = new Promise<T>((res, rej) => {
+          resolve = res;
+          reject = rej;
+        });
+        return { promise, resolve, reject };
+      }
+
+      function startUsagePendingTurn() {
+        const usage = deferred<void>();
+        mockMarkInstalledModelUsed.mockReturnValueOnce(usage.promise);
+        mockLocalGenerate.mockImplementationOnce(async (_path, options) => {
+          options.onToken?.('Partial reply');
+          return { text: finalText, runtime: 'executorch', aborted: false };
+        });
+        const send = getState().sendMessage(CONV_ID, 'Remember my favorite language.', LOCAL_MODEL);
+        return { usage, send };
+      }
+
+      beforeEach(() => {
+        useChatStore.setState({ currentConversationId: CONV_ID });
+        useArtifactStore.getState().clearArtifacts();
+        mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+      });
+
+      it('settles against live rows and preserves edits and assistant metadata', async () => {
+        const turn = startUsagePendingTurn();
+        await waitFor(() => expect(mockMarkInstalledModelUsed).toHaveBeenCalledTimes(1));
+        act(() => {
+          useChatMessageStore.setState((state) => ({
+            messages: {
+              ...state.messages,
+              [CONV_ID]: state.messages[CONV_ID]!.map((message) =>
+                message.role === 'user'
+                  ? { ...message, content: 'Edited while saving usage' }
+                  : {
+                      ...message,
+                      metadata: { ...message.metadata, thinkingStartedAt: 123 },
+                    },
+              ),
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === CONV_ID
+                ? { ...conversation, title: 'Edited title' }
+                : conversation,
+            ),
+          }));
+        });
+        await act(async () => {
+          turn.usage.resolve(undefined);
+          await turn.send;
+        });
+        const messages = getState().messages[CONV_ID]!;
+        expect(messages.find((message) => message.role === 'user')?.content).toBe(
+          'Edited while saving usage',
+        );
+        expect(messages.find((message) => message.role === 'assistant')).toMatchObject({
+          content: finalText,
+          isStreaming: false,
+          metadata: { thinkingStartedAt: 123 },
+        });
+        expect(
+          getState().conversations.find((conversation) => conversation.id === CONV_ID)?.title,
+        ).toBe('Edited title');
+        expect(mockConsolidateFactsFromTurn).toHaveBeenCalledTimes(1);
+        expect(useArtifactStore.getState().artifacts.length).toBeGreaterThan(0);
+      });
+
+      it('does not restore an assistant deleted while usage persistence is pending', async () => {
+        const turn = startUsagePendingTurn();
+        await waitFor(() => expect(mockMarkInstalledModelUsed).toHaveBeenCalledTimes(1));
+        const assistant = getState().messages[CONV_ID]!.find(
+          (message) => message.role === 'assistant',
+        )!;
+        act(() => getState().deleteMessage(CONV_ID, assistant.id));
+        await act(async () => {
+          turn.usage.resolve(undefined);
+          await turn.send;
+        });
+        expect(getState().messages[CONV_ID]!.some((message) => message.id === assistant.id)).toBe(
+          false,
+        );
+        expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+        expect(useArtifactStore.getState().artifacts).toEqual([]);
+      });
+
+      it('does not restore a conversation deleted while usage persistence is pending', async () => {
+        const turn = startUsagePendingTurn();
+        await waitFor(() => expect(mockMarkInstalledModelUsed).toHaveBeenCalledTimes(1));
+        await act(async () => {
+          await getState().deleteConversation(CONV_ID);
+        });
+        await act(async () => {
+          turn.usage.resolve(undefined);
+          await turn.send;
+        });
+        expect(getState().conversations.some((conversation) => conversation.id === CONV_ID)).toBe(
+          false,
+        );
+        expect(getState().messages[CONV_ID]).toBeUndefined();
+        expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+        expect(useArtifactStore.getState().artifacts).toEqual([]);
+      });
+
+      it.each(['resolve', 'reject'] as const)(
+        'preserves a replacement stream when stopped usage persistence settles late (%s)',
+        async (outcome) => {
+          const turn = startUsagePendingTurn();
+          await waitFor(() => expect(mockMarkInstalledModelUsed).toHaveBeenCalledTimes(1));
+          const oldAssistant = getState().messages[CONV_ID]!.find(
+            (message) => message.role === 'assistant',
+          )!;
+          act(() => getState().stopStreaming());
+          const replacement = deferred<Awaited<ReturnType<typeof localGenerate>>>();
+          let replacementOptions: Parameters<typeof localGenerate>[1] | undefined;
+          mockLocalGenerate.mockImplementationOnce((_path, options) => {
+            replacementOptions = options;
+            options.onToken?.('Replacement partial');
+            return replacement.promise;
+          });
+          const replacementSend = getState().sendMessage(
+            CONV_ID,
+            'Replacement question',
+            LOCAL_MODEL,
+          );
+          await waitFor(() => expect(mockLocalGenerate).toHaveBeenCalledTimes(2));
+          await act(async () => {
+            if (outcome === 'resolve') turn.usage.resolve(undefined);
+            else turn.usage.reject(new Error('Late usage persistence failure'));
+            await turn.send;
+          });
+          expect(getState().isStreaming).toBe(true);
+          expect(getState().streamingContent).toBe('Replacement partial');
+          expect(
+            getState().messages[CONV_ID]!.find((message) => message.id === oldAssistant.id)
+              ?.content,
+          ).toBe('Partial reply');
+          expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+          expect(useArtifactStore.getState().artifacts).toEqual([]);
+          act(() => getState().stopStreaming());
+          expect(replacementOptions?.signal.aborted).toBe(true);
+          await act(async () => {
+            replacement.resolve({
+              text: 'Replacement partial',
+              runtime: 'executorch',
+              aborted: true,
+            });
+            await replacementSend;
+          });
+        },
+      );
+
+      it('preserves partial content and reasoning when the current Local turn fails', async () => {
+        mockLocalGenerate.mockImplementationOnce(async (_path, options) => {
+          options.onToken?.('<think>Partial reasoning</think>Partial answer');
+          throw new Error('Local runtime failed');
+        });
+        await act(async () => {
+          await getState().sendMessage(CONV_ID, 'Question', LOCAL_MODEL);
+        });
+        expect(
+          getState().messages[CONV_ID]!.find((message) => message.role === 'assistant'),
+        ).toMatchObject({
+          content: 'Partial answer',
+          reasoning: 'Partial reasoning',
+          isStreaming: false,
+        });
+        expect(getState().isStreaming).toBe(false);
+        expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+      });
+
+      it('ignores a late Local rejection after Stop starts a replacement stream', async () => {
+        const old = deferred<Awaited<ReturnType<typeof localGenerate>>>();
+        let oldOptions: Parameters<typeof localGenerate>[1] | undefined;
+        mockLocalGenerate.mockImplementationOnce((_path, options) => {
+          oldOptions = options;
+          options.onToken?.('Old partial');
+          return old.promise;
+        });
+        const oldSend = getState().sendMessage(CONV_ID, 'Old question', LOCAL_MODEL);
+        await waitFor(() => expect(mockLocalGenerate).toHaveBeenCalledTimes(1));
+        act(() => getState().stopStreaming());
+        const replacement = deferred<Awaited<ReturnType<typeof localGenerate>>>();
+        let replacementOptions: Parameters<typeof localGenerate>[1] | undefined;
+        mockLocalGenerate.mockImplementationOnce((_path, options) => {
+          replacementOptions = options;
+          options.onToken?.('New partial');
+          return replacement.promise;
+        });
+        const replacementSend = getState().sendMessage(CONV_ID, 'New question', LOCAL_MODEL);
+        await waitFor(() => expect(mockLocalGenerate).toHaveBeenCalledTimes(2));
+        await act(async () => {
+          oldOptions?.onToken?.(' stale token');
+          old.reject(new Error('Late Local failure'));
+          await oldSend;
+        });
+        expect(getState().isStreaming).toBe(true);
+        expect(getState().streamingContent).toBe('New partial');
+        expect(getState().error).toBeNull();
+        expect(
+          getState()
+            .messages[CONV_ID]!.filter((message) => message.role === 'assistant')
+            .map((message) => message.content),
+        ).toEqual(['Old partial', 'New partial']);
+        expect(mockConsolidateFactsFromTurn).not.toHaveBeenCalled();
+        act(() => getState().stopStreaming());
+        expect(replacementOptions?.signal.aborted).toBe(true);
+        await act(async () => {
+          replacement.resolve({ text: 'New partial', runtime: 'executorch', aborted: true });
+          await replacementSend;
+        });
+      });
+    });
+
     it('captures durable facts only after a successful local assistant turn', async () => {
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
       mockListInstalledModels.mockResolvedValue([

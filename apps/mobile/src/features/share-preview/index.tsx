@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,7 +15,7 @@ import {
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore, useChatMessageStore, useChatCloudMessageStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -26,6 +26,14 @@ import {
 } from '@/src/features/chat/composerHandoff';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
+
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+} from '@/src/features/auth/services/cloudAccountSession';
+import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import { createSharePreviewAdmission, type SharePreviewStatus } from './sharePreviewAdmission';
 
 const MAX_SHARED_BYTES = 100 * 1024;
 const NEW_CHAT_DRAFT_KEY = 'new-chat';
@@ -64,7 +72,92 @@ export default function SharePreviewScreen() {
   const appMode = useChatAppModeStore((state) => state.appMode);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
-  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<SharePreviewStatus>('idle');
+  const mounted = useRef(true);
+  const previewIdentity = JSON.stringify([rawText, handoffKey, params.nativeTruncated]);
+  const currentPreviewIdentity = useRef(previewIdentity);
+  currentPreviewIdentity.current = previewIdentity;
+  const [original] = useState(() => ({
+    mode: appMode,
+    identity: previewIdentity,
+    account: appMode === 'cloud' ? captureCloudAccountEpoch() : null,
+    ownerId: appMode === 'cloud' ? clerkUserId : null,
+  }));
+  const [admission] = useState(() =>
+    createSharePreviewAdmission({
+      isCurrent: () => {
+        if (
+          !mounted.current ||
+          currentPreviewIdentity.current !== original.identity ||
+          useChatAppModeStore.getState().appMode !== original.mode
+        )
+          return false;
+        if (original.mode === 'local') return true;
+        const auth = useAuthStore.getState();
+        return (
+          isCloudAccountEpochCurrent(original.account) &&
+          original.account.ownerId === original.ownerId &&
+          auth.clerkUserId === original.ownerId &&
+          auth.isClerkSignedIn
+        );
+      },
+      conversationExists: (id) => {
+        const store = original.mode === 'local' ? useChatMessageStore : useChatCloudMessageStore;
+        return store
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === id &&
+              executionModeForConversation(conversation) === original.mode,
+          );
+      },
+      createConversation: (title) => useChatStore.getState().createConversation(title),
+      sendMessage: (id, content, model, onAccepted) =>
+        useChatStore.getState().sendMessage(id, content, model, undefined, { onAccepted }),
+      navigate: (id) => {
+        if (id) router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id } });
+        else router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+      },
+      onChange: (next) => {
+        if (mounted.current) setStatus(next);
+      },
+    }),
+  );
+  useEffect(() => {
+    mounted.current = true;
+    const unsubscribeMode = useChatAppModeStore.subscribe((state, previous) => {
+      if (state.appMode !== previous.appMode) admission.invalidate();
+    });
+    const unsubscribeAuth =
+      original.mode === 'cloud'
+        ? useAuthStore.subscribe((state, previous) => {
+            if (
+              state.clerkUserId !== previous.clerkUserId ||
+              state.isClerkSignedIn !== previous.isClerkSignedIn
+            )
+              admission.invalidate();
+          })
+        : () => {};
+    const unsubscribeEpoch =
+      original.mode === 'cloud'
+        ? subscribeCloudAccountEpochChange(() => {
+            admission.isCurrent();
+          })
+        : () => {};
+    admission.isCurrent();
+    return () => {
+      mounted.current = false;
+      unsubscribeMode();
+      unsubscribeAuth();
+      unsubscribeEpoch();
+    };
+  }, [admission, original]);
+  useEffect(() => {
+    admission.isCurrent();
+  }, [admission, previewIdentity]);
+  const sending = status === 'pending';
+  const canSend = status === 'idle' || status === 'refused';
+  const canCheckChat = status === 'accepted' || status === 'uncertain';
   const [attachments] = useState<Attachment[]>(() => takeComposerAttachments(handoffKey));
 
   const { text: sanitised, truncated: truncatedInApp } = sanitiseSharedText(rawText);
@@ -79,7 +172,7 @@ export default function SharePreviewScreen() {
         : undefined;
 
   const handleAttachToComposer = () => {
-    if (sending) return;
+    if (!canSend || !admission.isCurrent()) return;
     const { accepted, rejected } = validateAttachments(attachments, appMode);
     if (rejected.length > 0) {
       Alert.alert(
@@ -89,7 +182,7 @@ export default function SharePreviewScreen() {
     }
     if (accepted.length === 0) return;
 
-    setSending(true);
+    if (!admission.acquire()) return;
     const openConversationId = useChatStore.getState().currentConversationId;
     const draftKey = openConversationId ?? NEW_CHAT_DRAFT_KEY;
     stageComposerAttachments(draftKey, accepted);
@@ -105,43 +198,24 @@ export default function SharePreviewScreen() {
     router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
   };
 
-  const handleSend = async () => {
-    if (sending) return;
-    setSending(true);
-    try {
-      const { createConversation, sendMessage } = useChatStore.getState();
-      const { selectedModel } = useModelStore.getState();
-
-      const previewTitle = rawText.length > 40 ? rawText.slice(0, 40).trim() + '...' : rawText;
-      const id = await createConversation(previewTitle);
-      sendMessage(id, sanitised, selectedModel);
-      router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id } });
-    } catch {
-      setSending(false);
-      Alert.alert('Error', 'Could not start chat. Please try again.');
-    }
+  const handleSend = () => {
+    const previewTitle = rawText.length > 40 ? rawText.slice(0, 40).trim() + '...' : rawText;
+    return admission.send(previewTitle, sanitised, useModelStore.getState().selectedModel);
   };
 
   const pageUrl = sharedPageUrl(rawText);
 
-  const handleSummarize = async () => {
-    if (sending || !pageUrl) return;
-    setSending(true);
-    try {
-      const { createConversation, sendMessage } = useChatStore.getState();
-      const { selectedModel } = useModelStore.getState();
-      const id = await createConversation(SUMMARIZE_PROMPT);
-      sendMessage(id, `${SUMMARIZE_PROMPT}\n\n${sanitised}`, selectedModel);
-      router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id } });
-    } catch {
-      setSending(false);
-      Alert.alert('Error', 'Could not start chat. Please try again.');
-    }
+  const handleSummarize = () => {
+    if (!pageUrl) return;
+    return admission.send(
+      SUMMARIZE_PROMPT,
+      `${SUMMARIZE_PROMPT}\n\n${sanitised}`,
+      useModelStore.getState().selectedModel,
+    );
   };
 
   const handleAskAbout = () => {
-    if (sending || !pageUrl || !provenance) return;
-    setSending(true);
+    if (!pageUrl || !provenance || !admission.acquire()) return;
     const openConversationId = useChatStore.getState().currentConversationId;
     const draftKey = openConversationId ?? NEW_CHAT_DRAFT_KEY;
     setDraft(draftKey, `${draftText}\n\n`, provenance);
@@ -168,6 +242,7 @@ export default function SharePreviewScreen() {
   } as const;
 
   const handleDismiss = () => {
+    admission.invalidate();
     if (router.canGoBack()) {
       router.back();
     } else {
@@ -176,13 +251,15 @@ export default function SharePreviewScreen() {
   };
 
   const hasAttachments = attachments.length > 0;
-  const primaryLabel = hasAttachments
-    ? sending
-      ? 'Opening chat…'
-      : 'Add to chat'
-    : sending
-      ? 'Opening chat…'
-      : 'Send to Chat';
+  const primaryLabel = canCheckChat
+    ? 'Check chat'
+    : hasAttachments
+      ? sending
+        ? 'Opening chat…'
+        : 'Add to chat'
+      : sending
+        ? 'Opening chat…'
+        : 'Send to Chat';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
@@ -217,6 +294,17 @@ export default function SharePreviewScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+        {(status === 'refused' || canCheckChat || status === 'invalid') && (
+          <Text accessibilityRole="alert" style={{ color: themeColors.textSecondary }}>
+            {status === 'refused'
+              ? 'Your message was not accepted. The shared content is still here. You can try sending again.'
+              : status === 'invalid'
+                ? 'This preview is no longer active for its original mode or account. Dismiss it and share again.'
+                : status === 'accepted'
+                  ? 'Your message was accepted. Open the chat to check its progress.'
+                  : 'The outcome could not be confirmed. Check your chat before sharing again to avoid duplicates.'}
+          </Text>
+        )}
         {truncated && (
           <View
             style={{
@@ -319,7 +407,7 @@ export default function SharePreviewScreen() {
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <PressableBox
               onPress={() => void handleSummarize()}
-              disabled={sending}
+              disabled={!canSend}
               accessibilityRole="button"
               accessibilityLabel="Summarize this page"
               style={quickActionStyle}
@@ -331,7 +419,7 @@ export default function SharePreviewScreen() {
             </PressableBox>
             <PressableBox
               onPress={handleAskAbout}
-              disabled={sending || !provenance}
+              disabled={!canSend || !provenance}
               accessibilityRole="button"
               accessibilityLabel="Ask about this page"
               style={quickActionStyle}
@@ -377,10 +465,22 @@ export default function SharePreviewScreen() {
         </PressableBox>
 
         <PressableBox
-          onPress={hasAttachments ? handleAttachToComposer : handleSend}
-          disabled={sending || (!hasAttachments && !rawText.trim())}
+          onPress={
+            canCheckChat
+              ? admission.checkChat
+              : hasAttachments
+                ? handleAttachToComposer
+                : handleSend
+          }
+          disabled={(!canSend && !canCheckChat) || (!hasAttachments && !rawText.trim())}
           accessibilityRole="button"
-          accessibilityLabel={hasAttachments ? 'Add shared files to chat' : 'Send shared text'}
+          accessibilityLabel={
+            canCheckChat
+              ? 'Check chat'
+              : hasAttachments
+                ? 'Add shared files to chat'
+                : 'Send shared text'
+          }
           style={{
             flex: 2,
             paddingVertical: 14,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   AlertDescription,
@@ -21,13 +21,18 @@ import {
   ACCOUNT_SECURITY_POLICY,
   type AccountSecurityCredential,
   type AccountSecurityStatus,
+  type AccountSecurityRecoveryKeysResponse,
 } from '@agiworkforce/cloud-contracts/account-security';
+
+import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import type { SessionAuthority } from '@/lib/identity/request-authority';
 
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/useStepUp';
 import { isPasskeyCancellation } from '@features/settings/lib/passkey-cancellation';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
+  AccountSecurityRequestError,
   addCredential,
   cancelRecovery,
   canUseWebAuthn,
@@ -46,8 +51,13 @@ import { RecoveryKeysSheet } from './RecoveryKeysSheet';
 type Setup =
   | { step: 'closed' }
   | { step: 'methods' }
-  | { step: 'keys'; keys: string[] | null }
-  | { step: 'email'; sentTo: string; expiresAt: string };
+  | { step: 'keys'; receipt: AccountSecurityRecoveryKeysResponse }
+  | {
+      step: 'email';
+      sentTo: string;
+      expiresAt: string;
+      receipt: AccountSecurityRecoveryKeysResponse;
+    };
 
 const HOLD_HOURS = ACCOUNT_SECURITY_POLICY.recoveryHoldHours;
 const MINIMUM_METHODS = ACCOUNT_SECURITY_POLICY.minimumSignInMethods;
@@ -170,26 +180,59 @@ function AddCredentialForm({
 }
 
 export function AdvancedAccountSecurityPanel() {
+  const capture = useSessionSnapshot();
+  const owner = useRef<SessionAuthority | null>(null);
+  const generation = useRef(0);
+  const [, redraw] = useState(0);
+  if (owner.current && !owner.current.isCurrent()) owner.current = null;
+  if (!owner.current) {
+    owner.current = capture();
+    generation.current += 1;
+  }
+  const session = owner.current;
+  useEffect(
+    () =>
+      session?.subscribe?.(() => {
+        if (!session.isCurrent()) redraw((value) => value + 1);
+      }),
+    [session],
+  );
+  if (!session) return null;
+  return <OwnedAdvancedAccountSecurityPanel key={generation.current} session={session} />;
+}
+
+function OwnedAdvancedAccountSecurityPanel({ session }: { session: SessionAuthority }) {
   const [status, setStatus] = useState<AccountSecurityStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [setup, setSetup] = useState<Setup>({ step: 'closed' });
-  const [replacement, setReplacement] = useState<string[] | null>(null);
-  const [keysSaved, setKeysSaved] = useState(false);
+  const [replacement, setReplacement] = useState<AccountSecurityRecoveryKeysResponse | null>(null);
+  const [savedBatchId, setSavedBatchId] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const isCurrent = useCallback(() => mounted.current && session.isCurrent(), [session]);
   const [emailCode, setEmailCode] = useState('');
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await fetchAccountSecurityStatus());
+      const next = await fetchAccountSecurityStatus();
+      if (!isCurrent()) return;
+      setStatus(next);
       setLoadError(null);
     } catch (error) {
+      if (!isCurrent()) return;
       setLoadError(toUserMessage(error, 'Advanced Account Security could not be loaded.'));
     }
-  }, []);
+  }, [isCurrent]);
 
   useEffect(() => {
     void refresh();
@@ -197,6 +240,7 @@ export function AdvancedAccountSecurityPanel() {
 
   const run = useCallback(
     async (work: () => Promise<void>, fallback: string, keepNotice = false): Promise<boolean> => {
+      if (!isCurrent()) return false;
       setBusy(true);
       setActionError(null);
       if (!keepNotice) setNotice(null);
@@ -204,14 +248,16 @@ export function AdvancedAccountSecurityPanel() {
         await work();
         return true;
       } catch (error) {
-        if (!quietFailure(error)) setActionError(toUserMessage(error, fallback));
+        if (isCurrent() && !quietFailure(error)) setActionError(toUserMessage(error, fallback));
         return false;
       } finally {
-        setBusy(false);
-        await refresh();
+        if (isCurrent()) {
+          setBusy(false);
+          await refresh();
+        }
       }
     },
-    [refresh],
+    [refresh, isCurrent],
   );
 
   const enrolled = status?.state === 'enrolled';
@@ -245,29 +291,52 @@ export function AdvancedAccountSecurityPanel() {
   const handleGenerateSetupKeys = useCallback(
     () =>
       run(async () => {
+        setSavedBatchId(null);
+        setEmailCode('');
+        setSetup({ step: 'methods' });
         const generated = await generateRecoveryKeys();
-        setKeysSaved(false);
-        setSetup({ step: 'keys', keys: generated.recoveryKeys });
+        if (!isCurrent()) return;
+        setSetup({ step: 'keys', receipt: generated });
       }, 'Recovery keys could not be generated.'),
-    [run],
+    [run, isCurrent],
   );
 
   const handleSendCode = useCallback(
     () =>
       run(async () => {
+        if (
+          (setup.step !== 'keys' && setup.step !== 'email') ||
+          savedBatchId !== setup.receipt.recoveryBatchId
+        )
+          return;
+        const receipt = setup.receipt;
         const sent = await sendEnrollmentCode();
+        if (!isCurrent()) return;
         setEmailCode('');
-        setSetup({ step: 'email', sentTo: sent.sentTo, expiresAt: sent.expiresAt });
+        setSetup({ step: 'email', sentTo: sent.sentTo, expiresAt: sent.expiresAt, receipt });
       }, 'The code could not be emailed.'),
-    [run],
+    [run, setup, savedBatchId, isCurrent],
   );
 
   const handleEnroll = useCallback(
     (code: string) =>
       run(async () => {
-        const enrolledResult = await enrollAccountSecurity(stepUp, code);
+        if (setup.step !== 'email' || savedBatchId !== setup.receipt.recoveryBatchId) return;
+        const enrolledResult = await enrollAccountSecurity(
+          stepUp,
+          code,
+          setup.receipt.recoveryBatchId,
+        ).catch((error: unknown) => {
+          if (isCurrent() && error instanceof AccountSecurityRequestError && error.status === 409) {
+            setSetup({ step: 'methods' });
+            setSavedBatchId(null);
+            setEmailCode('');
+          }
+          throw error;
+        });
+        if (!isCurrent()) return;
         setSetup({ step: 'closed' });
-        setKeysSaved(false);
+        setSavedBatchId(null);
         setEmailCode('');
         const signedOut = enrolledResult.sessionsSignedOut + enrolledResult.devicesSignedOut;
         const signedOutLine =
@@ -278,7 +347,7 @@ export function AdvancedAccountSecurityPanel() {
           `Advanced Account Security is on.${signedOutLine} We emailed you a link that turns it off for the next ${UNDO_HOURS} hours, in case this was not you.`,
         );
       }, 'Advanced Account Security could not be turned on.'),
-    [run, stepUp],
+    [run, stepUp, setup, savedBatchId, isCurrent],
   );
 
   const handleVerify = useCallback(
@@ -292,22 +361,38 @@ export function AdvancedAccountSecurityPanel() {
   const handleStartReplacement = useCallback(
     () =>
       run(async () => {
+        setSavedBatchId(null);
+        setReplacement(null);
         const generated = await generateRecoveryKeys();
-        setKeysSaved(false);
-        setReplacement(generated.recoveryKeys);
+        if (!isCurrent()) return;
+        setReplacement(generated);
       }, 'Recovery keys could not be generated.'),
-    [run],
+    [run, isCurrent],
   );
 
   const handleConfirmReplacement = useCallback(
     () =>
       run(async () => {
-        await confirmReplacementRecoveryKeys(stepUp);
+        if (!replacement || savedBatchId !== replacement.recoveryBatchId) return;
+        await confirmReplacementRecoveryKeys(stepUp, replacement.recoveryBatchId).catch(
+          (error: unknown) => {
+            if (
+              isCurrent() &&
+              error instanceof AccountSecurityRequestError &&
+              error.status === 409
+            ) {
+              setReplacement(null);
+              setSavedBatchId(null);
+            }
+            throw error;
+          },
+        );
+        if (!isCurrent()) return;
         setReplacement(null);
-        setKeysSaved(false);
+        setSavedBatchId(null);
         setNotice('Your new recovery keys are saved. The old ones no longer work.');
       }, 'Your new recovery keys could not be saved.'),
-    [run, stepUp],
+    [run, stepUp, replacement, savedBatchId, isCurrent],
   );
 
   const handleCancelRecovery = useCallback(() => {
@@ -463,7 +548,7 @@ export function AdvancedAccountSecurityPanel() {
           </div>
         ) : null}
 
-        {status?.state === 'available' && setup.step === 'keys' && setup.keys ? (
+        {status?.state === 'available' && setup.step === 'keys' ? (
           <div className="space-y-4">
             <div>
               <h3 className="text-sm font-medium text-foreground">
@@ -475,11 +560,19 @@ export function AdvancedAccountSecurityPanel() {
                 entered, and we email you when that happens.
               </p>
             </div>
-            <RecoveryKeysSheet keys={setup.keys} saved={keysSaved} onSavedChange={setKeysSaved} />
+            <RecoveryKeysSheet
+              key={setup.receipt.recoveryBatchId}
+              keys={setup.receipt.recoveryKeys}
+              isCurrent={isCurrent}
+              saved={savedBatchId === setup.receipt.recoveryBatchId}
+              onSavedChange={(saved) =>
+                setSavedBatchId(saved ? setup.receipt.recoveryBatchId : null)
+              }
+            />
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                disabled={busy || !keysSaved}
+                disabled={busy || savedBatchId !== setup.receipt.recoveryBatchId}
                 onClick={() => void handleSendCode()}
               >
                 {busy ? <Spinner size="sm" /> : null}
@@ -489,7 +582,10 @@ export function AdvancedAccountSecurityPanel() {
                 type="button"
                 variant="outline"
                 disabled={busy}
-                onClick={() => setSetup({ step: 'methods' })}
+                onClick={() => {
+                  setSavedBatchId(null);
+                  setSetup({ step: 'methods' });
+                }}
               >
                 Back
               </Button>
@@ -543,9 +639,17 @@ export function AdvancedAccountSecurityPanel() {
                 type="button"
                 variant="outline"
                 disabled={busy}
+                onClick={() => void handleGenerateSetupKeys()}
+              >
+                Generate new recovery keys
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
                 onClick={() => {
                   setEmailCode('');
-                  setKeysSaved(false);
+                  setSavedBatchId(null);
                   setSetup({ step: 'closed' });
                 }}
               >
@@ -594,14 +698,18 @@ export function AdvancedAccountSecurityPanel() {
                     Saving these replaces your current recovery keys, which stop working.
                   </p>
                   <RecoveryKeysSheet
-                    keys={replacement}
-                    saved={keysSaved}
-                    onSavedChange={setKeysSaved}
+                    key={replacement.recoveryBatchId}
+                    keys={replacement.recoveryKeys}
+                    isCurrent={isCurrent}
+                    saved={savedBatchId === replacement.recoveryBatchId}
+                    onSavedChange={(saved) =>
+                      setSavedBatchId(saved ? replacement.recoveryBatchId : null)
+                    }
                   />
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      disabled={busy || !keysSaved}
+                      disabled={busy || savedBatchId !== replacement.recoveryBatchId}
                       onClick={() => void handleConfirmReplacement()}
                     >
                       Save new recovery keys
@@ -610,9 +718,20 @@ export function AdvancedAccountSecurityPanel() {
                       type="button"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => setReplacement(null)}
+                      onClick={() => {
+                        setSavedBatchId(null);
+                        setReplacement(null);
+                      }}
                     >
                       Keep current keys
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void handleStartReplacement()}
+                    >
+                      Generate new recovery keys
                     </Button>
                   </div>
                 </>

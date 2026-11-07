@@ -1,4 +1,3 @@
-
 jest.mock('expo-speech-recognition', () => {
   const listenersByEvent: Record<string, Array<(...args: unknown[]) => void>> = {};
   const getListeners = (name: string) => (listenersByEvent[name] ||= []);
@@ -47,62 +46,108 @@ const { __fireResult, __fireEnd } = jest.requireMock('expo-speech-recognition') 
   __fireEnd: () => void;
 };
 
-describe('voice.ts natural-stop lifecycle', () => {
+describe('voice.ts owned recording lifecycle', () => {
   beforeEach(async () => {
     await VoiceInput.cancelCapture();
     jest.clearAllMocks();
   });
 
-  it('does not permanently lock out startRecording() after a natural stop', async () => {
-    await VoiceService.startRecording();
-    expect(VoiceInput.isCapturing()).toBe(true);
-
-    __fireResult({ results: [{ transcript: 'hello there', confidence: 0.9 }], isFinal: false });
-    await Promise.resolve();
-    __fireEnd();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(VoiceInput.isCapturing()).toBe(false);
-
-    await expect(VoiceService.startRecording()).resolves.toBeUndefined();
-  });
-
-  it('still delivers the transcript when stopRecording() is called after a natural stop', async () => {
-    await VoiceService.startRecording();
-
+  it('keeps a native final result on its original handle while a newer capture runs', async () => {
+    const original = await VoiceService.startRecording();
     __fireResult({
       results: [{ transcript: 'buy milk tomorrow', confidence: 0.95 }],
-      isFinal: false,
+      isFinal: true,
     });
-    await Promise.resolve();
-    __fireEnd();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    await expect(VoiceService.stopRecording()).resolves.toBe('');
-
-    const result = await VoiceService.transcribe('');
-    expect(result.text).toBe('buy milk tomorrow');
+    const newer = await VoiceService.startRecording();
+    await original.stop();
+    await original.cancel();
+    expect(VoiceInput.isCapturing()).toBe(true);
+    await expect(original.result).resolves.toMatchObject({ text: 'buy milk tomorrow' });
+    __fireResult({ results: [{ transcript: 'new request', confidence: 0.9 }], isFinal: true });
+    await expect(newer.result).resolves.toMatchObject({ text: 'new request' });
   });
 
-  it('does not produce an unhandled promise rejection when a recording is cancelled', async () => {
-    const unhandled: unknown[] = [];
-    const onUnhandledRejection = (reason: unknown) => unhandled.push(reason);
-    process.on('unhandledRejection', onUnhandledRejection);
+  it('delivers a natural end through its owned result', async () => {
+    const recording = await VoiceService.startRecording();
+    __fireResult({ results: [{ transcript: 'hello there', confidence: 0.9 }], isFinal: false });
+    __fireEnd();
+    await recording.stop();
+    await expect(recording.result).resolves.toMatchObject({ text: 'hello there' });
+  });
 
+  it('invalidates pending permission without disturbing a newer capture', async () => {
+    const native = jest.requireMock('expo-speech-recognition').ExpoSpeechRecognitionModule;
+    let grant!: (value: { granted: boolean }) => void;
+    native.requestPermissionsAsync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          grant = resolve;
+        }),
+    );
+    const controller = new AbortController();
+    const pending = VoiceService.startRecording(undefined, controller.signal);
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'aborted' });
+    controller.abort();
+    const newer = await VoiceService.startRecording();
+    grant({ granted: true });
+    await rejected;
+    expect(native.start).toHaveBeenCalledTimes(1);
+    expect(VoiceInput.isCapturing()).toBe(true);
+    __fireResult({ results: [{ transcript: 'current', confidence: 1 }], isFinal: true });
+    await expect(newer.result).resolves.toMatchObject({ text: 'current' });
+  });
+
+  it('does not let cancelled file recognition clear a newer microphone capture', async () => {
+    const native = jest.requireMock('expo-speech-recognition').ExpoSpeechRecognitionModule;
+    const originalLocales = native.getSupportedLocales;
+    let finishLocales!: (value: { installedLocales: string[] }) => void;
+    native.getSupportedLocales = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishLocales = resolve;
+          }),
+      )
+      .mockResolvedValue({ installedLocales: ['en-US'] });
     try {
-      await VoiceService.startRecording();
-      await VoiceService.cancelRecording();
-
-      for (let i = 0; i < 5; i += 1) {
-        await Promise.resolve();
-      }
+      const pending = VoiceInput.transcribeAudioFile('file:///owned-recording.m4a');
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'aborted' });
+      await VoiceInput.cancelCapture();
+      const newer = await VoiceService.startRecording();
+      finishLocales({ installedLocales: ['en-US'] });
+      await rejected;
+      expect(native.start).toHaveBeenCalledTimes(1);
+      expect(native.start.mock.calls[0][0].audioSource).toBeUndefined();
+      expect(VoiceInput.isCapturing()).toBe(true);
+      await newer.cancel();
     } finally {
-      process.off('unhandledRejection', onUnhandledRejection);
+      native.getSupportedLocales = originalLocales;
     }
+  });
 
-    expect(unhandled).toHaveLength(0);
-    await expect(VoiceService.startRecording()).resolves.toBeUndefined();
+  it('bounds manual stop when the native recognizer emits no end', async () => {
+    jest.useFakeTimers();
+    try {
+      const native = jest.requireMock('expo-speech-recognition').ExpoSpeechRecognitionModule;
+      native.stop.mockImplementationOnce(() => undefined);
+      const recording = await VoiceService.startRecording();
+      __fireResult({ results: [{ transcript: 'kept partial', confidence: 0.7 }], isFinal: false });
+      await recording.stop();
+      jest.advanceTimersByTime(1500);
+      await expect(recording.result).resolves.toMatchObject({ text: 'kept partial' });
+      expect(VoiceInput.isCapturing()).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancels an owned capture without leaving an unhandled rejection', async () => {
+    const recording = await VoiceService.startRecording();
+    await recording.cancel();
+    await expect(recording.result).rejects.toMatchObject({ code: 'aborted' });
+    expect(VoiceInput.isCapturing()).toBe(false);
+    const newer = await VoiceService.startRecording();
+    await newer.cancel();
   });
 });

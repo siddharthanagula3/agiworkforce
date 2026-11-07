@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequestAuthority } from '@/lib/identity/request-authority';
 
 const mocks = vi.hoisted(() => ({
   applyCacheScope: vi.fn(async () => true),
@@ -15,6 +16,15 @@ import { queryKeys } from '@shared/stores/query-client';
 import { finalizeWorkspaceSwitch, workspaceSwitchDestination } from './workspace-cache-scope';
 
 beforeEach(() => vi.clearAllMocks());
+
+function authority(isCurrent = () => true) {
+  return createRequestAuthority({
+    userId: 'user_1',
+    sessionId: 'session_1',
+    isCurrent,
+    getToken: async () => 'fixture-token',
+  });
+}
 
 type KeyFactory = (...args: never[]) => readonly unknown[];
 
@@ -42,6 +52,27 @@ function everyCachedKey(): readonly unknown[][] {
 }
 
 describe('finalizeWorkspaceSwitch', () => {
+  it('uses the resolved product account ID instead of the captured provider subject when supplied', async () => {
+    const queryClient = new QueryClient();
+    const navigate = vi.fn();
+    const captured = authority();
+    await finalizeWorkspaceSwitch(
+      queryClient,
+      'org_b',
+      captured,
+      navigate,
+      'mapped-product-account',
+    );
+    expect(captured.session.userId).toBe('user_1');
+    expect(mocks.applyCacheScope).toHaveBeenCalledWith(
+      {
+        accountId: 'mapped-product-account',
+        workspaceId: 'org_b',
+      },
+      expect.any(Function),
+    );
+    expect(navigate).toHaveBeenCalledOnce();
+  });
   it.each([
     ['organization', 'org_a'],
     ['personal', null],
@@ -51,12 +82,15 @@ describe('finalizeWorkspaceSwitch', () => {
     queryClient.setQueryData(['workspace', 'enterprise-contract'], { plan: 'enterprise' });
     const navigate = vi.fn();
 
-    await finalizeWorkspaceSwitch(queryClient, workspaceId, navigate);
+    await finalizeWorkspaceSwitch(queryClient, workspaceId, authority(), navigate);
 
-    expect(mocks.applyCacheScope).toHaveBeenCalledWith({
-      accountId: 'user_1',
-      workspaceId,
-    });
+    expect(mocks.applyCacheScope).toHaveBeenCalledWith(
+      {
+        accountId: 'user_1',
+        workspaceId,
+      },
+      expect.any(Function),
+    );
     expect(queryClient.getQueryData(['workspace', 'usage-analytics', 30])).toBeUndefined();
     expect(queryClient.getQueryData(['workspace', 'enterprise-contract'])).toBeUndefined();
     expect(navigate).toHaveBeenCalledWith(null);
@@ -68,7 +102,7 @@ describe('finalizeWorkspaceSwitch', () => {
     expect(keys.length).toBeGreaterThan(0);
     for (const key of keys) queryClient.setQueryData(key, { fromPreviousWorkspace: true });
 
-    await finalizeWorkspaceSwitch(queryClient, 'org_c', vi.fn());
+    await finalizeWorkspaceSwitch(queryClient, 'org_c', authority(), vi.fn());
 
     const survivors = keys.filter((key) => queryClient.getQueryData(key) !== undefined);
     expect(survivors).toEqual([]);
@@ -88,9 +122,49 @@ describe('finalizeWorkspaceSwitch', () => {
       return true;
     });
 
-    await finalizeWorkspaceSwitch(queryClient, 'org_b', () => events.push('navigate'));
+    await finalizeWorkspaceSwitch(queryClient, 'org_b', authority(), () => events.push('navigate'));
 
     expect(events).toEqual(['cancel', 'scope', 'clear', 'navigate']);
+  });
+
+  it('does not apply scope or navigate after the owner changes during cancellation', async () => {
+    let current = true;
+    const queryClient = new QueryClient();
+    const navigate = vi.fn();
+    vi.spyOn(queryClient, 'cancelQueries').mockImplementation(async () => {
+      current = false;
+    });
+    await expect(
+      finalizeWorkspaceSwitch(
+        queryClient,
+        null,
+        authority(() => current),
+        navigate,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mocks.applyCacheScope).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('does not clear next-account queries after scope cleanup loses its owner', async () => {
+    let current = true;
+    const queryClient = new QueryClient();
+    const navigate = vi.fn();
+    mocks.applyCacheScope.mockImplementationOnce(async () => {
+      current = false;
+      queryClient.setQueryData(['next-account'], { kept: true });
+      return false;
+    });
+    await expect(
+      finalizeWorkspaceSwitch(
+        queryClient,
+        null,
+        authority(() => current),
+        navigate,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(queryClient.getQueryData(['next-account'])).toEqual({ kept: true });
+    expect(navigate).not.toHaveBeenCalled();
   });
 });
 

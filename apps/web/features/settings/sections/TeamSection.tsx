@@ -8,7 +8,7 @@ import {
   isOrganizationAdminRole,
   type TeamSeatType,
 } from '@agiworkforce/types';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Building2, Copy, Mail, RefreshCw, RotateCw, Trash2, Users, X } from 'lucide-react';
 import {
   AlertDialog,
@@ -40,6 +40,7 @@ import {
   useUpdateTeamMemberSeatType,
   SeatTypePaymentRequiredError,
   type OrganizationOwnerRoleAfterTransfer,
+  type PreparedWorkspaceMembershipAction,
   type TeamInvitation,
   type TeamInvitationCredentialResult,
   type TeamMember,
@@ -59,7 +60,6 @@ type PendingMemberAction =
   | { kind: 'role'; member: TeamMember; role: MemberRole }
   | { kind: 'remove'; member: TeamMember }
   | { kind: 'revoke-invitation'; invitation: TeamInvitation }
-  | { kind: 'leave-workspace' }
   | null;
 
 const controlStyle = {
@@ -182,7 +182,7 @@ function InlineError({ error }: { error: Error | null | undefined }) {
   );
 }
 
-export function TeamSection() {
+export function TeamSection({ active = true }: { active?: boolean }) {
   const overviewQuery = useOrganizationOverview();
   const overview = overviewQuery.data;
   const organization = overview?.organization ?? null;
@@ -198,15 +198,28 @@ export function TeamSection() {
   const createInvitation = useCreateTeamInvitation();
   const resendInvitation = useResendTeamInvitation();
   const revokeInvitation = useRevokeTeamInvitation();
-  const leaveOrganization = useLeaveOrganization();
+  const leaveOrganization = useLeaveOrganization(active);
   const updateRole = useUpdateTeamMemberRole();
   const updateSeatType = useUpdateTeamMemberSeatType();
   const removeMember = useRemoveTeamMember();
-  const transferOwnership = useTransferOrganizationOwnership();
+  const transferOwnership = useTransferOrganizationOwnership(active);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const { confirm: confirmMembership, dialog: membershipConfirmDialog } = useConfirmAction();
+  const [membershipConfirmation, setMembershipConfirmation] =
+    useState<PreparedWorkspaceMembershipAction | null>(null);
+  const membershipConfirmationRef = useRef<PreparedWorkspaceMembershipAction | null>(null);
 
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
+  const [creationDraft, setCreationDraft] = useState({
+    ownerKey: createOrganization.ownerKey,
+    name: '',
+    slug: '',
+  });
+  const currentCreationDraft =
+    creationDraft.ownerKey === createOrganization.ownerKey
+      ? creationDraft
+      : { ownerKey: createOrganization.ownerKey, name: '', slug: '' };
   const [memberEmail, setMemberEmail] = useState('');
   const [memberRole, setMemberRole] = useState<TeamInvitation['role']>('member');
   const [pendingAction, setPendingAction] = useState<PendingMemberAction>(null);
@@ -216,10 +229,79 @@ export function TeamSection() {
     delivery: TeamInvitationCredentialResult['delivery'];
   } | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const [successorUserId, setSuccessorUserId] = useState('');
-  const [newOwnerUserId, setNewOwnerUserId] = useState('');
-  const [outgoingOwnerRole, setOutgoingOwnerRole] =
-    useState<OrganizationOwnerRoleAfterTransfer>('admin');
+  const membershipOwnerKey = leaveOrganization.ownerKey;
+  const [membershipDraft, setMembershipDraft] = useState({
+    ownerKey: membershipOwnerKey,
+    successorUserId: '',
+    newOwnerUserId: '',
+    outgoingOwnerRole: 'admin' as OrganizationOwnerRoleAfterTransfer,
+  });
+  const currentMembershipDraft =
+    membershipDraft.ownerKey === membershipOwnerKey
+      ? membershipDraft
+      : {
+          ownerKey: membershipOwnerKey,
+          successorUserId: '',
+          newOwnerUserId: '',
+          outgoingOwnerRole: 'admin' as OrganizationOwnerRoleAfterTransfer,
+        };
+  const { successorUserId, newOwnerUserId, outgoingOwnerRole } = currentMembershipDraft;
+  const membershipIsOwner = leaveOrganization.currentUserRole === 'owner';
+  const membershipWorkspaceName = leaveOrganization.workspaceName;
+  const membershipTargets = (membersQuery.data ?? []).filter(
+    (member) =>
+      member.organizationId === leaveOrganization.organizationId &&
+      member.userId !== leaveOrganization.actorUserId,
+  );
+  const membershipAvailable =
+    active &&
+    leaveOrganization.canMutate &&
+    transferOwnership.canMutate &&
+    !!organization &&
+    !!membershipWorkspaceName &&
+    leaveOrganization.organizationId === organization.id &&
+    transferOwnership.organizationId === organization.id;
+
+  function askMembership(
+    question: {
+      title: string;
+      description: string;
+      confirmLabel: string;
+    },
+    prepare: () => PreparedWorkspaceMembershipAction | null,
+  ) {
+    const prepared = prepare();
+    if (!prepared) return;
+    membershipConfirmationRef.current?.cancel();
+    membershipConfirmationRef.current = prepared;
+    setMembershipConfirmation(prepared);
+    confirmMembership({
+      ...question,
+      destructive: true,
+      onConfirm: prepared.submit,
+      onCancel: prepared.cancel,
+    });
+  }
+
+  function askToLeave() {
+    if (!membershipAvailable || !organization) return;
+    const successor = membershipIsOwner
+      ? membershipTargets.find((member) => member.userId === successorUserId)
+      : null;
+    if (membershipIsOwner && !successor) return;
+    const input = {
+      organizationId: organization.id,
+      ...(successor ? { successorUserId: successor.userId } : {}),
+    };
+    askMembership(
+      {
+        title: successor ? 'Transfer ownership and leave?' : 'Leave workspace?',
+        description: `${successor ? `${successor.name} becomes owner of ${membershipWorkspaceName}, then you` : `You`} immediately lose access to ${membershipWorkspaceName} and your seat becomes available. Cleanup will attempt to revoke this workspace's device tokens and API keys and disconnect its shared connectors. The result will report any cleanup problems. You may need to sign in again. You cannot undo this yourself.`,
+        confirmLabel: successor ? 'Transfer and leave' : 'Leave workspace',
+      },
+      () => leaveOrganization.prepare(input),
+    );
+  }
 
   useEffect(() => {
     if (organization) {
@@ -227,6 +309,81 @@ export function TeamSection() {
       setWorkspaceSlug(organization.slug);
     }
   }, [organization]);
+
+  const membershipOperation =
+    leaveOrganization.phase && leaveOrganization.phase !== 'confirming'
+      ? leaveOrganization
+      : transferOwnership.phase && transferOwnership.phase !== 'confirming'
+        ? transferOwnership
+        : null;
+  if (active && membershipOperation) {
+    const left = leaveOrganization.data;
+    const transferred = transferOwnership.data;
+    const uncertain = membershipOperation.phase === 'uncertain';
+    const continuing = membershipOperation.phase === 'finishing';
+    return (
+      <SectionCard
+        title={
+          left
+            ? 'You left the workspace'
+            : transferred
+              ? 'Ownership transferred'
+              : uncertain
+                ? 'Workspace outcome unconfirmed'
+                : 'Confirming workspace action'
+        }
+      >
+        <div style={{ padding: 'var(--space-5)' }}>
+          {left ? (
+            <>
+              <p>
+                Your membership was removed. The server reports {left.revoked.deviceTokens} device
+                tokens, {left.revoked.apiKeys} API keys and {left.revoked.sessions} sessions
+                revoked, and {left.sharedConnectorsUnshared} shared connectors disconnected.
+              </p>
+              {left.warnings.length > 0 ? (
+                <p role="alert">
+                  Some credential or connector cleanup could not be confirmed. Contact your
+                  workspace administrator or support before assuming all access has ended.
+                </p>
+              ) : (
+                <p>No cleanup problems were reported.</p>
+              )}
+            </>
+          ) : transferred ? (
+            <p>
+              Ownership was transferred. Your role is now {titleCase(transferred.previousOwnerRole)}
+              .
+            </p>
+          ) : !uncertain ? (
+            <p role="status">
+              {continuing
+                ? 'Refreshing your workspace…'
+                : 'Complete any identity confirmation to continue.'}
+            </p>
+          ) : null}
+          {left || transferred ? (
+            <p>
+              Continue to refresh the app in your current workspace. This will not repeat the
+              action. You may be asked to sign in.
+            </p>
+          ) : null}
+          <InlineError error={membershipOperation.error} />
+          {left || transferred || uncertain ? (
+            <button
+              type="button"
+              disabled={continuing}
+              onClick={() => void membershipOperation.continueAfterReceipt()}
+              style={primaryButtonStyle}
+            >
+              {continuing ? 'Refreshing…' : uncertain ? 'Reload to check workspace' : 'Continue'}
+            </button>
+          ) : null}
+          {membershipOperation.stepUpDialog}
+        </div>
+      </SectionCard>
+    );
+  }
 
   if (overviewQuery.isLoading) {
     return (
@@ -281,7 +438,11 @@ export function TeamSection() {
   const licensedPremiumSeats = seatTypesQuery.data?.licensedPremiumSeats ?? 0;
   const premiumSeatsAssigned = seatTypesQuery.data?.premiumSeatsAssigned ?? 0;
   const unassignedPremiumSeats = Math.max(0, licensedPremiumSeats - premiumSeatsAssigned);
-  const workspaces = overview.workspaces ?? [];
+  const accountWorkspaces = switchWorkspace.accountWorkspaces;
+  const workspaces =
+    accountWorkspaces?.workspaces.filter(
+      (workspace) => workspace.kind === 'organization' && workspace.organizationId !== null,
+    ) ?? [];
 
   function requestSeatChange(member: TeamMember, seatType: TeamSeatType) {
     if (!organization || !seatBilling || seatType === member.seatType) return;
@@ -318,7 +479,7 @@ export function TeamSection() {
     updateSeatType.error instanceof SeatTypePaymentRequiredError ? updateSeatType.error : null;
 
   const workspacePicker =
-    workspaces.length > 0 ? (
+    (accountWorkspaces && workspaces.length > 0) || switchWorkspace.requiresReload ? (
       <div
         style={{
           display: 'flex',
@@ -334,37 +495,49 @@ export function TeamSection() {
           Workspace
         </label>
         <div>
-          <select
-            id="team-active-workspace"
-            aria-label="Active workspace"
-            value={overview.activeOrganizationId ?? 'personal'}
-            disabled={switchWorkspace.isPending}
-            onChange={(event) => {
-              const target = event.target.value === 'personal' ? null : event.target.value;
-              if (switchInterruptions.length === 0) {
-                switchWorkspace.mutate(target);
-                return;
+          {accountWorkspaces ? (
+            <select
+              id="team-active-workspace"
+              aria-label="Active workspace"
+              value={
+                accountWorkspaces.scope === 'personal'
+                  ? 'personal'
+                  : accountWorkspaces.activeOrganizationId!
               }
-              confirm({
-                title: 'Switch workspace?',
-                description: `Switching reloads the app in the new workspace. This work does not come with you: ${switchInterruptions
-                  .map((interruption) => interruption.description)
-                  .join(' ')}`,
-                confirmLabel: 'Switch anyway',
-                cancelLabel: 'Stay in this workspace',
-                onConfirm: () => switchWorkspace.mutate(target),
-              });
-            }}
-            style={{ ...controlStyle, width: 'auto' }}
-          >
-            <option value="personal">Personal</option>
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name} · {titleCase(workspace.role)}
-              </option>
-            ))}
-          </select>
+              disabled={switchWorkspace.isPending || switchWorkspace.canMutate === false}
+              onChange={(event) => {
+                const target = event.target.value === 'personal' ? null : event.target.value;
+                if (switchInterruptions.length === 0) {
+                  switchWorkspace.mutate(target);
+                  return;
+                }
+                confirm({
+                  title: 'Switch workspace?',
+                  description: `Switching reloads the app in the new workspace. This work does not come with you: ${switchInterruptions
+                    .map((interruption) => interruption.description)
+                    .join(' ')}`,
+                  confirmLabel: 'Switch anyway',
+                  cancelLabel: 'Stay in this workspace',
+                  onConfirm: () => switchWorkspace.mutate(target),
+                });
+              }}
+              style={{ ...controlStyle, width: 'auto' }}
+            >
+              <option value="personal">Personal</option>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.organizationId!}>
+                  {workspace.name}
+                  {workspace.role ? ` · ${titleCase(workspace.role)}` : ''}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <InlineError error={switchWorkspace.error} />
+          {switchWorkspace.requiresReload ? (
+            <button type="button" onClick={() => window.location.reload()}>
+              Reload to resolve workspace status
+            </button>
+          ) : null}
         </div>
       </div>
     ) : null;
@@ -372,8 +545,8 @@ export function TeamSection() {
   function handleCreate(event: FormEvent) {
     event.preventDefault();
     createOrganization.mutate({
-      name: workspaceName.trim(),
-      slug: workspaceSlug.trim(),
+      name: currentCreationDraft.name.trim(),
+      slug: currentCreationDraft.slug.trim(),
     });
   }
 
@@ -449,11 +622,6 @@ export function TeamSection() {
       revokeInvitation.mutate({
         invitationId: pendingAction.invitation.id,
         organizationId: organization.id,
-      });
-    } else if (pendingAction.kind === 'leave-workspace') {
-      leaveOrganization.mutate({
-        organizationId: organization.id,
-        ...(successorUserId ? { successorUserId } : {}),
       });
     } else if (pendingAction.kind === 'remove') {
       removeMember.mutate({
@@ -542,8 +710,10 @@ export function TeamSection() {
                 Workspace name
                 <input
                   aria-label="Workspace name"
-                  value={workspaceName}
-                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  value={currentCreationDraft.name}
+                  onChange={(event) =>
+                    setCreationDraft({ ...currentCreationDraft, name: event.target.value })
+                  }
                   required
                   maxLength={120}
                   style={controlStyle}
@@ -560,8 +730,13 @@ export function TeamSection() {
                 Workspace slug
                 <input
                   aria-label="Workspace slug"
-                  value={workspaceSlug}
-                  onChange={(event) => setWorkspaceSlug(event.target.value.toLowerCase())}
+                  value={currentCreationDraft.slug}
+                  onChange={(event) =>
+                    setCreationDraft({
+                      ...currentCreationDraft,
+                      slug: event.target.value.toLowerCase(),
+                    })
+                  }
                   required
                   maxLength={60}
                   pattern="[a-z0-9-]+"
@@ -570,9 +745,14 @@ export function TeamSection() {
                 />
               </label>
               <InlineError error={createOrganization.error} />
+              {createOrganization.requiresReload ? (
+                <button type="button" onClick={() => window.location.reload()}>
+                  Reload to resolve workspace status
+                </button>
+              ) : null}
               <button
                 type="submit"
-                disabled={createOrganization.isPending}
+                disabled={createOrganization.isPending || createOrganization.canMutate === false}
                 style={{ ...primaryButtonStyle, justifySelf: 'start' }}
               >
                 <Building2 size={14} style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }} />
@@ -1213,7 +1393,7 @@ export function TeamSection() {
         <InlineError error={updateRole.error ?? removeMember.error} />
       </SectionCard>
 
-      {isOwner ? (
+      {membershipIsOwner ? (
         <SectionCard
           title="Workspace ownership"
           description="Hand the owner role to another member while keeping your own seat."
@@ -1246,17 +1426,21 @@ export function TeamSection() {
                   aria-label="Member to receive ownership"
                   data-testid="transfer-ownership-member"
                   value={newOwnerUserId}
-                  onChange={(event) => setNewOwnerUserId(event.target.value)}
+                  onChange={(event) =>
+                    setMembershipDraft({
+                      ...currentMembershipDraft,
+                      newOwnerUserId: event.target.value,
+                    })
+                  }
+                  disabled={!membershipAvailable}
                   style={controlStyle}
                 >
                   <option value="">Choose a member</option>
-                  {(membersQuery.data ?? [])
-                    .filter((member) => !member.isCurrentUser)
-                    .map((member) => (
-                      <option key={member.userId} value={member.userId}>
-                        {member.name} ({member.email})
-                      </option>
-                    ))}
+                  {membershipTargets.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name} ({member.email})
+                    </option>
+                  ))}
                 </select>
               </label>
               <label
@@ -1271,9 +1455,13 @@ export function TeamSection() {
                 <select
                   aria-label="Your role after the transfer"
                   data-testid="transfer-ownership-outgoing-role"
+                  disabled={!membershipAvailable}
                   value={outgoingOwnerRole}
                   onChange={(event) =>
-                    setOutgoingOwnerRole(event.target.value as OrganizationOwnerRoleAfterTransfer)
+                    setMembershipDraft({
+                      ...currentMembershipDraft,
+                      outgoingOwnerRole: event.target.value as OrganizationOwnerRoleAfterTransfer,
+                    })
                   }
                   style={controlStyle}
                 >
@@ -1286,31 +1474,29 @@ export function TeamSection() {
             <button
               type="button"
               data-testid="transfer-ownership-submit"
-              disabled={!newOwnerUserId || transferOwnership.isPending}
+              disabled={!newOwnerUserId || !membershipAvailable}
               onClick={() => {
-                const target = (membersQuery.data ?? []).find(
-                  (member) => member.userId === newOwnerUserId,
+                const target = membershipTargets.find((member) => member.userId === newOwnerUserId);
+                if (!target || !organization || !membershipAvailable) return;
+                const input = {
+                  organizationId: organization.id,
+                  toUserId: target.userId,
+                  outgoingOwnerRole,
+                };
+                askMembership(
+                  {
+                    title: 'Transfer ownership?',
+                    description: `${target.name} becomes the owner of ${membershipWorkspaceName}, with billing, workspace deletion and every administrative control. You become ${titleCase(outgoingOwnerRole)} and lose those controls immediately. Only ${target.name} can transfer ownership back.`,
+                    confirmLabel: 'Transfer ownership',
+                  },
+                  () => transferOwnership.prepare(input),
                 );
-                if (!target || !organization) return;
-                confirm({
-                  title: 'Transfer ownership?',
-                  description: `${target.name} becomes the owner of ${organization.name}, with billing, workspace deletion and every administrative control. You become ${titleCase(outgoingOwnerRole)} and lose those controls immediately. Only ${target.name} can transfer ownership back.`,
-                  confirmLabel: 'Transfer ownership',
-                  destructive: true,
-                  onConfirm: () =>
-                    transferOwnership.mutate({
-                      organizationId: organization.id,
-                      toUserId: target.userId,
-                      outgoingOwnerRole,
-                    }),
-                });
               }}
               style={{ ...secondaryButtonStyle, marginTop: 'var(--space-4)' }}
             >
               {transferOwnership.isPending ? 'Transferring…' : 'Transfer ownership'}
             </button>
             <InlineError error={transferOwnership.error} />
-            {transferOwnership.stepUpDialog}
           </div>
         </SectionCard>
       ) : null}
@@ -1351,7 +1537,10 @@ export function TeamSection() {
         description="Leaving releases your seat and removes this workspace from your account."
       >
         <div style={{ padding: 'var(--space-5)' }}>
-          {isOwner ? (
+          {leaveOrganization.organizationId && !leaveOrganization.actorUserId ? (
+            <p role="alert">Reload to confirm your account before changing workspace membership.</p>
+          ) : null}
+          {membershipIsOwner ? (
             <>
               <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
                 Choose a successor. Ownership transfers and your membership is removed in one safe
@@ -1370,23 +1559,27 @@ export function TeamSection() {
                 <select
                   aria-label="New workspace owner"
                   value={successorUserId}
-                  onChange={(event) => setSuccessorUserId(event.target.value)}
+                  onChange={(event) =>
+                    setMembershipDraft({
+                      ...currentMembershipDraft,
+                      successorUserId: event.target.value,
+                    })
+                  }
+                  disabled={!membershipAvailable}
                   style={{ ...controlStyle, maxWidth: 360 }}
                 >
                   <option value="">Choose a member</option>
-                  {(membersQuery.data ?? [])
-                    .filter((member) => !member.isCurrentUser)
-                    .map((member) => (
-                      <option key={member.userId} value={member.userId}>
-                        {member.name} ({member.email})
-                      </option>
-                    ))}
+                  {membershipTargets.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.name} ({member.email})
+                    </option>
+                  ))}
                 </select>
               </label>
               <button
                 type="button"
-                onClick={() => setPendingAction({ kind: 'leave-workspace' })}
-                disabled={!successorUserId || leaveOrganization.isPending}
+                onClick={askToLeave}
+                disabled={!successorUserId || !membershipAvailable}
                 style={{
                   ...secondaryButtonStyle,
                   color: 'var(--settings-destructive-text)',
@@ -1396,7 +1589,6 @@ export function TeamSection() {
                 {leaveOrganization.isPending ? 'Leaving…' : 'Transfer ownership and leave'}
               </button>
               <InlineError error={leaveOrganization.error} />
-              {leaveOrganization.stepUpDialog}
             </>
           ) : (
             <>
@@ -1406,8 +1598,8 @@ export function TeamSection() {
               </p>
               <button
                 type="button"
-                onClick={() => setPendingAction({ kind: 'leave-workspace' })}
-                disabled={leaveOrganization.isPending}
+                onClick={askToLeave}
+                disabled={!membershipAvailable}
                 style={{
                   ...secondaryButtonStyle,
                   color: 'var(--settings-destructive-text)',
@@ -1442,24 +1634,16 @@ export function TeamSection() {
                 ? 'Remove team member?'
                 : pendingAction?.kind === 'revoke-invitation'
                   ? 'Revoke invitation?'
-                  : pendingAction?.kind === 'leave-workspace'
-                    ? isOwner
-                      ? 'Transfer ownership and leave?'
-                      : 'Leave workspace?'
-                    : 'Change member role?'}
+                  : 'Change member role?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingAction?.kind === 'remove'
                 ? `${pendingAction.member.name} will immediately lose access to this workspace.`
                 : pendingAction?.kind === 'revoke-invitation'
                   ? `${pendingAction.invitation.email} will no longer be able to join with this link. Its reserved seat becomes available immediately.`
-                  : pendingAction?.kind === 'leave-workspace'
-                    ? isOwner
-                      ? 'The selected member becomes owner, then you immediately lose access and your seat becomes available. The device tokens and API keys issued in this workspace are revoked, and if you were working in it you are signed out. Any connector you shared with this workspace stops working for its members.'
-                      : 'You will immediately lose access to this workspace and your seat becomes available. The device tokens and API keys issued in this workspace are revoked, and if you were working in it you are signed out. Any connector you shared with this workspace stops working for its members. This cannot be undone by you.'
-                    : pendingAction?.kind === 'role'
-                      ? `${pendingAction.member.name} will become ${titleCase(pendingAction.role)}. The workspace must always retain at least one owner.`
-                      : ''}
+                  : pendingAction?.kind === 'role'
+                    ? `${pendingAction.member.name} will become ${titleCase(pendingAction.role)}. The workspace must always retain at least one owner.`
+                    : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1469,16 +1653,13 @@ export function TeamSection() {
                 ? 'Remove member'
                 : pendingAction?.kind === 'revoke-invitation'
                   ? 'Revoke invitation'
-                  : pendingAction?.kind === 'leave-workspace'
-                    ? isOwner
-                      ? 'Transfer and leave'
-                      : 'Leave workspace'
-                    : 'Change role'}
+                  : 'Change role'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       {confirmDialog}
+      {active && membershipConfirmation?.isCurrent() ? membershipConfirmDialog : null}
     </div>
   );
 }

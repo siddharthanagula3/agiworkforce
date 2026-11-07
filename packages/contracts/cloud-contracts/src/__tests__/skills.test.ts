@@ -1,8 +1,55 @@
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 
-import { ManagedSkillsResponseSchema, parseManagedSkillsResponse } from '../skills';
+import {
+  MANAGED_SKILL_TITLE_MAX_CHARS,
+  ManagedSkillsResponseSchema,
+  ManagedSkillFilePreviewResponseSchema,
+  parseManagedSkillsResponse,
+} from '../skills';
 
 describe('Managed Skills directory contract', () => {
+  it.each(['', 'first\nsecond\n', 'Résumé: λ = 2\n{"literal": true}'])(
+    'preserves exact companion content in a preview response: %j',
+    (content) => {
+      const payload = {
+        file: { path: 'references/guide.md', size: Buffer.byteLength(content, 'utf8'), content },
+      };
+      expect(ManagedSkillFilePreviewResponseSchema.parse(payload)).toEqual(payload);
+    },
+  );
+
+  it.each([
+    { file: { path: 'references/guide.md', size: 0 } },
+    { file: { path: '', size: 0, content: '' } },
+    { file: { path: 'references/guide.md', size: -1, content: '' } },
+  ])('refuses an incomplete companion preview: %j', (payload) => {
+    expect(ManagedSkillFilePreviewResponseSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it('accepts an optional friendly title while retaining canonical IDs and old summaries', () => {
+    const base = {
+      name: 'triage-nda',
+      description: 'Review confidentiality agreements.',
+      source: 'bundled',
+      lifecycle: 'included',
+      downloadable: true,
+    };
+    const parsed = parseManagedSkillsResponse({
+      skills: [base, { ...base, title: '  NDA Triage  ' }],
+    });
+    expect(parsed.skills[0]).not.toHaveProperty('title');
+    expect(parsed.skills[1]).toMatchObject({
+      name: base.name,
+      title: 'NDA Triage',
+      description: base.description,
+    });
+    expect(
+      ManagedSkillsResponseSchema.safeParse({
+        skills: [{ ...base, title: 'x'.repeat(MANAGED_SKILL_TITLE_MAX_CHARS + 1) }],
+      }).success,
+    ).toBe(false);
+  });
   it('normalizes the complete lifecycle-aware response used by every surface', () => {
     expect(
       parseManagedSkillsResponse({

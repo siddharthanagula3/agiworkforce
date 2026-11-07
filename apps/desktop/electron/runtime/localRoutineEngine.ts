@@ -135,6 +135,46 @@ const TERMINAL = new Set<LocalRoutineRun['state']>([
 ]);
 const HISTORY_LIMIT = 20;
 const MISSED_GRACE_MS = 120_000;
+const PENDING_START_EVENT_LIMIT = 100;
+
+interface RoutineStopRequest {
+  state: 'interrupted' | 'cancelled';
+  reason: string;
+  pausedReason: string | null;
+  attempt?: Promise<void>;
+}
+
+type RoutineLifecycleEvent =
+  | {
+      type:
+        'approval-requested' | 'approval-answered' | 'user-input-requested' | 'user-input-answered';
+      threadId: string;
+      turnId: string;
+      requestId: string;
+    }
+  | {
+      type: 'turn-finished';
+      threadId: string;
+      turnId: string;
+      outcome: Extract<DeveloperSessionEvent, { type: 'turn-finished' }>['outcome'];
+    };
+
+function lifecycleEvent(event: DeveloperSessionEvent): RoutineLifecycleEvent | null {
+  if (
+    event.type === 'approval-requested' ||
+    event.type === 'approval-answered' ||
+    event.type === 'user-input-requested' ||
+    event.type === 'user-input-answered'
+  ) {
+    const { type, threadId, turnId, requestId } = event;
+    return { type, threadId, turnId, requestId };
+  }
+  if (event.type === 'turn-finished') {
+    const { type, threadId, turnId, outcome } = event;
+    return { type, threadId, turnId, outcome };
+  }
+  return null;
+}
 
 export class LocalRoutineEngine {
   private routines: LocalRoutine[];
@@ -144,6 +184,9 @@ export class LocalRoutineEngine {
   private fault: string | null = null;
   private releases = new Map<string, () => void>();
   private pending = new Map<string, Set<string>>();
+  private startRequests = new Set<string>();
+  private startEvents = new Map<string, RoutineLifecycleEvent[]>();
+  private stopRequests = new Map<string, RoutineStopRequest>();
 
   constructor(
     private readonly dependencies: LocalRoutineDependencies,
@@ -214,17 +257,15 @@ export class LocalRoutineEngine {
       if (firstFailure)
         for (const routine of this.routines) {
           const run = this.active(routine);
-          if (run?.threadId && run.turnId)
-            void this.dependencies
-              .cancel(routine.rootId, run.threadId, run.turnId)
-              .catch((stopError: unknown) => {
-                run.error =
-                  'The stop after a storage failure was not acknowledged. Open this run before resuming.';
-                console.warn(
-                  '[local-routines] stop after persistence failure was not acknowledged:',
-                  stopError,
-                );
-              });
+          if (!run) continue;
+          const stop = this.requestStop(routine, run, 'interrupted', this.fault);
+          if (run.threadId && run.turnId)
+            void this.cancelRun(routine, run, stop).catch((stopError: unknown) => {
+              console.warn(
+                '[local-routines] stop after persistence failure could not be recorded:',
+                stopError,
+              );
+            });
         }
       throw error;
     }
@@ -277,6 +318,11 @@ export class LocalRoutineEngine {
     const routine = this.routines.find((entry) => entry.id === id);
     if (!routine) throw new Error('That local routine no longer exists.');
     if (enabled) {
+      const run = this.active(routine);
+      if (run && this.stopRequests.has(run.id))
+        throw new Error('The stop has not been acknowledged. Open the run before resuming.');
+      if (run && this.startRequests.has(run.id) && run.error)
+        throw new Error('The run outcome is unknown. Open the run before resuming.');
       const authority = this.dependencies.authority(routine.rootId);
       if (!authority) throw new Error('Allow the coding agent in this folder before resuming.');
       Object.assign(routine, authority);
@@ -310,6 +356,69 @@ export class LocalRoutineEngine {
     return routine.runs.find((run) => !TERMINAL.has(run.state));
   }
 
+  private requestStop(
+    routine: LocalRoutine,
+    run: LocalRoutineRun,
+    state: RoutineStopRequest['state'],
+    reason: string,
+  ): RoutineStopRequest {
+    this.release(run);
+    let stop = this.stopRequests.get(run.id);
+    if (!stop) {
+      stop = {
+        state,
+        reason,
+        pausedReason: routine.pausedReason === run.error ? null : routine.pausedReason,
+      };
+      this.stopRequests.set(run.id, stop);
+    }
+    return stop;
+  }
+
+  private clearOwnership(routine: LocalRoutine, run: LocalRoutineRun): void {
+    if (run.error && routine.pausedReason === run.error)
+      routine.pausedReason = this.stopRequests.get(run.id)?.pausedReason ?? null;
+    this.startRequests.delete(run.id);
+    this.startEvents.delete(run.id);
+    this.stopRequests.delete(run.id);
+    this.pending.delete(run.id);
+  }
+
+  private finishStop(routine: LocalRoutine, run: LocalRoutineRun, stop: RoutineStopRequest): void {
+    if (TERMINAL.has(run.state)) return;
+    this.clearOwnership(routine, run);
+    run.state = stop.state;
+    run.finishedAt = this.dependencies.now().toISOString();
+    run.error = stop.reason;
+    this.persist();
+  }
+
+  private cancelRun(
+    routine: LocalRoutine,
+    run: LocalRoutineRun,
+    stop: RoutineStopRequest,
+  ): Promise<void> {
+    if (stop.attempt) return stop.attempt;
+    const { threadId, turnId } = run;
+    if (!threadId || !turnId || TERMINAL.has(run.state)) return Promise.resolve();
+    stop.attempt = Promise.resolve()
+      .then(() => {
+        if (!TERMINAL.has(run.state))
+          return this.dependencies.cancel(routine.rootId, threadId, turnId);
+      })
+      .then(
+        () => this.finishStop(routine, run, stop),
+        () => {
+          if (TERMINAL.has(run.state)) return;
+          routine.schedule.enabled = false;
+          run.error = 'The stop was not acknowledged. Open the run and stop it before resuming.';
+          routine.pausedReason = run.error;
+          this.persist();
+        },
+      );
+    return stop.attempt;
+  }
+
   private async cancelActive(
     routine: LocalRoutine,
     state: 'interrupted' | 'cancelled',
@@ -317,24 +426,19 @@ export class LocalRoutineEngine {
   ): Promise<void> {
     const run = this.active(routine);
     if (!run) return;
-    this.release(run);
+    const stop = this.requestStop(routine, run, state, reason);
     if (run.threadId && run.turnId) {
-      try {
-        await this.dependencies.cancel(routine.rootId, run.threadId, run.turnId);
-      } catch {
-        routine.schedule.enabled = false;
-        routine.pausedReason =
-          'The stop was not acknowledged. Open the run and stop it before resuming.';
-        this.persist();
-        return;
-      }
+      await this.cancelRun(routine, run, stop);
+      return;
     }
-    if (TERMINAL.has(run.state)) return;
-    this.pending.delete(run.id);
-    run.state = state;
-    run.finishedAt = this.dependencies.now().toISOString();
-    run.error = reason;
-    this.persist();
+    if (this.startRequests.has(run.id)) {
+      run.error =
+        'A stop was requested, but this run has not been identified. Its effects are unknown.';
+      routine.pausedReason = run.error;
+      this.persist();
+      return;
+    }
+    this.finishStop(routine, run, stop);
   }
 
   async suspend(): Promise<void> {
@@ -427,9 +531,14 @@ export class LocalRoutineEngine {
       );
       this.persist();
       const stillAuthorized = () =>
-        !this.stopped && !this.suspended && !TERMINAL.has(run.state) && this.authorized(routine);
+        !this.stopped &&
+        !this.suspended &&
+        !TERMINAL.has(run.state) &&
+        !this.stopRequests.has(run.id) &&
+        this.authorized(routine);
       if (!stillAuthorized()) throw new Error('The routine lost its launch authority.');
       if (routine.keepAwake) this.releases.set(run.id, this.dependencies.keepAwake());
+      this.startRequests.add(run.id);
       const turnId = await this.dependencies.start(
         routine.rootId,
         run.threadId,
@@ -440,15 +549,31 @@ export class LocalRoutineEngine {
       if (!TERMINAL.has(run.state)) {
         run.turnId = turnId;
         if (run.state !== 'awaiting_input') run.state = 'running';
+        const events = this.startEvents.get(run.id) ?? [];
+        this.startEvents.delete(run.id);
+        for (const event of events) {
+          if (TERMINAL.has(run.state)) break;
+          if (event.turnId === turnId) this.applyLifecycle(routine, run, event);
+        }
         this.persist();
+        const stop = this.stopRequests.get(run.id);
+        if (stop) await this.cancelRun(routine, run, stop);
       }
     } catch (error) {
       if (!TERMINAL.has(run.state)) {
-        run.state = 'failed';
-        run.finishedAt = this.dependencies.now().toISOString();
-        run.error = error instanceof Error ? error.message : 'Local routine startup failed.';
+        if (this.startRequests.has(run.id)) {
+          run.error = run.turnId
+            ? 'The run could not be recorded. Its effects are unknown. Open the run before resuming.'
+            : 'The start was not acknowledged. Its effects are unknown. Open the run before resuming.';
+        } else {
+          run.state = 'failed';
+          run.finishedAt = this.dependencies.now().toISOString();
+          run.error = error instanceof Error ? error.message : 'Local routine startup failed.';
+        }
         routine.schedule.enabled = false;
         routine.pausedReason = run.error;
+        const stop = this.stopRequests.get(run.id);
+        if (stop && run.threadId && run.turnId) await this.cancelRun(routine, run, stop);
       }
       this.release(run);
       this.persist();
@@ -458,11 +583,13 @@ export class LocalRoutineEngine {
   note(rootId: string, event: DeveloperSessionEvent): { notify: boolean } {
     if (this.fault) return { notify: false };
     let notify = true;
+    const lifecycle = lifecycleEvent(event);
     for (const routine of this.routines) {
       if (routine.rootId !== rootId) continue;
       const run = this.active(routine);
       if (!run) continue;
       if (event.type === 'runtime-stopped') {
+        this.clearOwnership(routine, run);
         run.state = 'interrupted';
         run.error = 'The local runtime stopped; this run was not replayed.';
         run.finishedAt = this.dependencies.now().toISOString();
@@ -473,46 +600,76 @@ export class LocalRoutineEngine {
         continue;
       }
       if (
-        !('threadId' in event) ||
-        event.threadId !== run.threadId ||
-        !('turnId' in event) ||
-        (run.turnId && event.turnId !== run.turnId)
+        !lifecycle ||
+        lifecycle.threadId !== run.threadId ||
+        (run.turnId && lifecycle.turnId !== run.turnId)
       )
         continue;
-      run.turnId = event.turnId;
-      if (event.type === 'approval-requested' || event.type === 'user-input-requested') {
-        const requests = this.pending.get(run.id) ?? new Set<string>();
-        requests.add(event.requestId);
-        this.pending.set(run.id, requests);
-        run.state = 'awaiting_input';
-        this.release(run);
-        notify = routine.notificationSettings.push && routine.notificationSettings.onApproval;
-      } else if (event.type === 'approval-answered' || event.type === 'user-input-answered') {
-        const requests = this.pending.get(run.id);
-        requests?.delete(event.requestId);
-        if (!requests?.size) {
-          run.state = 'running';
-          if (routine.keepAwake && !this.releases.has(run.id))
-            this.releases.set(run.id, this.dependencies.keepAwake());
+      if (!run.turnId) {
+        if (!this.startRequests.has(run.id)) continue;
+        notify = false;
+        const events = this.startEvents.get(run.id) ?? [];
+        if (events.length < PENDING_START_EVENT_LIMIT) {
+          events.push(lifecycle);
+          this.startEvents.set(run.id, events);
+        } else {
+          this.requestStop(
+            routine,
+            run,
+            'interrupted',
+            'The run exceeded the pending startup activity limit.',
+          );
+          routine.schedule.enabled = false;
+          run.error =
+            'Startup activity could not be retained. The run outcome is unknown until its start is acknowledged.';
+          routine.pausedReason = run.error;
+          this.persist();
         }
-      } else if (event.type === 'turn-finished') {
-        run.state =
-          event.outcome === 'completed'
-            ? 'completed'
-            : event.outcome === 'interrupted'
-              ? 'cancelled'
-              : 'failed';
-        run.finishedAt = this.dependencies.now().toISOString();
-        this.release(run);
-        this.pending.delete(run.id);
-        notify =
-          routine.notificationSettings.push &&
-          (run.state === 'completed'
-            ? routine.notificationSettings.onSuccess
-            : routine.notificationSettings.onFailure);
-      } else continue;
-      this.persist();
+        continue;
+      }
+      notify = this.applyLifecycle(routine, run, lifecycle);
     }
     return { notify };
+  }
+
+  private applyLifecycle(
+    routine: LocalRoutine,
+    run: LocalRoutineRun,
+    event: RoutineLifecycleEvent,
+  ): boolean {
+    let notify = true;
+    if (event.type === 'approval-requested' || event.type === 'user-input-requested') {
+      const requests = this.pending.get(run.id) ?? new Set<string>();
+      requests.add(event.requestId);
+      this.pending.set(run.id, requests);
+      run.state = 'awaiting_input';
+      this.release(run);
+      notify = routine.notificationSettings.push && routine.notificationSettings.onApproval;
+    } else if (event.type === 'approval-answered' || event.type === 'user-input-answered') {
+      const requests = this.pending.get(run.id);
+      requests?.delete(event.requestId);
+      if (!requests?.size) {
+        run.state = 'running';
+        if (routine.keepAwake && !this.stopRequests.has(run.id) && !this.releases.has(run.id))
+          this.releases.set(run.id, this.dependencies.keepAwake());
+      }
+    } else if (event.type === 'turn-finished') {
+      this.clearOwnership(routine, run);
+      run.state =
+        event.outcome === 'completed'
+          ? 'completed'
+          : event.outcome === 'interrupted'
+            ? 'cancelled'
+            : 'failed';
+      run.finishedAt = this.dependencies.now().toISOString();
+      this.release(run);
+      notify =
+        routine.notificationSettings.push &&
+        (run.state === 'completed'
+          ? routine.notificationSettings.onSuccess
+          : routine.notificationSettings.onFailure);
+    }
+    this.persist();
+    return notify;
   }
 }

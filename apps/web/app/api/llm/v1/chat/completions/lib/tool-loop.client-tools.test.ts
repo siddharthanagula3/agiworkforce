@@ -1,3 +1,4 @@
+import { createManagedToolInventoryMessage } from './request-processor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
@@ -16,6 +17,8 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
+import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from './managed-tool-inventory';
+import { CHAT_SYSTEM_PROMPT_PINNED_VERSION } from '@/lib/prompts/chat-system-prompt';
 
 const CALLER_WRITE_FILE = {
   type: 'function',
@@ -132,6 +135,47 @@ describe('tool loop · tools the caller declared', () => {
     provider.stream.mockReset();
     e2b.getE2BExecutor.mockClear();
   });
+
+  it.each(['cli', 'api'] as const)(
+    'preserves the %s caller ownership boundary in its provider inventory',
+    async (surface) => {
+      provider.stream.mockResolvedValueOnce(
+        stream([
+          {
+            choices: [{ index: 0, delta: { content: 'Done.' }, finish_reason: 'stop' }],
+            model: 'fixture-model',
+          },
+        ]),
+      );
+      const readFile = {
+        ...CALLER_WRITE_FILE,
+        function: { ...CALLER_WRITE_FILE.function, name: 'read_file' },
+      };
+      const processed = makeProcessed([CALLER_WRITE_FILE, readFile]);
+      processed.chatSurface = surface;
+      processed.managedToolInventoryVersion = CHAT_SYSTEM_PROMPT_PINNED_VERSION;
+      processed.llmRequest.messages.unshift(
+        createManagedToolInventoryMessage(processed.llmRequest.tools),
+      );
+      const source = structuredClone(processed.llmRequest.messages);
+
+      await collect(runToolLoop(processed, { approvalMode: 'auto' }));
+
+      const request = provider.stream.mock.calls[0]?.[2] as ProcessedRequest['llmRequest'];
+      const inventory = request.messages.find(
+        (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+      );
+      if (surface === 'cli') {
+        expect(inventory?.content).toContain('\n- write_file\n- read_file\n');
+        expect(inventory?.content).not.toContain('write a file into that sandbox');
+        expect(inventory?.content).toContain('- web_search,');
+      } else {
+        expect(request.messages).toEqual(source);
+      }
+      expect(processed.llmRequest.messages).toEqual(source);
+      expect(e2b.getE2BExecutor).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns the call in OpenAI form with a tool_calls finish instead of gating it', async () => {
     provider.stream.mockResolvedValueOnce(

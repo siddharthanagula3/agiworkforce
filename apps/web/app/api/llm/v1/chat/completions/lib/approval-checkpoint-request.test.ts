@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { describe, expect, it } from 'vitest';
 import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
 
@@ -7,6 +8,7 @@ import {
   checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from './approval-checkpoint-request';
+import { ToolSchemaStateSchema, createToolSchemaState } from './tool-schema-state';
 import type { ModelSelection } from './capability-preamble';
 import type { ChatCompletionRequest, ProcessedRequest } from './request-processor';
 
@@ -18,6 +20,64 @@ const callerTool = {
   type: 'function' as const,
   function: { name: 'caller_defined_tool', parameters: {} },
 };
+
+describe('server-owned tool schema checkpoint state', () => {
+  const name = 'mcp__schemafixture__read_item';
+  const turn = {
+    messages: [],
+    model: 'fixture-model',
+    stream: true,
+  } as unknown as ChatCompletionRequest;
+
+  it('does not promote an inbound private field into the server checkpoint', () => {
+    const incoming = { ...turn, x_tool_schema_state: { loadedQualifiedNames: [name] } };
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty('x_tool_schema_state');
+  });
+
+  it('persists only validated schema names and strips them from every replay request', () => {
+    const state = createToolSchemaState([name, name]);
+    const request = buildApprovalCheckpointRequest(turn, {}, [], undefined, undefined, state);
+    expect(request['x_tool_schema_state']).toEqual({ loadedQualifiedNames: [name] });
+    for (const freeTier of [true, false]) {
+      expect(checkpointRequestForResume(request, freeTier)).not.toHaveProperty(
+        'x_tool_schema_state',
+      );
+    }
+  });
+
+  it('restores the claimed checkpoint field without copying it into chat input', () => {
+    const state = createToolSchemaState([name]);
+    const request = buildApprovalCheckpointRequest(turn, {}, [], undefined, undefined, state);
+    const processed = {
+      chatRequest: { ...turn },
+      llmRequest: { messages: [] },
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, JSON.parse(JSON.stringify({ request, messages: [] })));
+    expect(processed.toolSchemaState).toEqual(state);
+    expect(processed.chatRequest).not.toHaveProperty('x_tool_schema_state');
+  });
+
+  it.each([
+    undefined,
+    { loadedQualifiedNames: 'untrusted result text' },
+    { loadedQualifiedNames: ['x'.repeat(513)] },
+    { loadedQualifiedNames: Array.from({ length: 1025 }, () => name) },
+    { loadedQualifiedNames: Array.from({ length: 60 }, (_, index) => `${index}`.padEnd(512, 'x')) },
+    { loadedQualifiedNames: [name], approvals: ['allowed'] },
+  ])('ignores absent or invalid state from older/corrupt checkpoints', (value) => {
+    const processed = {
+      chatRequest: { ...turn },
+      llmRequest: { messages: [] },
+      toolSchemaState: createToolSchemaState([name]),
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, {
+      request: { x_tool_schema_state: value },
+      messages: [],
+    });
+    expect(processed.toolSchemaState).toBeUndefined();
+    expect(ToolSchemaStateSchema.safeParse(value).success).toBe(false);
+  });
+});
 
 describe('buildApprovalCheckpointRequest', () => {
   it('does not turn server-injected tools into caller-defined tools on Free approval resume', () => {
@@ -187,5 +247,49 @@ describe('the model selection a checkpoint keeps', () => {
 
     expect(processed.modelSelection).toEqual({ kind: 'picked', modelId: routedModel });
     expect(processed.llmRequest.messages).toEqual(transcript);
+  });
+});
+
+describe('server-owned context policy snapshot', () => {
+  const turn = { model: 'fixture-model', messages: [], stream: true } as ChatCompletionRequest;
+
+  it('strips caller-supplied authority and only persists the explicit server snapshot', () => {
+    const incoming = {
+      ...turn,
+      x_context_policy_snapshot: contextPolicySnapshotFixture('attacker'),
+    };
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty(
+      'x_context_policy_snapshot',
+    );
+    const saved = contextPolicySnapshotFixture();
+    const request = buildApprovalCheckpointRequest(
+      incoming,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      saved,
+    );
+    expect(request['x_context_policy_snapshot']).toEqual(saved);
+    for (const isFree of [true, false]) {
+      expect(checkpointRequestForResume(request, isFree)).not.toHaveProperty(
+        'x_context_policy_snapshot',
+      );
+    }
+  });
+
+  it('restoring old transcript fields does not replace the already validated original snapshot', () => {
+    const saved = contextPolicySnapshotFixture();
+    const processed = {
+      chatRequest: turn,
+      llmRequest: { messages: [] },
+      contextPolicySnapshot: saved,
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, {
+      request: { x_context_policy_snapshot: contextPolicySnapshotFixture('different-user') },
+      messages: [],
+    });
+    expect(processed.contextPolicySnapshot).toBe(saved);
   });
 });

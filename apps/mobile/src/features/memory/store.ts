@@ -24,6 +24,11 @@ import {
 import { prohibitedMemoryMessage } from '@agiworkforce/context';
 import { MAX_IMPORT_ITEMS, parseManagedMemoryImportCommitResponse } from '@agiworkforce/types';
 import { MEMORY_IMPORT_PATH } from '@/src/features/memory/services/memoryImport';
+import {
+  assertMemoryImportOperationCurrent,
+  MEMORY_IMPORT_UNCERTAIN_MESSAGE,
+  type MemoryImportOperation,
+} from '@/src/features/memory/services/memoryImportOperation';
 
 export type { MemoryFact };
 
@@ -45,7 +50,8 @@ interface MemoryState {
   setSearchQuery: (query: string) => void;
   bulkInsert: (
     facts: string[],
-    sourceName?: string,
+    sourceName: string,
+    operation: MemoryImportOperation,
   ) => Promise<{ inserted: number; skipped: number }>;
   clearError: () => void;
   resetVisibleState: () => void;
@@ -395,9 +401,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }));
   },
 
-  bulkInsert: async (facts, sourceName = 'other') => {
-    const operationScope = captureMemoryOperationScope();
-    if (!operationScope) throw new Error('Sign in to manage Cloud memories');
+  bulkInsert: async (facts, sourceName, operation) => {
+    assertMemoryImportOperationCurrent(operation);
+    const operationScope = operation.scope;
     const candidates = facts
       .map((fact) => fact.trim())
       .filter((fact) => fact.length >= MIN_IMPORTED_FACT_CHARS);
@@ -406,26 +412,37 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
 
     if (operationScope.scope === 'cloud') {
       for (let start = 0; start < candidates.length; start += MAX_IMPORT_ITEMS) {
+        assertMemoryImportOperationCurrent(operation);
         const result = parseManagedMemoryImportCommitResponse(
-          await api.post<unknown>(MEMORY_IMPORT_PATH, {
-            mode: 'commit',
-            items: candidates.slice(start, start + MAX_IMPORT_ITEMS),
-            sourceName,
-          }),
+          await api.post<unknown>(
+            MEMORY_IMPORT_PATH,
+            {
+              mode: 'commit',
+              items: candidates.slice(start, start + MAX_IMPORT_ITEMS),
+              sourceName,
+            },
+            { accountEpoch: operationScope.account },
+          ),
         );
+        assertMemoryImportOperationCurrent(operation);
         if (!result) throw new Error('The memory import result could not be read.');
         inserted += result.insertedCount;
         skipped += result.skippedDuplicateCount + result.blockedCount + result.excludedCount;
       }
+      assertMemoryImportOperationCurrent(operation);
       await syncNow().catch(() => undefined);
-      if (isMemoryOperationScopeCurrent(operationScope)) await get().fetchMemories();
+      assertMemoryImportOperationCurrent(operation);
+      await get().fetchMemories();
+      assertMemoryImportOperationCurrent(operation);
       return { inserted, skipped };
     }
 
     let known = await listMemoryFacts({ limit: 5_000 });
     for (const trimmed of candidates) {
+      assertMemoryImportOperationCurrent(operation);
       try {
         const result = await writeLocalMemoryFact({ fact: trimmed, source: 'imported', known });
+        assertMemoryImportOperationCurrent(operation);
         if (!result.fact) {
           skipped++;
           continue;
@@ -437,10 +454,12 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         ];
         inserted++;
       } catch {
-        skipped++;
+        throw new Error(MEMORY_IMPORT_UNCERTAIN_MESSAGE);
       }
     }
+    assertMemoryImportOperationCurrent(operation);
     await get().fetchMemories();
+    assertMemoryImportOperationCurrent(operation);
     return { inserted, skipped };
   },
 

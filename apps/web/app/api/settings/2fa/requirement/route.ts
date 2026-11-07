@@ -11,10 +11,10 @@ async function handleRequirement(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request, TWO_FACTOR_SCOPE);
+  const { userId, sessionIdentity } = await getClerkAuthUser(request, TWO_FACTOR_SCOPE);
 
   return NextResponse.json(
-    { required: await isBlockedByMfaPolicy(userId) },
+    { required: await isBlockedByMfaPolicy(userId, sessionIdentity) },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

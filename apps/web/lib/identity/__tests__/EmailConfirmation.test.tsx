@@ -1,19 +1,63 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRequestAuthority, type RequestAuthority } from '../request-authority';
+import { useSessionSnapshot } from '../useSessionSnapshot';
 
 const mocks = vi.hoisted(() => ({
   user: null as Record<string, unknown> | null,
   sessionId: 'session-current',
+  nativeSession: null as {
+    id: string;
+    user: Record<string, unknown>;
+    getToken: () => Promise<string>;
+  } | null,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: 'user-1', getToken: vi.fn() }),
-  useClerk: () => ({ signOut: vi.fn() }),
+vi.mock('@clerk/nextjs', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  useAuth: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'user-1',
+    sessionId: mocks.sessionId,
+    getToken: vi.fn(),
+  }),
+  useClerk: () => clerk,
   useUser: () => ({ isLoaded: true, isSignedIn: true, user: mocks.user }),
-  useSession: () => ({ session: { id: mocks.sessionId } }),
+  useSession: () => ({ session: mocks.nativeSession }),
   useSignUp: () => ({ fetchStatus: 'idle', signUp: {} }),
 }));
-vi.mock('@agiworkforce/local-runtime-contract', () => ({ getHostBridge: () => null }));
+vi.mock('@agiworkforce/local-runtime-contract', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/local-runtime-contract')>()),
+  getHostBridge: () => null,
+}));
+
+const clerk = {
+  loaded: true,
+  get user() {
+    return mocks.user;
+  },
+  get session() {
+    return mocks.nativeSession;
+  },
+  signOut: vi.fn(),
+  addListener: (_listener: () => void) => () => undefined,
+};
+let requests: RequestAuthority[] = [];
+
+function connectScope() {
+  const snapshot = renderHook(useSessionSnapshot).result.current();
+  if (!snapshot) throw new Error('Fixture must have a current native session');
+  const authority = createRequestAuthority(snapshot);
+  requests.push(authority);
+  return { authority, onDispatch: vi.fn() };
+}
+
+afterEach(() => {
+  for (const request of requests) request.retire();
+  requests = [];
+  vi.unstubAllGlobals();
+});
 
 import {
   UNCONFIRMED_EMAIL_CONNECT_MESSAGE,
@@ -48,12 +92,18 @@ function accountWithAddress(status: string) {
     createExternalAccount,
     reload: vi.fn(async () => undefined),
   };
+  mocks.nativeSession = {
+    id: mocks.sessionId,
+    user: mocks.user,
+    getToken: vi.fn(async () => 'fixture-token'),
+  };
   return { address, sessions, createExternalAccount };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.user = null;
+  mocks.nativeSession = null;
 });
 
 describe('confirming the primary address of the signed-in account', () => {
@@ -97,7 +147,12 @@ describe('linking another way to sign in', () => {
     const { result } = renderHook(() => useConnectedAccounts());
 
     await expect(
-      result.current.connect('google', 'https://agiworkforce.com/settings'),
+      result.current
+        .capture(
+          { kind: 'connect', provider: 'google', returnUrl: 'https://agiworkforce.com/settings' },
+          connectScope(),
+        )
+        .execute(),
     ).rejects.toThrow(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
     expect(createExternalAccount).not.toHaveBeenCalled();
   });
@@ -108,7 +163,15 @@ describe('linking another way to sign in', () => {
     vi.stubGlobal('location', { ...window.location, assign });
     const { result } = renderHook(() => useConnectedAccounts());
 
-    await act(() => result.current.connect('google', 'https://agiworkforce.com/settings'));
+    const scope = connectScope();
+    await act(() =>
+      result.current
+        .capture(
+          { kind: 'connect', provider: 'google', returnUrl: 'https://agiworkforce.com/settings' },
+          scope,
+        )
+        .execute(),
+    );
 
     expect(createExternalAccount).toHaveBeenCalledWith({
       strategy: 'oauth_google',

@@ -20,6 +20,7 @@ import {
   type RowComponentProps,
 } from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { AssistantFenceEdit } from '@agiworkforce/unified-chat/assistant-fence';
 import { settledActivityStatus } from '@agiworkforce/unified-chat';
 import { hasUnavailableWebSearch, type AgentActivityState } from '@agiworkforce/client-runtime';
 import {
@@ -70,6 +71,7 @@ import { TranscriptNotice } from './TranscriptNotice';
 import { ArrowRight, ChevronDown, RefreshCw, ShieldAlert, Square } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
+import { currentReadAloudMessage, messageReadAloudUnavailable } from '@/lib/read-aloud-policy';
 import {
   isMessageContinuable,
   hasStreamError,
@@ -191,6 +193,7 @@ export interface ChatMessageListProps {
   countVariantFollowers?: (messageId: string) => number;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (messageId: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
@@ -405,6 +408,7 @@ interface MessageGroupRowProps {
   countVariantFollowers?: (id: string) => number;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
@@ -456,6 +460,7 @@ interface MessageRowProps {
   countVariantFollowers?: (id: string) => number;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
+  onFenceEdit?: (messageId: string, edit: AssistantFenceEdit) => Promise<void>;
   branchGroup?: MessageBranchGroup;
   isBranching: boolean;
   onBranch?: (messageId: string) => void;
@@ -655,6 +660,7 @@ const MessageRow = memo(function MessageRow({
   countVariantFollowers,
   onReact,
   onPin,
+  onFenceEdit,
   branchGroup,
   isBranching,
   onBranch,
@@ -840,6 +846,7 @@ const MessageRow = memo(function MessageRow({
       countVariantFollowers={countVariantFollowers}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
       onPin={onPin}
+      onFenceEdit={onFenceEdit}
       onBranch={onBranch ? handleBranch : undefined}
       isBranching={isBranching}
       branchNavigation={branchNavigation}
@@ -850,6 +857,7 @@ const MessageRow = memo(function MessageRow({
       onResumeVideo={onResumeVideo}
       onRetryVideo={onRetryVideo}
       onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
+      readAloudUnavailableReason={messageReadAloudUnavailable(message)}
       isReadingAloud={speakingMessageId === message.id}
       isReadAloudSupported={isReadAloudSupported}
       isLatestTurn={displayRole === 'assistant' && Boolean(isLastMessage)}
@@ -900,6 +908,7 @@ const MessageGroupRow = memo(
     countVariantFollowers,
     onReact,
     onPin,
+    onFenceEdit,
     branchGroupsByMessageId,
     branchingMessageId,
     onBranch,
@@ -947,6 +956,7 @@ const MessageGroupRow = memo(
             countVariantFollowers={countVariantFollowers}
             onReact={onReact}
             onPin={onPin}
+            onFenceEdit={onFenceEdit}
             branchGroup={branchGroupsByMessageId?.[message.id]}
             isBranching={branchingMessageId === message.id}
             onBranch={onBranch}
@@ -986,6 +996,7 @@ const MessageGroupRow = memo(
       prev.countVariantFollowers === next.countVariantFollowers &&
       prev.onReact === next.onReact &&
       prev.onPin === next.onPin &&
+      prev.onFenceEdit === next.onFenceEdit &&
       prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
       prev.branchingMessageId === next.branchingMessageId &&
       prev.onBranch === next.onBranch &&
@@ -1193,6 +1204,7 @@ const ChatMessageListComponent = ({
   countVariantFollowers,
   onReact,
   onPin,
+  onFenceEdit,
   branchGroupsByMessageId,
   branchingMessageId = null,
   onBranch,
@@ -1219,7 +1231,7 @@ const ChatMessageListComponent = ({
   turnErrorActive = false,
 }: ChatMessageListProps) => {
   const listApiRef = useRef<ListImperativeAPI | null>(null);
-  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
+  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS(conversationId);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   const [userScrolledUp, setUserScrolledUp] = useState(false);
@@ -1765,14 +1777,24 @@ const ChatMessageListComponent = ({
   );
 
   const handleReadAloud = useCallback(
-    (messageId: string, content: string) => {
+    (messageId: string, _content: string) => {
+      const currentMessage = () =>
+        currentReadAloudMessage(
+          renderedGroupsRef.current.flatMap((group) => group.messages),
+          messageId,
+        );
+      const message = currentMessage();
+      if (!message) {
+        stop();
+        return;
+      }
       if (isSpeaking && speakingMessageId === messageId) {
         stop();
         return;
       }
 
       setSpeakingMessageId(messageId);
-      speak(content);
+      speak(message.content, { canSpeak: () => currentMessage() !== null });
     },
     [isSpeaking, speak, speakingMessageId, stop],
   );
@@ -1854,6 +1876,7 @@ const ChatMessageListComponent = ({
       countVariantFollowers,
       onReact: handleReact,
       onPin,
+      onFenceEdit,
       branchGroupsByMessageId,
       branchingMessageId,
       onBranch,
@@ -1897,6 +1920,7 @@ const ChatMessageListComponent = ({
       onBranch,
       onDeleteVariant,
       onPin,
+      onFenceEdit,
       onRegenerateImage,
       onResumeVideo,
       onRetryVideo,
@@ -2166,6 +2190,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.onPaywallDismiss === next.onPaywallDismiss &&
     prev.onEdit === next.onEdit &&
     prev.onPin === next.onPin &&
+    prev.onFenceEdit === next.onFenceEdit &&
     prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
     prev.branchingMessageId === next.branchingMessageId &&
     prev.onBranch === next.onBranch &&

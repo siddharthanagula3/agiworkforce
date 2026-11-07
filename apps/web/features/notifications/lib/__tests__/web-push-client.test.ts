@@ -10,6 +10,8 @@ const {
   enableWebPush,
   fetchVapidPublicKey,
   isWebPushSupported,
+  readNotificationWorker,
+  readBrowserNotificationPermission,
   syncExistingSubscription,
 } = await import('../web-push-client');
 
@@ -41,6 +43,7 @@ function installBrowser(options: {
   vi.stubGlobal('navigator', {
     serviceWorker: {
       register: vi.fn().mockResolvedValue(registration),
+      getRegistration: vi.fn().mockResolvedValue(registration),
       ready: Promise.resolve(registration),
     },
   });
@@ -64,6 +67,22 @@ beforeEach(() => {
 });
 
 describe('support detection', () => {
+  it('reads existing notification registration without permission, subscription or service changes', async () => {
+    const push = installBrowser({ permission: 'granted' });
+    expect(await readNotificationWorker()).not.toBeNull();
+    expect(navigator.serviceWorker.getRegistration).toHaveBeenCalledWith('/sw.js');
+    expect(navigator.serviceWorker.register).not.toHaveBeenCalled();
+    expect(Notification.requestPermission).not.toHaveBeenCalled();
+    expect(push.subscribe).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes local popup permission from push capability', () => {
+    installBrowser({ permission: 'granted' });
+    vi.stubGlobal('navigator', {});
+    expect(isWebPushSupported()).toBe(false);
+    expect(readBrowserNotificationPermission()).toBe('granted');
+  });
   it('reports no support when the browser has no PushManager', () => {
     vi.stubGlobal('navigator', {});
     expect(isWebPushSupported()).toBe(false);

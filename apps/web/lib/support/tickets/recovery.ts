@@ -153,12 +153,15 @@ export async function completeAccountRecovery(input: {
   }
 
   const sweep = await revokeEveryOtherSession(identity, ticket.userId, null);
+  const intentRevoked = await finishIntentRevocation(sweep, ticket.userId);
+  const revocationComplete = sweep.failed.length === 0 && !sweep.incomplete && intentRevoked;
 
   await recordAuditEvent({
     userId: input.staffUserId,
     eventType: 'account_recovery_completed',
     request: input.request,
     severity: 'critical',
+    outcome: revocationComplete ? 'success' : 'failure',
     detail: {
       resourceType: 'account',
       resourceId: ticket.userId,
@@ -167,7 +170,7 @@ export async function completeAccountRecovery(input: {
     },
   });
 
-  if (!(await finishIntentRevocation(sweep, ticket.userId))) {
+  if (!revocationComplete) {
     throw new RecoveryTicketError(
       'Access was restored, but a signed-in device could not be signed out. Complete the recovery again to finish.',
     );

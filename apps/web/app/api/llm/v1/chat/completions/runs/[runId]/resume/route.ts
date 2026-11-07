@@ -1,4 +1,11 @@
 import 'server-only';
+import {
+  CONTEXT_POLICY_SNAPSHOT_KEY,
+  CONTEXT_POLICY_RESTART_CODE,
+  CONTEXT_POLICY_RESTART_MESSAGE,
+  ContextPolicySnapshotSchema,
+  contextPolicySnapshotIsCurrent,
+} from '@/lib/services/context-policy-snapshot';
 
 import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -135,7 +142,7 @@ async function handlePausedRunResume(
   runId: string,
 ) {
   const { userId, subscription } = authResult;
-  const { db } = await getUserScopedDb(request);
+  const { db, organizationId } = await getUserScopedDb(request);
 
   let fields;
   try {
@@ -208,9 +215,20 @@ async function handlePausedRunResume(
     await releaseClaim(db, userId, claim);
     return workspaceControls.response;
   }
+  const savedContextPolicy = ContextPolicySnapshotSchema.safeParse(
+    claim.checkpoint.request[CONTEXT_POLICY_SNAPSHOT_KEY],
+  );
+  if (
+    !savedContextPolicy.success ||
+    !(await contextPolicySnapshotIsCurrent(db, userId, organizationId, savedContextPolicy.data))
+  ) {
+    await releaseClaim(db, userId, claim);
+    return jsonError(CONTEXT_POLICY_RESTART_MESSAGE, 409, CONTEXT_POLICY_RESTART_CODE);
+  }
   const processResult = await processRequest(buildSyntheticRequest(request, claim), authResult, {
     workspaceControls: workspaceControls.controls,
     turnToolProhibition: checkpointTurnToolProhibition(claim.checkpoint.request),
+    contextPolicySnapshot: savedContextPolicy.data,
   });
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);
@@ -238,13 +256,18 @@ async function handlePausedRunResume(
     );
     const connectorsAllowed =
       processed.chatRequest.connector_tools_enabled !== false &&
-      (await connectorsAllowedForTurn(request, userId, processed));
+      (await connectorsAllowedForTurn(request, userId, {
+        ...processed,
+        allowSelective: !processed.agentTurn,
+      }));
     const [operatorTools, connectorTools] = await Promise.all([
       loadMcpToolDefs(),
       connectorsAllowed
         ? loadUserConnectorToolDefs(userId, {
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
             planTier: processed.subscriptionTier,
+            organizationId: processed.organizationId,
+            allowSelective: !processed.agentTurn,
             isToolDenied: permissions.isConnectorToolDenied,
             isConnectorDenied: permissions.isConnectorDenied,
             googleUserDataRouted: processed.googleUserData === true,

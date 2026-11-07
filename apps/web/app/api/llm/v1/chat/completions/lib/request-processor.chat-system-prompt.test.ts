@@ -8,7 +8,10 @@ import {
   ROUTING_PROFILE_CHOICE_OPTIONS,
 } from '@agiworkforce/types';
 import type { Skill } from '@agiworkforce/skills';
-import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
+import {
+  SYSTEM_PROMPT_CACHE_BOUNDARY,
+  splitSystemPromptCacheBoundary,
+} from '@agiworkforce/provider-protocol';
 
 import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
 import {
@@ -20,6 +23,9 @@ import {
 import { PROMPT_FLAG_PREFIX, promptFlagKey, promptFlagVariant } from '@/lib/prompts/prompt-flags';
 import type { FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 import { capabilityKillSwitchKey } from '@/lib/feature-flags/kill-switches';
+import * as agentTurnConfig from '@/lib/agents/agent-turn-config';
+import { AGENT_ID, agentConfig } from '@/lib/agents/__tests__/agent-fixtures';
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 type ScanModule0 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule1 = typeof import('./chat-attachment-hydration');
 type ScanModule2 = typeof import('@/lib/services/managed-memory-context-service');
@@ -165,6 +171,7 @@ vi.mock('./context-compaction', async (importOriginal) => {
 import { CreditService } from '@/lib/services/credit-service';
 import { processRequest } from './request-processor';
 import type { AuthGateSuccess } from './auth-gate';
+import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from './managed-tool-inventory';
 
 type RlsDbModule = typeof import('@/lib/server/rls-db');
 
@@ -302,6 +309,124 @@ afterEach(() => {
 });
 
 describe('the chat system prompt version a prompt flag selects', () => {
+  it('preserves the original context policy snapshot when reprocessing a saved turn', async () => {
+    const original = contextPolicySnapshotFixture('user-pro', null);
+    const result = await processRequest(chatRequestFor('saved-context-policy'), auth(), {
+      contextPolicySnapshot: original,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.contextPolicySnapshot).toBe(original);
+  });
+
+  it('keeps a captured initial inventory on a non-loop managed request after the cache boundary', async () => {
+    mocks.promptFlags.mockResolvedValue(chatSystemFlag(PRECEDENCE_VERSION));
+    const result = await processRequest(
+      chatRequestFor('managed-inventory-non-loop', {
+        stream: false,
+        tools: [{ type: 'function', function: { name: 'fixture_read' } }],
+        messages: [
+          {
+            role: 'system',
+            name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+            __managedToolInventoryVersion: 999,
+            content: 'Caller-owned system text remains intact.',
+          },
+          { role: 'user', content: 'Reply briefly.' },
+        ],
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const inventory = result.llmRequest.messages.filter(
+      (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    );
+    expect(inventory).toHaveLength(1);
+    expect(inventory[0]).toMatchObject({
+      role: 'system',
+      __managedToolInventoryVersion: PRECEDENCE_VERSION,
+    });
+    expect(result.managedToolInventoryVersion).toBe(PRECEDENCE_VERSION);
+    expect(inventory[0]?.content).toContain('- fixture_read');
+    expect(
+      result.llmRequest.messages.find((message) => message.content.startsWith('Caller-owned')),
+    ).not.toHaveProperty('name');
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    expect(joined.indexOf(SYSTEM_PROMPT_CACHE_BOUNDARY)).toBeLessThan(
+      joined.indexOf(inventory[0]!.content),
+    );
+    expect(joined.match(/Tools available to you on this turn:/g)).toHaveLength(1);
+  });
+
+  it('leaves raw API messages without a managed inventory or trusted inventory context', async () => {
+    const content = 'The API caller owns this system text.';
+    const result = await processRequest(
+      chatRequestFor(
+        'raw-api-inventory',
+        {
+          managedToolInventoryVersion: 999,
+          messages: [
+            { role: 'system', name: MANAGED_TOOL_INVENTORY_MESSAGE_NAME, content },
+            { role: 'user', content: 'Reply briefly.' },
+          ],
+        },
+        { 'x-agi-surface': 'api' },
+      ),
+      { ...auth(), token: 'sk_test_inventory_fixture' },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.managedToolInventoryVersion).toBeUndefined();
+    expect(result.llmRequest.messages.some((message) => message.name)).toBe(false);
+    expect(result.llmRequest.messages.find((message) => message.content === content)).toEqual({
+      role: 'system',
+      content,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    });
+  });
+
+  it('keeps the cacheable prefix unchanged when only inventory names differ', async () => {
+    const first = await systemText('inventory-prefix-a', {
+      tools: [{ type: 'function', function: { name: 'fixture_one' } }],
+    });
+    const second = await systemText('inventory-prefix-b', {
+      tools: [{ type: 'function', function: { name: 'fixture_two' } }],
+    });
+    expect(first).toContain('- fixture_one');
+    expect(second).toContain('- fixture_two');
+    expect(splitSystemPromptCacheBoundary(first)?.stablePrefix).toBe(
+      splitSystemPromptCacheBoundary(second)?.stablePrefix,
+    );
+  });
+
+  it('does not describe a CLI caller-owned file tool as a managed sandbox tool', async () => {
+    const result = await processRequest(
+      chatRequestFor(
+        'cli-inventory',
+        { tools: [{ type: 'function', function: { name: 'write_file' } }] },
+        { 'x-agi-surface': 'cli' },
+      ),
+      { ...auth(), surfaceClass: 'developer' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.chatSurface).toBe('cli');
+    const inventory = result.llmRequest.messages.find(
+      (message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME,
+    );
+    expect(inventory?.content).toContain('\n- write_file\n');
+    expect(inventory?.content).not.toContain('write a file into that sandbox');
+  });
+
   it('serves a customer the pinned version when the flag selects one kept on internal', async () => {
     vi.stubEnv(PLATFORM_ADMIN_ENV_VAR, '');
     mocks.promptFlags.mockResolvedValue(chatSystemFlag(IDENTITY_VERSION));
@@ -498,7 +623,7 @@ describe('the identity and chat setup the flagged identity version reports', () 
     expect(joined).not.toContain('- Memory is off, so you cannot see or save memories');
   });
 
-  it('says memory could not be loaded, not that the workspace closed it, when the workspace policy read fails', async () => {
+  it('says memory could not be loaded when only the workspace memory policy read fails', async () => {
     mocks.organizationId.mockReturnValue(WORKSPACE_ID);
     mocks.loadPolicy.mockResolvedValue({
       enabled: false,
@@ -507,7 +632,12 @@ describe('the identity and chat setup the flagged identity version reports', () 
       searchPastChats: false,
     });
     mocks.scopedQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('from organization_admin_policies')) throw new Error('connection reset');
+      if (sql.includes('from organization_admin_policies')) {
+        if (sql.includes('retention_days')) throw new Error('connection reset');
+        return [
+          { allow_memory: true, allow_connector_context: true, allow_web_result_context: true },
+        ];
+      }
       return [];
     });
 
@@ -516,6 +646,26 @@ describe('the identity and chat setup the flagged identity version reports', () 
     expect(joined).toContain('- Memory could not be loaded for this message');
     expect(joined).not.toContain('workspace administrator has turned memory off');
     expect(joined).not.toContain('- Memory is off, so you cannot see or save memories');
+  });
+
+  it('requires a restart before preparing a turn when the workspace context policy is unreadable', async () => {
+    mocks.organizationId.mockReturnValue(WORKSPACE_ID);
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from organization_admin_policies')) throw new Error('connection reset');
+      return [];
+    });
+
+    const result = await processRequest(chatRequestFor('unreadable-context-policy'), auth());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(409);
+    await expect(result.response.json()).resolves.toMatchObject({
+      error: { code: 'context_policy_restart_required' },
+    });
+    expect(mocks.turnContext).not.toHaveBeenCalled();
+    expect(mocks.hydrate).not.toHaveBeenCalled();
+    expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
   });
 
   it('says personalization could not be loaded when the custom instructions read fails', async () => {
@@ -800,6 +950,44 @@ describe('the product overview chat prompt v7 renders for the turn (PC-F05)', ()
     for (const capability of ['canUseDeepResearch', 'canUseWebSearch', 'canUseCloudExecution']) {
       expect(joined).toContain(overviewLine(capability));
     }
+  });
+
+  it('describes ordinary-chat connected apps without enabling artifact connector guidance', async () => {
+    const joined = await systemText('chat-system-prompt-selective-connectors');
+
+    expect(joined).toContain(overviewLine('canUseConnectors'));
+    expect(joined).not.toContain(
+      chatSystemPromptSection(chatSystemPromptSections(7), 'artifact_runtime_connectors'),
+    );
+  });
+
+  it('withholds selective connector overview claims from a registered agent turn', async () => {
+    const loadAgent = vi.spyOn(agentTurnConfig, 'loadAgentTurnConfig').mockResolvedValue({
+      ok: true,
+      turn: { agentId: AGENT_ID, config: agentConfig(), files: [] },
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      temporaryConversationRows(sql).map((row) => ({ ...row, agent_id: AGENT_ID })),
+    );
+
+    const result = await processRequest(
+      chatRequestFor('chat-system-prompt-agent-connectors', { conversation_id: CONVERSATION_ID }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(loadAgent).toHaveBeenCalledWith(expect.anything(), 'user-pro', AGENT_ID);
+    expect(result.agentTurn?.agentId).toBe(AGENT_ID);
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+    expect(joined).not.toContain(overviewLine('canUseConnectors'));
+    expect(joined).not.toContain(
+      chatSystemPromptSection(chatSystemPromptSections(7), 'artifact_runtime_connectors'),
+    );
+    expect(joined).toContain(overviewLine('canUseWebSearch'));
   });
 
   it('leaves out a feature the workspace administrator turned off', async () => {

@@ -97,17 +97,26 @@ async function securityAlertEmailAddress(
 
 export async function notifyAccountCompromiseContained(
   db: DatabaseAdapter,
-  input: { userId: string; responseId: string; sessionsRevoked: number },
+  input: {
+    userId: string;
+    responseId: string;
+    sessionsRevoked: number;
+    cleanupIncomplete: boolean;
+  },
 ): Promise<void> {
   await recordNotification(db, {
     userId: input.userId,
     category: 'security',
     severity: 'error',
-    title: 'Your account was secured',
+    title: input.cleanupIncomplete
+      ? 'Account security response needs attention'
+      : 'Account security response',
     message:
-      `We signed out ${input.sessionsRevoked} other session${input.sessionsRevoked === 1 ? '' : 's'} ` +
-      'because your account looked compromised. Set a new password before signing in anywhere else, ' +
-      'and contact support if you did not expect this.',
+      `We signed out ${input.sessionsRevoked} session${input.sessionsRevoked === 1 ? '' : 's'} ` +
+      'after a possible account compromise. Review your sign-in methods and active sessions.' +
+      (input.cleanupIncomplete
+        ? ' We could not confirm that all cleanup steps finished. Contact support for help with unresolved access.'
+        : ''),
     target: { kind: 'settings', id: 'security' },
     dedupeKey: `account-compromise:${input.responseId}`,
   });

@@ -157,7 +157,11 @@ import {
   type EditorContextSnapshot,
 } from '../../data/composerContext';
 import { searchMentionTargets } from '../../data/mentionSearch';
-import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
+import type {
+  ApprovalDecision,
+  ComposerBinding,
+  ContextAttachmentKind,
+} from '../../protocol/webviewMessages';
 import {
   approvalFilePath,
   approvalToolIdentity,
@@ -292,6 +296,7 @@ export type WebviewToExtMessage =
       };
     }
   | { type: 'ready' }
+  | { type: 'composerState'; payload: ComposerBinding }
   | { type: 'viewFocused' }
   | { type: 'viewBlurred' }
   | { type: 'openPlanDocument' }
@@ -371,7 +376,12 @@ export type WebviewToExtMessage =
   | { type: 'openArchivedSessions' }
   | {
       type: 'messageAction';
-      payload: { action: 'resend' | 'branch' | 'branchAnswer'; text: string; occurrence: number };
+      payload: {
+        action: 'resend' | 'branch' | 'branchAnswer';
+        text: string;
+        occurrence: number;
+        composer?: ComposerBinding;
+      };
     }
   | {
       type: 'planDecision';
@@ -517,7 +527,12 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'composerDraft';
-      payload: { text: string; references: WorkspaceFileReference[]; submit?: boolean };
+      payload: {
+        text: string;
+        references: WorkspaceFileReference[];
+        submit?: boolean;
+        expectedComposer?: ComposerBinding & { epoch: number };
+      };
     }
   | { type: 'addUserMessage'; payload: { text: string } }
   | { type: 'modeChanged'; payload: { mode: AgentMode } }
@@ -840,6 +855,15 @@ function manualModelUnlockText(): string {
     : `Your plan uses Auto; upgrade to ${getBillingPlanPricing(tier).label} to choose these models`;
 }
 
+interface ConversationNavigation {
+  attempt: number;
+  epoch: number;
+  thread: DeveloperThreadState;
+  source: DeveloperThreadState;
+  activeModel: string;
+  composer: ComposerBinding | undefined;
+}
+
 export class ChatStateManager {
   private _thread?: DeveloperThreadState;
   private _transcriptSyncActive = false;
@@ -863,6 +887,7 @@ export class ChatStateManager {
     this._post({ type: 'sessionBinding', payload: { epoch: this._conversationEpoch } });
   }
   private _resumeAttemptSeq = 0;
+  private _composerBinding: ComposerBinding | undefined;
   private _turnLifecycleActive = false;
   private _turnLifecycleEpoch: number | undefined;
   /**
@@ -903,7 +928,10 @@ export class ChatStateManager {
   private _webSearchLogins: readonly string[] = [];
   private _recoveryHref: string | undefined;
   private readonly _dismissedEditorContext = new Set<string>();
-  private readonly _sessionApprovals = new Set<string>();
+  private readonly _sessionApprovals = new Map<
+    string,
+    { thread: DeveloperThreadState; epoch: number }
+  >();
   private readonly _disallowedTools = new Map<string, readonly string[]>();
   private _draftDisallowedTools: readonly string[] | undefined;
   private readonly _pendingApprovals = new Map<
@@ -914,6 +942,7 @@ export class ChatStateManager {
       runtime: LocalRuntimeClient;
       identity: string;
       label: string;
+      resolving?: boolean;
       proposed?: { filePath: string; content: string };
     }
   >();
@@ -963,6 +992,7 @@ export class ChatStateManager {
   }
 
   async selectModel(modelId: string): Promise<'conversation' | 'default'> {
+    this._resumeAttemptSeq++;
     const model = this._normalizeModelSelection(modelId);
     const scope = this._thread === undefined ? 'default' : 'conversation';
     if (scope === 'default') {
@@ -1043,6 +1073,10 @@ export class ChatStateManager {
 
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
+      case 'composerState': {
+        this._composerBinding = msg.payload;
+        break;
+      }
       case 'ready': {
         if (this._context.globalState.get<boolean>(ONBOARDING_SEEN_KEY) === true) {
           this._post({ type: 'hideOnboarding' });
@@ -1353,27 +1387,50 @@ export class ChatStateManager {
 
       case 'respondToApproval': {
         const { requestId, decision, guidance, answer } = msg.payload;
+        const pending = this._pendingApprovals.get(requestId);
+        if (pending === undefined || pending.resolving) break;
+        const thread = this._thread;
+        const epoch = this._conversationEpoch;
+        const owner = this._activeTurn;
         if (answer !== undefined) {
           await this._resolveApproval(requestId, 'once', false, answer);
           break;
         }
-        const pending = this._pendingApprovals.get(requestId);
         const noted =
           decision === 'deny' &&
           guidance !== undefined &&
-          pending !== undefined &&
           (await pending.runtime.offers('approvalNotes'));
-        await this._resolveApproval(requestId, decision, false, noted ? guidance : undefined);
-        if (decision === 'deny' && guidance !== undefined && !noted) {
+        if (this._pendingApprovals.get(requestId) !== pending || this._activeTurn !== owner) break;
+        const resolved = await this._resolveApproval(
+          requestId,
+          decision,
+          false,
+          noted ? guidance : undefined,
+        );
+        if (
+          resolved &&
+          this._thread === thread &&
+          this._conversationEpoch === epoch &&
+          owner !== undefined &&
+          this._activeTurn === owner &&
+          !owner.isUiSettled() &&
+          decision === 'deny' &&
+          guidance !== undefined &&
+          !noted
+        ) {
           await this._handleSendMessage(guidance);
         }
         break;
       }
 
       case 'reviewApprovalChange': {
-        const proposed = this._pendingApprovals.get(msg.payload.requestId)?.proposed;
-        if (proposed === undefined) break;
+        const pending = this._pendingApprovals.get(msg.payload.requestId);
+        const proposed = pending?.proposed;
+        if (pending === undefined || proposed === undefined || pending.resolving) break;
         await openProposedChange(msg.payload.requestId, proposed.filePath, proposed.content);
+        if (this._pendingApprovals.get(msg.payload.requestId) !== pending || pending.resolving) {
+          await discardProposedChange(msg.payload.requestId);
+        }
         break;
       }
 
@@ -1654,6 +1711,7 @@ export class ChatStateManager {
       }
 
       case 'selectModel': {
+        this._resumeAttemptSeq++;
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId.startsWith('__local_setup__')) break;
         const normalized = this._normalizeModelSelection(modelId);
@@ -2196,11 +2254,20 @@ export class ChatStateManager {
   }
 
   public async resumeConversation(threadId: string): Promise<boolean> {
-    const attempt = ++this._resumeAttemptSeq;
+    return this._resumeConversation(threadId, ++this._resumeAttemptSeq);
+  }
+
+  private async _resumeConversation(
+    threadId: string,
+    attempt: number,
+    navigation?: ConversationNavigation,
+  ): Promise<boolean> {
+    if (attempt !== this._resumeAttemptSeq) return false;
     const startingEpoch = this._conversationEpoch;
     const isCurrentAttempt = (): boolean =>
       attempt === this._resumeAttemptSeq &&
       startingEpoch === this._conversationEpoch &&
+      (navigation === undefined || this._isCurrentNavigation(navigation)) &&
       !this._turnLifecycleActive &&
       this._activeTurn === undefined;
 
@@ -2222,6 +2289,15 @@ export class ChatStateManager {
       }
 
       const listed = resolved.response.thread;
+      if (
+        navigation !== undefined &&
+        (resolved.runtime !== navigation.source.runtime ||
+          !isSameWorkspacePath(resolved.cwd, navigation.source.cwd) ||
+          listed.trustMode !== navigation.source.trustMode ||
+          listed.provider !== navigation.source.provider)
+      ) {
+        return false;
+      }
       if (isCloudThread(listed)) {
         void showCloudSession(resolved.response);
         return false;
@@ -2246,6 +2322,13 @@ export class ChatStateManager {
       }
       if (resumed.trustMode === 'unknown') {
         return this._rejectResume(unknownBoundaryMessage(), PERMISSION_REFUSAL);
+      }
+      if (
+        navigation !== undefined &&
+        (resumed.trustMode !== navigation.source.trustMode ||
+          resumed.provider !== navigation.source.provider)
+      ) {
+        return false;
       }
 
       let localModels: LocalModelSummary[];
@@ -2276,6 +2359,13 @@ export class ChatStateManager {
         resumed.trustMode === 'local' && persistedModel !== undefined
           ? persistedModel
           : this._normalizeModelSelection(persistedModel ?? Config.model());
+      if (
+        navigation !== undefined &&
+        (model !== navigation.source.model ||
+          this._providerBoundaryForSession(resumed, model) !== navigation.source.providerBoundary)
+      ) {
+        return false;
+      }
       if (
         resumed.trustMode !== 'local' &&
         persistedModel !== undefined &&
@@ -2533,7 +2623,6 @@ export class ChatStateManager {
     this._writtenFilesByTurn.set(turnId, written);
   }
 
-  /** Puts back the files the latest reply changed, from the checkpoint taken with its prompt. */
   private async _undoTurn(turnId: string): Promise<void> {
     const thread = this._thread;
     const changed = this._lastChangedTurn;
@@ -2549,47 +2638,10 @@ export class ChatStateManager {
       );
       return;
     }
-    const undo = 'Undo changes';
-    const confirmed = await vscode.window.showWarningMessage(
-      'Undo the changes from the latest reply?',
-      {
-        modal: true,
-        detail: `${changed.files.length === 1 ? 'The file it changed goes back to how it was' : `The ${changed.files.length} files it changed go back to how they were`} before that prompt. The conversation stays as it is.`,
-      },
-      undo,
+    // Legacy checkpoints have no turn identity, so the newest entry cannot authorize Undo.
+    void vscode.window.showWarningMessage(
+      `${PRODUCT_NAMES.code}: this runtime cannot verify which checkpoint belongs to that reply. No files were changed. Use Checkpoints to choose a restore point explicitly.`,
     );
-    if (confirmed !== undo || this._thread !== thread) return;
-    try {
-      const { checkpoints } = await thread.runtime.listCheckpoints(thread.id);
-      const latest = checkpoints[checkpoints.length - 1];
-      if (latest === undefined) {
-        void vscode.window.showWarningMessage(
-          `${PRODUCT_NAMES.code}: this session kept no checkpoint for that reply, so its changes cannot be undone here.`,
-        );
-        return;
-      }
-      const outcome = await thread.runtime.rewindThread({
-        threadId: thread.id,
-        checkpointIndex: latest.checkpointIndex,
-        restore: 'code',
-      });
-      this._lastChangedTurn = undefined;
-      this._post({ type: 'turnChangesUndone', payload: { turnId } });
-      if (outcome.skippedFiles.length > 0) {
-        void vscode.window.showWarningMessage(
-          tPlural('checkpoints.skippedFiles', outcome.skippedFiles.length, {
-            files: outcome.skippedFiles.map((file) => `${file.path} (${file.reason})`).join(', '),
-          }),
-        );
-        return;
-      }
-      const restored = outcome.restoredFiles.length + outcome.removedFiles.length;
-      void vscode.window.showInformationMessage(tPlural('checkpoints.filesRestored', restored));
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
 
   private async _continueAccountConversationHere(conversationId: string): Promise<boolean> {
@@ -2661,30 +2713,39 @@ export class ChatStateManager {
     decision: ApprovalDecision,
     automatic: boolean,
     note?: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const pending = this._pendingApprovals.get(requestId);
-    if (pending === undefined) return;
-    this._pendingApprovals.delete(requestId);
-    const allowing = decision === 'once' || decision === 'session' || decision === 'always';
-    const editedContent =
-      pending.proposed === undefined
-        ? undefined
-        : allowing
-          ? await finishProposedChange(requestId)
-          : await discardProposedChange(requestId).then(() => undefined);
-
-    if (decision === 'session') this._sessionApprovals.add(pending.identity);
-    this._post({
-      type: 'approvalResolved',
-      payload: { requestId, outcome: automatic ? 'session' : decision },
-    });
-
-    if (decision === 'abort') {
-      await this._interruptActiveTurn();
-      return;
-    }
-
+    if (pending === undefined || pending.resolving) return false;
+    const owner = this._activeTurn;
+    const thread = this._thread;
+    const epoch = this._conversationEpoch;
+    const ownsTurn = (): boolean =>
+      owner !== undefined &&
+      this._activeTurn === owner &&
+      !owner.isUiSettled() &&
+      owner.threadId === pending.threadId &&
+      owner.turnId === pending.turnId &&
+      owner.runtime === pending.runtime &&
+      thread !== undefined &&
+      this._thread === thread &&
+      thread.id === pending.threadId &&
+      thread.runtime === pending.runtime &&
+      this._conversationEpoch === epoch;
+    if (!ownsTurn()) return false;
+    pending.resolving = true;
     try {
+      const allowing = decision === 'once' || decision === 'session' || decision === 'always';
+      const editedContent =
+        pending.proposed === undefined
+          ? undefined
+          : allowing
+            ? await finishProposedChange(requestId)
+            : await discardProposedChange(requestId).then(() => undefined);
+      if (!ownsTurn() || this._pendingApprovals.get(requestId) !== pending) return false;
+      if (decision === 'abort') {
+        await this._interruptActiveTurn();
+        return true;
+      }
       await pending.runtime.respondToApproval({
         threadId: pending.threadId,
         turnId: pending.turnId,
@@ -2700,8 +2761,12 @@ export class ChatStateManager {
         ...(note === undefined ? {} : { note }),
         ...(editedContent === undefined ? {} : { editedContent }),
       });
-      const thread = this._thread;
-      if (thread?.id === pending.threadId && thread.runtime === pending.runtime) {
+      if (ownsTurn() && this._pendingApprovals.get(requestId) === pending && thread !== undefined) {
+        if (decision === 'session') this._sessionApprovals.set(pending.identity, { thread, epoch });
+        this._post({
+          type: 'approvalResolved',
+          payload: { requestId, outcome: automatic ? 'session' : decision },
+        });
         approvalAnsweredInEditor({
           cwd: thread.cwd,
           threadId: pending.threadId,
@@ -2709,21 +2774,22 @@ export class ChatStateManager {
           requestId,
           approved: decision !== 'deny',
         });
+        return true;
       }
+      return false;
     } catch (error) {
-      const current = this._activeTurn;
-      if (
-        current?.threadId !== pending.threadId ||
-        current.turnId !== pending.turnId ||
-        current.runtime !== pending.runtime
-      ) {
-        return;
-      }
+      if (!ownsTurn() || this._pendingApprovals.get(requestId) !== pending) return false;
+      this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
       this._postError(
         error instanceof Error ? error.message : t('chatNotice.approvalFailed'),
         RUNTIME_FAILURE,
       );
       await this._interruptActiveTurn();
+      return false;
+    } finally {
+      if (this._pendingApprovals.get(requestId) === pending) {
+        this._pendingApprovals.delete(requestId);
+      }
     }
   }
 
@@ -2819,15 +2885,19 @@ export class ChatStateManager {
       );
       return;
     }
+    const navigation = this._beginConversationNavigation(thread, this._composerBinding);
+    if (!this._canStartNavigation(navigation)) return;
     let listed: ThreadCheckpointList;
     try {
       listed = await thread.runtime.listCheckpoints(thread.id);
     } catch (error) {
+      if (!this._isCurrentNavigation(navigation)) return;
       void vscode.window.showErrorMessage(
         `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return;
     }
+    if (!this._isCurrentNavigation(navigation)) return;
     if (listed.checkpoints.length === 0) {
       void vscode.window.showInformationMessage(
         `${PRODUCT_NAMES.code}: this session has no checkpoints yet. One is saved with each prompt.`,
@@ -2843,7 +2913,7 @@ export class ChatStateManager {
       })),
       { title: `${PRODUCT_NAMES.code}, Checkpoints`, placeHolder: 'Pick the prompt to go back to' },
     );
-    if (picked === undefined) return;
+    if (picked === undefined || !this._isCurrentNavigation(navigation)) return;
     const hasConversation = picked.checkpoint.messageIndex !== undefined;
     const hasCode = picked.checkpoint.trackedFiles > 0;
     const choices = REWIND_CHOICES.filter(
@@ -2861,19 +2931,13 @@ export class ChatStateManager {
       title: `${PRODUCT_NAMES.code}, Rewind to “${picked.label}”`,
       placeHolder: 'What goes back to this point',
     });
-    if (choice === undefined) return;
+    if (choice === undefined || !this._isCurrentNavigation(navigation)) return;
     const confirmed = await vscode.window.showWarningMessage(
       `Rewind to “${picked.label}”?`,
       { modal: true, detail: choice.consequence },
       REWIND,
     );
-    if (confirmed !== REWIND || this._thread !== thread) return;
-    if (this._activeTurn?.threadId === thread.id) {
-      void vscode.window.showWarningMessage(
-        `${PRODUCT_NAMES.code}: stop the current response before rewinding this session.`,
-      );
-      return;
-    }
+    if (confirmed !== REWIND || !this._isCurrentNavigation(navigation)) return;
     let outcome: ThreadRewindOutcome;
     try {
       outcome = await thread.runtime.rewindThread({
@@ -2887,8 +2951,12 @@ export class ChatStateManager {
       );
       return;
     }
-    if (outcome.conversationRestored && (await this.resumeConversation(thread.id))) {
-      this._post({ type: 'composerDraft', payload: { text: outcome.prompt, references: [] } });
+    if (
+      outcome.conversationRestored &&
+      this._isCurrentNavigation(navigation) &&
+      (await this._resumeConversation(thread.id, navigation.attempt, navigation))
+    ) {
+      this._postNavigationDraft(navigation, outcome.prompt);
     }
     if (outcome.skippedFiles.length > 0) {
       void vscode.window.showWarningMessage(
@@ -4346,6 +4414,7 @@ export class ChatStateManager {
     action: 'resend' | 'branch' | 'branchAnswer';
     text: string;
     occurrence: number;
+    composer?: ComposerBinding;
   }): Promise<void> {
     const thread = this._thread;
     const loaded = this._loadedConversation;
@@ -4369,12 +4438,18 @@ export class ChatStateManager {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
+    const navigation = this._beginConversationNavigation(thread, action.composer);
+    if (!this._canStartNavigation(navigation)) return;
     try {
-      if (action.action === 'resend') await this._resendMessage(thread, target.index, target.text);
-      else if (action.action === 'branchAnswer') {
-        await this._branchFromAnswer(thread, loaded.title, target.index);
-      } else await this._branchFromMessage(thread, loaded.title, target.index, target.text);
+      if (action.action === 'resend') {
+        await this._resendMessage(thread, target.index, target.text, navigation);
+      } else if (action.action === 'branchAnswer') {
+        await this._branchFromAnswer(thread, loaded.title, target.index, navigation);
+      } else {
+        await this._branchFromMessage(thread, loaded.title, target.index, target.text, navigation);
+      }
     } catch (error) {
+      if (navigation.attempt !== this._resumeAttemptSeq) return;
       void vscode.window.showErrorMessage(
         t('messageActions.failed', {
           reason: error instanceof Error ? error.message : String(error),
@@ -4387,8 +4462,11 @@ export class ChatStateManager {
     thread: DeveloperThreadState,
     messageIndex: number,
     text: string,
+    navigation: ConversationNavigation,
   ): Promise<void> {
-    if (!(await thread.runtime.offers('checkpoints'))) {
+    const supported = await thread.runtime.offers('checkpoints');
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (!supported) {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
@@ -4398,18 +4476,19 @@ export class ChatStateManager {
       { modal: true, detail: t('messageActions.resendDetail') },
       resend,
     );
-    if (confirmed !== resend || this._thread !== thread || this.turnInFlight()) return;
+    if (confirmed !== resend || !this._isCurrentNavigation(navigation)) return;
     const outcome = await thread.runtime.rewindThread({
       threadId: thread.id,
       messageIndex,
       restore: 'conversation',
     });
+    if (!this._isCurrentNavigation(navigation)) return;
     if (!outcome.conversationRestored) {
       void vscode.window.showWarningMessage(t('messageActions.notFound'));
       return;
     }
-    if (await this.resumeConversation(thread.id)) {
-      this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
+    if (await this._resumeConversation(thread.id, navigation.attempt, navigation)) {
+      this._postNavigationDraft(navigation, text, true);
     }
   }
 
@@ -4417,8 +4496,11 @@ export class ChatStateManager {
     thread: DeveloperThreadState,
     title: string,
     messageIndex: number,
+    navigation: ConversationNavigation,
   ): Promise<void> {
-    if (!(await thread.runtime.offers('forkAtMessage'))) {
+    const supported = await thread.runtime.offers('forkAtMessage');
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (!supported) {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
@@ -4428,7 +4510,8 @@ export class ChatStateManager {
       messageIndex,
     );
     this._conversationTreeProvider?.refresh();
-    await this.resumeConversation(forked.id);
+    if (!this._isCurrentNavigation(navigation)) return;
+    await this._resumeConversation(forked.id, navigation.attempt, navigation);
   }
 
   private async _branchFromMessage(
@@ -4436,13 +4519,18 @@ export class ChatStateManager {
     title: string,
     messageIndex: number,
     text: string,
+    navigation: ConversationNavigation,
   ): Promise<void> {
     if (messageIndex === 0) {
+      if (!this._isCurrentNavigation(navigation)) return;
       this.resetConversation();
-      this._post({ type: 'composerDraft', payload: { text, references: [] } });
+      navigation.attempt = this._resumeAttemptSeq;
+      this._postNavigationDraft(navigation, text);
       return;
     }
-    if (!(await thread.runtime.offers('forkAtMessage'))) {
+    const supported = await thread.runtime.offers('forkAtMessage');
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (!supported) {
       void vscode.window.showWarningMessage(t('messageActions.needsUpdate'));
       return;
     }
@@ -4452,9 +4540,77 @@ export class ChatStateManager {
       messageIndex - 1,
     );
     this._conversationTreeProvider?.refresh();
-    if (await this.resumeConversation(forked.id)) {
-      this._post({ type: 'composerDraft', payload: { text, references: [] } });
+    if (!this._isCurrentNavigation(navigation)) return;
+    if (await this._resumeConversation(forked.id, navigation.attempt, navigation)) {
+      this._postNavigationDraft(navigation, text);
     }
+  }
+
+  private _beginConversationNavigation(
+    thread: DeveloperThreadState,
+    composer: ComposerBinding | undefined,
+  ): ConversationNavigation {
+    return {
+      attempt: ++this._resumeAttemptSeq,
+      epoch: this._conversationEpoch,
+      thread,
+      source: { ...thread },
+      activeModel: this._activeModel,
+      composer,
+    };
+  }
+
+  private _isCurrentNavigation(navigation: ConversationNavigation): boolean {
+    return (
+      navigation.attempt === this._resumeAttemptSeq &&
+      navigation.epoch === this._conversationEpoch &&
+      navigation.thread === this._thread &&
+      navigation.activeModel === this._activeModel &&
+      navigation.composer !== undefined &&
+      navigation.composer.instance === this._composerBinding?.instance &&
+      navigation.composer.revision === this._composerBinding.revision &&
+      navigation.composer.attachments === 0 &&
+      this._composerBinding.attachments === 0 &&
+      this._pendingAttachments.length === 0 &&
+      navigation.source.runtime === this._thread.runtime &&
+      navigation.source.cwd === this._thread.cwd &&
+      navigation.source.model === this._thread.model &&
+      navigation.source.trustMode === this._thread.trustMode &&
+      navigation.source.provider === this._thread.provider &&
+      navigation.source.providerBoundary === this._thread.providerBoundary &&
+      !this.turnInFlight()
+    );
+  }
+
+  private _canStartNavigation(navigation: ConversationNavigation): boolean {
+    if (this._isCurrentNavigation(navigation)) return true;
+    void vscode.window.showWarningMessage(
+      `${PRODUCT_NAMES.code}: finish the current response and remove staged files before retrying this action. If the composer was replaced, reopen the chat first.`,
+    );
+    return false;
+  }
+
+  private _postNavigationDraft(
+    navigation: ConversationNavigation,
+    text: string,
+    submit = false,
+  ): void {
+    if (
+      navigation.composer === undefined ||
+      navigation.attempt !== this._resumeAttemptSeq ||
+      this.turnInFlight()
+    ) {
+      return;
+    }
+    this._post({
+      type: 'composerDraft',
+      payload: {
+        text,
+        references: [],
+        submit: submit && this._pendingAttachments.length === 0,
+        expectedComposer: { ...navigation.composer, epoch: this._conversationEpoch },
+      },
+    });
   }
 
   private _conversationPayload(
@@ -4723,10 +4879,15 @@ export class ChatStateManager {
     }
     if (event.type === 'approval_requested') {
       const approvalOwner = this._activeTurn;
+      const approvalThread = this._thread;
+      const approvalEpoch = this._conversationEpoch;
       if (
         approvalOwner?.threadId !== event.threadId ||
         approvalOwner.turnId !== event.turnId ||
-        approvalOwner.runtime !== runtime
+        approvalOwner.runtime !== runtime ||
+        approvalOwner.isUiSettled() ||
+        approvalThread?.id !== event.threadId ||
+        approvalThread.runtime !== runtime
       ) {
         complete();
         return;
@@ -4738,9 +4899,8 @@ export class ChatStateManager {
         event.editable === true &&
         event.proposedContent !== undefined &&
         filePath !== undefined &&
-        this._thread !== undefined &&
         (await runtime.offers('approvalEdits'))
-          ? { filePath: path.resolve(this._thread.cwd, filePath), content: event.proposedContent }
+          ? { filePath: path.resolve(approvalThread.cwd, filePath), content: event.proposedContent }
           : undefined;
       const question =
         event.question !== undefined && event.question !== null
@@ -4750,6 +4910,15 @@ export class ChatStateManager {
         question === undefined &&
         event.alwaysAllowSaved === true &&
         (await runtime.offers('savedPermissions'));
+      if (
+        this._activeTurn !== approvalOwner ||
+        approvalOwner.isUiSettled() ||
+        this._thread !== approvalThread ||
+        this._conversationEpoch !== approvalEpoch ||
+        this._pendingApprovals.has(event.requestId)
+      ) {
+        return;
+      }
       this._pendingApprovals.set(event.requestId, {
         threadId: event.threadId,
         turnId: event.turnId,
@@ -4758,7 +4927,12 @@ export class ChatStateManager {
         label,
         ...(proposed === undefined ? {} : { proposed }),
       });
-      if (question === undefined && this._sessionApprovals.has(identity)) {
+      const sessionApproval = this._sessionApprovals.get(identity);
+      if (
+        question === undefined &&
+        sessionApproval?.thread === approvalThread &&
+        sessionApproval.epoch === approvalEpoch
+      ) {
         await this._resolveApproval(event.requestId, 'once', true);
         return;
       }
@@ -4871,16 +5045,26 @@ export class ChatStateManager {
       this._cancelRequested = true;
       return;
     }
+    const thread = this._thread;
+    const epoch = this._conversationEpoch;
+    const ownsView = (): boolean =>
+      this._thread === thread &&
+      this._conversationEpoch === epoch &&
+      this._activeTurn === undefined &&
+      !active.isUiSettled();
     this._cancelRequested = false;
     delete this._activeTurn;
+    this._expirePendingApprovals(active.turnId);
     try {
       await active.runtime.interruptTurn({ threadId: active.threadId, turnId: active.turnId });
-      if (!active.isUiSettled()) this._post({ type: 'done' });
+      if (ownsView()) this._post({ type: 'done' });
     } catch (error) {
-      this._postError(
-        error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
-        RUNTIME_REFUSAL,
-      );
+      if (ownsView()) {
+        this._postError(
+          error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
+          RUNTIME_REFUSAL,
+        );
+      }
     } finally {
       active.complete();
     }

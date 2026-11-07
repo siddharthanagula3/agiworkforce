@@ -1,3 +1,4 @@
+import { ScheduledTaskTransportControl } from '../background/scheduled-task-transport';
 import {
   AgentTaskStateSchema,
   ManagedCloudAgentRunHttpError,
@@ -78,6 +79,7 @@ function errorResult(
   signal?: AbortSignal,
   fallbackMessage = 'The AGI Cloud run could not be resumed.',
 ): ChromeManagedRunControlError {
+  if (error instanceof ScheduledTaskTransportControl) throw error;
   if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }

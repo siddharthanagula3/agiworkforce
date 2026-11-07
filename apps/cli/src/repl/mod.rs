@@ -146,17 +146,18 @@ pub async fn run_repl(
     }
 
     match (resume_messages, resume_managed_session) {
-        (Some(messages), Some((managed_session, path))) => {
-            load_messages_into_session(&mut session, messages);
-            session.adopt_managed_session(managed_session, path)?;
+        (Some(messages), Some((mut managed_session, path))) => {
+            managed_session.messages = messages;
+            session.load_managed_conversation(managed_session, path)?;
+            reset_loaded_session_stats(&mut session);
         }
         (Some(messages), None) => {
             load_messages_into_session(&mut session, messages);
             session.enable_managed_session()?;
         }
         (None, Some((managed_session, path))) => {
-            load_messages_into_session(&mut session, managed_session.messages.clone());
-            session.adopt_managed_session(managed_session, path)?;
+            session.load_managed_conversation(managed_session, path)?;
+            reset_loaded_session_stats(&mut session);
         }
         (None, None) => {
             session.enable_managed_session()?;
@@ -846,6 +847,10 @@ pub(super) fn load_messages_into_session(
     if !messages.is_empty() {
         session.messages = messages;
     }
+    reset_loaded_session_stats(session);
+}
+
+pub(super) fn reset_loaded_session_stats(session: &mut AgentSession) {
     session.total_input_tokens = 0;
     session.total_output_tokens = 0;
     session.turn_count = session

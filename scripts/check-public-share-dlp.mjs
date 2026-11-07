@@ -44,10 +44,7 @@ const sources = new Map(
 );
 
 function publishesPublicly(source) {
-  for (const match of source.matchAll(/insert\s+into\s+(?:public\.)?([a-z_]+)/gi)) {
-    if (PUBLIC_SHARE_TABLES.includes(match[1])) return true;
-  }
-  return false;
+  return firstPublicWriteIndex(source) >= 0;
 }
 
 function firstInspectionIndex(source) {
@@ -59,10 +56,87 @@ function firstInspectionIndex(source) {
 }
 
 function firstPublicWriteIndex(source) {
+  const indexes = [];
   for (const match of source.matchAll(/insert\s+into\s+(?:public\.)?([a-z_]+)/gi)) {
-    if (PUBLIC_SHARE_TABLES.includes(match[1])) return match.index ?? -1;
+    if (PUBLIC_SHARE_TABLES.includes(match[1])) indexes.push(match.index);
   }
-  return -1;
+  // Metadata-only updates do not replace the public payload. Restore does.
+  for (const match of source.matchAll(
+    /update\s+(?:public\.)?([a-z_]+)\s+set\s+([^`;]*?)(?=\bwhere\b|\breturning\b|`|;)/gi,
+  )) {
+    if (PUBLIC_SHARE_TABLES.includes(match[1]) && /\bcontent\s*=/i.test(match[2])) {
+      indexes.push(match.index);
+    }
+  }
+  return indexes.length === 0 ? -1 : Math.min(...indexes);
+}
+
+function inOrder(source, markers) {
+  let previous = -1;
+  for (const marker of markers) {
+    const index = source.indexOf(marker);
+    if (index <= previous) return false;
+    previous = index;
+  }
+  return true;
+}
+
+// Bounded source-shape evidence, not a control-flow or data-flow proof. Only
+// this resolved helper implementation may stand in for a direct inspection.
+function publicationPreparationIndex(source, writeAt) {
+  if (
+    !source.includes(
+      "import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';",
+    )
+  )
+    return -1;
+  const helper = sources.get('apps/web/lib/services/published-artifact-publication-policy.ts');
+  if (
+    !helper ||
+    !helper.includes(
+      "import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';",
+    ) ||
+    !helper.includes(
+      "import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';",
+    ) ||
+    !helper.includes("import { moderateManagedPrompt } from '@/lib/moderation';")
+  )
+    return -1;
+  const declaration = helper.indexOf('export async function preparePublishedArtifactPublication(');
+  if (declaration < 0) return -1;
+  const moderation = helper.slice(0, declaration);
+  if (
+    !inOrder(moderation, [
+      'function refuseModeratedPublication(',
+      'moderateManagedPrompt({',
+      "surface: 'published-artifact'",
+      'if (!moderation.allowed) {',
+      'throw createError.validation(',
+    ])
+  )
+    return -1;
+  if (
+    !inOrder(helper.slice(declaration), [
+      'await buildExternalSharingGateResponse(',
+      'if (sharingGateResponse) return sharingGateResponse;',
+      'refuseModeratedPublication(input.userId, input.title, input.content);',
+      'await inspectOutboundContent({',
+      'value: input.content,',
+      "if (outbound.action === 'blocked') {",
+      'throw createError.validation(outbound.message);',
+      'return { content: outbound.value };',
+    ])
+  )
+    return -1;
+  const beforeWrite = source.slice(0, writeAt);
+  if (
+    !inOrder(beforeWrite, [
+      'const preparation = await preparePublishedArtifactPublication(',
+      'if (preparation instanceof Response) return preparation;',
+    ])
+  )
+    return -1;
+  return beforeWrite.indexOf('await preparePublishedArtifactPublication(');
 }
 
 /**
@@ -89,8 +163,11 @@ for (const [file, source] of sources) {
   if (!publishesPublicly(source)) continue;
   publishers += 1;
   if (file.endsWith('/route.ts')) {
-    const inspectionAt = firstInspectionIndex(source);
     const publishAt = firstPublicWriteIndex(source);
+    const inspectionAt =
+      firstInspectionIndex(source) >= 0
+        ? firstInspectionIndex(source)
+        : publicationPreparationIndex(source, publishAt);
     if (inspectionAt < 0 || inspectionAt > publishAt) {
       findings.push(`${file}: publishes to a public URL without inspecting the content first`);
     }
@@ -104,7 +181,10 @@ for (const [file, source] of sources) {
   for (const [name, owner] of publishingFunctions) {
     const call = new RegExp(`\\b${name}\\s*\\(`).exec(source);
     if (!call) continue;
-    const inspectionAt = firstInspectionIndex(source);
+    const inspectionAt =
+      firstInspectionIndex(source) >= 0
+        ? firstInspectionIndex(source)
+        : publicationPreparationIndex(source, call.index);
     if (inspectionAt >= 0 && inspectionAt < call.index) continue;
     findings.push(`${file}: calls ${name} (${owner}) without inspecting the content first`);
   }
@@ -123,5 +203,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `check-public-share-dlp: ${publishers} public share writers all inspect what they publish`,
+  `check-public-share-dlp: ${publishers} public share writers have source inspection evidence`,
 );

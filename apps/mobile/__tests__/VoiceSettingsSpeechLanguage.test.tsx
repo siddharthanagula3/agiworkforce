@@ -51,8 +51,8 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('@/src/features/voice/services/tts', () => ({
+  ...jest.requireActual('@/src/features/voice/services/tts'),
   getVoicesForLanguage: jest.fn().mockResolvedValue([]),
-  speak: jest.fn().mockResolvedValue(undefined),
 }));
 
 import VoiceSettingsScreen from '@/src/features/settings/voice';

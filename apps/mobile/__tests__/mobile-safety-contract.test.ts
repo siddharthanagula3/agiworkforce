@@ -117,10 +117,19 @@ describe('what a notification is allowed to say on a locked screen', () => {
 describe('deleting an account', () => {
   it('names the consequence, the timing and what is left behind', () => {
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/permanent deletion/);
-    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cancel before erasure begins/);
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cancel before the cancellation deadline/);
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
+      /Erasure is processed after the deadline and may take longer/,
+    );
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).not.toMatch(
+      /in 24 hours|cancel before erasure begins/,
+    );
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cannot be undone/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/signed out/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Local Mode data stays on this device/);
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Export your Cloud data above first/);
+    expect(ACCOUNT_SCREEN).toContain('Cancellation deadline:');
+    expect(ACCOUNT_SCREEN).not.toContain('Erasure is scheduled for');
   });
 
   it('asks before it acts, with the destructive choice marked as one', () => {

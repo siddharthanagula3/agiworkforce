@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import Link from 'next/link';
 import { Globe, Share2, TerminalSquare } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
@@ -15,7 +16,7 @@ import { formatRelativeTime } from '@shared/utils/format';
 import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_COPY, CODE_ROUTES } from './code-surface';
 import { CodeTranscriptBody } from './components/CodeTranscript';
-import { cloudCodeApi } from './services/cloud-code-api';
+import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
 import styles from './CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -31,21 +32,36 @@ export interface SharedCodeSessionPageProps {
   api?: CloudCodeApi;
 }
 
-export function SharedCodeSessionPage({ token, api = cloudCodeApi }: SharedCodeSessionPageProps) {
+export function SharedCodeSessionPage(props: SharedCodeSessionPageProps) {
+  const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  return (
+    <OwnedSharedCodeSessionPage
+      key={JSON.stringify([isLoaded, isSignedIn, userId, sessionId, props.token])}
+      {...props}
+    />
+  );
+}
+
+function OwnedSharedCodeSessionPage({ token, api: injectedApi }: SharedCodeSessionPageProps) {
+  const { api, capture } = useCloudCodeAuthority(injectedApi);
   const [state, setState] = useState<SharedState>({ status: 'loading' });
 
   useEffect(() => {
     const controller = new AbortController();
+    const ownsSession = capture();
+    const isCurrent = () => !controller.signal.aborted && ownsSession();
     setState({ status: 'loading' });
     api
       .openShared(token, controller.signal)
-      .then((shared) => setState({ status: 'ready', shared }))
+      .then((shared) => {
+        if (isCurrent()) setState({ status: 'ready', shared });
+      })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!isCurrent()) return;
         setState({ status: 'error', message: toUserMessage(error, CODE_COPY.sharedUnavailable) });
       });
     return () => controller.abort();
-  }, [api, token]);
+  }, [api, capture, token]);
 
   const items = useMemo(
     () =>
@@ -130,6 +146,7 @@ export function SharedCodeSessionPage({ token, api = cloudCodeApi }: SharedCodeS
                         <p className={styles['statusLine']}>{CODE_COPY.sharedEmpty}</p>
                       ) : (
                         <CodeTranscriptBody
+                          readAloudScope={token}
                           items={items}
                           approvals={[]}
                           busy={false}

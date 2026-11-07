@@ -10,6 +10,10 @@ export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
   max: 'Maximum',
 });
 
+export function isEffort(value: unknown): value is Effort {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(EFFORT_LABEL, value);
+}
+
 export const EFFORT_DESCRIPTION: Readonly<Record<Effort, string>> = Object.freeze({
   none: 'No extra reasoning for straightforward replies.',
   minimal: 'Minimal extra reasoning for simple tasks.',

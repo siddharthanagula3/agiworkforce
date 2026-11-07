@@ -63,7 +63,14 @@ async function deleteProviderIdentity(
     return { ok: true };
   } catch (deleteError) {
     const message = deleteError instanceof Error ? deleteError.message : String(deleteError);
-    if (/not\s*found|404/i.test(message)) return { ok: true };
+    if (
+      typeof deleteError === 'object' &&
+      deleteError !== null &&
+      'status' in deleteError &&
+      deleteError.status === 404
+    ) {
+      return { ok: true };
+    }
     return { ok: false, error: message };
   }
 }

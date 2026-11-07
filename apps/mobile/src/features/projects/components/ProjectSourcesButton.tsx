@@ -33,10 +33,9 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
     <>
       <PressableBox
         onPress={() => setOpen(true)}
-        hitSlop={6}
         style={({ pressed }) => ({
-          width: 32,
-          height: 32,
+          width: 44,
+          height: 44,
           borderRadius: radii.full,
           alignItems: 'center',
           justifyContent: 'center',
@@ -68,8 +67,7 @@ export function ProjectSourcesButton({ projectId }: ProjectSourcesButtonProps) {
               onPress={close}
               accessibilityRole="button"
               accessibilityLabel="Close project sources"
-              hitSlop={8}
-              style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={20} color={colors.textSecondary} />
             </PressableBox>

@@ -387,7 +387,7 @@ async function handlePatch(request: NextRequest) {
 
   const db = getNeonDb();
 
-  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!activeOrganizationId) {
     throw createError.notFound('Select a workspace before updating its settings');
   }
@@ -482,7 +482,7 @@ async function handleDelete(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  const activeOrganizationId = await resolveActiveOrganizationId(db, userId);
+  const activeOrganizationId = await resolveActiveOrganizationId(db, userId, request);
   if (!activeOrganizationId) {
     throw createError.notFound('Select a workspace before deleting it');
   }
@@ -525,6 +525,11 @@ async function handleDelete(request: NextRequest) {
   }
 
   const existing = await fetchOrganizationDeletionStatus(db, org.id);
+  if (existing.pending && !existing.canCancel) {
+    throw createError.conflict(
+      'Workspace deletion is already scheduled and its cancellation window has closed. The schedule was not changed.',
+    );
+  }
   if (existing.pending && existing.canCancel) {
     return NextResponse.json({
       message: `Workspace deletion is already scheduled for ${existing.scheduledFor}.`,
@@ -540,11 +545,12 @@ async function handleDelete(request: NextRequest) {
         set deletion_requested_at = now(),
             deletion_scheduled_for = $2,
             deletion_requested_by = $3
-      where id = $1`,
+      where id = $1
+        and deletion_scheduled_for is null`,
     [org.id, scheduledFor.toISOString(), userId],
   );
   if (updated === 0) {
-    throw createError.notFound('Workspace not found');
+    throw createError.conflict('Workspace deletion state changed. Refresh before trying again.');
   }
 
   logger.warn({ userId, orgId: org.id }, 'Workspace deletion scheduled');

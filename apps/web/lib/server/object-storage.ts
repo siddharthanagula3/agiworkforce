@@ -211,6 +211,7 @@ async function getBoundedObjectFromBucket(
     }
   } finally {
     await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
   return { data: Buffer.concat(chunks), contentType: stream.contentType, etag: head.etag };
 }

@@ -23,10 +23,17 @@ import {
 import { validateAttachmentMeta } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
-import { API_URL } from '@/lib/constants';
+import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { guardedFetch } from '@/lib/egressGuard';
 import { api } from '@/services/api';
 import { getAuthHeaders } from '@/services/authSession';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+  assertCloudAccountEpochCurrent,
+  subscribeCloudAccountEpochChange,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { markProjectForSync } from '@/services/cloudSyncEngine';
@@ -63,7 +70,11 @@ interface ProjectState {
     source: Omit<ProjectSource, 'id' | 'addedAt'>,
     options?: ProjectSourceUploadOptions,
   ) => Promise<void>;
-  removeSource: (projectId: string, sourceId: string) => Promise<void>;
+  removeSource: (
+    projectId: string,
+    sourceId: string,
+    accountEpoch?: CloudAccountEpoch | null,
+  ) => Promise<void>;
 }
 
 function generateLocalId(): string {
@@ -90,6 +101,7 @@ export interface ProjectSourceUploadProgress {
 }
 
 export interface ProjectSourceUploadOptions {
+  accountEpoch?: CloudAccountEpoch | null;
   signal?: AbortSignal;
   onProgress?: (progress: ProjectSourceUploadProgress) => void;
 }
@@ -122,15 +134,21 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-async function sha256HexOfFile(uri: string, byteCount: number): Promise<string> {
+async function sha256HexOfFile(
+  uri: string,
+  byteCount: number,
+  assertCurrent: () => void,
+): Promise<string> {
   const hasher = sha256.create();
   for (let offset = 0; offset < byteCount; offset += KNOWLEDGE_HASH_CHUNK_BYTES) {
+    assertCurrent();
     const length = Math.min(KNOWLEDGE_HASH_CHUNK_BYTES, byteCount - offset);
     const chunk = await readAsStringAsync(uri, {
       encoding: EncodingType.Base64,
       position: offset,
       length,
     });
+    assertCurrent();
     hasher.update(base64ToBytes(chunk));
   }
   return Array.from(hasher.digest())
@@ -138,119 +156,173 @@ async function sha256HexOfFile(uri: string, byteCount: number): Promise<string> 
     .join('');
 }
 
-async function releasePresignedUpload(projectId: string, storageKey: string): Promise<void> {
+async function releasePresignedUpload(
+  projectId: string,
+  storageKey: string,
+  accountEpoch: CloudAccountEpoch,
+  authHeaders: Record<string, string>,
+): Promise<void> {
+  if (!isCloudAccountEpochCurrent(accountEpoch) || !authHeaders.Authorization) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
+  const unsubscribe = subscribeCloudAccountEpochChange(() => {
+    if (!isCloudAccountEpochCurrent(accountEpoch)) controller.abort();
+  });
   try {
     await guardedFetch(`${API_URL}${MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH}`, {
       method: 'DELETE',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
-        ...(await getAuthHeaders()),
+        ...authHeaders,
       },
       body: JSON.stringify({ kind: 'knowledge-file', projectId, storageKey }),
     });
   } catch (error) {
     if (__DEV__) console.warn('[projectStore] orphaned knowledge upload cleanup failed:', error);
+  } finally {
+    clearTimeout(timeout);
+    unsubscribe();
   }
 }
 
 export const cloudProjectSources = {
-  async list(projectId: string): Promise<ManagedCloudProjectKnowledgeFile[]> {
-    const response = await api.get<unknown>(managedCloudProjectKnowledgePath(projectId));
+  async list(
+    projectId: string,
+    accountEpoch = captureCloudAccountEpoch(),
+  ): Promise<ManagedCloudProjectKnowledgeFile[]> {
+    assertCloudAccountEpochCurrent(accountEpoch);
+    const response = await api.get<unknown>(managedCloudProjectKnowledgePath(projectId), {
+      accountEpoch,
+    });
+    assertCloudAccountEpochCurrent(accountEpoch);
     return ManagedCloudProjectKnowledgeListResponseSchema.parse(response).files;
   },
 
   async upload(
     projectId: string,
     source: Omit<ProjectSource, 'id' | 'addedAt'>,
-    { signal, onProgress }: ProjectSourceUploadOptions = {},
+    { signal, onProgress, accountEpoch }: ProjectSourceUploadOptions = {},
   ): Promise<ManagedCloudProjectKnowledgeFile> {
-    const throwIfCancelled = () => {
-      if (signal?.aborted) throw new ProjectSourceCancelledError(source.name);
+    const account = accountEpoch === undefined ? captureCloudAccountEpoch() : accountEpoch;
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    const assertCurrent = () => {
+      assertCloudAccountEpochCurrent(account);
+      if (controller.signal.aborted) throw new ProjectSourceCancelledError(source.name);
     };
-    throwIfCancelled();
-    const info = await getInfoAsync(source.uri);
-    if (!info.exists || info.isDirectory) {
-      throw new ProjectSourceError(`"${source.name}" could not be read from this device.`);
-    }
-    const byteCount = info.size || source.size;
-    const validation = validateAttachmentMeta(source.name, source.mimeType, byteCount);
-    if (!validation.ok) throw new ProjectSourceError(validation.message);
-
-    const checksumSha256 = await sha256HexOfFile(source.uri, byteCount);
-    throwIfCancelled();
-    const presign = ManagedCloudProjectKnowledgePresignResponseSchema.parse(
-      await api.post<unknown>(
-        MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
-        ManagedCloudProjectKnowledgePresignRequestSchema.parse({
-          kind: 'knowledge-file',
-          uploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
-          projectId,
-          fileName: source.name,
-          mimeType: source.mimeType,
-          byteCount,
-          checksumSha256,
-        }),
-      ),
-    );
-
-    const uploadUrl = new URL(presign.uploadUrl);
-    if (uploadUrl.protocol !== 'https:' || uploadUrl.username !== '' || uploadUrl.password !== '') {
-      throw new ProjectSourceError(`Refusing an insecure upload destination for "${source.name}".`);
-    }
-    if (signal?.aborted) {
-      await releasePresignedUpload(projectId, presign.storageKey);
-      throwIfCancelled();
-    }
-
-    const task = createUploadTask(
-      uploadUrl.toString(),
-      source.uri,
-      {
-        httpMethod: 'PUT',
-        uploadType: FileSystemUploadType.BINARY_CONTENT,
-        headers: presign.uploadHeaders,
-      },
-      (data) =>
-        onProgress?.({
-          bytesSent: data.totalBytesSent,
-          totalBytes: data.totalBytesExpectedToSend,
-        }),
-    );
-    const cancelTask = () => {
-      task.cancelAsync().catch(() => undefined);
-    };
-    signal?.addEventListener('abort', cancelTask);
-    let putResult: Awaited<ReturnType<typeof task.uploadAsync>> = null;
-    let uploadError: unknown = null;
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
+    const unsubscribe = subscribeCloudAccountEpochChange(() => {
+      if (!isCloudAccountEpochCurrent(account)) cancel();
+    });
+    let storageKey: string | null = null;
+    let cleanupHeaders: Record<string, string> = {};
+    let registrationDispatched = false;
+    let acceptingProgress = true;
     try {
-      putResult = await task.uploadAsync();
-    } catch (error) {
-      uploadError = error;
-    } finally {
-      signal?.removeEventListener('abort', cancelTask);
-    }
-    if (signal?.aborted) {
-      await releasePresignedUpload(projectId, presign.storageKey);
-      throwIfCancelled();
-    }
-    if (uploadError || !putResult || putResult.status < 200 || putResult.status >= 300) {
-      await releasePresignedUpload(projectId, presign.storageKey);
-      throw new ProjectSourceError(`Uploading "${source.name}" to storage failed. Please retry.`);
-    }
+      assertCurrent();
+      const info = await getInfoAsync(source.uri);
+      assertCurrent();
+      if (!info.exists || info.isDirectory) {
+        throw new ProjectSourceError(`"${source.name}" could not be read from this device.`);
+      }
+      const byteCount = info.size || source.size;
+      const validation = validateAttachmentMeta(source.name, source.mimeType, byteCount);
+      if (!validation.ok) throw new ProjectSourceError(validation.message);
 
-    try {
-      const { file } = ManagedCloudProjectKnowledgeRegisterResponseSchema.parse(
+      const checksumSha256 = await sha256HexOfFile(source.uri, byteCount, assertCurrent);
+      assertCurrent();
+      cleanupHeaders = await getAuthHeaders();
+      assertCurrent();
+      const requestOptions = { signal: controller.signal, accountEpoch: account };
+      const presign = ManagedCloudProjectKnowledgePresignResponseSchema.parse(
         await api.post<unknown>(
-          managedCloudProjectKnowledgePath(projectId),
-          ManagedCloudProjectKnowledgeRegisterRequestSchema.parse({
+          MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH,
+          ManagedCloudProjectKnowledgePresignRequestSchema.parse({
+            kind: 'knowledge-file',
+            uploadProtocolVersion: PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION,
+            projectId,
             fileName: source.name,
             mimeType: source.mimeType,
             byteCount,
             checksumSha256,
-            sourceSurface: 'mobile',
-            storageUri: presign.storageKey,
           }),
+          requestOptions,
+        ),
+      );
+      storageKey = presign.storageKey;
+      assertCurrent();
+      const uploadUrl = new URL(presign.uploadUrl);
+      if (
+        uploadUrl.protocol !== 'https:' ||
+        uploadUrl.username !== '' ||
+        uploadUrl.password !== ''
+      ) {
+        throw new ProjectSourceError(
+          `Refusing an insecure upload destination for "${source.name}".`,
+        );
+      }
+      const task = createUploadTask(
+        uploadUrl.toString(),
+        source.uri,
+        {
+          httpMethod: 'PUT',
+          uploadType: FileSystemUploadType.BINARY_CONTENT,
+          headers: presign.uploadHeaders,
+        },
+        (data) => {
+          if (
+            !acceptingProgress ||
+            controller.signal.aborted ||
+            !isCloudAccountEpochCurrent(account)
+          )
+            return;
+          onProgress?.({
+            bytesSent: data.totalBytesSent,
+            totalBytes: data.totalBytesExpectedToSend,
+          });
+        },
+      );
+      const cancelTask = () => {
+        void Promise.resolve()
+          .then(() => task.cancelAsync())
+          .catch(() => undefined);
+      };
+      controller.signal.addEventListener('abort', cancelTask, { once: true });
+      let putResult;
+      try {
+        assertCurrent();
+        putResult = await task.uploadAsync();
+      } catch {
+        assertCurrent();
+        throw new ProjectSourceError(`Uploading "${source.name}" to storage failed. Please retry.`);
+      } finally {
+        acceptingProgress = false;
+        controller.signal.removeEventListener('abort', cancelTask);
+      }
+      assertCurrent();
+      if (!putResult || putResult.status < 200 || putResult.status >= 300) {
+        throw new ProjectSourceError(`Uploading "${source.name}" to storage failed. Please retry.`);
+      }
+
+      const registration = ManagedCloudProjectKnowledgeRegisterRequestSchema.parse({
+        fileName: source.name,
+        mimeType: source.mimeType,
+        byteCount,
+        checksumSha256,
+        sourceSurface: 'mobile',
+        storageUri: presign.storageKey,
+      });
+      assertCurrent();
+      // A dispatched registration may have committed even when its response is lost.
+      registrationDispatched = true;
+      const { file } = ManagedCloudProjectKnowledgeRegisterResponseSchema.parse(
+        await api.post<unknown>(
+          managedCloudProjectKnowledgePath(projectId),
+          registration,
+          requestOptions,
         ),
       );
       if (
@@ -261,15 +333,32 @@ export const cloudProjectSources = {
       ) {
         throw new ProjectSourceError('The server returned mismatched project knowledge metadata.');
       }
+      assertCloudAccountEpochCurrent(account);
       return file;
     } catch (error) {
-      await releasePresignedUpload(projectId, presign.storageKey);
+      if (storageKey && !registrationDispatched && isCloudAccountEpochCurrent(account)) {
+        await releasePresignedUpload(projectId, storageKey, account, cleanupHeaders);
+      }
+      assertCloudAccountEpochCurrent(account);
+      if (controller.signal.aborted) throw new ProjectSourceCancelledError(source.name);
       throw error;
+    } finally {
+      acceptingProgress = false;
+      unsubscribe();
+      signal?.removeEventListener('abort', cancel);
     }
   },
 
-  async remove(projectId: string, fileId: string): Promise<void> {
-    await api.delete<unknown>(managedCloudProjectKnowledgeFilePath(projectId, fileId));
+  async remove(
+    projectId: string,
+    fileId: string,
+    accountEpoch = captureCloudAccountEpoch(),
+  ): Promise<void> {
+    assertCloudAccountEpochCurrent(accountEpoch);
+    await api.delete<unknown>(managedCloudProjectKnowledgeFilePath(projectId, fileId), {
+      accountEpoch,
+    });
+    assertCloudAccountEpochCurrent(accountEpoch);
   },
 };
 
@@ -398,6 +487,12 @@ export const useProjectStore = create<ProjectState>()(
       addSource: async (projectId, source, options) => {
         if (options?.signal?.aborted) throw new ProjectSourceCancelledError(source.name);
         const target = resolveProjectSourceTarget(projectId);
+        if (options?.accountEpoch !== undefined) {
+          assertCloudAccountEpochCurrent(options.accountEpoch);
+          if (target !== 'cloud') {
+            throw new ProjectSourceError('This Cloud project is no longer available.');
+          }
+        }
         if (target === 'cloud') {
           await cloudProjectSources.upload(projectId, source, options);
           return;
@@ -422,10 +517,16 @@ export const useProjectStore = create<ProjectState>()(
         }));
       },
 
-      removeSource: async (projectId, sourceId) => {
+      removeSource: async (projectId, sourceId, accountEpoch) => {
         const target = resolveProjectSourceTarget(projectId);
+        if (accountEpoch !== undefined) {
+          assertCloudAccountEpochCurrent(accountEpoch);
+          if (target !== 'cloud') {
+            throw new ProjectSourceError('This Cloud project is no longer available.');
+          }
+        }
         if (target === 'cloud') {
-          await cloudProjectSources.remove(projectId, sourceId);
+          await cloudProjectSources.remove(projectId, sourceId, accountEpoch);
           return;
         }
         if (target === 'unknown') {

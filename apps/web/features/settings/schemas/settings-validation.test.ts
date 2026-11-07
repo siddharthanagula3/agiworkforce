@@ -110,6 +110,21 @@ describe('Settings Validation Schemas', () => {
       expect(result.success).toBe(true);
     });
 
+    it.each([true, false])(
+      'strips the legacy factor mirror (%s) from parsed timeout settings',
+      (enabled) => {
+        expect(
+          securitySettingsSchema.parse({ session_timeout: 60, two_factor_enabled: enabled }),
+        ).toEqual({ session_timeout: 60 });
+      },
+    );
+
+    it.each([15, 1440])('accepts the timeout boundary %s without a factor mirror', (timeout) => {
+      expect(securitySettingsSchema.parse({ session_timeout: timeout })).toEqual({
+        session_timeout: timeout,
+      });
+    });
+
     it('should reject session timeout below minimum', () => {
       const invalidSettings = {
         two_factor_enabled: false,

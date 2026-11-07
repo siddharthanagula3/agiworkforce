@@ -5,6 +5,7 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 
 interface PendingClear {
   clearedAt: number;
+  markerId?: string;
 }
 
 function key(conversationId: string): string {
@@ -12,10 +13,17 @@ function key(conversationId: string): string {
 }
 
 export function markPendingDraftClear(conversationId: string): boolean {
-  return setItem<PendingClear>(key(conversationId), { clearedAt: Date.now() });
+  try {
+    return setItem<PendingClear>(key(conversationId), {
+      clearedAt: Date.now(),
+      markerId: crypto.randomUUID(),
+    });
+  } catch {
+    return false;
+  }
 }
 
-export function hasPendingDraftClear(conversationId: string): boolean {
+export function readPendingDraftClearToken(conversationId: string): string | null {
   const record = getItem<PendingClear | null>(key(conversationId), null);
   if (
     !record ||
@@ -25,11 +33,18 @@ export function hasPendingDraftClear(conversationId: string): boolean {
     Date.now() - record.clearedAt > MAX_AGE_MS
   ) {
     removeItem(key(conversationId));
-    return false;
+    return null;
   }
-  return true;
+  return JSON.stringify(record);
 }
 
-export function clearPendingDraftClear(conversationId: string): void {
+export function hasPendingDraftClear(conversationId: string): boolean {
+  return readPendingDraftClearToken(conversationId) !== null;
+}
+
+export function clearPendingDraftClear(conversationId: string, expectedToken?: string): void {
+  if (expectedToken !== undefined && readPendingDraftClearToken(conversationId) !== expectedToken) {
+    return;
+  }
   removeItem(key(conversationId));
 }

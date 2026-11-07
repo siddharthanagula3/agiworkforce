@@ -30,6 +30,17 @@ const permissive = policy({
 });
 
 describe('evaluateOrganizationPolicy, managed compute', () => {
+  it.each([undefined, null, 'US'])('denies active-empty countries with evidence %s', (country) => {
+    const decision = evaluateOrganizationPolicy(
+      {
+        ...permissive,
+        controls: { ...permissive.controls, allowedCountries: [], countryRestrictionActive: true },
+      },
+      { resource: 'managed_compute', surface: 'web', country },
+    );
+    expect(decision.code).toBe('region_not_allowed');
+  });
+
   it('denies when the administrator has turned managed compute off', () => {
     const decision = evaluateOrganizationPolicy(policy({ allowManagedCompute: false }), {
       resource: 'managed_compute',

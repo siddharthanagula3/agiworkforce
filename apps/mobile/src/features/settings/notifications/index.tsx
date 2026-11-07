@@ -606,7 +606,11 @@ export default function NotificationPreferencesScreen() {
           <Switch
             accessibilityLabel="Agent Run Push"
             value={agentActivityPush.enabled}
-            disabled={agentActivityPush.status === 'local'}
+            disabled={
+              !agentActivityPush.ready ||
+              agentActivityPush.status === 'local' ||
+              agentActivityPush.status === 'saving'
+            }
             onValueChange={agentActivityPush.setEnabled}
           />
         </View>
@@ -624,6 +628,20 @@ export default function NotificationPreferencesScreen() {
                   ? 'Saved to your account, but this device stays silent until notifications are allowed in Settings.'
                   : 'Applied by the server before it sends, on every device on this account.'}
       </Text>
+
+      {agentActivityPush.canRetry ? (
+        <Pressable
+          onPress={agentActivityPush.retry}
+          accessibilityRole="button"
+          accessibilityLabel="Retry agent run notifications"
+          className="mt-2 px-3 py-2.5 rounded-xl items-center"
+          style={{ backgroundColor: colors.accentSurface }}
+        >
+          <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+            Retry
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View className="mt-6 mb-2">
         <Text

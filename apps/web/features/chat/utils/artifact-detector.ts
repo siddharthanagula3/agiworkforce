@@ -13,9 +13,19 @@ import {
   type ArtifactDerivationPolicy,
 } from '@agiworkforce/artifacts';
 import type { SharedArtifact } from '@agiworkforce/types';
+import { parseChartArtifact } from '@agiworkforce/types/chart-spec';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 
 export { extractCodeBlocks, extractArtifactTitle };
+
+export function isInlineVisualizationFence(language: string | undefined, content: string): boolean {
+  const normalized = language?.toLowerCase();
+  return (
+    normalized === 'mermaid' ||
+    normalized === 'chart' ||
+    (normalized === 'json' && parseChartArtifact(content).ok)
+  );
+}
 export interface ExtractArtifactsContext {
   conversationId?: string;
   messageId?: string;
@@ -76,6 +86,7 @@ export function removeArtifactBlocks(
 ): string {
   return removeArtifactBlocksShared(markdown, artifacts, {
     include: artifactInclusionForPolicy(policy),
+    keepInline: (block) => isInlineVisualizationFence(block.language, block.content),
   });
 }
 
@@ -86,6 +97,7 @@ export function splitProseAroundArtifacts(
 ): ArtifactProseSplit {
   return splitProseAroundArtifactsShared(markdown, artifacts, {
     include: artifactInclusionForPolicy(policy),
+    keepInline: (block) => isInlineVisualizationFence(block.language, block.content),
   });
 }
 

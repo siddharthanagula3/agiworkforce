@@ -18,14 +18,27 @@ import {
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentEventSource } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
+import {
+  captureCloudAccountEpoch,
+  assertCloudAccountEpochCurrent,
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
-import { ApiHttpError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import {
+  ApiHttpError,
+  CloudCredentialUnavailableError,
+  httpErrorFrom,
+  parseJsonBody,
+  rateLimitErrorFrom,
+} from './apiErrors';
 import { ensureCloudSendConsent, ensureLlmGateOpen } from './llmGate';
 import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { isFreeQuotaTurnModelId } from '@/src/features/model-picker/service';
 import { fastSpeedForModel } from '@/src/features/model-picker/fastMode';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
@@ -156,6 +169,28 @@ export interface StreamCallbacks {
   onModelSubstitution?: (substitution: ModelSubstitution) => void;
 }
 
+function accountStreamCallbacks(
+  callbacks: StreamCallbacks,
+  account: CloudAccountEpoch | null,
+): StreamCallbacks {
+  const guard =
+    <Args extends unknown[]>(callback: ((...args: Args) => void) | undefined) =>
+    (...args: Args): void => {
+      if (isCloudAccountEpochCurrent(account)) callback?.(...args);
+    };
+  return {
+    onDelta: guard(callbacks.onDelta),
+    onDone: guard(callbacks.onDone),
+    onError: guard(callbacks.onError),
+    onReconnecting: guard(callbacks.onReconnecting),
+    onActivity: guard(callbacks.onActivity),
+    onRunReference: guard(callbacks.onRunReference),
+    onAttachmentsTruncated: guard(callbacks.onAttachmentsTruncated),
+    onMemoryCitations: guard(callbacks.onMemoryCitations),
+    onModelSubstitution: guard(callbacks.onModelSubstitution),
+  };
+}
+
 const MAX_RECONNECT_ATTEMPTS = 3;
 
 const RECONNECT_DELAYS = [1_000, 2_500, 5_000];
@@ -215,23 +250,91 @@ function processSseData(data: string, callbacks: StreamCallbacks): boolean {
 
 const COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
 
-export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
-  return createManagedCloudAgentRunClient({
+export function createMobileCloudAgentRunClient(
+  account: CloudAccountEpoch | null = captureCloudAccountEpoch(),
+): ManagedCloudAgentRunClient {
+  const assertCurrent = () => assertCloudAccountEpochCurrent(account);
+  const complete = async <T>(operation: () => Promise<T>): Promise<T> => {
+    assertCurrent();
+    try {
+      return await operation();
+    } finally {
+      assertCurrent();
+    }
+  };
+  const client = createManagedCloudAgentRunClient({
     baseUrl: API_URL,
-    getAuthToken,
-    decorateMutationHeaders: (headers) => ({
-      ...headers,
-      'Content-Type': 'application/json',
-      ...platformRequestHeaders(),
-    }),
+    getAuthToken: () =>
+      complete(async () => {
+        const token = await getAuthToken();
+        assertCurrent();
+        if (!token) throw httpErrorFrom(401, '');
+        return token;
+      }),
+    decorateMutationHeaders: (headers) => {
+      assertCurrent();
+      return {
+        ...headers,
+        'Content-Type': 'application/json',
+        ...platformRequestHeaders(),
+      };
+    },
     fetchImpl: async (input, init) => {
+      assertCurrent();
       const response = isDetachedResume(input)
         ? await guardedFetch(input, init, { stream: true })
         : await guardedFetch(input, init);
-      if (response.status === 403) await noticeRunRefusal(response);
+      assertCurrent();
+      if (response.status === 403) await noticeRunRefusal(response, account);
+      assertCurrent();
       return response;
     },
+    wait: (ms, signal) =>
+      complete(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            if (signal?.aborted) {
+              reject(new AbortError('Run follow cancelled'));
+              return;
+            }
+            const onAbort = () => {
+              clearTimeout(timer);
+              signal?.removeEventListener('abort', onAbort);
+              reject(new AbortError('Run follow cancelled'));
+            };
+            const timer = setTimeout(() => {
+              signal?.removeEventListener('abort', onAbort);
+              resolve();
+            }, ms);
+            signal?.addEventListener('abort', onAbort, { once: true });
+          }),
+      ),
   });
+  return {
+    listRuns: (...args) => complete(() => client.listRuns(...args)),
+    getRun: (...args) => complete(() => client.getRun(...args)),
+    cancelRun: (...args) => complete(() => client.cancelRun(...args)),
+    resumeRun: (...args) => complete(() => client.resumeRun(...args)),
+    answerRunInput: (...args) => complete(() => client.answerRunInput(...args)),
+    pauseRun: (...args) => complete(() => client.pauseRun(...args)),
+    resumePausedRun: (...args) => complete(() => client.resumePausedRun(...args)),
+    steerRun: (...args) => complete(() => client.steerRun(...args)),
+    withdrawSteer: (...args) => complete(() => client.withdrawSteer(...args)),
+    followRun: (runId, options = {}) =>
+      complete(() =>
+        client.followRun(runId, {
+          ...options,
+          onEvent: (event) =>
+            complete(async () => {
+              await options.onEvent?.(event);
+            }),
+          onSnapshot: (snapshot) =>
+            complete(async () => {
+              await options.onSnapshot?.(snapshot);
+            }),
+        }),
+      ),
+  };
 }
 
 /**
@@ -240,13 +343,17 @@ export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
  * them too. The caller still sees the refusal; this makes the app act on it as
  * it does for a turn, instead of showing a bare 403.
  */
-async function noticeRunRefusal(response: Response): Promise<void> {
+async function noticeRunRefusal(
+  response: Response,
+  account: CloudAccountEpoch | null,
+): Promise<void> {
   const text = await response
     .clone()
     .text()
     .catch(() => '');
+  assertCloudAccountEpochCurrent(account);
   streamAuthRefusal(403, text);
-  if (isTermsRefusal(text)) {
+  if (isCloudAccountEpochCurrent(account) && isTermsRefusal(text)) {
     const terms = useTermsAcceptanceStore.getState();
     if (terms.userId && terms.status !== 'checking') void terms.recheck(terms.userId);
   }
@@ -355,10 +462,13 @@ async function attemptStream(
     | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
+  account: CloudAccountEpoch,
   path: string = COMPLETIONS_PATH,
   sessionRecovered = false,
 ): Promise<boolean> {
+  assertCloudAccountEpochCurrent(account);
   const token = await getAuthToken();
+  assertCloudAccountEpochCurrent(account);
   if (signal.aborted) throw new AbortError('Stream cancelled before network egress');
   if (!token) throw httpErrorFrom(401, '');
 
@@ -376,6 +486,8 @@ async function attemptStream(
   const deviceHostHeaders =
     path === FREE_QUOTA_COMPLETIONS_PATH ? {} : await phoneDeviceHostHeaders();
 
+  assertCloudAccountEpochCurrent(account);
+  if (signal.aborted) throw new AbortError('Stream cancelled before network egress');
   const response = await guardedFetch(
     `${API_URL}${path}`,
     {
@@ -403,12 +515,16 @@ async function attemptStream(
     { stream: true },
   );
 
+  assertCloudAccountEpochCurrent(account);
   if (!response.ok) {
     const text = await response.text();
+    assertCloudAccountEpochCurrent(account);
 
     if (response.status === 401 && !sessionRecovered && !signal.aborted) {
-      if (await recoverStreamSession()) {
-        return attemptStream(body, callbacks, signal, path, true);
+      const recovered = await recoverStreamSession(account);
+      assertCloudAccountEpochCurrent(account);
+      if (recovered) {
+        return attemptStream(body, callbacks, signal, account, path, true);
       }
     }
 
@@ -465,13 +581,18 @@ async function attemptStream(
     if (memoryCitations) callbacks.onMemoryCitations?.(memoryCitations);
     const substitution = readModelSubstitution(response.headers);
     if (substitution) callbacks.onModelSubstitution?.(substitution);
+    assertCloudAccountEpochCurrent(account);
     surfaceTermsNotice(response.headers);
   }
 
   for await (const event of readServerSentEvents(response, {
     acceptUnterminatedFinalFrame: true,
-    onChunk: () => callbacks.onActivity?.(),
+    onChunk: () => {
+      assertCloudAccountEpochCurrent(account);
+      callbacks.onActivity?.();
+    },
   })) {
+    assertCloudAccountEpochCurrent(account);
     if (processSseData(event.data, callbacks)) {
       callbacks.onDone();
       return true;
@@ -485,16 +606,23 @@ export async function streamFreeQuotaChat(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  const account = captureCloudAccountEpoch();
+  if (!account) {
+    callbacks.onError(new CloudCredentialUnavailableError());
+    return;
+  }
+  callbacks = accountStreamCallbacks(callbacks, account);
   try {
-    const offering = getProviderOffering(body.model);
-    if (offering?.category !== 'chat' || offering.quotaProbeProtocol !== 'chat') {
-      callbacks.onError(new Error('This model is not a provider-funded Free chat offering.'));
+    assertCloudAccountEpochCurrent(account);
+    if (!isFreeQuotaTurnModelId(body.model)) {
+      callbacks.onError(new Error('This model is not a provider-funded Free offering.'));
       return;
     }
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
     });
     await ensureCloudSendConsent();
+    assertCloudAccountEpochCurrent(account);
     const timeoutController = new AbortController();
     let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
     const combinedSignal = signal
@@ -509,7 +637,13 @@ export async function streamFreeQuotaChat(
       },
     };
     try {
-      await attemptStream(body, timedCallbacks, combinedSignal, FREE_QUOTA_COMPLETIONS_PATH);
+      await attemptStream(
+        body,
+        timedCallbacks,
+        combinedSignal,
+        account,
+        FREE_QUOTA_COMPLETIONS_PATH,
+      );
     } catch (error) {
       if (signal?.aborted) return;
       callbacks.onError(
@@ -574,15 +708,23 @@ export async function streamChat(
   options: StreamChatOptions = {},
 ): Promise<void> {
   if ('assistant_message_id' in body) return streamFreeQuotaChat(body, callbacks, signal);
+  const account = captureCloudAccountEpoch();
+  if (!account) {
+    callbacks.onError(new CloudCredentialUnavailableError());
+    return;
+  }
+  callbacks = accountStreamCallbacks(callbacks, account);
   if (getProviderOffering(body.model)) {
     callbacks.onError(new Error('Provider-funded Free models require the Free chat route.'));
     return;
   }
   try {
+    assertCloudAccountEpochCurrent(account);
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
     });
     await ensureCloudSendConsent();
+    assertCloudAccountEpochCurrent(account);
     ensureLlmGateOpen(resolveProviderFromModel(body.model));
   } catch (err) {
     callbacks.onError(err instanceof Error ? err : new Error(String(err)));
@@ -647,7 +789,7 @@ export async function streamChat(
 
   const followDurableRun = async (): Promise<void> => {
     if (!currentRunReference) throw new Error('Managed Cloud run handle is unavailable');
-    const client = createMobileCloudAgentRunClient();
+    const client = createMobileCloudAgentRunClient(account);
     const followed = await client.followRun(currentRunReference.runId, {
       afterSequence: currentRunReference.lastSequence,
       signal: combinedSignal,
@@ -691,6 +833,7 @@ export async function streamChat(
   };
 
   const recoverFromDurableRun = async (reconnectAttempt: number): Promise<boolean> => {
+    if (!isCloudAccountEpochCurrent(account)) return true;
     if (!currentRunReference) return false;
     callbacks.onReconnecting?.(reconnectAttempt);
     resetTimeoutForDurableFollow();
@@ -709,6 +852,10 @@ export async function streamChat(
   };
 
   for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+    if (!isCloudAccountEpochCurrent(account)) {
+      clearTimeout(timeoutId);
+      return;
+    }
     if (combinedSignal.aborted) {
       clearTimeout(timeoutId);
       if (!signal?.aborted) {
@@ -741,7 +888,7 @@ export async function streamChat(
         clearTimeout(timeoutId);
       });
 
-      if (combinedSignal.aborted) {
+      if (!isCloudAccountEpochCurrent(account) || combinedSignal.aborted) {
         clearTimeout(timeoutId);
         if (!signal?.aborted) {
           callbacks.onError(
@@ -760,7 +907,7 @@ export async function streamChat(
     }
 
     try {
-      const completed = await attemptStream(request, timedCallbacks, combinedSignal);
+      const completed = await attemptStream(request, timedCallbacks, combinedSignal, account);
       if (completed) {
         clearTimeout(timeoutId);
         return;
@@ -768,7 +915,7 @@ export async function streamChat(
       clearTimeout(timeoutId);
       return;
     } catch (err) {
-      if (signal?.aborted) {
+      if (!isCloudAccountEpochCurrent(account) || signal?.aborted) {
         clearTimeout(timeoutId);
         return;
       }
@@ -829,7 +976,14 @@ async function streamCheckpointResume(
   path: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  const account = captureCloudAccountEpoch();
+  if (!account) {
+    callbacks.onError(new CloudCredentialUnavailableError());
+    return;
+  }
+  callbacks = accountStreamCallbacks(callbacks, account);
   try {
+    assertCloudAccountEpochCurrent(account);
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
     });
@@ -861,7 +1015,7 @@ async function streamCheckpointResume(
   };
 
   try {
-    await attemptStream(body, timedCallbacks, combinedSignal, path);
+    await attemptStream(body, timedCallbacks, combinedSignal, account, path);
     clearTimeout(timeoutId);
   } catch (err) {
     clearTimeout(timeoutId);

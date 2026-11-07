@@ -391,6 +391,7 @@ export async function listLibraryAssets(
 export interface MediaAssetForServing {
   id: string;
   userId: string;
+  organizationId: string | null;
   kind: string;
   mimeType: string;
   byteSize: number | null;
@@ -405,7 +406,7 @@ export async function getMediaAssetById(
   db: MediaAssetQueryClient,
 ): Promise<MediaAssetForServing | null> {
   const rows = await db.query<Record<string, unknown>>(
-    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+    `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
             metadata, deleted_at
        from public.media_assets
       where id = $1
@@ -417,6 +418,7 @@ export async function getMediaAssetById(
   return {
     id: String(row['id']),
     userId: String(row['user_id']),
+    organizationId: (row['organization_id'] as string | null) ?? null,
     kind: String(row['kind']),
     mimeType: String(row['mime_type']),
     byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
@@ -432,24 +434,35 @@ export async function getActiveWorkspaceMediaAssetById(
   userId: string,
   id: string,
   db: DatabaseAdapter,
+  options?: { conversationId?: string; organizationId?: string | null },
 ): Promise<MediaAssetForServing | null> {
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId =
+    options?.organizationId === undefined
+      ? await resolveActiveOrganizationId(db, userId)
+      : options.organizationId;
   const rows = await db.query<Record<string, unknown>>(
-    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+    `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
             metadata, deleted_at
        from public.media_assets
       where id = $1
         and user_id = $2
         and organization_id is not distinct from $3::uuid
+        ${options?.conversationId !== undefined ? 'and conversation_id = $4::uuid' : ''}
         and deleted_at is null
       limit 1`,
-    [id, userId, organizationId],
+    [
+      id,
+      userId,
+      organizationId,
+      ...(options?.conversationId !== undefined ? [options.conversationId] : []),
+    ],
   );
   const row = rows[0];
   if (!row) return null;
   return {
     id: String(row['id']),
     userId: String(row['user_id']),
+    organizationId: (row['organization_id'] as string | null) ?? null,
     kind: String(row['kind']),
     mimeType: String(row['mime_type']),
     byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
@@ -494,7 +507,7 @@ export async function getMediaAssetByContentHash(
   temporaryChat = false,
 ): Promise<MediaAssetForServing | null> {
   const rows = await db.query<Record<string, unknown>>(
-    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+    `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
             metadata, deleted_at
        from public.media_assets
       where user_id = $1
@@ -511,6 +524,7 @@ export async function getMediaAssetByContentHash(
   return {
     id: String(row['id']),
     userId: String(row['user_id']),
+    organizationId: (row['organization_id'] as string | null) ?? null,
     kind: String(row['kind']),
     mimeType: String(row['mime_type']),
     byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),
@@ -529,7 +543,7 @@ export async function getMediaAssetByStoragePathname(
   temporaryChat = false,
 ): Promise<MediaAssetForServing | null> {
   const rows = await db.query<Record<string, unknown>>(
-    `select id, user_id, kind, mime_type, byte_size, storage_url, storage_pathname,
+    `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
             metadata, deleted_at
        from public.media_assets
       where user_id = $1
@@ -545,6 +559,7 @@ export async function getMediaAssetByStoragePathname(
   return {
     id: String(row['id']),
     userId: String(row['user_id']),
+    organizationId: (row['organization_id'] as string | null) ?? null,
     kind: String(row['kind']),
     mimeType: String(row['mime_type']),
     byteSize: row['byte_size'] == null ? null : Number(row['byte_size']),

@@ -146,3 +146,13 @@ describe('GET /api/connectors/<ref>/capabilities reports each tool risk tier', (
     ]);
   });
 });
+
+it('passes the request and verified workspace to connector discovery', async () => {
+  const input = request();
+  await GET(input, context());
+  expect(mocks.loadCatalog).toHaveBeenCalledWith('user-1', CONNECTOR_REF, {
+    organizationId: null,
+    request: input,
+    allowSelective: true,
+  });
+});

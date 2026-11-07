@@ -74,12 +74,43 @@ function baseInput(overrides: Record<string, unknown> = {}) {
 }
 
 describe('reserveManagedUsageRequest, organization spend cap', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.readOrganizationPolicy.mockReset();
+    mocks.getOrganizationMonthToDateSpendCents.mockReset();
+  });
 
   it('skips the spend cap check entirely for a personal-scope reservation', async () => {
     await reserveManagedUsageRequest(baseInput());
 
     expect(mocks.readOrganizationPolicy).not.toHaveBeenCalled();
+  });
+
+  it('refuses before reserving when the funding organization lookup throws', async () => {
+    const query = vi.fn().mockRejectedValue(new Error('funding organization unavailable'));
+
+    await expect(reserveManagedUsageRequest(baseInput({ db: { query } }))).rejects.toMatchObject({
+      name: 'ManagedUsageRequestError',
+      message: 'Managed usage billing is temporarily unavailable.',
+      code: 'billing_unavailable',
+      status: 503,
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining(') governing'), ['user-1']);
+    expect(mocks.readOrganizationPolicy).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('reserves when the organization has no policy', async () => {
+    mocks.readOrganizationPolicy.mockResolvedValue(null);
+
+    const reservation = await reserveManagedUsageRequest(
+      baseInput({ organizationId: ORGANIZATION_ID }),
+    );
+
+    expect(reservation.leaseToken).toBe('lease-1');
+    expect(mocks.getOrganizationMonthToDateSpendCents).not.toHaveBeenCalled();
   });
 
   it('skips the spend lookup when the organization has no cap configured', async () => {
@@ -140,24 +171,40 @@ describe('reserveManagedUsageRequest, organization spend cap', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
-  it('fails open and still reserves when the policy read throws', async () => {
+  it('refuses before reserving when the policy read throws', async () => {
     mocks.readOrganizationPolicy.mockRejectedValue(new Error('connection reset'));
 
-    const reservation = await reserveManagedUsageRequest(
-      baseInput({ organizationId: ORGANIZATION_ID }),
-    );
+    const { db, query } = dbStub();
 
-    expect(reservation.leaseToken).toBe('lease-1');
+    await expect(
+      reserveManagedUsageRequest(baseInput({ db, organizationId: ORGANIZATION_ID })),
+    ).rejects.toMatchObject({
+      name: 'ManagedUsageRequestError',
+      message: 'Managed usage billing is temporarily unavailable.',
+      code: 'billing_unavailable',
+      status: 503,
+    });
+
+    expect(query).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
-  it('fails open and still reserves when the spend lookup throws', async () => {
+  it('refuses before reserving when the spend lookup throws', async () => {
     mocks.readOrganizationPolicy.mockResolvedValue({ monthlySpendCapCents: 10_000 });
     mocks.getOrganizationMonthToDateSpendCents.mockRejectedValue(new Error('connection reset'));
 
-    const reservation = await reserveManagedUsageRequest(
-      baseInput({ organizationId: ORGANIZATION_ID }),
-    );
+    const { db, query } = dbStub();
 
-    expect(reservation.leaseToken).toBe('lease-1');
+    await expect(
+      reserveManagedUsageRequest(baseInput({ db, organizationId: ORGANIZATION_ID })),
+    ).rejects.toMatchObject({
+      name: 'ManagedUsageRequestError',
+      message: 'Managed usage billing is temporarily unavailable.',
+      code: 'billing_unavailable',
+      status: 503,
+    });
+
+    expect(query).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });

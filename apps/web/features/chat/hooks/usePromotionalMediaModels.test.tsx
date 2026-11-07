@@ -104,13 +104,14 @@ describe('usePromotionalMediaModels', () => {
   });
 
   it.each([401, 403, 404])(
-    'treats HTTP %s as a plan that is offered no free media, not as a failure',
+    'keeps HTTP %s unknown instead of claiming the offer ended',
     async (status) => {
       vi.stubGlobal('fetch', answer({ error: 'not offered' }, status));
       const { result } = renderHook(() => usePromotionalMediaModels(true));
 
-      await waitFor(() => expect(result.current.status).toBe('ready'));
+      await waitFor(() => expect(result.current.status).toBe('error'));
       expect(result.current.models).toEqual([]);
+      expect(result.current.availability).toEqual({ image: 'unknown', video: 'unknown' });
     },
   );
 
@@ -127,5 +128,43 @@ describe('usePromotionalMediaModels', () => {
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.models.length).toBeGreaterThan(0);
+  });
+  it('hides old account models immediately and ignores its late response', async () => {
+    let finishOld!: (response: Response) => void;
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finishOld = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(Response.json(catalogue({ issuer: 'New account' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook(
+      ({ account }) => usePromotionalMediaModels(true, account),
+      { initialProps: { account: 'old' } },
+    );
+    rerender({ account: 'new' });
+    expect(result.current.models).toEqual([]);
+    await waitFor(() => expect(result.current.issuer).toBe('New account'));
+    await act(async () => {
+      finishOld(Response.json(catalogue({ issuer: 'Old account' })));
+    });
+    expect(result.current.issuer).toBe('New account');
+  });
+
+  it('hides settled models while refreshing rather than offering stale choices', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(catalogue()))
+      .mockImplementationOnce(() => new Promise<Response>(() => undefined));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => usePromotionalMediaModels(true, 'account'));
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    act(() => result.current.refresh());
+    expect(result.current.status).toBe('loading');
+    expect(result.current.models).toEqual([]);
+    expect(result.current.availability.image).toBe('unknown');
   });
 });

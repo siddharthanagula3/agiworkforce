@@ -109,7 +109,7 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   let data = await selectProjectWithConversationCount(db, id, userId, organizationId);
 
   if (!data && organizationId) {
-    const sharedScope = await resolveSharedProjectScope(db, userId);
+    const sharedScope = await resolveSharedProjectScope(db, userId, organizationId);
     if (sharedScope?.organizationId === organizationId) {
       data = await selectSharedProjectWithConversationCount(
         db,

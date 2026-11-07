@@ -49,6 +49,9 @@ export type ConversationShareSummary = z.infer<typeof ConversationShareSummarySc
 
 export const ConversationShareListResponseSchema = z.object({
   shares: z.array(ConversationShareSummarySchema),
+  // Completeness describes this query's inventory, not later concurrent changes;
+  // older servers that omit it cannot establish completeness.
+  complete: z.boolean().optional().default(false),
   workspace: ConversationShareWorkspaceSchema.optional(),
 });
 export type ConversationShareListResponse = z.input<typeof ConversationShareListResponseSchema>;

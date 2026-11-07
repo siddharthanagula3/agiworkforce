@@ -41,6 +41,11 @@ async function loadStreamingService() {
     useWaitlistStore: { getState: () => ({ cloudUnlocked: true }) },
   }));
 
+  const { activateCloudAccount } = jest.requireActual<
+    typeof import('../src/features/auth/services/cloudAccountSession')
+  >('../src/features/auth/services/cloudAccountSession');
+  activateCloudAccount('stream-account-a');
+
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../services/streaming') as typeof import('../services/streaming');
 }
@@ -276,6 +281,35 @@ describe('managed mobile stream routing', () => {
     expect(callbacks.onDone).not.toHaveBeenCalled();
   });
 
+  it.each(['image-sync', 'image-async', 'video-async'] as const)(
+    'admits the canonical %s offering only through the Free endpoint',
+    async (protocol) => {
+      const offering = Object.entries(getProviderOfferings()).find(
+        ([, candidate]) => candidate.quotaProbeProtocol === protocol,
+      );
+      if (!offering) throw new Error(`Expected a ${protocol} offering in the generated catalog.`);
+      const { streamFreeQuotaChat } = await loadStreamingService();
+      const callbacks = { onDelta: jest.fn(), onDone: jest.fn(), onError: jest.fn() };
+      await streamFreeQuotaChat(
+        {
+          model: offering[0],
+          conversation_id: '0190a000-0000-7000-8000-000000000111',
+          assistant_message_id: '0190a000-0000-7000-8000-000000000112',
+          operationId: '0190a000-0000-7000-8000-000000000112',
+          messages: [{ role: 'user', content: 'a lighthouse' }],
+        },
+        callbacks,
+      );
+      expect(ensureCloudSendConsentMock).toHaveBeenCalled();
+      expect(guardedFetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/models/free-quota/completions'),
+        expect.anything(),
+        { stream: true },
+      );
+      expect(callbacks.onError).not.toHaveBeenCalled();
+    },
+  );
+
   it('refuses to send a billed model through the Free quota endpoint', async () => {
     const { streamFreeQuotaChat } = await loadStreamingService();
     const callbacks = { onDelta: jest.fn(), onDone: jest.fn(), onError: jest.fn() };
@@ -294,7 +328,7 @@ describe('managed mobile stream routing', () => {
     expect(guardedFetchMock).not.toHaveBeenCalled();
     expect(callbacks.onError).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'This model is not a provider-funded Free chat offering.',
+        message: 'This model is not a provider-funded Free offering.',
       }),
     );
   });

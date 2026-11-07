@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { devNull, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 
 import {
   RELEASE_READINESS,
@@ -15,9 +17,109 @@ import {
   requireZeroOpenAlerts,
   classifyDeployScope,
   formatGithubOutputs,
+  isAutomaticDeploymentAllowed,
   isEligibleProductionRun,
   selectSurfaceBaseline,
 } from './production-deploy-scope.mjs';
+
+test('automatic deployment allows absent or empty directives and denies every nonempty directive', () => {
+  for (const trailers of ['', 'Reviewed-By: Deployment: hold\n', 'Deployment: \t\n']) {
+    assert.equal(isAutomaticDeploymentAllowed(trailers), true, trailers);
+  }
+  for (const trailers of [
+    'Deployment: hold\n',
+    'dEpLoYmEnT: HoLd\n',
+    'Deployment: unknown\n',
+    'Deployment: allow\n',
+    'Deployment: hold\nDeployment: \n',
+    'Deployment: \nDeployment: future-directive\n',
+  ]) {
+    assert.equal(isAutomaticDeploymentAllowed(trailers), false, trailers);
+  }
+});
+
+test('automatic deployment CLI reads the checked-out HEAD through Git trailer parsing', (t) => {
+  const repository = fs.mkdtempSync(join(tmpdir(), 'automatic-deployment-'));
+  t.after(() => fs.rmSync(repository, { recursive: true, force: true }));
+  const environment = {
+    ...process.env,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_GLOBAL: devNull,
+    GITHUB_SHA: 'f'.repeat(40),
+    GITHUB_REPOSITORY: '',
+    GITHUB_TOKEN: '',
+  };
+  const git = (args, input) => {
+    const result = spawnSync('git', args, {
+      cwd: repository,
+      env: environment,
+      input,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stderr);
+  };
+  git(['init', '--quiet']);
+
+  const script = fileURLToPath(new URL('./production-deploy-scope.mjs', import.meta.url));
+  const invoke = () =>
+    spawnSync(process.execPath, [script, '--automatic-deployment'], {
+      cwd: repository,
+      env: environment,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+  const unreadableHead = invoke();
+  assert.equal(unreadableHead.error, undefined);
+  assert.notEqual(unreadableHead.status, 0);
+  assert.equal(unreadableHead.stdout, 'allowed=false\n');
+
+  for (const [message, allowed] of [
+    ['fix: default commit\n\nOrdinary body text.\n', true],
+    ['Deployment: hold\n', true],
+    ['fix: prose example\n\nThis sentence mentions Deployment: hold as prose.\n', true],
+    ['fix: body example\n\nDeployment: hold\n\nAn ordinary conclusion follows.\n', true],
+    ['fix: code example\n\n```text\nDeployment: hold\n```\n', true],
+    ['fix: unrelated trailer\n\nRelease-Notes: Deployment: hold\n', true],
+    ['fix: empty directive\n\nDeployment: \t\n', true],
+    ['fix: canonical hold\n\nDeployment: hold\n', false],
+    ['fix: normalized hold\n\ndEpLoYmEnT : \tHoLd \t\n', false],
+    ['fix: folded hold\n\nDeployment:\n hold\n', false],
+    ['fix: separator in body\n\nBody.\n\n---\n\nMore body.\n\nDeployment: hold\n', false],
+    ['fix: unknown directive\n\nDeployment: unknown\n', false],
+    ['fix: unsupported allow directive\n\nDeployment: allow\n', false],
+    ['fix: no trailer override\n\nDeployment: hold\nDeployment: \n', false],
+  ]) {
+    git(
+      [
+        '-c',
+        'user.name=Deployment fixture',
+        '-c',
+        'user.email=deployment-fixture@example.invalid',
+        'commit',
+        '--quiet',
+        '--allow-empty',
+        '--cleanup=verbatim',
+        '--file=-',
+      ],
+      message,
+    );
+    const result = invoke();
+    assert.equal(result.error, undefined, message);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, '', message);
+    assert.equal(result.stdout, `allowed=${allowed ? 'true' : 'false'}\n`, message);
+  }
+
+  git(['config', 'trailer.separators', '=']);
+  git(['config', 'trailer.deployment.key', 'Other']);
+  const configuredParser = invoke();
+  assert.equal(configuredParser.error, undefined);
+  assert.equal(configuredParser.status, 0, configuredParser.stderr);
+  assert.equal(configuredParser.stderr, '');
+  assert.equal(configuredParser.stdout, 'allowed=false\n');
+});
 
 test('web-only changes do not spend unrelated expensive runners', () => {
   assert.deepEqual(classifyDeployScope(['apps/web/app/page.tsx']), {

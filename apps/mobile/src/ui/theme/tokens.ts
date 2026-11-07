@@ -4,10 +4,12 @@ import {
   agiMobileHighContrastColors,
   agiMobileNotificationLedColors,
   agiRadii,
+  agiChatTypography,
 } from '@agiworkforce/design-tokens';
 
 export const colors = agiMobileColors.dark;
 export const lightColors = agiMobileColors.light;
+export const chatTypography = agiChatTypography;
 
 export type ColorScheme = {
   [K in keyof typeof agiMobileColors.dark]: string;
