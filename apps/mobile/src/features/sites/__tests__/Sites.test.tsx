@@ -70,7 +70,7 @@ const authorityOptions = () => expect.objectContaining({
 });
 
 const SITE = {
-  token: 'tok_1',
+  token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
   artifactId: 'art-1',
   conversationId: 'conv-1',
   title: 'Pricing calculator',
@@ -81,7 +81,7 @@ const SITE = {
   visibility: 'public',
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-02T00:00:00.000Z',
-  shareUrl: 'https://agiworkforce.com/shared-artifact/tok_1',
+  shareUrl: 'https://agiworkforce.com/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
   sandboxed: true,
 };
 
@@ -147,7 +147,7 @@ describe('published sites on mobile', () => {
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
     useChatAppModeStore.setState({ appMode: 'cloud' });
     mockGet.mockImplementation(routeGet);
-    mockParams.token = 'tok_1';
+    mockParams.token = 'aaaaaaaaaaaaaaaaaaaaaaaa';
   });
 
   it('loads after StrictMode effect replay', async () => {
@@ -192,7 +192,7 @@ describe('published sites on mobile', () => {
       });
       if (transition === 'token') {
         act(() => {
-          mockParams.token = 'tok_1';
+          mockParams.token = 'aaaaaaaaaaaaaaaaaaaaaaaa';
           screen.rerender(<SiteDetailScreen />);
         });
       }
@@ -367,13 +367,13 @@ describe('published sites on mobile', () => {
     fireEvent.press(await findByLabelText('Pricing calculator. Anyone with the link'));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/sites/[token]',
-      params: { token: 'tok_1' },
+      params: { token: 'aaaaaaaaaaaaaaaaaaaaaaaa' },
     });
   });
 
   it('limits a site to the workspace and renames it', async () => {
     mockPatch.mockResolvedValue({
-      token: 'tok_1',
+      token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
       shareUrl: SITE.shareUrl,
       title: 'Pricing',
       visibility: 'organization',
@@ -383,28 +383,70 @@ describe('published sites on mobile', () => {
     const { findByText, findByLabelText, getByText } = render(<SiteDetailScreen />);
     fireEvent.press(await findByText('Only your workspace'));
     await waitFor(() =>
-      expect(mockPatch).toHaveBeenCalledWith('/api/artifacts/publish/tok_1', {
+      expect(mockPatch).toHaveBeenCalledWith('/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa', {
         visibility: 'organization',
       }, authorityOptions()),
     );
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(6));
     fireEvent.changeText(await findByLabelText('Site name'), 'Pricing tool');
     fireEvent.press(getByText('Rename'));
     await waitFor(() =>
-      expect(mockPatch).toHaveBeenLastCalledWith('/api/artifacts/publish/tok_1', {
+      expect(mockPatch).toHaveBeenLastCalledWith('/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa', {
         title: 'Pricing tool',
       }, authorityOptions()),
     );
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(9));
   });
 
   it('puts an earlier version live through its canonical endpoint with captured authority', async () => {
-    mockPost.mockResolvedValue({ shareUrl: SITE.shareUrl });
+    mockPost.mockResolvedValue({ token: SITE.token, version: 8 });
     const { findByLabelText } = render(<SiteDetailScreen />);
     fireEvent.press(await findByLabelText('Put version 1 live'));
     await waitFor(() =>
       expect(mockPost).toHaveBeenCalledWith(
-        '/api/artifacts/publish/tok_1/versions/1', undefined, authorityOptions(),
+        '/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa/versions/1', undefined, authorityOptions(),
       ),
     );
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(6));
+  });
+
+  // UNRUN: actual service receipt rejection must not commit UI success.
+  it.each(['unpublish', 'delete', 'restore', 'visibility', 'rename'] as const)(
+    'shows uncertainty without navigation or reload for invalid %s success', async (operation) => {
+      mockDelete.mockImplementation(async (path: string) => path.endsWith('/data') ? { cleared: 1 } : {});
+      mockPost.mockResolvedValue({ token: 'other', version: 8 });
+      mockPatch.mockResolvedValue({});
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      try {
+        const screen = render(<SiteDetailScreen />);
+        await screen.findByLabelText('Site name');
+        const reads = mockGet.mock.calls.length;
+        if (operation === 'unpublish' || operation === 'delete') {
+          fireEvent.press(screen.getByText(operation === 'delete' ? 'Delete site and its data' : 'Unpublish'));
+          await act(async () => alert.mock.calls[0]?.[2]?.find((button) => button.style === 'destructive')?.onPress?.());
+        } else if (operation === 'restore') fireEvent.press(screen.getByLabelText('Put version 1 live'));
+        else if (operation === 'visibility') fireEvent.press(screen.getByText('Only your workspace'));
+        else {
+          fireEvent.changeText(screen.getByLabelText('Site name'), 'New name');
+          fireEvent.press(screen.getByText('Rename'));
+        }
+        expect(await screen.findByText(/could not be confirmed.*may have taken effect/)).toBeTruthy();
+        expect(mockReplace).not.toHaveBeenCalled();
+        expect(mockGet).toHaveBeenCalledTimes(reads);
+        expect(mockDelete).toHaveBeenCalledTimes(operation === 'delete' ? 2 : operation === 'unpublish' ? 1 : 0);
+        expect(mockPost).toHaveBeenCalledTimes(operation === 'restore' ? 1 : 0);
+        expect(mockPatch).toHaveBeenCalledTimes(operation === 'rename' || operation === 'visibility' ? 1 : 0);
+      } finally { alert.mockRestore(); }
+    },
+  );
+
+  it('keeps arbitrary transport error messages out of the UI', async () => {
+    mockPatch.mockRejectedValue(new Error('untrusted server detail'));
+    const screen = render(<SiteDetailScreen />);
+    fireEvent.press(await screen.findByText('Only your workspace'));
+    expect(await screen.findByText('Could not change who can open this.')).toBeTruthy();
+    expect(screen.queryByText('untrusted server detail')).toBeNull();
+    expect(screen.queryByText(/may have taken effect/)).toBeNull();
   });
 
   describe.each([
@@ -412,13 +454,13 @@ describe('published sites on mobile', () => {
       control: 'Unpublish',
       title: 'Unpublish Pricing calculator?',
       action: 'Unpublish',
-      paths: ['/api/artifacts/publish/tok_1'],
+      paths: ['/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa'],
     },
     {
       control: 'Delete site and its data',
       title: 'Delete Pricing calculator and its data?',
       action: 'Delete',
-      paths: ['/api/artifacts/publish/tok_1/data', '/api/artifacts/publish/tok_1'],
+      paths: ['/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa/data', '/api/artifacts/publish/aaaaaaaaaaaaaaaaaaaaaaaa'],
     },
   ])('$control confirmation', ({ control, title, action, paths }) => {
     afterEach(() => {
@@ -426,7 +468,8 @@ describe('published sites on mobile', () => {
     });
 
     it('discloses irreversible shared and personal data loss before dispatching', async () => {
-      mockDelete.mockResolvedValue({ cleared: 1 });
+      mockDelete.mockImplementation(async (path: string) => path.endsWith('/data')
+        ? { cleared: 1 } : { success: true, token: SITE.token });
       const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
       const { findByText } = render(<SiteDetailScreen />);
       fireEvent.press(await findByText(control));

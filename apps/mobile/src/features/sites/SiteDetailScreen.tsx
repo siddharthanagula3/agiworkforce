@@ -36,6 +36,7 @@ import { useSiteDetailLifetime, type SiteDetailLifetime } from './useSiteDetailL
 import type { CloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import {
   SITE_VISIBILITY_LABELS,
+  SiteMutationUncertainError,
   clearSiteSharedData,
   deleteSiteAndData,
   listPublishedSites,
@@ -125,7 +126,10 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
         await action();
         return view.isCurrent();
       } catch (actionError) {
-        if (view.isCurrent()) setError(cloudActionError(actionError, failure));
+        if (view.isCurrent()) {
+          setError(actionError instanceof SiteMutationUncertainError
+            ? actionError.message : cloudActionError(actionError, failure));
+        }
         return false;
       } finally {
         if (view.isCurrent()) {

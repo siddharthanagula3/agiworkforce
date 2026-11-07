@@ -3,7 +3,9 @@ import {
   ManagedCloudPublishedArtifactDataClearResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
-  ManagedCloudPublishedArtifactUpdateResponseSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
+  ManagedCloudPublishedArtifactDeleteReceiptSchema,
+  ManagedCloudPublishedArtifactRestoreReceiptSchema,
   ManagedCloudPublishedArtifactVersionListResponseSchema,
   managedCloudPublishedArtifactDataPath,
   managedCloudPublishedArtifactPath,
@@ -17,6 +19,13 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+
+export class SiteMutationUncertainError extends Error {
+  constructor(operation: 'update' | 'unpublish' | 'version restore') {
+    super(`This site ${operation} could not be confirmed. It may have taken effect. Refresh to check before trying again.`);
+    this.name = 'SiteMutationUncertainError';
+  }
+}
 
 export interface SiteRequestAuthority {
   accountEpoch: CloudAccountEpoch | null;
@@ -55,16 +64,30 @@ export async function updatePublishedSite(
   change: ManagedCloudPublishedArtifactUpdateRequest,
   authority?: SiteRequestAuthority,
 ): Promise<ManagedCloudPublishedArtifactUpdateResponse> {
-  return ManagedCloudPublishedArtifactUpdateResponseSchema.parse(
-    (authority
-      ? await api.patch<unknown>(managedCloudPublishedArtifactPath(token), change, requestOptions(authority))
-      : await api.patch<unknown>(managedCloudPublishedArtifactPath(token), change)),
-  );
+  const requestedChange = { ...change };
+  const raw = authority
+    ? await api.patch<unknown>(managedCloudPublishedArtifactPath(token), requestedChange, requestOptions(authority))
+    : await api.patch<unknown>(managedCloudPublishedArtifactPath(token), requestedChange);
+  authority?.assertCurrent();
+  const receipt = ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse(raw);
+  if (
+    !receipt.success || receipt.data.token !== token ||
+    (requestedChange.visibility !== undefined && receipt.data.visibility !== requestedChange.visibility)
+  ) {
+    throw new SiteMutationUncertainError('update');
+  }
+  return receipt.data;
 }
 
 export async function unpublishSite(token: string, authority?: SiteRequestAuthority): Promise<void> {
-  if (authority) await api.delete<unknown>(managedCloudPublishedArtifactPath(token), requestOptions(authority));
-  else await api.delete<unknown>(managedCloudPublishedArtifactPath(token));
+  const raw = authority
+    ? await api.delete<unknown>(managedCloudPublishedArtifactPath(token), requestOptions(authority))
+    : await api.delete<unknown>(managedCloudPublishedArtifactPath(token));
+  authority?.assertCurrent();
+  const receipt = ManagedCloudPublishedArtifactDeleteReceiptSchema.safeParse(raw);
+  if (!receipt.success || receipt.data.token !== token) {
+    throw new SiteMutationUncertainError('unpublish');
+  }
 }
 
 export async function listSiteVersions(
@@ -82,9 +105,16 @@ export async function republishSiteVersion(
   version: number,
   authority?: SiteRequestAuthority,
 ): Promise<void> {
-  const path = managedCloudPublishedArtifactVersionPath(site.token, version);
-  if (authority) await api.post<unknown>(path, undefined, requestOptions(authority));
-  else await api.post<unknown>(path);
+  const token = site.token;
+  const path = managedCloudPublishedArtifactVersionPath(token, version);
+  const raw = authority
+    ? await api.post<unknown>(path, undefined, requestOptions(authority))
+    : await api.post<unknown>(path);
+  authority?.assertCurrent();
+  const receipt = ManagedCloudPublishedArtifactRestoreReceiptSchema.safeParse(raw);
+  if (!receipt.success || receipt.data.token !== token) {
+    throw new SiteMutationUncertainError('version restore');
+  }
 }
 
 export async function readSiteData(

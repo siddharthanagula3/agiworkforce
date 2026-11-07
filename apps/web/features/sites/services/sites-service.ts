@@ -4,6 +4,8 @@ import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
   ManagedCloudPublishedArtifactDataClearResponseSchema,
+  ManagedCloudPublishedArtifactDeleteReceiptSchema,
+  ManagedCloudPublishedArtifactRestoreReceiptSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactPageInfoSchema,
@@ -64,16 +66,6 @@ export interface PublishedSiteList {
   sites: PublishedSite[];
   workspace: { memberCount: number } | null;
 }
-
-const PublishedArtifactDeleteReceiptSchema = z.object({
-  success: z.literal(true),
-  token: PublishedSiteSchema.shape.token,
-});
-
-const PublishedArtifactRestoreReceiptSchema = z.object({
-  token: PublishedSiteSchema.shape.token,
-  version: z.number().int().positive().safe(),
-});
 
 async function withPublicationAuthority<T>(
   authority: Pick<RequestAuthority, 'assertCurrent'> | undefined,
@@ -231,7 +223,7 @@ export async function republishArtifactVersion(
     }
     const raw: unknown = await response.json().catch(() => null);
     authority?.assertCurrent();
-    const receipt = PublishedArtifactRestoreReceiptSchema.safeParse(raw);
+    const receipt = ManagedCloudPublishedArtifactRestoreReceiptSchema.safeParse(raw);
     if (!receipt.success || receipt.data.token !== token) {
       throw new Error(
         'This version restore could not be confirmed. It may have taken effect. Refresh to check before trying again.',
@@ -255,7 +247,7 @@ export async function unpublishArtifact(token: string, authority?: RequestAuthor
     }
     const raw: unknown = await response.json().catch(() => null);
     authority?.assertCurrent();
-    const receipt = PublishedArtifactDeleteReceiptSchema.safeParse(raw);
+    const receipt = ManagedCloudPublishedArtifactDeleteReceiptSchema.safeParse(raw);
     if (!receipt.success || receipt.data.token !== token) {
       throw new Error(
         'This unpublish could not be confirmed. It may have taken effect. Refresh to check before trying again.',

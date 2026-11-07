@@ -263,6 +263,16 @@ export const ManagedCloudPublishedArtifactUpdateReceiptSchema =
     message: 'The publication receipt must link to its token.',
   });
 
+export const ManagedCloudPublishedArtifactDeleteReceiptSchema = z.object({
+  success: z.literal(true),
+  token: ManagedCloudPublishedArtifactSchema.shape.token,
+});
+
+export const ManagedCloudPublishedArtifactRestoreReceiptSchema = z.object({
+  token: ManagedCloudPublishedArtifactSchema.shape.token,
+  version: z.number().int().positive().safe(),
+});
+
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACT_DATA_PREVIEW_CHARS = 240;
 
 export const ManagedCloudPublishedArtifactDataEntrySchema = z.object({

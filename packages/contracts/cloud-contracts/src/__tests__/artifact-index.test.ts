@@ -4,6 +4,8 @@ import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH,
   ManagedCloudArtifactIndexResponseSchema,
   ManagedCloudPublishedArtifactDataResponseSchema,
+  ManagedCloudPublishedArtifactDeleteReceiptSchema,
+  ManagedCloudPublishedArtifactRestoreReceiptSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactDetailResponseSchema,
   ManagedCloudPublishedArtifactLookupQuerySchema,
@@ -292,4 +294,26 @@ describe('published artifact pagination compatibility', () => {
     expect(ManagedCloudPublishedArtifactDetailResponseSchema.safeParse({ artifacts: [], workspace: null }).success)
       .toBe(false);
   });
+});
+
+// UNRUN: minimum deletion and restore acknowledgement contracts.
+describe('publication delete and restore receipts', () => {
+  it('accepts minimum receipts and strips unrelated fields', () => {
+    expect(ManagedCloudPublishedArtifactDeleteReceiptSchema.parse({ success: true, token: 'token', extra: 1 }))
+      .toEqual({ success: true, token: 'token' });
+    expect(ManagedCloudPublishedArtifactRestoreReceiptSchema.parse({ token: 'token', version: 8, extra: 1 }))
+      .toEqual({ token: 'token', version: 8 });
+  });
+
+  it.each([null, {}, { success: false, token: 'token' }, { success: true },
+    { success: true, token: '' }, { success: true, token: 1 }])('rejects invalid delete %p', (raw) => {
+    expect(ManagedCloudPublishedArtifactDeleteReceiptSchema.safeParse(raw).success).toBe(false);
+  });
+
+  it.each([null, {}, { token: '', version: 1 }, { token: 'token' },
+    ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1'].map((version) => ({ token: 'token', version }))])(
+    'rejects invalid restore %p', (raw) => {
+      expect(ManagedCloudPublishedArtifactRestoreReceiptSchema.safeParse(raw).success).toBe(false);
+    },
+  );
 });
