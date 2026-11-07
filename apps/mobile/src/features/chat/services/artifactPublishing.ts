@@ -11,6 +11,7 @@ import {
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
   ManagedCloudPublishedArtifactPublishResponseSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
   type ManagedCloudPublishedArtifactPublishResponse,
   managedCloudPublishedArtifactLookupPath,
 } from '@agiworkforce/cloud-contracts';
@@ -65,10 +66,6 @@ export interface ArtifactPublication {
 export interface ArtifactPublicationState {
   publication: ArtifactPublication | null;
   workspaceMemberCount: number | null;
-}
-
-function readAudience(value: unknown): PublishedArtifactAudience {
-  return value === 'public' || value === 'organization' ? value : 'invited';
 }
 
 export function readPublishedTokenFromUrl(shareUrl: string): string | null {
@@ -220,14 +217,19 @@ export async function setPublishedArtifactAudience(
   visibility: PublishedArtifactAudience,
 ): Promise<ArtifactPublication> {
   const token = requirePublishedToken(shareUrl);
-  const response = await api.patch<{ shareUrl?: unknown; visibility?: unknown }>(
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.patch<unknown>(
     `/api/artifacts/publish/${token}`,
     { visibility },
+    { accountEpoch: account, auth401Recovery: 'caller-owned' },
   );
-  return {
-    shareUrl: typeof response.shareUrl === 'string' ? response.shareUrl : shareUrl,
-    visibility: readAudience(response.visibility),
-  };
+  assertCloudAccountEpochCurrent(account);
+  const receipt = ManagedCloudPublishedArtifactUpdateReceiptSchema.parse(response);
+  if (receipt.token !== token || receipt.visibility !== visibility) {
+    throw new Error('The audience change receipt did not match the requested publication change.');
+  }
+  return { shareUrl: receipt.shareUrl, visibility: receipt.visibility };
 }
 
 export async function unpublishArtifact(shareUrl: string): Promise<void> {

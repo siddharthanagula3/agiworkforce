@@ -62,6 +62,10 @@ const publishReceipt = {
   visibility: 'public', version: 1, publishedAt: '2026-11-07T00:00:00Z',
   kind: 'html', title: 'Landing page', sandboxed: true, workspace: { memberCount: 7 },
 };
+const audienceReceipt = {
+  token: 'a'.repeat(24), shareUrl: publishedUrl, title: 'Landing page',
+  visibility: 'organization', organizationId: 'org-1', updatedAt: '2026-11-07T00:00:00Z',
+};
 const uncertainLabel = 'A publish is unconfirmed. Any link shown is the last known publication and may contain an earlier version. No automatic retry was made.';
 
 function lookupReply(artifactId = 'artifact-1') {
@@ -298,7 +302,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     fireEvent.press(view.getByLabelText('Check publication status'));
     expect(mockGet).toHaveBeenCalledTimes(2);
     if (operation === 'unpublish') mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
-    await act(async () => { mutation.resolve({ shareUrl: publishedUrl, visibility: 'organization' }); });
+    await act(async () => { mutation.resolve(audienceReceipt); });
     const priorReads = operation === 'unpublish' ? 3 : 2;
     expect(mockGet).toHaveBeenCalledTimes(priorReads);
     mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
@@ -564,6 +568,50 @@ describe('ArtifactFullScreen publish-to-link', () => {
     expect(mockPost).not.toHaveBeenCalled();
   });
 
+  // UNRUN: current controls adopt only matching full audience acknowledgements.
+  it.each(['public', 'organization'] as const)('adopts a current %s audience and badge after confirmation', async (visibility) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const initial = lookupReply();
+    initial.artifact.visibility = visibility === 'public' ? 'organization' : 'public';
+    mockGet.mockResolvedValueOnce(initial);
+    mockPatch.mockResolvedValueOnce({ ...audienceReceipt, visibility });
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+    fireEvent.press(view.getByTestId(`artifact-audience-${visibility}`));
+    expect(mockPatch).not.toHaveBeenCalled();
+    tapAlertButton(visibility === 'public' ? 'Make public' : 'Share with workspace');
+    await waitFor(() => expect(view.getByTestId(`artifact-audience-${visibility}`).props.accessibilityState.checked).toBe(true));
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe(visibility);
+    expect(mockPatch).toHaveBeenCalledTimes(1);
+    expect(mockPatch).toHaveBeenCalledWith(`/api/artifacts/publish/${audienceReceipt.token}`, { visibility }, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+  });
+
+  it.each(['malformed', 'wrong-audience', 'wrong-token', 'transport'])(
+    'preserves the visible link and badge on a current %s audience failure', async (failure) => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      usePublishedArtifactAudiences.setState({ ownerId: 'owner-a', byId: { 'artifact-1': 'public' } });
+      mockGet.mockResolvedValueOnce(lookupReply());
+      if (failure === 'transport') mockPatch.mockRejectedValueOnce(new Error('offline'));
+      else mockPatch.mockResolvedValueOnce(failure === 'malformed' ? {} : failure === 'wrong-audience'
+        ? { ...audienceReceipt, visibility: 'public' }
+        : { ...audienceReceipt, token: 'b'.repeat(24), shareUrl: publishedUrl.replace(/a{24}$/, 'b'.repeat(24)) });
+      const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+      await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+      fireEvent.press(view.getByTestId('artifact-audience-organization'));
+      tapAlertButton('Share with workspace');
+      await waitFor(() => expect(Alert.alert).toHaveBeenLastCalledWith('Could not change who can open this', PUBLISH_FAILED_MESSAGE));
+      expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);
+      expect(view.getByTestId('artifact-audience-public').props.accessibilityState.checked).toBe(true);
+      expect(view.getByTestId('artifact-audience-organization').props.accessibilityState.disabled).toBe(false);
+      expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('public');
+      expect(mockPatch).toHaveBeenCalledTimes(1);
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(mockPost).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(['publish', 'audience'] as const)(
     'allows only the first confirmed %s owner when publish and audience dialogs overlap',
     async (first) => {
@@ -587,7 +635,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
 
       await act(async () => {
         if (first === 'publish') publish.resolve(publishReceipt);
-        else audience.resolve({ shareUrl: publishedUrl, visibility: 'organization' });
+        else audience.resolve(audienceReceipt);
       });
       expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);
       expect(view.getByTestId(`artifact-audience-${first === 'publish' ? 'public' : 'organization'}`)
@@ -615,7 +663,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
       await act(async () => undefined);
       expect(first === 'audience' ? mockDelete : mockPatch).not.toHaveBeenCalled();
 
-      await act(async () => { mutation.resolve({ shareUrl: publishedUrl, visibility: 'organization' }); });
+      await act(async () => { mutation.resolve(audienceReceipt); });
       if (first === 'audience') {
         expect(view.getByTestId('artifact-audience-organization').props.accessibilityState.checked).toBe(true);
         mockDelete.mockReset().mockResolvedValueOnce(undefined);
@@ -670,7 +718,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
       act(() => activateCloudAccount('owner-b'));
       act(() => activateCloudAccount('owner-a'));
       const callsBeforeCompletion = mockGet.mock.calls.length;
-      await act(async () => { mutation.resolve({ shareUrl: publishedUrl, visibility: 'organization' }); });
+      await act(async () => { mutation.resolve(audienceReceipt); });
       expect(view.queryByTestId('artifact-published-url')).toBeNull();
       expect(view.queryByText(privateLabel)).toBeNull();
       expect(usePublishedArtifactAudiences.getState().byId).toEqual({});

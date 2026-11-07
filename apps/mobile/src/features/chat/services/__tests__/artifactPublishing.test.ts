@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react-native';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
   fetchArtifactPublication,
+  setPublishedArtifactAudience,
   publishArtifact,
   isPublicationOutcomeUncertain,
   recordPublishedArtifactAudience,
@@ -21,7 +22,7 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS, MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS } from '@agiworkforce/cloud-contracts';
 
-jest.mock('@/services/api', () => ({ api: { get: jest.fn(), post: jest.fn() } }));
+jest.mock('@/services/api', () => ({ api: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
 
 const publication = (artifactId = 'artifact-1') => ({
   token: 'a'.repeat(24),
@@ -83,6 +84,82 @@ describe('publish acknowledgement', () => {
     invalidateCloudAccount();
     await expect(publishArtifact(input)).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
     expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+// UNRUN: WEB-PUBLICATION-QUOTA-ADMISSION-01 audience receipt boundaries.
+describe('audience change acknowledgement', () => {
+  const shareUrl = publication().shareUrl;
+  const receipt = {
+    token: 'a'.repeat(24), shareUrl, title: 'Landing page',
+    visibility: 'organization', organizationId: 'org-1', updatedAt: '2026-11-07T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    jest.mocked(api.patch).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    recordPublishedArtifactAudience('artifact-1', 'public');
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  it.each(['public', 'organization', 'invited'] as const)(
+    'returns a matching %s receipt without recording a badge itself', async (visibility) => {
+      jest.mocked(api.patch).mockResolvedValue({ ...receipt, visibility });
+      await expect(setPublishedArtifactAudience(shareUrl, visibility)).resolves.toEqual({ shareUrl, visibility });
+      expect(api.patch).toHaveBeenCalledWith(`/api/artifacts/publish/${receipt.token}`, { visibility }, {
+        accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+      });
+      expect(api.patch).toHaveBeenCalledTimes(1);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+    },
+  );
+
+  it.each([
+    undefined, null, {}, { shareUrl, visibility: 'organization' },
+    { ...receipt, shareUrl: undefined }, { ...receipt, visibility: undefined },
+    { ...receipt, visibility: 'unknown' }, { ...receipt, visibility: 'public' },
+    { ...receipt, token: 'b'.repeat(24), shareUrl: shareUrl.replace(/a{24}$/, 'b'.repeat(24)) },
+    { ...receipt, shareUrl: shareUrl.replace(/a{24}$/, 'b'.repeat(24)) },
+    { ...receipt, shareUrl: 'javascript:alert(1)' }, { ...receipt, shareUrl: `${shareUrl}?extra=1` },
+    { ...receipt, organizationId: undefined }, { ...receipt, updatedAt: '' },
+  ])('rejects incomplete, invalid or mismatched acknowledgement %p', async (reply) => {
+    jest.mocked(api.patch).mockResolvedValue(reply);
+    await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toThrow();
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each([401, 403, 500])('propagates HTTP %i without retrying or clearing the account', async (status) => {
+    const account = captureCloudAccountEpoch();
+    const failure = new ApiHttpError('Audience unavailable', status, null);
+    jest.mocked(api.patch).mockRejectedValue(failure);
+    await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toBe(failure);
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    expect(captureCloudAccountEpoch()).toEqual(account);
+  });
+
+  it.each(['other-owner', 'round-trip', 'sign-out'])(
+    'rejects an old completion after %s', async (transition) => {
+      let resolve!: (reply: unknown) => void;
+      jest.mocked(api.patch).mockReturnValue(new Promise((done) => { resolve = done; }));
+      const pending = setPublishedArtifactAudience(shareUrl, 'organization');
+      const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+      if (transition === 'sign-out') invalidateCloudAccount();
+      else activateCloudAccount('owner-b');
+      if (transition === 'round-trip') activateCloudAccount('owner-a');
+      resolve(receipt);
+      await rejection;
+      expect(api.patch).toHaveBeenCalledTimes(1);
+      expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    },
+  );
+
+  it('requires a current account and a valid target before transport', async () => {
+    await expect(setPublishedArtifactAudience('invalid', 'organization')).rejects.toThrow();
+    invalidateCloudAccount();
+    await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.patch).not.toHaveBeenCalled();
   });
 });
 

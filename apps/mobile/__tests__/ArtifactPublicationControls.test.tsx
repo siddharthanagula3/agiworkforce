@@ -18,10 +18,16 @@ import {
 import {
   fetchArtifactPublication,
   readPublishedTokenFromUrl,
+  PUBLISH_FAILED_MESSAGE,
 } from '@/src/features/chat/services/artifactPublishing';
 
 const TOKEN = 'abcdefghijklmnopqrstuvwx';
 const SHARE_URL = `https://agiworkforce.com/shared-artifact/${TOKEN}`;
+
+const audienceReceipt = {
+  token: TOKEN, shareUrl: SHARE_URL, title: 'Report', visibility: 'organization',
+  organizationId: 'org-1', updatedAt: '2026-11-07T00:00:00Z',
+};
 
 function lookupReply(artifactId: string, visibility: string) {
   return {
@@ -87,7 +93,7 @@ describe('published artifact controls', () => {
 
   it('moves the link to the workspace after confirmation', async () => {
     pressConfirm();
-    mockApi.patch.mockResolvedValue({ shareUrl: SHARE_URL, visibility: 'organization' });
+    mockApi.patch.mockResolvedValue(audienceReceipt);
     const onChanged = jest.fn();
     const { getByTestId } = render(
       <PublishedArtifactControls
@@ -105,8 +111,35 @@ describe('published artifact controls', () => {
 
     expect(mockApi.patch).toHaveBeenCalledWith(`/api/artifacts/publish/${TOKEN}`, {
       visibility: 'organization',
-    });
+    }, { accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned' });
     expect(onChanged).toHaveBeenCalledWith({ shareUrl: SHARE_URL, visibility: 'organization' });
+  });
+
+  // UNRUN: real service receipt rejection must not call the adoption callback.
+  it.each([
+    {}, { shareUrl: SHARE_URL, visibility: 'organization' },
+    { ...audienceReceipt, visibility: 'public' },
+    { ...audienceReceipt, visibility: 'unknown' },
+    { ...audienceReceipt, token: 'b'.repeat(24), shareUrl: `https://example.com/shared-artifact/${'b'.repeat(24)}` },
+  ])('keeps the current audience on invalid acknowledgement %p', async (reply) => {
+    pressConfirm();
+    mockApi.patch.mockResolvedValue(reply);
+    const onChanged = jest.fn();
+    const { getByTestId } = render(
+      <PublishedArtifactControls
+        title="Report"
+        publication={{ shareUrl: SHARE_URL, visibility: 'public' }}
+        workspaceMemberCount={3}
+        onChanged={onChanged}
+        onUnpublished={jest.fn()}
+      />,
+    );
+    await act(async () => { fireEvent.press(getByTestId('artifact-audience-organization')); });
+    expect(mockApi.patch).toHaveBeenCalledTimes(1);
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenLastCalledWith('Could not change who can open this', PUBLISH_FAILED_MESSAGE);
+    expect(getByTestId('artifact-audience-public').props.accessibilityState.checked).toBe(true);
+    expect(getByTestId('artifact-audience-organization').props.accessibilityState.disabled).toBe(false);
   });
 
   it('unpublishes only after confirmation', async () => {
