@@ -334,27 +334,40 @@ async function readViewers(response: Response, fallback: string): Promise<SiteVi
   return Array.isArray(body.viewers) ? body.viewers : [];
 }
 
-export async function listSiteViewers(token: string, signal?: AbortSignal): Promise<SiteViewer[]> {
-  const response = await fetch(managedCloudPublishedArtifactViewersPath(token), {
-    credentials: 'include',
-    ...(signal ? { signal } : {}),
+export async function listSiteViewers(
+  token: string,
+  signal?: AbortSignal,
+  authority?: Pick<RequestAuthority, 'assertCurrent' | 'fetch'>,
+): Promise<SiteViewer[]> {
+  return withPublicationAuthority(authority, async () => {
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactViewersPath(token), {
+      credentials: 'include',
+      ...(signal ? { signal } : {}),
+    });
+    authority?.assertCurrent();
+    return readViewers(response, 'Failed to load who this site is shared with');
   });
-  return readViewers(response, 'Failed to load who this site is shared with');
 }
 
 export async function changeSiteViewer(
   token: string,
   email: string,
   action: 'add' | 'remove',
+  authority?: Pick<RequestAuthority, 'assertCurrent' | 'fetch'>,
 ): Promise<SiteViewer[]> {
-  const response = await fetch(managedCloudPublishedArtifactViewersPath(token), {
-    method: action === 'add' ? 'POST' : 'DELETE',
-    credentials: 'include',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ email } satisfies ManagedCloudPublishedArtifactViewerRequest),
+  return withPublicationAuthority(authority, async () => {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    authority?.assertCurrent();
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactViewersPath(token), {
+      method: action === 'add' ? 'POST' : 'DELETE',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify({ email } satisfies ManagedCloudPublishedArtifactViewerRequest),
+    });
+    authority?.assertCurrent();
+    return readViewers(
+      response,
+      action === 'add' ? 'Failed to share with that person' : 'Failed to remove that person',
+    );
   });
-  return readViewers(
-    response,
-    action === 'add' ? 'Failed to share with that person' : 'Failed to remove that person',
-  );
 }
