@@ -10,6 +10,7 @@ import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
 import { SharedLinksSection } from './SharedLinksSection';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 import { admitWorkspace, observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
 type Original0 = typeof import('@features/sites/services/sites-service');
 type ScanModule0 = typeof import('@/lib/sentry-shared');
@@ -76,8 +77,8 @@ vi.mock('../services/conversation-data-service', () => ({
   deleteManagedConversation: (...args: unknown[]) => mocks.deleteConversation(...args),
   applyBulkConversationAction: (...args: unknown[]) => mocks.bulkAction(...args),
   fetchConversationHistoryStats: (...args: unknown[]) => mocks.historyStats(...args),
-  listSharedLinks: (...args: unknown[]) => mocks.listShares(...args),
-  revokeSharedLink: (...args: unknown[]) => mocks.revokeShare(...args),
+  listSharedLinks: (request: RequestAuthority) => mocks.listShares(request),
+  revokeSharedLink: (token: string, request: RequestAuthority) => mocks.revokeShare(token, request),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -271,16 +272,16 @@ describe('Web conversation data settings', () => {
     render(<SharedLinksSection />);
 
     expect(await screen.findByText('Shared planning')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute(
-      'href',
-      'https://agiworkforce.com/share/share-token',
-    );
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(open).toHaveBeenCalledWith('https://agiworkforce.com/share/share-token', '_blank', 'noopener,noreferrer');
+    expect(mocks.listShares).toHaveBeenCalledWith(expect.objectContaining({ session, assertCurrent: expect.any(Function) }));
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
 
     expect(mocks.revokeShare).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
-    await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token'));
+    await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token', expect.objectContaining({ session, assertCurrent: expect.any(Function) })));
     expect(screen.getByText('No shared links')).toBeInTheDocument();
   });
 
@@ -309,7 +310,9 @@ describe('Web conversation data settings', () => {
 
     await screen.findByText('Shared planning');
     expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute('href', shareUrl);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(open).toHaveBeenCalledWith(shareUrl, '_blank', 'noopener,noreferrer');
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     await screen.findByText('Copied the link for “Shared planning”.');
     expect(writeText).toHaveBeenCalledWith(shareUrl);
@@ -318,7 +321,7 @@ describe('Web conversation data settings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
     expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
-    expect(mocks.revokeShare).toHaveBeenCalledWith('share-token');
+    expect(mocks.revokeShare).toHaveBeenCalledWith('share-token', expect.objectContaining({ session, assertCurrent: expect.any(Function) }));
     expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
     expect(screen.queryByText('No shared links')).toBeNull();
     expect(mocks.listShares).toHaveBeenCalledTimes(1);

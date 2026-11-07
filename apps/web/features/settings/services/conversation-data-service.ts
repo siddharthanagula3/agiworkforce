@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   CONVERSATION_SHARES_PATH,
   ConversationShareListResponseSchema,
+  ConversationShareRevokedSchema,
   conversationSharePath,
   type ConversationShareSummary,
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -238,22 +239,42 @@ export async function applyBulkConversationAction(
   return receipt.affectedCount;
 }
 
-export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkList> {
-  const response = await fetch(CONVERSATION_SHARES_PATH, { credentials: 'include', signal });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to load shared links');
+export async function listSharedLinks(request: RequestAuthority): Promise<SharedLinkList> {
+  request.assertCurrent();
+  try {
+    const response = await request.fetch(CONVERSATION_SHARES_PATH, { cache: 'no-store' });
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to load shared links');
+    }
+    const body: unknown = await response.json();
+    request.assertCurrent();
+    const { shares, complete } = ConversationShareListResponseSchema.parse(body);
+    request.assertCurrent();
+    return { shares, complete };
+  } catch (error) {
+    request.assertCurrent();
+    throw error;
   }
-  const { shares, complete } = ConversationShareListResponseSchema.parse(await response.json());
-  return { shares, complete };
 }
 
-export async function revokeSharedLink(token: string): Promise<void> {
-  const response = await fetch(conversationSharePath(token), {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: await addCsrfHeaders(),
-  });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to revoke shared link');
+export async function revokeSharedLink(token: string, request: RequestAuthority): Promise<void> {
+  request.assertCurrent();
+  try {
+    const headers = await addCsrfHeaders();
+    request.assertCurrent();
+    const response = await request.fetch(conversationSharePath(token), {
+      method: 'DELETE',
+      headers,
+    });
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to revoke shared link');
+    }
+    const body: unknown = await response.json();
+    request.assertCurrent();
+    ConversationShareRevokedSchema.parse(body);
+    request.assertCurrent();
+  } catch (error) {
+    request.assertCurrent();
+    throw error;
   }
 }

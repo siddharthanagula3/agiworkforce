@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyBulkConversationAction,
   fetchConversationHistoryStats,
@@ -7,8 +7,10 @@ import {
   restoreDeletedConversation,
   deleteManagedConversation,
   listSharedLinks,
+  revokeSharedLink,
   restoreArchivedConversation,
 } from './conversation-data-service';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 
@@ -135,11 +137,12 @@ describe('conversation data settings service', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await listSharedLinks();
+    const request = shareOwner().request;
+    const result = await listSharedLinks(request);
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/share',
-      expect.objectContaining({ credentials: 'include' }),
+      expect.objectContaining({ credentials: 'omit', signal: request.signal }),
     );
     expect(result.shares[0]?.title).toBe('Shared planning');
     expect(result.complete).toBe(true);
@@ -149,13 +152,13 @@ describe('conversation data settings service', () => {
     const body = complete === undefined ? { shares: [] } : { shares: [], complete };
     const fetchMock = vi.fn(async () => response(body));
     vi.stubGlobal('fetch', fetchMock);
-    const controller = new AbortController();
+    const request = shareOwner().request;
 
-    await expect(listSharedLinks(controller.signal)).resolves.toEqual({ shares: [], complete: false });
-    expect(fetchMock).toHaveBeenCalledWith('/api/share', {
-      credentials: 'include',
-      signal: controller.signal,
-    });
+    await expect(listSharedLinks(request)).resolves.toEqual({ shares: [], complete: false });
+    expect(fetchMock).toHaveBeenCalledWith('/api/share', expect.objectContaining({
+      credentials: 'omit',
+      signal: request.signal,
+    }));
   });
 
   it('keeps an explicit original organization on the count and mutation after CSRF', async () => {
@@ -238,4 +241,268 @@ describe('owned manager receipts', () => {
     }
     request.retire();
   });
+});
+
+function deferredShare<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+function shareOwner() {
+  let userId = 'account-a';
+  let sessionId = 'session-a';
+  const getToken = vi.fn(async (): Promise<string | null> => 'token-a');
+  const request = createRequestAuthority({
+    userId, sessionId, getToken,
+    isCurrent: () => userId === 'account-a' && sessionId === 'session-a',
+  });
+  return {
+    request, getToken,
+    retire: (reason: 'account' | 'session' | 'explicit') => {
+      if (reason === 'account') userId = 'account-b';
+      else if (reason === 'session') sessionId = 'session-b';
+      else request.retire();
+    },
+  };
+}
+
+const shareOperations = [
+  { name: 'list', call: listSharedLinks, body: { shares: [], complete: true } },
+  {
+    name: 'revoke',
+    call: (request: ReturnType<typeof createRequestAuthority>) => revokeSharedLink('share-token', request),
+    body: { success: true },
+  },
+] as const;
+
+const shareRetirements = ['account', 'session', 'explicit'] as const;
+
+describe('shared-link session authority source fixtures (UNRUN)', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(addCsrfHeaders).mockReset();
+    vi.mocked(addCsrfHeaders).mockImplementation(async (headers = {}) => ({
+      ...Object.fromEntries(new Headers(headers).entries()), 'x-csrf-token': 'csrf-token',
+    }));
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new Error('Unexpected network call')));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(addCsrfHeaders).mockReset();
+    vi.mocked(addCsrfHeaders).mockImplementation(async (headers = {}) => ({
+      ...Object.fromEntries(new Headers(headers).entries()), 'x-csrf-token': 'csrf-token',
+    }));
+  });
+
+  it('uses captured bearer credentials for account-wide GET and encoded DELETE without workspace scope', async () => {
+    const owner = shareOwner();
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(response({ shares: [], complete: true, workspace: { memberCount: 2 } }))
+      .mockResolvedValueOnce(response({ success: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listSharedLinks(owner.request)).resolves.toEqual({ shares: [], complete: true });
+    expect(addCsrfHeaders).not.toHaveBeenCalled();
+    await expect(revokeSharedLink('token/with ?#%', owner.request)).resolves.toBeUndefined();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/share');
+    expect(fetchMock.mock.calls[0]?.[1]?.method ?? 'GET').toBe('GET');
+    expect(fetchMock.mock.calls[0]?.[1]?.cache).toBe('no-store');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/share/token%2Fwith%20%3F%23%25');
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('DELETE');
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.credentials).toBe('omit');
+      expect(init?.signal).toBe(owner.request.signal);
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token-a');
+      expect(new Headers(init?.headers).has(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(false);
+    }
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-csrf-token')).toBe('csrf-token');
+    expect(owner.getToken).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(shareRetirements)('does not dispatch revoke after %s retirement during CSRF', async (reason) => {
+    const owner = shareOwner();
+    const csrf = deferredShare<Record<string, string>>();
+    vi.mocked(addCsrfHeaders).mockReturnValueOnce(csrf.promise);
+    const pending = revokeSharedLink('share-token', owner.request);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(addCsrfHeaders).toHaveBeenCalledTimes(1);
+    owner.retire(reason);
+    csrf.resolve({ 'x-csrf-token': 'late-csrf' });
+    await rejected;
+    expect(owner.getToken).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('prefers session retirement over a late CSRF rejection without dispatching', async () => {
+    const owner = shareOwner();
+    const csrf = deferredShare<HeadersInit>();
+    vi.mocked(addCsrfHeaders).mockReturnValueOnce(csrf.promise);
+    const pending = revokeSharedLink('share-token', owner.request);
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    owner.retire('session');
+    csrf.reject(new Error('Old session CSRF failed'));
+    await rejected;
+    expect(owner.getToken).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  describe.each(shareOperations)('$name', ({ call, body }) => {
+    it('fails closed without an authority rather than using ambient cookies', async () => {
+      await expect(call(undefined as unknown as Parameters<typeof listSharedLinks>[0])).rejects.toThrow();
+      expect(addCsrfHeaders).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each(shareRetirements)('rejects a pre-retired %s authority before any boundary', async (reason) => {
+      const owner = shareOwner();
+      owner.retire(reason);
+      await expect(call(owner.request)).rejects.toMatchObject({ name: 'AbortError' });
+      expect(owner.getToken).not.toHaveBeenCalled();
+      expect(addCsrfHeaders).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each(shareRetirements)('rejects %s retirement during captured token acquisition without rebinding', async (reason) => {
+      const owner = shareOwner();
+      const token = deferredShare<string>();
+      const entered = deferredShare<void>();
+      owner.getToken.mockImplementationOnce(() => { entered.resolve(); return token.promise; });
+      const pending = call(owner.request);
+      const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      await entered.promise;
+      owner.retire(reason);
+      token.resolve('token-a');
+      await rejected;
+      expect(owner.getToken).toHaveBeenCalledTimes(1);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each(shareRetirements)('rejects %s retirement while fetch is pending before reading its body', async (reason) => {
+      const owner = shareOwner();
+      const transport = deferredShare<Response>();
+      const entered = deferredShare<void>();
+      const fetchMock = vi.fn<typeof fetch>().mockImplementation(() => {
+        entered.resolve();
+        return transport.promise;
+      });
+      const json = vi.fn(async () => body);
+      vi.stubGlobal('fetch', fetchMock);
+      const pending = call(owner.request);
+      const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      await entered.promise;
+      owner.retire(reason);
+      transport.resolve({ ok: true, json } as unknown as Response);
+      await rejected;
+      expect(json).not.toHaveBeenCalled();
+      expect(owner.request.signal.aborted).toBe(true);
+      expect(owner.getToken).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    describe.each([true, false])('HTTP ok=%s', (ok) => {
+      it.each(shareRetirements)('rejects %s retirement during body parsing instead of surfacing old account data', async (reason) => {
+        const owner = shareOwner();
+        const parsed = deferredShare<unknown>();
+        const entered = deferredShare<void>();
+        const json = vi.fn(() => { entered.resolve(); return parsed.promise; });
+        const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({ ok, json } as unknown as Response);
+        vi.stubGlobal('fetch', fetchMock);
+        const pending = call(owner.request);
+        const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await entered.promise;
+        owner.retire(reason);
+        parsed.resolve(ok ? body : { error: 'Old account failure' });
+        await rejected;
+        expect(owner.request.signal.aborted).toBe(true);
+        expect(json).toHaveBeenCalledTimes(1);
+        expect(owner.getToken).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe.each(['malformed', 'rejected'] as const)('late %s body', (outcome) => {
+      it.each([true, false])('prefers retirement over stale body errors when HTTP ok=%s', async (ok) => {
+        const owner = shareOwner();
+        const parsed = deferredShare<unknown>();
+        const entered = deferredShare<void>();
+        const json = vi.fn(() => { entered.resolve(); return parsed.promise; });
+        const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({ ok, json } as unknown as Response);
+        vi.stubGlobal('fetch', fetchMock);
+        const pending = call(owner.request);
+        const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await entered.promise;
+        owner.retire('session');
+        if (outcome === 'rejected') parsed.reject(new SyntaxError('Old session JSON failed'));
+        else parsed.resolve(null);
+        await rejected;
+        expect(json).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(owner.getToken).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it.each([null, ''])('rejects missing token %s without a cookie fallback', async (token) => {
+      const owner = shareOwner();
+      owner.getToken.mockResolvedValueOnce(token);
+      await expect(call(owner.request)).rejects.toThrow('Not authenticated');
+      expect(owner.getToken).toHaveBeenCalledTimes(1);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each([401, 403, 404, 500])('surfaces HTTP %s failure once without retrying', async (status) => {
+      const owner = shareOwner();
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+        ...response({ error: { message: 'Share operation denied' } }, false), status,
+      } as Response);
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(call(owner.request)).rejects.toThrow('Share operation denied');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(owner.getToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry a rejected transport', async () => {
+      const owner = shareOwner();
+      const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(new Error('Network unavailable'));
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(call(owner.request)).rejects.toThrow('Network unavailable');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(owner.getToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects invalid JSON without retrying', async () => {
+      const owner = shareOwner();
+      const json = vi.fn().mockRejectedValue(new SyntaxError('Invalid JSON'));
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({ ok: true, json } as unknown as Response);
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(call(owner.request)).rejects.toThrow('Invalid JSON');
+      expect(json).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it.each([{}, { success: false }, { success: 'true' }, null, { revoked: 1 }])(
+    'rejects a noncanonical revoke receipt %j without retrying', async (body) => {
+      const owner = shareOwner();
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response(body));
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(revokeSharedLink('share-token', owner.request)).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(owner.getToken).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([{ complete: true }, { shares: [], complete: 'true' }, { shares: [{}], complete: true }])(
+    'rejects malformed inventory %j', async (body) => {
+      const owner = shareOwner();
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response(body));
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(listSharedLinks(owner.request)).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 });
