@@ -356,7 +356,7 @@ describe('POST /api/artifacts/publish', () => {
 
   it('refuses a publish past the per-user cap with an actionable 409', async () => {
     const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
-    mocks.txQuery.mockImplementation(routeVersionQueries({ otherPublished: MAX_PUBLISHED_PER_USER }));
+    mocks.txQuery.mockImplementation(routeVersionQueries({ publishedCount: MAX_PUBLISHED_PER_USER }));
 
     const response = await POST(postRequest(VALID_BODY));
 
@@ -373,6 +373,22 @@ describe('POST /api/artifacts/publish', () => {
     const response = await POST(postRequest(VALID_BODY));
     expect(response.status).toBe(401);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('republishes an existing page over the cap without changing its URL', async () => {
+    const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
+    mocks.txQuery.mockImplementation(routeVersionQueries({
+      publishedCount: MAX_PUBLISHED_PER_USER + 1,
+      existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+    }));
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).token).toBe(TOKEN);
+    expect(mocks.txQuery.mock.calls.some(([sql]) =>
+      String(sql).includes('as published_count'),
+    )).toBe(false);
   });
 
   it('does not return success until the transaction commit promise resolves', async () => {
@@ -553,7 +569,8 @@ function routeVersionQueries(handlers: {
   newest?: unknown[];
   insertedVersion?: unknown[];
   ownedConversations?: number;
-  otherPublished?: number;
+  publishedCount?: number;
+  existingRows?: unknown[];
 }) {
   return async (sql: unknown, params: unknown[]) => {
     const text = String(sql);
@@ -569,10 +586,19 @@ function routeVersionQueries(handlers: {
     if (text.includes('update public.published_artifacts')) {
       return [{ id: params[0], user_id: params[2], version: params[1] }];
     }
-    if (text.includes('as other_published')) {
+    if (text.includes("current_setting('transaction_isolation')")) {
+      return [{ isolation: 'read committed' }];
+    }
+    if (text.includes('pg_advisory_xact_lock')) return [{ locked: true }];
+    if (text.includes('from public.published_artifacts') && text.includes('for update')) {
+      return handlers.existingRows ?? [];
+    }
+    if (text.includes('as published_count')) {
+      return [{ published_count: handlers.publishedCount ?? 0 }];
+    }
+    if (text.includes('as owned_conversations')) {
       return [
         {
-          other_published: handlers.otherPublished ?? 0,
           owned_conversations: handlers.ownedConversations ?? 1,
         },
       ];
@@ -605,6 +631,7 @@ describe('published artifact version history', () => {
       routeVersionQueries({
         newest: [versionRow()],
         insertedVersion: [{ version: 2 }],
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
       }),
     );
     const second = await POST(postRequest({ ...VALID_BODY, content: '<h1>v2</h1>' }));
@@ -618,7 +645,10 @@ describe('published artifact version history', () => {
   });
 
   it('does not append a version when the republish says the same thing', async () => {
-    mocks.txQuery.mockImplementation(routeVersionQueries({ newest: [versionRow({ version: 4 })] }));
+    mocks.txQuery.mockImplementation(routeVersionQueries({
+      newest: [versionRow({ version: 4 })],
+      existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+    }));
     const response = await POST(postRequest({ ...VALID_BODY, content: '<h1>v1</h1>' }));
 
     expect((await response.json()).version).toBe(4);

@@ -51,8 +51,8 @@ const MAX_LIST_LIMIT = 200;
 
 /**
  * Per-user cap on live published pages. Deliberately equal to the management
- * list cap: a page past that limit could never appear in its own publisher's
- * "Published artifacts" list, so it could never be found and revoked there.
+ * list cap: older pages above that limit are omitted from the publisher's
+ * management list until enough newer publications are removed and it reloads.
  */
 export const MAX_PUBLISHED_PER_USER = MAX_LIST_LIMIT;
 
@@ -234,13 +234,18 @@ export function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArti
 }
 
 interface PublishPreflightRow {
-  other_published: number | string | null;
   owned_conversations: number | string | null;
 }
 
-function countOf(value: number | string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+function requirePublicationCount(value: unknown): number {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value))) {
+    throw new Error('Published artifact count is invalid');
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error('Published artifact count is invalid');
+  }
+  return parsed;
 }
 
 function toVersionNumber(value: number | string | null | undefined): number {
@@ -331,31 +336,84 @@ async function preparePublishArtifactRecord(
   const language = input.language ? input.language.slice(0, MAX_LANGUAGE_CHARS) : null;
   const conversationId = input.conversationId ?? null;
 
-  const [preflight] = await db.query<PublishPreflightRow>(
+  const preflights = await db.query<PublishPreflightRow>(
     `select
-       (select count(*) from public.published_artifacts
-         where user_id = $1 and artifact_id <> $2) as other_published,
        (select count(*) from public.web_conversations
-         where id = $3::uuid and user_id = $1 and deleted_at is null) as owned_conversations`,
-    [userId, artifactId, conversationId],
+         where id = $2::uuid and user_id = $1 and deleted_at is null) as owned_conversations`,
+    [userId, conversationId],
   );
+  if (preflights.length !== 1 || !preflights[0]) {
+    throw new Error('Published artifact ownership preflight is missing');
+  }
+  const ownedConversations = requirePublicationCount(preflights[0].owned_conversations);
 
   // The RLS WITH CHECK in 0095 already refuses a foreign conversation, but it
   // refuses it by raising 42501, a 500 to the caller. Decide it here so the
   // answer is a 403 the client can act on.
-  if (conversationId && countOf(preflight?.owned_conversations) === 0) {
+  if (conversationId && ownedConversations === 0) {
     throw new PublishedArtifactOwnershipError(
       'That artifact belongs to a conversation that was deleted or that you do not own, so it cannot be published.',
     );
   }
 
-  if (countOf(preflight?.other_published) >= MAX_PUBLISHED_PER_USER) {
+  return { userId, artifactId, conversationId, title, language, content };
+}
+
+async function admitPublishedArtifact(
+  db: DatabaseAdapter,
+  userId: string,
+  artifactId: string,
+): Promise<string | null> {
+  const isolation = await db.query<{ isolation: string }>(
+    `select current_setting('transaction_isolation') as isolation`,
+  );
+  if (isolation.length !== 1 || isolation[0]?.isolation !== 'read committed') {
+    throw new Error('Published artifact admission requires read committed isolation');
+  }
+  const locks = await db.query<{ locked: boolean }>(
+    `select pg_advisory_xact_lock(hashtextextended('agi:published-artifact-quota:' || $1, 0)),
+            true as locked`,
+    [userId],
+  );
+  if (locks.length !== 1 || locks[0]?.locked !== true) {
+    throw new Error('Published artifact admission lock was not acquired');
+  }
+  // Separate statements refresh the READ COMMITTED snapshot after waiting for the owner lock.
+  const existing = await db.query<{ id: string; user_id: string; artifact_id: string }>(
+    `select id, user_id, artifact_id from public.published_artifacts
+      where user_id = $1 and artifact_id = $2
+      for update`,
+    [userId, artifactId],
+  );
+  if (!Array.isArray(existing) || existing.length > 1) {
+    throw new Error('Published artifact admission identity is invalid');
+  }
+  if (existing.length === 1) {
+    const row = existing[0];
+    if (
+      !row ||
+      typeof row.id !== 'string' ||
+      !row.id.trim() ||
+      row.user_id !== userId ||
+      row.artifact_id !== artifactId
+    ) {
+      throw new Error('Published artifact admission identity is invalid');
+    }
+    return row.id;
+  }
+  const counts = await db.query<{ published_count: number | string }>(
+    `select count(*) as published_count from public.published_artifacts where user_id = $1`,
+    [userId],
+  );
+  if (counts.length !== 1 || !counts[0]) {
+    throw new Error('Published artifact admission count is missing');
+  }
+  if (requirePublicationCount(counts[0].published_count) >= MAX_PUBLISHED_PER_USER) {
     throw new PublishedArtifactQuotaError(
       `You already have ${MAX_PUBLISHED_PER_USER} published artifacts. Unpublish one before publishing another.`,
     );
   }
-
-  return { userId, artifactId, conversationId, title, language, content };
+  return null;
 }
 
 export async function publishArtifactRecord(
@@ -365,6 +423,7 @@ export async function publishArtifactRecord(
   return db.transaction(async (tx) => {
     const { userId, artifactId, conversationId, title, language, content } =
       await preparePublishArtifactRecord(tx, input);
+    const existingPublicationId = await admitPublishedArtifact(tx, userId, artifactId);
 
     let rows: PublishedArtifactRow[];
     try {
@@ -413,6 +472,16 @@ export async function publishArtifactRecord(
       throw new PublishedArtifactOwnershipError(
         'Artifact was not published (row-level security denied the write)',
       );
+    }
+    if (
+      rows.length !== 1 ||
+      typeof row.id !== 'string' ||
+      !row.id.trim() ||
+      (existingPublicationId !== null && row.id !== existingPublicationId) ||
+      row.user_id !== userId ||
+      row.artifact_id !== artifactId
+    ) {
+      throw new Error('Published artifact write identity is invalid');
     }
     const version = await recordPublishedVersion(tx, {
       publishedArtifactId: row.id,
@@ -464,7 +533,17 @@ export async function restorePublishedArtifactRecord(
       throw error;
     }
     const row = rows[0];
-    if (!row) return null;
+    if (rows.length === 0) return null;
+    if (
+      rows.length !== 1 ||
+      !row ||
+      row.id !== input.publishedArtifactId ||
+      row.token !== input.token ||
+      row.user_id !== userId ||
+      row.artifact_id !== artifactId
+    ) {
+      throw new Error('Published artifact restore identity is invalid');
+    }
     const version = await recordPublishedVersion(tx, {
       publishedArtifactId: row.id,
       userId: row.user_id,

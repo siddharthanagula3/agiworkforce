@@ -67,15 +67,17 @@ function initial(): State {
   };
 }
 
-// This models one publication lock acquired at live DML and held until transaction completion.
+// This models owner admission locking for publish and live DML locking for restore.
 // It tests service ownership, rollback and ordering, not PostgreSQL locks, isolation, RLS or triggers.
 function model(options: {
   state?: State;
   fail?: Stage;
   insertReceipt?: unknown[];
   pointerReceipt?: unknown[];
+  writeReceipt?: unknown[];
   usesConnectors?: boolean;
   beforeCommit?: () => Promise<void>;
+  lockAttempt?: (transaction: number) => void;
   commitErrorAfterApply?: Error;
 } = {}) {
   let committed = structuredClone(options.state ?? initial());
@@ -101,26 +103,44 @@ function model(options: {
         tail = new Promise<void>((resolve) => {
           lock.release = resolve;
         });
+        options.lockAttempt?.(transaction);
         await previous;
         staged = structuredClone(committed);
       }
       const tx = {
-        query: vi.fn(async (raw: string, params: unknown[]) => {
+        query: vi.fn(async (raw: string, params: unknown[] = []) => {
           if (!active) throw new Error('Transaction query after completion');
           const sql = raw.replace(/\s+/g, ' ').trim();
           if (
-            sql.startsWith('insert into public.published_artifacts ') ||
+            sql.includes('pg_advisory_xact_lock') ||
             sql.startsWith('update public.published_artifacts set title')
           ) {
             await acquirePublication();
           }
           calls.push({ transaction, sql, params });
-          if (!lock.release && !sql.includes('as other_published')) {
+          if (sql.includes("current_setting('transaction_isolation')")) {
+            return [{ isolation: 'read committed' }];
+          }
+          if (sql.includes('pg_advisory_xact_lock')) {
+            expect(params).toEqual([input.userId]);
+            return [{ locked: true }];
+          }
+          if (!lock.release && !sql.includes('as owned_conversations')) {
             throw new Error('History or pointer accessed before publication mutation');
           }
-          if (sql.startsWith('select') && sql.includes('as other_published')) {
-            expect(params.slice(0, 2)).toEqual([input.userId, input.artifactId]);
-            return [{ other_published: 0, owned_conversations: 1 }];
+          if (sql.startsWith('select') && sql.includes('as owned_conversations')) {
+            expect(params).toEqual([input.userId, null]);
+            return [{ owned_conversations: 1 }];
+          }
+          if (sql.startsWith('select') && sql.endsWith('for update')) {
+            expect(params).toEqual([input.userId, input.artifactId]);
+            return staged.live ? [{
+              id: staged.live.id, user_id: staged.live.user_id, artifact_id: staged.live.artifact_id,
+            }] : [];
+          }
+          if (sql.includes('as published_count')) {
+            expect(params).toEqual([input.userId]);
+            return [{ published_count: staged.live ? 1 : 0 }];
           }
           if (sql.startsWith('insert into public.published_artifacts ')) {
             expect(sql).toContain('on conflict (user_id, artifact_id) do update set');
@@ -156,7 +176,7 @@ function model(options: {
                 updated_at: 'created',
               };
             }
-            return [{ ...staged.live }];
+            return options.writeReceipt ?? [{ ...staged.live }];
           }
           if (sql.startsWith('update public.published_artifacts set title')) {
             expect(sql).toContain('where user_id = $1 and id = $2 and artifact_id = $3 and token = $4');
@@ -177,7 +197,7 @@ function model(options: {
               content: String(params[7]),
               updated_at: 'changed',
             };
-            return [{ ...staged.live }];
+            return options.writeReceipt ?? [{ ...staged.live }];
           }
           if (sql.startsWith('select') && sql.includes('from public.published_artifact_versions')) {
             expect(sql).toContain('where published_artifact_id = $1 and user_id = $2 order by version desc limit 1');
@@ -260,7 +280,9 @@ for (const operation of ['publish', 'restore'] as const) {
         content: input.content,
         parent_version_id: 'history-1',
       });
-      expect(state.calls.map((call) => call.transaction)).toEqual([1, 1, 1, 1, 1]);
+      expect(state.calls.map((call) => call.transaction)).toEqual(
+        Array(operation === 'publish' ? 8 : 5).fill(1),
+      );
     });
 
     it.each(['history-read', 'history-insert', 'pointer'] as const)(
@@ -270,6 +292,22 @@ for (const operation of ['publish', 'restore'] as const) {
         const before = state.current();
         await expect(mutate(state, operation)).rejects.toThrow(`${fail} failed`);
         expect(state.current()).toEqual(before);
+      },
+    );
+
+    it.each([
+      [{}],
+      [{ ...initial().live!, id: '' }],
+      [{ ...initial().live!, user_id: 'foreign' }],
+      [{ ...initial().live!, artifact_id: 'other' }],
+      [initial().live!, initial().live!],
+    ].map((writeReceipt) => ({ writeReceipt })))(
+      'rolls back an invalid live write identity before history: %j',
+      async ({ writeReceipt }) => {
+        const state = model({ writeReceipt });
+        await expect(mutate(state, operation)).rejects.toThrow();
+        expect(state.current()).toEqual(initial());
+        expect(state.calls.some((call) => call.sql.includes('public.published_artifact_versions'))).toBe(false);
       },
     );
 
@@ -334,6 +372,16 @@ for (const operation of ['publish', 'restore'] as const) {
   });
 }
 
+it.each([{ id: 'replacement' }, { token: 'bbbbbbbbbbbbbbbbbbbbbbbb' }])(
+  'rolls back an inexact restore write receipt: %j',
+  async (change) => {
+    const state = model({ writeReceipt: [{ ...initial().live!, ...change }] });
+    await expect(mutate(state, 'restore')).rejects.toThrow();
+    expect(state.current()).toEqual(initial());
+    expect(state.calls.some((call) => call.sql.includes('public.published_artifact_versions'))).toBe(false);
+  },
+);
+
 it.each(['history-read', 'history-insert', 'pointer'] as const)(
   'leaves no first publication after %s failure',
   async (fail) => {
@@ -359,11 +407,31 @@ it.each([
   ['publish', 'restore'],
   ['restore', 'publish'],
 ] as const)('serializes distinct %s/%s payloads with matching receipts', async (first, second) => {
-  const state = model();
-  const results = await Promise.all([
-    mutate(state, first, '<p>A</p>'),
-    mutate(state, second, '<p>B</p>'),
-  ]);
+  let entered!: () => void;
+  let release!: () => void;
+  let secondAttempted!: () => void;
+  const firstMutated = new Promise<void>((resolve) => { entered = resolve; });
+  const secondLockAttempt = new Promise<void>((resolve) => { secondAttempted = resolve; });
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let commits = 0;
+  const state = model({
+    beforeCommit: async () => {
+      if (++commits === 1) { entered(); await gate; }
+    },
+    lockAttempt: (transaction) => { if (transaction === 2) secondAttempted(); },
+  });
+  const firstResult = mutate(state, first, '<p>A</p>');
+  await firstMutated;
+  const secondResult = mutate(state, second, '<p>B</p>');
+  await secondLockAttempt;
+  expect(commits).toBe(1);
+  expect(state.current()).toEqual(initial());
+  expect(state.calls.some((call) => call.transaction === 2 && (
+    call.sql.startsWith('insert') || call.sql.startsWith('update') ||
+    call.sql.includes('from public.published_artifact_versions')
+  ))).toBe(false);
+  release();
+  const results = await Promise.all([firstResult, secondResult]);
   expect(results.map((result) => result?.version)).toEqual([2, 3]);
   const committed = state.current();
   for (const result of results) {
@@ -371,8 +439,10 @@ it.each([
   }
   expect(committed.live).toMatchObject({ version: 3, content: '<p>B</p>' });
   expect(committed.history[2]?.parent_version_id).toBe('history-2');
-  expect(state.calls.slice(0, 2).map((call) => call.transaction)).toEqual([1, 2]);
-  const mutations = state.calls.filter((call) => !call.sql.includes('as other_published'));
+  const mutations = state.calls.filter((call) =>
+    call.sql.startsWith('insert') || call.sql.startsWith('update') ||
+    call.sql.includes('from public.published_artifact_versions'),
+  );
   expect(mutations.map((call) => call.transaction)).toEqual([1, 1, 1, 1, 2, 2, 2, 2]);
 });
 

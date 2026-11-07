@@ -41,8 +41,14 @@ function makeDb(handler: (sql: string, params: unknown[]) => unknown[]) {
           if (sql.includes('set version = $2')) {
             return [{ id: params[0], user_id: params[2], version: params[1] }];
           }
+          if (sql.includes("current_setting('transaction_isolation')")) {
+            return [{ isolation: 'read committed' }];
+          }
+          if (sql.includes('pg_advisory_xact_lock')) return [{ locked: true }];
+          if (sql.includes('from public.published_artifacts') && sql.includes('for update')) return [];
+          if (sql.includes('as published_count')) return [{ published_count: 0 }];
           if (
-            sql.includes('as other_published') ||
+            sql.includes('as owned_conversations') ||
             sql.includes('insert into public.published_artifacts')
           ) return handler(sql, params);
           throw new Error(`Unexpected publish SQL: ${sql}`);
@@ -80,7 +86,7 @@ describe('a first publish of an artifact with a connector binding', () => {
     const { db, issued } = makeDb((sql) =>
       sql.includes('insert into public.published_artifacts')
         ? [publishedRow('invited')]
-        : [{ other_published: 0, owned_conversations: 0 }],
+        : [{ owned_conversations: 0 }],
     );
 
     const published = await publishArtifactRecord(db, {

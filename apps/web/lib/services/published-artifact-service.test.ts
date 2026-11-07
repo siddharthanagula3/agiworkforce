@@ -39,8 +39,10 @@ function makeDb(rows: unknown[] = []): FakeDb {
     db.query.mockImplementation(async (sql: unknown, params: unknown[] = []) => {
       const history = historyRows(String(sql), params);
       if (history !== null) return history;
-      if (String(sql).includes('as other_published')) {
-        return [{ other_published: 0, owned_conversations: 1 }];
+      const admission = admissionRows(String(sql));
+      if (admission !== null) return admission;
+      if (String(sql).includes('as owned_conversations')) {
+        return [{ owned_conversations: 1 }];
       }
       if (isInsert(sql) || String(sql).includes('set title = case')) return rows;
       throw new Error(`Unexpected transaction SQL: ${String(sql)}`);
@@ -52,6 +54,18 @@ function makeDb(rows: unknown[] = []): FakeDb {
     }
   });
   return db;
+}
+
+function admissionRows(sql: string, publishedCount = 0, existingRows: unknown[] = []): unknown[] | null {
+  if (sql.includes("current_setting('transaction_isolation')")) {
+    return [{ isolation: 'read committed' }];
+  }
+  if (sql.includes('pg_advisory_xact_lock')) return [{ locked: true }];
+  if (sql.includes('from public.published_artifacts') && sql.includes('for update')) {
+    return existingRows;
+  }
+  if (sql.includes('as published_count')) return [{ published_count: publishedCount }];
+  return null;
 }
 
 function historyRows(sql: string, params: unknown[]): unknown[] | null {
@@ -81,7 +95,8 @@ function insertCall(db: FakeDb): [string, unknown[]] {
 }
 
 function makeRoutedDb(options: {
-  otherPublished?: number | string;
+  publishedCount?: number;
+  existingRows?: unknown[];
   ownedConversations?: number | string;
   insertRows?: unknown[];
   insertError?: unknown;
@@ -95,12 +110,13 @@ function makeRoutedDb(options: {
         if (options.insertError) throw options.insertError;
         return options.insertRows ?? [row()];
       }
-      if (!String(sql).includes('as other_published')) {
+      const admission = admissionRows(String(sql), options.publishedCount, options.existingRows);
+      if (admission !== null) return admission;
+      if (!String(sql).includes('as owned_conversations')) {
         throw new Error(`Unexpected publish SQL: ${String(sql)}`);
       }
       return [
         {
-          other_published: options.otherPublished ?? 0,
           owned_conversations: options.ownedConversations ?? 0,
         },
       ];
@@ -279,7 +295,7 @@ describe('publishArtifactRecord', () => {
     });
     const [sql, params] = owned.query.mock.calls[0]! as [string, unknown[]];
     expect(sql).toContain('public.web_conversations');
-    expect(params).toEqual(['user-1', 'artifact-1', '11111111-1111-4111-8111-111111111111']);
+    expect(params).toEqual(['user-1', '11111111-1111-4111-8111-111111111111']);
     expect(owned.query.mock.calls.some(([s]) => isInsert(s))).toBe(true);
   });
 
@@ -296,7 +312,7 @@ describe('publishArtifactRecord', () => {
   });
 
   it('bounds how many pages one user can leave published', async () => {
-    const full = makeRoutedDb({ otherPublished: MAX_PUBLISHED_PER_USER });
+    const full = makeRoutedDb({ publishedCount: MAX_PUBLISHED_PER_USER });
     await expect(
       publishArtifactRecord(full as never, {
         userId: 'user-1',
@@ -309,20 +325,27 @@ describe('publishArtifactRecord', () => {
     expect(full.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
-  it('excludes the artifact being republished from the quota count', async () => {
-    const atCap = makeRoutedDb({ otherPublished: MAX_PUBLISHED_PER_USER - 1 });
-    await expect(
-      publishArtifactRecord(atCap as never, {
-        userId: 'user-1',
-        artifactId: 'artifact-1',
-        title: 'Dashboard',
-        kind: 'html',
-        content: '<h1>hi</h1>',
-      }),
-    ).resolves.toMatchObject({ token: 'aaaaaaaaaaaaaaaaaaaaaaaa' });
-    const [sql] = atCap.query.mock.calls[0]! as [string, unknown[]];
-    expect(sql).toContain('artifact_id <> $2');
-  });
+  it.each([MAX_PUBLISHED_PER_USER, MAX_PUBLISHED_PER_USER + 1])(
+    'republishes a pinned existing artifact without quota admission at inventory %i',
+    async (publishedCount) => {
+      const atCap = makeRoutedDb({
+        publishedCount,
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+      });
+      await expect(
+        publishArtifactRecord(atCap as never, {
+          userId: 'user-1',
+          artifactId: 'artifact-1',
+          title: 'Dashboard',
+          kind: 'html',
+          content: '<h1>hi</h1>',
+        }),
+      ).resolves.toMatchObject({ token: 'aaaaaaaaaaaaaaaaaaaaaaaa' });
+      const existing = atCap.query.mock.calls.find(([sql]) => String(sql).includes('for update'));
+      expect(existing?.[1]).toEqual(['user-1', 'artifact-1']);
+      expect(atCap.query.mock.calls.some(([sql]) => String(sql).includes('as published_count'))).toBe(false);
+    },
+  );
 
   it('turns a racing RLS denial into an ownership refusal, not an unhandled 500', async () => {
     const denied = makeRoutedDb({
@@ -585,11 +608,12 @@ describe('Restore persistence without republication', () => {
         const history = historyRows(sql, params);
         if (history !== null) return history;
         const normalized = sql.replace(/\s+/g, ' ').trim();
-        if (normalized.startsWith('select') && normalized.includes('as other_published')) {
-          expect(normalized).toContain('where user_id = $1 and artifact_id <> $2');
-          expect(normalized).toContain('where id = $3::uuid and user_id = $1 and deleted_at is null');
+        if (normalized.includes('as published_count')) {
+          return [{ published_count: options.otherPublished ?? 0 }];
+        }
+        if (normalized.startsWith('select') && normalized.includes('as owned_conversations')) {
+          expect(normalized).toContain('where id = $2::uuid and user_id = $1 and deleted_at is null');
           return [{
-            other_published: options.otherPublished ?? 0,
             owned_conversations: options.ownedConversations ?? 1,
           }];
         }
@@ -754,7 +778,7 @@ describe('Restore persistence without republication', () => {
       title: restoreInput.title,
       conversationId: 'original-conversation',
     });
-    expect(state.db.query.mock.calls[0]?.[1]).toEqual(['user-1', 'artifact-1', null]);
+    expect(state.db.query.mock.calls[0]?.[1]).toEqual(['user-1', null]);
   });
 
   it.each([
@@ -813,22 +837,21 @@ describe('Restore persistence without republication', () => {
     expect(state.db.query).not.toHaveBeenCalled();
   });
 
-  it('retains quota refusal without any mutation', async () => {
-    const state = model({ otherPublished: MAX_PUBLISHED_PER_USER });
-    await expect(
-      restorePublishedArtifactRecord(state.db as never, restoreInput),
-    ).rejects.toBeInstanceOf(PublishedArtifactQuotaError);
-    expect(state.db.query).toHaveBeenCalledTimes(1);
-    expect(state.current()?.content).toBe('<h1>hi</h1>');
-  });
-
-  it('excludes its own artifact from the quota at capacity', async () => {
-    const state = model({ otherPublished: MAX_PUBLISHED_PER_USER - 1 });
-    await expect(
-      restorePublishedArtifactRecord(state.db as never, restoreInput),
-    ).resolves.toMatchObject({ id: 'row-1' });
-    expect(state.db.query.mock.calls[0]?.[1]).toEqual(['user-1', 'artifact-1', null]);
-  });
+  it.each([MAX_PUBLISHED_PER_USER, MAX_PUBLISHED_PER_USER + 1])(
+    'restores existing content without quota admission at inventory %i', async (otherPublished) => {
+      const state = model({ otherPublished });
+      await expect(
+        restorePublishedArtifactRecord(state.db as never, restoreInput),
+      ).resolves.toMatchObject({ id: 'row-1', content: restoreInput.content, version: 1 });
+      expect(state.db.query).toHaveBeenCalledTimes(5);
+      expect(state.db.query.mock.calls.some(([sql]) =>
+        /published_count|other_published|pg_advisory_xact_lock|transaction_isolation|for update/.test(sql),
+      )).toBe(false);
+      expect(state.db.query.mock.calls.some(([sql]) =>
+        sql.includes('insert into public.published_artifact_versions'),
+      )).toBe(true);
+    },
+  );
 
   it('rejects a deleted or foreign conversation before updating', async () => {
     const state = model({ ownedConversations: 0 });
