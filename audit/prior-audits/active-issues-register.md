@@ -15740,8 +15740,9 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `d1123747532a84e34c0af1215c461e239974ea21`; billing/report continuation in
 `09073e677cf3971fc2f7c1ed929669e55158f78e`; owner-policy auth/scope continuation in
 `c0a44e87321e8b14f7d7b43eaa07f0c9fd16e658`; shared-project scope continuation in
-`2a5d910157b8b82127c79917140d705426e401a2`, 2026-11-07. Client workspace binding, shared-session
-audience scope, wider identity consumers and runtime acceptance remain open.
+`2a5d910157b8b82127c79917140d705426e401a2`; shared-session target/receipt continuation in
+`7bab6613db418be541428fc48e7a3b32721b9cf9`, 2026-11-07. Client intent, broader audience atomicity,
+wider identity consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
 returns the authenticated request's organizationId. The affected handlers discarded
@@ -16202,3 +16203,78 @@ workflows remain open. Existing project response-version handling, owner-only
 field checks, limits, transactions, response shape and errors are preserved. No migration, new
 transaction, replay or lease is introduced; prior 0394/0395 remain UNAPPLIED.
 No product checks, provider/SQL/RLS execution, push or deployment occurred.
+
+### Shared-session target and observed-grant receipt continuation
+
+Source-reviewed continuation `7bab6613db418be541428fc48e7a3b32721b9cf9` makes
+resolveSessionShareTarget require the captured request organizationId and use
+canonical exact active membership. PATCH /api/share/[token] passes the value from
+its existing getUserScopedDb result. Both audience branches still require a
+non-null active target; Personal no longer falls back to saved A. This is an
+intentional fail-closed change, not new Personal/offboarded publication support.
+
+Previously a share without a linked conversation could grant saved A despite
+captured B. A linked B conversation with explicit B could instead be falsely
+refused when the resolver reselected A; an explicitly Personal linked conversation
+could fall through the truthy organization comparison and grant saved A. Existing
+membership, owner/token, conversation, content.share and external-sharing gates
+still apply. The privileged scope read remains owner-qualified; conversation
+ownership is checked in its join. No unrelated-tenant privilege or observed
+incident is established. For linked conversations, requireSelectedWorkspace
+checks an explicit selector and returns early for headerless requests. The later
+non-null conversation-organization equality guard still checks the captured
+target; it does not add a headerless Personal-conversation equality check.
+
+Public transition now deletes the scope snapshot's observed grant organization,
+not the newly captured destination, and audits that actual organization. A present
+grant must yield exactly one matching shared_session_id receipt before visibility
+is changed. Zero, mismatched or multiple receipts cause conflict, without a
+privileged retry or revoke audit. Such a refusal does not prove nothing was
+deleted. An absent observed grant skips deletion/revoke audit. The settings
+organization-unshare route uses the same stricter receipt helper and remains
+delete-only; it never reopens the public link. Its validated UUID route parameter
+is canonicalized to lowercase so PostgreSQL's lowercase receipt does not produce
+a false 404 and suppress audit after a mixed-case-ID deletion.
+
+The combined change is necessary: simply changing the resolver to B while retaining
+DELETE B could leave an observed grant A behind on a public transition that
+previously deleted A. Existing grant A -> organization B still conflicts with the
+unique per-session grant instead of relocating it. Checked-in 0186 permits at most
+one grant via UNIQUE(shared_session_id); LIMIT 1 is not a demonstrated multi-grant
+defect. Anonymous visibility and workspace grant are independent concepts, and a
+public row with a grant is not universally invalid. Org-shared reads do not filter
+visibility. Applied schema/RLS state remains unverified.
+
+The old grant's scoped SELECT/DELETE policies require readable organization
+authority, including content.read under the checked-in permission functions;
+being the session owner alone need not suffice after offboarding or permission
+loss. Failure to confirm revocation refuses publication rather than bypassing
+RLS. Default auth/native-to-product identity and scoped-adapter behavior are
+unchanged.
+
+This is not atomic audience switching. Scope read, grant/delete, visibility
+update and audit remain separate. A concurrent insertion after an absent-grant
+snapshot is now skipped, whereas the previous selected-target DELETE could catch
+a same-target insertion. Replacement before deletion, reinsertion afterward and
+permission changes remain possible; concurrent removal causes conservative
+conflict. An exact receipt proves that statement, not final grant absence.
+Successful grant followed by visibility failure may retain public access plus a
+grant; successful deletion followed by failure may leave an organization-only
+share without a grant. No response/error proves rollback. A future atomic design
+must address row locking, all participating writers and owner revocation under
+RLS without recursive policies. No transaction or migration is added here.
+
+Authored UNRUN fixtures exercise real target/membership/service owners and PATCH
+source with modeled database results, saved-selection sentinels, auth receipts,
+policy/cache/permissions and effect boundaries. They cover captured B/saved A,
+explicit/headerless inputs, Personal/missing/mismatched membership, owner/token
+binding, actual A deletion/audit, exact/zero/mismatched/multiple receipts,
+no observed grant, retained permissions/external-policy refusals, unique-conflict
+non-relocation and separate-write failure. Settings fixtures call the real delete
+helper through mocked route infrastructure and assert truthful 404/200 receipts
+without visibility changes, including mixed-case UUID input with a canonical
+receipt. End-to-end authenticated selector admission, PostgreSQL/RLS,
+concurrency and real audit failure behavior are not established by these fixtures.
+No product checks, live SQL/provider work, push or deployment; prior 0394/0395
+remain UNAPPLIED. Runtime acceptance and broader audience-transition repair remain
+open. Source review and backup integrity are not release readiness.

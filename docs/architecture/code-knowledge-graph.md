@@ -6903,8 +6903,52 @@ No actual auth/header parsing, SQL/RLS, object storage, extraction, indexing,
 upload completion, concurrency or runtime acceptance is established.
 
 Default auth/identity/adapter behavior, limits, response-version handling,
-owner-only field checks and transactions stay unchanged. Client intent before capture, shared-session audience
-scope, default identity/RLS mapping and post-check grant/membership races remain.
+owner-only field checks and transactions stay unchanged. The later shared-session
+continuation below narrows target and observed-grant receipts; client intent,
+default identity/RLS mapping, audience atomicity and post-check grant/membership
+races remain.
 No lease, new transaction, quota reservation, replay protocol or migration. Prior
 0394/0395 remain UNAPPLIED; no product checks, live SQL/provider work, push or deploy.
 See WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for boundaries and unrun acceptance work.
+
+## Shared-session audience retains target and observed grant
+
+Continuation `7bab6613db418be541428fc48e7a3b32721b9cf9` makes resolveSessionShareTarget require the
+getUserScopedDb-captured organization and canonical exact active membership.
+PATCH preserves owner/token and linked-conversation checks, organization
+content.share and stored-conversation/grant external-sharing policy. Both branches
+still require non-null membership; Personal refuses rather than falling back to
+saved selection. No default auth/adapter or privilege change.
+
+Public deletes the observed grant organization instead of the selected target and
+audits that actual organization. Exactly one matching session-ID receipt is
+required before visibility update; zero/mismatched/multiple receipts conflict.
+No observed grant skips deletion/audit. Settings unshare inherits the stricter
+receipt and remains delete-only; validated UUID input is lowercased to match
+canonical PostgreSQL receipts and avoid false post-delete failure. Existing A ->
+organization B conflicts with the unique per-session grant; it does not relocate it.
+
+This corrects unintended saved-workspace targeting and avoids leaving observed A
+behind when captured B is selected. It does not establish atomic audience
+switching. Visibility and grant are independent schema concepts, org-shared reads
+do not filter visibility, and the unique grant index rules out supported
+multi-grant state. Old-grant readability/RLS can still refuse owner deletion after
+permission loss; there is no privileged retry.
+
+Scope read, deletion/grant, visibility update and audit remain separate. The new
+absent-grant skip can miss a concurrent insertion the old selected-target DELETE
+would catch; replacement/reinsertion, concurrent removal, permission changes and
+post-write failure remain. Exact receipt is not final-state verification.
+Linked conversations retain an explicit-selector check; headerless requests skip
+that check, then use the existing non-null conversation/captured-target equality.
+No headerless Personal-conversation equality is added. Client intent, default
+identity mapping and stronger owner-revocation/transaction design remain open.
+
+UNRUN fixtures exercise real route/service/exact membership and policy source over
+mocked auth, DB/cache/permission/effect boundaries, including captured B/saved A,
+Personal/member/owner binding, observed A receipts, no-grant skip, retained gates,
+unique conflict and partial-effect failures. Settings fixtures use the real delete
+helper but mocked route infrastructure. No end-to-end authenticated selector admission, SQL/RLS,
+concurrency or audit failure is proven. No new migration; prior 0394/0395 remain
+UNAPPLIED. No product checks, provider/DB actions, push or deployment. See
+WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for bounded scope and runtime acceptance limits.
