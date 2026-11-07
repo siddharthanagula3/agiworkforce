@@ -10417,6 +10417,42 @@ or full erasure. An audit failure can still occur after a successful write.
 No tests, lint, typechecks, builds, installations, live/database actions, push or
 deployment ran.
 
+Cancellation request-ownership addendum, 2026-11-07: Source-corrected in
+`ce083f4072cc2b59beb751505b392cce71ca467f`. The previous cancellation hook
+could dispatch after its view retired while CSRF preparation was pending and
+unconditionally replace newer deletion-status cache data after success.
+A dedicated controller now captures the native session when confirmation opens,
+uses fresh layout generations and permanently retired one-shot intents, and
+receives a separate active-view prop from the settings modal. Inactive view,
+unmount and observed session changes retire the request and its presentation.
+
+Exact ready QueryState identity is checked at confirmation and again at physical
+POST dispatch after CSRF and captured-token waits. RequestAuthority supplies
+captured Bearer authentication with cookies omitted. Intent lifetime is separate
+from QueryState identity: a synchronous comparison permits no-pending cache
+publication only when the captured state is unchanged, and that own write does
+not invalidate settlement. A valid receipt after a newer state preserves that
+state and offers an explicit status-query-only refetch. Its admission and UI
+settlement are guarded; no full-page reload or cancellation replay is added.
+Retired results cannot publish cache, close a replacement dialog or emit errors.
+
+The original global status GET/cache remains unowned and cookie-authenticated,
+including reconciliation's reader. Capturing a session does not prove ownership
+of the originally displayed status. The server still cancels its authenticated
+account's schedule current at execution, without a version precondition;
+different-device cancel/re-schedule races remain. Scheduling, success logout,
+global cleanup and durable uncertainty recovery are unchanged. Already-accepted
+server effects cannot be recalled, and a cancellation receipt is not final
+remote-state or erasure proof. Existing receipt/refusal parsing and retry:false
+are retained.
+
+Independent source review accepted four production and six fixture files.
+UNRUN fixtures cover duplicate/retained handles, CSRF/token waits, later query
+state, response/body retirement, status-only reconciliation and StrictMode
+generation retirement; they do not establish real browser/auth/React/database
+behavior. No product tests, lint, typechecks, builds, installations, live account
+actions, migration application, push or deployment ran.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 

@@ -7656,3 +7656,22 @@ No full linearizable add/remove result, server cancellation or automatic retry.
 Three source/fixture files are independently reviewed. Deterministic protocol
 and route fixtures are UNRUN, not live database/lock/RLS/rollback acceptance.
 No migration application or client change. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Account cancellation owns its confirmation and dispatch
+
+Continuation ce083f4072cc2b59beb751505b392cce71ca467f captures the native session when
+cancellation confirmation opens. Separate active-view wiring, fresh layout
+generations and one-shot intent retirement fence old callbacks and completion.
+RequestAuthority checks exact ready QueryState after CSRF/token preparation at
+physical dispatch, then uses captured Bearer credentials with cookies omitted.
+
+Lifetime is independent of QueryState. Cache publication compares the captured
+state synchronously; newer status survives, while an own write can still settle.
+A validated receipt with changed state offers an explicit status-only query
+refetch with guarded UI settlement, never page reload or cancellation replay.
+
+The global cookie-authenticated status reader/cache remains unowned. This does
+not establish the displayed status's original account or a server schedule ID.
+Backend cancel/re-schedule races, scheduling/logout, durable recovery and already
+accepted server effects remain outside this slice. Ten independently reviewed
+source/fixture files; fixtures UNRUN. See WEB-ACCOUNT-DELETION-INTENT-01.
