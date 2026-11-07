@@ -449,7 +449,7 @@ describe('SiteDetail', () => {
       'Each signed-in visitor’s own data stays private to them',
     );
     expect(screen.getByTestId('site-data-personal')).toHaveTextContent('You have 2 entries');
-    expect(mocks.readPublishedSiteData).toHaveBeenCalledWith(TOKEN, expect.any(AbortSignal));
+    expect(mocks.readPublishedSiteData).toHaveBeenCalledWith(TOKEN, expect.any(AbortSignal), expect.objectContaining({ assertCurrent: expect.any(Function), fetch: expect.any(Function) }));
   });
 
   it('confirms before clearing shared data and reloads afterwards', async () => {
@@ -468,7 +468,7 @@ describe('SiteDetail', () => {
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Clear shared data' }));
 
-    await waitFor(() => expect(mocks.clearPublishedSiteSharedData).toHaveBeenCalledWith(TOKEN));
+    await waitFor(() => expect(mocks.clearPublishedSiteSharedData).toHaveBeenCalledWith(TOKEN, expect.objectContaining({ assertCurrent: expect.any(Function), fetch: expect.any(Function) })));
     expect(await screen.findByText('Nothing shared yet.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear shared data' })).toBeDisabled();
   });

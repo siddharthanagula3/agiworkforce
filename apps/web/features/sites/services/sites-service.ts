@@ -294,27 +294,36 @@ export async function updatePublishedSite(
 export async function readPublishedSiteData(
   token: string,
   signal?: AbortSignal,
+  authority?: Pick<RequestAuthority, 'assertCurrent' | 'fetch'>,
 ): Promise<SiteData> {
-  const response = await fetch(managedCloudPublishedArtifactDataPath(token), {
-    credentials: 'include',
-    signal,
+  return withPublicationAuthority(authority, async () => {
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactDataPath(token), {
+      credentials: 'include', signal,
+    });
+    authority?.assertCurrent();
+    if (!response.ok) throw await responseError(response, "Failed to load this site's data");
+    const raw: unknown = await response.json();
+    authority?.assertCurrent();
+    return ManagedCloudPublishedArtifactDataResponseSchema.parse(raw);
   });
-  if (!response.ok) {
-    throw await responseError(response, "Failed to load this site's data");
-  }
-  return ManagedCloudPublishedArtifactDataResponseSchema.parse(await response.json());
 }
 
-export async function clearPublishedSiteSharedData(token: string): Promise<number> {
-  const response = await fetch(managedCloudPublishedArtifactDataPath(token), {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: await addCsrfHeaders(),
+export async function clearPublishedSiteSharedData(
+  token: string,
+  authority?: Pick<RequestAuthority, 'assertCurrent' | 'fetch'>,
+): Promise<number> {
+  return withPublicationAuthority(authority, async () => {
+    const headers = await addCsrfHeaders();
+    authority?.assertCurrent();
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactDataPath(token), {
+      method: 'DELETE', credentials: 'include', headers,
+    });
+    authority?.assertCurrent();
+    if (!response.ok) throw await responseError(response, "Failed to clear this site's shared data");
+    const raw: unknown = await response.json();
+    authority?.assertCurrent();
+    return ManagedCloudPublishedArtifactDataClearResponseSchema.parse(raw).cleared;
   });
-  if (!response.ok) {
-    throw await responseError(response, "Failed to clear this site's shared data");
-  }
-  return ManagedCloudPublishedArtifactDataClearResponseSchema.parse(await response.json()).cleared;
 }
 
 export type SiteViewer = ManagedCloudPublishedArtifactViewer;
