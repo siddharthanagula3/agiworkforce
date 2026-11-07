@@ -58,7 +58,7 @@ function expectOnlyHistoryAndRestore() {
   expect(fetchMock.mock.calls[0]?.[0]).toBe(managedCloudPublishedArtifactVersionsPath(site.token));
   expect(fetchMock.mock.calls[1]).toEqual([
     managedCloudPublishedArtifactVersionPath(site.token, 7),
-    { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': 'restore-csrf' } },
+    { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': 'restore-csrf' }, signal: expect.any(AbortSignal) },
   ]);
 }
 

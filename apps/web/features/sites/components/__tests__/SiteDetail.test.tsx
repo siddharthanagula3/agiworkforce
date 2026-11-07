@@ -401,6 +401,7 @@ describe('SiteDetail', () => {
       expect(mocks.republishArtifactVersion).toHaveBeenCalledWith(
         expect.objectContaining({ token: TOKEN, artifactId: 'artifact-1' }),
         1,
+        expect.objectContaining({ assertCurrent: expect.any(Function), fetch: expect.any(Function) }),
       ),
     );
   });
@@ -636,7 +637,8 @@ describe('SiteDetail read ownership', () => {
     );
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-2']?.token).toBe(other.token);
     await restoreOlderVersion();
-    await waitFor(() => expect(mocks.republishArtifactVersion).toHaveBeenLastCalledWith(renewed, 1));
+    await waitFor(() => expect(mocks.republishArtifactVersion).toHaveBeenLastCalledWith(renewed, 1,
+      expect.objectContaining({ assertCurrent: expect.any(Function), fetch: expect.any(Function) })));
     await act(async () => oldRead.resolve({ site: site({ visibility: 'invited' }), workspace: null }));
   });
 

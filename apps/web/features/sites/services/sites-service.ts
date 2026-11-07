@@ -76,7 +76,7 @@ const PublishedArtifactRestoreReceiptSchema = z.object({
 });
 
 async function withPublicationAuthority<T>(
-  authority: RequestAuthority | undefined,
+  authority: Pick<RequestAuthority, 'assertCurrent'> | undefined,
   operation: () => Promise<T>,
 ): Promise<T> {
   authority?.assertCurrent();
@@ -179,7 +179,7 @@ export async function readPublishedSite(
 export async function listPublishedArtifactVersions(
   token: string,
   signal?: AbortSignal,
-  authority?: RequestAuthority,
+  authority?: Pick<RequestAuthority, 'assertCurrent' | 'fetch'>,
 ): Promise<ManagedCloudPublishedArtifactVersion[]> {
   return withPublicationAuthority(authority, async () => {
     const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactVersionsPath(token), {
@@ -214,7 +214,7 @@ export async function readPublishedSiteVersion(
 export async function republishArtifactVersion(
   artifact: Pick<PublishedSite, 'token' | 'artifactId'>,
   version: number,
-  authority?: RequestAuthority,
+  authority?: Pick<RequestAuthority, 'assertCurrent' | 'fetch'>,
 ): Promise<void> {
   const token = artifact.token;
   return withPublicationAuthority(authority, async () => {
