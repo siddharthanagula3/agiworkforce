@@ -6664,3 +6664,29 @@ already-served content are not revoked retroactively; later manager revocation c
 narrow access. Uncertain COMMIT or response errors may follow durable effects.
 Source models and guards are UNRUN and do not establish actual header parsing,
 concurrency, storage access or deployment. See WEB-INVITED-WORKSPACE-GRANT-01.
+
+## Sharing and spend settings retain resolved workspace scope
+
+Accepted `12c9a9a7c85536c373968c5e9137c1af04eade1b` adds a required-target membership lookup
+in org-sharing-service. resolveOrgMembershipForOrganization returns null for
+Personal without querying and otherwise reads the exact active organization/user
+membership, rejecting mismatched receipts. The saved-selection wrapper delegates
+rather than duplicating the lookup; auth/bootstrap and other callers retain their
+existing semantics pending separate review.
+
+The shared overview, four sharing-resource routes and spend-limit route pass the
+organizationId already returned by getUserScopedDb. Permission, resource, audit,
+cache and spend-storage destinations therefore use the same captured request scope.
+Existing adapters and gates are preserved. The old Personal/saved-A spend DELETE
+could remove A's cap under valid A permissions; this correction prevents that
+bounded retargeting, not unauthorized tenant access.
+
+Auth/scope and resource boundaries are mocked in authored handler fixtures. The
+real membership helper and sharing permission-gate functions are exercised; spend
+entitlement/permission gates are mocked, with target and refusal assertions. Source coverage names
+the ten corrected call sites. All remain UNRUN and do not prove real header/auth
+resolution, RLS, concurrency or UI behavior. Headerless UI snapshots and stale
+query keys, twelve other organization settings files, interactive caller gates,
+project/session target helpers and MFA exemption scope remain separate work.
+No new migration or product checks were performed. Prior 0394/0395 migrations
+remain UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.

@@ -15655,8 +15655,73 @@ invited grants cease authorizing new workspace reads, but old writers can still
 produce wrong-target/partial writes. Existing snapshots, served content and already
 authorized requests cannot be withdrawn retroactively. Later authorized manager
 revocation may narrow access after final validation. Policy/live-artifact changes,
-stale-client intent (no audience CAS), settings APIs' separate saved-selector usage,
+stale-client intent (no audience CAS), other settings APIs' saved-selector usage,
 non-null conversation scope restrictions and cross-artifact quotas remain outside
-this correction. COMMIT acknowledgement loss or response failure can follow durable
+this correction. Sharing/spend settings receive the later bounded correction under
+WEB-ORG-SETTINGS-REQUEST-SCOPE-01. COMMIT acknowledgement loss or response failure can follow durable
 effects; failed HTTP is not rollback proof. Installed Next guidance and applied
 schema were not verified. No product checks, DB/provider actions, push or deployment.
+
+## WEB-ORG-SETTINGS-REQUEST-SCOPE-01
+
+Severity: Medium. Bounded sharing/spend correction source-reviewed in
+`12c9a9a7c85536c373968c5e9137c1af04eade1b`, 2026-11-07. Other request-backed settings, client
+workspace binding and runtime acceptance remain open.
+
+getUserScopedDb already resolves an explicit workspace or Personal selector and
+returns the authenticated request's organizationId. The affected handlers discarded
+it and called resolveOrgMembership, which independently resolved the saved/cached
+selection again. A valid authenticated/CSRF spend-limit DELETE explicitly selecting
+Personal could therefore remove saved workspace A's cap, provided the caller had
+active A membership, the required Team/Enterprise access and policy.manage. PUT
+could likewise change A's cap. Existing privileged spend storage writes consumed
+the reselected A, so request-scoped RLS did not correct the destination.
+
+Sharing overview and project/connector/artifact/conversation operations used the
+same second selection. Membership, permission, ownership and resource predicates
+still applied to A: this is authorized-but-unintended targeting, not acquisition
+of another tenant's rights. Nonmembers, inadequate permissions and resource scope
+can refuse the operation. An explicit B selector can be ignored similarly when
+its upstream membership check permits it. A no-header request can also resolve A,
+then reselect B after a concurrent persisted/cache workspace switch. These are
+source-supported paths, not executed reproductions or observed incidents.
+
+The canonical service now offers resolveOrgMembershipForOrganization with a
+required string-or-null target. Personal returns null without querying. Non-null
+lookup is bound to exact organization, authenticated subject and active membership;
+a mismatched returned organization fails closed and database errors propagate.
+The existing saved-selection wrapper delegates to this lookup, preserving its
+intentional callers rather than globally redefining authentication or bootstrap.
+
+Five sharing route files and the spend-limit route capture organizationId once
+from getUserScopedDb and use the explicit helper. Every sharing method and the
+spend GET/admin gates retain that target for permissions, writes, response, audit
+and connector cache cleanup. Existing CSRF/rate/input/owner/plan/custom-role gates,
+scoped sharing adapters and spend storage adapter remain unchanged. Personal and
+lost target membership fail existing membership gates before resource effects.
+No migration, client change, additional privilege or new fallback is introduced.
+
+Fixtures exercise the real membership helper and sharing permission-gate functions
+behind mocked auth/scope and resource boundaries. Spend entitlement, permission
+and storage boundaries are mocked, with target and refusal assertions. They cover B versus saved A, Personal,
+headerless captured scope, missing/inactive/mismatched membership, target permissions,
+read/write/audit/cache attribution and retained refusal paths. The prior cross-org
+fixture's null-scoped mock plus header-B/saved-A premise was corrected while
+retaining untrusted query/body override and resource-boundary checks. A bounded
+source guard requires explicit scope propagation at all ten corrected call sites.
+All fixtures and guards remain UNRUN; none proves real auth/header parsing, database
+RLS, concurrent selection, integrated UI or deployment behavior.
+
+The sharing hooks use a constant query key and omit a selector; the spend UI also
+omits one. Keeping the first server resolution does not reconstruct stale UI intent
+or stop a selection change before that resolution. Twelve other organization
+settings route files, interactive compliance/service-principal gates, shared-project
+scope and conversation-sharing target helpers still need separate scope review.
+Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
+were deliberately not migrated. In particular the policy route's MFA exemption
+requires an authentication-boundary review, not a mechanical target replacement.
+Membership/permission changes after checking, post-write audit/cache/response errors
+and uncertain outcomes remain separate; no transaction or replay guarantee was
+added. Prior migrations 0394/0395 remain UNAPPLIED. Installed Next guidance and
+runtime state were unavailable. No product checks, live DB/provider action, push
+or deployment was performed.
