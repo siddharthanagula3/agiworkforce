@@ -15088,30 +15088,76 @@ No tests, lint, typechecks, builds, browser, database, push or deployment ran.
 
 ## WEB-ARTIFACT-DRAFT-RETENTION-01
 
-Severity: Medium. Independently source-qualified on 2026-11-07 and still open;
-no implementation correction or runtime reproduction is claimed.
+Severity: Medium. Independently source-qualified on 2026-11-07; bounded correction
+`fa3ad230d85f939a089b24832f804611f11de553` is independently source-reviewed only.
+Broader recovery/durability and runtime acceptance remain open.
 
-ArtifactPreview holds sourceDraft in component state and delays its separate
-localStorage recovery write by 800 ms. The timer cleanup cancels that write;
-ArtifactsPanel closes by unmounting its viewer, switches to a streaming viewer,
-and reuses the unkeyed preview on artifact selection. The preview also clears the
-draft on artifact ID/version-count changes. Closing or switching before the timer
-fires can therefore lose the newest edits, or leave only an older stored draft.
-The kept/not-kept status can continue to describe an earlier successful write.
-Manual Save, not the 800 ms timer, commits a canonical artifact version.
+ArtifactPreview previously held sourceDraft in component state and delayed its
+separate localStorage recovery write by 800 ms. Timer cleanup canceled the write
+on unmount or replacement. Closing the panel, switching to streaming, or replacing
+an artifact/version could lose the newest edits or retain only an older recovery
+copy. The kept/not-kept status could still describe an earlier successful write.
+Manual Save, not that timer, commits a canonical artifact version.
 
-A blanket cleanup flush is not an accepted fix. It can resurrect explicitly
-saved/discarded drafts or write one artifact's draft under another key. CodeMirror
-also calls onChange for programmatic value synchronization, so blindly treating
-every callback as a user edit is unsafe. A bounded correction needs artifact-bound
-edit-event persistence, no cleanup/restoration/initialization writes, truthful
-storage outcomes, and explicit Save/Cancel/confirmed-Restore handling. Checklist
-updates must retain their separate four-second canonical commit behavior without
-storage side effects inside React state updater functions.
+Recovery text is now written synchronously only when a changed editor or checklist
+callback is admitted for its current owner/session. The owner identity depends on
+artifact ID, actual artifact content and version count; a per-edit session further
+separates repeated editing lifetimes. Owned snapshots are filtered during render,
+so an outgoing artifact's draft is not displayed as the incoming artifact's edit.
+Committed owner liveness rejects callbacks after replacement/unmount, and session
+checks reject old editor callbacks. Only editor children are keyed by session;
+the entire preview, its publication guards and stopped-stream retention remain
+unchanged. This tuple is a client lifecycle boundary, not a server revision/CAS.
 
-Existing raw recovery strings have no base-revision or concurrent-owner metadata;
-automatic restoration against newer canonical content, storage-removal failure,
-cloud reconciliation and multiple-editor conflict behavior need explicit limits.
-This finding remains separate from stopped-stream retention and publication
-ownership. The publication correction did not change sourceDraft handling,
-editor callbacks, draft storage format or either draft timer.
+The 800 ms recovery writer is removed. Cleanup, restoration, initialization and
+edit entry do not write recovery text. Each admitted edit stores the exact new
+text and its actual write success/failure status before returning. A live session
+snapshot composes rapid checklist toggles without storage side effects inside a
+React state updater. Its separate four-second canonical commit remains. Ending
+or restarting editing changes an event epoch; stale checklist/confirmed-Restore
+callbacks must pass current owner/epoch checks. Canonical Save reads current live
+session text and uses the existing store upsert/version path.
+
+A successful Save removes its captured recovery key after the canonical call
+returns, even if that call changed the view owner; an exception skips cleanup.
+UI clearing remains session/owner guarded. Successful confirmed Restore likewise
+removes the captured key; a failed/no-op Restore does not discard recovery.
+Cancel remains an explicit removal. There is no later timer/cleanup write to
+resurrect saved or discarded text, and merely closing an old owner does not
+replace a newer recovery value another owner wrote.
+
+CodeMirror's external value synchronization is marked with a private Annotation;
+the update listener ignores that transaction rather than reporting it as an edit.
+Normal changed transactions still report through the same callback. The official
+Annotation/AnnotationType/Transaction API contract was checked, but installed
+package declarations were unavailable. ArtifactDocumentEditor's lifetime-bound
+initialValue is isolated by editor-session keys. No storage schema or dependency
+was added.
+
+History navigation does not replace the draft owner merely because the viewed
+version changes. A same-owner live draft also prevents recovery reads from
+replacing newer failed-write text/status with an older stored string when the
+reader returns from history. This preserves the existing unsaved-discard warning
+and does not claim that a failed write survived closing the component.
+
+Two production files and two unrun fixtures under
+apps/web/features/chat/components/artifacts were independently source-reviewed:
+ArtifactPreview.tsx, ArtifactCodeEditor.tsx,
+ArtifactPreview.draftRetention.test.tsx and ArtifactCodeEditor.externalSync.test.tsx.
+The first fixture uses the real reactive store/preview with modeled editor and
+Markdown boundaries; it covers close/unmount, artifact switching, older/newest
+text, same-count replacement, stale callbacks, Save/Cancel/Restore, foreign newer
+recovery, storage failure/history return, and StrictMode rapid checklist timing.
+The second uses actual CodeMirror transactions plus actual preview/rich-document
+and Markdown-fallback bindings. These are authored source models, not passing
+runs. Integrated real-rich switching/reopening, streaming takeover, browser/IME
+ordering and installed-library execution remain unverified.
+
+Raw recovery strings still lack base-revision and concurrent-owner/CAS metadata.
+Restoration across genuinely new owners can load stale text; later intentional
+edits/removals by another editor, swallowed storage-removal failures, quota/device
+loss, account/cloud reconciliation and durable browser storage remain outside
+this correction. Per-edit synchronous localStorage latency is unbenchmarked.
+Canonical activeContent/copy/export semantics, other save paths and publication
+ownership are unchanged. No tests, lint, typechecks, builds, product/browser or
+live-provider execution, push or deployment ran.

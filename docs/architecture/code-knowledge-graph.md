@@ -6358,9 +6358,40 @@ production files and two fixture files were independently source-reviewed. The
 parent-mocked-preview and actual-preview fixtures are unrun, not integrated
 browser verification. See WEB-ARTIFACT-PUBLICATION-OWNERSHIP-01.
 
-The independent WEB-ARTIFACT-DRAFT-RETENTION-01 remains open: local recovery writes
-are delayed, and close/switch can cancel them before the newest sourceDraft is
-stored. Canonical Save is separate. Cleanup flushing risks wrong-owner writes or
-resurrected discards, and programmatic editor synchronization also invokes
-onChange. No draft persistence, recovery format, editor callback or checklist
-commit behavior was changed by the publication correction.
+The publication correction did not change draft persistence or editor behavior.
+The separately qualified WEB-ARTIFACT-DRAFT-RETENTION-01 received the bounded
+edit-event correction below; broader raw-recovery reconciliation remains open.
+
+
+## Artifact recovery text is kept at the edit boundary
+
+Accepted `fa3ad230d85f939a089b24832f804611f11de553` removes ArtifactPreview's delayed
+800 ms recovery writer. Actual changed editor/checklist events now synchronously
+write exact recovery text and the result for that text. Cleanup, restoration,
+initialization and edit entry do not write it. SourceDraftSession ownership uses
+artifact ID/current content/version count plus an edit-session identity, committed
+liveness and an event epoch. Render hides snapshots from other owners. Only the
+editor children are keyed, leaving preview/publication lifetime unchanged.
+
+A live text snapshot composes rapid checklist events outside React updater side
+effects. Manual Save and the separate four-second checklist commit still use the
+canonical artifact store. Successful Save/Restore cleanup removes the captured
+recovery key after canonical success, without depending on the old owner staying
+active or clearing another session's UI. Cancel explicitly removes recovery; no
+later recovery timer can resurrect it. Unmount itself writes nothing, including
+when a different owner has since stored a newer recovery string.
+
+ArtifactCodeEditor annotates its own external value-sync transactions so they do
+not emit user edits. Editor-session keys isolate the rich editor's initial value.
+History navigation retains the owner; recovery reads do not overwrite a newer
+same-owner live draft/status after a storage failure. Canonical activeContent,
+copy/export behavior and stopped-stream/publication ownership remain unchanged.
+
+This is a client recovery boundary, not base-revision or concurrent-editor CAS.
+Stale raw recovery across new owners, intentional competing edits/removals,
+removal failure, browser/device durability and cloud reconciliation remain open;
+synchronous storage latency is unbenchmarked. Two production files and two
+fixtures were independently source-reviewed. Reactive-preview boundary models,
+actual CodeMirror transactions and real rich/fallback editor bindings are authored
+but unrun; integrated rich switching/reopening, streaming and browser/IME ordering
+remain unverified. See WEB-ARTIFACT-DRAFT-RETENTION-01.
