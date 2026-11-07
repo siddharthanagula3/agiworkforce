@@ -37,16 +37,55 @@ const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
-  })),
+  getNeonDb: vi.fn(() => makeTransactionAdapter()),
 }));
 
 type FakeRow = Record<string, unknown>;
+const PROJECT_ID = '11111111-2222-4333-8444-555555555555';
+
+// Handle-lifetime model only; this does not implement PostgreSQL transactions or RLS.
+function makeTransactionAdapter() {
+  let active = false;
+  return {
+    query: (sql: string, params?: unknown[]) => {
+      if (active || /insert into api_keys|update public\.developer_projects/i.test(sql)) {
+        throw new Error('Issuance query escaped its transaction');
+      }
+      return mockNeonQuery(sql, params);
+    },
+    execute: (...args: unknown[]) => {
+      if (active) throw new Error('Outer execute during transaction');
+      return mockNeonExecute(...args);
+    },
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+      if (active) throw new Error('Nested transaction');
+      active = true;
+      let open = true;
+      const tx = {
+        query: (...args: unknown[]) => {
+          if (!open) throw new Error('Transaction handle escaped');
+          return mockNeonQuery(...args);
+        },
+        execute: (...args: unknown[]) => {
+          if (!open) throw new Error('Transaction handle escaped');
+          return mockNeonExecute(...args);
+        },
+        transaction: () => { throw new Error('Nested transaction'); },
+        withUser: () => { throw new Error('Transaction scope escape'); },
+        withOrg: () => { throw new Error('Transaction scope escape'); },
+      };
+      try {
+        return await callback(tx);
+      } finally {
+        open = false;
+        active = false;
+      }
+    },
+    withUser: () => { throw new Error('Unexpected fixture scope change'); },
+    withOrg: () => { throw new Error('Unexpected fixture scope change'); },
+    dispose: vi.fn(),
+  };
+}
 
 function normalizedLookupSql(sql: string): string {
   return sql.toLowerCase().replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
@@ -71,6 +110,14 @@ function makeFakeDb() {
 
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
     const s = sql.toLowerCase();
+    if (s.includes('update public.developer_projects')) {
+      expect(normalizedLookupSql(sql)).toBe(
+        'update public.developer_projects set updated_at = now() where id = $1 and user_id = $2 and archived_at is null returning id',
+      );
+      const [projectId, userId] = params as [string, string];
+      const project = projects.get(projectId);
+      return project?.user_id === userId && project.archived_at === null ? [{ id: projectId }] : [];
+    }
     if (s.includes('account_status')) {
       return [{ account_status: null, deletion_scheduled_for: null, erased: false }];
     }
@@ -203,12 +250,20 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     'requires canonical project admission for %s authentication and CSRF exemption',
     async (state) => {
       const fakeDb = makeFakeDb();
+      fakeDb.projects.set(PROJECT_ID, { user_id: 'completions-user', archived_at: null });
       const { apiKey, rawKey } = await ApiKeyService.createApiKey(
         getNeonDb(), 'completions-user', 'project admission', ['inference:write'], null,
-        state === 'null' ? null : 'project-1',
+        state === 'null' ? null : PROJECT_ID,
       );
-      if (state !== 'missing') {
-        fakeDb.projects.set('project-1', {
+      const admissions = mockNeonQuery.mock.calls.filter(([sql]) =>
+        String(sql).includes('update public.developer_projects'),
+      );
+      expect(admissions).toHaveLength(state === 'null' ? 0 : 1);
+      if (state !== 'null') expect(admissions[0]?.[1]).toEqual([PROJECT_ID, 'completions-user']);
+      if (state === 'missing') {
+        fakeDb.projects.delete(PROJECT_ID);
+      } else {
+        fakeDb.projects.set(PROJECT_ID, {
           user_id: state === 'foreign' ? 'another-owner' : 'completions-user',
           archived_at: state === 'archived' ? new Date().toISOString() : null,
         });

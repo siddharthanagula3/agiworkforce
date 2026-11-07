@@ -66,6 +66,8 @@ describe('support actions, regenerate_api_key', () => {
           name: 'Deploy bot',
           scopes: ['inference:write'],
           revoked_at: null,
+          expires_at: null,
+          project_id: null,
         },
       ],
     });
@@ -128,6 +130,7 @@ describe('support actions, regenerate_api_key', () => {
     const projectId = '77777777-7777-4777-8777-777777777777';
     mocks.db!.apiKeys[0]!.expires_at = expiresAt;
     mocks.db!.apiKeys[0]!.project_id = projectId;
+    mocks.db!.projects.push({ id: projectId, user_id: USER, archived_at: null });
     const { proposal, confirmationToken } = await proposeSupportAction({
       db: mocks.db!.adapter,
       userId: USER,

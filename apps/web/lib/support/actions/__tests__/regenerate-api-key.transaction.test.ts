@@ -71,6 +71,10 @@ function createTransactionModel(options: {
   insertFailure?: 'throw' | 'no_row';
   commitGate?: Promise<void>;
   commitFailure?: boolean;
+  projectOwner?: string;
+  projectArchived?: boolean;
+  projectMissing?: boolean;
+  lockedProject?: string | null;
 } = {}) {
   let committed = options.row === null ? [] : [seedKey(options.row)];
   const outerCalls: Call[] = [];
@@ -99,9 +103,19 @@ function createTransactionModel(options: {
           const normalized = sql.replace(/\s+/gu, ' ').trim();
           txCalls.push({ sql: normalized, params });
           if (/^select id, name, scopes, expires_at, project_id from public\.api_keys /iu.test(normalized)) {
-            events.push('read');
-            return staged.filter((row) => row.id === params[0] && row.user_id === params[1]
-              && row.revoked_at === null) as unknown as Row[];
+            const locked = normalized.endsWith(' for update');
+            expect(normalized).toBe(`select id, name, scopes, expires_at, project_id from public.api_keys where id = $1 and user_id = $2 and revoked_at is null limit 2${locked ? ' for update' : ''}`);
+            events.push(locked ? 'locked_read' : 'discovery');
+            const rows = staged.filter((row) => row.id === params[0] && row.user_id === params[1]
+              && row.revoked_at === null);
+            return rows.map((row) => ({ ...row, project_id: locked && options.lockedProject !== undefined
+              ? options.lockedProject : row.project_id })) as unknown as Row[];
+          }
+          if (normalized === 'update public.developer_projects set updated_at = now() where id = $1 and user_id = $2 and archived_at is null returning id') {
+            events.push('project_write');
+            return !options.projectMissing && !options.projectArchived && params[0] === PROJECT_ID
+              && params[1] === (options.projectOwner ?? USER)
+              ? [{ id: PROJECT_ID }] as unknown as Row[] : [];
           }
           if (/^insert into api_keys /iu.test(normalized)) {
             events.push('insert');
@@ -181,13 +195,15 @@ describe('API key rotation transaction model (not a database concurrency test)',
     const result = await model.rotate();
 
     expect(model.outerCalls).toEqual([]);
-    expect(model.events).toEqual(['begin', 'read', 'revoke', 'insert', 'callback_done', 'commit']);
+    expect(model.events).toEqual(['begin', 'discovery', 'project_write', 'locked_read', 'revoke', 'insert', 'callback_done', 'commit']);
     expect(model.txCalls[0]).toEqual({
-      sql: 'select id, name, scopes, expires_at, project_id from public.api_keys where id = $1 and user_id = $2 and revoked_at is null limit 1 for update',
+      sql: 'select id, name, scopes, expires_at, project_id from public.api_keys where id = $1 and user_id = $2 and revoked_at is null limit 2',
       params: [KEY_ID, USER],
     });
-    expect(model.txCalls[1]?.params).toEqual([KEY_ID, USER]);
-    const insert = model.txCalls[2]!;
+    expect(model.txCalls[1]?.params).toEqual([PROJECT_ID, USER]);
+    expect(model.txCalls[2]?.params).toEqual([KEY_ID, USER]);
+    expect(model.txCalls[3]?.params).toEqual([KEY_ID, USER]);
+    const insert = model.txCalls[4]!;
     expect(insert.params).toEqual([
       USER, 'Deploy bot', 'fixture-argon2-hash', expect.stringMatching(/^[0-9a-f]{16}$/u),
       ['inference:write', 'usage:read'], expiry === null ? null : EXPIRY, PROJECT_ID,
@@ -216,6 +232,7 @@ describe('API key rotation transaction model (not a database concurrency test)',
     expect(model.committed()[1]?.scopes).toEqual(expected);
     expect(model.committed()[1]?.project_id).toBeNull();
     expect(model.outerCalls).toEqual([]);
+    expect(model.events).toEqual(['begin', 'discovery', 'locked_read', 'revoke', 'insert', 'callback_done', 'commit']);
   });
 
   it.each([
@@ -234,8 +251,11 @@ describe('API key rotation transaction model (not a database concurrency test)',
     const model = createTransactionModel({ row: seedKey(overrides) });
     const before = model.committed();
     await expect(model.rotate()).rejects.toMatchObject({ code: 'SUPPORT_ACTION_UNAVAILABLE', status: 409 });
-    expect(model.events).toEqual(['begin', 'read', 'rollback']);
-    expect(model.txCalls).toHaveLength(1);
+    const invalidProject = Object.hasOwn(overrides, 'project_id');
+    expect(model.events).toEqual(invalidProject
+      ? ['begin', 'discovery', 'rollback']
+      : ['begin', 'discovery', 'project_write', 'locked_read', 'rollback']);
+    expect(model.txCalls).toHaveLength(invalidProject ? 1 : 3);
     expect(model.outerCalls).toEqual([]);
     expect(mocks.hash).not.toHaveBeenCalled();
     expect(model.committed()).toEqual(before);
@@ -248,7 +268,7 @@ describe('API key rotation transaction model (not a database concurrency test)',
   ] as const)('refuses an %s target without mutation', async (_label, row) => {
     const model = createTransactionModel({ row });
     await expect(model.rotate()).rejects.toMatchObject({ code: 'SUPPORT_ACTION_TARGET_NOT_FOUND', status: 404 });
-    expect(model.events).toEqual(['begin', 'read', 'rollback']);
+    expect(model.events).toEqual(['begin', 'discovery', 'rollback']);
     expect(model.outerCalls).toEqual([]);
     expect(mocks.hash).not.toHaveBeenCalled();
   });
@@ -256,17 +276,37 @@ describe('API key rotation transaction model (not a database concurrency test)',
   it.each([0, 2])('requires exactly one revoked row, not %s', async (revokeCount) => {
     const model = createTransactionModel({ revokeCount });
     await expect(model.rotate()).rejects.toMatchObject({ code: 'SUPPORT_ACTION_TARGET_NOT_FOUND', status: 409 });
-    expect(model.events).toEqual(['begin', 'read', 'revoke', 'rollback']);
+    expect(model.events).toEqual(['begin', 'discovery', 'project_write', 'locked_read', 'revoke', 'rollback']);
     expect(model.committed()).toEqual([seedKey()]);
     expect(model.outerCalls).toEqual([]);
+    expect(mocks.hash).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { projectMissing: true },
+    { projectArchived: true },
+    { projectOwner: 'another-user' },
+  ])('refuses an unavailable associated project: %s', async (options) => {
+    const model = createTransactionModel(options);
+    await expect(model.rotate()).rejects.toMatchObject({ code: 'SUPPORT_ACTION_UNAVAILABLE', status: 409 });
+    expect(model.events).toEqual(['begin', 'discovery', 'project_write', 'rollback']);
+    expect(model.committed()).toEqual([seedKey()]);
+    expect(mocks.hash).not.toHaveBeenCalled();
+  });
+
+  it.each([null, '99999999-9999-4999-8999-999999999999'])('refuses a changed locked project %s', async (lockedProject) => {
+    const model = createTransactionModel({ lockedProject });
+    await expect(model.rotate()).rejects.toMatchObject({ code: 'SUPPORT_ACTION_TARGET_NOT_FOUND', status: 409 });
+    expect(model.events).toEqual(['begin', 'discovery', 'project_write', 'locked_read', 'rollback']);
+    expect(model.committed()).toEqual([seedKey()]);
     expect(mocks.hash).not.toHaveBeenCalled();
   });
 
   it('does not silently deduplicate scopes that the canonical issuer refuses', async () => {
     const row = seedKey({ scopes: ['usage:read', 'usage:read'] });
     const model = createTransactionModel({ row });
-    await expect(model.rotate()).rejects.toThrow('At least one unique, supported API key scope is required');
-    expect(model.events).toEqual(['begin', 'read', 'revoke', 'rollback']);
+    await expect(model.rotate()).rejects.toMatchObject({ code: 'SUPPORT_ACTION_UNAVAILABLE', status: 409 });
+    expect(model.events).toEqual(['begin', 'discovery', 'project_write', 'locked_read', 'rollback']);
     expect(model.committed()).toEqual([row]);
     expect(model.outerCalls).toEqual([]);
     expect(mocks.hash).not.toHaveBeenCalled();

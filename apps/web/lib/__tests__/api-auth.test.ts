@@ -69,29 +69,77 @@ process.env['JWT_SECRET'] = TEST_DEVELOPER_JWT_SECRET;
 process.env['CSRF_SECRET'] = 'api-auth-step-up-secret-at-least-32-bytes';
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
-    withUser: vi.fn(() => ({})),
-    dispose: vi.fn(),
-  })),
+  getNeonDb: vi.fn(() => makeTransactionAdapter()),
 }));
 
 vi.mock('@agiworkforce/data-layer', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
-  const rlsCapableAdapter: unknown = {
-    query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: (...args: unknown[]) => mockNeonExecute(...args),
-    transaction: (fn: (db: unknown) => unknown) => fn(rlsCapableAdapter),
-    withUser: () => rlsCapableAdapter,
-    withOrg: () => rlsCapableAdapter,
-    dispose: vi.fn(),
-  };
-  return { ...actual, createDatabaseClient: vi.fn(() => rlsCapableAdapter) };
+  return { ...actual, createDatabaseClient: vi.fn(() => makeTransactionAdapter()) };
 });
 
 type FakeRow = Record<string, unknown>;
+const PROJECT_ID = '11111111-2222-4333-8444-555555555555';
+type FixtureAdapter = {
+  query: (sql: string, params?: unknown[]) => Promise<FakeRow[]>;
+  execute: (...args: unknown[]) => Promise<number>;
+  transaction: (callback: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+  withUser: (token: string) => FixtureAdapter;
+  withOrg: (organization: string | null) => FixtureAdapter;
+  dispose: () => void;
+};
+
+// Handle-lifetime model only; this does not implement PostgreSQL transactions or RLS.
+function makeTransactionAdapter() {
+  let active = false;
+  function adapter(user: string | null, org: string | null): FixtureAdapter {
+    return {
+      query: (sql: string, params?: unknown[]) => {
+        if (active || /insert into api_keys|update public\.developer_projects/i.test(sql)) {
+          throw new Error('Issuance query escaped its transaction');
+        }
+        return mockNeonQuery(sql, params);
+      },
+      execute: (...args: unknown[]) => {
+        if (active) throw new Error('Outer execute during transaction');
+        return mockNeonExecute(...args);
+      },
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+        if (active) throw new Error('Nested transaction');
+        active = true;
+        let open = true;
+        const tx = {
+          query: (...args: unknown[]) => {
+            if (!open) throw new Error('Transaction handle escaped');
+            return mockNeonQuery(...args);
+          },
+          execute: (...args: unknown[]) => {
+            if (!open) throw new Error('Transaction handle escaped');
+            return mockNeonExecute(...args);
+          },
+          transaction: () => { throw new Error('Nested transaction'); },
+          withUser: () => { throw new Error('Transaction scope escape'); },
+          withOrg: () => { throw new Error('Transaction scope escape'); },
+        };
+        try {
+          return await callback(tx);
+        } finally {
+          open = false;
+          active = false;
+        }
+      },
+      withUser: (token: string) => {
+        if (active) throw new Error('Outer scope change during transaction');
+        return adapter(token, org);
+      },
+      withOrg: (organization: string | null) => {
+        if (active) throw new Error('Outer scope change during transaction');
+        return adapter(user, organization);
+      },
+      dispose: vi.fn(),
+    };
+  }
+  return adapter(null, null);
+}
 
 function normalizedLookupSql(sql: string): string {
   return sql.toLowerCase().replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
@@ -138,6 +186,15 @@ function makeFakeDb() {
 
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
     const s = sql.toLowerCase();
+
+    if (s.includes('update public.developer_projects')) {
+      expect(normalizedLookupSql(sql)).toBe(
+        'update public.developer_projects set updated_at = now() where id = $1 and user_id = $2 and archived_at is null returning id',
+      );
+      const [projectId, userId] = params as [string, string];
+      const project = projects.get(projectId);
+      return project?.user_id === userId && project.archived_at === null ? [{ id: projectId }] : [];
+    }
 
     if (s.includes('insert into public.identities')) {
       const [provider, subject, accountId] = params as [string, string, string];
@@ -355,12 +412,20 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       const fakeDb = makeFakeDb();
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
       const { getNeonDb } = await import('@/lib/server/neon-db');
+      fakeDb.projects.set(PROJECT_ID, { user_id: 'project-key-owner', archived_at: null });
       const { apiKey, rawKey } = await ApiKeyService.createApiKey(
         getNeonDb(), 'project-key-owner', 'project admission', ['models:read'], null,
-        state === 'null' ? null : 'project-1',
+        state === 'null' ? null : PROJECT_ID,
       );
-      if (state !== 'missing') {
-        fakeDb.projects.set('project-1', {
+      const admissions = mockNeonQuery.mock.calls.filter(([sql]) =>
+        String(sql).includes('update public.developer_projects'),
+      );
+      expect(admissions).toHaveLength(state === 'null' ? 0 : 1);
+      if (state !== 'null') expect(admissions[0]?.[1]).toEqual([PROJECT_ID, 'project-key-owner']);
+      if (state === 'missing') {
+        fakeDb.projects.delete(PROJECT_ID);
+      } else {
+        fakeDb.projects.set(PROJECT_ID, {
           user_id: state === 'foreign' ? 'another-owner' : 'project-key-owner',
           archived_at: state === 'archived' ? new Date().toISOString() : null,
         });

@@ -1,42 +1,26 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { resolveApiKeyScopes, type ApiKeyScope } from '@/lib/api-key-scopes';
-import { ApiKeyService, apiKeyExpiryProblem } from '@/lib/services/api-key-service';
-import { isUuid } from '@/lib/uuid';
+import { ApiKeyService, ApiKeyRotationRefusal } from '@/lib/services/api-key-service';
 import { SupportActionRefusal, type SupportActionResult } from '../types';
-
-interface OwnedKeyRow {
-  id: string;
-  name: string;
-  scopes: string[] | null;
-  expires_at: string | Date | null;
-  project_id: string | null;
-}
-
-async function readOwnedKey(
-  db: DatabaseAdapter,
-  userId: string,
-  keyId: string,
-  lock = false,
-): Promise<OwnedKeyRow | null> {
-  const [row] = await db.query<OwnedKeyRow>(
-    `select id, name, scopes, expires_at, project_id
-       from public.api_keys
-      where id = $1 and user_id = $2 and revoked_at is null
-      limit 1${lock ? ' for update' : ''}`,
-    [keyId, userId],
-  );
-  return row ?? null;
-}
 
 export async function assertApiKeyOwned(
   db: DatabaseAdapter,
   userId: string,
   keyId: string,
 ): Promise<void> {
-  const row = await readOwnedKey(db, userId, keyId);
-  if (!row) {
+  const rows = await db.query<{ id: string }>(
+    `select id
+       from public.api_keys
+      where id = $1 and user_id = $2 and revoked_at is null
+      limit 2`,
+    [keyId, userId],
+  );
+  if (
+    rows.length !== 1 ||
+    typeof rows[0]?.id !== 'string' ||
+    rows[0].id.toLowerCase() !== keyId.toLowerCase()
+  ) {
     throw new SupportActionRefusal(
       'SUPPORT_ACTION_TARGET_NOT_FOUND',
       404,
@@ -51,62 +35,39 @@ export async function executeRegenerateApiKey(args: {
   keyId: string;
 }): Promise<SupportActionResult> {
   const { db, userId, keyId } = args;
-  const { apiKey, rawKey } = await db.transaction(async (tx) => {
-    const existing = await readOwnedKey(tx, userId, keyId, true);
-    if (!existing) {
+  let issued: Awaited<ReturnType<typeof ApiKeyService.rotateApiKey>>;
+  try {
+    issued = await ApiKeyService.rotateApiKey(db, userId, keyId);
+  } catch (error) {
+    if (!(error instanceof ApiKeyRotationRefusal)) throw error;
+    if (error.reason === 'not_found') {
       throw new SupportActionRefusal(
         'SUPPORT_ACTION_TARGET_NOT_FOUND',
         404,
         'That API key is not on your account, or it has already been revoked.',
       );
     }
-
-    const scopes: ApiKeyScope[] = resolveApiKeyScopes(existing.scopes ?? []);
-
-    if (scopes.length === 0) {
-      throw new SupportActionRefusal(
-        'SUPPORT_ACTION_UNAVAILABLE',
-        409,
-        'That key uses a set of permissions this version no longer issues, so it cannot be regenerated automatically. Create a replacement in Settings and revoke the old one there.',
-      );
-    }
-
-    const expiresAt =
-      existing.expires_at === null
-        ? null
-        : existing.expires_at instanceof Date
-          ? existing.expires_at
-          : typeof existing.expires_at === 'string'
-            ? new Date(existing.expires_at)
-            : new Date(Number.NaN);
-    if (
-      (expiresAt !== null && apiKeyExpiryProblem(expiresAt, Date.now()) !== null) ||
-      (existing.project_id !== null &&
-        (typeof existing.project_id !== 'string' || !isUuid(existing.project_id)))
-    ) {
-      throw new SupportActionRefusal(
-        'SUPPORT_ACTION_UNAVAILABLE',
-        409,
-        'That key cannot be regenerated with its existing expiry and project. Create a replacement in Settings and revoke the old one there.',
-      );
-    }
-
-    if ((await ApiKeyService.revokeApiKey(tx, existing.id, userId)) !== 1) {
+    if (error.reason === 'changed') {
       throw new SupportActionRefusal(
         'SUPPORT_ACTION_TARGET_NOT_FOUND',
         409,
         'That API key changed while it was being regenerated. Ask again with the current key.',
       );
     }
-    return ApiKeyService.createApiKey(
-      tx,
-      userId,
-      existing.name,
-      scopes,
-      expiresAt,
-      existing.project_id,
+    if (error.reason === 'permissions') {
+      throw new SupportActionRefusal(
+        'SUPPORT_ACTION_UNAVAILABLE',
+        409,
+        'That key uses a set of permissions this version no longer issues, so it cannot be regenerated automatically. Create a replacement in Settings and revoke the old one there.',
+      );
+    }
+    throw new SupportActionRefusal(
+      'SUPPORT_ACTION_UNAVAILABLE',
+      409,
+      'That key cannot be regenerated with its existing expiry and project. Create a replacement in Settings and revoke the old one there.',
     );
-  });
+  }
+  const { apiKey, rawKey } = issued;
 
   return {
     kind: 'secret_once',
