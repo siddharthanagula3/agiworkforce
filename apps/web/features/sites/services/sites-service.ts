@@ -9,7 +9,7 @@ import {
   ManagedCloudPublishedArtifactPageInfoSchema,
   ManagedCloudPublishedArtifactDetailResponseSchema,
   ManagedCloudPublishedArtifactSchema,
-  ManagedCloudPublishedArtifactUpdateResponseSchema,
+  ManagedCloudPublishedArtifactUpdateReceiptSchema,
   ManagedCloudPublishedArtifactVersionDetailSchema,
   ManagedCloudPublishedArtifactVersionListResponseSchema,
   managedCloudPublishedArtifactDataPath,
@@ -263,21 +263,35 @@ export async function updatePublishedSite(
   token: string,
   change: ManagedCloudPublishedArtifactUpdateRequest,
 ): Promise<ManagedCloudPublishedArtifactUpdateResponse> {
+  const requestedChange = { ...change };
+  const body = JSON.stringify(requestedChange);
   const response = await fetch(managedCloudPublishedArtifactPath(token), {
     method: 'PATCH',
     credentials: 'include',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(change),
+    body,
   });
   if (!response.ok) {
     throw await responseError(
       response,
-      change.title !== undefined
+      requestedChange.title !== undefined
         ? 'Failed to rename this site'
         : 'Failed to change who can open this',
     );
   }
-  return ManagedCloudPublishedArtifactUpdateResponseSchema.parse(await response.json());
+  const raw: unknown = await response.json().catch(() => null);
+  const receipt = ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse(raw);
+  if (
+    !receipt.success ||
+    receipt.data.token !== token ||
+    (requestedChange.visibility !== undefined &&
+      receipt.data.visibility !== requestedChange.visibility)
+  ) {
+    throw new Error(
+      'This site update could not be confirmed. It may have taken effect. Refresh to check before trying again.',
+    );
+  }
+  return receipt.data;
 }
 
 export async function readPublishedSiteData(
