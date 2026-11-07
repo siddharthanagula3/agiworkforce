@@ -12830,10 +12830,13 @@ failure/authority change, not an observed production incident or established
 project-budget bypass. Ownership, Personal scope, CSRF, step-up and single-use
 proposal checks already existed and remain.
 
-The executor now uses one caller-scoped transaction. It reads the owned live row
-FOR UPDATE, validates retained expiry/project metadata, requires exactly one
-revocation and calls the canonical creator with the same name, effective scopes,
-expiry and project. Invalid, expired, missing or newly-disallowed expiry and
+The original correction used one caller-scoped transaction for the owned live
+key, metadata validation, exact revocation and replacement. The 2026-11-07 follow-on
+`b1f930dae7082658bb037643eb699ea952824c1c` centralizes that transaction in
+ApiKeyService.rotateApiKey, with a shared private inserter and typed support refusal
+mapping. It discovers association without a key lock, writes the owned live project,
+then locks/rereads the key and refuses any changed association before revocation.
+Locked name, effective scopes, expiry and project are retained. Invalid, expired, missing or newly-disallowed expiry and
 invalid/missing project metadata refuse before revocation. A null expiry remains
 null. Existing legacy scope resolution is unchanged. The shared revocation helper
 now returns its affected count; the ordinary settings DELETE still ignores that
@@ -12850,16 +12853,16 @@ consumption remains outside rotation: failed execution consumes that proposal;
 a fresh proposal can target an original key retained by a confirmed rollback.
 No automatic retry/idempotency or guaranteed secret recovery is claimed.
 
-Preserving project metadata does not establish project-archive concurrency safety.
-Archive updates the project before revoking keys, while this correction locks the
-key. A complete coordinated admission design must retain project-first ordering,
-check a current owned live project with an archive-conflicting lock, then re-read
-the key and reject changed metadata. That broader correction is not implemented.
+The follow-on uses a project row write, not only a lock, before any key lock.
+It coordinates participating creation/rotation with archive, including source-level
+higher-isolation conflict reasoning. Old writers and global workspace revocation
+remain outside it. See WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01 for the exact boundary.
 
 Authored fixtures are unrun. A dedicated distinct outer/transaction-handle model
 covers supplied metadata, refusal, receipt checks and staged success/failure;
 it does not execute SQL, RLS, database locking or real concurrent proposals. The
-existing full-support fake only preserves metadata and remains nontransactional.
+shared support fake now stages key rows but not project timestamps or concurrency;
+the dedicated lifecycle model has separate staged SQL/order/fault coverage.
 No tests, lint, typechecks, builds, provider calls, push or deployment ran.
 
 ## WEB-SECURITY-SESSION-COMPLETION-01: emailed undo and recovery custody
@@ -12997,90 +13000,72 @@ typechecks, builds, service/runtime calls, push or deployment ran.
 
 ## WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01
 
-Severity: High. Canonical project-state request admission source-corrected on
-2026-11-07 in `562fb2dc0fc6a80031b58dc8c7e9727d011d74d9`; issuance/rotation,
-archive revocation scope and database/runtime acceptance remain open. Independently
-source-confirmed, not runtime-reproduced.
+Severity: High. Participating creation/rotation/archive admission and canonical
+lookup are source-corrected; cross-workspace revocation, old writers, commit/secret
+delivery and database/runtime acceptance remain open. Independently source-reviewed
+on 2026-11-07, not runtime-reproduced. Accepted lookup slice:
+`562fb2dc0fc6a80031b58dc8c7e9727d011d74d9`. Accepted transaction slice:
+`b1f930dae7082658bb037643eb699ea952824c1c`.
 
-Settings key creation checks `readLiveDeveloperProject` before count, step-up and
-rate-limit work, outside the canonical key insertion. `ApiKeyService.createApiKey`
-only inserts the supplied project ID. Archive can therefore finish between
-preflight and insertion. Support rotation now preserves project metadata atomically,
-but locks the key before inserting a replacement; archive updates the project
-before bulk-revoking keys. An archive bulk-update snapshot can miss a concurrent
-replacement while waiting for its old key. The project FK checks existence, not
-ownership or archive admission. See `SUPPORT-API-KEY-ROTATION-ATOMICITY-01` for the
-accepted earlier transaction/metadata correction and its remaining limits.
+Original races: settings checked a live project before count, proof/rate work and
+canonical insertion. Archive could commit before that insertion. Support rotation
+retained metadata but locked the key first; archive locked the project first and
+its key-update snapshot could miss a replacement committed while it waited.
+The project existence FK did not enforce owned/live admission.
 
-There is a separate scope mismatch: migration 0321's developer projects are
-user-global, while API keys default to the active organization under 0110 and
-use the workspace visibility/writability policies from 0073, 0110 and 0272.
-Settings creation and project archive use normal active-workspace resolution;
-support confirmation explicitly uses Personal scope. The same project can thus
-hold keys in several workspaces, but archive's scoped UPDATE reaches only the
-current workspace. Other existing keys can remain unrevoked. Before the bounded admission
-correction below, canonical key verification checked hash, revocation and expiry,
-not project archive status. Other account/endpoint admission gates still apply.
+Canonical creation now owns one caller-scoped transaction. Non-NULL associations
+require an owner-qualified live-project UPDATE RETURNING before shared private
+insertion. The intentional project updated_at write creates a row version, rather
+than relying on a lock alone. In higher-isolation transactions, a stale archive
+snapshot must conflict with that write instead of successfully missing the new
+key. This is source-level concurrency reasoning, not executed database evidence.
+NULL association skips project admission. Invalid association refuses; no migration,
+RLS weakening, workspace rebinding or privileged fallback was added.
 
-Source owners: `lib/services/developer-project-service.ts`,
-`lib/services/api-key-service.ts`, `app/api/settings/api-keys/route.ts`,
-`app/api/developers/projects/[projectId]/route.ts`, support confirmation/executor,
-and the cited append-only migrations. Project association participates in usage
-aggregation and the project-spend refusal called by chat completions and audio
-transcription; it is not merely display metadata. However, `project-spend.ts`
-binds Personal scope explicitly, so its key/project query cannot see an
-organization-owned key under current RLS and returns no project refusal for that
-row. The same adapter scopes spend aggregation. This is a source visibility
-limitation, not proven global enforcement or a demonstrated end-to-end budget
-bypass.
+Canonical rotation owns one transaction: unlocked owned/nonrevoked key discovery,
+validated project association, project write, locked owned key reread, unchanged
+association check, current metadata validation, exactly-one revocation and private
+insertion. A changed association, including NULL transitions, refuses without
+acquiring a different project after the key lock. UUID case is compared semantically;
+product owner identity stays exact. Missing/malformed project and expiry metadata
+refuse. The locked name, effective scopes, expiry and project are retained, including
+legacy scope expansion and NULL expiry. Typed domain refusals map to existing
+support outcomes. Secrets return only after the transaction resolves; nested
+transactions and automatic serialization retries are not introduced. Archive's
+existing project-first transaction remains unchanged.
 
-A complete lifecycle decision must address both concurrency and scope. Admission
-needs project-before-key ordering, an owned live-project lock conflicting with
-archive, and a locked key reread refusing changed project association; null project
-issuance stays supported. A late project lock inside the current key-first rotation
-is unsafe. For global archive semantics, either align project/workspace ownership
-with an existing-data policy or provide a narrowly authorized owner-qualified
-cross-workspace revocation operation. Do not weaken RLS or silently rebind scope.
-A verifier archive check alone would not make all keys revoked or emit their
-revocation events. Future acceptance must cover both archive interleavings,
-concurrent rotations, changed association, rollback and multi-workspace keys.
-No such database or runtime checks ran here.
+Scope remains a separate defect: 0321 developer projects are user-global while
+0073/0110/0272 key policies are workspace-scoped. Archive only revokes keys visible
+and writable in its selected workspace. Existing keys elsewhere can remain stored
+as unrevoked; creation/rotation now touch the same owned project across participating
+workspaces but do not supply global revocation or its events. Support remains
+Personal-scoped. Project-spend also selects Personal scope, so it cannot establish
+organization-wide project spending enforcement.
 
-
-Bounded source correction, 2026-11-07: the existing owner-connected canonical
-verification query now additionally requires either a NULL project reference or
-an EXISTS row with matching project ID, matching key owner and archived_at NULL.
-The query retains its projection, prefix, revocation and expiry predicates. Hash
-verification and best-effort last-used updates remain after candidate admission;
-refused project candidates reach neither. No Personal/organization scope binding,
-new metadata, migration or project lock is introduced. The connection's unbound
-query path and documented BYPASSRLS role contract were read; actual deployed role
+The lookup correction requires either NULL project_id or a matching owned live
+project in the existing owner-connected query. Prefix/revocation/expiry/hash and
+last-used behavior remain. API authentication refuses invalid/errored keys without
+cookie fallback. CSRF refuses the invalid key's Bearer exemption, but separate
+valid CSRF proof can pass that check without authenticating the key. The unbound
+query path and documented BYPASSRLS role contract were read; actual deployed
 privileges and FORCE RLS behavior remain unverified.
 
-Both production raw-key consumers use this verifier: API authentication refuses
-invalid/errored keys without cookie fallback; CSRF no longer grants the invalid
-key's Bearer exemption, but a separate valid CSRF proof can still pass that check
-without authenticating the key. No positive API-key/project admission cache or
-alternate sk_live verifier was found in the searched production source. Separate
-admin credentials and developer JWTs are different authentication paths.
+Lookup sees one statement snapshot and cannot cancel an admitted request. Old
+verifiers/issuers/rotators do not follow the new protocol; coordinated rollout is
+required. Hard deletion uses ON DELETE SET NULL and can restore projectless
+admission for an otherwise-live key. Uncertain commit, consumed support proposals,
+lost once-only secret delivery, global revocation/events, spending and deletion
+history remain open. No automatic retry or durable secret recovery is claimed.
 
-This is statement-snapshot admission, not persisted revocation. Archive can
-commit after the lookup while hashing or an admitted request continues. Old
-verifiers still omit the guard, requiring coordinated rollout for consistent
-admission. Hard project deletion uses ON DELETE SET NULL and can restore allowed
-projectless admission for an otherwise-live key; dangling non-NULL references
-instead refuse. Issuance/rotation races, cross-workspace revocation and missing
-events, in-flight termination, budget/workspace semantics and deletion history
-remain open.
-
-One production file and three fixture files were independently source-reviewed.
-Canonical and real-verifier caller fixtures use predicate-sensitive models with
-separate exact SQL assertions, including owned/foreign/archived/missing/NULL
-states, Personal/organization rows, modeled archive, expiry/revocation/hash,
-lookup errors, scope and CSRF fallback. The existing expiry fixture's unaliased
-predicates and NULL project inputs remain compatible. Fixtures are unrun, not
-PostgreSQL, RLS or concurrency proof. No product checks, live services, database
-changes, push or deployment occurred.
+The latest transaction slice has three production files and nine fixture files,
+independently source-reviewed. New lifecycle fixtures call actual services with
+strict SQL, staged state, owner/workspace models, sequential archive schedules,
+association/receipt/metadata faults, commit gates and injected serialization errors.
+They do not model simultaneous PostgreSQL transactions, real RLS or uncertain
+commit outcomes. Existing caller fixtures enforce distinct transaction handles;
+API-auth/CSRF stores do not model rollback. Shared support fake stages key rows,
+not project timestamps/concurrency. All fixtures are unrun. No product tests,
+lint, typechecks, builds, live services, database changes, push or deployment ran.
 
 ## WEB-DEVELOPER-MUTATION-RETRY-01
 

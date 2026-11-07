@@ -5226,8 +5226,9 @@ replacement; null expiry and canonical legacy scope semantics are unchanged.
 The once-only result is constructed after the transaction returns.
 
 Authored fixtures are unrun models, not database concurrency or RLS acceptance.
-Project archive admission, uncertain commits, consumed-proposal recovery and lost
-secret delivery remain separate limits. The same audit extended the existing
+The later project transaction correction below addresses participating archive
+admission. Uncertain commits, consumed-proposal recovery and lost secret delivery
+remain separate limits. The same audit extended the existing
 session-completion record for emailed security undo: failures can strand cleanup
 after link consumption; returned partial results can still produce universal-success
 copy. That coordinated outcome/
@@ -5276,7 +5277,8 @@ The same audit records `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01` without changing
 product code: user-global projects and workspace-scoped keys do not share archive
 coverage, and issuance/rotation need coordinated project-first admission. The
 Personal-scoped spend query does not establish organization-wide project limits.
-The earlier support rotation atomicity correction retains its narrower scope.
+The later lookup and project transaction corrections below address participating
+writers; the earlier support slice retains its original narrower scope.
 
 ## Developer console mutations do not automatically replay
 
@@ -6154,9 +6156,35 @@ remain distinct. One production and three fixture files were independently
 reviewed; predicate-sensitive models and exact SQL/caller assertions are unrun,
 not PostgreSQL or concurrency evidence. See WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01.
 
+## Key issuance and rotation share project-first transactions
+
+Accepted `b1f930dae7082658bb037643eb699ea952824c1c` centralizes create and rotate in
+ApiKeyService with one scoped transaction and private insertion. Associated issuance
+first writes the owned live project row. Rotation discovers the association without
+locking the key, performs that project write, then locks/rereads the key and refuses
+any association change instead of chasing another project after the key lock.
+Current metadata and exactly-one revocation/insertion receipts govern replacement;
+case-insensitive UUID comparison does not normalize user identity. NULL project and expiry and
+canonical legacy scope expansion retain their semantics. Support translates typed
+refusals and constructs the once-only secret result after transaction completion.
+
+The actual project write conflicts with a stale higher-isolation archive snapshot;
+a lock-only design would leave that counterexample open. No global isolation
+setting, nested transaction, automatic retry or scope rebinding is introduced.
+Archive still revokes only its visible workspace keys. Global revocation/events,
+old deployments, Personal spend visibility, hard-delete NULL history, in-flight
+requests, uncertain commits and lost secret delivery remain outside the correction.
+
+Three production and nine fixture files were independently read. Strict SQL and
+staged sequential models cover order, admission, metadata/receipt refusal and
+commit-gated results; injected serialization failures check propagation, not real
+PostgreSQL contention. Caller/support fakes retain their narrower modeling limits.
+Fixtures are unrun. See WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01 and
+SUPPORT-API-KEY-ROTATION-ATOMICITY-01 for the remaining acceptance boundary.
+
 ## Reconstruction boundary
 
-Only the two hundred fifty-three accepted production slices traced above are
+Only the two hundred fifty-four accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
