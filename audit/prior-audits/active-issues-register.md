@@ -15021,3 +15021,97 @@ model, not upstream reachability evidence. Hook cases cover StrictMode/repetitio
 quiet equal content, neutral hidden-work notice, settlement/dismissal and stale
 cleanup. Copy cases use the existing actual renderers. No tests, lint, typechecks,
 builds, browser, database, push or deployment execution occurred.
+
+## WEB-ARTIFACT-PUBLICATION-OWNERSHIP-01
+
+Severity: High. Source-confirmed on 2026-11-07; bounded correction
+`03a1c5ba51c7351eb842077ef502f6ca4de6d67e` is independently source-reviewed only.
+No deployed incident, browser reproduction or server authorization bypass is claimed.
+
+ArtifactsPanel previously held publication details without an artifact/view owner.
+A publish response for A could arrive after selecting B and install A's URL and
+audience under B. The reused ArtifactPreview could independently install A's local
+URL after its selection reset, overriding B's later host link. Changing the shown
+audience could then PATCH A's token while recording the response under B in the
+published-sites store. ArtifactCard consumes that mapping. Invited-viewer controls
+also derive their token from the displayed URL, so this was a wrong-target access
+control path, not only misleading progress feedback. Server owner checks do not
+establish which artifact the user intended to change.
+
+Publication state now carries a committed view owner. Conversation, artifact,
+managed-publication eligibility, panel open/closed state and streaming-view
+replacement define separate lifetimes. Rendered details must match the current
+owner; a later reset effect is not the visibility guard. Captured callbacks reject
+stale starts, including after A-to-B-to-A navigation. The host constructs the cloud
+publisher inside the captured operation, and successful mutation responses are
+recorded under that operation's artifact ID, even if the user has moved away.
+They never use a newly selected artifact's ID for attribution.
+
+Within one mounted panel controller, synchronous per-artifact locks reject
+concurrent publication/audience starts. Mutation revisions invalidate earlier
+lookup results. Lookup is suppressed while that artifact's mutation is pending;
+a settlement signal lets a reopened view reconcile afterward. Inactive operation
+entries are released, and render does not allocate operation entries. Audience
+callbacks additionally require their exact publication snapshot and operation
+revision, including when republishing keeps the same token. Local coordination
+is not evidence of server commit order or cross-controller serialization.
+
+ArtifactPreview uses a separate committed lifetime and immediate operation gate.
+Publish feedback also belongs to its submitted content/viewed-version lifetime.
+Stale success, error and finally continuations cannot write another view's URL or
+pending state. Clipboard initiation is guarded after publication, and feedback is
+guarded again after a clipboard await. Delayed audience confirmations recheck
+view, snapshot and operation generation before invoking the mutation. The host
+publication link takes precedence over a preview-local result so host link,
+audience and invited-viewer target stay paired. The invited editor is keyed by
+artifact ID and token; the whole artifact viewer is not remounted.
+
+The accepted scope is three production files and two unrun fixture files under
+apps/web/features/chat/components/artifacts: ArtifactsPanel.tsx,
+ArtifactPreview.tsx, usePublicationView.ts, ArtifactsPanel.publish.test.tsx and
+ArtifactPreview.publish.test.tsx. Source-reviewed cases cover A-to-B-to-A,
+close/reopen before settlement, unmount, hidden streaming, viewed-version changes,
+managed-to-local/unknown eligibility changes, stale GETs, captured callbacks,
+same-token confirmation replacement, duplicate starts, captured canonical IDs,
+late audience responses, old rejection/finally versus new pending work, and
+navigation during a clipboard await. The panel fixture mocks the preview; the
+preview fixture separately uses the actual preview. They are not integrated
+browser proof, and none were executed.
+
+Already-started requests may still transmit or finish, and an initiated clipboard
+write cannot be undone. Cross-tab/other-controller/remote-writer ordering, uncertain
+server outcomes, authoritative revision/CAS recovery, pre-existing cached mapping
+repair and the invitation editor's independent same-token request races remain
+outside this correction. Existing publication privacy/refusal policy, server
+contracts, source editing and ordinary export/save workflows are unchanged.
+No tests, lint, typechecks, builds, browser, database, push or deployment ran.
+
+## WEB-ARTIFACT-DRAFT-RETENTION-01
+
+Severity: Medium. Independently source-qualified on 2026-11-07 and still open;
+no implementation correction or runtime reproduction is claimed.
+
+ArtifactPreview holds sourceDraft in component state and delays its separate
+localStorage recovery write by 800 ms. The timer cleanup cancels that write;
+ArtifactsPanel closes by unmounting its viewer, switches to a streaming viewer,
+and reuses the unkeyed preview on artifact selection. The preview also clears the
+draft on artifact ID/version-count changes. Closing or switching before the timer
+fires can therefore lose the newest edits, or leave only an older stored draft.
+The kept/not-kept status can continue to describe an earlier successful write.
+Manual Save, not the 800 ms timer, commits a canonical artifact version.
+
+A blanket cleanup flush is not an accepted fix. It can resurrect explicitly
+saved/discarded drafts or write one artifact's draft under another key. CodeMirror
+also calls onChange for programmatic value synchronization, so blindly treating
+every callback as a user edit is unsafe. A bounded correction needs artifact-bound
+edit-event persistence, no cleanup/restoration/initialization writes, truthful
+storage outcomes, and explicit Save/Cancel/confirmed-Restore handling. Checklist
+updates must retain their separate four-second canonical commit behavior without
+storage side effects inside React state updater functions.
+
+Existing raw recovery strings have no base-revision or concurrent-owner metadata;
+automatic restoration against newer canonical content, storage-removal failure,
+cloud reconciliation and multiple-editor conflict behavior need explicit limits.
+This finding remains separate from stopped-stream retention and publication
+ownership. The publication correction did not change sourceDraft handling,
+editor callbacks, draft storage format or either draft timer.

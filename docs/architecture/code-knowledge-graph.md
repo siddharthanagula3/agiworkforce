@@ -6329,3 +6329,38 @@ rehydration marker loss and editor draft lifecycle remain separate open work.
 Four production and four fixture files were independently reviewed; public-action
 and explicit source-state models plus hook/copy fixtures are unrun. See
 WEB-ARTIFACT-STOP-RETENTION-OWNERSHIP-01 for evidence and acceptance limits.
+
+## Publication results stay with their initiating artifact
+
+Accepted `03a1c5ba51c7351eb842077ef502f6ca4de6d67e` binds web publication presentation
+to a committed view rather than an unowned singleton. ArtifactsPanel owns the
+publication snapshot, captured artifact ID, per-artifact pending gate and lookup
+revision. Conversation/artifact/eligibility, panel visibility and streaming
+replacement define view lifetimes. Successful mutations may still record their
+captured artifact after navigation; they cannot install details into another
+view or record the response under a newly selected artifact.
+
+A private usePublicationView hook supplies committed liveness to parent and
+preview. The preview separately binds publish feedback to submitted content and
+viewed version. Its immediate pending gate, delayed-confirmation snapshot checks,
+and pre/post-clipboard guards prevent stale actions and feedback from crossing
+view lifetimes. Host publication links take precedence, keeping host audience
+controls and the invitation target with the same publication. Only the invited
+editor is keyed by artifact/token; source editor lifetime is unchanged.
+
+Mutation start invalidates earlier lookups. A reopened view whose lookup was
+blocked by a pending mutation reconciles after settlement. Operation metadata is
+released when inactive and is not allocated during render. This is coordination
+within one mounted controller, not server revision/CAS, cross-tab serialization,
+rollback or proof of remote commit order. Started requests/clipboard writes may
+finish; independent invitation-editor same-token races remain open. Three
+production files and two fixture files were independently source-reviewed. The
+parent-mocked-preview and actual-preview fixtures are unrun, not integrated
+browser verification. See WEB-ARTIFACT-PUBLICATION-OWNERSHIP-01.
+
+The independent WEB-ARTIFACT-DRAFT-RETENTION-01 remains open: local recovery writes
+are delayed, and close/switch can cancel them before the newest sourceDraft is
+stored. Canonical Save is separate. Cleanup flushing risks wrong-owner writes or
+resurrected discards, and programmatic editor synchronization also invokes
+onChange. No draft persistence, recovery format, editor callback or checklist
+commit behavior was changed by the publication correction.
