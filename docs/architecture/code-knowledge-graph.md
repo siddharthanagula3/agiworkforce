@@ -7301,7 +7301,7 @@ Continuation ecae371624f140b8cec5ef7059e542280f10f28e adds a strict update recei
 legacy update response. Publish and strict Update share the same HTTP(S),
 parsed-token-path, no-credentials/query/fragment predicate; Publish semantics are
 unchanged. Sites consumers retained their prior schema at that boundary; web
-Sites adoption follows below, while mobile Sites remains unchanged.
+and mobile Sites adoption follow in their later continuations below.
 
 Web chat audience PATCH now requires parsed receipt token and visibility to
 match the requested target and audience before resolving. Panel cache and
@@ -7372,7 +7372,8 @@ not rollback.
 UI actions, lease/view guards, ambient cookie credentials, HTTP failure handling
 and DELETE/Restore remain unchanged. Earlier cache/display may persist; there
 is no new retry, recovery read or durable unknown-write record. Mobile Sites
-remains on the legacy update schema. Direct and real-helper/hook/store fixtures
+kept the legacy update schema at this slice; adoption is recorded below.
+Direct and real-helper/hook/store fixtures
 are UNRUN; no product checks, live services/migrations, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
 
@@ -7447,7 +7448,8 @@ uncertainty mechanism changes. Minimum acknowledgement does not certify content
 bytes, selected historical identity in the reply, rollback or lasting remote
 state. Version-view ownership/admission was still open at this slice and is
 bounded below; ordinary DELETE acknowledgement is corrected in the later
-Unpublish continuation below, while mobile receipt limits remain. All fixtures are UNRUN; no product checks, live services,
+Unpublish continuation below. Mobile Sites receipt adoption is recorded later,
+while other mobile receipt limits remain. All fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
 
 ## Web Sites version actions have local lifetime ownership
@@ -7489,6 +7491,22 @@ success or notify its parent.
 Backend ownership and receipt production, ordinary cookie/CSRF transport,
 optional authority assertions and non-2xx handling are unchanged. No retry,
 recovery GET, durable uncertainty marker, rollback or lasting remote-state
-proof. Prior cache can remain; broader lifecycle and mobile receipt work is
-separate. Focused fixtures are UNRUN; no product checks or deployment.
+proof. Prior cache can remain; mobile Sites receipts are bounded below,
+while broader lifecycle and other mobile receipt work remain separate. Focused fixtures are UNRUN; no product checks or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile Sites mutation adoption uses canonical receipts
+
+Continuation 6f642fbc06d3a8f2f0f7067cfb4f6dc91dde3a97 moves the equivalent minimum Delete/Restore
+receipt schemas to cloud-contracts for web and mobile reuse. Mobile Sites
+checks exact target token, success true for DELETE, a positive safe live
+version for Restore, and requested audience for strict PATCH acknowledgement.
+Historical Restore numbers can differ from returned live numbers; moderated
+titles are accepted as authoritative.
+
+A feature-owned receipt uncertainty error reaches the detail banner without
+exposing arbitrary Error messages. Invalid decoded replies do not trigger
+successful navigation or refresh. Existing transport/auth/lifetime guards and
+non-atomic clear-before-delete remain. No retry, recovery GET, durable marker,
+backend change or remote-state proof. Transport JSON failures keep their
+existing handling. Fixtures are UNRUN; see WEB-PUBLICATION-QUOTA-ADMISSION-01.

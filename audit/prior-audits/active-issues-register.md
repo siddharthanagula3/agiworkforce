@@ -17045,8 +17045,8 @@ It requires a 24-character token and an absolute HTTP(S) share link with that
 token's exact parsed path, no credentials, query or fragment. This is parsed
 URL shape, not raw-string canonicality. The link predicate is
 factored from Publish without changing Publish's validation semantics. Existing
-web/mobile Sites consumers kept their original schema at that boundary. Web
-Sites adoption follows below; mobile Sites remains on the legacy parser.
+web/mobile Sites consumers kept their original schema at that boundary.
+Web and mobile Sites adoption follow in their later continuations below.
 
 The web chat client parses the strict receipt and requires its token and audience
 to equal the requested values before resolving. It uses the returned validated
@@ -17142,7 +17142,8 @@ both existing request sequences, and reject cancellation/dismissal; all UNRUN.
 At that slice, an unrelated Restore fixture still expected the obsolete root
 POST. It is aligned in the detail-lifetime continuation below. That continuation
 also bounds mobile detail ownership and the clear-to-delete retirement gap;
-bodyless DELETE acceptance and non-atomic partial failure remain unresolved. This
+mobile Sites DELETE acknowledgement is bounded in the later receipt continuation,
+while non-atomic partial failure remains unresolved. This
 copy correction adds no atomicity, recovery, receipt or lifecycle guarantee.
 No product checks, live service/database or migration actions, push or deploy.
 Existing fixed-base recovery dependencies and lost-history limits remain.
@@ -17179,7 +17180,8 @@ canonicality, full metadata semantics and lasting remote state are not proved.
 Three source/fixture files are independently reviewed. Direct real-parser
 and real-helper/hook/store fixtures are authored UNRUN; existing component
 suites mock the service and are not transport/parser acceptance. Mobile Sites
-still uses legacy update receipts. Web Sites Restore receipt adoption remained
+kept legacy update receipts at this slice; adoption is recorded below.
+Web Sites Restore receipt adoption remained
 open at this slice and is corrected below; ordinary DELETE acknowledgement is
 corrected in the later Unpublish continuation below. Broader lifetime and
 reconciliation remain open. No product checks, live
@@ -17231,8 +17233,8 @@ useCopyAction still owns its post-dispatch haptic/error feedback; not every
 platform/helper completion is lifetime-cancelled.
 
 At this detail slice, the separate Sites list lifetime remained open; its later
-correction is recorded below. Legacy mobile receipts, capped detail discovery
-and live React/native/auth/database behavior remain open. No product
+correction is recorded below, as is mobile Sites receipt validation. Capped
+detail discovery and live React/native/auth/database behavior remain open. No product
 checks, live services/migrations, push or deployment. Recovery dependencies,
 unapplied migrations and lost-history limitations remain.
 
@@ -17277,9 +17279,10 @@ overlapping resolve/reject outcomes, retained rows/retries, unmount,
 subscription-gap reconciliation, StrictMode and Local-to-Cloud readiness.
 
 Fixture cases are authored UNRUN. No product checks, migration application,
-live services, push or deployment. This does not complete paginated inventory,
-strict mobile mutation receipts, durable unknown-write recovery or global
-cross-controller ordering. Credentials remain ambient and mocked request options
+live services, push or deployment. This slice does not complete paginated
+inventory or strict mobile mutation receipts; later Sites receipt adoption is
+recorded below. Durable unknown-write recovery and global ordering remain open.
+Credentials remain ambient and mocked request options
 do not prove actual network/auth/abort behavior. Existing recovery dependencies,
 unapplied migrations and lost-history limits remain.
 
@@ -17324,7 +17327,8 @@ durable unknown-write record or backend/shared-contract change.
 
 The ordinary version UI's lifetime/admission gaps remained open at this slice
 and are bounded below. Ordinary DELETE acknowledgement is corrected in the later continuation below;
-mobile legacy receipts remain open. Existing parent SiteDetail lease/token and reload guards are not removed
+mobile Sites receipt adoption is recorded below, while other mobile receipt
+limits remain. Existing parent SiteDetail lease/token and reload guards are not removed
 or treated as missing. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. Recovery prerequisites, unapplied
 migrations and lost-history limitations remain.
@@ -17374,8 +17378,8 @@ Restore minimum receipt and history deduplication semantics are preserved.
 
 Restore republishes through retained history; this slice establishes no new
 irreversible consequence and adds no confirmation requirement. Ordinary DELETE
-acknowledgement is corrected below; mobile legacy receipts, capped discovery and
-durable recovery remain separate. Fixtures are UNRUN; no product checks, live services,
+acknowledgement and mobile Sites receipts are corrected below. Capped discovery,
+other mobile receipt paths and durable recovery remain separate. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. Existing recovery dependencies,
 unapplied migrations and lost-history limitations remain.
 
@@ -17402,7 +17406,45 @@ rollback, cascade execution or recovery. Prior cache may remain after uncertaint
 No automatic replay, recovery GET, durable marker or new lifecycle guard.
 Mocked CSRF fixtures assert one mutation after preparation, not zero total GETs;
 real CSRF preparation can still fetch its token.
-Mobile receipts and broader request ownership remain separate.
+Mobile Sites receipts are bounded in the following continuation; other mobile
+receipt paths and broader request ownership remain separate.
+
+No product checks, live services, migration application, push or deployment.
+Existing recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Sites mutations require matching receipts
+
+Continuation 6f642fbc06d3a8f2f0f7067cfb4f6dc91dde3a97, 2026-11-07, bounds decoded successful mutation
+acknowledgements in mobile Sites. Previously Unpublish discarded the DELETE
+body and could navigate away without confirming the target. Restore also
+discarded its reply, and PATCH accepted a legacy shape without binding token
+or requested audience. PATCH/Restore already refreshed details rather than
+directly adopting returned permissions; that safeguard remains.
+
+Delete and Restore minimum receipt schemas now live in cloud-contracts and
+replace the equivalent private web definitions without a web behavior change.
+Minimum token shape remains nonempty text, as in the previous web definitions.
+Delete requires success true and the requested token; Restore requires the
+requested token and a positive safe live version. The returned version need
+not equal the selected historical number because history can append or reuse
+an identical snapshot. PATCH uses the existing strict receipt, exact token and
+requested audience, with an immutable top-level requested-change snapshot.
+Server policy can transform titles, so title equality is not required.
+
+Mobile helpers reject invalid decoded acknowledgements with a feature-owned
+uncertainty error. SiteDetail presents only that narrow safe message directly;
+arbitrary errors still pass through its existing formatter. Invalid receipts
+cannot trigger successful detail navigation or refresh. Existing lifetime,
+account epoch, abort signal, caller-owned 401 policy, ambient calling forms and
+clear-before-delete sequencing remain.
+
+Focused contract, direct helper and actual detail/service fixtures are UNRUN.
+This is receipt validation, not content equality, final remote-state,
+rollback, cascade or cancellation proof. The transport still owns JSON decoding
+and non-2xx errors; those failures are not newly classified as receipt errors.
+Shared-data clearing can succeed before a later uncertain unpublish and is
+not made atomic. No automatic retry, recovery GET or durable unknown marker.
+Capped mobile discovery and broader ordering remain separate.
 
 No product checks, live services, migration application, push or deployment.
 Existing recovery dependencies, unapplied migrations and lost-history limits remain.
