@@ -17180,8 +17180,9 @@ Three source/fixture files are independently reviewed. Direct real-parser
 and real-helper/hook/store fixtures are authored UNRUN; existing component
 suites mock the service and are not transport/parser acceptance. Mobile Sites
 still uses legacy update receipts. Web Sites Restore receipt adoption remained
-open at this slice and is corrected below; ordinary DELETE acknowledgement and
-broader lifetime/reconciliation remain open. No product checks, live
+open at this slice and is corrected below; ordinary DELETE acknowledgement is
+corrected in the later Unpublish continuation below. Broader lifetime and
+reconciliation remain open. No product checks, live
 services/databases, migration application, push or deployment. Existing recovery
 dependencies, unapplied migrations and lost-history limits remain.
 
@@ -17322,8 +17323,8 @@ handling and unrelated helpers remain. No extra GET, retry, Publish fallback,
 durable unknown-write record or backend/shared-contract change.
 
 The ordinary version UI's lifetime/admission gaps remained open at this slice
-and are bounded below. Bodyless ordinary DELETE acknowledgement and mobile
-legacy receipts remain open. Existing parent SiteDetail lease/token and reload guards are not removed
+and are bounded below. Ordinary DELETE acknowledgement is corrected in the later continuation below;
+mobile legacy receipts remain open. Existing parent SiteDetail lease/token and reload guards are not removed
 or treated as missing. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. Recovery prerequisites, unapplied
 migrations and lost-history limitations remain.
@@ -17373,7 +17374,35 @@ Restore minimum receipt and history deduplication semantics are preserved.
 
 Restore republishes through retained history; this slice establishes no new
 irreversible consequence and adds no confirmation requirement. Ordinary DELETE
-acknowledgement, mobile legacy receipts, capped discovery and durable recovery
-remain separate. Fixtures are UNRUN; no product checks, live services,
+acknowledgement is corrected below; mobile legacy receipts, capped discovery and
+durable recovery remain separate. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. Existing recovery dependencies,
 unapplied migrations and lost-history limitations remain.
+
+### Web Unpublish requires a matching acknowledgement
+
+Continuation 895b30991c302ceb1bb81e086d4bc0ba6a9c3540, 2026-11-07, closes an ordinary web Unpublish
+false-success path. The cookie-based helper previously accepted every HTTP 2xx
+without inspecting its body; useSiteActions could then forget the publication,
+announce that its link no longer worked and remove the site from its parent.
+The optional full-authority path already required an acknowledgement.
+
+The helper now requires the existing minimum receipt, success true and the
+exact requested token, for both paths. Empty, unreadable, malformed or mismatched
+successful replies produce explicit uncertainty rather than deletion success.
+The token parameter is already an immutable primitive. Existing cookie/CSRF
+transport, authority assertions, non-2xx handling and backend owner checks remain.
+The backend returns this receipt only after its owner-scoped delete reports a row.
+
+Focused helper and real helper/action/store fixtures are authored UNRUN.
+Invalid acknowledgement cannot trigger the existing successful cache removal,
+toast or parent callback; a valid matching receipt retains the normal path.
+This is minimum acknowledgement validation, not proof of final remote state,
+rollback, cascade execution or recovery. Prior cache may remain after uncertainty.
+No automatic replay, recovery GET, durable marker or new lifecycle guard.
+Mocked CSRF fixtures assert one mutation after preparation, not zero total GETs;
+real CSRF preparation can still fetch its token.
+Mobile receipts and broader request ownership remain separate.
+
+No product checks, live services, migration application, push or deployment.
+Existing recovery dependencies, unapplied migrations and lost-history limits remain.

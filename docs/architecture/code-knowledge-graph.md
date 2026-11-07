@@ -7446,7 +7446,8 @@ No UI, backend/shared schema, ambient transport, retry, recovery GET or durable
 uncertainty mechanism changes. Minimum acknowledgement does not certify content
 bytes, selected historical identity in the reply, rollback or lasting remote
 state. Version-view ownership/admission was still open at this slice and is
-bounded below; ordinary DELETE/mobile receipt limits remain. All fixtures are UNRUN; no product checks, live services,
+bounded below; ordinary DELETE acknowledgement is corrected in the later
+Unpublish continuation below, while mobile receipt limits remain. All fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
 
 ## Web Sites version actions have local lifetime ownership
@@ -7476,3 +7477,18 @@ or cookie identity. Existing full RequestAuthority callers remain compatible.
 No global auth, backend cancellation/rollback, cross-controller ordering or
 new confirmation claim. Fixtures are UNRUN; no product checks, live services,
 migration application, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web Unpublish success depends on its receipt
+
+Continuation 895b30991c302ceb1bb81e086d4bc0ba6a9c3540 applies the existing success-true/exact-token
+minimum acknowledgement to ordinary cookie Unpublish as well as full-authority
+calls. Invalid or unreadable successful bodies enter an explicit uncertain
+outcome error before useSiteActions can forget the cached publication, emit
+success or notify its parent.
+
+Backend ownership and receipt production, ordinary cookie/CSRF transport,
+optional authority assertions and non-2xx handling are unchanged. No retry,
+recovery GET, durable uncertainty marker, rollback or lasting remote-state
+proof. Prior cache can remain; broader lifecycle and mobile receipt work is
+separate. Focused fixtures are UNRUN; no product checks or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.
