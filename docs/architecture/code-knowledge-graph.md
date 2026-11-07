@@ -7059,3 +7059,37 @@ changes, server policy snapshots, identity/RLS or runtime acceptance. Contract,
 route, hook/dialog/settings fixtures are authored and UNRUN; no product checks,
 live provider/database action, push or deployment. Prior 0394/0395 remain
 UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.
+
+## Settings conversation links own their session lifetime
+
+Continuation `6bcf2de7b3dad763a70177b97d75e9c14867bf04` makes listSharedLinks and revokeSharedLink require
+canonical RequestAuthority. The list stays account-wide, without workspace
+admission or a workspace selector. Captured native-session Bearer/credentials
+omission and currentness checks surround CSRF, token/fetch, success/error JSON
+and canonical success:true receipt parsing. No automatic mutation retry.
+
+SharedLinksSection captures a stable session descriptor and creates a fresh
+effect activation for every setup. Cleanup/observed retirement permanently
+invalidates that activation, requests, view and confirmation. Render, queued
+publication and events require exact current activation/latest-view identity;
+row actions require inventory membership. Confirmation is one-shot and bound
+to its row/inventory; operations serialize with identity-conditional finalizers.
+
+Open is a guarded new-tab button instead of an anchor, removing retained-href
+navigation paths while changing link-specific middle-click/context-menu behavior.
+Copy dispatch and later feedback are guarded independently. Neither retirement
+nor abort recalls prior clipboard/navigation effects or a dispatched server write.
+
+Dispatched revoke failure/malformed acknowledgement is reported as uncertain,
+not rollback or proof the link remains live. Retry lists again, never resends
+DELETE. No new network deadline. v35 completeness survives per-token removal;
+server token+owner enforcement remains. Same-account workspace changes alone
+are not this defect, and account-wide semantics are deliberately preserved.
+
+The scope is only the conversation-link subsection. PublishedArtifactsSection
+and other identity consumers remain unchanged. UNRUN source fixtures use real
+owners with mocked identity/transport/clipboard observations; detached DOM clicks
+alone do not establish retained callback execution, and StrictMode coverage is
+replay operability. No browser/SDK/React/auth/SQL runtime acceptance, product
+checks, live services/migrations, push or deployment. Prior 0394/0395 remain
+UNAPPLIED. See WEB-ORG-SETTINGS-REQUEST-SCOPE-01.

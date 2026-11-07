@@ -15744,7 +15744,8 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `7bab6613db418be541428fc48e7a3b32721b9cf9`; shared-session transaction continuation in
 `74658ddcc2d4e9e331a3dbaf986131cd991adaab`; web share confirmation scope in
 `36081001d8f696c5bd5afb7a216b3ff0bc903efe`; share inventory completeness in
-`d9bf60f52b3ff692f44e2f58d3819f8656e71a41`, 2026-11-07. Wider clients, audience races,
+`d9bf60f52b3ff692f44e2f58d3819f8656e71a41`; settings conversation-link lifetime in
+`6bcf2de7b3dad763a70177b97d75e9c14867bf04`, 2026-11-07. Wider clients, audience races,
 identity consumers and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -16475,3 +16476,77 @@ Source review and mocked assertions do not establish browser/React, auth/CSRF,
 SQL/RLS, timing, concurrency or end-to-end acceptance. No product tests, lint,
 typechecks, builds, app execution, live service/database/migration actions, push or
 deployment. Prior 0394/0395 remain UNAPPLIED; release readiness remains unverified.
+
+### Settings conversation-link session lifetime continuation
+
+Source-reviewed continuation `6bcf2de7b3dad763a70177b97d75e9c14867bf04` binds the settings conversation-link
+subsection to its initiating native session. The settings/provider chain does not
+key this surviving view by account/session; previously local inventory, notices
+and revoke confirmation could remain across an observed identity transition, and
+late reads or writes could settle into that view. Retained Copy/Open actions
+could still use the previous account's share URLs. This is stale own-account
+client data and action lifetime, not unauthorized server reads or cross-account
+deletion: token DELETE already matches authenticated owner and token.
+
+The list intentionally spans the account, so same-account workspace selection
+alone is not the qualified defect and no workspace admission requirement is
+added. Ordinary settings close or section replacement unmounts the subsection;
+identity changes while it remains mounted are the distinct source-qualified path.
+Actual browser/SDK transition delivery is not runtime-verified.
+
+The two share service helpers now require canonical RequestAuthority instead of
+ambient fetch. GET remains account-wide; DELETE retains its encoded token path.
+Captured native-session Bearer and omitted cookies come from canonical transport.
+Currentness is checked before and after CSRF, token/fetch and success/error body
+boundaries, including rejected or malformed bodies. A successful DELETE must
+parse the canonical success:true receipt. Neither helper retries a mutation.
+
+The subsection keeps a stable captured session descriptor and creates a fresh
+activation on each layout-effect setup, including StrictMode replay. Cleanup
+permanently retires that activation, not a reusable session descriptor. Observed
+session retirement aborts its operation and invalidates its view and confirmation.
+Render and event admission require the current activation and exact latest view;
+row actions also require exact inventory membership. Queued state publication
+rechecks activation and latest-view identity, rather than reviving old state.
+
+List, clipboard and revoke operations are serialized per activation. A request
+can settle or clear busy state only while it still owns the operation; an old
+finalizer cannot clear replacement-session work. Revoke confirmation captures
+the exact row/inventory, advances once from confirming to writing, and cannot be
+replayed after cancellation, replacement or retirement. Retry rereads inventory
+and does not repeat DELETE. Captured authority guards later CSRF/token dispatch.
+
+Open is now a guarded button opening a new tab with noopener/noreferrer, rather
+than an anchor whose retained href could bypass a click guard through auxiliary
+or context-menu navigation. This intentionally changes ordinary link-specific
+middle-click/context-menu behavior; Copy remains an explicit action. Clipboard
+dispatch and later feedback are guarded separately. Already dispatched external
+effects cannot be undone.
+
+A dispatched DELETE without a confirmed receipt reports that revocation could
+not be confirmed and asks the user to reload. Pre-dispatch failures retain
+sanitized start guidance. The old row is not proof it remains live; no automatic
+DELETE retry or rollback claim is introduced. No new network deadline is added.
+
+Only conversation links are corrected. The nested PublishedArtifactsSection and
+other settings consumers are unchanged and not certified by this work. Already
+copied/opened URLs or dispatched server actions cannot be recalled by retiring
+the view. Server owner checks, account-wide list semantics and v35 completeness
+remain; there is no new privilege, workspace binding, migration or server writer.
+
+Authored service and component fixtures are UNRUN. Service fixtures invoke real
+service and request authority over mocked session/CSRF/network boundaries.
+The new identity suite uses the real subsection, service, transport and dialog,
+with mocked identity observations, clipboard/window and the out-of-scope artifact
+sibling. Broad section fixtures remain wiring coverage. Assertions cover captured
+Bearer/account-wide scope, completeness, encoded tokens, session retirement at
+CSRF/token/fetch/body boundaries, receipts, unknown outcomes/read-only Retry,
+copy/open admission, confirmation retirement/clearing, serialized operations and
+stale finalizers. Mounted-before-notification events exercise currentness; detached DOM
+clicks alone do not prove a retained React callback was invoked. The StrictMode
+fixture asserts replay operability, not every first-activation stale callback.
+They are source-reviewed models, not browser/React/auth/CSRF/SQL acceptance or
+proof that uncooperative I/O settles. No product tests, lint, typechecks, builds,
+app execution, live provider/database/migration actions, push or deployment.
+Prior 0394/0395 remain UNAPPLIED. Wider identity consumers and runtime acceptance
+remain open.
