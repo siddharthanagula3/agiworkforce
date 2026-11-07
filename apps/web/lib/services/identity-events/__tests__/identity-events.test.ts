@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   compromiseNotice: vi.fn(),
   observe: vi.fn(),
   revoke: vi.fn(),
+  finishIntent: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -23,7 +24,7 @@ vi.mock('@/lib/server/risk-signals', () => ({
 vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   revokeEveryOtherSession: (...args: unknown[]) => mocks.revoke(...args),
-  finishIntentRevocation: async () => true,
+  finishIntentRevocation: (...args: unknown[]) => mocks.finishIntent(...args),
 }));
 vi.mock('@/lib/services/account-activity-notifications', () => ({
   notifyIdentitySecurityEvent: (...args: unknown[]) => mocks.notify(...args),
@@ -53,6 +54,7 @@ beforeEach(() => {
   for (const mock of Object.values(mocks)) mock.mockReset();
   query.mockReset().mockResolvedValue([{ id: 'resp-1' }]);
   execute.mockReset().mockResolvedValue(undefined);
+  mocks.finishIntent.mockResolvedValue(true);
   mocks.observe.mockResolvedValue({ level: 'none', signals: [] });
   mocks.audit.mockResolvedValue(undefined);
   mocks.notify.mockResolvedValue(undefined);
@@ -100,6 +102,30 @@ describe('emitIdentitySecurityEvent', () => {
 });
 
 describe('respondToAccountCompromise', () => {
+  it.each([
+    [], null, undefined, {}, [null], [{}], [{ id: null }], [{ id: 1 }],
+    [{ id: '' }], [{ id: '   ' }], [{ id: 'resp-1' }, { id: 'resp-2' }],
+  ].map((receipt) => ({ receipt })))('stops before subsequent effects without one opener receipt $receipt', async ({ receipt }) => {
+    query.mockResolvedValueOnce(receipt);
+
+    await expect(respondToAccountCompromise(db, identity, {
+      userId: 'user-1', trigger: 'reported',
+    })).rejects.toMatchObject({
+      statusCode: 503,
+      userSafe: true,
+      message: 'Could not confirm that the compromise response was recorded.',
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.finishIntent).not.toHaveBeenCalled();
+    expect(mocks.compromiseNotice).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(mocks.observe).not.toHaveBeenCalled();
+  });
+
   it('ends every session, including the one that asked', async () => {
     const response = await respondToAccountCompromise(db, identity, {
       userId: 'user-1',
@@ -277,8 +303,17 @@ describe('resolveCompromiseResponse', () => {
       trigger: 'impossible_travel',
       opened_at: OPENED_AT,
       resolved_at: null,
+      password_reset_required: true,
       ...overrides,
     };
+  }
+
+  function closedRow(overrides: Record<string, unknown> = {}) {
+    return openRow({
+      resolved_at: '2026-09-18T13:00:00.000Z',
+      password_reset_required: false,
+      ...overrides,
+    });
   }
 
   function provider(session: Record<string, unknown> | null) {
@@ -300,7 +335,7 @@ describe('resolveCompromiseResponse', () => {
   }
 
   it('closes the response once the account has signed in again and nothing else survives', async () => {
-    query.mockResolvedValueOnce([openRow()]).mockResolvedValueOnce([{ id: 'resp-1' }]);
+    query.mockResolvedValueOnce([openRow()]).mockResolvedValueOnce([closedRow()]);
     mocks.revoke.mockResolvedValue({
       ended: ['sess-old'],
       alreadyGone: [],
@@ -332,7 +367,7 @@ describe('resolveCompromiseResponse', () => {
     );
   });
 
-  it('refuses a session that predates the response, so a surviving intruder cannot lift the lockdown', async () => {
+  it('refuses a session that predates the response', async () => {
     query.mockResolvedValueOnce([openRow()]);
 
     const result = await resolve(
@@ -403,8 +438,9 @@ describe('resolveCompromiseResponse', () => {
     expect(mocks.revoke).not.toHaveBeenCalled();
   });
 
-  it('is a no-op on a response that is already closed', async () => {
-    query.mockResolvedValueOnce([openRow({ resolved_at: '2026-09-18T13:00:00.000Z' })]);
+  it.each(['2026-09-18T13:00:00.000Z', new Date('2026-09-18T13:00:00.000Z')])(
+    'is a no-op on a response that is already closed at %s', async (resolvedAt) => {
+    query.mockResolvedValueOnce([closedRow({ resolved_at: resolvedAt })]);
     const identityStub = provider({
       id: 'sess-new',
       userId: 'user-1',
@@ -432,7 +468,7 @@ describe('resolveCompromiseResponse', () => {
   it.each([OPENED_AT, new Date(OPENED_MS)])('accepts matching active session at hold opening %s', async (openedAt) => {
     query
       .mockResolvedValueOnce([openRow({ opened_at: openedAt })])
-      .mockResolvedValueOnce([{ id: 'resp-1' }]);
+      .mockResolvedValueOnce([closedRow()]);
     const identityStub = provider({
       id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS,
     });
@@ -483,4 +519,165 @@ describe('resolveCompromiseResponse', () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(mocks.revoke).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { password_reset_required: true },
+    { password_reset_required: undefined },
+    { password_reset_required: 'false' },
+    { resolved_at: undefined },
+    { resolved_at: 'invalid-date' },
+    { resolved_at: new Date(Number.NaN) },
+    { resolved_at: 0 },
+  ])('does not report initial inconsistent completion %j', async (overrides) => {
+    query.mockResolvedValueOnce([closedRow(overrides)]);
+
+    await expect(resolve(provider(null))).rejects.toMatchObject({
+      statusCode: 503, userSafe: true,
+      message: 'Could not confirm that this response was resolved.',
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  const unconfirmedReceipts = [
+    [], null, undefined, {}, [null], [{}],
+    [closedRow({ id: 'another-response' })],
+    [closedRow({ id: '' })],
+    [closedRow({ password_reset_required: true })],
+    [closedRow({ password_reset_required: undefined })],
+    [closedRow({ password_reset_required: 'false' })],
+    [closedRow({ resolved_at: null })],
+    [closedRow({ resolved_at: undefined })],
+    [closedRow({ resolved_at: 'invalid-date' })],
+    [closedRow({ resolved_at: new Date(Number.NaN) })],
+    [closedRow({ resolved_at: 0 })],
+    [closedRow(), closedRow()],
+  ];
+
+  it.each(unconfirmedReceipts.map((receipt) => ({ receipt })))(
+    'does not treat an empty update as completion without stored evidence $receipt',
+    async ({ receipt }) => {
+      query.mockResolvedValueOnce([openRow()]).mockResolvedValueOnce([])
+        .mockResolvedValueOnce(receipt);
+
+      await expect(resolve(provider({
+        id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000,
+      }))).rejects.toMatchObject({
+        statusCode: 503, userSafe: true,
+        message: 'Could not confirm that this response was resolved. Some sessions may already have been signed out.',
+      });
+
+      expect(query).toHaveBeenCalledTimes(3);
+      expect(query.mock.calls[2]?.[0]).toContain('where id = $1 and user_id = $2');
+      expect(query.mock.calls[2]?.[1]).toEqual(['resp-1', 'user-1']);
+      expect(mocks.revoke).toHaveBeenCalledTimes(1);
+      expect(mocks.audit).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(unconfirmedReceipts.filter((receipt) => !Array.isArray(receipt) || receipt.length > 0)
+    .map((receipt) => ({ receipt })))(
+    'rejects a malformed update receipt without a success audit or retry $receipt',
+    async ({ receipt }) => {
+      query.mockResolvedValueOnce([openRow()]).mockResolvedValueOnce(receipt);
+
+      await expect(resolve(provider({
+        id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000,
+      }))).rejects.toMatchObject({ statusCode: 503, userSafe: true });
+
+      expect(query).toHaveBeenCalledTimes(2);
+      expect(mocks.revoke).toHaveBeenCalledTimes(1);
+      expect(mocks.audit).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['update', 'read'])('propagates a database %s failure without success audit', async (stage) => {
+    const failure = new Error('database unavailable');
+    query.mockResolvedValueOnce([openRow()]);
+    if (stage === 'read') query.mockResolvedValueOnce([]);
+    query.mockRejectedValueOnce(failure);
+
+    await expect(resolve(provider({
+      id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000,
+    }))).rejects.toBe(failure);
+
+    expect(query).toHaveBeenCalledTimes(stage === 'read' ? 3 : 2);
+    expect(mocks.revoke).toHaveBeenCalledTimes(1);
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it.each(['update', 'concurrent read'])('preserves the sweep count with confirmed %s evidence', async (stage) => {
+    query.mockResolvedValueOnce([openRow()]);
+    if (stage === 'concurrent read') query.mockResolvedValueOnce([]);
+    query.mockResolvedValueOnce([closedRow({ resolved_at: new Date(OPENED_MS + 60_000) })]);
+    mocks.revoke.mockResolvedValueOnce({
+      ended: ['ended-1', 'ended-2'], alreadyGone: ['gone-1'], failed: [],
+      currentSession: undefined, incomplete: false, targetCount: 3,
+    });
+
+    const result = await resolve(provider({
+      id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000,
+    }));
+
+    expect(result).toMatchObject({
+      status: stage === 'update' ? 'resolved' : 'already_resolved',
+      responseId: 'resp-1', outstanding: [], sessionsEnded: 3,
+    });
+    expect(query).toHaveBeenCalledTimes(stage === 'update' ? 2 : 3);
+    expect(query.mock.calls[1]?.[0]).toContain('returning id, resolved_at, password_reset_required');
+    if (stage === 'update') {
+      expect(mocks.audit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        outcome: 'success', detail: expect.objectContaining({ count: 3 }),
+      }));
+    } else {
+      expect(query.mock.calls[2]?.[1]).toEqual(['resp-1', 'user-1']);
+      expect(mocks.audit).not.toHaveBeenCalled();
+    }
+  });
+
+
+  it.each([
+    'ABCDEFAB-CDEF-ABCD-EFAB-CDEFABCDEFAB',
+    'abcdefabcdefabcdefabcdefabcdefab',
+    '{ABCDEFAB-CDEF-ABCD-EFAB-CDEFABCDEFAB}',
+    'abcd-efab-cdef-abcd-efab-cdef-abcd-efab',
+  ])('matches PostgreSQL UUID identity without changing account identity: %s', async (responseId) => {
+    const id = 'abcdefab-cdef-abcd-efab-cdefabcdefab';
+    for (const stage of ['initial', 'update', 'concurrent read']) {
+      query.mockReset();
+      mocks.audit.mockClear();
+      query.mockResolvedValueOnce([stage === 'initial' ? closedRow({ id }) : openRow({ id })]);
+      if (stage === 'concurrent read') query.mockResolvedValueOnce([]);
+      if (stage !== 'initial') query.mockResolvedValueOnce([closedRow({ id })]);
+
+      const result = await resolve(provider({
+        id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000,
+      }), { responseId });
+
+      expect(result.status).toBe(stage === 'update' ? 'resolved' : 'already_resolved');
+      expect(query.mock.calls[0]?.[1]).toEqual([responseId, 'user-1']);
+      if (stage !== 'initial') expect(query.mock.calls[1]?.[1]).toEqual([responseId, 'user-1']);
+    }
+  });
+
+  it.each([
+    null, undefined, {}, [null], [{}], [openRow({ id: 'another-response' })],
+    [openRow(), openRow()],
+  ].map((receipt) => ({ receipt })))(
+    'refuses malformed initial receipt before any sweep $receipt', async ({ receipt }) => {
+      query.mockResolvedValueOnce(receipt);
+
+      await expect(resolve(provider(null))).rejects.toMatchObject({
+        statusCode: 503, userSafe: true,
+        message: 'Could not confirm the state of this compromise response.',
+      });
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(mocks.revoke).not.toHaveBeenCalled();
+      expect(mocks.audit).not.toHaveBeenCalled();
+    },
+  );
+
 });

@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { IdentityProvider } from '@agiworkforce/identity';
+import { createError } from '@agiworkforce/utils';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent, type AuditEventDetail } from '@/lib/security-audit';
@@ -133,13 +134,19 @@ export async function respondToAccountCompromise(
   identity: IdentitySessionOperations,
   input: CompromiseResponseInput,
 ): Promise<CompromiseResponse> {
-  const [opened] = await db.query<{ id: string }>(
+  const opened = await db.query<{ id: string }>(
     `insert into public.account_compromise_responses (user_id, trigger)
      values ($1, $2)
      returning id`,
     [input.userId, input.trigger],
   );
-  const responseId = opened?.id ?? '';
+  const receipt = singleCompromiseReceipt(opened);
+  if (!receipt) {
+    throw createError
+      .serviceUnavailable('Could not confirm that the compromise response was recorded.')
+      .asUserSafe();
+  }
+  const responseId = receipt.id;
 
   if (input.trigger === 'reported') {
     await recordAuditEvent({
@@ -302,18 +309,40 @@ export interface ResolveCompromiseResponseInput {
 type CompromiseIdentityOperations = IdentitySessionOperations &
   Pick<IdentityProvider, 'getSession'>;
 
-function epochMs(value: string | Date): number {
+function epochMs(value: unknown): number {
   if (value instanceof Date) return value.getTime();
   return typeof value === 'string' ? new Date(value).getTime() : Number.NaN;
 }
 
-/**
- * Closes an open response once its steps are genuinely complete. The response
- * ends every session including the one that asked, so a session that predates
- * it belongs to someone who never had to authenticate again, and that is the
- * case this refuses: a surviving intruder session cannot clear the lockout it
- * caused. Resolving is idempotent and scoped to the owner.
- */
+function singleCompromiseReceipt(rows: unknown): (Record<string, unknown> & { id: string }) | null {
+  if (!Array.isArray(rows) || rows.length !== 1) return null;
+  const row: unknown = rows[0];
+  if (row === null || typeof row !== 'object' || !('id' in row)) return null;
+  if (typeof row.id !== 'string' || row.id.trim().length === 0) return null;
+  return row as Record<string, unknown> & { id: string };
+}
+
+function sameCompromiseResponseId(actual: string, expected: string): boolean {
+  if (actual === expected) return true;
+  const normalize = (value: string): string | null => {
+    const unwrapped = value.startsWith('{') && value.endsWith('}') ? value.slice(1, -1) : value;
+    if (!/^[a-f0-9]{4}(?:-?[a-f0-9]{4}){7}$/i.test(unwrapped)) return null;
+    return unwrapped.replaceAll('-', '').toLowerCase();
+  };
+  const normalized = normalize(actual);
+  return normalized !== null && normalized === normalize(expected);
+}
+
+function confirmsCompromiseResolution(rows: unknown, responseId: string): boolean {
+  const row = singleCompromiseReceipt(rows);
+  return (
+    row !== null &&
+    sameCompromiseResponseId(row.id, responseId) &&
+    row.password_reset_required === false &&
+    Number.isFinite(epochMs(row.resolved_at))
+  );
+}
+
 export async function resolveCompromiseResponse(
   db: DatabaseAdapter,
   identity: CompromiseIdentityOperations,
@@ -321,19 +350,20 @@ export async function resolveCompromiseResponse(
 ): Promise<CompromiseResolution> {
   const base = { responseId: input.responseId, supportPath: ACCOUNT_COMPROMISE_SUPPORT_PATH };
 
-  const [row] = await db.query<{
+  const rows = await db.query<{
     id: string;
     trigger: string;
     opened_at: string | Date;
     resolved_at: string | Date | null;
+    password_reset_required: boolean;
   }>(
-    `select id, trigger, opened_at, resolved_at
+    `select id, trigger, opened_at, resolved_at, password_reset_required
        from public.account_compromise_responses
       where id = $1 and user_id = $2`,
     [input.responseId, input.userId],
   );
 
-  if (!row) {
+  if (Array.isArray(rows) && rows.length === 0) {
     return {
       ...base,
       status: 'not_found',
@@ -341,7 +371,18 @@ export async function resolveCompromiseResponse(
       sessionsEnded: 0,
     };
   }
+  const row = rows?.[0];
+  if (!singleCompromiseReceipt(rows) || !row || !sameCompromiseResponseId(row.id, input.responseId)) {
+    throw createError
+      .serviceUnavailable('Could not confirm the state of this compromise response.')
+      .asUserSafe();
+  }
   if (row.resolved_at !== null) {
+    if (!confirmsCompromiseResolution(rows, input.responseId)) {
+      throw createError
+        .serviceUnavailable('Could not confirm that this response was resolved.')
+        .asUserSafe();
+    }
     return { ...base, status: 'already_resolved', outstanding: [], sessionsEnded: 0 };
   }
 
@@ -389,15 +430,36 @@ export async function resolveCompromiseResponse(
     return refuse('other_sessions_ended', sessionsEnded);
   }
 
-  const cleared = await db.query<{ id: string }>(
+  const cleared = await db.query<{
+    id: string;
+    resolved_at: string | Date;
+    password_reset_required: boolean;
+  }>(
     `update public.account_compromise_responses
         set resolved_at = now(), password_reset_required = false
       where id = $1 and user_id = $2 and resolved_at is null
-      returning id`,
+      returning id, resolved_at, password_reset_required`,
     [input.responseId, input.userId],
   );
-  if (cleared.length === 0) {
-    return { ...base, status: 'already_resolved', outstanding: [], sessionsEnded };
+  if (Array.isArray(cleared) && cleared.length === 0) {
+    const stored = await db.query<{
+      id: string;
+      resolved_at: string | Date;
+      password_reset_required: boolean;
+    }>(
+      `select id, resolved_at, password_reset_required
+         from public.account_compromise_responses
+        where id = $1 and user_id = $2`,
+      [input.responseId, input.userId],
+    );
+    if (confirmsCompromiseResolution(stored, input.responseId)) {
+      return { ...base, status: 'already_resolved', outstanding: [], sessionsEnded };
+    }
+  }
+  if (!confirmsCompromiseResolution(cleared, input.responseId)) {
+    throw createError.serviceUnavailable(
+      'Could not confirm that this response was resolved. Some sessions may already have been signed out.',
+    ).asUserSafe();
   }
 
   await recordAuditEvent({
