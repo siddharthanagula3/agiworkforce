@@ -14480,13 +14480,13 @@ is not a backend mapping lease.
 
 The remaining policy and response consumers still use the wrong namespace:
 
-- Product-only mfa-policy-gate.ts resolveMfaEnrolled still uses product cache keys
+- One-argument mfa-policy-gate.ts resolveMfaEnrolled still uses product cache keys
   and passes product ID to getIdentityUser. API keys, developer/device tokens and
   mobile-intent checks are not given invented native identity. Existing positive
   cache admission and missing/error denial remain unchanged for these consumers.
-  Organization-policy enablement/self-lockout preflight and second-factor
-  enrollment/cache writers also remain open. Outside the bounded owner-policy
-  opt-in corrected below, getUserScopedDb cookie scoping still discards the
+  Main policy PATCH's native-session preflight is corrected below; its device
+  path and product-only enrollment/cache writers remain open. Outside the bounded
+  owner-policy opt-in corrected below, getUserScopedDb cookie scoping still discards the
   resolved product ID and session-token adapters retain native claims.
   The bounded session path does not certify these related flows or universal
   mapped-account email availability.
@@ -14719,10 +14719,65 @@ token-required admission; bearer verifies once. The resulting internally produce
 receipt is account-matched and copied into the existing app_rls claimed adapter,
 which binds product subject and target transaction-locally. No token rewriting or
 service-role fallback is introduced. This is limited to mfaGateExemptForOwner and
-the two policy routes; default cookie/session-token adapters, product-only MFA
-preflight and other namespace consumers remain open. See
+the two policy routes; default cookie/session-token adapters and other namespace
+consumers remain open. Main policy native-session preflight is corrected in the
+subsequent continuation below, without changing the device fallback. See
 WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for exact gates, fixtures and lifetime limits.
 All new fixtures remain UNRUN; no live SQL/RLS or provider acceptance is established.
+
+The policy-save preflight continuation `6c60f38d0415816f9fd611a01001402d5414749b` extends that native-session
+MFA decision to main organization policy PATCH. The existing owner-policy scoped
+helper now returns a separate copy of the admitted native subject/session pair,
+only on that opt-in path. PATCH passes the same evidence to resolveMfaEnrolled;
+present evidence dispatches to the existing exact-native resolver before any
+product cache access. No second request-identity read, reverse mapping, request-
+supplied proof or default cookie/Bearer DB-scope change is introduced.
+
+Before this continuation, a mapped enrolled identity could be falsely refused,
+while a stale or product-keyed enrolled verdict could approve a policy save by
+an unenrolled authenticated identity. This is an enrollment preflight mismatch
+under existing policy.manage authority, not a non-admin policy-edit bypass or an
+observed incident. An admin may then lose MFA-governed access; the exact-target
+owner recovery exemption remains. The preflight still checks every resulting
+requireMfa=true policy, including unrelated edits to an already-required policy;
+disabling the requirement skips enrollment lookup.
+
+Only exact returned native ID and twoFactorEnabled === true pass. Blank subject,
+absent/foreign/malformed provider user and provider errors refuse without product
+fallback or cache writes. Enrollment is not a fresh challenge, a provider-mapping
+lease or an assurance that enrollment remains unchanged until the write. Native
+preflight now adds an uncached provider read, even for equal-ID accounts, and loses
+product-cache outage tolerance. It adds no deadline or cancellation; latency,
+rate limits and actual provider availability remain unverified.
+
+Signed developer/device tokens have no native evidence and deliberately retain
+legacy product-keyed cache/lookup behavior, including the existing 300-second
+cache TTL. Policy routes still do not admit API keys. Other one-argument callers,
+enrollment/cache writers, default RLS helpers and legacy compromise namespaces
+remain open. No native identity is invented for product-only credentials.
+
+Authored UNRUN fixtures retain the real shared enrollment resolver, exact membership,
+policy merge/revision/cache source, and real auth-to-scope/claimed-adapter source at
+their respective boundaries. External provider SDK, identity/KV storage, auth
+receipts in route cases, database transport/effects, plan/permissions and audit
+are mocked. Direct resolver cases cover mapped/equal subjects, contradictory
+legacy caches, invalid native reads and retained one-argument behavior. Scoped
+cases cover cookie/bearer mapped/equal accounts with present/null session IDs,
+forged request metadata, copied-evidence mutation, device/scoped-key absence and
+unchanged default output; the scoped-key fixture explicitly supplies a key scope
+and does not imply policy-route admission. Existing role/claims/operation ordering
+assertions remain. Route cases use the real MFA resolver behind a restored wrapper,
+cover exact evidence despite forged fields, failure before writes/cache/audit,
+already-required unrelated edits, disabling and device fallback. Fixture state and
+session-start cache are reset; narrow auth spies remain limited to receipt-mutation
+cases. No new source-shape guard is added, and no fixture is execution evidence.
+
+Policy permission/plan, owner recovery, exact target, CSRF/rate/input validation,
+enrollment availability, IP self-lockout check, revision checks, write/cache/audit
+ordering and response shape are unchanged. Main revision check/write remain
+separate, not CAS; Code gains no new protocol. No migration, replay or transaction
+guarantee is added. Prior 0394/0395 remain UNAPPLIED. This is source review only:
+no product checks, provider/SQL/RLS execution, push or deployment occurred.
 
 Finish the canonical contracts end-to-end, retaining product IDs for DB, grants,
 policy, cache, audit and notifications while passing verified native subjects to
@@ -16026,9 +16081,12 @@ retain existing behavior. The two policy routes do not request API-key admission
 This also narrows WEB-IDENTITY-POLICY-NAMESPACE-01 for this opt-in: logical account
 and DB subject now use the verified product identity together. Non-opt-in cookie
 scoping can still discard the mapped account, and other session-token adapters
-retain native subjects. Main policy PATCH still calls product-only resolveMfaEnrolled
-for its self-lockout preflight. No global identity/RLS or provider-mapping repair
-is claimed; the claimed adapter alone is not authentication.
+retain native subjects. The subsequent native-session preflight continuation
+`6c60f38d0415816f9fd611a01001402d5414749b` retains copied admitted session evidence in main policy PATCH;
+device fallback and wider product-only consumers remain unchanged. See
+WEB-IDENTITY-POLICY-NAMESPACE-01 for its exact scope and unrun fixtures. No global
+identity/RLS or provider-mapping repair is claimed; the claimed adapter alone is
+not authentication.
 
 The auth fixture retains real authentication, lifecycle/age, request selection and
 exact owner lookup over mocked database/provider adapters and isolated admission

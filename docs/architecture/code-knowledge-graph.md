@@ -5642,10 +5642,10 @@ aggregate enrollment across every linked provider.
 
 The uncached path adds a provider read per governed native request and loses
 legacy cache outage tolerance; latency, rate limits and provider acceptance are
-unrun. Product-only principals, organization-policy enablement preflight,
-product-only enrollment/cache writers, global cookie/Bearer DB scope and legacy
-compromise revocation remain separate gaps. The bounded email-triggered
-revocation correction follows below. No reverse mapping or provider
+unrun. The later native-session policy-save preflight continuation is recorded
+below; product-only/device principals, enrollment/cache writers, global
+cookie/Bearer DB scope and legacy compromise revocation remain separate gaps.
+The bounded email-triggered revocation correction follows below. No reverse mapping or provider
 identity is invented, and the source migration's cardinality is not evidence of
 deployed schema. See WEB-IDENTITY-POLICY-NAMESPACE-01 for the bounded correction,
 source-reviewed unrun fixtures and unresolved identity contract.
@@ -6809,8 +6809,9 @@ membership, permissions, policy/revision/override queries, cache and audit.
 Default auth, getVerifiedBearerUserScopedDb, credential admission and existing
 enrollment/account-security exceptions remain unchanged. Owner recovery is still
 broad within its exact owned target. The mapped-account correction is opt-in only;
-default cookie/token adapters and main-policy product-only MFA preflight remain
-under WEB-IDENTITY-POLICY-NAMESPACE-01.
+default cookie/token adapters and product-only/device MFA remain under
+WEB-IDENTITY-POLICY-NAMESPACE-01. The later native-session policy-save preflight
+correction is recorded below.
 
 Auth fixtures retain real selection/owner/auth code with mocked adapters and gate
 spies; scoped fixtures keep real auth and claimed adapter, checking native/product
@@ -6829,3 +6830,42 @@ universally selected-org equality. Main revision check/write are still separate;
 Code policy gains no revision protocol. No new transaction/replay guarantee or
 migration. Fixtures are UNRUN; prior 0394/0395 remain UNAPPLIED. See
 WEB-ORG-SETTINGS-REQUEST-SCOPE-01 for scope and acceptance limits.
+
+## Policy-save MFA preflight keeps admitted native identity
+
+Continuation `6c60f38d0415816f9fd611a01001402d5414749b` carries copied native subject/session evidence from
+the existing owner-policy getUserScopedDb opt-in into main policy PATCH's
+self-lockout check. Optional evidence dispatches through the same canonical
+resolveMfaEnrolled entry used by the MFA gate; present evidence uses the exact
+native resolver before product cache access. It accepts only an exact returned
+native ID with strictly enabled enrollment and refuses blank, absent, foreign,
+malformed or failed reads without product fallback/cache writes.
+
+This corrects a preflight mismatch under existing policy.manage authority: mapped
+enrolled identities could be falsely refused and stale/product enrolled state
+could approve an unenrolled identity's policy save. It does not change who can
+edit policy or establish an observed incident. Exact-target owner recovery is
+retained. Every resulting requireMfa=true policy is checked, including unrelated
+edits; disabling the requirement skips the lookup.
+
+Only this opt-in scoped result gains copied evidence; default cookie/token helpers
+remain unchanged. No second request-identity read, reverse mapping or client-provided proof.
+Devices retain absent-evidence product-only lookup/cache semantics; API keys stay
+unadmitted. Existing IP, permissions, plan, revision, cache and audit behavior stays.
+The uncached native read adds no timeout/cancellation; enrollment is neither a
+fresh challenge nor a lease. Provider latency/rate limits and deployment remain
+unverified. One-argument consumers, global RLS mapping, enrollment/cache writers
+and broader identity gaps remain under WEB-IDENTITY-POLICY-NAMESPACE-01.
+
+Authored UNRUN fixtures exercise the real enrollment resolver, auth/scoped/claimed
+adapter and canonical route membership/policy/revision/cache source at their
+separate boundaries, with external provider/identity/KV/DB/auth receipts,
+permissions and effects mocked. They cover mapped/equal native identity,
+contradictory caches, malformed/error evidence, same-session copy and mutation,
+forged fields, no-evidence devices, opt-in scoped keys versus unchanged policy
+key refusal, default output absence, already-required edits and disabling.
+No PostgreSQL/RLS, real provider, concurrency or runtime acceptance is claimed.
+Main revision check/write are still separate, Code gets no new protocol, and no
+transaction, replay or migration is added. Prior 0394/0395 remain UNAPPLIED. No
+product checks, live provider/SQL/RLS, push or deployment. Runtime acceptance is
+open; source review and backup integrity do not establish release readiness.
