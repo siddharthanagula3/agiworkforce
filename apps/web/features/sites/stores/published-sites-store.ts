@@ -32,53 +32,85 @@ function stateFor(token: string, shareUrl: string, visibility: SiteVisibility) {
   return { token, shareUrl, visibility, sitePath: sitePath(token) };
 }
 
-export const usePublishedSitesStore = create<PublishedSitesStore>((set, get) => ({
-  byArtifactId: {},
-  status: 'idle',
+export const usePublishedSitesStore = create<PublishedSitesStore>((set, get) => {
+  let pendingLoad: Map<string, PublishedSiteState | null> | null = null;
 
-  hydrate: (sites) =>
-    set({
-      status: 'ready',
-      byArtifactId: Object.fromEntries(
-        sites.map((site) => [
-          site.artifactId,
-          stateFor(site.token, site.shareUrl, site.visibility),
-        ]),
-      ),
-    }),
+  return {
+    byArtifactId: {},
+    status: 'idle',
 
-  record: (artifactId, details) => {
-    const token = readPublishedTokenFromUrl(details.shareUrl);
-    if (!token) return;
-    set((state) => ({
-      byArtifactId: {
-        ...state.byArtifactId,
-        [artifactId]: stateFor(token, details.shareUrl, details.visibility),
-      },
-    }));
-  },
+    hydrate: (sites) => {
+      pendingLoad?.clear();
+      pendingLoad = null;
+      set({
+        status: 'ready',
+        byArtifactId: Object.fromEntries(
+          sites.map((site) => [
+            site.artifactId,
+            stateFor(site.token, site.shareUrl, site.visibility),
+          ]),
+        ),
+      });
+    },
 
-  forget: (artifactId) =>
-    set((state) => {
-      if (!(artifactId in state.byArtifactId)) return state;
-      const next = { ...state.byArtifactId };
-      delete next[artifactId];
-      return { byArtifactId: next };
-    }),
+    record: (artifactId, details) => {
+      const token = readPublishedTokenFromUrl(details.shareUrl);
+      if (!token) return;
+      const publication = stateFor(token, details.shareUrl, details.visibility);
+      pendingLoad?.set(artifactId, publication);
+      set((state) => ({
+        byArtifactId: {
+          ...state.byArtifactId,
+          [artifactId]: publication,
+        },
+      }));
+    },
 
-  ensureLoaded: async () => {
-    if (get().status !== 'idle') return;
-    set({ status: 'loading' });
-    try {
-      const { sites } = await listPublishedSites();
-      const recorded = get().byArtifactId;
-      get().hydrate(sites);
-      set((state) => ({ byArtifactId: { ...state.byArtifactId, ...recorded } }));
-    } catch {
-      set({ status: 'error' });
-    }
-  },
-}));
+    forget: (artifactId) => {
+      pendingLoad?.set(artifactId, null);
+      set((state) => {
+        if (!(artifactId in state.byArtifactId)) return state;
+        const next = { ...state.byArtifactId };
+        delete next[artifactId];
+        return { byArtifactId: next };
+      });
+    },
+
+    ensureLoaded: async () => {
+      if (get().status !== 'idle') return;
+      const request = new Map<string, PublishedSiteState | null>(
+        Object.entries(get().byArtifactId),
+      );
+      pendingLoad = request;
+      set({ status: 'loading' });
+      try {
+        const { sites } = await listPublishedSites();
+        if (pendingLoad !== request) return;
+        const publications = new Map(
+          sites.map((site) => [
+            site.artifactId,
+            stateFor(site.token, site.shareUrl, site.visibility),
+          ]),
+        );
+        for (const [artifactId, publication] of request) {
+          if (publication === null) publications.delete(artifactId);
+          else publications.set(artifactId, publication);
+        }
+        pendingLoad = null;
+        request.clear();
+        set({ status: 'ready', byArtifactId: Object.fromEntries(publications) });
+      } catch {
+        if (pendingLoad !== request) return;
+        pendingLoad = null;
+        request.clear();
+        set({ status: 'error' });
+      } finally {
+        if (pendingLoad === request) pendingLoad = null;
+        request.clear();
+      }
+    },
+  };
+});
 
 /**
  * The live publication of one chat artifact, or null when it has none. Reading

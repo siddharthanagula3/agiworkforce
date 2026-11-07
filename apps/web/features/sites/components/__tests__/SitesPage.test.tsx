@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublishedSite } from '../../services/sites-service';
 type SitesServiceModule = typeof import('../../services/sites-service');
 
@@ -25,7 +25,7 @@ vi.mock('../../services/sites-service', async (importOriginal) => ({
 }));
 
 const { SitesPage } = await import('../SitesPage');
-const { usePublishedSitesStore } = await import('../../stores/published-sites-store');
+const { usePublishedSite, usePublishedSitesStore } = await import('../../stores/published-sites-store');
 
 function site(overrides: Partial<PublishedSite> = {}): PublishedSite {
   return {
@@ -46,7 +46,37 @@ function site(overrides: Partial<PublishedSite> = {}): PublishedSite {
   };
 }
 
+type SiteList = Awaited<ReturnType<SitesServiceModule['listPublishedSites']>>;
+const pendingLists: Array<{ resolve: (value: SiteList) => void; promise: Promise<SiteList> }> = [];
+
+function deferredList() {
+  let resolve!: (value: SiteList) => void;
+  const promise = new Promise<SiteList>((done) => {
+    resolve = done;
+  });
+  pendingLists.push({ resolve, promise });
+  return { promise, resolve };
+}
+
+function PublicationProbe() {
+  const publication = usePublishedSite('artifact-1');
+  return <output data-testid="publication-probe">{publication?.token ?? 'unpublished'}</output>;
+}
+
+afterEach(async () => {
+  cleanup();
+  usePublishedSitesStore.getState().hydrate([]);
+  for (const pending of pendingLists) pending.resolve({ sites: [], workspace: null });
+  await act(async () => {
+    await Promise.allSettled(pendingLists.map((pending) => pending.promise));
+  });
+  pendingLists.length = 0;
+  usePublishedSitesStore.getState().hydrate([]);
+});
+
 beforeEach(() => {
+  usePublishedSitesStore.getState().hydrate([]);
+  mocks.listPublishedSites.mockReset();
   usePublishedSitesStore.setState({ byArtifactId: {}, status: 'idle' });
   mocks.readPublishedSiteVersion.mockResolvedValue({
     version: 2,
@@ -206,6 +236,49 @@ describe('SitesPage', () => {
     await waitFor(() => expect(mocks.unpublishArtifact).toHaveBeenCalledWith(site().token));
     await waitFor(() => expect(screen.queryByTestId('site-card')).toBeNull());
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toBeUndefined();
+  });
+
+  it('keeps a confirmed unpublish after a modeled route transition ahead of an older lazy read', async () => {
+    const lazyList = deferredList();
+    const pageList = deferredList();
+    mocks.listPublishedSites
+      .mockReturnValueOnce(lazyList.promise)
+      .mockReturnValueOnce(pageList.promise);
+
+    const view = render(<PublicationProbe />);
+    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(1);
+    expect(usePublishedSitesStore.getState().status).toBe('loading');
+
+    view.rerender(<SitesPage />);
+    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      pageList.resolve({ sites: [site()], workspace: null });
+      await pageList.promise;
+    });
+    expect(await screen.findByTestId('site-card')).toBeInTheDocument();
+    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toBeDefined();
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'More actions for Team scoreboard' }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Unpublish' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(mocks.unpublishArtifact).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish' }));
+    await waitFor(() => expect(mocks.unpublishArtifact).toHaveBeenCalledWith(site().token));
+    expect(await screen.findByTestId('sites-empty')).toBeInTheDocument();
+    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toBeUndefined();
+
+    await act(async () => {
+      lazyList.resolve({ sites: [site()], workspace: null });
+      await lazyList.promise;
+    });
+    expect(usePublishedSitesStore.getState().status).toBe('ready');
+    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toBeUndefined();
+    view.rerender(<PublicationProbe />);
+    expect(screen.getByTestId('publication-probe')).toHaveTextContent('unpublished');
+    expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the site listed when the unpublish is cancelled', async () => {
