@@ -5745,7 +5745,7 @@ The later `2488135d50436840c619a4535297db61f8ebad54` receipt correction requires
 stored completion evidence after an empty update; see the compromise response
 completion section below. The reset marker is not a demonstrated authentication
 gate. No deployed policy inspection or backfill occurred. Native mapping, write
-authority, report-counter receipts, proof custody and atomic/all-provider
+authority, proof custody and atomic/all-provider
 containment remain open; see WEB-IDENTITY-POLICY-NAMESPACE-01 and
 WEB-COMPROMISE-WRITE-AUTHORITY-01.
 
@@ -6069,12 +6069,28 @@ composer notice directs users to existing approval controls without changing
 send/stop behavior or pretending the transport is active.
 
 Existing recoverability controls expired-request wording; no deadline policy or
-checkpoint guarantee is added. Expired Resend, user-message Retry and interrupted-
-artifact Regenerate remain explicit replay paths. An unfinished artifact fence
-can still be marked interrupted on a paused transport's end; that interaction is
-not corrected here. Four production and five authored regression-source files
-were independently reviewed, but no product checks or browser acceptance ran.
-See WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01 for the remaining acceptance limits.
+checkpoint guarantee is added. Expired Resend and user-message Retry remain replay
+paths. Four production and five authored regression-source files were independently
+reviewed, but no product checks or browser acceptance ran.
+
+The follow-on `9badea92ff459ff8e275aa213622cea44a0f710b` changes only presentation of
+retained interrupted artifacts. MessageBubble uses its canonical pending predicate
+to replace stopped wording and hide/guard interrupted Regenerate. The handler guard
+is render-scoped, not new live authorization. ArtifactsPanel reads only the selected
+artifact's origin message from its subscribed conversation rows and passes transient
+approval state to ArtifactPreview. Partial wording still requires interrupted
+metadata; completed and unrelated artifacts do not become partial. Panel callers
+omitting the prop retain stopped wording; default card/gallery previews continue
+without that notice. Content, titles, IDs, persistence and transport are untouched.
+
+Interruption is nonpersisted WebSideEntry data, so rehydration and cold hooks can
+lose partial status. Same-ID retained artifacts can still hide resumed streaming
+or outlive parsed completion. Stored "Stopped artifact" titles are not rewritten.
+Three production and three fixture files were independently source-reviewed;
+controlled metadata/selection/store/preview cases are unrun. Shared-snapshot
+restoration models a boundary rather than actual rehydration, while resume and
+closed-fence fixtures characterize existing gaps. See
+WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01 for the remaining acceptance limits.
 
 ## Recovery-key activation binds the acknowledged batch
 
@@ -6206,9 +6222,29 @@ and fixtures are unrun. They do not prove PostgreSQL behavior or provider effect
 No authority or identity repair is implied: migration 0037's default DML does not
 supply the write policy absent from 0255. No migration, grant or owner fallback was
 added. The reset flag is an operational record without a found authentication gate,
-not demonstrated account lockdown or password-reset enforcement. Counter-update
-receipts, caller side effects, product/native mapping, proof, containment and
-recovery usability remain open under WEB-COMPROMISE-WRITE-AUTHORITY-01.
+not demonstrated account lockdown or password-reset enforcement. The bounded
+counter-receipt follow-on below does not repair caller side effects, product/native
+mapping, proof, containment or recovery usability; those remain open under
+WEB-COMPROMISE-WRITE-AUTHORITY-01.
+
+## Compromise counter writes require exact receipts
+
+Accepted `e8838da24366532ba91ee31d1e42abefe8294fc1` replaces the report's unchecked
+counter execute with owner-and-response-qualified UPDATE RETURNING. Exactly one
+non-array record must match the response UUID identity, exact text owner and exact
+observed finite nonnegative integer counts. Unconfirmed receipts stop the later
+containment notice/audit and normal result with a user-safe 503 that preserves
+possible prior sign-outs. Query failures still propagate; no retry or reread
+fallback was added.
+
+This guard occurs after the report audit and provider/mobile/device cleanup.
+Automatic-event and undo callers can have earlier effects and lose later success
+continuations on refusal. It proves only the returned counter write, not durable
+reconciliation, atomic containment, RLS authority or a canonical identity mapping.
+Public success fields, grants, provider operations and resolution guards are
+unchanged. Three files were independently source-reviewed; receipt, count, owner,
+UUID, ordering, prior-event and route-error models are unrun. Real database and
+concurrency behavior remain unknown under WEB-COMPROMISE-WRITE-AUTHORITY-01.
 
 ## Compromise notices distinguish incomplete observed cleanup
 

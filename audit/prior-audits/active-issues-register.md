@@ -14761,8 +14761,7 @@ sweep count is retained for a confirmed concurrent completion.
 PostgreSQL UUID case, braces and documented grouping equivalents compare by UUID
 identity; user IDs and SQL owner predicates are unchanged. This is a receipt
 correction, not fresh password/factor proof, durable operation reconciliation,
-atomic provider cleanup or all-session containment. The report's later counter
-UPDATE still has no receipt check. Repository source has no authentication gate
+atomic provider cleanup or all-session containment. The later counter-receipt correction below verifies that write. Repository source has no authentication gate
 reading this compromise reset marker: it is an operational record, not demonstrated
 password-reset enforcement or account lockdown. Inaccurate permanent-lockout
 comments were removed. The emergency endpoint has no routine first-party settings
@@ -14788,6 +14787,28 @@ or identity custody. The public response still lacks the aggregate incomplete st
 Two production and two fixture files were independently source-reviewed. Exact-copy,
 count, predicate and failure fixtures are unrun models; isolated failed intent with
 a complete sweep is defensive mock input, not a demonstrated current helper path.
+
+The bounded counter-receipt follow-on `e8838da24366532ba91ee31d1e42abefe8294fc1`
+uses an owner-and-response-qualified UPDATE RETURNING instead of unchecked execute.
+It requires exactly one non-array record with the same response UUID identity,
+exact text owner, and the exact observed finite nonnegative integer revoked/failed
+counts. Missing, malformed, duplicate or inconsistent receipts produce a user-safe
+503 before the containment notice, containment audit and normal report return.
+The message warns that some sessions may already have been signed out. There is no
+retry or reread fallback; original query failures still propagate and are masked
+by the route error handler rather than converted to this user-safe message.
+
+The report audit, provider sweep, mobile-intent and device-credential cleanup occur
+before this counter write. Automatic identity events and emailed enrollment undo
+may have still earlier effects; their later success continuations stop when this
+receipt is refused. This is evidence of counter persistence at the returned write,
+not an atomic recovery operation, stable read-after-write guarantee, repair of RLS
+write authority, or proof that every session was contained. It adds no marker-clear
+permission, identity resolver, migration or public response field. Three source and
+fixture files were independently reviewed. Unrun models cover zero/nonzero counts,
+UUID-equivalent IDs, exact owners, malformed receipts, cleanup ordering, prior
+identity events and raw rejection; the route fixture covers the explicit 503, not
+an executed raw-database-error path.
 
 Repair the canonical product/native contract across GET/report/resolve together
 with narrowly authorized service writes. Preserve product-only protective-report
@@ -14888,10 +14909,9 @@ state to both composer placements. The composer shows an unresolved-request
 notice pointing to existing conversation/Approvals controls, without changing
 actual transport flags, send/stop behavior or adding another approval inbox.
 
-This does not disable every replay action. Existing expired-request Resend,
-user-message Retry and interrupted-artifact Regenerate remain. An unclosed
-artifact can still be marked interrupted when transport stops for approval;
-that artifact-specific recovery/pause interaction remains to be reconciled.
+This does not disable every replay action. Existing expired-request Resend and
+user-message Retry remain. The later artifact-presentation correction below
+withholds interrupted-artifact Regenerate while that message has pending approval.
 Canonical activity-only states, approval restoration and server decision/resume
 semantics are unchanged. No new promise of checkpoint liveness is made.
 
@@ -14904,3 +14924,38 @@ assertions. Composer navigation is modeled by prop changes, not integrated
 routing. There is no direct new empty-content projection fixture. Full browser,
 accessibility and image/video/stopped/failed acceptance remain open. No tests,
 lint, typechecks, builds, application execution, push or deployment were performed.
+
+The bounded follow-on `9badea92ff459ff8e275aa213622cea44a0f710b` keeps retained
+partial content while replacing stopped/regenerate wording with approval-wait
+wording in the transcript and selected artifact panel. MessageBubble hides the
+interrupted-artifact Regenerate control and guards its handler with the current
+render's canonical pending predicate. This is a render-scoped presentation guard,
+not a live-store authorization or retained-callback lifetime guarantee. Once no
+approval remains pending, ordinary interrupted-artifact recovery is available again.
+
+ArtifactsPanel derives the transient prop from the selected artifact's own origin
+message in its subscribed conversation messages, not from another message's or the
+whole conversation's pending state. Missing/non-assistant origins do not borrow
+approval. ArtifactPreview requires interrupted evidence for the partial notice;
+completed artifacts are not relabeled. Panel callers omitting the prop retain the
+existing stopped wording. Default card/gallery previews have no interrupted notice
+and remain unchanged. Content, stored/user-renamed titles, IDs, transport flags,
+approval authority and persistence are unchanged; the fallback title "Stopped
+artifact" can still be retained.
+
+The interruption marker exists only in WebSideEntry and is omitted from the shared
+persisted artifact shape. Rehydration clears that side data; a cold hook without
+an observed streamed snapshot does not reconstruct it. This correction therefore
+does not provide reload-complete partial status. A retained same-ID partial can
+still suppress the resumed panel streaming overlay and win over later closed-fence
+extraction. Those lifecycle reconciliation gaps remain open, rather than being
+hidden by a persisted pause flag or a change to stream state.
+
+Three production and three fixture files were independently source-reviewed.
+Unrun cases cover projected/legacy/partial approvals, metadata-only decisions,
+resolved projection over stale tools, ordinary recovery, selected origin and
+selection/branch/conversation changes, missing origins, completed/default preview
+behavior and content preservation. Panel wiring uses a controlled preview stub;
+separate preview fixtures exercise the real notice. Shared-snapshot restoration is
+a model, not actual browser rehydration. Resume and closed-fence cases characterize
+unchanged gaps. No tests, lint, typechecks, builds or browser execution were run.
