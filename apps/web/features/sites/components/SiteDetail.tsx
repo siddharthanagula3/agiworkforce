@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Copy, ExternalLink, Pencil } from '@agiworkforce/icons';
@@ -25,7 +25,25 @@ type DetailState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'missing' }
-  | { status: 'ready'; site: PublishedSite; workspace: { memberCount: number } | null };
+  | {
+      status: 'ready';
+      site: PublishedSite;
+      workspace: { memberCount: number } | null;
+      refreshError?: string;
+    };
+
+type DetailView = {
+  active: boolean;
+  artifactId: string | null;
+  request: AbortController | null;
+};
+
+function interruptRead(view: DetailView): boolean {
+  const request = view.request;
+  view.request = null;
+  request?.abort();
+  return request !== null;
+}
 
 function BackLink() {
   return (
@@ -98,42 +116,92 @@ function SiteHeader({
 }
 
 export function SiteDetail({ token }: { token: string }) {
+  return <SiteDetailView key={token} token={token} />;
+}
+
+function SiteDetailView({ token }: { token: string }) {
   const router = useRouter();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
+  const viewRef = useRef<DetailView | null>(null);
   const hydrateStore = usePublishedSitesStore((store) => store.hydrate);
 
   const load = useCallback(
-    async (signal?: AbortSignal) => {
+    async (showLoading = false) => {
+      const view = viewRef.current;
+      if (!view?.active) return;
+      interruptRead(view);
+      const request = new AbortController();
+      view.request = request;
+      setState((current) =>
+        !showLoading && current.status === 'ready'
+          ? { ...current, refreshError: undefined }
+          : { status: 'loading' },
+      );
       try {
-        const { sites, workspace } = await listPublishedSites(signal);
-        hydrateStore(sites);
+        const { sites, workspace } = await listPublishedSites(request.signal);
+        if (!view.active || view.request !== request) return;
         const site = sites.find((candidate) => candidate.token === token);
+        view.artifactId = site?.artifactId ?? null;
+        hydrateStore(sites);
+        if (!view.active || view.request !== request) return;
+        view.request = null;
         setState(site ? { status: 'ready', site, workspace } : { status: 'missing' });
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        setState({
-          status: 'error',
-          message: toUserMessage(error, 'This site could not be loaded.'),
-        });
+        if (!view.active || view.request !== request) return;
+        view.request = null;
+        setState((current) =>
+          current.status === 'ready'
+            ? {
+                ...current,
+                refreshError:
+                  'Site details could not be refreshed and may be out of date. Try again to refresh them.',
+              }
+            : {
+                status: 'error',
+                message: toUserMessage(error, 'This site could not be loaded.'),
+              },
+        );
       }
     },
     [token, hydrateStore],
   );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
+  useLayoutEffect(() => {
+    const view: DetailView = { active: true, artifactId: null, request: null };
+    viewRef.current = view;
+    void load(true);
+    return () => {
+      view.active = false;
+      interruptRead(view);
+      if (viewRef.current === view) viewRef.current = null;
+    };
   }, [load]);
 
-  const onUpdated = useCallback((update: SiteUpdate) => {
-    setState((current) =>
-      current.status === 'ready'
-        ? { ...current, site: mergeSiteUpdate(current.site, update) }
-        : current,
-    );
-  }, []);
-  const onUnpublished = useCallback(() => router.push(SITES_PATH), [router]);
+  const onUpdated = useCallback(
+    (update: SiteUpdate) => {
+      const view = viewRef.current;
+      if (!view?.active || update.token !== token || update.artifactId !== view.artifactId) return;
+      const interrupted = interruptRead(view);
+      setState((current) =>
+        current.status === 'ready'
+          ? { ...current, site: mergeSiteUpdate(current.site, update) }
+          : current,
+      );
+      if (interrupted) void load();
+    },
+    [load, token],
+  );
+  const onUnpublished = useCallback(
+    (site: PublishedSite) => {
+      const view = viewRef.current;
+      if (!view?.active || site.token !== token || site.artifactId !== view.artifactId) return;
+      view.active = false;
+      interruptRead(view);
+      setState({ status: 'missing' });
+      router.push(SITES_PATH);
+    },
+    [router, token],
+  );
   const actions = useSiteActions({ onUpdated, onUnpublished });
 
   return (
@@ -153,7 +221,7 @@ export function SiteDetail({ token }: { token: string }) {
             <p role="alert" className="text-sm text-[var(--chat-text-secondary)]">
               {state.message}
             </p>
-            <Button variant="outline" size="sm" onClick={() => void load()}>
+            <Button variant="outline" size="sm" onClick={() => void load(true)}>
               Try again
             </Button>
           </div>
@@ -166,6 +234,16 @@ export function SiteDetail({ token }: { token: string }) {
           </div>
         ) : (
           <>
+            {state.refreshError ? (
+              <div className="flex flex-col items-start gap-3">
+                <p role="alert" className="text-sm text-[var(--chat-text-secondary)]">
+                  {state.refreshError}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => void load(true)}>
+                  Try again
+                </Button>
+              </div>
+            ) : null}
             <SiteHeader site={state.site} onCopyLink={(site) => void actions.copyLink(site)} />
 
             <Tabs defaultValue="settings" className="flex flex-col gap-6">
