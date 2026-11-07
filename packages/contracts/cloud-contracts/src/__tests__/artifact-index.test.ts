@@ -8,6 +8,7 @@ import {
   ManagedCloudPublishedArtifactDetailResponseSchema,
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
+  ManagedCloudPublishedArtifactPublishResponseSchema,
   managedCloudPublishedArtifactLookupPath,
   ManagedCloudPublishedArtifactUpdateRequestSchema,
   managedCloudArtifactIndexQueryString,
@@ -15,6 +16,35 @@ import {
   managedCloudPublishedArtifactPath,
   managedCloudPublishedArtifactVersionsPath,
 } from '../artifact-index';
+
+// UNRUN: source-authored publication receipt fixtures.
+describe('publication acknowledgement contract', () => {
+  const receipt = {
+    artifactId: 'artifact-1', token: 'a'.repeat(24),
+    shareUrl: `https://example.test/shared-artifact/${'a'.repeat(24)}`,
+    visibility: 'invited', version: 1, publishedAt: '2026-11-07T00:00:00Z',
+    title: 'Page', kind: 'html', sandboxed: true, workspace: null,
+  };
+
+  it.each(['public', 'organization', 'invited'])('preserves acknowledged audience %s', (visibility) => {
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.parse({ ...receipt, visibility }))
+      .toEqual({ ...receipt, visibility });
+  });
+
+  it.each([
+    { artifactId: undefined }, { token: 'invalid' }, { visibility: undefined },
+    { visibility: 'future' }, { version: 0 }, { version: Number.MAX_SAFE_INTEGER + 1 },
+    { version: -1 }, { version: 1.5 },
+    { workspace: undefined },
+    { shareUrl: 'not a URL' }, { shareUrl: 'javascript:alert(1)' },
+    { shareUrl: `https://example.test/shared-artifact/${'b'.repeat(24)}` },
+    { shareUrl: `${receipt.shareUrl}?redirect=other` },
+    { shareUrl: `${receipt.shareUrl}#fragment` },
+  ])('rejects incomplete or mismatched receipt %p', (change) => {
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.safeParse({ ...receipt, ...change }).success)
+      .toBe(false);
+  });
+});
 
 // UNRUN: source-authored exact publication lookup contract fixtures.
 describe('exact publication lookup contract', () => {

@@ -2,6 +2,8 @@ import { act, renderHook } from '@testing-library/react-native';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
   fetchArtifactPublication,
+  publishArtifact,
+  isPublicationOutcomeUncertain,
   recordPublishedArtifactAudience,
   refreshPublishedArtifactAudiences,
   PUBLISH_FAILED_MESSAGE,
@@ -33,6 +35,55 @@ const publication = (artifactId = 'artifact-1') => ({
   updatedAt: '2026-11-07T00:00:00Z',
   shareUrl: `https://example.com/shared-artifact/${'a'.repeat(24)}`,
   sandboxed: true,
+});
+
+// UNRUN: source-authored publish acknowledgement and account fixtures.
+describe('publish acknowledgement', () => {
+  const input = { artifactId: 'artifact-1', title: 'Page', kind: 'html', content: '<p>new</p>' };
+  const receipt = { ...publication(), version: 2, publishedAt: '2026-11-07T00:00:00Z', workspace: null };
+
+  beforeEach(() => {
+    jest.mocked(api.post).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  it('uses a full epoch, disables automatic auth replay and returns actual audience', async () => {
+    jest.mocked(api.post).mockResolvedValue(receipt);
+    await expect(publishArtifact(input)).resolves.toMatchObject({ visibility: 'organization', version: 2 });
+    expect(api.post).toHaveBeenCalledWith('/api/artifacts/publish', input, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ shareUrl: publication().shareUrl }, { ...receipt, artifactId: 'other' },
+    { ...receipt, visibility: 'unknown' }, { ...receipt, shareUrl: 'javascript:alert(1)' }])(
+    'rejects invalid acknowledgement without replay %p', async (reply) => {
+      jest.mocked(api.post).mockResolvedValue(reply);
+      await expect(publishArtifact(input)).rejects.toThrow();
+      expect(api.post).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('rejects an A to B to A completion without recording a badge', async () => {
+    let resolve!: (reply: unknown) => void;
+    jest.mocked(api.post).mockReturnValue(new Promise((done) => { resolve = done; }));
+    const pending = publishArtifact(input);
+    const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    activateCloudAccount('owner-b');
+    activateCloudAccount('owner-a');
+    resolve(receipt);
+    await rejection;
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+  });
+
+  it('does not transport without a current account', async () => {
+    invalidateCloudAccount();
+    await expect(publishArtifact(input)).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.post).not.toHaveBeenCalled();
+  });
 });
 
 describe('exact artifact publication lookup', () => {
@@ -131,6 +182,12 @@ describe('exact artifact publication lookup', () => {
 });
 
 describe('what a reader is told when publishing fails', () => {
+  // UNRUN: a timeout or upstream error is not a rollback receipt.
+  it.each([408, 404, 500, 503])('keeps HTTP %i uncertain', (status) => {
+    const error = new ApiHttpError('Request unavailable.', status, null);
+    expect(isPublicationOutcomeUncertain(error)).toBe(true);
+    expect(publishFailureMessage(error)).toContain(PUBLISH_FAILED_MESSAGE);
+  });
   it("shows the server's own sentence with the reference that finds it", () => {
     const refused = new ApiHttpError('Publishing is turned off for this workspace.', 403, null, {
       requestId: 'req_7f3a',

@@ -52,11 +52,17 @@ import { ArtifactFullScreen, publishableKindFor } from '../ArtifactFullScreen';
 import type { Artifact } from '@/types/chat';
 import { ApiHttpError } from '@/services/apiErrors';
 import { PUBLISH_FAILED_MESSAGE, usePublishedArtifactAudiences } from '../../services/artifactPublishing';
-import { activateCloudAccount, invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
+import { activateCloudAccount, captureCloudAccountEpoch, invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '../../store/appModeStore';
 
 const privateLabel = 'Private. Only you can open it until you publish it.';
 const publishedUrl = `https://example.com/shared-artifact/${'a'.repeat(24)}`;
+const publishReceipt = {
+  artifactId: 'artifact-1', token: 'a'.repeat(24), shareUrl: publishedUrl,
+  visibility: 'public', version: 1, publishedAt: '2026-11-07T00:00:00Z',
+  kind: 'html', title: 'Landing page', sandboxed: true, workspace: { memberCount: 7 },
+};
+const uncertainLabel = 'A publish is unconfirmed. Any link shown is the last known publication and may contain an earlier version. No automatic retry was made.';
 
 function lookupReply(artifactId = 'artifact-1') {
   return {
@@ -100,7 +106,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     mockGet.mockReset().mockImplementation(() => new Promise(() => undefined));
     mockPatch.mockReset();
     mockDelete.mockReset();
-    mockCopy.mockClear();
+    mockCopy.mockReset().mockResolvedValue(true);
     invalidateCloudAccount();
     activateCloudAccount('owner-a');
     useChatAppModeStore.setState({ appMode: 'local' });
@@ -113,7 +119,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
   });
 
   it('posts the artifact to the publish endpoint and surfaces the hosted URL', async () => {
-    mockPost.mockResolvedValue({ shareUrl: 'https://agiworkforce.ai/a/tok3n' });
+    mockPost.mockResolvedValue(publishReceipt);
 
     const view = render(
       <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
@@ -130,15 +136,207 @@ describe('ArtifactFullScreen publish-to-link', () => {
         kind: 'html',
         language: 'html',
         content: '<h1>Hello</h1>',
-      }),
+      }, { accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned' }),
     );
 
     await waitFor(() =>
       expect(view.getByTestId('artifact-published-url').props.children).toBe(
-        'https://agiworkforce.ai/a/tok3n',
+        publishedUrl,
       ),
     );
-    expect(mockCopy).toHaveBeenCalledWith('https://agiworkforce.ai/a/tok3n');
+    expect(mockCopy).toHaveBeenCalledWith(publishedUrl);
+  });
+
+  // UNRUN: receipt, ambiguity, clipboard and current-view regressions.
+  it.each(['organization', 'invited'])('uses the acknowledged %s audience and records its badge', async (visibility) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockPost.mockResolvedValue({ ...publishReceipt, visibility });
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    expect(view.getByTestId('artifact-audience-public').props.accessibilityState.checked).toBe(false);
+    expect(view.getByTestId('artifact-audience-organization').props.accessibilityState.checked)
+      .toBe(visibility === 'organization');
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe(visibility);
+    expect(mockCopy).toHaveBeenCalledWith(publishedUrl);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['present', 'absent', 'failed'] as const)('keeps the attempted publish uncertain after %s reconciliation', async (result) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
+    const readback = deferred();
+    mockGet.mockReturnValueOnce(readback.promise);
+    mockPost.mockRejectedValue(new ApiHttpError('Request timed out.', 408, null));
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      if (result === 'failed') readback.reject(new Error('offline'));
+      else readback.resolve(result === 'present' ? lookupReply() : { artifact: null, workspace: null });
+    });
+    expect(view.getByText(uncertainLabel)).toBeTruthy();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockCopy).not.toHaveBeenCalled();
+    if (result === 'present') expect(view.getByTestId('artifact-published-url')).toBeTruthy();
+  });
+
+  it('keeps confirmed publication when copying throws, without re-publishing or readback', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockPost.mockResolvedValue(publishReceipt);
+    mockCopy.mockRejectedValueOnce(new Error('clipboard unavailable'));
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Artifact published', expect.stringContaining('copying')));
+    expect(view.getByTestId('artifact-published-url')).toBeTruthy();
+    expect(view.queryByText(uncertainLabel)).toBeNull();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a single read-only status retry after reconciliation failure without clearing uncertainty', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null })
+      .mockRejectedValueOnce(new Error('offline'));
+    mockPost.mockRejectedValueOnce(new Error('response lost'));
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByLabelText('Check publication status').props.accessibilityState.disabled).toBe(false));
+    const status = deferred();
+    mockGet.mockReturnValueOnce(status.promise);
+    fireEvent.press(view.getByLabelText('Check publication status'));
+    fireEvent.press(view.getByLabelText('Check publication status'));
+    expect(mockGet).toHaveBeenCalledTimes(3);
+    await act(async () => { status.resolve({ artifact: null, workspace: null }); });
+    expect(view.getByText(uncertainLabel)).toBeTruthy();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not certify private after an uncertain publish followed by unpublish and null readback', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce(lookupReply()).mockResolvedValueOnce(lookupReply())
+      .mockResolvedValueOnce({ artifact: null, workspace: null });
+    mockPost.mockRejectedValueOnce(new Error('response lost'));
+    mockDelete.mockResolvedValueOnce(undefined);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Republish artifact link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByText(uncertainLabel)).toBeTruthy());
+    fireEvent.press(view.getByTestId('artifact-unpublish'));
+    tapAlertButton('Unpublish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+    expect(view.getByText(uncertainLabel)).toBeTruthy();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a pending uncertainty read replace a new confirmed receipt', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
+    const oldRead = deferred();
+    mockGet.mockReturnValueOnce(oldRead.promise);
+    mockPost.mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({ ...publishReceipt, visibility: 'organization' });
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByText(uncertainLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    await act(async () => { oldRead.resolve({ artifact: null, workspace: null }); });
+    expect(view.getByTestId('artifact-published-url')).toBeTruthy();
+    expect(view.getByTestId('artifact-audience-organization').props.accessibilityState.checked).toBe(true);
+    expect(view.queryByText(uncertainLabel)).toBeNull();
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect(mockCopy).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards a reconciliation after an A to B to A account epoch change', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
+    const oldRead = deferred();
+    mockGet.mockReturnValueOnce(oldRead.promise);
+    mockPost.mockRejectedValueOnce(new Error('response lost'));
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    act(() => { activateCloudAccount('owner-b'); activateCloudAccount('owner-a'); });
+    await act(async () => { oldRead.resolve(lookupReply()); });
+    expect(view.queryByTestId('artifact-published-url')).toBeNull();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({});
+    expect(mockCopy).not.toHaveBeenCalled();
+  });
+
+  it.each(['audience', 'unpublish'] as const)('blocks status reads during a pending %s mutation, then allows recovery', async (operation) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockGet.mockResolvedValueOnce(lookupReply()).mockResolvedValueOnce(lookupReply());
+    mockPost.mockRejectedValueOnce(new Error('response lost'));
+    const mutation = deferred();
+    mockPatch.mockReturnValueOnce(mutation.promise);
+    mockDelete.mockReturnValueOnce(mutation.promise);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Republish artifact link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByLabelText('Check publication status').props.accessibilityState.disabled).toBe(false));
+    fireEvent.press(view.getByTestId(operation === 'audience' ? 'artifact-audience-organization' : 'artifact-unpublish'));
+    tapAlertButton(operation === 'audience' ? 'Share with workspace' : 'Unpublish');
+    await waitFor(() => expect(operation === 'audience' ? mockPatch : mockDelete).toHaveBeenCalledTimes(1));
+    fireEvent.press(view.getByLabelText('Check publication status'));
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    if (operation === 'unpublish') mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
+    await act(async () => { mutation.resolve({ shareUrl: publishedUrl, visibility: 'organization' }); });
+    const priorReads = operation === 'unpublish' ? 3 : 2;
+    expect(mockGet).toHaveBeenCalledTimes(priorReads);
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
+    fireEvent.press(view.getByLabelText('Check publication status'));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(priorReads + 1));
+    expect(view.getByText(uncertainLabel)).toBeTruthy();
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an old-view read finalizer clear a newer uncertainty read', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const oldRead = deferred();
+    const newRead = deferred();
+    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null })
+      .mockReturnValueOnce(oldRead.promise)
+      .mockResolvedValueOnce({ artifact: null, workspace: null })
+      .mockReturnValueOnce(newRead.promise);
+    mockPost.mockRejectedValue(new Error('response lost'));
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    view.rerender(<ArtifactFullScreen artifact={{ ...htmlArtifact, id: 'artifact-2' }} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    tapAlertButton('Publish');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(4));
+    await act(async () => { oldRead.resolve(lookupReply()); });
+    expect(view.getByLabelText('Check publication status').props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(view.getByLabelText('Check publication status'));
+    expect(mockGet).toHaveBeenCalledTimes(4);
+    expect(view.queryByTestId('artifact-published-url')).toBeNull();
+    await act(async () => { newRead.resolve({ artifact: null, workspace: null }); });
+    expect(view.getByLabelText('Check publication status').props.accessibilityState.disabled).toBe(false);
+    expect(view.getByText(uncertainLabel)).toBeTruthy();
+    expect(view.queryByText(privateLabel)).toBeNull();
   });
 
   it('never uploads content until the user confirms the cloud publish', async () => {
@@ -171,8 +369,8 @@ describe('ArtifactFullScreen publish-to-link', () => {
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
-        'Publish failed',
-        'Artifact publishing is not configured Reference: req_7f3a',
+        'Publish not confirmed',
+        `Artifact publishing is not configured ${PUBLISH_FAILED_MESSAGE} Reference: req_7f3a`,
       ),
     );
     expect(view.queryByTestId('artifact-published-url')).toBeNull();
@@ -190,12 +388,12 @@ describe('ArtifactFullScreen publish-to-link', () => {
     tapAlertButton('Publish');
 
     await waitFor(() =>
-      expect(Alert.alert).toHaveBeenCalledWith('Publish failed', PUBLISH_FAILED_MESSAGE),
+      expect(Alert.alert).toHaveBeenCalledWith('Publish not confirmed', PUBLISH_FAILED_MESSAGE),
     );
   });
 
   it('does not show one artifact’s link while a different artifact is open', async () => {
-    mockPost.mockResolvedValue({ shareUrl: 'https://agiworkforce.ai/a/tok3n' });
+    mockPost.mockResolvedValue(publishReceipt);
 
     const view = render(
       <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
@@ -310,7 +508,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const read = deferred();
     mockGet.mockReturnValueOnce(read.promise);
-    mockPost.mockResolvedValue({ shareUrl: publishedUrl });
+    mockPost.mockResolvedValue(publishReceipt);
     const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
     fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
     tapAlertButton('Publish');
@@ -329,7 +527,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
     view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible={false} onClose={() => undefined} />);
     view.rerender(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
-    await act(async () => { mutation.resolve({ shareUrl: publishedUrl }); });
+    await act(async () => { mutation.resolve(publishReceipt); });
     expect(view.queryByTestId('artifact-published-url')).toBeNull();
     expect(mockCopy).not.toHaveBeenCalled();
   });
@@ -338,19 +536,17 @@ describe('ArtifactFullScreen publish-to-link', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const oldRead = deferred();
     const readback = deferred();
-    mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
-    mockPost.mockResolvedValueOnce({ shareUrl: publishedUrl });
+    mockGet.mockReturnValueOnce(oldRead.promise);
+    mockPost.mockResolvedValueOnce(publishReceipt);
     mockDelete.mockResolvedValueOnce(undefined);
     const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
-    await waitFor(() => expect(view.getByText(privateLabel)).toBeTruthy());
-    mockGet.mockReturnValueOnce(oldRead.promise);
     fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
     tapAlertButton('Publish');
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
     mockGet.mockReturnValueOnce(readback.promise);
     fireEvent.press(view.getByTestId('artifact-unpublish'));
     tapAlertButton('Unpublish');
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
     expect(view.queryByText(privateLabel)).toBeNull();
     await act(async () => { oldRead.resolve(lookupReply()); });
     expect(view.queryByTestId('artifact-published-url')).toBeNull();
@@ -390,7 +586,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
       expect(first === 'publish' ? mockPatch : mockPost).not.toHaveBeenCalled();
 
       await act(async () => {
-        if (first === 'publish') publish.resolve({ shareUrl: publishedUrl });
+        if (first === 'publish') publish.resolve(publishReceipt);
         else audience.resolve({ shareUrl: publishedUrl, visibility: 'organization' });
       });
       expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);

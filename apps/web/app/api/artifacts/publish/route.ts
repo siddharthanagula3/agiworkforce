@@ -5,6 +5,7 @@ import { z } from 'zod';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS,
   type ManagedCloudPublishedArtifactListResponse,
+  type ManagedCloudPublishedArtifactPublishResponse,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -69,6 +70,7 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   });
   if (preparation instanceof Response) return preparation;
   const publishContent = preparation.content;
+  const workspace = await describePublishedArtifactWorkspace(db, organizationId);
 
   let published;
   try {
@@ -96,6 +98,7 @@ async function handlePublish(request: NextRequest): Promise<Response> {
 
   return NextResponse.json(
     {
+      artifactId: published.artifactId,
       token: published.token,
       shareUrl: buildPublishedArtifactUrl(published.token),
       publishedAt: published.updatedAt,
@@ -104,8 +107,8 @@ async function handlePublish(request: NextRequest): Promise<Response> {
       title: published.title,
       sandboxed: requiresSandboxedRender(published.kind),
       visibility: published.visibility,
-      workspace: await describePublishedArtifactWorkspace(db, organizationId),
-    },
+      workspace,
+    } satisfies ManagedCloudPublishedArtifactPublishResponse,
     { status: 201 },
   );
 }

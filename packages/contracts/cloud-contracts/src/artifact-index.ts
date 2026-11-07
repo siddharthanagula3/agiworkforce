@@ -85,6 +85,31 @@ export const ManagedCloudPublishedArtifactWorkspaceSchema = z.object({
   memberCount: z.number().int().nonnegative(),
 });
 
+export const ManagedCloudPublishedArtifactPublishResponseSchema = z.object({
+  artifactId: z.string().min(1).max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS),
+  token: z.string().regex(/^[A-Za-z0-9_-]{24}$/),
+  shareUrl: z.string().url(),
+  visibility: z.enum(MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES),
+  version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  publishedAt: z.string().min(1),
+  kind: z.string().min(1),
+  title: z.string(),
+  sandboxed: z.boolean(),
+  workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable(),
+}).refine((receipt) => {
+  try {
+    const url = new URL(receipt.shareUrl);
+    return (url.protocol === 'https:' || url.protocol === 'http:') &&
+      !url.username && !url.password && !url.search && !url.hash &&
+      url.pathname === `/shared-artifact/${receipt.token}`;
+  } catch {
+    return false;
+  }
+}, { message: 'The publication receipt must link to its token.' });
+export type ManagedCloudPublishedArtifactPublishResponse = z.infer<
+  typeof ManagedCloudPublishedArtifactPublishResponseSchema
+>;
+
 export const ManagedCloudPublishedArtifactLookupResponseSchema = z.object({
   artifact: ManagedCloudPublishedArtifactSchema.nullable(),
   workspace: ManagedCloudPublishedArtifactWorkspaceSchema.nullable(),

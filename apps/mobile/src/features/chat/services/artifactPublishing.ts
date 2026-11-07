@@ -10,6 +10,8 @@ import {
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
+  ManagedCloudPublishedArtifactPublishResponseSchema,
+  type ManagedCloudPublishedArtifactPublishResponse,
   managedCloudPublishedArtifactLookupPath,
 } from '@agiworkforce/cloud-contracts';
 import { ApiHttpError } from '@/services/apiErrors';
@@ -27,9 +29,14 @@ export interface PublishArtifactInput {
   conversationId?: string;
 }
 
-export async function publishArtifact(input: PublishArtifactInput): Promise<string> {
-  const response = await api.post<{ shareUrl?: unknown }>('/api/artifacts/publish', {
-    artifactId: input.artifactId,
+export async function publishArtifact(
+  input: PublishArtifactInput,
+): Promise<ManagedCloudPublishedArtifactPublishResponse> {
+  const { artifactId } = ManagedCloudPublishedArtifactLookupQuerySchema.parse(input);
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.post<unknown>('/api/artifacts/publish', {
+    artifactId,
     title: input.title,
     kind: input.kind,
     ...(input.language ? { language: input.language } : {}),
@@ -39,11 +46,13 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<stri
     SERVER_CONVERSATION_ID.test(input.conversationId)
       ? { conversationId: input.conversationId }
       : {}),
-  });
-
-  const shareUrl = typeof response.shareUrl === 'string' ? response.shareUrl.trim() : '';
-  if (!shareUrl) throw new Error('The publish endpoint returned no share URL.');
-  return shareUrl;
+  }, { accountEpoch: account, auth401Recovery: 'caller-owned' });
+  assertCloudAccountEpochCurrent(account);
+  const receipt = ManagedCloudPublishedArtifactPublishResponseSchema.parse(response);
+  if (receipt.artifactId !== artifactId) {
+    throw new Error('The publication receipt returned a different artifact.');
+  }
+  return receipt;
 }
 
 export type PublishedArtifactAudience = 'public' | 'organization' | 'invited';
@@ -227,13 +236,24 @@ export async function unpublishArtifact(shareUrl: string): Promise<void> {
 }
 
 export const PUBLISH_FAILED_MESSAGE =
-  'This artifact could not be published right now. Nothing was shared. Try again in a moment.';
+  'The sharing change could not be confirmed. It may have completed. Check the current publication before trying again.';
+
+export function isPublicationOutcomeUncertain(error: unknown): boolean {
+  return !(error instanceof ApiHttpError &&
+    (error.status === 400 || error.status === 401 || error.status === 403 ||
+      error.status === 409 || error.status === 429));
+}
 
 /**
  * Only a sentence the server wrote for a reader is shown as it is. Anything
  * else (a dropped connection, a malformed reply) is this app's own wording.
  */
 export function publishFailureMessage(error: unknown): string {
-  if (error instanceof ApiHttpError) return withFailureReference(error.message, error.requestId);
+  if (error instanceof ApiHttpError) {
+    return withFailureReference(
+      isPublicationOutcomeUncertain(error) ? `${error.message} ${PUBLISH_FAILED_MESSAGE}` : error.message,
+      error.requestId,
+    );
+  }
   return PUBLISH_FAILED_MESSAGE;
 }

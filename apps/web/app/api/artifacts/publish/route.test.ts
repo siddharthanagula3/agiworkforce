@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { ManagedCloudPublishedArtifactPublishResponseSchema } from '@agiworkforce/cloud-contracts';
 
 type CsrfModule = typeof import('@/lib/csrf');
 type RateLimitModule = typeof import('@/lib/rate-limit');
@@ -207,6 +208,7 @@ describe('POST /api/artifacts/publish', () => {
     expect(response.status).toBe(201);
 
     const body = await response.json();
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.parse(body).artifactId).toBe('artifact-1');
     expect(body.token).toBe(TOKEN);
     expect(body.shareUrl).toContain(`/shared-artifact/${TOKEN}`);
     expect(body.sandboxed).toBe(true);
@@ -700,7 +702,8 @@ describe('POST /api/artifacts/publish workspace audience', () => {
     ).toBe(false);
   });
 
-  it('can fail its postcommit workspace read without retrying the completed transaction', async () => {
+  // UNRUN: enrichment failure must precede any publication transaction.
+  it('fails its workspace read before starting the publication transaction', async () => {
     mocks.canShareArtifacts.mockResolvedValue(true);
     let transactionCompleted = false;
     mocks.transaction.mockImplementation(async (callback) => {
@@ -710,7 +713,7 @@ describe('POST /api/artifacts/publish workspace audience', () => {
     });
     mocks.query.mockImplementation(async (sql: unknown) => {
       if (String(sql).includes('organization_members')) {
-        expect(transactionCompleted).toBe(true);
+        expect(transactionCompleted).toBe(false);
         throw new Error('workspace summary unavailable');
       }
       return [];
@@ -719,8 +722,8 @@ describe('POST /api/artifacts/publish workspace audience', () => {
     const response = await POST(postRequest(VALID_BODY));
 
     expect(response.status).toBe(500);
-    expect(transactionCompleted).toBe(true);
-    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionCompleted).toBe(false);
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });
 

@@ -38,6 +38,7 @@ import {
   fetchArtifactPublication,
   publishArtifact,
   publishFailureMessage,
+  isPublicationOutcomeUncertain,
   recordPublishedArtifactAudience,
   type ArtifactPublication,
 } from '../services/artifactPublishing';
@@ -211,6 +212,9 @@ export function ArtifactFullScreen({
     publication: ArtifactPublication;
   } | null>(null);
   const [absentView, setAbsentView] = useState<typeof publicationView | null>(null);
+  const [uncertainPublishView, setUncertainPublishView] = useState<typeof publicationView | null>(null);
+  const uncertainRead = useRef<{ view: typeof publicationView; sequence: number } | null>(null);
+  const [checkingPublication, setCheckingPublication] = useState(false);
   const [workspaceMemberCount, setWorkspaceMemberCount] = useState<number | null>(null);
   const { status: linkCopyStatus, copy: copyLink } = useCopyAction();
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
@@ -257,9 +261,14 @@ export function ArtifactFullScreen({
   );
 
   const loadPublication = useCallback(
-    async (id: string) => {
+    async (id: string, uncertainPublish = false) => {
       if (!isPublicationViewCurrent() || publicationView.appMode !== 'cloud') return;
+      if (uncertainPublish && uncertainRead.current?.view === publicationView) return;
       const sequence = ++publicationSequence.current;
+      if (uncertainPublish) {
+        uncertainRead.current = { view: publicationView, sequence };
+        setCheckingPublication(true);
+      }
       setAbsentView(null);
       try {
         const state = await fetchArtifactPublication(id);
@@ -268,10 +277,18 @@ export function ArtifactFullScreen({
         setPublished(
           state.publication ? { view: publicationView, publication: state.publication } : null,
         );
-        setAbsentView(state.publication ? null : publicationView);
+        setAbsentView(state.publication || uncertainPublish ? null : publicationView);
+        if (uncertainPublish && state.publication) {
+          recordPublishedArtifactAudience(id, state.publication.visibility);
+        }
       } catch (error) {
         if (!isPublicationViewCurrent() || sequence !== publicationSequence.current) return;
         console.warn('[ArtifactFullScreen] publication lookup failed', error);
+      } finally {
+        if (uncertainPublish && uncertainRead.current?.sequence === sequence) {
+          uncertainRead.current = null;
+          if (isPublicationViewCurrent()) setCheckingPublication(false);
+        }
       }
     },
     [isPublicationViewCurrent, publicationView],
@@ -288,6 +305,8 @@ export function ArtifactFullScreen({
   useEffect(() => {
     setPublished(null);
     setAbsentView(null);
+    setUncertainPublishView(null);
+    setCheckingPublication(false);
     setWorkspaceMemberCount(null);
     setPublishing(false);
     if (visible && artifactId && appMode === 'cloud') void loadPublication(artifactId);
@@ -424,7 +443,7 @@ export function ArtifactFullScreen({
     if (mutation === false) return;
     setPublishing(true);
     try {
-      const shareUrl = await publishArtifact({
+      const receipt = await publishArtifact({
         artifactId: artifact.id,
         title: artifact.title,
         kind,
@@ -434,21 +453,31 @@ export function ArtifactFullScreen({
       });
       if (!isPublicationMutationCurrent(mutation)) return;
 
-      setPublished((current) => ({
+      setPublished({
         view: publicationView,
         publication: {
-          shareUrl,
-          visibility:
-            current?.view === publicationView ? current.publication.visibility : 'public',
+          shareUrl: receipt.shareUrl,
+          visibility: receipt.visibility,
         },
-      }));
-      await copyLink(shareUrl);
-      if (isPublicationMutationCurrent(mutation)) {
-        void loadPublication(artifact.id);
+      });
+      setUncertainPublishView(null);
+      setWorkspaceMemberCount(receipt.workspace?.memberCount ?? null);
+      recordPublishedArtifactAudience(artifact.id, receipt.visibility);
+      try {
+        await copyLink(receipt.shareUrl);
+      } catch {
+        if (isPublicationMutationCurrent(mutation)) {
+          Alert.alert('Artifact published', 'Publishing was confirmed, but copying the link could not be confirmed. You can copy it again below.');
+        }
       }
     } catch (err) {
       if (isPublicationMutationCurrent(mutation)) {
-        Alert.alert('Publish failed', publishFailureMessage(err));
+        const uncertain = isPublicationOutcomeUncertain(err);
+        if (uncertain) {
+          setUncertainPublishView(publicationView);
+          void loadPublication(artifact.id, true);
+        }
+        Alert.alert(uncertain ? 'Publish not confirmed' : 'Publish failed', publishFailureMessage(err));
       }
     } finally {
       endPublicationMutation(mutation);
@@ -861,7 +890,32 @@ export function ArtifactFullScreen({
             <ArtifactSwitcher artifacts={switchable} activeId={artifact.id} onSelect={onSwitch} />
           ) : null}
 
-          {artifact && appMode === 'cloud' && publicationKnown && !publishedUrl ? (
+          {uncertainPublishView === publicationView && isPublicationViewCurrent() ? (
+            <View>
+              <Text accessibilityRole="alert" style={{ color: colors.textSecondary }}>
+                A publish is unconfirmed. Any link shown is the last known publication and may contain an earlier version. No automatic retry was made.
+              </Text>
+              {artifact && appMode === 'cloud' ? (
+                <PressableBox
+                  accessibilityRole="button"
+                  accessibilityLabel="Check publication status"
+                  accessibilityState={{ disabled: checkingPublication || publishing }}
+                  disabled={checkingPublication || publishing}
+                  onPress={() => {
+                    if (publicationMutation.current?.view !== publicationView) {
+                      void loadPublication(artifact.id, true);
+                    }
+                  }}
+                  style={{ paddingVertical: 10 }}
+                >
+                  <Text style={{ color: colors.textSecondary }}>
+                    {checkingPublication ? 'Checking publication…' : 'Check publication status'}
+                  </Text>
+                </PressableBox>
+              ) : null}
+            </View>
+          ) : null}
+          {artifact && appMode === 'cloud' && publicationKnown && !publishedUrl && uncertainPublishView !== publicationView ? (
             <Text
               style={{ marginTop: 10, fontSize: typeScale.caption, color: colors.textSecondary }}
               testID="artifact-private-state"
@@ -892,7 +946,7 @@ export function ArtifactFullScreen({
               </Text>
               <PressableBox
                 onPress={handleCopyLink}
-                accessibilityLabel={copyControlLabel(linkCopyStatus, 'Copy public link')}
+                accessibilityLabel={copyControlLabel(linkCopyStatus, 'Copy publication link')}
                 accessibilityRole="button"
                 style={{ padding: 4 }}
               >
@@ -906,7 +960,7 @@ export function ArtifactFullScreen({
               </PressableBox>
               <PressableBox
                 onPress={handleShareLink}
-                accessibilityLabel="Share public link"
+                accessibilityLabel="Share publication link"
                 accessibilityRole="button"
                 style={{ padding: 4 }}
               >
