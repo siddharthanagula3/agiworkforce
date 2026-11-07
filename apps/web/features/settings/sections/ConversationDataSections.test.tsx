@@ -152,7 +152,7 @@ describe('Web conversation data settings', () => {
     mocks.restoreDeleted.mockResolvedValue(restoredWire);
     mocks.deleteConversation.mockResolvedValue(undefined);
     mocks.bulkAction.mockResolvedValue(1);
-    mocks.listShares.mockResolvedValue([]);
+    mocks.listShares.mockResolvedValue({ shares: [], complete: true });
     mocks.revokeShare.mockResolvedValue(undefined);
     mocks.listPublished.mockResolvedValue([]);
     mocks.unpublish.mockResolvedValue(undefined);
@@ -254,7 +254,7 @@ describe('Web conversation data settings', () => {
   });
 
   it('lists and revokes account-owned shared links', async () => {
-    mocks.listShares.mockResolvedValue([
+    mocks.listShares.mockResolvedValue({ complete: true, shares: [
       {
         token: 'share-token',
         title: 'Shared planning',
@@ -266,7 +266,7 @@ describe('Web conversation data settings', () => {
         expiresAt: '2026-08-01T00:00:00.000Z',
         expired: false,
       },
-    ]);
+    ] });
 
     render(<SharedLinksSection />);
 
@@ -282,6 +282,46 @@ describe('Web conversation data settings', () => {
 
     await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token'));
     expect(screen.getByText('No shared links')).toBeInTheDocument();
+  });
+
+  it('does not describe an incomplete empty inventory as having no shared links', async () => {
+    mocks.listShares.mockResolvedValue({ shares: [], complete: false });
+
+    render(<SharedLinksSection />);
+
+    expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
+    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.queryByText('No shared links')).toBeNull();
+  });
+
+  it('keeps incomplete guidance after revoking the last displayed link', async () => {
+    const shareUrl = 'https://agiworkforce.com/share/share-token';
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    mocks.listShares.mockResolvedValue({ complete: false, shares: [{
+      token: 'share-token', title: 'Shared planning', shareUrl,
+      modelId: null, provider: null, messageCount: 3, visibility: 'public',
+      createdAt: '2026-07-01T00:00:00.000Z', expiresAt: '2026-08-01T00:00:00.000Z',
+      expired: false,
+    }] });
+
+    render(<SharedLinksSection />);
+
+    await screen.findByText('Shared planning');
+    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute('href', shareUrl);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await screen.findByText('Copied the link for “Shared planning”.');
+    expect(writeText).toHaveBeenCalledWith(shareUrl);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    expect(mocks.revokeShare).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
+
+    expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
+    expect(mocks.revokeShare).toHaveBeenCalledWith('share-token');
+    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.queryByText('No shared links')).toBeNull();
+    expect(mocks.listShares).toHaveBeenCalledTimes(1);
   });
 
   it('exposes archive-all, delete-all, archived, and shared-link controls in Privacy', async () => {

@@ -78,6 +78,7 @@ function ShareConversationDialogImpl({
     isSharing,
     isTemporary,
     activeShare,
+    inventoryIncomplete,
     checkingShare,
     loadingChat,
     error,
@@ -134,7 +135,7 @@ function ShareConversationDialogImpl({
   };
 
   const handleAudienceChange = (next: ShareAudience) => {
-    if (!isViewCurrent() || !activeShare || next === activeShare.audience) return;
+    if (!isViewCurrent() || inventoryIncomplete || !activeShare || next === activeShare.audience) return;
     const apply = async () => {
       const ok = await setAudience(next);
       if (!ok || !isViewCurrent()) return;
@@ -171,7 +172,7 @@ function ShareConversationDialogImpl({
   };
 
   const handleUpdateLink = () => {
-    if (!isViewCurrent() || !activeShare) return;
+    if (!isViewCurrent() || inventoryIncomplete || !activeShare) return;
     const several = activeShare.linkCount > 1;
     const readers = several
       ? `This chat has ${activeShare.linkCount} live links, which may have gone to different people, and all of them change. Everyone who can open any of them`
@@ -198,15 +199,15 @@ function ShareConversationDialogImpl({
   };
 
   const handleRevoke = () => {
-    if (!isViewCurrent() || !activeShare) return;
-    const scope = activeShare.mayHaveUnlistedLinks
+    if (!isViewCurrent() || (!activeShare && !inventoryIncomplete)) return;
+    const scope = inventoryIncomplete
       ? {
           title: 'Revoke every link to this chat?',
           description:
-            'Every live link to this chat stops working, including any older ones that could not be checked. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.',
+            'This request revokes the existing live links to this chat, including older ones that could not be checked, and withdraws their workspace grants. Revoked links cannot be restored. It does not prevent someone from creating another link.',
           confirmLabel: 'Revoke all links',
         }
-      : activeShare.linkCount > 1
+      : activeShare && activeShare.linkCount > 1
         ? {
             title: `Revoke all ${activeShare.linkCount} links?`,
             description: `This chat has ${activeShare.linkCount} live links, and all of them stop working. Anyone holding one loses access immediately, and any workspace grant is withdrawn. A new link can be created, but it will be a different URL, and the old ones stay dead.`,
@@ -215,7 +216,7 @@ function ShareConversationDialogImpl({
         : {
             title: 'Revoke this share?',
             description:
-              activeShare.audience === 'organization'
+              activeShare?.audience === 'organization'
                 ? 'Everyone in your workspace loses access immediately, and the grant is withdrawn. A new share can be created, but it will be a different URL, the old one stays dead.'
                 : 'Anyone holding the link loses access immediately. A new link can be created, but it will be a different URL, the old one stays dead.',
             confirmLabel: 'Revoke share',
@@ -257,23 +258,35 @@ function ShareConversationDialogImpl({
               ) : (
                 <Globe2 className="h-5 w-5" />
               )}
-              {activeShare
-                ? activeShare.audience === 'organization'
-                  ? 'Shared with your workspace'
-                  : 'Public link ready'
-                : 'Share conversation'}
+              {inventoryIncomplete
+                ? 'Conversation links'
+                : activeShare
+                  ? activeShare.audience === 'organization'
+                    ? 'Shared with your workspace'
+                    : 'Public link ready'
+                  : 'Share conversation'}
             </DialogTitle>
             <DialogDescription>
-              {activeShare
-                ? activeShare.audience === 'organization'
-                  ? `Everyone in your workspace can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}. Nobody else can, link or not.`
-                  : `Anyone with this link can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}.`
-                : 'Create a read-only snapshot. New messages and future edits will not be added to it.'}
-              {activeShare
+              {inventoryIncomplete
+                ? 'Some older links may not be shown. Their access could not be confirmed.'
+                : activeShare
+                  ? activeShare.audience === 'organization'
+                    ? `Everyone in your workspace can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}. Nobody else can, link or not.`
+                    : `Anyone with this link can read this ${activeShare.messageCount}-message snapshot until ${formatExpiry(activeShare.expiresAt)}.`
+                  : 'Create a read-only snapshot. New messages and future edits will not be added to it.'}
+              {activeShare && !inventoryIncomplete
                 ? ' Messages added after it was shared stay private until you update the link, which keeps the same address.'
                 : null}
             </DialogDescription>
           </DialogHeader>
+
+          {inventoryIncomplete ? (
+            <p role="status" className="text-sm text-warning-text">
+              The full list of links could not be confirmed. Changing the audience and updating all
+              links are unavailable. You can revoke every existing live link to this chat. Creating
+              a new link does not close older links.
+            </p>
+          ) : null}
 
           {pendingStatus ? (
             <div
@@ -304,7 +317,7 @@ function ShareConversationDialogImpl({
                   <select
                     id="share-audience-select"
                     value={activeShare.audience}
-                    disabled={isSharing}
+                    disabled={isSharing || inventoryIncomplete}
                     onChange={(event) =>
                       handleAudienceChange(
                         event.target.value === 'organization' ? 'organization' : 'public',
@@ -320,7 +333,7 @@ function ShareConversationDialogImpl({
                 </div>
               ) : null}
 
-              {activeShare.linkCount > 1 ? (
+              {activeShare.linkCount > 1 && !inventoryIncomplete ? (
                 <p className="text-sm text-muted-foreground" data-testid="share-link-count">
                   This chat has {activeShare.linkCount} live links. Update link and Revoke share act
                   on all of them.
@@ -397,13 +410,19 @@ function ShareConversationDialogImpl({
           ) : null}
 
           <DialogFooter key={activeShare ? 'shared' : 'unshared'}>
+            {!activeShare && inventoryIncomplete ? (
+              <Button variant="destructive" onClick={handleRevoke} disabled={isSharing}>
+                <Trash2 className="me-2 h-4 w-4" />
+                Revoke every link
+              </Button>
+            ) : null}
             {activeShare ? (
               <>
                 <Button variant="destructive" onClick={handleRevoke} disabled={isSharing}>
                   <Trash2 className="me-2 h-4 w-4" />
-                  Revoke share
+                  {inventoryIncomplete ? 'Revoke every link' : 'Revoke share'}
                 </Button>
-                <Button variant="outline" onClick={handleUpdateLink} disabled={isSharing}>
+                <Button variant="outline" onClick={handleUpdateLink} disabled={isSharing || inventoryIncomplete}>
                   <RefreshCw className="me-2 h-4 w-4" />
                   Update link
                 </Button>

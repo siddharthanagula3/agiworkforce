@@ -293,6 +293,7 @@ vi.mock('../../hooks/use-share-conversation', () => ({
     isViewCurrent: () => false,
     workspacePending: false,
     workspaceUnavailable: false,
+    inventoryIncomplete: false,
   }),
 }));
 vi.mock('../../hooks/use-conversation-branches', () => ({

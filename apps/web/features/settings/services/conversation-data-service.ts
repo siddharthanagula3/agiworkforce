@@ -26,6 +26,10 @@ const BulkConversationResponseSchema = z.object({
 
 export type BulkConversationAction = z.infer<typeof BulkConversationResponseSchema>['action'];
 export type SharedLinkSummary = ConversationShareSummary;
+export type SharedLinkList = Pick<
+  z.output<typeof ConversationShareListResponseSchema>,
+  'shares' | 'complete'
+>;
 
 export interface ConversationDataAuthority {
   request: RequestAuthority;
@@ -234,12 +238,13 @@ export async function applyBulkConversationAction(
   return receipt.affectedCount;
 }
 
-export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkSummary[]> {
+export async function listSharedLinks(signal?: AbortSignal): Promise<SharedLinkList> {
   const response = await fetch(CONVERSATION_SHARES_PATH, { credentials: 'include', signal });
   if (!response.ok) {
     throw await responseError(response, 'Failed to load shared links');
   }
-  return ConversationShareListResponseSchema.parse(await response.json()).shares;
+  const { shares, complete } = ConversationShareListResponseSchema.parse(await response.json());
+  return { shares, complete };
 }
 
 export async function revokeSharedLink(token: string): Promise<void> {

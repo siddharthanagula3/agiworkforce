@@ -5,6 +5,7 @@ import {
   listSharedLinks,
   revokeSharedLink,
   type SharedLinkSummary,
+  type SharedLinkList,
 } from '../services/conversation-data-service';
 import { PublishedArtifactsSection } from './PublishedArtifactsSection';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
@@ -40,7 +41,8 @@ const actionButtonStyle = {
 } as const;
 
 export function SharedLinksSection() {
-  const [shares, setShares] = useState<SharedLinkSummary[]>([]);
+  const [inventory, setInventory] = useState<SharedLinkList>({ shares: [], complete: false });
+  const { shares, complete } = inventory;
   const [loading, setLoading] = useState(true);
   const [actionToken, setActionToken] = useState<string | null>(null);
   const [shareToRevoke, setShareToRevoke] = useState<SharedLinkSummary | null>(null);
@@ -53,7 +55,7 @@ export function SharedLinksSection() {
     setError(null);
     setLoadFailed(false);
     try {
-      setShares(await listSharedLinks(signal));
+      setInventory(await listSharedLinks(signal));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
       setLoadFailed(true);
@@ -90,7 +92,10 @@ export function SharedLinksSection() {
     setNotice(null);
     try {
       await revokeSharedLink(share.token);
-      setShares((current) => current.filter(({ token }) => token !== share.token));
+      setInventory((current) => ({
+        ...current,
+        shares: current.shares.filter(({ token }) => token !== share.token),
+      }));
       setNotice(`Revoked the link for “${share.title}”.`);
       setShareToRevoke(null);
     } catch (caught) {
@@ -158,6 +163,12 @@ export function SharedLinksSection() {
           overflow: 'hidden',
         }}
       >
+        {!loading && !loadFailed && !complete ? (
+          <p role="status" style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-2)', fontSize: 13 }}>
+            This list may not show every shared link. You can manage the links shown here individually;
+            links not shown may still be accessible.
+          </p>
+        ) : null}
         {loading ? (
           <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading shared links…
@@ -174,10 +185,12 @@ export function SharedLinksSection() {
         ) : shares.length === 0 ? (
           <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
-              No shared links
+              {complete ? 'No shared links' : 'No shared links shown'}
             </div>
             <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
-              Links you create from a conversation will appear here.
+              {complete
+                ? 'Links you create from a conversation will appear here.'
+                : 'An empty list does not confirm that all shared links have been revoked.'}
             </p>
           </div>
         ) : (

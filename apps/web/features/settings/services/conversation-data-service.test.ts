@@ -114,9 +114,10 @@ describe('conversation data settings service', () => {
     expect(affected).toBe(4);
   });
 
-  it('validates the account-owned shared-link index', async () => {
+  it('validates the complete account-owned shared-link index', async () => {
     const fetchMock = vi.fn(async () =>
       response({
+        complete: true,
         shares: [
           {
             token: 'share-token',
@@ -134,13 +135,27 @@ describe('conversation data settings service', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const shares = await listSharedLinks();
+    const result = await listSharedLinks();
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/share',
       expect.objectContaining({ credentials: 'include' }),
     );
-    expect(shares[0]?.title).toBe('Shared planning');
+    expect(result.shares[0]?.title).toBe('Shared planning');
+    expect(result.complete).toBe(true);
+  });
+
+  it.each([false, undefined])('treats complete=%s as an incomplete shared-link inventory', async (complete) => {
+    const body = complete === undefined ? { shares: [] } : { shares: [], complete };
+    const fetchMock = vi.fn(async () => response(body));
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    await expect(listSharedLinks(controller.signal)).resolves.toEqual({ shares: [], complete: false });
+    expect(fetchMock).toHaveBeenCalledWith('/api/share', {
+      credentials: 'include',
+      signal: controller.signal,
+    });
   });
 
   it('keeps an explicit original organization on the count and mutation after CSRF', async () => {

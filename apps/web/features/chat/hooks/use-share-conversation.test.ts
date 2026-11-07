@@ -71,6 +71,7 @@ function created(shareToken = 'created') {
 
 function list() {
   return {
+    complete: true,
     shares: listedTokens.map((shareToken) => ({
       ...created(shareToken), title: 'Session', modelId: null, provider: null,
       createdAt: MESSAGE.createdAt, expired: false,
@@ -152,7 +153,11 @@ describe('useShareConversation captured workspace and view lifetime (source-only
         case 'GET': return json(list());
         case 'POST': return json(created(), 201);
         case 'PUT': return json({ refreshed: 1, tokens: listedTokens, messageCount: 1 });
-        case 'DELETE': return json({ success: true, revoked: listedTokens.length });
+        case 'DELETE': {
+          const revoked = listedTokens.length;
+          listedTokens = [];
+          return json({ success: true, revoked });
+        }
         case 'PATCH': return json({
           token: url.split('/').at(-1), shareUrl: `https://example.test${url}`,
           visibility: 'organization', organizationId: organization, expiresAt: EXPIRES_AT,
@@ -323,7 +328,7 @@ describe('useShareConversation captured workspace and view lifetime (source-only
     expect(hook.result.current.activeShare?.token).toBe('current');
     expect(oldSignal?.aborted).toBe(true);
     await act(async () => {
-      late.resolve(json(status === 200 ? { shares: [], workspace: null } : { error: 'obsolete' }, status));
+      late.resolve(json(status === 200 ? { shares: [], workspace: null, complete: true } : { error: 'obsolete' }, status));
     });
     expect(hook.result.current.activeShare?.token).toBe('current');
     expect(hook.result.current.error).toBeNull();
@@ -347,7 +352,7 @@ describe('useShareConversation captured workspace and view lifetime (source-only
     listedTokens = ['current'];
     hook.rerender({ open: true, conversationId: CONVERSATION });
     await ready(hook);
-    await act(async () => { body.resolve({ shares: [], workspace: null }); });
+    await act(async () => { body.resolve({ shares: [], workspace: null, complete: true }); });
     expect(hook.result.current.activeShare?.token).toBe('current');
     expect(hook.result.current.error).toBeNull();
   });
@@ -468,8 +473,190 @@ describe('useShareConversation captured workspace and view lifetime (source-only
     const hook = mount();
     await ready(hook);
     expect(hook.result.current.error).toEqual(expect.any(String));
+    expect(hook.result.current.activeShare).toBeNull();
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
     await act(async () => { expect(await hook.result.current.share(7)).toBe(true); });
     expect(hook.result.current.activeShare?.mayHaveUnlistedLinks).toBe(true);
+  });
+
+  it.each([false, undefined, true])('requires explicit completeness metadata (%s)', async (complete) => {
+    listedTokens = ['visible'];
+    onShareRequest = async () => json({ ...list(), complete });
+    const hook = mount();
+    await ready(hook);
+    expect(hook.result.current.inventoryIncomplete).toBe(complete !== true);
+    expect(hook.result.current.activeShare?.mayHaveUnlistedLinks).toBe(complete !== true);
+  });
+
+  it('retains incomplete inventory when every returned row is expired', async () => {
+    listedTokens = ['expired'];
+    const normal = onShareRequest;
+    onShareRequest = (url, init) => (init.method ?? 'GET') === 'GET'
+      ? Promise.resolve(json({ ...list(), complete: false,
+          shares: list().shares.map((share) => ({ ...share, expired: true })) }))
+      : normal(url, init);
+    const hook = mount();
+    await ready(hook);
+    expect(hook.result.current.activeShare).toBeNull();
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+    await act(async () => { expect(await hook.result.current.revoke()).toBe(true); });
+    expect(shareCalls('DELETE')).toHaveLength(1);
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+  });
+
+  it.each([{ tokens: [] }, { tokens: ['visible'] }])('blocks direct update and audience callbacks for incomplete inventory $tokens', async ({ tokens }) => {
+    listedTokens = tokens;
+    const normal = onShareRequest;
+    onShareRequest = (url, init) => (init.method ?? 'GET') === 'GET'
+      ? Promise.resolve(json({ ...list(), complete: false })) : normal(url, init);
+    const hook = mount();
+    await ready(hook);
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+    const csrfCalls = boundary.csrf.mock.calls.length;
+    const tokenCalls = token.mock.calls.length;
+    await act(async () => {
+      expect(await hook.result.current.updateLink()).toBe(false);
+      expect(await hook.result.current.setAudience('organization')).toBe(false);
+    });
+    expect(shareCalls('PUT')).toHaveLength(0);
+    expect(shareCalls('PATCH')).toHaveLength(0);
+    expect(boundary.csrf).toHaveBeenCalledTimes(csrfCalls);
+    expect(token).toHaveBeenCalledTimes(tokenCalls);
+    await act(async () => { expect(await hook.result.current.share(7)).toBe(true); });
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+    expect(hook.result.current.activeShare?.mayHaveUnlistedLinks).toBe(true);
+  });
+
+  it.each(['complete empty', 'complete remaining', 'incomplete empty', 'omitted', 'failed', 'malformed'] as const)(
+    'acknowledges zero revocations without claiming emptiness after %s refresh', async (refresh) => {
+      let gets = 0;
+      onShareRequest = async (_url, init) => {
+        if (init.method === 'DELETE') return json({ success: true, revoked: 0 });
+        if (++gets === 1) return json({ ...list(), complete: false });
+        if (refresh === 'failed') return json({}, 503);
+        if (refresh === 'malformed') return json({ shares: 'invalid', complete: true });
+        listedTokens = refresh === 'complete remaining' ? ['concurrent'] : [];
+        return json({ ...list(), complete: refresh.startsWith('complete') ? true
+          : refresh === 'omitted' ? undefined : false });
+      };
+      const hook = mount();
+      await ready(hook);
+      expect(hook.result.current.activeShare).toBeNull();
+      expect(hook.result.current.inventoryIncomplete).toBe(true);
+      await act(async () => { expect(await hook.result.current.revoke()).toBe(true); });
+      expect(shareCalls('DELETE')).toHaveLength(1);
+      expect(shareCalls('GET')).toHaveLength(2);
+      expect(hook.result.current.inventoryIncomplete).toBe(!refresh.startsWith('complete'));
+      expect(hook.result.current.activeShare?.token ?? null)
+        .toBe(refresh === 'complete remaining' ? 'concurrent' : null);
+      if (refresh === 'failed' || refresh === 'malformed') {
+        expect(hook.result.current.error).toMatch(/revocation request succeeded.*remaining links could not be checked/i);
+      } else expect(hook.result.current.error).toBeNull();
+      const headers = shareCalls().map(([, init]) => new Headers(init?.headers));
+      expect(headers.every((item) => item.get('authorization') === 'Bearer captured-session-token')).toBe(true);
+      expect(headers.every((item) => item.get(MANAGED_CLOUD_ORGANIZATION_HEADER) === ORGANIZATION_A)).toBe(true);
+    },
+  );
+
+  it.each(['malformed', 'failed', 'timeout'] as const)('does not refresh or erase known links after %s DELETE', async (failure) => {
+    listedTokens = ['visible'];
+    const normal = onShareRequest;
+    onShareRequest = (url, init) => {
+      if (init.method !== 'DELETE') return normal(url, init);
+      if (failure === 'timeout') return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      });
+      return Promise.resolve(failure === 'failed' ? json({}, 503) : json({ success: true }));
+    };
+    const hook = mount();
+    await ready(hook);
+    vi.useFakeTimers();
+    let pending!: Promise<boolean>;
+    act(() => { pending = hook.result.current.revoke(); });
+    await flush();
+    await act(async () => {
+      if (failure === 'timeout') await vi.advanceTimersByTimeAsync(SHARE_CONVERSATION_CLIENT_DEADLINE_MS);
+      expect(await pending).toBe(false);
+    });
+    expect(shareCalls('DELETE')).toHaveLength(1);
+    expect(shareCalls('GET')).toHaveLength(1);
+    expect(hook.result.current.activeShare?.token).toBe('visible');
+    expect(hook.result.current.error).toEqual(expect.any(String));
+  });
+
+  it('blocks retained complete-inventory callbacks after refresh loses completeness in the same view', async () => {
+    listedTokens = ['visible'];
+    const normal = onShareRequest;
+    let gets = 0;
+    onShareRequest = (url, init) => (init.method ?? 'GET') === 'GET' && ++gets > 1
+      ? Promise.resolve(json({}, 503)) : normal(url, init);
+    const hook = mount();
+    await ready(hook);
+    const completeCallbacks = hook.result.current;
+    await act(async () => { expect(await hook.result.current.revoke()).toBe(true); });
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+    expect(completeCallbacks.isViewCurrent()).toBe(true);
+    await act(async () => {
+      expect(await completeCallbacks.updateLink()).toBe(false);
+      expect(await completeCallbacks.setAudience('organization')).toBe(false);
+    });
+    expect(shareCalls('PUT')).toHaveLength(0);
+    expect(shareCalls('PATCH')).toHaveLength(0);
+  });
+
+  it('bounds refresh after acknowledged DELETE without retrying deletion', async () => {
+    listedTokens = ['visible'];
+    const normal = onShareRequest;
+    let gets = 0;
+    onShareRequest = (url, init) => {
+      if ((init.method ?? 'GET') === 'GET' && ++gets > 1) return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      });
+      return normal(url, init);
+    };
+    const hook = mount();
+    await ready(hook);
+    vi.useFakeTimers();
+    let pending!: Promise<boolean>;
+    act(() => { pending = hook.result.current.revoke(); });
+    await flush();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SHARE_CONVERSATION_CLIENT_DEADLINE_MS);
+      expect(await pending).toBe(true);
+    });
+    expect(shareCalls('DELETE')).toHaveLength(1);
+    expect(shareCalls('GET')).toHaveLength(2);
+    expect(hook.result.current.activeShare).toBeNull();
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+    expect(hook.result.current.error).toMatch(/revocation request succeeded/i);
+  });
+
+  it('does not let a retired revocation refresh replace a reopened inventory', async () => {
+    listedTokens = ['original'];
+    const late = deferred<Response>();
+    const normal = onShareRequest;
+    let gets = 0;
+    onShareRequest = (url, init) => (init.method ?? 'GET') === 'GET' && ++gets === 2
+      ? late.promise : normal(url, init);
+    const hook = mount();
+    await ready(hook);
+    let pending!: Promise<boolean>;
+    act(() => { pending = hook.result.current.revoke(); });
+    await waitFor(() => expect(shareCalls('GET')).toHaveLength(2));
+    expect(hook.result.current.activeShare).toBeNull();
+    expect(hook.result.current.inventoryIncomplete).toBe(true);
+    hook.rerender({ open: false, conversationId: CONVERSATION });
+    listedTokens = ['reopened'];
+    hook.rerender({ open: true, conversationId: CONVERSATION });
+    await ready(hook);
+    await act(async () => {
+      late.resolve(json({ shares: [], workspace: null, complete: false }));
+      expect(await pending).toBe(true);
+    });
+    expect(hook.result.current.activeShare?.token).toBe('reopened');
+    expect(hook.result.current.inventoryIncomplete).toBe(false);
+    expect(hook.result.current.error).toBeNull();
+    expect(shareCalls('DELETE')).toHaveLength(1);
   });
 
   it('preserves timeout guidance and allows retry in the current view', async () => {
