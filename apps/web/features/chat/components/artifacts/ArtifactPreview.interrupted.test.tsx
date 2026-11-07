@@ -20,8 +20,9 @@ describe('WEB-USE-STREAMING-ARTIFACT-INTERRUPTING-01 · panel marker', () => {
     render(<ArtifactPreview artifact={partialArtifact({ interrupted: true })} variant="panel" />);
 
     const notice = screen.getByTestId(NOTICE);
-    expect(notice.textContent).toMatch(/stopped before it finished/i);
-    expect(notice.textContent).toMatch(/regenerate/i);
+    expect(notice.textContent).toContain('saved from a partial response');
+    expect(notice.textContent).toContain('may not include later output');
+    expect(notice.textContent).not.toMatch(/what arrived|whole document|regenerate/i);
   });
 
   it('stays silent for an artifact that finished', () => {
@@ -37,12 +38,14 @@ describe('transient approval presentation', () => {
     const artifact = partialArtifact({ interrupted: true, title: 'My renamed draft', type: 'code' });
     const before = { ...artifact };
     const { rerender, container } = render(<ArtifactPreview artifact={artifact} variant="panel" awaitingApproval />);
-    expect(screen.getByTestId(NOTICE)).toHaveTextContent('partial while the response awaits approval');
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('This saved artifact is partial. The response awaits approval');
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('may not include later output');
     expect(screen.getByTestId(NOTICE)).not.toHaveTextContent(/stopped|regenerate/i);
     expect(screen.getByText('My renamed draft')).toBeInTheDocument();
     expect(container.textContent).toContain('<!DOCTYPE html>');
     rerender(<ArtifactPreview artifact={artifact} variant="panel" awaitingApproval={false} />);
-    expect(screen.getByTestId(NOTICE)).toHaveTextContent(/regenerate/i);
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('saved from a partial response');
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('may not include later output');
     expect(artifact).toEqual(before);
   });
 

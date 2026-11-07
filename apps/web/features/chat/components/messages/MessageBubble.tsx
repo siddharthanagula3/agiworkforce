@@ -668,7 +668,8 @@ interface Message {
   };
 }
 
-const INTERRUPTED_ARTIFACT_NOTICE = 'This artifact stopped before it finished.';
+const INTERRUPTED_ARTIFACT_NOTICE =
+  'This artifact was saved from a partial response. It may not include later output.';
 const ARTIFACT_PROSE_SLOT = '\u2063agi-artifact-slot\u2063';
 const INTERRUPTED_ARTIFACT_ACTION = 'Regenerate';
 
@@ -3232,7 +3233,7 @@ const MessageBubbleComponent = function MessageBubble({
             >
               <span className="min-w-0 text-xs">
                 {awaitingApproval
-                  ? 'This artifact is partial while the response awaits approval.'
+                  ? 'This saved artifact is partial. The response awaits approval, and this copy may not include later output.'
                   : INTERRUPTED_ARTIFACT_NOTICE}
               </span>
               {onRegenerate && !awaitingApproval && (

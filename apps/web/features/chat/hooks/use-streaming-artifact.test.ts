@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createElement, StrictMode, type ReactNode } from 'react';
 import { renderHook } from '@testing-library/react';
 import {
   computeDerivedArtifactId,
@@ -9,6 +10,9 @@ import { useStreamingArtifactSync } from './use-streaming-artifact';
 import { useStreamingArtifactStore } from '../stores/streaming-artifact-store';
 import { useArtifactsStore } from '../stores/artifacts-store';
 
+const toastMock = vi.hoisted(() => ({ message: vi.fn() }));
+vi.mock('sonner', () => ({ toast: toastMock }));
+
 const MESSAGE_ID = 'msg-1';
 const CONVERSATION_ID = 'conv-1';
 
@@ -18,6 +22,7 @@ function blockFor(markdown: string): TrailingUnclosedBlock | null {
 
 describe('useStreamingArtifactSync', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     useArtifactsStore.getState().reset();
     useArtifactsStore.getState().setPanelOpen(false);
     useStreamingArtifactStore.getState().clearStreamingArtifact();
@@ -196,5 +201,117 @@ describe('useStreamingArtifactSync', () => {
     expect(useStreamingArtifactStore.getState().streaming).not.toBeNull();
     unmount();
     expect(useStreamingArtifactStore.getState().streaming).toBeNull();
+  });
+
+  it('keeps the first partial and notifies once for a differing resumed stop in StrictMode', () => {
+    const initial = { isStreaming: true, block: blockFor('```html\n<div>first') };
+    const { rerender } = renderHook(
+      (props: typeof initial) => useStreamingArtifactSync({
+        ...props, messageId: MESSAGE_ID, conversationId: CONVERSATION_ID,
+      }),
+      {
+        initialProps: initial,
+        wrapper: ({ children }: { children: ReactNode }) => createElement(StrictMode, null, children),
+      },
+    );
+    rerender({ ...initial, isStreaming: false });
+    expect(toastMock.message).not.toHaveBeenCalled();
+    const later = { isStreaming: true, block: blockFor('```html\n<div>later') };
+    rerender(later);
+    const before = useArtifactsStore.getState();
+    const versions = before.getArtifactVersions(before.artifacts[0]!.id);
+    rerender({ ...later, isStreaming: false });
+    rerender({ isStreaming: false, block: blockFor('```html\n<div>later') });
+    expect(useArtifactsStore.getState()).toEqual(before);
+    expect(useArtifactsStore.getState().getArtifactVersions(before.artifacts[0]!.id)).toBe(versions);
+    expect(useArtifactsStore.getState().artifacts[0]?.content).toBe('<div>first');
+    expect(toastMock.message).toHaveBeenCalledExactlyOnceWith('New partial output was not saved over the existing artifact.');
+    expect(useStreamingArtifactStore.getState().streaming).toBeNull();
+  });
+
+  it('quietly preserves renamed identical content on repeated stops', () => {
+    const block = blockFor('```html\n<div>same');
+    const { rerender } = renderHook(
+      ({ isStreaming }: { isStreaming: boolean }) => useStreamingArtifactSync({
+        messageId: MESSAGE_ID, conversationId: CONVERSATION_ID, isStreaming, block,
+      }),
+      { initialProps: { isStreaming: true } },
+    );
+    rerender({ isStreaming: false });
+    const id = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
+    useArtifactsStore.getState().renameArtifact(id, 'My renamed draft');
+    rerender({ isStreaming: true });
+    rerender({ isStreaming: false });
+    expect(useArtifactsStore.getState().artifacts[0]?.title).toBe('My renamed draft');
+    expect(useArtifactsStore.getState().getArtifactVersions(id)).toHaveLength(1);
+    expect(toastMock.message).not.toHaveBeenCalled();
+  });
+
+  it('uses the neutral hidden-work notice and clears before delivering it', () => {
+    const id = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
+    const store = useArtifactsStore.getState();
+    store.upsertArtifact({ id, messageId: MESSAGE_ID, type: 'html', language: 'html', title: 'Saved', content: '<div>same' });
+    store.renameArtifact(id, 'Renamed');
+    store.removeArtifact(id);
+    const { rerender, unmount } = renderHook(
+      ({ isStreaming }: { isStreaming: boolean }) => useStreamingArtifactSync({
+        messageId: MESSAGE_ID, conversationId: CONVERSATION_ID, isStreaming,
+        block: blockFor('```html\n<div>same'),
+      }),
+      { initialProps: { isStreaming: true } },
+    );
+    toastMock.message.mockImplementationOnce(() => {
+      expect(useStreamingArtifactStore.getState().streaming).toBeNull();
+    });
+    rerender({ isStreaming: false });
+    rerender({ isStreaming: false });
+    unmount();
+    expect(toastMock.message).toHaveBeenCalledExactlyOnceWith('New partial output was not saved.');
+    expect(useArtifactsStore.getState().artifacts).toEqual([]);
+  });
+
+  it('preserves settled-id work without reopening a dismissed panel', () => {
+    const id = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
+    useArtifactsStore.getState().upsertArtifact({ id, messageId: MESSAGE_ID, type: 'html', language: 'html', title: 'Saved', content: 'My work' });
+    const { rerender } = renderHook(
+      ({ conversationId, isStreaming }: { conversationId: string; isStreaming: boolean }) => useStreamingArtifactSync({
+        messageId: MESSAGE_ID, conversationId, isStreaming, block: blockFor('```html\n<div>later'),
+      }),
+      { initialProps: { conversationId: 'temporary', isStreaming: true } },
+    );
+    useArtifactsStore.getState().setPanelOpen(false);
+    rerender({ conversationId: CONVERSATION_ID, isStreaming: true });
+    rerender({ conversationId: CONVERSATION_ID, isStreaming: false });
+    expect(useArtifactsStore.getState().panelOpen).toBe(false);
+    expect(useArtifactsStore.getState().selectedArtifactId).toBe(id);
+    expect(useArtifactsStore.getState().artifacts).toEqual([expect.objectContaining({ id, content: 'My work' })]);
+    expect(toastMock.message).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retain an old snapshot under a different message', () => {
+    const { rerender } = renderHook(
+      ({ messageId, isStreaming }: { messageId: string; isStreaming: boolean }) => useStreamingArtifactSync({
+        messageId, conversationId: CONVERSATION_ID, isStreaming, block: blockFor('```html\n<div>partial'),
+      }),
+      { initialProps: { messageId: MESSAGE_ID, isStreaming: true } },
+    );
+    rerender({ messageId: 'other-message', isStreaming: false });
+    expect(useArtifactsStore.getState().artifacts).toEqual([]);
+    expect(useStreamingArtifactStore.getState().streaming).toBeNull();
+    expect(toastMock.message).not.toHaveBeenCalled();
+  });
+
+  it('does not clear a different message stream during stale cleanup', () => {
+    const first = renderHook(() => useStreamingArtifactSync({
+      messageId: MESSAGE_ID, conversationId: CONVERSATION_ID, isStreaming: true, block: blockFor('```html\n<div>first'),
+    }));
+    const second = renderHook(() => useStreamingArtifactSync({
+      messageId: 'other-message', conversationId: CONVERSATION_ID, isStreaming: true, block: blockFor('```html\n<div>second'),
+    }));
+    first.unmount();
+    expect(useStreamingArtifactStore.getState().streaming?.messageId).toBe('other-message');
+    expect(useArtifactsStore.getState().artifacts).toEqual([]);
+    expect(toastMock.message).not.toHaveBeenCalled();
+    second.unmount();
   });
 });

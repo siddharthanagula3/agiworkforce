@@ -201,9 +201,8 @@ export interface ArtifactData {
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
   /**
-   * The stream producing this artifact stopped before its fence closed, so the
-   * content is everything that arrived and not the finished document. Set by
-   * the streaming sync hook when it persists the partial.
+   * Saved from an unclosed response fence. This marker does not establish
+   * ownership of the content or whether later output has been retained.
    */
   interrupted?: boolean;
 }
@@ -214,7 +213,7 @@ const SOURCE_LANGUAGE_FOR_TYPE: Partial<Record<ArtifactData['type'], string>> = 
 };
 
 const INTERRUPTED_ARTIFACT_NOTICE =
-  'This artifact stopped before it finished. What arrived is kept below; regenerate for the whole document.';
+  'This artifact was saved from a partial response. It may not include later output.';
 
 export interface ArtifactPublishSelection {
   content: string;
@@ -2773,7 +2772,7 @@ export function ArtifactPreview({
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span className="min-w-0 text-xs">
               {awaitingApproval
-                ? 'This artifact is partial while the response awaits approval.'
+                ? 'This saved artifact is partial. The response awaits approval, and this copy may not include later output.'
                 : INTERRUPTED_ARTIFACT_NOTICE}
             </span>
           </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   computeDerivedArtifactId,
   detectArtifactType,
@@ -55,18 +56,17 @@ export function useStreamingArtifactSync({
 
     if (!isStreaming || !block) {
       const streamed = streamedRef.current;
+      let notice: string | undefined;
       // Either the fence closed, whichever side of the turn ending that
       // happened on, or the turn ended with it open. Only the second is worth
       // keeping, and the snapshot is spent either way.
       streamedRef.current = null;
       // The turn ended with a fence this hook watched open and never saw close.
-      // Persist what arrived under the id the finished artifact would have
-      // taken, so the panel keeps showing it instead of going blank and the
-      // reader can copy or regenerate from it. The id is derived here rather
-      // than reused from the snapshot: a first turn streams under a client-only
-      // conversation id and settles under the real one.
+      // The settled id can already belong to saved work. Only retain a new
+      // artifact; deriving the id here also handles a temporary conversation
+      // that settled under its real id at the end of the turn.
       if (block && streamed) {
-        useArtifactsStore.getState().upsertArtifact({
+        const retained = useArtifactsStore.getState().retainPartialArtifact({
           id: computeDerivedArtifactId(conversationId, messageId, streamed.ordinal),
           type: streamed.type,
           title: streamed.title ?? INTERRUPTED_ARTIFACT_TITLE,
@@ -76,8 +76,14 @@ export function useStreamingArtifactSync({
           conversationId,
           interrupted: true,
         });
+        if (retained === 'preserved') {
+          notice = 'New partial output was not saved over the existing artifact.';
+        } else if (retained === 'blocked') {
+          notice = 'New partial output was not saved.';
+        }
       }
       store.clearStreamingArtifact(messageId);
+      if (notice) toast.message(notice);
       return;
     }
 

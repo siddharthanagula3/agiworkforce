@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
-const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), message: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMock }));
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
@@ -61,7 +61,8 @@ describe('WEB-USE-STREAMING-ARTIFACT-INTERRUPTING-01 · transcript card', () => 
 
     render(<MessageBubble message={assistantMessage()} onRegenerate={onRegenerate} />);
 
-    expect(screen.getByTestId(NOTICE).textContent).toMatch(/stopped before it finished/i);
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('saved from a partial response');
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('may not include later output');
 
     await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
 
@@ -121,7 +122,8 @@ describe('partial artifact approval presentation', () => {
     const onRegenerate = vi.fn();
     render(<MessageBubble message={{ ...assistantMessage(), metadata }} onRegenerate={onRegenerate} />);
     const notice = screen.getByTestId(NOTICE);
-    expect(notice).toHaveTextContent('partial while the response awaits approval');
+    expect(notice).toHaveTextContent('This saved artifact is partial. The response awaits approval');
+    expect(notice).toHaveTextContent('may not include later output');
     expect(notice).not.toHaveTextContent(/stopped|regenerate/i);
     expect(within(notice).queryByRole('button')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Regenerate response' })).toBeNull();
@@ -153,7 +155,7 @@ describe('partial artifact approval presentation', () => {
           onRegenerate={onRegenerate}
         />,
       );
-      expect(screen.getByTestId(NOTICE)).toHaveTextContent('stopped before it finished');
+      expect(screen.getByTestId(NOTICE)).toHaveTextContent('saved from a partial response');
       await userEvent.click(within(screen.getByTestId(NOTICE)).getByRole('button', { name: 'Regenerate' }));
       expect(onRegenerate).toHaveBeenCalledWith(MESSAGE_ID);
       expect(pending.metadata.cloudApproval.calls[0]).not.toHaveProperty('approvalDecision');
@@ -211,7 +213,7 @@ describe('partial artifact lifecycle boundaries (characterization)', () => {
       content: '```html\n<!DOCTYPE html>\n<html>\n<head><title>Finished page</title></head>\n<body><main><h1>Complete</h1><p>The complete document.</p></main></body>\n</html>\n```',
     };
     render(<MessageBubble message={message} onRegenerate={vi.fn()} />);
-    expect(screen.getByTestId(NOTICE)).toHaveTextContent('stopped before it finished');
+    expect(screen.getByTestId(NOTICE)).toHaveTextContent('saved from a partial response');
     const artifact = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID).find((item) => item.id === id);
     expect(artifact?.content).toBe('<!DOCTYPE html>\n<html>\n<body>');
     expect(artifact?.interrupted).toBe(true);

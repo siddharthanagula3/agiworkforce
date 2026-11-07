@@ -75,15 +75,15 @@ export interface Artifact extends ArtifactData {
   conversationId?: string;
   createdAt: Date;
   /**
-   * The stream that was producing this artifact stopped before the fence
-   * closed, so the content is everything that arrived and not the whole
-   * document. Web-only, carried in the side map because the shared artifact
-   * wire has no field for it.
+   * Saved from an unclosed response fence. This marker does not establish
+   * ownership of the content or whether later output has been retained.
+   * Web-only because the shared artifact wire has no field for it.
    */
   interrupted?: boolean;
 }
 
 type ArtifactInput = Omit<Artifact, 'createdAt'> & { createdAt?: Date };
+type PartialArtifactRetention = 'created' | 'unchanged' | 'preserved' | 'blocked';
 
 let _sideMap: Record<string, WebSideEntry> = {};
 let _cloudArtifacts: CloudArtifact[] = [];
@@ -477,6 +477,7 @@ type ArtifactsStoreReturn = {
     conversationId?: string,
   ) => void;
   upsertArtifact: (artifact: ArtifactInput) => void;
+  retainPartialArtifact: (artifact: ArtifactInput) => PartialArtifactRetention;
   removeArtifact: (id: string) => void;
   selectArtifact: (id: string | null) => void;
   openArtifactForEditing: (id: string) => void;
@@ -506,6 +507,29 @@ type ArtifactsStoreReturn = {
 };
 
 const actions = {
+  retainPartialArtifact(artifact: ArtifactInput): PartialArtifactRetention {
+    const { id } = artifact;
+    const engine = _sharedArtifactStore.getState();
+    const known =
+      engine.artifacts.some((existing) => existing.id === id) ||
+      _cloudArtifacts.some((existing) => existing.id === id) ||
+      (engine.versionsById[id]?.length ?? 0) > 0 ||
+      Object.prototype.hasOwnProperty.call(_conflictsById, id) ||
+      _inFlightPushById.has(id) ||
+      Object.prototype.hasOwnProperty.call(_rejectedPushContentById, id) ||
+      _renamedHereIds.has(id) ||
+      Object.prototype.hasOwnProperty.call(_sideMap, id);
+
+    if (known) {
+      const visible = mergedArtifacts().find((existing) => existing.id === id);
+      if (!visible) return 'blocked';
+      return visible.content === artifact.content ? 'unchanged' : 'preserved';
+    }
+
+    actions.upsertArtifact(artifact);
+    return 'created';
+  },
+
   addArtifact(artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }): string {
     const id = artifact.id || crypto.randomUUID();
     const normalized = normalizeInput({ ...artifact, id });
