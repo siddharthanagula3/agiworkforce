@@ -15403,7 +15403,8 @@ audience receipts before onUpdated. The later common-cleanup lease correction
 below now fences enumerated writers across that boundary, not all account/session
 changes or other live controllers. A same-epoch stale confirmation may still
 execute DELETE and an already-started restore POST may finish; guards do not undo
-backend actions. Concurrent restore/unpublish ordering is separate. Loading hides
+backend actions. Restore recreation is separately corrected in
+WEB-SITE-RESTORE-REPUBLICATION-01; history and stale feedback remain open. Loading hides
 list cards and modal saving blocks close, so invented simultaneous-modal journeys
 are not evidence. Server access checks are unchanged; a stale cache cannot
 republish a deleted row. See WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01 for the later
@@ -15483,3 +15484,54 @@ including work awaiting CSRF, and initiated clipboard writes may dispatch/finish
 later; no rollback or server-access change is promised. Version Restore, data-clear
 and viewer-editor mutators/feedback, unrelated artifact provenance/cloud sync,
 same-field/global ordering and real browser account-switch acceptance remain open.
+
+## WEB-SITE-RESTORE-REPUBLICATION-01
+
+Severity: High. Bounded existing-publication Restore correction source-reviewed in
+`48155a459eb59c7c4b5ce25c466a66a86b710f98`, 2026-11-07. Runtime acceptance,
+client turnover, history concurrency and stale success feedback remain open.
+
+The old web and Mobile services read a historical snapshot and sent its bytes to
+generic Publish without the original token or conversation. If Unpublish deleted
+the original row before that upsert, Restore could create a new publication ID and
+token, normally public unless a matching live_artifacts row selected invited.
+The original token stayed dead; this is not old-link resurrection or evidence of
+token discovery. Prior conversation, grants, workspace shares, storage and history
+did not follow the new row. Web Restore left Unpublish available; Mobile's busy
+control limits same-screen overlap, but not another client/device or retired work.
+This is a source-qualified ordering, not an observed runtime incident.
+
+Both current clients now send a bodyless POST to the existing token/version
+resource without generic-Publish fallback. Mobile retains its authenticated API
+transport. The server joins the owner publication and selected historical snapshot
+in one query and derives all write identity from that source. A shared server-only
+preparation helper preserves conversation and workspace-share gates, snapshot-title
+moderation, outbound inspection/redaction, artifact context and secret policy.
+Ordinary Publish consumes that same helper without changing its contract.
+
+Restore persistence shares validation, quota and conversation-ownership preflight
+with Publish, then UPDATEs only matching owner, publication ID, artifact ID and
+original token. It never inserts, upserts or mints a token. Existing audience,
+conversation, createdAt and dependent relationships remain untouched; a current
+nonempty title is preserved. Missing initial source returns 404; an exact UPDATE
+miss returns 409 after earlier policy/validation gates permit. History is appended
+only after a successful update, using returned persisted title/content.
+
+Six production files and ten fixture/guard sources were independently reviewed.
+Predicate-sensitive adapter models cover both deletion orderings and identity
+replacement; request fixtures invoke actual handlers/services with boundary mocks.
+The existing E10 release source now uses canonical Restore, but was not executed.
+Safety source guards follow the canonical helper implementation and payload UPDATE
+writers, excluding metadata-only updates; they are lexical evidence, not complete
+control-flow or data-flow proof. All fixtures and guards remain UNRUN.
+
+Old loaded web bundles and older installed Mobile versions still use generic
+Publish until refreshed/upgraded. New callers have no fallback against an old
+GET-only backend; actual routing/OPTIONS/CORS rollout is unverified and installed
+Next guidance was unavailable. No migration is needed for this correction.
+Content UPDATE and history append remain separate: deletion or history failure can
+follow a committed update, and concurrent history/version-pointer writes remain
+unordered. Policy TOCTOU, uncertain outcomes, stale "live again" feedback, broader
+identity/transport binding and ordinary Publish concurrency are not repaired.
+No product tests, lint, typechecks, builds, installs, live DB/provider actions,
+push or deployment ran.

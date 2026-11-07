@@ -6574,3 +6574,34 @@ mutators and feedback, unrelated artifact sync/provenance and global ordering ar
 outside scope. No server authorization, actual cross-account disclosure, runtime
 acceptance, product checks, push or deployment is claimed. See
 WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01.
+
+## Historical Restore cannot create a replacement publication
+
+Accepted `48155a459eb59c7c4b5ce25c466a66a86b710f98` changes both current web and
+Mobile Restore producers to bodyless POST on the canonical token/version resource.
+Neither falls back to generic Publish. The version route joins the owner row and
+historical snapshot, prepares content through the same server-only sharing,
+moderation and outbound policy helper as ordinary Publish, then calls an
+UPDATE-only service bound to owner + publication ID + artifact ID + original token.
+No token is minted and no row is inserted. Current nonempty title, audience,
+conversation and dependent grant/storage relationships are retained.
+
+Deletion before the conditional write produces no replacement row. Initial source
+absence is 404; UPDATE miss is 409 after other gates permit. Deletion after the
+write still wins. History append follows successful content UPDATE separately,
+using returned title/content; this is not atomic history/version-pointer repair.
+The previous race created a fresh token, not restoration of the deleted link.
+
+Six production files and ten fixture/guard sources are independently source-reviewed.
+Authored adapter models bind SQL predicates and simulate ordering; handler/client
+fixtures mock external boundaries. Existing E10 source is adapted but UNRUN.
+Safety guards inspect actual imported helper source/order and content UPDATEs,
+not all control/data flow. No product checks, live DB/provider actions or rollout
+were performed; installed Next guidance was unavailable.
+
+Older loaded web bundles and older installed Mobile clients remain a rollout gap.
+New callers fail without generic fallback on unsupported servers, but actual
+framework routing/OPTIONS/CORS behavior is unverified. Separate history failures,
+policy TOCTOU, uncertain outcomes and later-delete success feedback remain open.
+See WEB-SITE-RESTORE-REPUBLICATION-01; common-cleanup identity/transport limits are
+still tracked separately. No migration, push or deployment is included.
