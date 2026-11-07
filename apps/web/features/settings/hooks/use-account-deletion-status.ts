@@ -3,6 +3,7 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient, type QueryClient, type QueryKey, type QueryState } from '@tanstack/react-query';
 import {
+  AccountDeletionScheduleCancellationRequestSchema,
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   NO_PENDING_ACCOUNT_DELETION,
   parseAccountDeletionStatus,
@@ -19,12 +20,16 @@ type ReaderOwner = {
   generation: number | null;
   retired: boolean;
   requests: Set<RequestAuthority>;
+  readSequence: number;
+  cancellationFence: number;
+  completedReadSequence: number;
 };
 type Envelope = {
   instance: string;
   incarnation: number;
   generation: number;
   status: AccountDeletionStatus;
+  readSequence: number;
 };
 declare const ownedSnapshot: unique symbol;
 export type OwnedAccountDeletionSnapshot = { readonly [ownedSnapshot]: true };
@@ -59,7 +64,25 @@ export function permitsAccountDeletionAction(
   const record = snapshot && snapshots.get(snapshot);
   if (!record || !ready(record) || !record.state.data) return false;
   const status = record.state.data.status;
-  return action === 'schedule' ? !status.pending : status.pending && status.canCancel;
+  return action === 'schedule' ? !status.pending : status.pending && status.canCancel &&
+    status.cancellationPrecondition === 'schedule-pair-v1' &&
+    record.state.data.readSequence > record.owner.cancellationFence &&
+    record.state.data.readSequence === record.owner.completedReadSequence;
+}
+
+export function captureAccountDeletionCancellationBody(snapshot: OwnedAccountDeletionSnapshot): string | null {
+  const record = snapshots.get(snapshot);
+  if (!record || !permitsAccountDeletionAction(snapshot, 'cancel') || !record.state.data) return null;
+  const { scheduledFor, requestedAt } = record.state.data.status;
+  const parsed = AccountDeletionScheduleCancellationRequestSchema.safeParse({
+    expectedSchedule: { scheduledFor, requestedAt },
+  });
+  return parsed.success ? JSON.stringify(parsed.data) : null;
+}
+
+export function fenceAccountDeletionCancellation(snapshot: OwnedAccountDeletionSnapshot) {
+  const record = snapshots.get(snapshot);
+  if (record?.current()) record.owner.cancellationFence = record.owner.readSequence;
 }
 
 export function createAccountDeletionRequest(
@@ -88,10 +111,12 @@ export function settleAccountDeletionCancellation(snapshot: OwnedAccountDeletion
 export async function refetchAccountDeletionSnapshot(snapshot: OwnedAccountDeletionSnapshot) {
   const record = snapshots.get(snapshot);
   if (!record?.current()) throw new DOMException('Deletion status reader retired', 'AbortError');
-  const before = record.client.getQueryState(record.key);
+  const readSequence = record.owner.readSequence;
+  await record.client.cancelQueries({ queryKey: record.key, exact: true });
+  if (!record.current()) throw new DOMException('Deletion status reader retired', 'AbortError');
   await record.client.refetchQueries({ queryKey: record.key, exact: true }, { throwOnError: true });
   const state = record.client.getQueryState<Envelope, Error>(record.key);
-  if (!state || state === before || !ready(record, state)) {
+  if (!state || !ready(record, state) || !state.data || state.data.readSequence <= readSequence) {
     throw new Error('Deletion status is not ready. Check the current status again.');
   }
 }
@@ -113,7 +138,7 @@ export function useAccountDeletionStatus(active = true) {
   if (active && !slot.current) {
     const session = capture();
     if (session) slot.current = {
-      session, incarnation: ++sequence.current, generation: null, retired: false, requests: new Set(),
+      session, incarnation: ++sequence.current, generation: null, retired: false, requests: new Set(), readSequence: 0, cancellationFence: 0, completedReadSequence: 0,
     };
   }
   const owner = slot.current;
@@ -157,6 +182,7 @@ export function useAccountDeletionStatus(active = true) {
       if (!owner || generation == null || !current() || signal.aborted) {
         throw new DOMException('Deletion status reader retired', 'AbortError');
       }
+      const readSequence = ++owner.readSequence;
       const timeout = AbortSignal.timeout(TimeoutPresets.FAST);
       const abort = AbortSignal.any([signal, timeout]);
       const request = createRequestAuthority(owner.session, () => current() && !abort.aborted);
@@ -172,7 +198,8 @@ export function useAccountDeletionStatus(active = true) {
         if (!response.ok) throw new Error('Unable to check account deletion status.');
         const status = parseAccountDeletionStatus(body);
         request.assertCurrent();
-        return { instance, incarnation: owner.incarnation, generation, status };
+        owner.completedReadSequence = readSequence;
+        return { instance, incarnation: owner.incarnation, generation, status, readSequence };
       } finally {
         abort.removeEventListener('abort', request.retire);
         owner.requests.delete(request);

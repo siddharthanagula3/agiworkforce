@@ -40,7 +40,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 
 const prefix = queryKeys.settings.accountDeletionStatus();
 const pending = {
-  pending: true, canCancel: true, requestedAt: null, scheduledFor: '2026-11-08T12:00:00.000Z',
+  cancellationPrecondition: 'schedule-pair-v1' as const, pending: true, canCancel: true, requestedAt: null, scheduledFor: '2026-11-08T12:00:00.000Z',
 };
 const json = (body: unknown) => new Response(JSON.stringify(body));
 const fetchMock = vi.fn<typeof fetch>();
@@ -72,7 +72,7 @@ beforeEach(() => {
   native.listeners.clear();
   switchSession();
   client = new QueryClient({ defaultOptions: { queries: { retry: 3, retryDelay: 1 }, mutations: { retry: 3 } } });
-  fetchMock.mockReset().mockImplementation(async (_input, init) => json(init?.method === 'POST'
+  fetchMock.mockReset().mockImplementation(async (_input, init) => json(init?.method === 'PUT'
     ? { message: 'Account deletion cancelled.', cancelled: true } : pending));
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -168,9 +168,9 @@ describe('native-session owned deletion status and admissions (UNRUN)', () => {
     let intent!: AccountDeletionCancellationIntent;
     act(() => { intent = first.result.current.cancellation.begin(first.result.current.reader.snapshot)!; });
     const receipt = deferred<Response>();
-    fetchMock.mockImplementation(async (_input, init) => init?.method === 'POST' ? receipt.promise : json(NO_PENDING_ACCOUNT_DELETION));
+    fetchMock.mockImplementation(async (_input, init) => init?.method === 'PUT' ? receipt.promise : json(NO_PENDING_ACCOUNT_DELETION));
     act(() => intent.confirm());
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1));
     act(() => client.setQueryData(firstKey, client.getQueryData(firstKey), { updatedAt: 10 }));
     await act(async () => receipt.resolve(json({ message: 'Account deletion cancelled.', cancelled: true })));
     await waitFor(() => expect(first.result.current.cancellation.needsStatusCheck).toBe(true));
@@ -178,7 +178,7 @@ describe('native-session owned deletion status and admissions (UNRUN)', () => {
     expect(first.result.current.reader.data).toEqual(NO_PENDING_ACCOUNT_DELETION);
     expect(second.result.current.reader.data).toEqual(pending);
     expect(secondQuery.state).toBe(secondState);
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(3);
     first.unmount();
     expect(permitsAccountDeletionAction(second.result.current.reader.snapshot, 'cancel')).toBe(true);

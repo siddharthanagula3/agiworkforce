@@ -62,7 +62,7 @@ vi.mock('@/features/auth/StepUpDialog', async (importOriginal) => ({
 
 const DELETE_PATH = '/api/user/delete-account';
 const GRANT_PATH = '/api/auth/step-up';
-const CANCEL_PATH = '/api/user/delete-account/cancel';
+const CANCEL_PATH = '/api/user/delete-account/cancel-schedule';
 const fetchMock = vi.fn<typeof fetch>();
 let client: QueryClient;
 let deletion: ReturnType<typeof useDeleteAccount>;
@@ -70,6 +70,7 @@ let cancellation: ReturnType<typeof useCancelAccountDeletion>;
 let statusReader: ReturnType<typeof useAccountDeletionStatus>;
 
 const pendingStatus = {
+  cancellationPrecondition: 'schedule-pair-v1',
   pending: true, canCancel: true,
   requestedAt: '2026-11-05T12:00:00.000Z', scheduledFor: '2026-11-06T12:00:00.000Z',
 };
@@ -329,7 +330,7 @@ describe('account deletion mutation receipts with production retry defaults', ()
     await beyondRetryWindow();
     expect(cancellation.isSuccess).toBe(false);
     expect(toUserMessage(cancellation.error, 'fallback')).toBe(
-      'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.',
+      'We could not confirm the cancellation outcome. Check the current status, then open a new confirmation before trying again.',
     );
     expect(statusReader.data).toEqual(pendingStatus);
     expect(fetchMock).toHaveBeenCalledTimes(1);

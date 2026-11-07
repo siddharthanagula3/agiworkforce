@@ -20,7 +20,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 
 let key: readonly unknown[];
 const pending: AccountDeletionStatus = {
-  pending: true, canCancel: true, requestedAt: '2026-11-07T12:00:00.000Z', scheduledFor: '2026-11-08T12:00:00.000Z',
+  cancellationPrecondition: 'schedule-pair-v1', pending: true, canCancel: true, requestedAt: '2026-11-07T12:00:00.000Z', scheduledFor: '2026-11-08T12:00:00.000Z',
 };
 const receipt = { message: 'Account deletion cancelled.', cancelled: true };
 const fetchMock = vi.fn<typeof fetch>();
@@ -101,11 +101,14 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     act(() => { intent.confirm(); intent.confirm(); });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/user/delete-account/cancel');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/user/delete-account/cancel-schedule');
     const init = fetchMock.mock.calls[0]?.[1];
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer captured-token');
     expect(new Headers(init?.headers).get('x-csrf-token')).toBe('csrf');
     expect(init?.credentials).toBe('omit');
+    expect(init?.method).toBe('PUT');
+    expect(init?.redirect).toBe('error');
+    expect(JSON.parse(String(init?.body))).toEqual({ expectedSchedule: { scheduledFor: pending.scheduledFor, requestedAt: pending.requestedAt } });
     expect(client.getQueryData<{ status: AccountDeletionStatus }>(key)?.status).toEqual(NO_PENDING_ACCOUNT_DELETION);
     expect(result.current.needsStatusCheck).toBe(false);
     expect(intent.isCurrent()).toBe(true);
@@ -163,6 +166,23 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     act(() => intent.confirm());
     expect(fetchMock).not.toHaveBeenCalled();
     expect(intent.canConfirm()).toBe(false);
+  });
+
+  it.each(['csrf', 'token'] as const)('blocks invalidation during %s without replacing the captured body (UNRUN)', async (stage) => {
+    const csrf = deferred<HeadersInit>();
+    const auth = deferred<string | null>();
+    const { intent, result } = await setup();
+    if (stage === 'csrf') mocks.csrf.mockReturnValue(csrf.promise);
+    else token.mockReturnValue(auth.promise);
+    act(() => intent.confirm());
+    await waitFor(() => expect(stage === 'csrf' ? mocks.csrf : token).toHaveBeenCalledTimes(1));
+    await act(async () => { await client.invalidateQueries({ queryKey: key, exact: true, refetchType: 'none' }); });
+    await act(async () => { csrf.resolve({}); auth.resolve('captured-token'); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/Cancellation was not sent/);
+    expect(result.current.needsStatusCheck).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
   });
 
   it.each(['response', 'json'] as const)('preserves newer cache and known receipt after delayed %s', async (stage) => {
@@ -271,6 +291,10 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     await act(async () => {
       await client.cancelQueries({ queryKey: key, exact: true });
     });
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET'
+      ? Promise.resolve(response(pending)) : fetchMock(input, init));
+    await act(async () => { await result.current.reader.refetch(); });
     let replacement!: AccountDeletionCancellationIntent;
     act(() => { replacement = result.current.begin(result.current.reader.snapshot)!; });
     await act(async () => { status.resolve(NO_PENDING_ACCOUNT_DELETION); await checking; });
@@ -300,12 +324,118 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     await waitFor(() => expect(readBody).toHaveBeenCalledTimes(1));
     rerender({ active: false });
     rerender({ active: true });
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
+    await act(async () => { body.resolve({ error: 'The cancellation window has closed.' }); });
+    await act(async () => { await result.current.reader.refetch(); });
     let fresh!: AccountDeletionCancellationIntent;
     act(() => { fresh = result.current.begin(result.current.reader.snapshot)!; });
-    await act(async () => { body.resolve({ error: 'The cancellation window has closed.' }); });
     expect(fresh.isCurrent()).toBe(true);
     expect(result.current.error).toBeNull();
     expect(result.current.isPending).toBe(false);
+  });
+
+  it.each([null, '2026-11-07T12:00:00.654321Z'])('captures exact microseconds and explicit requestedAt=%s at open (UNRUN)', async (requestedAt) => {
+    const exact = { ...pending, requestedAt, scheduledFor: '2026-11-08T12:00:00.123456Z' };
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET'
+      ? Promise.resolve(response(exact)) : fetchMock(input, init));
+    const { intent, result } = await setup();
+    act(() => intent.confirm());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ expectedSchedule: {
+      scheduledFor: exact.scheduledFor, requestedAt,
+    } }));
+  });
+
+  it('displays legacy status but cannot open protected cancellation without the exact marker (UNRUN)', async () => {
+    const { cancellationPrecondition: _marker, ...legacy } = pending;
+    vi.mocked(globalThis.fetch).mockImplementation(async () => response(legacy));
+    const hook = renderHook(() => ({ reader: useAccountDeletionStatus(), cancellation: useCancelAccountDeletion() }), { wrapper });
+    await waitFor(() => expect(hook.result.current.reader.data).toEqual(legacy));
+    expect(permitsAccountDeletionAction(hook.result.current.reader.snapshot, 'cancel')).toBe(false);
+    expect(hook.result.current.cancellation.begin(hook.result.current.reader.snapshot)).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: '404 missing route', reply: () => new Response(null, { status: 404 }) },
+    { label: '405 missing PUT', reply: () => new Response(null, { status: 405 }) },
+    { label: '401', reply: () => new Response(null, { status: 401 }) },
+    { label: '409 changed schedule', reply: () => new Response(JSON.stringify({ reason: 'schedule_changed', error: 'Changed.' }), { status: 409 }) },
+    { label: '500 after possible commit', reply: () => new Response(null, { status: 500 }) },
+    { label: 'malformed receipt', reply: () => response({}) },
+    { label: 'parent GET response', reply: () => response(NO_PENDING_ACCOUNT_DELETION) },
+    { label: 'timeout', reply: (): Response => { throw new DOMException('Timed out', 'TimeoutError'); } },
+    { label: 'redirect failure', reply: (): Response => { throw new TypeError('Failed to fetch'); } },
+  ])('fences same-state close/reopen after $label with no fallback or replay (UNRUN)', async ({ label, reply }) => {
+    fetchMock.mockImplementation(async () => reply());
+    const { intent, result, rerender } = await setup();
+    const original = result.current.reader.snapshot;
+    act(() => { intent.confirm(); intent.confirm(); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.needsStatusCheck).toBe(true);
+    if (label === '409 changed schedule') expect(result.current.error?.message).toMatch(/schedule changed/);
+    act(() => intent.dismiss());
+    rerender({ active: false });
+    rerender({ active: true });
+    expect(result.current.begin(original)).toBeNull();
+    act(() => client.setQueryData(key, client.getQueryData(key), { updatedAt: 99 }));
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
+    await act(async () => { await result.current.reader.refetch(); });
+    let next!: AccountDeletionCancellationIntent;
+    act(() => { next = result.current.begin(result.current.reader.snapshot)!; });
+    expect(next.canConfirm()).toBe(true);
+    act(() => intent.confirm());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/user/delete-account/cancel-schedule');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'PUT', redirect: 'error' });
+    expect(token.mock.calls.every(([options]) => options?.skipCache !== true)).toBe(true);
+  });
+
+  it('rejects a delayed read started before refusal, even after unrelated query transitions (UNRUN)', async () => {
+    const reply = deferred<Response>();
+    fetchMock.mockReturnValue(reply.promise);
+    const { intent, result } = await setup();
+    act(() => intent.confirm());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const delayed = deferred<Response>();
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET'
+      ? delayed.promise : fetchMock(input, init));
+    let reading!: Promise<void>;
+    act(() => { reading = result.current.reader.refetch(); });
+    await waitFor(() => expect(result.current.reader.isFetching).toBe(true));
+    await act(async () => { reply.resolve(new Response(null, { status: 409 })); });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    await act(async () => { delayed.resolve(response(pending)); await reading; });
+    act(() => intent.dismiss());
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
+    act(() => client.setQueryData(key, client.getQueryData(key), { updatedAt: 100 }));
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET'
+      ? Promise.resolve(response(pending)) : fetchMock(input, init));
+    await act(async () => { await result.current.reader.refetch(); });
+    expect(permitsAccountDeletionAction(result.current.reader.snapshot, 'cancel')).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed recovery stays fenced and a later no-pending GET never proves ambiguous cancellation succeeded (UNRUN)', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const { intent, result } = await setup();
+    act(() => intent.confirm());
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET'
+      ? Promise.resolve(response({})) : fetchMock(input, init));
+    await act(async () => { await intent.checkCurrentStatus(); });
+    expect(result.current.needsStatusCheck).toBe(true);
+    expect(result.current.begin(result.current.reader.snapshot)).toBeNull();
+    vi.mocked(globalThis.fetch).mockImplementation((input, init) => init?.method === 'GET'
+      ? Promise.resolve(response(NO_PENDING_ACCOUNT_DELETION)) : fetchMock(input, init));
+    await act(async () => { await intent.checkCurrentStatus(); });
+    expect(result.current.needsStatusCheck).toBe(false);
+    expect(result.current.reader.data).toEqual(NO_PENDING_ACCOUNT_DELETION);
+    expect(result.current.isSuccess).toBe(false);
+    expect(result.current.data).toBeUndefined();
+    expect(intent.canConfirm()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('creates a fresh layout generation in StrictMode instead of reviving earlier handles', async () => {

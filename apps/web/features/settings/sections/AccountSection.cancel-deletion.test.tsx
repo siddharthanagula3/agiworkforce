@@ -3,7 +3,7 @@
  * useAccountDeletionStatus / useCancelAccountDeletion hooks (not stubs).
  * matching how AccountSection.delete.test.tsx exercises useDeleteAccount for
  * real. Pins: the pending state renders with its deadline, the cancel
- * control is wired to POST /api/user/delete-account/cancel behind the app's
+ * control is wired to PUT /api/user/delete-account/cancel-schedule behind the app's
  * confirm-dialog pattern, a successful cancel restores the normal
  * delete-account UI without a manual page refresh, and a failed cancel
  * surfaces an honest error while leaving the account still scheduled.
@@ -94,7 +94,7 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
 
   it('renders the pending state with its deadline instead of the delete trigger', async () => {
     stubFetch({
-      pending: true,
+      cancellationPrecondition: 'schedule-pair-v1', pending: true,
       canCancel: true,
       requestedAt: new Date().toISOString(),
       scheduledFor: FUTURE_DEADLINE,
@@ -111,7 +111,7 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
 
   it('shows the pending state without a cancel control once the grace window has closed', async () => {
     stubFetch({
-      pending: true,
+      cancellationPrecondition: 'schedule-pair-v1', pending: true,
       canCancel: false,
       requestedAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
       scheduledFor: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
@@ -132,13 +132,13 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
   it('cancels the deletion and restores the normal delete-account UI without a manual refresh', async () => {
     stubFetch(
       {
-        pending: true,
+        cancellationPrecondition: 'schedule-pair-v1', pending: true,
         canCancel: true,
         requestedAt: new Date().toISOString(),
         scheduledFor: FUTURE_DEADLINE,
       },
       (url, init) => {
-        if (url === '/api/user/delete-account/cancel' && init?.method === 'POST') {
+        if (url === '/api/user/delete-account/cancel-schedule' && init?.method === 'PUT') {
           return jsonResponse({
             message: 'Account deletion cancelled. Your account is fully restored.',
             cancelled: true,
@@ -161,13 +161,13 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
   it('surfaces a server error on the cancel dialog and leaves the account still scheduled', async () => {
     stubFetch(
       {
-        pending: true,
+        cancellationPrecondition: 'schedule-pair-v1', pending: true,
         canCancel: true,
         requestedAt: new Date().toISOString(),
         scheduledFor: FUTURE_DEADLINE,
       },
       (url, init) => {
-        if (url === '/api/user/delete-account/cancel' && init?.method === 'POST') {
+        if (url === '/api/user/delete-account/cancel-schedule' && init?.method === 'PUT') {
           return jsonResponse(
             {
               error: 'The cancellation window has closed. This does not confirm that erasure is complete.',
@@ -202,23 +202,23 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     }) },
   ])('leaves the schedule and confirmation dialog intact after $label', async ({ reply }) => {
     stubFetch({
-      pending: true, canCancel: true, requestedAt: new Date().toISOString(), scheduledFor: FUTURE_DEADLINE,
-    }, (url, init) => url === '/api/user/delete-account/cancel' && init?.method === 'POST' ? reply() : null);
+      cancellationPrecondition: 'schedule-pair-v1', pending: true, canCancel: true, requestedAt: new Date().toISOString(), scheduledFor: FUTURE_DEADLINE,
+    }, (url, init) => url === '/api/user/delete-account/cancel-schedule' && init?.method === 'PUT' ? reply() : null);
     renderAccountSection();
     fireEvent.click(await screen.findByTestId('cancel-deletion-trigger'));
     fireEvent.click(await screen.findByTestId('cancel-deletion-confirm'));
     expect(await screen.findByText(
-      'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.',
+      'We could not confirm the cancellation outcome. Check the current status, then open a new confirmation before trying again.',
     )).toBeInTheDocument();
     expect(screen.getByTestId('pending-deletion-title')).toBeInTheDocument();
-    expect(screen.getByTestId('cancel-deletion-confirm')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check current status' })).toBeInTheDocument();
     expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();
   });
 
   it('accepts the server confirmation that no deletion is pending without claiming it cancelled one', async () => {
     stubFetch({
-      pending: true, canCancel: true, requestedAt: new Date().toISOString(), scheduledFor: FUTURE_DEADLINE,
-    }, (url, init) => url === '/api/user/delete-account/cancel' && init?.method === 'POST'
+      cancellationPrecondition: 'schedule-pair-v1', pending: true, canCancel: true, requestedAt: new Date().toISOString(), scheduledFor: FUTURE_DEADLINE,
+    }, (url, init) => url === '/api/user/delete-account/cancel-schedule' && init?.method === 'PUT'
       ? jsonResponse({ message: 'No account deletion is pending.', cancelled: false }) : null);
     renderAccountSection();
     fireEvent.click(await screen.findByTestId('cancel-deletion-trigger'));
@@ -232,13 +232,13 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
   it('does not expose operator details from a failed cancellation', async () => {
     stubFetch(
       {
-        pending: true,
+        cancellationPrecondition: 'schedule-pair-v1', pending: true,
         canCancel: true,
         requestedAt: new Date().toISOString(),
         scheduledFor: FUTURE_DEADLINE,
       },
       (url, init) =>
-        url === '/api/user/delete-account/cancel' && init?.method === 'POST'
+        url === '/api/user/delete-account/cancel-schedule' && init?.method === 'PUT'
           ? jsonResponse({ error: 'HTTP 500: SELECT secret FROM profiles' }, 500)
           : null,
     );
@@ -248,8 +248,21 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     fireEvent.click(await screen.findByTestId('cancel-deletion-trigger'));
     fireEvent.click(await screen.findByTestId('cancel-deletion-confirm'));
 
-    expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
+    expect(await screen.findByText(/could not confirm the cancellation outcome/i)).toBeInTheDocument();
     expect(screen.queryByText(/SELECT secret/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the deadline visible without inventing expiry when protected cancellation is unavailable (UNRUN)', async () => {
+    stubFetch({ pending: true, canCancel: true, requestedAt: null, scheduledFor: FUTURE_DEADLINE });
+    renderAccountSection();
+    expect(await screen.findByTestId('pending-deletion-title')).toBeInTheDocument();
+    expect(screen.getByText(/Protected cancellation is unavailable/)).toBeInTheDocument();
+    expect(screen.getByTestId('cancel-deletion-trigger')).toBeDisabled();
+    expect(screen.queryByText(/cancellation window has closed/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Check current status' }));
+    await waitFor(() => expect(vi.mocked(globalThis.fetch).mock.calls.filter(([input, init]) =>
+      String(input) === '/api/user/delete-account' && init?.method === 'GET')).toHaveLength(2));
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([, init]) => init?.method === 'PUT' || init?.method === 'POST')).toBe(false);
   });
 
   it('shows the normal delete-account trigger when nothing is pending', async () => {

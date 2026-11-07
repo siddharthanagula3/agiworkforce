@@ -69,8 +69,10 @@ describe('delete-account dialog matches what deletion actually does', () => {
   it('keeps both route modes server-selected and delegated to the shared handler', () => {
     expect(cancelRoute).toContain("from '@/lib/server/account-deletion-cancellation'");
     expect(cancelScheduleRoute).toContain("from '@/lib/server/account-deletion-cancellation'");
+    expect(cancelScheduleRoute).not.toMatch(/export (?:async function|const|\{)[^\n]*POST/);
+    expect(cancelRoute).not.toMatch(/export (?:async function|const|\{)[^\n]*PUT/);
     expect(cancelRoute).toMatch(/export async function POST\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'legacy' \}\);\s*\}/);
-    expect(cancelScheduleRoute).toMatch(/export async function POST\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'required-pair' \}\);\s*\}/);
+    expect(cancelScheduleRoute).toMatch(/export async function PUT\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'required-pair' \}\);\s*\}/);
   });
 
 });

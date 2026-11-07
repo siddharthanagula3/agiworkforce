@@ -439,10 +439,18 @@ export function AccountSection({ emailEditorActive = true, deletionActionsActive
                     : null,
                 )}. ${
                   deletionStatus.data?.canCancel
-                    ? 'You can cancel any time before then.'
+                    ? deletionStatus.data.cancellationPrecondition === 'schedule-pair-v1'
+                      ? 'You can cancel any time before then.'
+                      : 'Protected cancellation is unavailable. Check the current status again before cancelling.'
                     : 'The cancellation window has closed.'
                 } Erasure is processed after the deadline and may take longer.`}
               >
+                {deletionStatus.data?.canCancel && !canCancelDeletion && (
+                  <button type="button" disabled={deletionStatus.isFetching} style={outlineButtonStyle}
+                    onClick={() => { void deletionStatus.refetch(); }}>
+                    Check current status
+                  </button>
+                )}
                 {deletionStatus.data?.canCancel && (
                   <button
                     type="button"
@@ -982,10 +990,12 @@ export function AccountSection({ emailEditorActive = true, deletionActionsActive
           )}
           {cancelDeletionMutation.needsStatusCheck && (
             <p role="status" className="text-sm text-muted-foreground">
-              {cancelDeletionMutation.data?.cancelled
-                ? 'The cancellation request completed.'
-                : 'The server reported no pending deletion for this request.'}{' '}
-              Deletion status changed while this request was in progress. Check the current status before taking another action.
+              {cancelDeletionMutation.data
+                ? cancelDeletionMutation.data.cancelled
+                  ? 'The cancellation request completed.'
+                  : 'The server reported no pending deletion for this request.'
+                : 'Cancellation has not been confirmed.'}{' '}
+              Check the current status before taking another action. A new confirmation is required to try cancellation again.
             </p>
           )}
           <AlertDialogFooter>

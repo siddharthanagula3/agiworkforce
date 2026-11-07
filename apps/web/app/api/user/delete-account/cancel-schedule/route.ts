@@ -5,7 +5,7 @@ import { handleAccountDeletionCancellation, accountDeletionCancellationOptions }
 
 export const runtime = 'nodejs';
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   return handleAccountDeletionCancellation(request, { kind: 'required-pair' });
 }
 

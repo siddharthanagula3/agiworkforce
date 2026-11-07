@@ -297,6 +297,7 @@ describe('CSRF coverage on state-changing routes', () => {
 
   it.each(['cancel', 'cancel-schedule'])('includes account deletion %s in the shared-gate scan', (route) => {
     const src = fs.readFileSync(path.join(API_ROOT, 'user/delete-account', route, 'route.ts'), 'utf8');
+    expect(src).toContain(`export async function ${route === 'cancel-schedule' ? 'PUT' : 'POST'}(`);
     expect(MUTATING.test(src)).toBe(true);
     expect(src).toContain("from '@/lib/server/account-deletion-cancellation'");
     expect(checksCsrf(src)).toBe(true);
