@@ -7311,7 +7311,29 @@ proof. URL origin and full metadata semantics are not certified.
 Confirmation, lease/view/revision/mutation guards, non-2xx/transport handling,
 automatic lookup and ambient CSRF/cookie credentials remain unchanged. No new
 retry, recovery read, durable uncertainty or permission expansion is added.
-Earlier displayed/cache knowledge may remain after unknown PATCH. Mobile chat,
-legacy Sites binding and DELETE receipt behavior remain outside this slice.
+Earlier displayed/cache knowledge may remain after unknown PATCH. Mobile chat
+receipt adoption follows below; legacy Sites binding and DELETE receipt behavior
+remain outside this slice.
 Fixtures are authored/adapted UNRUN; no product checks, live service/database or
 migration actions, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile audience updates adopt owned strict receipts
+
+Continuation d509e2422173dd21d016bed3e0c5d0607b54f4bc binds mobile chat audience PATCH to the full captured
+cloud account epoch and the existing caller-owned 401 option. It avoids automatic
+replay/first-401 sign-out without changing global transport, ambient credentials
+or Local egress. A strict update receipt must match requested token and audience
+before returning metadata to controls and FullScreen badge/state adoption.
+
+Confirmation, per-view mutation ownership, stale completion guards and legacy
+callback arity remain unchanged. Public/organization controls are unchanged;
+invited stays display-only. Lookup/list fallback remains separate and unchanged.
+Invalid acknowledgement uses existing uncertainty feedback, not proof of
+rollback. It does not extend the Publish uncertainty marker or add recovery
+reads; earlier cache/display knowledge may remain.
+
+The receipt checks parsed link shape, not URL origin, raw canonicality, full
+metadata semantics or lasting remote state. DELETE, legacy Sites and durable
+reconciliation remain outside this slice. Fixtures are authored/adapted UNRUN;
+no product checks, live service/database or migration actions, push or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.

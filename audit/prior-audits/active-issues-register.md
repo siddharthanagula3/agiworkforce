@@ -17068,8 +17068,49 @@ still reflect earlier knowledge; it is not certified as current by this slice.
 Six source/fixture files are independently reviewed. Shared receipt, direct
 client and real-client Preview rejection fixtures are authored UNRUN; panel
 success and stale/interrupted PATCH fixtures now carry complete receipts.
-Mobile chat audience acknowledgements, legacy Sites target binding, DELETE
-receipts, durable reconciliation and live browser/auth/database behavior remain
-open. No product tests, lint, typechecks, builds, installs, app/module execution,
+Mobile chat audience acknowledgement is bounded in the following continuation;
+legacy Sites target binding, DELETE receipts, durable reconciliation and live
+browser/auth/database behavior remain open. No product tests, lint, typechecks, builds, installs, app/module execution,
 live services/databases, migration application, fetch, push or deployment.
 Recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile audience changes require an owned matching acknowledgement
+
+Continuation d509e2422173dd21d016bed3e0c5d0607b54f4bc, 2026-11-07, narrows mobile chat audience PATCH.
+The previous helper reused an absent URL and mapped unknown or missing returned
+visibility to invited, without checking receipt token or requested audience.
+Controls could pass that fabricated result to FullScreen and its badge record.
+This is a qualified malformed-acknowledgement path, not an observed disclosure
+or evidence that ordinary account transitions universally leaked data.
+
+The helper captures and asserts the full cloud account epoch, supplies it to
+PATCH with the existing caller-owned 401-recovery option, and checks it again
+after the response. This avoids automatic 401 replay and first-401 ambient
+sign-out for this request. Existing API account-generation checks, credential
+retrieval and Local egress remain; credentials are still ambient rather than
+pinned. No global transport behavior changes.
+
+The canonical strict update receipt must parse and match both requested token
+and audience before resolution. Its parsed HTTP(S) link must match that token,
+without credentials, query or fragment. No missing-URL or invited fallback is
+used for PATCH. Invalid or mismatched receipts reject into existing uncertainty
+feedback rather than callback/state/badge success. URL origin, raw-string
+canonicality and full metadata semantics remain outside the receipt guarantee;
+a valid acknowledgement is not proof of remote state after a later write.
+
+Production controls and FullScreen remain unchanged. Existing confirmation,
+view/account/mutation ownership and callback arity govern adoption and stale
+result/error/finalizer handling. Actual controls offer public and organization;
+invited remains a display state, not a new option. Strict mutation receipts are
+separate from the unchanged lookup/list unknown-audience-to-invited fallback.
+The existing Publish uncertainty marker is not extended to PATCH: earlier
+displayed/cache knowledge may remain after an unknown audience change, with no
+new GET recovery action or durable reconciliation record.
+
+Four source/fixture files are independently reviewed. Direct service authority
+and receipt cases, real-parser controls rejection, and FullScreen stale/current
+PATCH fixtures are authored/adapted UNRUN. DELETE and legacy Sites behavior,
+cross-controller ordering, delayed writes and live native/auth/database behavior
+remain open. No product tests, lint, typechecks, builds, installs, app/module
+execution, live services/databases, migration application, fetch, push or deploy.
+The existing recovery-chain, unapplied-migration and lost-history limits remain.
