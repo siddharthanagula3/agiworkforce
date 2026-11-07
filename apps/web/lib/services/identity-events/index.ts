@@ -168,6 +168,7 @@ export async function respondToAccountCompromise(
   const intentRevoked = await finishIntentRevocation(sweep, input.userId);
   const sessionsRevoked = sweep.ended.length;
   const sessionsFailed = sweep.failed.length;
+  const cleanupIncomplete = sessionsFailed > 0 || sweep.incomplete || !intentRevoked;
   // A provider sweep leaves device credentials alive, and a live refresh row
   // mints a new session straight back.
   const deviceCredentialsRevoked = await revokeEveryDeviceRefreshCredential(db, input.userId);
@@ -186,6 +187,7 @@ export async function respondToAccountCompromise(
       userId: input.userId,
       responseId: responseId || input.trigger,
       sessionsRevoked,
+      cleanupIncomplete,
     });
   } catch (error) {
     logger.warn({ error, userId: input.userId }, '[identity-events] compromise notice failed');
@@ -197,7 +199,7 @@ export async function respondToAccountCompromise(
     request: input.request,
     organizationId: input.organizationId ?? null,
     severity: 'critical',
-    outcome: sessionsFailed > 0 || sweep.incomplete || !intentRevoked ? 'failure' : 'success',
+    outcome: cleanupIncomplete ? 'failure' : 'success',
     detail: {
       resourceType: 'account',
       resourceId: responseId || input.trigger,

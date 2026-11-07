@@ -126,7 +126,7 @@ describe('respondToAccountCompromise', () => {
     expect(mocks.observe).not.toHaveBeenCalled();
   });
 
-  it('ends every session, including the one that asked', async () => {
+  it('requests a sweep without excluding the session that asked', async () => {
     const response = await respondToAccountCompromise(db, identity, {
       userId: 'user-1',
       trigger: 'reported',
@@ -178,7 +178,104 @@ describe('respondToAccountCompromise', () => {
       userId: 'user-1',
       responseId: 'resp-1',
       sessionsRevoked: 2,
+      cleanupIncomplete: false,
     });
+  });
+
+  it.each([
+    {
+      source: 'no observed cleanup failure',
+      failed: [],
+      incomplete: false,
+      intentRevoked: true,
+      cleanupIncomplete: false,
+    },
+    {
+      source: 'failed session revocation only',
+      failed: ['s3'],
+      incomplete: false,
+      intentRevoked: true,
+      cleanupIncomplete: true,
+    },
+    {
+      source: 'incomplete sweep only',
+      failed: [],
+      incomplete: true,
+      intentRevoked: true,
+      cleanupIncomplete: true,
+    },
+    {
+      source: 'unconfirmed intent revocation only',
+      failed: [],
+      incomplete: false,
+      intentRevoked: false,
+      cleanupIncomplete: true,
+    },
+  ])('shares the observed cleanup state for $source without changing sweep status semantics', async ({
+    failed, incomplete, intentRevoked, cleanupIncomplete,
+  }) => {
+    mocks.revoke.mockResolvedValueOnce({
+      ended: ['s1', 's2'],
+      alreadyGone: ['s0'],
+      failed,
+      currentSession: undefined,
+      incomplete,
+      targetCount: 3 + failed.length,
+    });
+    mocks.finishIntent.mockResolvedValueOnce(intentRevoked);
+    query.mockResolvedValueOnce([{ id: 'resp-1' }]).mockResolvedValueOnce([]);
+
+    const response = await respondToAccountCompromise(db, identity, {
+      userId: 'product-account',
+      identitySubject: 'native-subject',
+      trigger: 'reported',
+    });
+
+    expect(mocks.revoke).toHaveBeenCalledWith(identity, 'product-account', null, 'native-subject');
+    expect(mocks.compromiseNotice).toHaveBeenCalledExactlyOnceWith(db, {
+      userId: 'product-account',
+      responseId: 'resp-1',
+      sessionsRevoked: 2,
+      cleanupIncomplete,
+    });
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'product-account',
+      eventType: 'account_compromise_contained',
+      outcome: cleanupIncomplete ? 'failure' : 'success',
+      detail: expect.objectContaining({
+        resourceId: 'resp-1',
+        count: 2,
+        status: incomplete ? 'incomplete' : 'complete',
+      }),
+    }));
+    expect(response).toEqual({
+      responseId: 'resp-1',
+      sessionsRevoked: 2,
+      sessionsFailed: failed.length,
+      deviceCredentialsRevoked: 0,
+      passwordResetRequired: true,
+      supportPath: ACCOUNT_COMPROMISE_SUPPORT_PATH,
+    });
+  });
+
+  it.each([true, false])('keeps the response and audit when the compromise notice fails (intent revoked: %s)', async (intentRevoked) => {
+    mocks.finishIntent.mockResolvedValueOnce(intentRevoked);
+    mocks.compromiseNotice.mockRejectedValueOnce(new Error('notifications down'));
+
+    await expect(respondToAccountCompromise(db, identity, {
+      userId: 'user-1', trigger: 'reported',
+    })).resolves.toMatchObject({ responseId: 'resp-1', sessionsRevoked: 2 });
+
+    expect(mocks.compromiseNotice).toHaveBeenCalledExactlyOnceWith(db, {
+      userId: 'user-1', responseId: 'resp-1', sessionsRevoked: 2,
+      cleanupIncomplete: !intentRevoked,
+    });
+    expect(auditTypes()).toEqual(['account_compromise_reported', 'account_compromise_contained']);
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'account_compromise_contained',
+      outcome: intentRevoked ? 'success' : 'failure',
+      detail: expect.objectContaining({ status: 'complete' }),
+    }));
   });
 
   it('reports a failure when the provider left sessions alive', async () => {
@@ -636,7 +733,6 @@ describe('resolveCompromiseResponse', () => {
       expect(mocks.audit).not.toHaveBeenCalled();
     }
   });
-
 
   it.each([
     'ABCDEFAB-CDEF-ABCD-EFAB-CDEFABCDEFAB',
