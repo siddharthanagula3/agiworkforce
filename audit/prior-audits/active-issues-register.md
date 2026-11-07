@@ -15273,3 +15273,105 @@ preserve unrelated refreshed metadata without making every refresh consistent.
 No service, backend, permission, confirmation or response-schema contract changed.
 No tests, lint, typechecks, builds, installs, product/browser or live-provider
 execution, push or deployment ran.
+
+## WEB-PUBLICATION-CACHE-LAZY-RESURRECTION-01
+
+Severity: Medium. Source-confirmed on 2026-11-07; bounded correction
+`b7d8791960b43f0478722df1a70ee0ca95fe6fde` is independently source-reviewed only.
+This corrects stale publication labels/audiences and dead links, not restoration
+of server access. No live incident, browser reproduction or authorization bypass
+is claimed.
+
+ArtifactCard calls usePublishedSite, whose singleton ensureLoaded lookup survives
+component unmount. The chat sidebar uses router.push for client navigation. A
+user can open Sites while that lazy request is pending; SitesPage performs and
+hydrates a separate list, then its confirmed unpublish deletes the server record
+and calls forget. Previously the older lazy response unconditionally hydrated
+its old snapshot and merged remaining positive records. Absence had no deletion
+provenance, so the deleted publication returned to the cache. Returning to chat
+could show Published and a dead management link; ready status prevented ordinary
+card mounting from reloading it. The plain published-link anchor is not the
+client-navigation evidence.
+
+The store now owns one Map for the active lazy request, using its identity and
+per-artifact positive/deletion overrides. Existing positive records seed it,
+preserving prior precedence; valid record and every forget update it, including
+forget of an absent ID. The latest record/forget for an ID wins over that lazy
+snapshot, while unrelated server entries remain. Accepted completion constructs
+the merged map before one ready-state publication, eliminating the intermediate
+unmerged notification. Map and Object.fromEntries preserve own-property behavior
+for special string IDs rather than introducing prototype assignment.
+
+Explicit hydrate clears and retires the lazy request before publishing its own
+snapshot. Later success/error/finally from that retired request cannot replace
+that state or a subsequent forget. Settlement also clears request metadata. No
+permanent tombstones are retained: later explicit hydration or record can admit
+a legitimate publication again. Metadata is per request and per distinct changed
+ID, not a claimed constant-space global history. Pre-load positives retain their
+existing priority; this is not remote-cache reconciliation. Explicit hydration
+supersedes the lazy read, but that priority does not prove the explicit snapshot
+is globally newer or current.
+
+Production scope is published-sites-store.ts. Its unrun store fixture covers
+duplicate admission, positive/deletion ordering, absent forget, unrelated entries,
+hydrate supersession on success/error, subsequent forget, later re-publication,
+special own keys and atomic subscriber notification with a pre-load positive.
+The SitesPage.test.tsx case uses the actual page, actions, confirmation, store
+and hook with mocked list/delete services. A probe replaces ArtifactCard and
+rerender models the route transition; actual router/browser/server behavior was
+not executed. Fixtures retire pending closure state through hydrate, settle their
+deferred work, and then reset; raw setState is not a production reset API.
+
+Direct page GET-versus-mutation ordering, request cancellation, same-field or
+cross-controller receipt ordering and missing account cleanup remain open. See
+WEB-SITE-SNAPSHOT-ORDERING-01 and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. Neither
+SitesPage nor SiteDetail nor authentication cleanup was changed. No tests, lint,
+typechecks, builds, installs, product/browser or live-provider execution, push or
+deployment ran.
+
+## WEB-SITE-SNAPSHOT-ORDERING-01
+
+Severity: Medium. Source-confirmed open issue on 2026-11-07; not corrected by
+`b7d8791960b43f0478722df1a70ee0ca95fe6fde`. No runtime or deployed incident is claimed.
+
+SiteDetail's version Restore triggers onRestored -> load without a signal and
+without putting the detail into loading state. Settings remain usable. A later
+audience PATCH can succeed and record its new audience before the earlier list
+response arrives; load then unconditionally calls hydrate and replaces detail
+state with its older snapshot. The UI and shared cache can look invite-only while
+the user-requested public backend state remains in force. A reload still pending
+through unpublish/navigation can likewise restore a stale cache entry. The lazy
+lookup correction above does not fence these explicit list writers.
+
+Sources: features/sites/components/SiteDetail.tsx load/onRestored,
+SiteSettingsTab.tsx VersionsSetting, hooks/useSiteActions.ts, and
+stores/published-sites-store.ts hydrate. SitesPage also accepts full list snapshots;
+its ordinary initial loading hides cards, and modal actions block closing while
+saving, so an invented initial-load unpublish or simultaneous-modal sequence is
+not evidence. Its refresh/previous-action ordering still needs review.
+
+A correction needs coordinated request/view ownership, mutation ordering and a
+way to keep or reconcile current fields without dropping unrelated list/version
+information. Merely discarding a whole response can leave a loading view or
+restored metadata unresolved. Server access checks are unchanged; a Zustand
+snapshot cannot republish a deleted row or undo the backend audience. No fix or
+execution acceptance is claimed.
+
+## WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01
+
+Severity: Medium. Source-confirmed cleanup omission on 2026-11-07; open design
+and execution work. No actual cross-account disclosure is established.
+
+published-sites-store is a module singleton with no reset action, and it is not
+in USER_SCOPED_STORE_MODULES in shared/stores/authentication-store.ts. The common
+cleanupAllStores path therefore does not clear this map, loading/ready/error
+status or its pending work during in-process account cleanup. Retained status
+can suppress a fresh lazy load. Full-navigation behavior and artifact-ID
+reachability constrain any actual exposure and remain unverified.
+
+An eventual reset must invalidate pending reads as well as clear state and
+restore idle. Registering a reset that fences only ensureLoaded would still
+allow old SiteDetail/SitesPage hydrate completions to refill the cache. Coordinate
+the reset/account epoch with the direct snapshot ownership work above; raw
+setState clearing is not that contract. No authentication behavior was changed
+and no live account-switch validation occurred.

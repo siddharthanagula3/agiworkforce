@@ -6446,3 +6446,31 @@ insertion guards and valid/invalid timestamps. No browser or runtime acceptance
 is implied. Reload/restore ordering, same-field or cross-controller changes,
 uncertain outcomes, cache races and route/lifecycle ownership remain open. See
 WEB-SITE-SETTINGS-FIELD-COMPOSITION-01.
+
+## Lazy publication snapshots have request-local override ownership
+
+Accepted `b7d8791960b43f0478722df1a70ee0ca95fe6fde` gives ensureLoaded one Map identity
+with seeded positive records and per-ID record/deletion overrides. An absent-key
+forget is retained for that request. Completion merges its snapshot and last
+overrides before one observer-visible ready update; unrelated entries survive.
+Maps/Object.fromEntries retain safe own-key construction. Explicit hydrate clears
+and retires the lazy identity; stale success/error/finally cannot undo it or a
+subsequent forget. Settlement clears metadata too, with no permanent tombstones
+blocking a later explicit snapshot or publication.
+
+The source-confirmed path is a lazy chat-card read surviving sidebar client
+navigation, followed by Sites hydration, confirmed unpublish, and late lazy reply.
+This can restore a Published label and dead link, not server access. The unrun
+component fixture models routing with a probe/rerender and uses real page/actions/
+confirmation/store with mocked services. Store fixtures cover mutation order,
+retirement, atomic notifications, seeded positives and special IDs. They are not
+browser or server acceptance. See WEB-PUBLICATION-CACHE-LAZY-RESURRECTION-01.
+
+Explicit hydration remains an unconditional writer, not globally ordered data.
+SiteDetail restore reloads leave Settings usable and can overwrite a newer
+audience or refill the cache after unpublish. Account cleanup also omits this
+singleton and supplies no pending-read reset epoch. Those distinct open paths
+need coordinated ownership/reconciliation, not permanent deletion markers or a
+partial reset that old explicit reads can undo. See WEB-SITE-SNAPSHOT-ORDERING-01
+and WEB-PUBLICATION-CACHE-ACCOUNT-RESET-01. Actual cross-account disclosure is not
+established. No backend or authentication change was made in this slice.
