@@ -25,6 +25,7 @@ import {
   type ManagedCloudPublishedArtifactVisibility,
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
 
 export const SITES_PATH = '/chat/sites';
 
@@ -61,6 +62,31 @@ export interface PublishedSiteList {
   workspace: { memberCount: number } | null;
 }
 
+const PublishedArtifactDeleteReceiptSchema = z.object({
+  success: z.literal(true),
+  token: PublishedSiteSchema.shape.token,
+});
+
+const PublishedArtifactRestoreReceiptSchema = z.object({
+  token: PublishedSiteSchema.shape.token,
+  version: z.number().int().positive().safe(),
+});
+
+async function withPublicationAuthority<T>(
+  authority: RequestAuthority | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  authority?.assertCurrent();
+  try {
+    const result = await operation();
+    authority?.assertCurrent();
+    return result;
+  } catch (error) {
+    authority?.assertCurrent();
+    throw error;
+  }
+}
+
 async function responseError(response: Response, fallback: string): Promise<Error> {
   const body = (await response.json().catch(() => ({}))) as {
     error?: { message?: string } | string;
@@ -74,31 +100,44 @@ async function responseError(response: Response, fallback: string): Promise<Erro
   return new Error(message);
 }
 
-export async function listPublishedSites(signal?: AbortSignal): Promise<PublishedSiteList> {
-  const response = await fetch(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH, {
-    credentials: 'include',
-    signal,
+export async function listPublishedSites(
+  signal?: AbortSignal,
+  authority?: RequestAuthority,
+): Promise<PublishedSiteList> {
+  return withPublicationAuthority(authority, async () => {
+    const response = await (authority?.fetch ?? fetch)(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH, {
+      credentials: 'include',
+      signal,
+    });
+    authority?.assertCurrent();
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to load published artifacts');
+    }
+    const raw: unknown = await response.json();
+    authority?.assertCurrent();
+    const body = PublishedSiteListResponseSchema.parse(raw);
+    return { sites: body.artifacts, workspace: body.workspace };
   });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to load published artifacts');
-  }
-  const body = PublishedSiteListResponseSchema.parse(await response.json());
-  return { sites: body.artifacts, workspace: body.workspace };
 }
 
 export async function listPublishedArtifactVersions(
   token: string,
   signal?: AbortSignal,
+  authority?: RequestAuthority,
 ): Promise<ManagedCloudPublishedArtifactVersion[]> {
-  const response = await fetch(managedCloudPublishedArtifactVersionsPath(token), {
-    credentials: 'include',
-    signal,
+  return withPublicationAuthority(authority, async () => {
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactVersionsPath(token), {
+      credentials: 'include',
+      signal,
+    });
+    authority?.assertCurrent();
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to load the publish history');
+    }
+    const raw: unknown = await response.json();
+    authority?.assertCurrent();
+    return ManagedCloudPublishedArtifactVersionListResponseSchema.parse(raw).versions;
   });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to load the publish history');
-  }
-  return ManagedCloudPublishedArtifactVersionListResponseSchema.parse(await response.json())
-    .versions;
 }
 
 export async function readPublishedSiteVersion(
@@ -119,26 +158,49 @@ export async function readPublishedSiteVersion(
 export async function republishArtifactVersion(
   artifact: Pick<PublishedSite, 'token' | 'artifactId'>,
   version: number,
+  authority?: RequestAuthority,
 ): Promise<void> {
-  const response = await fetch(managedCloudPublishedArtifactVersionPath(artifact.token, version), {
-    method: 'POST',
-    credentials: 'include',
-    headers: await addCsrfHeaders(),
+  return withPublicationAuthority(authority, async () => {
+    const headers = await addCsrfHeaders();
+    authority?.assertCurrent();
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactVersionPath(artifact.token, version), {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+    });
+    authority?.assertCurrent();
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to put that version live');
+    }
+    if (authority) {
+      const raw: unknown = await response.json();
+      authority.assertCurrent();
+      const receipt = PublishedArtifactRestoreReceiptSchema.parse(raw);
+      if (receipt.token !== artifact.token) throw new Error('Published version restore was not confirmed');
+    }
   });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to put that version live');
-  }
 }
 
-export async function unpublishArtifact(token: string): Promise<void> {
-  const response = await fetch(managedCloudPublishedArtifactPath(token), {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: await addCsrfHeaders(),
+export async function unpublishArtifact(token: string, authority?: RequestAuthority): Promise<void> {
+  return withPublicationAuthority(authority, async () => {
+    const headers = await addCsrfHeaders();
+    authority?.assertCurrent();
+    const response = await (authority?.fetch ?? fetch)(managedCloudPublishedArtifactPath(token), {
+      method: 'DELETE',
+      credentials: 'include',
+      headers,
+    });
+    authority?.assertCurrent();
+    if (!response.ok) {
+      throw await responseError(response, 'Failed to unpublish artifact');
+    }
+    if (authority) {
+      const raw: unknown = await response.json();
+      authority.assertCurrent();
+      const receipt = PublishedArtifactDeleteReceiptSchema.parse(raw);
+      if (receipt.token !== token) throw new Error('Artifact unpublish was not confirmed');
+    }
   });
-  if (!response.ok) {
-    throw await responseError(response, 'Failed to unpublish artifact');
-  }
 }
 
 export async function updatePublishedSite(

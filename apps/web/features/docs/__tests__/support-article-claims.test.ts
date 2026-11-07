@@ -559,9 +559,9 @@ describe('artifacts help article follows the implemented publishing controls', (
   });
 
   it('unpublishes from the Published artifacts list and tells the owner the link no longer works', () => {
-    expect(settings).toContain('await unpublishArtifact(artifact.token);');
+    expect(settings).toContain('await unpublishArtifact(artifact.token, request);');
     expect(settings).toContain('The link no longer works.');
-    expect(settings).toContain("{busy ? 'Unpublishing…' : 'Unpublish'}");
+    expect(settings).toContain("{view.actionToken === artifact.token && view.confirmation ? 'Unpublishing…' : 'Unpublish'}");
     expect(article).toContain('**Published artifacts** list with **Unpublish** on each one');
   });
 });
