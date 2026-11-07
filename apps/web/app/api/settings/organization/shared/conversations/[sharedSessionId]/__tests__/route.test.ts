@@ -65,6 +65,7 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   resolveOrgMembershipForOrganization: mocks.resolveOrgMembershipForOrganization,
 }));
 vi.mock('@/lib/services/org-shared-session-service', () => ({
+  updateSharedSessionAudience: vi.fn(),
   SHARED_SESSION_VISIBILITIES: vi.fn(),
   SHARE_IN_OTHER_WORKSPACE_MESSAGE: 'This chat belongs to another workspace.',
   SHARE_TOKEN_REGEX: vi.fn(),

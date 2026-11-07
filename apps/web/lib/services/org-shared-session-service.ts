@@ -120,7 +120,7 @@ export async function shareSessionWithOrganization(
   db: DatabaseAdapter,
   input: ShareSessionInput,
 ): Promise<SharedSessionSummary> {
-  const [row] = await db.query<SharedSessionSummaryRow>(
+  const rows = await db.query<SharedSessionSummaryRow>(
     `with grant_row as materialized (
        insert into public.organization_shared_sessions
          (organization_id, shared_session_id, shared_by_user_id)
@@ -139,8 +139,18 @@ export async function shareSessionWithOrganization(
     [input.organizationId, input.sharedSessionId, input.actorUserId],
   );
 
+  const row = rows[0];
   if (!row) {
     throw createError.notFound('Shared conversation not found');
+  }
+  if (
+    rows.length !== 1 ||
+    row.organization_id !== input.organizationId ||
+    row.shared_session_id !== input.sharedSessionId ||
+    row.shared_by_user_id !== input.actorUserId ||
+    row.owner_user_id !== input.actorUserId
+  ) {
+    throw createError.conflict('Shared conversation workspace access could not be verified');
   }
   return rowToSummary(row);
 }
@@ -356,25 +366,89 @@ export async function resolveSessionShareTarget(
  */
 export async function setSharedSessionVisibility(
   db: DatabaseAdapter,
-  input: { userId: string; token: string; visibility: SharedSessionVisibility },
+  input: {
+    userId: string;
+    token: string;
+    sharedSessionId: string;
+    visibility: SharedSessionVisibility;
+  },
 ): Promise<{ token: string; visibility: SharedSessionVisibility; expiresAt: string } | null> {
   const userId = input.userId?.trim();
   const token = input.token?.trim();
-  if (!userId || !token || !SHARE_TOKEN_REGEX.test(token)) return null;
+  if (!userId || !token || !input.sharedSessionId || !SHARE_TOKEN_REGEX.test(token)) return null;
 
-  const rows = await db.query<{ token: string; visibility: string; expires_at: string | Date }>(
+  const rows = await db.query<{
+    id: string;
+    token: string;
+    owner_id: string;
+    visibility: string;
+    expires_at: string | Date;
+  }>(
     `update public.shared_sessions
         set visibility = $3
-      where token = $1 and owner_id = $2
-      returning token, visibility, expires_at`,
-    [token, userId, input.visibility],
+      where token = $1 and owner_id = $2 and id = $4
+      returning id, token, owner_id, visibility, expires_at`,
+    [token, userId, input.visibility, input.sharedSessionId],
   );
+  if (rows.length === 0) return null;
   const row = rows[0];
-  return row
-    ? {
-        token: row.token,
-        visibility: toSharedSessionVisibility(row.visibility),
-        expiresAt: toIso(row.expires_at),
+  if (
+    rows.length !== 1 ||
+    !row ||
+    row.id !== input.sharedSessionId ||
+    row.token !== token ||
+    row.owner_id !== userId ||
+    row.visibility !== input.visibility
+  ) {
+    throw createError.conflict('Shared conversation audience update could not be verified');
+  }
+  return {
+    token: row.token,
+    visibility: toSharedSessionVisibility(row.visibility),
+    expiresAt: toIso(row.expires_at),
+  };
+}
+
+export interface UpdateSharedSessionAudienceInput {
+  userId: string;
+  token: string;
+  sharedSessionId: string;
+  organizationId: string;
+  visibility: SharedSessionVisibility;
+  grantOrganizationId: string | null;
+}
+
+export async function updateSharedSessionAudience(
+  db: DatabaseAdapter,
+  input: UpdateSharedSessionAudienceInput,
+): Promise<{
+  updated: { token: string; visibility: SharedSessionVisibility; expiresAt: string };
+  revokedOrganizationId: string | null;
+}> {
+  return db.transaction(async (tx) => {
+    let revokedOrganizationId: string | null = null;
+    if (input.visibility === 'organization') {
+      await shareSessionWithOrganization(tx, {
+        organizationId: input.organizationId,
+        sharedSessionId: input.sharedSessionId,
+        actorUserId: input.userId,
+      });
+    } else if (input.grantOrganizationId) {
+      const revoked = await unshareSessionFromOrganization(
+        tx,
+        input.grantOrganizationId,
+        input.sharedSessionId,
+      );
+      if (!revoked) {
+        throw createError.conflict('Shared conversation workspace access could not be removed');
       }
-    : null;
+      revokedOrganizationId = input.grantOrganizationId;
+    }
+
+    const updated = await setSharedSessionVisibility(tx, input);
+    if (!updated) {
+      throw createError.notFound('Shared session not found');
+    }
+    return { updated, revokedOrganizationId };
+  });
 }

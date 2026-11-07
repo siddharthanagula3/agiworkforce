@@ -64,6 +64,7 @@ vi.mock('@/lib/services/org-shared-artifact-service', () => ({
   unshareArtifactFromOrganization: mocks.unshareArtifact,
 }));
 vi.mock('@/lib/services/org-shared-session-service', () => ({
+  updateSharedSessionAudience: vi.fn(),
   listSharedSessions: mocks.listSessions,
   unshareSessionFromOrganization: mocks.unshareSession,
 }));

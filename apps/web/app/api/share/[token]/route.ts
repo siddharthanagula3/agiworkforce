@@ -32,11 +32,9 @@ import {
   getPublicSharedSessionByToken,
   readSharedSessionScope,
   resolveSessionShareTarget,
-  setSharedSessionVisibility,
   SHARE_IN_OTHER_WORKSPACE_MESSAGE,
   SHARE_TOKEN_REGEX,
-  shareSessionWithOrganization,
-  unshareSessionFromOrganization,
+  updateSharedSessionAudience,
 } from '@/lib/services/org-shared-session-service';
 
 const SHARE_AUDIT_ENDPOINT = '/api/share/[token]';
@@ -214,7 +212,6 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
     throw createError.forbidden(SHARE_IN_OTHER_WORKSPACE_MESSAGE).asUserSafe();
   }
 
-  let revoked = false;
   if (visibility === 'organization') {
     await requireOrganizationPermission(
       userId,
@@ -222,39 +219,28 @@ async function handleSetVisibility(request: NextRequest, context: RouteContext) 
       'content.share',
       SHARE_INTO_WORKSPACE_DENIED_MESSAGE,
     );
-    await shareSessionWithOrganization(db, {
-      organizationId: target.organizationId,
-      sharedSessionId: target.sharedSessionId,
-      actorUserId: userId,
-    });
   } else {
     const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
       conversationOrganizationId,
       stored.grantOrganizationId,
     ]);
     if (sharingGateResponse) return sharingGateResponse;
-    if (stored.grantOrganizationId) {
-      revoked = await unshareSessionFromOrganization(
-        db,
-        stored.grantOrganizationId,
-        target.sharedSessionId,
-      );
-      if (!revoked) {
-        throw createError.conflict('Shared conversation workspace access could not be removed');
-      }
-    }
   }
 
-  const updated = await setSharedSessionVisibility(db, { userId, token, visibility });
-  if (!updated) {
-    throw createError.notFound('Shared session not found');
-  }
+  const { updated, revokedOrganizationId } = await updateSharedSessionAudience(db, {
+    userId,
+    token,
+    sharedSessionId: target.sharedSessionId,
+    organizationId: target.organizationId,
+    visibility,
+    grantOrganizationId: stored.grantOrganizationId,
+  });
 
-  if (visibility === 'organization' || revoked) {
+  if (visibility === 'organization' || revokedOrganizationId) {
     await recordAuditEvent({
       userId,
       organizationId:
-        visibility === 'organization' ? target.organizationId : stored.grantOrganizationId,
+        visibility === 'organization' ? target.organizationId : revokedOrganizationId,
       eventType:
         visibility === 'organization' ? 'organization_share_granted' : 'organization_share_revoked',
       request,
