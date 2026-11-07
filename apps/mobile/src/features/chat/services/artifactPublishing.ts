@@ -7,6 +7,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
+  ManagedCloudPublishedArtifactDeleteReceiptSchema,
   ManagedCloudPublishedArtifactListResponseSchema,
   ManagedCloudPublishedArtifactLookupQuerySchema,
   ManagedCloudPublishedArtifactLookupResponseSchema,
@@ -234,7 +235,17 @@ export async function setPublishedArtifactAudience(
 
 export async function unpublishArtifact(shareUrl: string): Promise<void> {
   const token = requirePublishedToken(shareUrl);
-  await api.delete(`/api/artifacts/publish/${token}`);
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await api.delete<unknown>(`/api/artifacts/publish/${token}`, {
+    accountEpoch: account,
+    auth401Recovery: 'caller-owned',
+  });
+  assertCloudAccountEpochCurrent(account);
+  const receipt = ManagedCloudPublishedArtifactDeleteReceiptSchema.parse(response);
+  if (receipt.token !== token) {
+    throw new Error('The unpublish receipt returned a different publication.');
+  }
 }
 
 export const PUBLISH_FAILED_MESSAGE =

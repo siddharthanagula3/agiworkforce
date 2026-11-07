@@ -49,6 +49,7 @@ jest.mock('../MessageContentRenderer', () => ({
 jest.mock('../GeneratedFileCard', () => ({ GeneratedFileCard: () => null }));
 
 import { ArtifactFullScreen, publishableKindFor } from '../ArtifactFullScreen';
+import { PublishedArtifactControls } from '../PublishedArtifactControls';
 import type { Artifact } from '@/types/chat';
 import { ApiHttpError } from '@/services/apiErrors';
 import { PUBLISH_FAILED_MESSAGE, usePublishedArtifactAudiences } from '../../services/artifactPublishing';
@@ -62,6 +63,7 @@ const publishReceipt = {
   visibility: 'public', version: 1, publishedAt: '2026-11-07T00:00:00Z',
   kind: 'html', title: 'Landing page', sandboxed: true, workspace: { memberCount: 7 },
 };
+const deleteReceipt = { success: true, token: 'a'.repeat(24) };
 const audienceReceipt = {
   token: 'a'.repeat(24), shareUrl: publishedUrl, title: 'Landing page',
   visibility: 'organization', organizationId: 'org-1', updatedAt: '2026-11-07T00:00:00Z',
@@ -229,7 +231,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     mockGet.mockResolvedValueOnce(lookupReply()).mockResolvedValueOnce(lookupReply())
       .mockResolvedValueOnce({ artifact: null, workspace: null });
     mockPost.mockRejectedValueOnce(new Error('response lost'));
-    mockDelete.mockResolvedValueOnce(undefined);
+    mockDelete.mockResolvedValueOnce(deleteReceipt);
     const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
     await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
     fireEvent.press(view.getByLabelText('Republish artifact link'));
@@ -302,7 +304,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     fireEvent.press(view.getByLabelText('Check publication status'));
     expect(mockGet).toHaveBeenCalledTimes(2);
     if (operation === 'unpublish') mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
-    await act(async () => { mutation.resolve(audienceReceipt); });
+    await act(async () => { mutation.resolve(operation === 'unpublish' ? deleteReceipt : audienceReceipt); });
     const priorReads = operation === 'unpublish' ? 3 : 2;
     expect(mockGet).toHaveBeenCalledTimes(priorReads);
     mockGet.mockResolvedValueOnce({ artifact: null, workspace: null });
@@ -542,7 +544,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     const readback = deferred();
     mockGet.mockReturnValueOnce(oldRead.promise);
     mockPost.mockResolvedValueOnce(publishReceipt);
-    mockDelete.mockResolvedValueOnce(undefined);
+    mockDelete.mockResolvedValueOnce(deleteReceipt);
     const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
     fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
     tapAlertButton('Publish');
@@ -551,12 +553,64 @@ describe('ArtifactFullScreen publish-to-link', () => {
     fireEvent.press(view.getByTestId('artifact-unpublish'));
     tapAlertButton('Unpublish');
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(mockDelete).toHaveBeenCalledWith(`/api/artifacts/publish/${deleteReceipt.token}`, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBeUndefined();
     expect(view.queryByText(privateLabel)).toBeNull();
     await act(async () => { oldRead.resolve(lookupReply()); });
     expect(view.queryByTestId('artifact-published-url')).toBeNull();
     expect(view.queryByText(privateLabel)).toBeNull();
     await act(async () => { readback.resolve({ artifact: null, workspace: null }); });
     expect(view.getByText(privateLabel)).toBeTruthy();
+  });
+
+  // UNRUN: callback assertions use the real controls and unpublish service.
+  it.each([undefined, { ...deleteReceipt, success: false }, { ...deleteReceipt, token: 'b'.repeat(24) }])(
+    'does not call onUnpublished for an invalid receipt %p', async (reply) => {
+      const onUnpublished = jest.fn();
+      const onChanged = jest.fn();
+      mockDelete.mockResolvedValueOnce(reply);
+      const view = render(<PublishedArtifactControls
+        title="Landing page" publication={{ shareUrl: publishedUrl, visibility: 'public' }}
+        workspaceMemberCount={7} onChanged={onChanged} onUnpublished={onUnpublished}
+      />);
+      fireEvent.press(view.getByTestId('artifact-unpublish'));
+      tapAlertButton('Unpublish');
+      await waitFor(() => expect(Alert.alert).toHaveBeenLastCalledWith('Could not unpublish', PUBLISH_FAILED_MESSAGE));
+      expect(onUnpublished).not.toHaveBeenCalled();
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      expect(mockGet).not.toHaveBeenCalled();
+    },
+  );
+
+  // UNRUN: actual controls and service parsing must not adopt invalid delete receipts.
+  it.each([
+    undefined, null, {}, { success: true }, { token: deleteReceipt.token },
+    { ...deleteReceipt, success: false }, { ...deleteReceipt, token: 'b'.repeat(24) },
+  ])('preserves the link and badge without readback on invalid unpublish acknowledgement %p', async (reply) => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    usePublishedArtifactAudiences.setState({ ownerId: 'owner-a', byId: { 'artifact-1': 'public' } });
+    mockGet.mockResolvedValueOnce(lookupReply());
+    mockDelete.mockResolvedValueOnce(reply);
+    const view = render(<ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />);
+    await waitFor(() => expect(view.getByTestId('artifact-published-controls')).toBeTruthy());
+    fireEvent.press(view.getByTestId('artifact-unpublish'));
+    expect(mockDelete).not.toHaveBeenCalled();
+    tapAlertButton('Unpublish');
+    await waitFor(() => expect(Alert.alert).toHaveBeenLastCalledWith('Could not unpublish', PUBLISH_FAILED_MESSAGE));
+    expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl);
+    expect(view.getByTestId('artifact-unpublish').props.accessibilityState.disabled).toBe(false);
+    expect(view.queryByText(privateLabel)).toBeNull();
+    expect(usePublishedArtifactAudiences.getState().byId['artifact-1']).toBe('public');
+    expect(mockDelete).toHaveBeenCalledTimes(1);
+    expect(mockDelete).toHaveBeenCalledWith(`/api/artifacts/publish/${deleteReceipt.token}`, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
   });
 
   it('invalidates a pending publish confirmation when the artifact changes', async () => {
@@ -663,10 +717,10 @@ describe('ArtifactFullScreen publish-to-link', () => {
       await act(async () => undefined);
       expect(first === 'audience' ? mockDelete : mockPatch).not.toHaveBeenCalled();
 
-      await act(async () => { mutation.resolve(audienceReceipt); });
+      await act(async () => { mutation.resolve(first === 'unpublish' ? deleteReceipt : audienceReceipt); });
       if (first === 'audience') {
         expect(view.getByTestId('artifact-audience-organization').props.accessibilityState.checked).toBe(true);
-        mockDelete.mockReset().mockResolvedValueOnce(undefined);
+        mockDelete.mockReset().mockResolvedValueOnce(deleteReceipt);
         fireEvent.press(view.getByTestId('artifact-unpublish'));
         tapAlertButton('Unpublish');
         await waitFor(() => expect(mockDelete).toHaveBeenCalledTimes(1));
@@ -718,7 +772,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
       act(() => activateCloudAccount('owner-b'));
       act(() => activateCloudAccount('owner-a'));
       const callsBeforeCompletion = mockGet.mock.calls.length;
-      await act(async () => { mutation.resolve(audienceReceipt); });
+      await act(async () => { mutation.resolve(operation === 'unpublish' ? deleteReceipt : audienceReceipt); });
       expect(view.queryByTestId('artifact-published-url')).toBeNull();
       expect(view.queryByText(privateLabel)).toBeNull();
       expect(usePublishedArtifactAudiences.getState().byId).toEqual({});

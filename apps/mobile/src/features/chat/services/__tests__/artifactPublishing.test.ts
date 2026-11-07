@@ -4,6 +4,7 @@ import {
   fetchArtifactPublication,
   setPublishedArtifactAudience,
   publishArtifact,
+  unpublishArtifact,
   isPublicationOutcomeUncertain,
   recordPublishedArtifactAudience,
   refreshPublishedArtifactAudiences,
@@ -22,7 +23,7 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS, MANAGED_CLOUD_PUBLISHED_ARTIFACT_ID_MAX_CHARS } from '@agiworkforce/cloud-contracts';
 
-jest.mock('@/services/api', () => ({ api: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
+jest.mock('@/services/api', () => ({ api: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() } }));
 
 const publication = (artifactId = 'artifact-1') => ({
   token: 'a'.repeat(24),
@@ -160,6 +161,86 @@ describe('audience change acknowledgement', () => {
     invalidateCloudAccount();
     await expect(setPublishedArtifactAudience(shareUrl, 'organization')).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
     expect(api.patch).not.toHaveBeenCalled();
+  });
+});
+
+// UNRUN: unpublish receipt and account boundaries through the actual service parser.
+describe('unpublish acknowledgement', () => {
+  const shareUrl = publication().shareUrl;
+  const receipt = { success: true, token: 'a'.repeat(24) };
+
+  beforeEach(() => {
+    jest.mocked(api.delete).mockReset();
+    jest.mocked(api.get).mockReset();
+    invalidateCloudAccount();
+    activateCloudAccount('owner-a');
+    recordPublishedArtifactAudience('artifact-1', 'public');
+  });
+  afterEach(() => invalidateCloudAccount());
+
+  it('accepts a matching receipt with a full epoch and caller-owned 401 recovery', async () => {
+    jest.mocked(api.delete).mockResolvedValue(receipt);
+    await expect(unpublishArtifact(shareUrl)).resolves.toBeUndefined();
+    expect(api.delete).toHaveBeenCalledWith(`/api/artifacts/publish/${receipt.token}`, {
+      accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned',
+    });
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each([
+    undefined, null, {}, { success: true }, { token: receipt.token },
+    { ...receipt, success: false }, { ...receipt, success: 'true' },
+    { ...receipt, token: '' }, { ...receipt, token: 'b'.repeat(24) },
+  ])('rejects an invalid acknowledgement %p without replay or badge removal', async (reply) => {
+    jest.mocked(api.delete).mockResolvedValue(reply);
+    const failure = await unpublishArtifact(shareUrl).then(() => null, (error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(publishFailureMessage(failure)).toBe(PUBLISH_FAILED_MESSAGE);
+    expect(isPublicationOutcomeUncertain(failure)).toBe(true);
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each([
+    new ApiHttpError('Unpublish unavailable', 401, null),
+    new ApiHttpError('Unpublish unavailable', 403, null),
+    new ApiHttpError('Unpublish unavailable', 404, null),
+    new ApiHttpError('Unpublish unavailable', 500, null),
+    new SyntaxError('Invalid JSON'), new TypeError('Network request failed'),
+  ])('preserves a rejected transport result %p without replay or account teardown', async (failure) => {
+    const account = captureCloudAccountEpoch();
+    jest.mocked(api.delete).mockRejectedValue(failure);
+    await expect(unpublishArtifact(shareUrl)).rejects.toBe(failure);
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(api.get).not.toHaveBeenCalled();
+    expect(captureCloudAccountEpoch()).toEqual(account);
+    expect(usePublishedArtifactAudiences.getState().byId).toEqual({ 'artifact-1': 'public' });
+  });
+
+  it.each(['other-owner', 'round-trip', 'sign-out'])(
+    'retires a pending acknowledgement after %s', async (transition) => {
+      let resolve!: (reply: unknown) => void;
+      jest.mocked(api.delete).mockReturnValue(new Promise((done) => { resolve = done; }));
+      const pending = unpublishArtifact(shareUrl);
+      const rejection = expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+      if (transition === 'sign-out') invalidateCloudAccount();
+      else activateCloudAccount('owner-b');
+      if (transition === 'round-trip') activateCloudAccount('owner-a');
+      resolve(receipt);
+      await rejection;
+      expect(api.delete).toHaveBeenCalledTimes(1);
+      expect(api.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it('requires a valid target and current account before transport', async () => {
+    await expect(unpublishArtifact('invalid')).rejects.toThrow();
+    invalidateCloudAccount();
+    await expect(unpublishArtifact(shareUrl)).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(api.delete).not.toHaveBeenCalled();
   });
 });
 
