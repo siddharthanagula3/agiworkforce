@@ -6632,6 +6632,35 @@ Lexical DLP discovery still sees both direct exported SQL bodies; no guard waive
 Mixed old backend writers, direct writes, actual isolation/RLS/locking/deadlocks,
 historical repair and deployment acceptance remain open. Uncertain COMMIT or later
 workspace reads/response delivery can fail after durable effects; HTTP failure is
-not rollback proof. Rename remains page metadata, and policy/audience atomicity
-and cross-artifact quotas are separate. No migration, product checks or push ran.
+not rollback proof. Rename remains page metadata. Policy TOCTOU and cross-artifact
+quotas remain separate; the later audience/grant correction below has its own
+migration and rollout requirements. No migration, product checks or push ran.
 See WEB-PUBLICATION-HISTORY-ATOMICITY-01 and the narrower Restore rollout limits.
+
+## Publication audiences revoke actual workspace grants
+
+Accepted `966b8402c6eba629109df12c721cdeb95cae7a9c` makes token PATCH call the canonical
+updatePublishedArtifactAudience service using the request-resolved organization.
+One scoped transaction locks the owned publication first, reads its actual grant,
+authorizes the exact target/public transition, then removes/replaces the grant and
+updates audience plus optional inspected title. Strict receipts and final grant
+state are required before commit. A thrown public-policy response crosses rollback
+and is returned by the route. Obsolete standalone share/visibility/selection exports
+are removed; manager unshare and Publish/Restore/history remain unchanged.
+
+The qualified Personal/B-to-invited path previously left A's workspace grant active.
+Append-only, UNAPPLIED 0395 adds recursion-safe owner grant SELECT/DELETE through a
+current-subject boolean definer with checked BYPASSRLS owner and narrow execution
+ACL. Existing INSERT/UPDATE/manager gates remain. Publication workspace SELECT
+retains public/organization discovery but excludes invited; runnable org branches
+require organization, retaining owner/public/named-viewer access. Existing storage
+and connector helper consumers inherit the revised authorization. No row backfill.
+Rollback explicitly restores the old flaw and is not a safe routine privacy rollback.
+
+Migration-first rollout, draining old writers and real PostgreSQL role/RLS/locking
+acceptance remain necessary. Current callbacks serialize cooperating writers, not
+stale client intent or external policy/live-artifact changes. Existing snapshots and
+already-served content are not revoked retroactively; later manager revocation can
+narrow access. Uncertain COMMIT or response errors may follow durable effects.
+Source models and guards are UNRUN and do not establish actual header parsing,
+concurrency, storage access or deployment. See WEB-INVITED-WORKSPACE-GRANT-01.

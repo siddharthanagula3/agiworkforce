@@ -15584,9 +15584,79 @@ must drain before deployment-wide claims; older-client generic Restore behavior
 remains separately tracked. COMMIT acknowledgement loss is uncertain, and workspace
 summary reads, response construction or delivery can fail after durable commit.
 A failed HTTP request does not prove rollback. No automatic replay is added.
-Policy TOCTOU, audience/grant atomicity, per-user quota races across distinct
-artifacts, historical backfill and arbitrary old-history repair remain open.
+Policy TOCTOU, per-user quota races across distinct artifacts, historical backfill
+and arbitrary old-history repair remain open. The later bounded audience/grant
+correction is tracked under WEB-INVITED-WORKSPACE-GRANT-01; its migration and rollout
+acceptance remain pending.
 A later rename may legitimately differ from the snapshot title. Applied schema,
 database isolation, real rollback/locking/deadlocks and installed Next guidance
 were not verified. No migration, product checks, live DB/provider actions, push
 or deployment is included.
+
+## WEB-INVITED-WORKSPACE-GRANT-01
+
+Severity: High. Bounded current-writer correction source-reviewed in
+`966b8402c6eba629109df12c721cdeb95cae7a9c`, 2026-11-07. Migration 0395 is authored but
+UNAPPLIED; database acceptance, coordinated rollout and older writers remain open.
+
+A supported null-conversation publication could be shared into workspace A, then
+changed to invited after the owner selected Personal or workspace B. The old PATCH
+removed only the selected workspace's grant (or none), ignored a missing deletion,
+and committed invited visibility. A's active members with content.read still had
+full content and runnable access through visibility-blind organization RLS and
+0372 helper branches. The same grant could remain after a public-to-invited change.
+This is source-qualified, not an observed incident. Anonymous reads still required
+public; this does not expose publisher connector credentials or another viewer's
+personal storage. The unique publication grant index permits at most one grant.
+Separate grant/visibility writes also admitted partial failure and overlapping
+successful requests with invited visibility plus a workspace grant.
+
+The canonical updatePublishedArtifactAudience service now owns a mandatory
+transaction on the existing scoped adapter. It locks the owned publication first,
+reads its actual grant by publication ID and uses the request-resolved destination
+from getUserScopedDb, without resolving the saved selection again. Target
+entitlement/content.share checks and the route's public connector/external-sharing
+callback precede all writes. The callback receives the transaction and locked
+publication/actual grant; policy refusal throws across the rollback boundary.
+
+Grant removal, destination insertion, visibility and optional inspected title share
+one transaction. Title normalization retains the canonical contract limit. Exact
+owner/token/publication receipts and final grant state are required. Missing or
+foreign publication is 404; invalid removal/write receipts fail closed. The response
+waits for transaction completion. Three now-unused share/selection/visibility
+helpers and their obsolete-only fixtures were removed, rather than preserving
+unsafe alternative write seams. Existing Publish/Restore/history code and exact
+Restore identity remain unchanged. Standalone manager unshare remains revocation-only.
+
+Append-only 0395 adds a current-subject-only boolean ownership helper with fixed
+search path, row_security off, checked privileged function owner, PUBLIC execute
+revoked and app_rls execute granted. Separate grant SELECT/DELETE policies let
+owners see/revoke old grants after leaving the workspace without the 0185 recursive
+publication-to-grant policy cycle. INSERT/UPDATE and manager permissions are unchanged.
+Grant-backed publication SELECT permits public/organization, preserving historical
+public-plus-workspace discovery while excluding invited. Both runnable helpers
+require organization visibility for their workspace branch, retaining independent
+public, owner and named-invitation admission. Storage and connector authorization
+inherit those predicates. No grant rows are deleted or backfilled by migration.
+The paired down migration warns that rollback restores the privacy flaw.
+
+Source-reviewed fixtures cover actual-grant targeting, authoritative resolver
+forwarding, permission/public-policy refusal before writes, strict receipts, staged
+rollback, no/same grant cases, combined title updates and applied-but-unacknowledged
+COMMIT without replay. SQL fixtures compare predecessor behavior and guard helper
+ownership/ACL/policy shape; external-sharing coverage follows the callback into
+the transaction. All remain UNRUN, not PostgreSQL RLS/role/locking/concurrency,
+actual header parsing, runtime storage or browser evidence.
+
+Apply/validate 0395 before new application traffic and drain old writers before
+claiming deployment-wide write correctness. New application code with the old
+schema is not safe: hidden grants can escape its scoped reads. With 0395, stale
+invited grants cease authorizing new workspace reads, but old writers can still
+produce wrong-target/partial writes. Existing snapshots, served content and already
+authorized requests cannot be withdrawn retroactively. Later authorized manager
+revocation may narrow access after final validation. Policy/live-artifact changes,
+stale-client intent (no audience CAS), settings APIs' separate saved-selector usage,
+non-null conversation scope restrictions and cross-artifact quotas remain outside
+this correction. COMMIT acknowledgement loss or response failure can follow durable
+effects; failed HTTP is not rollback proof. Installed Next guidance and applied
+schema were not verified. No product checks, DB/provider actions, push or deployment.
