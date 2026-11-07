@@ -14740,6 +14740,27 @@ password-reset enforcement or account lockdown. Inaccurate permanent-lockout
 comments were removed. The emergency endpoint has no routine first-party settings
 caller; external-client behavior and recovery usability remain unverified.
 
+A second bounded correction, `40cd6e7131cb20dacb5d1069285f99f2fbda17d9`, derives
+cleanupIncomplete once from the existing failed-session, incomplete-sweep and
+failed-intent predicate. The required internal notification field and existing
+audit outcome share it; audit detail.status deliberately retains its sweep-only
+meaning. The notice no longer says the account was secured. It counts only
+sweep.ended, removes "other" because this sweep exempts no current session, asks
+for review of sign-in methods and active sessions, and warns about unconfirmed
+cleanup/support when incomplete. No new all-account containment, password-reset
+or provider-coverage guarantee is made even on the neutral branch.
+
+This corrects one in-app notice producer, not guaranteed delivery: recordNotification
+can swallow insert errors into recorded:false, and existing dedupe does not rewrite
+older notices. Recipient, category, severity, target, dedupe, public response,
+provider calls and receipt guards are unchanged. Earlier errors can still prevent
+notification; notification-before-audit ordering remains. The emailed enrollment-undo
+workflow separately emits an "every session was signed out" claim that remains
+outside this slice. The public response still lacks the aggregate incomplete state.
+Two production and two fixture files were independently source-reviewed. Exact-copy,
+count, predicate and failure fixtures are unrun models; isolated failed intent with
+a complete sweep is defensive mock input, not a demonstrated current helper path.
+
 Repair the canonical product/native contract across GET/report/resolve together
 with narrowly authorized service writes. Preserve product-only protective-report
 eligibility and define its provider coverage. Do not grant general clients
@@ -14748,8 +14769,8 @@ credentials, or add an unverified cross-owner fallback. PATCH still mixes scoped
 owner admission with cookie session evidence; current-session checks do not prove
 password reset or fresh factor proof bound to that session.
 
-Four files were independently reviewed: service behavior, route comment cleanup
-and two fixture sources. Service fixtures control returned receipts, errors and
+The receipt correction separately reviewed four files: service behavior, route
+comment cleanup and two fixture sources. Service fixtures control returned receipts, errors and
 side-effect calls; route fixtures mock the service and inspect the real error
 wrapper. They are unrun source models, not PostgreSQL/RLS, provider, concurrency or
 end-to-end evidence. No product tests, lint, typechecks, builds, migrations or

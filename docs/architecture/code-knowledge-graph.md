@@ -6210,9 +6210,28 @@ not demonstrated account lockdown or password-reset enforcement. Counter-update
 receipts, caller side effects, product/native mapping, proof, containment and
 recovery usability remain open under WEB-COMPROMISE-WRITE-AUTHORITY-01.
 
+## Compromise notices distinguish incomplete observed cleanup
+
+Accepted `40cd6e7131cb20dacb5d1069285f99f2fbda17d9` shares the existing failed-session,
+incomplete-sweep and failed-intent predicate between the report's audit outcome
+and a required internal notice field. Audit detail.status remains sweep-only.
+The in-app copy is neutral even when no incomplete condition was observed; partial
+cleanup explicitly asks for security review/support. It counts sweep.ended only
+and no longer calls these "other" sessions because the report exempts none.
+
+Recipient, severity, category, target, dedupe, response contract, provider calls
+and confirmed-receipt gates are unchanged. This neither repairs recovery authority
+nor guarantees notification recording/delivery: errors can yield recorded:false,
+and duplicate IDs do not replace old notices. The separate enrollment-undo event
+still overclaims that every session ended, and the public response has no aggregate
+incomplete field. Two production and two fixture files were independently reviewed;
+exact-copy/count/predicate and error models are unrun. Isolated failed intent with
+complete sweep is defensive mock coverage, not a current helper reachability claim.
+See WEB-COMPROMISE-WRITE-AUTHORITY-01 for the unresolved recovery boundary.
+
 ## Reconstruction boundary
 
-Only the two hundred fifty-five accepted production slices traced above are
+Only the two hundred fifty-six accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.
