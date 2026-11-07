@@ -5741,10 +5741,13 @@ ownership, so product-only PATCH would stop finding those holds. All handlers,
 provider identity, device-report eligibility and historical rows need coordinated
 repair. A separate checked-schema defect also remains: compromise rows have
 SELECT-only app_rls policy, while scoped report/resolve attempt INSERT/UPDATE.
-An empty update is treated as already_resolved without proving the hold cleared.
-No deployed policy inspection or backfill occurred. Native mapping, write authority,
-truthful receipts, proof custody and atomic/all-provider containment remain open;
-see WEB-IDENTITY-POLICY-NAMESPACE-01 and WEB-COMPROMISE-WRITE-AUTHORITY-01.
+The later `2488135d50436840c619a4535297db61f8ebad54` receipt correction requires
+stored completion evidence after an empty update; see the compromise response
+completion section below. The reset marker is not a demonstrated authentication
+gate. No deployed policy inspection or backfill occurred. Native mapping, write
+authority, report-counter receipts, proof custody and atomic/all-provider
+containment remain open; see WEB-IDENTITY-POLICY-NAMESPACE-01 and
+WEB-COMPROMISE-WRITE-AUTHORITY-01.
 
 ## Shared session pages validate provider ownership before use
 
@@ -6182,9 +6185,34 @@ PostgreSQL contention. Caller/support fakes retain their narrower modeling limit
 Fixtures are unrun. See WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01 and
 SUPPORT-API-KEY-ROTATION-ATOMICITY-01 for the remaining acceptance boundary.
 
+## Compromise response completion requires stored receipts
+
+Accepted `2488135d50436840c619a4535297db61f8ebad54` requires exactly one nonblank
+inserted response ID before the report service's subsequent audit, sweep, cleanup
+and notice. Calling workflows may already have emitted events or changed state;
+a refused receipt does not roll those effects back. Resolution now requires the
+requested response identity, a finite resolved timestamp and false reset marker.
+An empty update alone no longer means already_resolved: a fresh query using both
+response and owner IDs must prove that state. Malformed or unconfirmed receipts
+produce a user-safe 503 without a success audit; post-sweep copy preserves the
+possibility of earlier sign-outs. Raw database failures still propagate.
+
+UUID comparison preserves documented PostgreSQL case, brace and grouping forms,
+without changing user identity or owner predicates. Successful concurrent completion
+keeps the observed sweep count. Four files were independently read; service mocks
+exercise receipt/error orchestration, route mocks inspect the real error wrapper,
+and fixtures are unrun. They do not prove PostgreSQL behavior or provider effects.
+
+No authority or identity repair is implied: migration 0037's default DML does not
+supply the write policy absent from 0255. No migration, grant or owner fallback was
+added. The reset flag is an operational record without a found authentication gate,
+not demonstrated account lockdown or password-reset enforcement. Counter-update
+receipts, caller side effects, product/native mapping, proof, containment and
+recovery usability remain open under WEB-COMPROMISE-WRITE-AUTHORITY-01.
+
 ## Reconstruction boundary
 
-Only the two hundred fifty-four accepted production slices traced above are
+Only the two hundred fifty-five accepted production slices traced above are
 represented as reconstructed here. Other remembered changes from the unavailable branch require
 fresh reconstruction or recoverable Git evidence before they can be represented
 as current implementation. Authored regression sources are not runtime acceptance.

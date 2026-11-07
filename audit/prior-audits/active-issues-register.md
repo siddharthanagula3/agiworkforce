@@ -14701,31 +14701,59 @@ runtime/timer or installed provider acceptance were run.
 
 ## WEB-COMPROMISE-WRITE-AUTHORITY-01
 
-Severity: High. Source-confirmed on 2026-11-06; unpatched and not runtime reproduced.
-Migration 0255_identity_risk_signals.sql grants app_rls SELECT on
-account_compromise_responses and defines only its FOR SELECT policy. Both the
-legacy scoped adapter and claimed product scope use app_rls. No later write
-policy for this table was found. Protective POST inserts a hold through that
-scoped database, and resolution PATCH updates it after sweeping sessions; those
-writes are excluded by the checked RLS contract. Deployed schema state is unknown.
+Severity: High. Source-confirmed on 2026-11-06; broader authority and recovery
+repair remains open. Bounded receipt correction
+`2488135d50436840c619a4535297db61f8ebad54` is independently source-reviewed on
+2026-11-07, not runtime reproduced or accepted.
 
-If UPDATE privilege is present through inherited grants, SELECT-only RLS can
-produce no updated row rather than proving the hold is already resolved. The
-service currently treats every empty UPDATE RETURNING result as already_resolved.
-Provider revocation may therefore precede a failed or excluded hold update, and
-a success-shaped response is not proof that password_reset_required was cleared.
-The report/resolve API is registered as an emergency endpoint without a routine
-first-party settings caller; external-client and operational behavior are unverified.
+Migration 0255_identity_risk_signals.sql defines only the FOR SELECT app_rls
+policy on account_compromise_responses. Migration 0037 grants table/default DML;
+0255's explicit SELECT grant does not revoke those privileges. Where those default
+grants apply, SELECT-only RLS can exclude an UPDATE and return no row. Both legacy
+scoped and claimed product adapters use app_rls, and no later write policy for this
+table was found. Scoped report insertion and resolution updates therefore lack
+checked-schema row authority. Deployed grants, schema and migration ownership are
+unknown. No migration, grant or unrestricted owner-connection fallback is added by
+this correction.
+
+The report service now requires exactly one nonblank inserted ID before its
+subsequent report audit, session sweep, intent/device cleanup or containment notice.
+This does not establish that a missing receipt means no insert occurred, nor undo
+effects already performed by callers such as emailed enrollment undo or identity
+event handling. Resolution requires one matching response identity, a finite
+string/Date resolved timestamp and password_reset_required exactly false before
+reporting completion. An initially closed record must meet the same conditions.
+Only an empty UPDATE triggers a fresh response-ID-and-owner-qualified read;
+already_resolved then requires that read to prove completion. Other missing,
+malformed, mismatched or inconsistent receipts produce user-safe 503 errors and no
+success audit, retaining the possibility that sessions were already ended. Raw
+database failures still propagate and are not all converted to 503. The actual
+sweep count is retained for a confirmed concurrent completion.
+
+PostgreSQL UUID case, braces and documented grouping equivalents compare by UUID
+identity; user IDs and SQL owner predicates are unchanged. This is a receipt
+correction, not fresh password/factor proof, durable operation reconciliation,
+atomic provider cleanup or all-session containment. The report's later counter
+UPDATE still has no receipt check. Repository source has no authentication gate
+reading this compromise reset marker: it is an operational record, not demonstrated
+password-reset enforcement or account lockdown. Inaccurate permanent-lockout
+comments were removed. The emergency endpoint has no routine first-party settings
+caller; external-client behavior and recovery usability remain unverified.
 
 Repair the canonical product/native contract across GET/report/resolve together
-with narrowly authorized service writes and truthful completion. Do not grant
-general clients unrestricted hold-clearing privileges, infer provider subjects
-from device credentials, or add an unverified cross-owner row fallback. Preserve
-product-only protective-report eligibility while explicitly defining its provider
-coverage. Current-session evidence checks do not establish password reset, fresh
-factor proof bound to that session, atomic cleanup/update or all-provider
-containment. Source fixtures mock DB operations and were not executed; they do
-not verify deployed privileges, RLS behavior or recovery usability.
+with narrowly authorized service writes. Preserve product-only protective-report
+eligibility and define its provider coverage. Do not grant general clients
+unrestricted marker-clearing privileges, infer provider subjects from device
+credentials, or add an unverified cross-owner fallback. PATCH still mixes scoped
+owner admission with cookie session evidence; current-session checks do not prove
+password reset or fresh factor proof bound to that session.
+
+Four files were independently reviewed: service behavior, route comment cleanup
+and two fixture sources. Service fixtures control returned receipts, errors and
+side-effect calls; route fixtures mock the service and inspect the real error
+wrapper. They are unrun source models, not PostgreSQL/RLS, provider, concurrency or
+end-to-end evidence. No product tests, lint, typechecks, builds, migrations or
+runtime acceptance were performed.
 
 ## WEB-SESSION-LIFETIME-CONVERSION-01
 
