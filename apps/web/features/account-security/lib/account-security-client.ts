@@ -24,6 +24,7 @@ import {
   ACCOUNT_SECURITY_VERIFICATION_OPTIONS_PATH,
   ACCOUNT_SECURITY_VERIFICATION_PATH,
   AccountSecurityRecoveryBatchIdSchema,
+  AccountSecurityUndoResponseSchema,
   accountSecurityCredentialPath,
   type AccountSecurityCredential,
   type AccountSecurityEnrollmentCodeResponse,
@@ -194,11 +195,34 @@ export async function enrollAccountSecurity(
   );
 }
 
-export async function turnOffFromEmailLink(token: string): Promise<AccountSecurityUndoResponse> {
-  return readJson(
-    await send(ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH, 'POST', { token }),
-    'Advanced Account Security could not be turned off.',
-  );
+export interface AccountSecurityUndoCustody {
+  isCurrent: () => boolean;
+  onDispatch: () => void;
+}
+
+export async function turnOffFromEmailLink(
+  token: string,
+  custody?: AccountSecurityUndoCustody,
+): Promise<AccountSecurityUndoResponse> {
+  const assertCurrent = () => {
+    if (custody && !custody.isCurrent()) {
+      throw new DOMException('This link intent is no longer active.', 'AbortError');
+    }
+  };
+  assertCurrent();
+  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  assertCurrent();
+  const init: RequestInit = {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    cache: 'no-store',
+    body: JSON.stringify({ token }),
+  };
+  custody?.onDispatch();
+  const response = await fetch(ACCOUNT_SECURITY_ENROLLMENT_UNDO_PATH, init);
+  const body = await readJson<unknown>(response, 'Advanced Account Security could not be turned off.');
+  return AccountSecurityUndoResponseSchema.parse(body);
 }
 
 export async function verifyWithPasskey(): Promise<string> {

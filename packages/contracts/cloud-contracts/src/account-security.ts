@@ -114,10 +114,12 @@ export interface AccountSecurityEnrollmentResponse {
   devicesSignedOut: number;
 }
 
-export interface AccountSecurityUndoResponse {
-  sessionsSignedOut: number;
-  passwordReset: boolean;
-}
+export const AccountSecurityUndoResponseSchema = z.object({
+  sessionsSignedOut: z.number().int().nonnegative(),
+  passwordReset: z.boolean(),
+});
+
+export type AccountSecurityUndoResponse = z.infer<typeof AccountSecurityUndoResponseSchema>;
 
 export interface AccountSecurityVerificationResponse {
   verifiedUntil: string;
