@@ -36,7 +36,7 @@ import { ControlsPatchSchema } from './controls-schema';
 import { assertOwnerTurnsOnFastMode } from '@/lib/services/organization-membership-service';
 import { isIpAllowed, isValidCidr } from '@/lib/services/ip-allow-list';
 import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
-import { resolveMfaEnrolled } from '@/lib/mfa-policy-gate';
+import { resolveMfaEnrolled, type MfaSessionIdentity } from '@/lib/mfa-policy-gate';
 
 const MFA_GATE_EXEMPT_OWNER_OPTIONS = { mfaGateExemptForOwner: true } as const;
 
@@ -134,9 +134,10 @@ async function assertPolicyChangeWontLockOutRequester(
   policy: AdminPolicyInput,
   userId: string,
   request: NextRequest,
+  sessionIdentity?: MfaSessionIdentity,
 ): Promise<void> {
   if (policy.requireMfa) {
-    const enrolled = await resolveMfaEnrolled(userId);
+    const enrolled = await resolveMfaEnrolled(userId, sessionIdentity);
     if (!enrolled) {
       throw createError.validation(
         'Enrol in two-factor authentication first, then require it for the workspace.',
@@ -209,7 +210,10 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, MFA_GATE_EXEMPT_OWNER_OPTIONS);
+  const { db, userId, organizationId, sessionIdentity } = await getUserScopedDb(
+    request,
+    MFA_GATE_EXEMPT_OWNER_OPTIONS,
+  );
   const membership = requireOrgMember(
     await resolveOrgMembershipForOrganization(db, userId, organizationId),
   );
@@ -282,7 +286,7 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     current.policy.controls.featureAccess.fast_mode === true,
     next.controls.featureAccess.fast_mode,
   );
-  await assertPolicyChangeWontLockOutRequester(next, userId, request);
+  await assertPolicyChangeWontLockOutRequester(next, userId, request, sessionIdentity);
   assertPolicyCoherent(next);
 
   const policy = await upsertOrganizationPolicy(db, membership.organizationId, next);

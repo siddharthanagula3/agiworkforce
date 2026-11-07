@@ -37,6 +37,7 @@ function getRlsCapableDb(): DatabaseAdapter {
 
 export interface UserScopedDb {
   surface?: CloudChatSurface;
+  readonly sessionIdentity?: AuthResult['sessionIdentity'];
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
@@ -160,10 +161,14 @@ function scopeAuthenticatedOrganization(
   const scope = auth.organizationScope;
   if (!scope || scope.userId !== auth.userId) throw createError.unauthorized();
   const { userId, organizationId } = scope;
+  const sessionIdentity = auth.sessionIdentity
+    ? { subject: auth.sessionIdentity.subject, sessionId: auth.sessionIdentity.sessionId }
+    : undefined;
   const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId });
   setTenantScope({ userId, organizationId: organizationId ?? undefined });
   return {
     surface,
+    ...(sessionIdentity ? { sessionIdentity } : {}),
     db,
     userId,
     organizationId,

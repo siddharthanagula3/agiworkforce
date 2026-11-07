@@ -16,13 +16,27 @@ vi.mock('@agiworkforce/data-layer', () => ({
 }));
 
 const mockAuth = vi.fn(
-  async (): Promise<{ userId: string | null; getToken: () => Promise<string | null> }> => ({
+  async (): Promise<{
+    userId: string | null;
+    sessionId?: string | null;
+    getToken: () => Promise<string | null>;
+  }> => ({
     userId: null,
     getToken: async () => null,
   }),
 );
+const mockGetSession = vi.fn(async (sessionId: string) => ({
+  id: sessionId,
+  userId: 'user_policy_provider',
+  status: 'active',
+  createdAt: Date.now() - 60 * 60 * 1000,
+  lastActiveAt: Date.now(),
+  expireAt: Date.now() + 60 * 60 * 1000,
+  latestActivity: null,
+}));
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...(args as [])),
+  clerkClient: vi.fn(async () => ({ sessions: { getSession: mockGetSession } })),
 }));
 
 const mockVerifyToken = vi.fn();
@@ -250,6 +264,7 @@ describe('getVerifiedBearerUserScopedDb', () => {
     });
 
     expect(scoped.userId).toBe('user_verified');
+    expect(scoped).not.toHaveProperty('sessionIdentity');
     expect(rlsWithUser).toHaveBeenCalledWith(token);
     expect(mockVerifyToken).not.toHaveBeenCalled();
     expect(mockVerifyKey).not.toHaveBeenCalled();
@@ -310,6 +325,7 @@ describe('getCurrentUserRlsDb', () => {
     const scoped = await getCurrentUserRlsDb();
 
     expect(scoped?.userId).toBe('user_1');
+    expect(scoped).not.toHaveProperty('sessionIdentity');
     await scoped?.db.query('select 1');
     expect(rlsUserQuery).toHaveBeenCalledWith('select 1', undefined);
     expect(rlsWithUser).toHaveBeenCalledWith('jwt-token');
@@ -411,6 +427,7 @@ describe('getCurrentCookieUserRlsDb', () => {
     const request = apiKeyRequest();
     const result = await getCurrentCookieUserRlsDb(request);
     expect(result?.userId).toBe('user_cookie_share');
+    expect(result).not.toHaveProperty('sessionIdentity');
     expect(mockVerifyKey).not.toHaveBeenCalled();
     expect(mockVerifyToken).not.toHaveBeenCalled();
     expect(mockAssertMfaPolicy).toHaveBeenCalledWith('user_cookie_share', {
@@ -489,6 +506,8 @@ vi.mock('@/lib/feature-flags/tenant-lockdown', () => ({
 }));
 
 async function resetPolicyBoundaries(): Promise<void> {
+  const { resetSessionStartCache } = await import('@/lib/auth/session-age');
+  resetSessionStartCache();
   const { resolveOrgMembershipForOrganization } = await import('@/lib/services/org-sharing-service');
   const { assertTenantNotLockedDown } = await import('@/lib/feature-flags/tenant-lockdown');
   const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
@@ -520,13 +539,16 @@ describe('owner-policy admission through real auth and claimed scope', () => {
     { transport: 'cookie', mapped: true },
     { transport: 'bearer', mapped: false },
     { transport: 'bearer', mapped: true },
-  ])('captures one $transport identity and target (mapped=$mapped)', async ({ transport, mapped }) => {
+  ].flatMap((principal) => [
+    { ...principal, sessionId: 'sess_policy_admitted' },
+    { ...principal, sessionId: null },
+  ]))('captures one $transport identity and target (mapped=$mapped, session=$sessionId)', async ({ transport, mapped, sessionId }) => {
     const providerSubject = 'user_policy_provider';
     const userId = mapped ? 'account_policy_product' : providerSubject;
     const token = 'opaque-provider-session-token';
     const getToken = vi.fn(async () => token);
-    mockAuth.mockResolvedValue({ userId: providerSubject, getToken });
-    mockVerifyToken.mockResolvedValue({ sub: providerSubject });
+    mockAuth.mockResolvedValue({ userId: providerSubject, sessionId, getToken });
+    mockVerifyToken.mockResolvedValue({ sub: providerSubject, sid: sessionId });
     serviceQuery.mockImplementation(async (sql, params) =>
       String(sql).includes('left join public.identities')
         ? [{ identity_id: mapped ? 'identity-policy' : null, account_id: userId, erased: false }]
@@ -542,16 +564,30 @@ describe('owner-policy admission through real auth and claimed scope', () => {
     vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
     try {
       const scoped = await getUserScopedDb(
-        new NextRequest('https://example.test/api/organizations/mfa-policy', {
-          headers: transport === 'bearer' ? { authorization: `Bearer ${token}` } : {},
+        new NextRequest('https://example.test/api/organizations/mfa-policy?subject=forged-query-subject&sessionId=forged-query-session', {
+          method: 'PATCH',
+          headers: {
+            ...(transport === 'bearer' ? { authorization: `Bearer ${token}` } : {}),
+            'content-type': 'application/json',
+            'x-agi-subject': 'forged-header-subject',
+            'x-agi-session-id': 'forged-header-session',
+          },
+          body: JSON.stringify({
+            sessionIdentity: { subject: 'forged-body-subject', sessionId: 'forged-body-session' },
+          }),
         }),
         { mfaGateExemptForOwner: true },
       );
       expect(scoped).toMatchObject({ userId, organizationId });
+      expect(scoped.sessionIdentity).toEqual({ subject: providerSubject, sessionId });
       expect(resolveActiveOrganizationId).toHaveBeenCalledTimes(1);
       expect(assertTenantNotLockedDown).toHaveBeenCalledWith(organizationId);
       expect(resolveOrgMembershipForOrganization).toHaveBeenCalledWith(expect.anything(), userId, organizationId);
-      expect(mockAssertMfaPolicy).toHaveBeenCalled();
+      expect(mockAssertMfaPolicy).toHaveBeenCalledExactlyOnceWith(userId, {
+        subject: providerSubject,
+        sessionId,
+      });
+      expect(mockAssertMfaPolicy).toHaveBeenCalledWith(userId, scoped.sessionIdentity);
       expect(rlsWithUser).not.toHaveBeenCalled();
       expect(rlsWithOrg).not.toHaveBeenCalled();
       expect(mockAuth).toHaveBeenCalledTimes(transport === 'cookie' ? 1 : 0);
@@ -606,6 +642,66 @@ describe('owner-policy admission through real auth and claimed scope', () => {
     expect(rlsWithUser).not.toHaveBeenCalled();
   });
 
+  it.each(['device', 'api-key'] as const)('does not invent session evidence for an admitted %s', async (kind) => {
+    const { verifyDeveloperTokenSignature } = await import('@/lib/server/developer-token');
+    const userId = 'account_without_provider_session';
+    const token = kind === 'api-key' ? API_KEY_TOKEN : 'opaque-device-token';
+    if (kind === 'device') {
+      vi.mocked(verifyDeveloperTokenSignature).mockReturnValueOnce({
+        userId,
+        jti: 'fixture-device-jti',
+        exp: 4_000_000_000,
+        sessionFamilyId: 'device-family-is-not-a-provider-session',
+      });
+    } else {
+      mockVerifyKey.mockResolvedValueOnce({ id: 'policy-key', user_id: userId, scopes: ['inference:write'] });
+    }
+    const request = new NextRequest('https://example.test/api/organizations/mfa-policy?subject=forged&sessionId=forged', {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        'x-agi-subject': 'forged',
+        'x-agi-session-id': 'forged',
+      },
+      body: JSON.stringify({ sessionIdentity: { subject: 'forged', sessionId: 'forged' } }),
+    });
+    const scoped = await getUserScopedDb(request, {
+      mfaGateExemptForOwner: true,
+      ...(kind === 'api-key' ? { apiKeyScope: 'inference:write' as const } : {}),
+    });
+    expect(scoped).toMatchObject({ userId, organizationId });
+    expect(scoped).not.toHaveProperty('sessionIdentity');
+    expect(mockAssertMfaPolicy).toHaveBeenCalledExactlyOnceWith(userId, undefined);
+    expect(mockVerifyToken).not.toHaveBeenCalled();
+    expect(mockAuth).not.toHaveBeenCalled();
+    expect(mockGetSession).not.toHaveBeenCalled();
+    await scoped.db.query('select sessionless_policy_fixture');
+    expect(serviceExecute).toHaveBeenCalledWith('set local role app_rls');
+    expect(serviceQuery).toHaveBeenCalledWith(expect.stringContaining('set_config'), [userId, organizationId]);
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it.each(['cookie', 'bearer'] as const)('keeps session evidence off the default %s scope', async (transport) => {
+    const userId = 'user_policy_provider';
+    const sessionId = 'sess_default_admitted';
+    const token = 'opaque-default-session';
+    mockAuth.mockResolvedValue({ userId, sessionId, getToken: async () => token });
+    mockVerifyToken.mockResolvedValue({ sub: userId, sid: sessionId });
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
+    try {
+      const scoped = await getUserScopedDb(new NextRequest('https://example.test/api/settings/preferences', {
+        headers: transport === 'bearer' ? { authorization: `Bearer ${token}` } : {},
+      }));
+      expect(scoped).not.toHaveProperty('sessionIdentity');
+      expect(mockAssertMfaPolicy).toHaveBeenCalledExactlyOnceWith(userId, { subject: userId, sessionId });
+      expect(rlsWithUser).toHaveBeenCalledExactlyOnceWith(token);
+      expect(rlsWithOrg).toHaveBeenCalledExactlyOnceWith(organizationId);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('rejects opting out of organization resolution on the recovery path', async () => {
     await expect(getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy'), {
       mfaGateExemptForOwner: true,
@@ -647,19 +743,26 @@ describe('owner-policy receipt boundary', () => {
     },
   );
 
-  it('copies receipt primitives before a caller can mutate the auth result', async () => {
+  it.each(['sess_receipt', null])('copies receipt and session primitives before auth metadata mutation: %s', async (sessionId) => {
     const auth = await import('@/lib/api-auth');
     const receipt = { userId: 'account_receipt', organizationId };
-    const result = { userId: 'account_receipt', organizationScope: receipt };
+    const sessionIdentity = { subject: 'provider_receipt', sessionId };
+    const result = { userId: 'account_receipt', organizationScope: receipt, sessionIdentity };
     const spy = vi.spyOn(auth, 'getClerkAuthUser').mockResolvedValue(result);
     try {
       const scoped = await getUserScopedDb(new NextRequest('https://example.test/api/organizations/mfa-policy', {
         headers: { authorization: 'Bearer opaque-session' },
       }), { mfaGateExemptForOwner: true });
+      expect(scoped.sessionIdentity).toEqual({ subject: 'provider_receipt', sessionId });
+      expect(scoped.sessionIdentity).not.toBe(sessionIdentity);
+      sessionIdentity.subject = 'mutated-provider';
+      sessionIdentity.sessionId = 'mutated-session';
+      result.sessionIdentity = { subject: 'replacement-provider', sessionId: 'replacement-session' };
       receipt.userId = 'mutated-account';
       receipt.organizationId = '22222222-2222-4222-8222-222222222222';
       result.userId = 'mutated-principal';
       result.organizationScope = { userId: 'replacement-account', organizationId: receipt.organizationId };
+      expect(scoped.sessionIdentity).toEqual({ subject: 'provider_receipt', sessionId });
       await scoped.db.query('select receipt_fixture');
       expect(serviceQuery).toHaveBeenCalledWith(expect.stringContaining('set_config'), [
         'account_receipt', organizationId,

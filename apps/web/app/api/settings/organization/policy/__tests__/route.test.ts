@@ -14,12 +14,18 @@ const {
   mockRecordAuditEvent,
   mockRequireTeamAdminAccess,
   mockResolveMfaEnrolled,
+  mockGetIdentityUser,
+  mockEnrollmentCacheGet,
+  mockEnrollmentCacheSet,
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
   mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
   mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
-  mockResolveMfaEnrolled: vi.fn(async () => true),
+  mockResolveMfaEnrolled: vi.fn<typeof import('@/lib/mfa-policy-gate').resolveMfaEnrolled>(async () => true),
+  mockGetIdentityUser: vi.fn(),
+  mockEnrollmentCacheGet: vi.fn(),
+  mockEnrollmentCacheSet: vi.fn(async () => undefined),
 }));
 
 const currentRole = vi.hoisted(() => ({ value: 'admin' as string }));
@@ -36,6 +42,20 @@ vi.mock('@/lib/security-audit', async (importOriginal) => {
   return { ...actual, recordAuditEvent: mockRecordAuditEvent };
 });
 vi.mock('@/lib/mfa-policy-gate', () => ({ resolveMfaEnrolled: mockResolveMfaEnrolled }));
+vi.mock('@/lib/server/identity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/identity')>();
+  return { ...actual, getIdentityUser: mockGetIdentityUser };
+});
+vi.mock('@/lib/server/key-value', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/server/key-value')>();
+  return {
+    ...actual,
+    getKeyValueStore: vi.fn(() => ({
+      get: mockEnrollmentCacheGet,
+      set: mockEnrollmentCacheSet,
+    })),
+  };
+});
 vi.mock('@/lib/services/organization-permission-service', () => ({
   resolveOrganizationPermissions: vi.fn(async () => {
     const role = currentRole.value;
@@ -720,6 +740,7 @@ function bindCapturedScope(options: {
   role?: 'owner' | 'admin' | 'member';
   entitled?: boolean;
   canManage?: boolean;
+  sessionIdentity?: { subject: string; sessionId: string | null };
 } = {}) {
   const rows = new Map<string, ScopedRow>([
     [SAVED_ORG, {
@@ -806,6 +827,7 @@ function bindCapturedScope(options: {
     db,
     userId: CAPTURED_USER,
     organizationId: options.organizationId === undefined ? CAPTURED_ORG : options.organizationId,
+    ...(options.sessionIdentity ? { sessionIdentity: options.sessionIdentity } : {}),
   } as never);
   vi.mocked(requireTeamAdminAccess).mockImplementation(async (scopedDb, userId, orgId) => {
     expect(scopedDb).toBe(db);
@@ -859,7 +881,7 @@ function bindCapturedScope(options: {
 function scopedRequest(
   method: 'GET' | 'PATCH',
   explicit: boolean,
-  body = { retentionDays: 30 },
+  body: Record<string, unknown> = { retentionDays: 30 },
   extraHeaders: Record<string, string> = {},
 ) {
   return new NextRequest('https://app.test/api/settings/organization/policy', {
@@ -872,6 +894,159 @@ function scopedRequest(
     ...(method === 'PATCH' ? { body: JSON.stringify(body) } : {}),
   });
 }
+
+describe('native policy preflight (real MFA resolver; admitted auth/provider/DB mocked; UNRUN)', () => {
+  const nativeSubject = 'native-captured-subject';
+  const forgedSubject = 'forged-enrolled-subject';
+
+  function forgedMfaRequest(body: Record<string, unknown> = { requireMfa: true }) {
+    return scopedRequest('PATCH', true, {
+      ...body,
+      userId: forgedSubject,
+      subject: forgedSubject,
+      sessionIdentity: { subject: forgedSubject, sessionId: 'forged-session' },
+    }, {
+      'x-user-id': forgedSubject,
+      'x-session-id': 'forged-session',
+      'x-identity-subject': forgedSubject,
+    });
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+    vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
+    vi.mocked(requireCsrfToken).mockResolvedValue(null);
+    vi.mocked(withRateLimit).mockResolvedValue(null);
+    const actual = await vi.importActual<typeof import('@/lib/mfa-policy-gate')>(
+      '@/lib/mfa-policy-gate',
+    );
+    mockResolveMfaEnrolled.mockReset().mockImplementation(actual.resolveMfaEnrolled);
+    mockGetIdentityUser.mockReset();
+    mockEnrollmentCacheGet.mockReset().mockResolvedValue('enrolled');
+    mockEnrollmentCacheSet.mockReset().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    mockResolveMfaEnrolled.mockReset().mockResolvedValue(true);
+    vi.unstubAllEnvs();
+    clearIpAllowListCacheForTests();
+  });
+
+  for (const subject of [nativeSubject, CAPTURED_USER]) {
+    it(`allows exact enrolled ${subject === CAPTURED_USER ? 'equal-ID' : 'mapped-ID'} native identity despite forged request evidence`, async () => {
+      const sessionIdentity = { subject, sessionId: 'captured-session' };
+      const state = bindCapturedScope({ role: 'owner', sessionIdentity });
+      mockGetIdentityUser.mockImplementation(async (requestedSubject: string) => (
+        requestedSubject === subject ? { id: subject, twoFactorEnabled: true } : null
+      ));
+      mockEnrollmentCacheGet.mockResolvedValue('unenrolled');
+
+      const response = await PATCH(forgedMfaRequest());
+
+      expect(response.status).toBe(200);
+      expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER, sessionIdentity);
+      expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(subject);
+      expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
+      expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+      expect(state.rows.get(CAPTURED_ORG)?.metadata).toMatchObject({ requireMfa: true });
+      expect(state.revisions.get(CAPTURED_ORG)).toBe(10);
+      expect(getCachedIpAllowList(CAPTURED_ORG)).toBeUndefined();
+      expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+      state.assertAUnchanged();
+    });
+  }
+
+  for (const failure of ['unenrolled', 'absent', 'foreign', 'malformed', 'provider-error', 'blank-subject'] as const) {
+    for (const alreadyRequired of [false, true]) {
+      it(`refuses ${failure} native evidence ${alreadyRequired ? 'when MFA remains required' : 'when enabling MFA'} before effects`, async () => {
+        const subject = failure === 'blank-subject' ? '   ' : nativeSubject;
+        const sessionIdentity = { subject, sessionId: 'captured-session' };
+        const state = bindCapturedScope({ role: 'owner', sessionIdentity });
+        const row = state.rows.get(CAPTURED_ORG)!;
+        row.metadata = { ...(row.metadata as Record<string, unknown>), requireMfa: alreadyRequired };
+        const original = JSON.stringify(row);
+        mockGetIdentityUser.mockImplementation(async (requestedSubject: string) => {
+          if (requestedSubject === CAPTURED_USER || requestedSubject === forgedSubject) {
+            return { id: requestedSubject, twoFactorEnabled: true };
+          }
+          if (failure === 'provider-error') throw new Error('Provider unavailable');
+          if (failure === 'absent') return null;
+          if (failure === 'foreign') return { id: forgedSubject, twoFactorEnabled: true };
+          if (failure === 'malformed') return { id: nativeSubject, twoFactorEnabled: 'true' };
+          return { id: nativeSubject, twoFactorEnabled: false };
+        });
+
+        const response = await PATCH(forgedMfaRequest(
+          alreadyRequired ? { retentionDays: 30 } : { requireMfa: true },
+        ));
+
+        expect(response.status).toBe(400);
+        expect(JSON.stringify(await response.json())).toMatch(/Enrol in two-factor authentication first/i);
+        expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER, sessionIdentity);
+        if (failure === 'blank-subject') {
+          expect(mockGetIdentityUser).not.toHaveBeenCalled();
+        } else {
+          expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(nativeSubject);
+        }
+        expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
+        expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+        expect(JSON.stringify(state.rows.get(CAPTURED_ORG))).toBe(original);
+        expect(state.revisions.get(CAPTURED_ORG)).toBe(9);
+        state.assertNoWrite();
+        state.assertAUnchanged();
+      });
+    }
+  }
+
+  for (const alreadyRequired of [false, true]) {
+    it(`skips enrollment when the resulting policy does not require MFA (previously ${alreadyRequired})`, async () => {
+      const state = bindCapturedScope({
+        role: 'owner',
+        sessionIdentity: { subject: nativeSubject, sessionId: 'captured-session' },
+      });
+      const row = state.rows.get(CAPTURED_ORG)!;
+      row.metadata = { ...(row.metadata as Record<string, unknown>), requireMfa: alreadyRequired };
+
+      const response = await PATCH(forgedMfaRequest(
+        alreadyRequired ? { requireMfa: false } : { retentionDays: 30 },
+      ));
+
+      expect(response.status).toBe(200);
+      expect(mockResolveMfaEnrolled).not.toHaveBeenCalled();
+      expect(mockGetIdentityUser).not.toHaveBeenCalled();
+      expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
+      expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+      expect(state.rows.get(CAPTURED_ORG)?.metadata).toMatchObject({ requireMfa: false });
+      state.assertAUnchanged();
+    });
+  }
+
+  for (const cached of ['enrolled', 'unenrolled', null] as const) {
+    it(`preserves product enrollment for device/no-evidence callers (${cached ?? 'cache miss'})`, async () => {
+      const state = bindCapturedScope({ role: 'owner' });
+      mockEnrollmentCacheGet.mockResolvedValue(cached);
+      mockGetIdentityUser.mockResolvedValue({ id: CAPTURED_USER, twoFactorEnabled: true });
+
+      const response = await PATCH(forgedMfaRequest());
+
+      expect(response.status).toBe(cached === 'unenrolled' ? 400 : 200);
+      expect(mockResolveMfaEnrolled).toHaveBeenCalledExactlyOnceWith(CAPTURED_USER, undefined);
+      expect(mockEnrollmentCacheGet).toHaveBeenCalledExactlyOnceWith(`mfa-enrolled:${CAPTURED_USER}`);
+      if (cached === null) {
+        expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(CAPTURED_USER);
+        expect(mockEnrollmentCacheSet).toHaveBeenCalledWith(
+          `mfa-enrolled:${CAPTURED_USER}`, 'enrolled', { ttlSeconds: 300 },
+        );
+      } else {
+        expect(mockGetIdentityUser).not.toHaveBeenCalled();
+        expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
+      }
+      if (cached === 'unenrolled') state.assertNoWrite();
+      state.assertAUnchanged();
+    });
+  }
+});
 
 describe('captured policy scope (auth mocked; UNRUN)', () => {
   beforeEach(() => {
@@ -1025,7 +1200,7 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
         method: 'PATCH', headers: req.headers, body: JSON.stringify({ requireMfa: true }),
       }));
       expect(response.status).toBe(400);
-      expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER);
+      expect(mockResolveMfaEnrolled).toHaveBeenCalledWith(CAPTURED_USER, undefined);
       state.assertNoWrite();
       state.assertAUnchanged();
     } finally {

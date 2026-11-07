@@ -33,7 +33,7 @@ vi.mock('@/lib/server/identity', async (importOriginal) => ({
 
 import { createUpstashKeyValueStore, type UpstashRedisLike } from '@agiworkforce/key-value';
 
-const { assertMfaPolicy, isMfaRequiredError } = await import('../mfa-policy-gate');
+const { assertMfaPolicy, isMfaRequiredError, resolveMfaEnrolled } = await import('../mfa-policy-gate');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -136,6 +136,106 @@ describe('assertMfaPolicy', () => {
 describe('isMfaRequiredError', () => {
   it('does not match an unrelated error', () => {
     expect(isMfaRequiredError(new Error('boom'))).toBe(false);
+  });
+});
+
+describe('resolveMfaEnrolled admitted session evidence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getUser.mockReset();
+    mocks.redisClient = null;
+  });
+
+  it.each([
+    { accountId: 'product-account', cached: 'enrolled', enrolled: false },
+    { accountId: 'native-subject', cached: 'enrolled', enrolled: false },
+    { accountId: 'product-account', cached: 'unenrolled', enrolled: true },
+    { accountId: 'native-subject', cached: 'unenrolled', enrolled: true },
+  ])('uses native enrollment for $accountId despite $cached cache', async ({
+    accountId, cached, enrolled,
+  }) => {
+    const get = vi.fn(async () => cached);
+    mocks.redisClient = { get, set: mocks.redisSet };
+    mocks.getUser.mockResolvedValue({ id: 'native-subject', twoFactorEnabled: enrolled });
+
+    await expect(resolveMfaEnrolled(accountId, { subject: 'native-subject' })).resolves.toBe(enrolled);
+    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject');
+    expect(get).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+    expect(mocks.resolveMfaPolicy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    undefined,
+    {},
+    { id: 'foreign-subject', twoFactorEnabled: true },
+    { twoFactorEnabled: true },
+    { id: 'native-subject' },
+    { id: 'native-subject', twoFactorEnabled: 'true' },
+    { id: 'native-subject', twoFactorEnabled: 1 },
+  ])('refuses invalid native enrollment without legacy fallback: %j', async (user) => {
+    const get = vi.fn(async () => 'enrolled');
+    mocks.redisClient = { get, set: mocks.redisSet };
+    mocks.getUser.mockResolvedValue(user);
+
+    await expect(
+      resolveMfaEnrolled('product-account', { subject: 'native-subject' }),
+    ).resolves.toBe(false);
+    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject');
+    expect(get).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+  });
+
+  it.each(['', '   '])('refuses blank subject %j without any lookup', async (subject) => {
+    const get = vi.fn(async () => 'enrolled');
+    mocks.redisClient = { get, set: mocks.redisSet };
+
+    await expect(resolveMfaEnrolled('product-account', { subject })).resolves.toBe(false);
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+  });
+
+  it('refuses a provider error without product lookup or cache fallback', async () => {
+    const get = vi.fn(async () => 'enrolled');
+    mocks.redisClient = { get, set: mocks.redisSet };
+    mocks.getUser.mockRejectedValue(new Error('provider unavailable'));
+
+    await expect(
+      resolveMfaEnrolled('product-account', { subject: 'native-subject' }),
+    ).resolves.toBe(false);
+    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject');
+    expect(get).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { cached: 'enrolled', enrolled: true },
+    { cached: 'unenrolled', enrolled: false },
+  ])('preserves one-argument $cached cache behavior', async ({ cached, enrolled }) => {
+    const get = vi.fn(async () => cached);
+    mocks.redisClient = { get, set: mocks.redisSet };
+
+    await expect(resolveMfaEnrolled('device-account')).resolves.toBe(enrolled);
+    expect(get).toHaveBeenCalledExactlyOnceWith('mfa-enrolled:device-account');
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('preserves one-argument provider enrollment %s', async (enrolled) => {
+    const get = vi.fn(async () => null);
+    mocks.redisClient = { get, set: mocks.redisSet };
+    mocks.getUser.mockResolvedValue({ twoFactorEnabled: enrolled });
+
+    await expect(resolveMfaEnrolled('device-account')).resolves.toBe(enrolled);
+    expect(get).toHaveBeenCalledExactlyOnceWith('mfa-enrolled:device-account');
+    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('device-account');
+    expect(mocks.redisSet).toHaveBeenCalledExactlyOnceWith(
+      'mfa-enrolled:device-account',
+      enrolled ? 'enrolled' : 'unenrolled',
+      { ex: 300 },
+    );
   });
 });
 

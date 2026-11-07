@@ -54,7 +54,12 @@ export async function rememberMfaEnrollment(userId: string, enrolled: boolean): 
     });
 }
 
-export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
+export async function resolveMfaEnrolled(
+  userId: string,
+  sessionIdentity?: MfaSessionIdentity,
+): Promise<boolean> {
+  if (sessionIdentity) return resolveSessionMfaEnrolled(userId, sessionIdentity);
+
   const store = getKeyValueStore();
   const cacheKey = enrollmentCacheKey(userId);
 
@@ -92,9 +97,7 @@ async function mfaPolicyRefusal(
   const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId);
   if (!policy || !policy.requireMfa || !organizationId) return null;
 
-  const mfaEnrolled = sessionIdentity
-    ? await resolveSessionMfaEnrolled(userId, sessionIdentity)
-    : await resolveMfaEnrolled(userId);
+  const mfaEnrolled = await resolveMfaEnrolled(userId, sessionIdentity);
   const decision = evaluateOrganizationPolicy(policy, { resource: 'mfa', mfaEnrolled });
   if (decision.allowed) return null;
   return { organizationId, code: decision.code, reason: decision.reason };
