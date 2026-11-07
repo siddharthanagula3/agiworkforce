@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { usePublicationView } from './usePublicationView';
+import { useState, useRef, useCallback, useMemo, useEffect, useLayoutEffect } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Tabs,
@@ -260,6 +261,7 @@ interface ArtifactPreviewProps {
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
   publishedLink?: string;
+  publicationScope?: object;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
@@ -524,6 +526,7 @@ export function ArtifactPreview({
   publishArtifact,
   artifactAudience,
   publishedLink,
+  publicationScope,
   projectLink,
   projectSave,
   onRequestEdits,
@@ -539,11 +542,23 @@ export function ArtifactPreview({
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
-  const shownPublishedUrl = publishedUrl ?? publishedLink ?? null;
+  const publicationView = usePublicationView(artifact.id, publicationScope);
+  const [publicationPending, setPublicationPending] = useState<{
+    view: object;
+    kind: 'publish' | 'audience';
+  } | null>(null);
+  const isPublishing =
+    publicationPending?.view === publicationView && publicationPending.kind === 'publish';
+  const isChangingAudience =
+    publicationPending?.view === publicationView && publicationPending.kind === 'audience';
+  const [publishedUrl, setPublishedUrl] = useState<{ view: object; url: string } | null>(null);
+  const shownPublishedUrl =
+    publishedLink ?? (publishedUrl?.view === publicationView ? publishedUrl.url : null);
   const publishedToken = shownPublishedUrl ? readPublishedTokenFromUrl(shownPublishedUrl) : null;
-  const [isChangingAudience, setIsChangingAudience] = useState(false);
+  const audienceSnapshot = useRef(artifactAudience);
+  useLayoutEffect(() => {
+    audienceSnapshot.current = artifactAudience;
+  }, [artifactAudience]);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
   const versionCount = versionHistory?.length ?? 0;
@@ -809,6 +824,11 @@ export function ArtifactPreview({
     versionHistory && versionHistory[shownVersionIndex]
       ? versionHistory[shownVersionIndex]!.content
       : artifact.content;
+  const publishFeedbackScope = useMemo(
+    () => ({}),
+    [publicationView, activeContent, shownVersionIndex],
+  );
+  const publishFeedbackView = usePublicationView(artifact.id, publishFeedbackScope);
   const imageSrc = useMemo(
     () => (isImage ? resolveArtifactImageSource(activeContent) : null),
     [isImage, activeContent],
@@ -1088,16 +1108,26 @@ export function ArtifactPreview({
   };
 
   const handlePublish = useCallback(async () => {
-    if (!publishArtifact || isPublishing) return;
-    setIsPublishing(true);
+    if (
+      !publishArtifact ||
+      !publicationView.active ||
+      !publishFeedbackView.active ||
+      publicationView.pending
+    ) return;
+    publicationView.pending = true;
+    publicationView.revision += 1;
+    setPublicationPending({ view: publicationView, kind: 'publish' });
     try {
       const result = await publishArtifact({
         content: activeContent,
         versionIndex: shownVersionIndex,
       });
+      if (!publicationView.active || !publishFeedbackView.active) return;
       if (result.kind === 'cloud') {
-        setPublishedUrl(result.shareUrl);
-        if (await writeToClipboard(result.shareUrl)) {
+        setPublishedUrl({ view: publicationView, url: result.shareUrl });
+        const copied = await writeToClipboard(result.shareUrl);
+        if (!publicationView.active || !publishFeedbackView.active) return;
+        if (copied) {
           toast.success('Published · link copied to clipboard');
         } else {
           toast.success('Published. Copy the link from the bar below.');
@@ -1105,36 +1135,55 @@ export function ArtifactPreview({
         return;
       }
       if (result.kind === 'local') {
-        setPublishedUrl(result.shareUrl);
+        setPublishedUrl({ view: publicationView, url: result.shareUrl });
         toast.success('Exported to a local file');
         return;
       }
       setPublishedUrl(null);
-      if (await writeToClipboard(activeContent)) {
+      const copied = await writeToClipboard(activeContent);
+      if (!publicationView.active || !publishFeedbackView.active) return;
+      if (copied) {
         toast.message(result.reason, { description: 'Artifact source copied to the clipboard.' });
       } else {
         toast.error(result.reason);
       }
     } catch (error) {
+      if (!publicationView.active || !publishFeedbackView.active) return;
       setPublishedUrl(null);
       toast.error(toUserMessage(error, 'Failed to publish artifact'));
     } finally {
-      setIsPublishing(false);
+      publicationView.pending = false;
+      if (publicationView.active) setPublicationPending(null);
     }
-  }, [publishArtifact, isPublishing, activeContent, shownVersionIndex]);
+  }, [publishArtifact, publicationView, publishFeedbackView, activeContent, shownVersionIndex]);
 
   const handleChangeAudience = useCallback(
     (next: PublishedArtifactAudience) => {
-      if (!artifactAudience || isChangingAudience || next === artifactAudience.current) return;
+      if (
+        !artifactAudience ||
+        !publicationView.active ||
+        publicationView.pending ||
+        next === artifactAudience.current
+      ) return;
+      const revision = publicationView.revision;
       const members = artifactAudience.memberCount ?? 0;
       const memberLabel = translateUiPlural('settings', 'counts.members', members, {
         one: '{{count}} member',
         other: '{{count}} members',
       });
       const apply = async () => {
-        setIsChangingAudience(true);
+        if (
+          !publicationView.active ||
+          publicationView.pending ||
+          publicationView.revision !== revision ||
+          audienceSnapshot.current !== artifactAudience
+        ) return;
+        publicationView.pending = true;
+        publicationView.revision += 1;
+        setPublicationPending({ view: publicationView, kind: 'audience' });
         try {
           await artifactAudience.onChange(next);
+          if (!publicationView.active) return;
           toast.success(
             next === 'organization'
               ? 'Only your workspace can open this now'
@@ -1143,9 +1192,12 @@ export function ArtifactPreview({
                 : 'Anyone with the link can open this now',
           );
         } catch (error) {
-          toast.error(toUserMessage(error, 'Could not change who can open this'));
+          if (publicationView.active) {
+            toast.error(toUserMessage(error, 'Could not change who can open this'));
+          }
         } finally {
-          setIsChangingAudience(false);
+          publicationView.pending = false;
+          if (publicationView.active) setPublicationPending(null);
         }
       };
       if (next === 'invited') {
@@ -1184,7 +1236,7 @@ export function ArtifactPreview({
             },
       );
     },
-    [artifactAudience, isChangingAudience, confirmAction],
+    [artifactAudience, publicationView, confirmAction],
   );
 
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
@@ -2108,7 +2160,7 @@ export function ArtifactPreview({
         id: 'publish',
         label: isPublishing ? 'Publishing…' : 'Publish',
         icon: Globe,
-        disabled: isPublishing,
+        disabled: isPublishing || isChangingAudience,
         onSelect: () => void handlePublish(),
         className: NARROW_ONLY_ITEM_CLASS,
       });
@@ -2720,7 +2772,7 @@ export function ArtifactPreview({
                 variant="ghost"
                 size="sm"
                 onClick={() => void handlePublish()}
-                disabled={isPublishing}
+                disabled={isPublishing || isChangingAudience}
                 className="hidden h-7 px-2 @[26rem]:inline-flex"
                 aria-label="Publish artifact to a public link"
                 title="Publish"
@@ -2824,7 +2876,9 @@ export function ArtifactPreview({
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => {
+                if (!publicationView.active) return;
                 void writeToClipboard(shownPublishedUrl).then((ok) => {
+                  if (!publicationView.active) return;
                   if (ok) toast.success('Link copied');
                   else toast.error('Could not copy the link');
                 });
@@ -2840,7 +2894,7 @@ export function ArtifactPreview({
                 <select
                   id="artifact-audience-select"
                   value={artifactAudience.current}
-                  disabled={isChangingAudience}
+                  disabled={isChangingAudience || isPublishing}
                   onChange={(event) =>
                     handleChangeAudience(
                       event.target.value === 'organization' || event.target.value === 'invited'
@@ -2862,7 +2916,7 @@ export function ArtifactPreview({
             )}
             {artifactAudience?.current === 'invited' && publishedToken && (
               <div className="w-full" data-testid="artifact-invited-viewers">
-                <SiteViewersEditor token={publishedToken} />
+                <SiteViewersEditor key={`${artifact.id}:${publishedToken}`} token={publishedToken} />
               </div>
             )}
           </div>

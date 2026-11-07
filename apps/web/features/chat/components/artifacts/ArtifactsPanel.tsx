@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
@@ -42,6 +42,7 @@ import {
 } from './publishArtifactClient';
 import { usePublishedSitesStore } from '@features/sites/stores/published-sites-store';
 import { toast } from 'sonner';
+import { usePublicationView } from './usePublicationView';
 import { toUserMessage } from '@/lib/user-error-message';
 import { ArtifactPrivacyNotice } from '@/features/onboarding/components/ArtifactPrivacyNotice';
 import { useUIStore } from '@shared/stores/layout-store';
@@ -171,6 +172,7 @@ function ArtifactViewer({
   publishArtifact,
   artifactAudience,
   publishedLink,
+  publicationScope,
   projectLink,
   projectSave,
   onRequestEdits,
@@ -183,6 +185,7 @@ function ArtifactViewer({
   publishArtifact?: (selection: ArtifactPublishSelection) => Promise<PublishResult>;
   artifactAudience?: ArtifactAudienceControl;
   publishedLink?: string;
+  publicationScope: object;
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
@@ -197,6 +200,7 @@ function ArtifactViewer({
         className="mt-0 rounded-none border-0"
         variant="panel"
         onClose={onClose}
+        publicationScope={publicationScope}
         {...(publishArtifact ? { publishArtifact } : {})}
         {...(artifactAudience ? { artifactAudience } : {})}
         {...(publishedLink ? { publishedLink } : {})}
@@ -320,19 +324,18 @@ export function ArtifactsPanel({
       s.conversations.find((conversation) => conversation.id === s.activeConversationId) ?? null,
   );
   const projects = useChatProjectStore((s) => s.projects);
-  const [publishDetails, setPublishDetails] = useState<WebPublishDetails | null>(null);
+  const [publication, setPublication] = useState<{
+    view: object;
+    details: WebPublishDetails;
+  } | null>(null);
+  const publicationRef = useRef(publication);
+  useLayoutEffect(() => {
+    publicationRef.current = publication;
+  }, [publication]);
+  const panelLifetime = usePublicationView(null);
+  const [settledPublication, setSettledPublication] = useState(0);
+  const publicationOperations = useRef(new Map<string, { revision: number; pending: boolean }>());
   const recordPublishedSite = usePublishedSitesStore((s) => s.record);
-  const cloudPublisher = useMemo(
-    () =>
-      createWebCloudPublisher({
-        conversationId: activeConversationId ?? null,
-        onPublished: (details, artifactId) => {
-          setPublishDetails(details);
-          recordPublishedSite(artifactId, details);
-        },
-      }),
-    [activeConversationId, recordPublishedSite],
-  );
   const projectLink = useMemo(() => {
     const projectId = activeConversation?.projectId;
     if (!projectId) return undefined;
@@ -346,25 +349,6 @@ export function ArtifactsPanel({
     }),
     [projects],
   );
-  const makePublishHandler = useCallback(
-    (artifact: Artifact) => async (selection: ArtifactPublishSelection) =>
-      publishArtifactService({
-        artifact: await publishableArtifact(artifact, selection.content),
-        // The requested sink is always the managed cloud (web injects no local
-        // file writer); `originPrivacyMode` decides whether this artifact is
-        // allowed to reach it, and an unknown origin is refused there.
-        privacyMode: 'managed',
-        originPrivacyMode: resolveArtifactOriginPrivacyMode(
-          artifact,
-          conversationMessages,
-          activeConversation,
-        ),
-        surface: 'web',
-        cloudPublisher,
-      }),
-    [cloudPublisher, conversationMessages, activeConversation],
-  );
-
   const [deepLinkId, setDeepLinkId] = useState<string | null>(() => readArtifactDeepLink());
   const conversationArtifacts = activeConversationId
     ? getConversationArtifacts(activeConversationId)
@@ -405,29 +389,134 @@ export function ArtifactsPanel({
       'managed'
       ? selectedArtifact.id
       : null;
+  const streamingArtifact =
+    streaming &&
+    streaming.conversationId === activeConversationId &&
+    !artifacts.some((a) => a.id === streaming.artifactId)
+      ? streaming
+      : null;
+  const showStreamingView = Boolean(
+    streamingArtifact && (selectedArtifactId === streamingArtifact.artifactId || !selectedArtifact),
+  );
+
+  const publicationScope = useMemo(
+    () => ({}),
+    [activeConversationId, selectedArtifact?.id, selectedArtifactKey, panelOpen, showStreamingView],
+  );
+  const publicationView = usePublicationView(selectedArtifact?.id ?? null, publicationScope);
+  const publishDetails = publication?.view === publicationView ? publication.details : null;
+  const operationFor = useCallback((id: string) => {
+    let operation = publicationOperations.current.get(id);
+    if (!operation) {
+      operation = { revision: 0, pending: false };
+      publicationOperations.current.set(id, operation);
+    }
+    return operation;
+  }, []);
+  useLayoutEffect(() => {
+    const artifactId = selectedArtifact?.id;
+    return () => {
+      if (artifactId && !publicationOperations.current.get(artifactId)?.pending) {
+        publicationOperations.current.delete(artifactId);
+      }
+    };
+  }, [publicationView, selectedArtifact?.id]);
+  const makePublishHandler = (artifact: Artifact) => async (selection: ArtifactPublishSelection) => {
+    if (!panelOpen || showStreamingView || !publicationView.active) {
+      throw new Error('This publication action is no longer available.');
+    }
+    const operation = operationFor(artifact.id);
+    if (operation.pending) throw new Error('A publication change is already in progress.');
+    operation.pending = true;
+    operation.revision += 1;
+    try {
+      const publishable = await publishableArtifact(artifact, selection.content);
+      if (!publicationView.active) throw new Error('This publication view has closed.');
+      return await publishArtifactService({
+        artifact: publishable,
+        privacyMode: 'managed',
+        originPrivacyMode: resolveArtifactOriginPrivacyMode(
+          artifact,
+          conversationMessages,
+          activeConversation,
+        ),
+        surface: 'web',
+        cloudPublisher: createWebCloudPublisher({
+          conversationId: activeConversationId ?? null,
+          onPublished: (details) => {
+            recordPublishedSite(artifact.id, details);
+            if (publicationView.active) setPublication({ view: publicationView, details });
+          },
+        }),
+      });
+    } finally {
+      operation.pending = false;
+      if (!publicationView.active && publicationOperations.current.get(artifact.id) === operation) {
+        publicationOperations.current.delete(artifact.id);
+      }
+      if (panelLifetime.active) setSettledPublication((value) => value + 1);
+    }
+  };
   useEffect(() => {
-    setPublishDetails(null);
-    if (!selectedArtifactKey) return;
+    if (
+      !panelOpen || showStreamingView || !selectedArtifactKey || publication?.view === publicationView
+    ) return;
+    const operation = operationFor(selectedArtifactKey);
+    if (operation.pending) return;
+    const revision = operation.revision;
     let cancelled = false;
     void fetchArtifactPublication(selectedArtifactKey)
       .then((details) => {
-        if (cancelled || !details) return;
-        setPublishDetails(details);
+        if (cancelled || !publicationView.active || operation.revision !== revision || !details) return;
+        setPublication({ view: publicationView, details });
         recordPublishedSite(selectedArtifactKey, details);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [selectedArtifactKey, recordPublishedSite]);
+  }, [
+    selectedArtifactKey, panelOpen, showStreamingView, publicationView, publication,
+    settledPublication, operationFor, recordPublishedSite,
+  ]);
+  const publicationRevision = selectedArtifactKey
+    ? (publicationOperations.current.get(selectedArtifactKey)?.revision ?? 0)
+    : 0;
   const changeAudience = useCallback(
     async (next: PublishedArtifactAudience) => {
-      if (!publishDetails) return;
-      const changed = await setPublishedArtifactAudience(publishDetails.shareUrl, next);
-      setPublishDetails({ ...publishDetails, ...changed });
-      if (selectedArtifactKey) recordPublishedSite(selectedArtifactKey, changed);
+      if (
+        !panelOpen || showStreamingView || !publicationView.active || !publishDetails || !selectedArtifactKey
+      ) {
+        throw new Error('This publication action is no longer available.');
+      }
+      const operation = operationFor(selectedArtifactKey);
+      if (
+        publicationRef.current !== publication || operation.pending || operation.revision !== publicationRevision
+      ) {
+        throw new Error('This publication action is no longer available.');
+      }
+      operation.pending = true;
+      operation.revision += 1;
+      try {
+        const changed = await setPublishedArtifactAudience(publishDetails.shareUrl, next);
+        recordPublishedSite(selectedArtifactKey, changed);
+        if (publicationView.active) {
+          setPublication({ view: publicationView, details: { ...publishDetails, ...changed } });
+        }
+      } finally {
+        operation.pending = false;
+        if (
+          !publicationView.active && publicationOperations.current.get(selectedArtifactKey) === operation
+        ) {
+          publicationOperations.current.delete(selectedArtifactKey);
+        }
+        if (panelLifetime.active) setSettledPublication((value) => value + 1);
+      }
     },
-    [publishDetails, selectedArtifactKey, recordPublishedSite],
+    [
+      panelOpen, showStreamingView, publicationView, publicationRevision, publication, publishDetails,
+      selectedArtifactKey, operationFor, recordPublishedSite, panelLifetime,
+    ],
   );
   const artifactAudience = useMemo(
     () =>
@@ -439,16 +528,6 @@ export function ArtifactsPanel({
           }
         : undefined,
     [publishDetails, changeAudience],
-  );
-
-  const streamingArtifact =
-    streaming &&
-    streaming.conversationId === activeConversationId &&
-    !artifacts.some((a) => a.id === streaming.artifactId)
-      ? streaming
-      : null;
-  const showStreamingView = Boolean(
-    streamingArtifact && (selectedArtifactId === streamingArtifact.artifactId || !selectedArtifact),
   );
 
   const previousConversationRef = useRef<string | null>(activeConversationId);
@@ -671,6 +750,7 @@ export function ArtifactsPanel({
               ) : selectedArtifact ? (
                 <ArtifactViewer
                   artifact={selectedArtifact}
+                  publicationScope={publicationScope}
                   awaitingApproval={awaitingApproval}
                   versionHistory={getArtifactVersions(selectedArtifact.id)}
                   onClose={() => setPanelOpen(false)}
