@@ -16984,8 +16984,48 @@ writes, cross-controller ordering and later remounts remain outside this claim.
 Eight source/fixture files are independently reviewed. Shared receipt, route
 sequencing, service authority/error classification and component recovery fixtures
 are authored/adapted UNRUN, including stale views, manual read admission and
-clipboard failures. PATCH/DELETE receipt/replay behavior, web publisher adoption,
-durable unknown-write recovery and live server/native/auth/clipboard timing remain
-open. No product tests, lint, typechecks, builds, installs, app/module execution,
+clipboard failures. Web publisher adoption was still open at this mobile slice;
+the following continuation bounds its receipt acceptance. PATCH/DELETE receipt/
+replay behavior, durable unknown-write recovery and live server/native/auth/
+clipboard timing remain open. No product tests, lint, typechecks, builds, installs, app/module execution,
 live services/databases, migrations, fetch, push or deployment. The existing
 recovery-chain, unapplied-migration and lost-history limitations remain.
+
+### Web Publish requires a matching acknowledgement
+
+Continuation 34fe86ebd59bd993f88c5fbb362431d9f05223ee, 2026-11-07, adopts the shared Publish receipt at
+the web adapter boundary. Previously a nonempty share URL was enough to invoke
+the callback and return cloud success, and a missing or unknown audience became
+public. The chat panel then recorded that metadata in its lease-owned Sites
+cache; the Library caller could copy the same unvalidated URL. This is a
+qualified malformed-response path, not evidence of a server policy bypass,
+observed disclosure or a wrong-account incident.
+
+The adapter validates and normalizes the intended artifact ID before dispatch,
+parses the canonical identity/token/link/audience/version receipt and requires
+an exact response-ID match before calling onPublished or returning success.
+Actual audience and workspace are preserved without permissive coercion or a
+public fallback. Invalid JSON, malformed or legacy receipts and wrong identity
+are unconfirmed, not proof that no write happened. The backend must supply the
+additive artifactId field introduced in the preceding mobile outcome slice.
+
+Existing chat publication lease, view, revision and pending-operation guards,
+the shared origin trust-boundary gate and CSRF/cookie transport remain unchanged.
+Library sharing and audience-change confirmations are retained; chat Publish's
+direct invocation is not changed or certified as a confirmed flow. Library
+inherits the adapter validation but
+its separate lifecycle is not certified here. No new retries, additional writes, recovery GETs, UI controls or permission
+expansion are introduced. Non-2xx/transport error handling and existing automatic
+lookup behavior remain unchanged; the new uncertainty message is limited to
+invalid successful receipts. URL origin is not
+pinned; nonempty kind/timestamp and other receipt shape checks do not prove exact
+content/version bytes, and server policy may redact submitted content.
+
+Three source/fixture files are independently reviewed. Receipt rejection,
+confirmed actual metadata and existing interrupted/stale panel fixtures are
+authored/adapted UNRUN. PATCH audience acknowledgement fallback, durable unknown
+writes, ambient credential binding, cross-controller ordering and live
+browser/auth/database acceptance remain open. No product tests, lint,
+typechecks, builds, installs, app/module execution, live services/databases,
+migration application, fetch, push or deployment. The prior recovery-chain,
+unapplied-migration and lost-history limits still apply.

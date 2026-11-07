@@ -7269,7 +7269,27 @@ guards and owned finalizers. No automatic POST retry or durable uncertainty
 record is added. Exact reconciliation can record a current positive badge;
 ordinary lookup still leaves the map untouched.
 
-Close/remount, other controllers, future writers, PATCH/DELETE receipts/replay and
-web publisher adoption remain separate limits. Local confirmation stays intact
+Close/remount, other controllers, future writers and PATCH/DELETE receipts/replay
+remain separate limits. Web receipt adoption follows in the next continuation. Local confirmation stays intact
 without a new egress allowance. All fixtures UNRUN; no product checks, live
 services/migrations, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web publication adopts the shared receipt boundary
+
+Continuation 34fe86ebd59bd993f88c5fbb362431d9f05223ee makes createWebCloudPublisher validate the normalized
+intended artifact ID and the canonical publish receipt before callback/cache
+adoption or cloud success. Response identity must match; token/link and strict
+actual audience/workspace are preserved without the prior public fallback.
+Malformed, legacy or wrong-identity replies remain unconfirmed rather than
+proof of no publication. The backend's additive identity field is required.
+
+Chat retains its lease/view/revision/operation guards, and Library inherits
+adapter validation without a new lifecycle guarantee. CSRF/cookie transport,
+shared origin checks and permissions remain unchanged. Library/audience
+confirmations stay intact; chat Publish's direct invocation is not changed. The receipt
+does not pin URL origin or verify content bytes. No retries, new recovery reads or durable unknown-write record are added.
+Non-2xx/transport error handling and existing automatic lookup remain unchanged. PATCH acknowledgement fallback and
+cross-controller/ambient-credential limits remain open.
+
+Fixtures are authored/adapted UNRUN. No product checks, live service/database or
+migration actions, push or deployment. See WEB-PUBLICATION-QUOTA-ADMISSION-01.
