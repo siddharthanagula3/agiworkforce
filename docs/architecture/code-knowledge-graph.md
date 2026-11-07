@@ -7510,3 +7510,18 @@ successful navigation or refresh. Existing transport/auth/lifetime guards and
 non-atomic clear-before-delete remain. No retry, recovery GET, durable marker,
 backend change or remote-state proof. Transport JSON failures keep their
 existing handling. Fixtures are UNRUN; see WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile Site detail uses exact owner-scoped lookup
+
+Continuation c5dffe6d5ae115961385d277ebf68485412d86fe replaces first-page collection searching with
+the existing exact token GET and canonical detail envelope. The mobile adapter
+matches the returned token, treats only real HTTP 404 as absence and preserves
+authority assertions around dispatch/settlement. No collection or public-view
+fallback.
+
+The detail screen keeps its existing lifetime, secondary history/data reads
+and mutation receipt guards. Workspace presence follows the nullable envelope,
+including zero-member workspaces. No backend/schema or authorization change.
+This fixes conditional off-page detail lookup, not mobile list completeness or
+the publication quota. Fixtures are UNRUN; no product checks or live acceptance.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.

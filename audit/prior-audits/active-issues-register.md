@@ -17233,8 +17233,9 @@ useCopyAction still owns its post-dispatch haptic/error feedback; not every
 platform/helper completion is lifetime-cancelled.
 
 At this detail slice, the separate Sites list lifetime remained open; its later
-correction is recorded below, as is mobile Sites receipt validation. Capped
-detail discovery and live React/native/auth/database behavior remain open. No product
+correction is recorded below, as are mobile Sites receipts and exact detail
+lookup. Separate list discovery and live React/native/auth/database behavior
+remain open. No product
 checks, live services/migrations, push or deployment. Recovery dependencies,
 unapplied migrations and lost-history limitations remain.
 
@@ -17446,5 +17447,36 @@ Shared-data clearing can succeed before a later uncertain unpublish and is
 not made atomic. No automatic retry, recovery GET or durable unknown marker.
 Capped mobile discovery and broader ordering remain separate.
 
+No product checks, live services, migration application, push or deployment.
+Existing recovery dependencies, unapplied migrations and lost-history limits remain.
+
+### Mobile Site detail reads the requested owner token
+
+Continuation c5dffe6d5ae115961385d277ebf68485412d86fe, 2026-11-07, removes the mobile detail screen's
+dependency on the first publication list page. Previously it searched one
+capped response and rendered absence when a requested token was outside that
+page. A recently edited older publication does not necessarily enter the
+server's creation-ordered first page. Current admission caps ordinary owners
+at 200 publications; affected legacy or nonparticipating over-cap inventories
+are source-qualified, not observed production incidents.
+
+The mobile service now reads the existing exact owner-scoped detail endpoint,
+parses its canonical envelope and requires the returned token to match.
+Only a real API HTTP 404 means absence. Other transport, authentication,
+rate-limit and schema failures propagate without list or public-link fallback.
+Authority is asserted before dispatch and after settlement, including before
+interpreting a 404, preserving captured epoch, signal and caller-owned 401.
+
+SiteDetail derives its site and workspace presence from that response.
+A present workspace with zero members is still present. Existing secondary
+history/data reads and their currentness-protected fallbacks remain, as do
+keyed detail lifetime and mutation receipt protections. No shared schema,
+backend, authorization policy or lifetime redesign.
+
+Direct service and actual-service detail fixtures are authored UNRUN, covering
+exact reads, target/envelope rejection, error classes, workspace presence,
+retired requests and existing identity/navigation lifetimes. This is not
+pagination or complete inventory discovery: the separate mobile list remains
+capped. No quota lift, public access, automatic retry or recovery write.
 No product checks, live services, migration application, push or deployment.
 Existing recovery dependencies, unapplied migrations and lost-history limits remain.
