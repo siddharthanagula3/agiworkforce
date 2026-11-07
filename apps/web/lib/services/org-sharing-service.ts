@@ -241,8 +241,9 @@ export interface SharedProjectScope {
 export async function resolveSharedProjectScope(
   db: DatabaseAdapter,
   userId: string,
+  organizationId: string | null,
 ): Promise<SharedProjectScope | null> {
-  const membership = await resolveOrgMembership(db, userId);
+  const membership = await resolveOrgMembershipForOrganization(db, userId, organizationId);
   if (!membership) return null;
   const projectIds = await listReadableSharedProjectIds(db, membership.organizationId, userId);
   if (projectIds.length === 0) return null;
@@ -289,7 +290,7 @@ export async function resolveProjectWriteAccess(
   if (owned) return 'owner';
   if (!input.organizationId) return null;
 
-  const scope = await resolveSharedProjectScope(db, input.userId);
+  const scope = await resolveSharedProjectScope(db, input.userId, input.organizationId);
   if (scope?.organizationId !== input.organizationId) return null;
   return scope.writableProjectIds.includes(input.projectId) ? 'editor' : null;
 }
