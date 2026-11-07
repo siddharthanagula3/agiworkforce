@@ -16,7 +16,6 @@ import {
   buildPublishedArtifactUrl,
   readPublishedArtifactRestoreSource,
   readPublishedArtifactVersion,
-  recordPublishedVersion,
   requiresSandboxedRender,
   restorePublishedArtifactRecord,
 } from '@/lib/services/published-artifact-service';
@@ -103,21 +102,11 @@ async function handleRestoreVersion(request: NextRequest, context: RouteContext)
     throw createError.conflict('This publication is no longer available to restore.');
   }
 
-  // History remains a separate write: failure can follow an already committed restore.
-  const restoredVersion = await recordPublishedVersion(db, {
-    publishedArtifactId: restored.id,
-    userId,
-    title: restored.title,
-    kind: restored.kind,
-    language: restored.language,
-    content: restored.content,
-  });
-
   return NextResponse.json({
     token: restored.token,
     shareUrl: buildPublishedArtifactUrl(restored.token),
     publishedAt: restored.updatedAt,
-    version: restoredVersion,
+    version: restored.version,
     kind: restored.kind,
     title: restored.title,
     sandboxed: requiresSandboxedRender(restored.kind),

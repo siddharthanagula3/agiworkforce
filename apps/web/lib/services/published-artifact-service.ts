@@ -361,101 +361,120 @@ async function preparePublishArtifactRecord(
 export async function publishArtifactRecord(
   db: DatabaseAdapter,
   input: PublishArtifactRecordInput,
-): Promise<PublishedArtifact> {
-  const { userId, artifactId, conversationId, title, language, content } =
-    await preparePublishArtifactRecord(db, input);
+): Promise<PublishedArtifact & { version: number }> {
+  return db.transaction(async (tx) => {
+    const { userId, artifactId, conversationId, title, language, content } =
+      await preparePublishArtifactRecord(tx, input);
 
-  let rows: PublishedArtifactRow[];
-  try {
-    rows = await db.query<PublishedArtifactRow>(
-      `insert into public.published_artifacts (
-       token, user_id, artifact_id, conversation_id, title, kind, language, content, visibility
-     ) values (
-       $1, $2, $3, $4, $5, $6, $7, $8,
-       case when exists (
-         select 1 from public.live_artifacts live
-          where live.user_id = $2 and live.artifact_id::text = lower($3)
-       ) then 'invited' else 'public' end
-     )
-     on conflict (user_id, artifact_id) do update set
-       conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
-       title = case when published_artifacts.title = '' then excluded.title
-                    else published_artifacts.title end,
-       kind = excluded.kind,
-       language = excluded.language,
-       content = excluded.content,
-       updated_at = now()
-     returning id, token, user_id, artifact_id, conversation_id, title, kind,
-               language, content, visibility, created_at, updated_at`,
-      [
-        mintPublishToken(),
-        userId,
-        artifactId,
-        conversationId,
-        title,
-        input.kind,
-        language,
-        content,
-      ],
-    );
-  } catch (error) {
-    // The preflight and the write are not one transaction: the conversation can
-    // change hands or be deleted in between, and RLS is the one that finally says no.
-    if (isRowLevelSecurityDenial(error)) {
+    let rows: PublishedArtifactRow[];
+    try {
+      rows = await tx.query<PublishedArtifactRow>(
+        `insert into public.published_artifacts (
+         token, user_id, artifact_id, conversation_id, title, kind, language, content, visibility
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8,
+         case when exists (
+           select 1 from public.live_artifacts live
+            where live.user_id = $2 and live.artifact_id::text = lower($3)
+         ) then 'invited' else 'public' end
+       )
+       on conflict (user_id, artifact_id) do update set
+         conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
+         title = case when published_artifacts.title = '' then excluded.title
+                      else published_artifacts.title end,
+         kind = excluded.kind,
+         language = excluded.language,
+         content = excluded.content,
+         updated_at = now()
+       returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                 language, content, visibility, created_at, updated_at`,
+        [
+          mintPublishToken(),
+          userId,
+          artifactId,
+          conversationId,
+          title,
+          input.kind,
+          language,
+          content,
+        ],
+      );
+    } catch (error) {
+      if (isRowLevelSecurityDenial(error)) {
+        throw new PublishedArtifactOwnershipError(
+          'Row-level security refused the publish: the artifact is not yours to publish.',
+        );
+      }
+      throw error;
+    }
+
+    const row = rows[0];
+    if (!row) {
       throw new PublishedArtifactOwnershipError(
-        'Row-level security refused the publish: the artifact is not yours to publish.',
+        'Artifact was not published (row-level security denied the write)',
       );
     }
-    throw error;
-  }
-
-  const row = rows[0];
-  if (!row) {
-    throw new PublishedArtifactOwnershipError(
-      'Artifact was not published (row-level security denied the write)',
-    );
-  }
-  return rowToPublishedArtifact(row);
+    const version = await recordPublishedVersion(tx, {
+      publishedArtifactId: row.id,
+      userId: row.user_id,
+      title: row.title,
+      kind: row.kind,
+      language: row.language,
+      content: row.content,
+    });
+    return { ...rowToPublishedArtifact(row), version };
+  });
 }
 
 export async function restorePublishedArtifactRecord(
   db: DatabaseAdapter,
   input: PublishArtifactRecordInput & { publishedArtifactId: string; token: string },
-): Promise<PublishedArtifact | null> {
+): Promise<(PublishedArtifact & { version: number }) | null> {
   if (!input.publishedArtifactId || !PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
-  const { userId, artifactId, title, language, content } =
-    await preparePublishArtifactRecord(db, input);
+  return db.transaction(async (tx) => {
+    const { userId, artifactId, title, language, content } =
+      await preparePublishArtifactRecord(tx, input);
 
-  let rows: PublishedArtifactRow[];
-  try {
-    rows = await db.query<PublishedArtifactRow>(
-      `update public.published_artifacts
-          set title = case when title = '' then $5 else title end,
-              kind = $6, language = $7, content = $8, updated_at = now()
-        where user_id = $1 and id = $2 and artifact_id = $3 and token = $4
-        returning id, token, user_id, artifact_id, conversation_id, title, kind,
-                  language, content, visibility, created_at, updated_at`,
-      [
-        userId,
-        input.publishedArtifactId,
-        artifactId,
-        input.token,
-        title,
-        input.kind,
-        language,
-        content,
-      ],
-    );
-  } catch (error) {
-    if (isRowLevelSecurityDenial(error)) {
-      throw new PublishedArtifactOwnershipError(
-        'Row-level security refused the publish: the artifact is not yours to publish.',
+    let rows: PublishedArtifactRow[];
+    try {
+      rows = await tx.query<PublishedArtifactRow>(
+        `update public.published_artifacts
+            set title = case when title = '' then $5 else title end,
+                kind = $6, language = $7, content = $8, updated_at = now()
+          where user_id = $1 and id = $2 and artifact_id = $3 and token = $4
+          returning id, token, user_id, artifact_id, conversation_id, title, kind,
+                    language, content, visibility, created_at, updated_at`,
+        [
+          userId,
+          input.publishedArtifactId,
+          artifactId,
+          input.token,
+          title,
+          input.kind,
+          language,
+          content,
+        ],
       );
+    } catch (error) {
+      if (isRowLevelSecurityDenial(error)) {
+        throw new PublishedArtifactOwnershipError(
+          'Row-level security refused the publish: the artifact is not yours to publish.',
+        );
+      }
+      throw error;
     }
-    throw error;
-  }
-  const row = rows[0];
-  return row ? rowToPublishedArtifact(row) : null;
+    const row = rows[0];
+    if (!row) return null;
+    const version = await recordPublishedVersion(tx, {
+      publishedArtifactId: row.id,
+      userId: row.user_id,
+      title: row.title,
+      kind: row.kind,
+      language: row.language,
+      content: row.content,
+    });
+    return { ...rowToPublishedArtifact(row), version };
+  });
 }
 
 export async function unpublishArtifactRecord(
@@ -637,13 +656,25 @@ interface PublishedVersionRow {
   created_at: string | Date;
 }
 
+function requireHistoryVersion(value: number | string | undefined): number {
+  const version = Number(value);
+  if (
+    (typeof value !== 'number' && typeof value !== 'string') ||
+    !Number.isSafeInteger(version) ||
+    version < 1
+  ) {
+    throw new Error('Published artifact history has an invalid version');
+  }
+  return version;
+}
+
 /**
  * Append this publish to the artifact's history, unless it says exactly what
  * the newest version already says. Republishing an unchanged artifact is what
  * the Publish button does on every second click, and a history full of
  * identical versions is not a history.
  */
-export async function recordPublishedVersion(
+async function recordPublishedVersion(
   db: DatabaseAdapter,
   input: {
     publishedArtifactId: string;
@@ -663,6 +694,8 @@ export async function recordPublishedVersion(
     [input.publishedArtifactId, input.userId],
   );
 
+  const newestVersion = newest ? requireHistoryVersion(newest.version) : 0;
+  let version: number;
   if (
     newest &&
     newest.content === input.content &&
@@ -670,33 +703,48 @@ export async function recordPublishedVersion(
     newest.kind === input.kind &&
     (newest.language ?? null) === input.language
   ) {
-    return toVersionNumber(newest.version);
+    version = newestVersion;
+  } else {
+    const nextVersion = requireHistoryVersion(newestVersion + 1);
+    const [inserted] = await db.query<{ version: number | string }>(
+      `insert into public.published_artifact_versions
+         (published_artifact_id, user_id, version, title, kind, language, content, parent_version_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       returning version`,
+      [
+        input.publishedArtifactId,
+        input.userId,
+        nextVersion,
+        input.title,
+        input.kind,
+        input.language,
+        input.content,
+        newest?.id ?? null,
+      ],
+    );
+    version = requireHistoryVersion(inserted?.version);
+    if (version !== nextVersion) {
+      throw new Error('Published artifact history version did not match the write');
+    }
   }
 
-  const [inserted] = await db.query<{ version: number | string }>(
-    `insert into public.published_artifact_versions
-       (published_artifact_id, user_id, version, title, kind, language, content, parent_version_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
-     returning version`,
-    [
-      input.publishedArtifactId,
-      input.userId,
-      toVersionNumber(newest?.version) + 1,
-      input.title,
-      input.kind,
-      input.language,
-      input.content,
-      newest?.id ?? null,
-    ],
-  );
-
-  const version = toVersionNumber(inserted?.version);
-  await db.execute(
+  const receipts = await db.query<{ id: string; user_id: string; version: number | string }>(
     `update public.published_artifacts
         set version = $2
-      where id = $1 and user_id = $3`,
+      where id = $1 and user_id = $3
+      returning id, user_id, version`,
     [input.publishedArtifactId, version, input.userId],
   );
+  const receipt = receipts[0];
+  if (
+    receipts.length !== 1 ||
+    !receipt ||
+    receipt.id !== input.publishedArtifactId ||
+    receipt.user_id !== input.userId ||
+    requireHistoryVersion(receipt.version) !== version
+  ) {
+    throw new Error('Published artifact version pointer was not updated');
+  }
   return version;
 }
 

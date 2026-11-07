@@ -26,10 +26,46 @@ const {
 
 interface FakeDb {
   query: ReturnType<typeof vi.fn>;
+  transaction: ReturnType<typeof vi.fn>;
 }
 
 function makeDb(rows: unknown[] = []): FakeDb {
-  return { query: vi.fn(async () => rows) };
+  const db = {
+    query: vi.fn(async (_sql: unknown, _params?: unknown[]) => rows),
+    transaction: vi.fn(),
+  };
+  db.transaction.mockImplementation(async (callback: (tx: FakeDb) => Promise<unknown>) => {
+    const original = db.query.getMockImplementation()!;
+    db.query.mockImplementation(async (sql: unknown, params: unknown[] = []) => {
+      const history = historyRows(String(sql), params);
+      if (history !== null) return history;
+      if (String(sql).includes('as other_published')) {
+        return [{ other_published: 0, owned_conversations: 1 }];
+      }
+      if (isInsert(sql) || String(sql).includes('set title = case')) return rows;
+      throw new Error(`Unexpected transaction SQL: ${String(sql)}`);
+    });
+    try {
+      return await callback(db);
+    } finally {
+      db.query.mockImplementation(original);
+    }
+  });
+  return db;
+}
+
+function historyRows(sql: string, params: unknown[]): unknown[] | null {
+  if (
+    sql.includes('from public.published_artifact_versions') &&
+    sql.includes('order by version desc')
+  ) return [];
+  if (sql.includes('insert into public.published_artifact_versions')) {
+    return [{ version: params[2] }];
+  }
+  if (sql.includes('set version = $2')) {
+    return [{ id: params[0], user_id: params[2], version: params[1] }];
+  }
+  return null;
 }
 
 const INSERT_SQL = 'insert into public.published_artifacts';
@@ -50,11 +86,17 @@ function makeRoutedDb(options: {
   insertRows?: unknown[];
   insertError?: unknown;
 }): FakeDb {
-  return {
-    query: vi.fn(async (sql: unknown) => {
+  const db = {
+    transaction: vi.fn(),
+    query: vi.fn(async (sql: unknown, params: unknown[] = []) => {
+      const history = historyRows(String(sql), params);
+      if (history !== null) return history;
       if (isInsert(sql)) {
         if (options.insertError) throw options.insertError;
         return options.insertRows ?? [row()];
+      }
+      if (!String(sql).includes('as other_published')) {
+        throw new Error(`Unexpected publish SQL: ${String(sql)}`);
       }
       return [
         {
@@ -64,6 +106,10 @@ function makeRoutedDb(options: {
       ];
     }),
   };
+  db.transaction.mockImplementation(
+    async (callback: (tx: typeof db) => Promise<unknown>) => callback(db),
+  );
+  return db;
 }
 
 function row(overrides: Partial<PublishedArtifactRow> = {}): PublishedArtifactRow {
@@ -534,7 +580,10 @@ describe('Restore persistence without republication', () => {
     const grants = [{ publicationId: 'row-1', recipient: 'reader-1' }];
     const storage = [{ publicationId: 'row-1', key: 'existing-storage' }];
     const db = {
+      transaction: vi.fn(),
       query: vi.fn(async (sql: string, params: unknown[]) => {
+        const history = historyRows(sql, params);
+        if (history !== null) return history;
         const normalized = sql.replace(/\s+/g, ' ').trim();
         if (normalized.startsWith('select') && normalized.includes('as other_published')) {
           expect(normalized).toContain('where user_id = $1 and artifact_id <> $2');
@@ -597,6 +646,9 @@ describe('Restore persistence without republication', () => {
         throw new Error(`Unexpected Restore SQL: ${normalized}`);
       }),
     };
+    db.transaction.mockImplementation(
+      async (callback: (tx: typeof db) => Promise<unknown>) => callback(db),
+    );
     return {
       db,
       grants,
@@ -681,7 +733,7 @@ describe('Restore persistence without republication', () => {
     expect(restored?.updatedAt).not.toBe(original.updated_at);
     expect(state.grants).toEqual([{ publicationId: 'row-1', recipient: 'reader-1' }]);
     expect(state.storage).toEqual([{ publicationId: 'row-1', key: 'existing-storage' }]);
-    expect(state.db.query).toHaveBeenCalledTimes(2);
+    expect(state.db.query).toHaveBeenCalledTimes(5);
     expect(state.db.query.mock.calls[1]?.[1]).toEqual([
       'user-1', 'row-1', 'artifact-1', restoreInput.token,
       restoreInput.title, 'code', 'typescript', restoreInput.content,
@@ -735,7 +787,7 @@ describe('Restore persistence without republication', () => {
     state.replace(null);
     expect(await restorePublishedArtifactRecord(state.db as never, restoreInput)).toBeNull();
     expect(state.current()).toBeNull();
-    expect(state.db.query).toHaveBeenCalledTimes(4);
+    expect(state.db.query).toHaveBeenCalledTimes(7);
   });
 
   it.each([{ publishedArtifactId: '' }, { token: 'bad' }])('rejects malformed identity: %j', async (change) => {

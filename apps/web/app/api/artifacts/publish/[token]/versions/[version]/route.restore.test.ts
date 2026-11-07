@@ -10,7 +10,6 @@ import {
   readPublishedArtifactRestoreSource,
   readPublishedArtifactVersion,
   restorePublishedArtifactRecord,
-  recordPublishedVersion,
   publishArtifactRecord,
   PublishedArtifactOwnershipError,
   PublishedArtifactQuotaError,
@@ -34,7 +33,6 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => {
     readPublishedArtifactRestoreSource: vi.fn(),
     readPublishedArtifactVersion: vi.fn(),
     restorePublishedArtifactRecord: vi.fn(),
-    recordPublishedVersion: vi.fn(),
     publishArtifactRecord: vi.fn(),
   };
 });
@@ -51,7 +49,7 @@ const snapshot = {
   version: 3, title: 'Historical title', kind: 'html' as const, language: null,
   content: '<h1>Historical secret</h1>',
 };
-const restored = { ...publication, content: 'persisted redacted content' };
+const restored = { ...publication, content: 'persisted redacted content', version: 9 };
 const context = (version = '3', requestedToken = token) => ({
   params: Promise.resolve({ token: requestedToken, version }),
 });
@@ -84,12 +82,10 @@ beforeEach(() => {
     content: 'prepared redacted content',
   });
   vi.mocked(restorePublishedArtifactRecord).mockResolvedValue(restored);
-  vi.mocked(recordPublishedVersion).mockResolvedValue(9);
 });
 
 function expectNoWrites() {
   expect(restorePublishedArtifactRecord).not.toHaveBeenCalled();
-  expect(recordPublishedVersion).not.toHaveBeenCalled();
   expect(publishArtifactRecord).not.toHaveBeenCalled();
 }
 
@@ -179,12 +175,8 @@ describe('version POST restore handler', () => {
       language: snapshot.language,
       content: 'prepared redacted content',
     });
-    expect(recordPublishedVersion).toHaveBeenCalledExactlyOnceWith(db, {
-      publishedArtifactId: restored.id, userId: 'owner', title: restored.title,
-      kind: restored.kind, language: restored.language, content: restored.content,
-    });
     const order = [requireCsrfToken, withRateLimit, getUserScopedDb, readPublishedArtifactRestoreSource,
-      preparePublishedArtifactPublication, restorePublishedArtifactRecord, recordPublishedVersion]
+      preparePublishedArtifactPublication, restorePublishedArtifactRecord]
       .map((mock) => vi.mocked(mock).mock.invocationCallOrder[0]!);
     expect(order).toEqual([...order].sort((left, right) => left - right));
     expect(publishArtifactRecord).not.toHaveBeenCalled();
@@ -193,11 +185,10 @@ describe('version POST restore handler', () => {
     });
   });
 
-  it('returns 409 after a lost publication without history or fallback', async () => {
+  it('returns 409 after a lost publication without retry or fallback', async () => {
     vi.mocked(restorePublishedArtifactRecord).mockResolvedValue(null);
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode: 409 });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
-    expect(recordPublishedVersion).not.toHaveBeenCalled();
     expect(publishArtifactRecord).not.toHaveBeenCalled();
   });
 
@@ -205,20 +196,49 @@ describe('version POST restore handler', () => {
     [new PublishedArtifactValidationError('invalid'), 400],
     [new PublishedArtifactOwnershipError('foreign'), 403],
     [new PublishedArtifactQuotaError('quota'), 409],
-  ])('maps persistence error %s without history', async (error, statusCode) => {
+  ])('maps persistence error %s without replay', async (error, statusCode) => {
     vi.mocked(restorePublishedArtifactRecord).mockRejectedValue(error);
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode });
-    expect(recordPublishedVersion).not.toHaveBeenCalled();
+    expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
   });
 
-  it('surfaces history failure after restore without retry or generic Publish', async () => {
-    vi.mocked(recordPublishedVersion).mockRejectedValue(new Error('history unavailable'));
-    await expect(POST(request(), context())).rejects.toThrow('history unavailable');
+  it.each(['history unavailable', 'commit outcome unknown'])(
+    'propagates service rejection %s without retry or generic Publish',
+    async (message) => {
+      vi.mocked(restorePublishedArtifactRecord).mockRejectedValue(new Error(message));
+      await expect(POST(request(), context())).rejects.toThrow(message);
+      expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
+      expect(publishArtifactRecord).not.toHaveBeenCalled();
+    },
+  );
+
+  it('waits for the transaction-owning service before returning success', async () => {
+    let enterService!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enterService = resolve;
+    });
+    let finishService!: (value: typeof restored) => void;
+    const pending = new Promise<typeof restored>((resolve) => {
+      finishService = resolve;
+    });
+    vi.mocked(restorePublishedArtifactRecord).mockImplementation(() => {
+      enterService();
+      return pending;
+    });
+    let settled = false;
+    const response = POST(request(), context()).then((result) => {
+      settled = true;
+      return result;
+    });
+    await entered;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+    finishService(restored);
+    expect(await (await response).json()).toMatchObject({ version: restored.version });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
-    expect(recordPublishedVersion).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
-  });
+  }, 1_000);
 });
 
 describe('version GET remains read-only', () => {

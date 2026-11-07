@@ -21,7 +21,6 @@ import {
   buildPublishedArtifactUrl,
   listPublishedArtifacts,
   publishArtifactRecord,
-  recordPublishedVersion,
   requiresSandboxedRender,
 } from '@/lib/services/published-artifact-service';
 
@@ -113,21 +112,12 @@ async function handlePublish(request: NextRequest): Promise<Response> {
     throw error;
   }
 
-  const version = await recordPublishedVersion(db, {
-    publishedArtifactId: published.id,
-    userId,
-    title: published.title,
-    kind: published.kind,
-    language: published.language,
-    content: publishContent,
-  });
-
   return NextResponse.json(
     {
       token: published.token,
       shareUrl: buildPublishedArtifactUrl(published.token),
       publishedAt: published.updatedAt,
-      version,
+      version: published.version,
       kind: published.kind,
       title: published.title,
       sandboxed: requiresSandboxedRender(published.kind),
