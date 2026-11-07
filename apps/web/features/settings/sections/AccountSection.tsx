@@ -44,6 +44,7 @@ import {
   useCancelAccountDeletion,
 } from '../hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
+import type { AccountDeletionCancellationIntent } from '../hooks/use-cancel-account-deletion';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 type DeletionStatusSnapshot = QueryState<AccountDeletionStatus, Error>;
@@ -257,7 +258,10 @@ function AccountRow({
   );
 }
 
-export function AccountSection({ emailEditorActive = true }: { emailEditorActive?: boolean }) {
+export function AccountSection({ emailEditorActive = true, cancellationActive = true }: {
+  emailEditorActive?: boolean;
+  cancellationActive?: boolean;
+}) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -365,7 +369,6 @@ export function AccountSection({ emailEditorActive = true }: { emailEditorActive
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const queryClient = useQueryClient();
   const [deleteStatusSnapshot, setDeleteStatusSnapshot] = useState<DeletionStatusSnapshot | null>(null);
-  const [cancelStatusSnapshot, setCancelStatusSnapshot] = useState<DeletionStatusSnapshot | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const deleteAccountMutation = useDeleteAccount();
 
@@ -385,16 +388,9 @@ export function AccountSection({ emailEditorActive = true }: { emailEditorActive
   // only once the user clicks Continue. Signing back in before the deadline
   // (the Clerk identity itself is not deleted until the purge cron runs)
   // lands here with deletionStatus.pending true, which is what this reads.
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelIntent, setCancelIntent] = useState<AccountDeletionCancellationIntent | null>(null);
   const deletionStatus = useAccountDeletionStatus();
-  const cancelDeletionMutation = useCancelAccountDeletion();
-
-  const handleCancelDeletion = useCallback(() => {
-    if (!permitsDeletionAction(queryClient, cancelStatusSnapshot, 'cancel')) return;
-    cancelDeletionMutation.mutate(undefined, {
-      onSuccess: () => setShowCancelDialog(false),
-    });
-  }, [cancelDeletionMutation, cancelStatusSnapshot, queryClient]);
+  const cancelDeletionMutation = useCancelAccountDeletion(cancellationActive);
 
   const renderedDeletionStatus = useSyncExternalStore(
     useCallback((notify: () => void) => queryClient.getQueryCache().subscribe(notify), [queryClient]),
@@ -478,9 +474,7 @@ export function AccountSection({ emailEditorActive = true }: { emailEditorActive
                     disabled={!canCancelDeletion || deletionStatus.isFetching}
                     onClick={() => {
                       if (!permitsDeletionAction(queryClient, renderedDeletionStatus, 'cancel')) return;
-                      setCancelStatusSnapshot(renderedDeletionStatus ?? null);
-                      cancelDeletionMutation.reset();
-                      setShowCancelDialog(true);
+                      setCancelIntent(cancelDeletionMutation.begin(renderedDeletionStatus));
                     }}
                     style={outlineButtonStyle}
                   >
@@ -992,16 +986,17 @@ export function AccountSection({ emailEditorActive = true }: { emailEditorActive
 
       {/* Cancel-deletion confirmation dialog */}
       <AlertDialog
-        open={showCancelDialog}
+        open={cancelIntent?.isCurrent() === true &&
+          (!cancelDeletionMutation.isSuccess || cancelDeletionMutation.needsStatusCheck)}
         onOpenChange={(open) => {
-          if (!cancelDeletionMutation.isPending) setShowCancelDialog(open);
+          if (!open && !cancelDeletionMutation.isPending) cancelIntent?.dismiss();
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel account deletion?</AlertDialogTitle>
             <AlertDialogDescription>
-              Your account will stay active and none of your data will be removed.
+              Cancel the currently scheduled deletion before its cancellation deadline.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {cancelDeletionMutation.error && (
@@ -1009,26 +1004,42 @@ export function AccountSection({ emailEditorActive = true }: { emailEditorActive
               {toUserMessage(cancelDeletionMutation.error, 'Could not cancel account deletion.')}
             </p>
           )}
+          {cancelDeletionMutation.needsStatusCheck && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {cancelDeletionMutation.data?.cancelled
+                ? 'The cancellation request completed.'
+                : 'The server reported no pending deletion for this request.'}{' '}
+              Deletion status changed while this request was in progress. Check the current status before taking another action.
+            </p>
+          )}
           <AlertDialogFooter>
-            {!cancelDeletionMutation.isPending && !permitsDeletionAction(queryClient, cancelStatusSnapshot, 'cancel') && (
+            {!cancelDeletionMutation.isPending && !cancelDeletionMutation.isSuccess && !cancelIntent?.canConfirm() && (
               <p role="alert" className="text-sm text-danger">
-                Deletion status changed. Close this dialog, check the current status, and reopen the confirmation.
+                A fresh confirmation is required. Close this dialog, check the current status, and reopen the confirmation.
               </p>
             )}
             <AlertDialogCancel disabled={cancelDeletionMutation.isPending}>
-              Keep deletion scheduled
+              {cancelDeletionMutation.isSuccess || cancelDeletionMutation.error ? 'Close' : 'Keep deletion scheduled'}
             </AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="cancel-deletion-confirm"
-              onClick={(e) => {
+            {cancelDeletionMutation.needsStatusCheck ? (
+              <AlertDialogAction disabled={cancelDeletionMutation.isCheckingStatus} onClick={(e) => {
                 e.preventDefault();
-                handleCancelDeletion();
-              }}
-              disabled={cancelDeletionMutation.isPending ||
-                !permitsDeletionAction(queryClient, cancelStatusSnapshot, 'cancel')}
-            >
-              {cancelDeletionMutation.isPending ? 'Cancelling…' : 'Cancel deletion'}
-            </AlertDialogAction>
+                void cancelIntent?.checkCurrentStatus();
+              }}>
+                {cancelDeletionMutation.isCheckingStatus ? 'Checking…' : 'Check current status'}
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                data-testid="cancel-deletion-confirm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  cancelIntent?.confirm();
+                }}
+                disabled={cancelDeletionMutation.isPending || !cancelIntent?.canConfirm()}
+              >
+                {cancelDeletionMutation.isPending ? 'Cancelling…' : 'Cancel deletion'}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

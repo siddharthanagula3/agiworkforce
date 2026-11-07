@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StepUpDialogProps } from '@/features/auth/StepUpDialog';
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { queryClient as productionQueryClient, queryKeys } from '@shared/stores/query-client';
-import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
+import { NO_PENDING_ACCOUNT_DELETION, type AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDeleteAccount, useCancelAccountDeletion } from './use-settings-queries';
 
@@ -14,6 +14,12 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   replace: vi.fn(),
   dialog: vi.fn(),
+}));
+
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
+    isCurrent: () => true, getToken: async () => 'captured-token' }),
 }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
@@ -115,7 +121,9 @@ function renderDeletion() {
 
 function CancellationHarness() {
   cancellation = useCancelAccountDeletion();
-  return <button onClick={() => cancellation.mutate()}>Cancel scheduled deletion</button>;
+  return <button onClick={() => cancellation.begin(
+    client.getQueryState<AccountDeletionStatus, Error>(queryKeys.settings.accountDeletionStatus()),
+  )?.confirm()}>Cancel scheduled deletion</button>;
 }
 
 function renderCancellation() {

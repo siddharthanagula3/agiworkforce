@@ -247,7 +247,7 @@ export function WebSettingsModal({
       ? { plugins: <CapabilityDeniedNotice reason={pluginsDecision.reason} /> }
       : {}),
     general: <GeneralSection />,
-    account: <AccountSection emailEditorActive={open && activeSection === 'account'} />,
+    account: <AccountSection emailEditorActive={open && activeSection === 'account'} cancellationActive={open && activeSection === 'account'} />,
     team: (
       <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
         <WorkspaceConsolePointer />

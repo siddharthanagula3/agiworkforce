@@ -14,6 +14,15 @@ const { schedule, cancel, confirmations } = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('@clerk/nextjs', () => ({ useClerk: () => ({ signOut: vi.fn() }) }));
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
+    isCurrent: () => true, getToken: async () => 'captured-token' }),
+}));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  addCsrfHeaders: async (headers: HeadersInit) => headers,
+}));
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: { id: 'user-1' }, logout: vi.fn() }),
 }));
@@ -29,7 +38,6 @@ vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
     mutate: schedule, reset: vi.fn(), isPending: false, isSuccess: false,
     error: null, data: undefined, signOutAfterDeletion: vi.fn(),
   }),
-  useCancelAccountDeletion: () => ({ mutate: cancel, reset: vi.fn(), isPending: false, error: null }),
 }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
   const original = await importOriginal<typeof import('@agiworkforce/ui')>();
@@ -60,6 +68,10 @@ function setup(status?: AccountDeletionStatus, responseBody: unknown = status ??
   const statusRead = vi.fn<() => Promise<Response>>().mockImplementation(async () => response(responseBody));
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     if (String(input) === '/api/user/delete-account') return statusRead();
+    if (String(input) === '/api/user/delete-account/cancel') {
+      cancel();
+      return response({ message: 'Account deletion cancelled.', cancelled: true });
+    }
     return response({ sessions: [], totalCount: 0 });
   });
   render(<QueryClientProvider client={client}><AccountSection /></QueryClientProvider>);
@@ -98,7 +110,7 @@ describe('AccountSection deletion status admission', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     const current = await openConfirmation('cancel');
     act(() => { current(); });
-    expect(cancel).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
     expect(schedule).not.toHaveBeenCalled();
   });
 
@@ -129,7 +141,7 @@ describe('AccountSection deletion status admission', () => {
       setup(action === 'schedule' ? NO_PENDING_ACCOUNT_DELETION : pending);
       const retained = await openConfirmation(action);
       act(() => { retained(); });
-      expect(action === 'schedule' ? schedule : cancel).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(action === 'schedule' ? schedule : cancel).toHaveBeenCalledTimes(1));
     });
 
     it.each(['invalidated', 'paused', 'fetching', 'malformed', 'recovered', 'equal-data', 'cancelled', 'replaced'] as const)
@@ -163,7 +175,7 @@ describe('AccountSection deletion status admission', () => {
         }
 
         expect(client.getQueryState(key)).not.toBe(before);
-        expect(screen.getByText(/Deletion status changed\. Close this dialog/)).toBeInTheDocument();
+        expect(screen.getByText(action === 'schedule' ? /Deletion status changed\. Close this dialog/ : /A fresh confirmation is required\. Close this dialog/)).toBeInTheDocument();
         expect(screen.getByTestId(action === 'schedule' ? 'delete-account-confirm' : 'cancel-deletion-confirm')).toBeDisabled();
         act(() => { retained(); });
         expect(schedule).not.toHaveBeenCalled();

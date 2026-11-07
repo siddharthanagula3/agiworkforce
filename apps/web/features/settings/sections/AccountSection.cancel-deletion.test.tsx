@@ -29,6 +29,12 @@ vi.mock('@clerk/nextjs', () => ({
   useClerk: () => ({ signOut: vi.fn() }),
 }));
 
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
+    isCurrent: () => true, getToken: async () => 'captured-token' }),
+}));
+
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) =>
     selector({ user: { id: 'user-1' }, logout: vi.fn() }),
