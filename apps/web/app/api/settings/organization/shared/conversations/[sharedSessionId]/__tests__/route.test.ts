@@ -7,7 +7,7 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   requireCsrfToken: vi.fn(),
-  resolveOrgMembership: vi.fn(),
+  resolveOrgMembershipForOrganization: vi.fn(),
   unshare: vi.fn(),
   recordAuditEvent: vi.fn(),
 }));
@@ -62,7 +62,7 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  resolveOrgMembership: mocks.resolveOrgMembership,
+  resolveOrgMembershipForOrganization: mocks.resolveOrgMembershipForOrganization,
 }));
 vi.mock('@/lib/services/org-shared-session-service', () => ({
   SHARED_SESSION_VISIBILITIES: vi.fn(),
@@ -119,8 +119,8 @@ describe('DELETE shared conversation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requireCsrfToken.mockResolvedValue(null);
-    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'member-1' });
-    mocks.resolveOrgMembership.mockResolvedValue({ organizationId: ORG, role: 'member' });
+    mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'member-1', organizationId: ORG });
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({ organizationId: ORG, role: 'member' });
   });
 
   it('returns 401 when the caller is not signed in', async () => {
@@ -144,7 +144,7 @@ describe('DELETE shared conversation', () => {
   });
 
   it('returns 403 when the caller has no organization', async () => {
-    mocks.resolveOrgMembership.mockResolvedValue(null);
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue(null);
     const response = await DELETE(request(), ctx());
     expect(response.status).toBe(403);
     expect(mocks.unshare).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('DELETE shared conversation', () => {
     const response = await DELETE(request(), ctx());
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
-    expect(mocks.resolveOrgMembership).toHaveBeenCalledWith(DB, 'member-1');
+    expect(mocks.resolveOrgMembershipForOrganization).toHaveBeenCalledWith(DB, 'member-1', ORG);
     expect(mocks.unshare).toHaveBeenCalledWith(DB, ORG, SESSION);
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({

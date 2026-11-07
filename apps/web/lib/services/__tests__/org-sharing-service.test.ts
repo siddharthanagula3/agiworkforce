@@ -3,14 +3,21 @@ type ScanModule0 = typeof import('@/lib/services/org-entitlements');
 
 vi.mock('server-only', () => ({}));
 
-const { mockEntitlements, mockNeonQuery } = vi.hoisted(() => ({
+const { mockEntitlements, mockNeonQuery, mockCachedRead, mockCachedWrite } = vi.hoisted(() => ({
   mockEntitlements: vi.fn(),
   mockNeonQuery: vi.fn(),
+  mockCachedRead: vi.fn(async () => undefined),
+  mockCachedWrite: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   getOrganizationEntitlements: mockEntitlements,
+}));
+
+vi.mock('@/lib/server/request-context-cache', () => ({
+  getCachedActiveOrganizationId: mockCachedRead,
+  setCachedActiveOrganizationId: mockCachedWrite,
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
@@ -27,6 +34,7 @@ import {
   requireOrgMember,
   requireSharingManager,
   resolveOrgMembership,
+  resolveOrgMembershipForOrganization,
   resolveSharedProjectScope,
   setProjectMemberAccess,
   shareProject,
@@ -97,25 +105,87 @@ describe('role gates fail closed', () => {
   });
 });
 
-describe('resolveOrgMembership', () => {
-  it('reads the role from the membership table for the authenticated subject', async () => {
-    const { db, issued } = makeDb(() => [{ organization_id: ORG, role: 'admin' }]);
-    const membership = await resolveOrgMembership(db, 'user-1');
-    expect(membership).toEqual({ organizationId: ORG, role: 'admin' });
-
-    expect(issued[0]!.sql).toMatch(/from public\.user_settings/i);
-    expect(issued[0]!.sql).toMatch(/join public\.organization_members/i);
-    expect(issued[0]!.sql).toMatch(/where s\.user_id = \$1/i);
-    expect(issued[0]!.params).toEqual(['user-1']);
-
-    expect(issued[1]!.sql).toMatch(/from public\.organization_members/i);
-    expect(issued[1]!.sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
-    expect(issued[1]!.params).toEqual([ORG, 'user-1']);
+describe('resolveOrgMembershipForOrganization', () => {
+  it('binds only the requested organization, authenticated subject and active status', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      expect(sql).not.toMatch(/user_settings/i);
+      expect(sql).toMatch(/from public\.organization_members/i);
+      expect(sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+      expect(sql).toMatch(/and status = 'active'/i);
+      expect(params).toEqual([OTHER_ORG, 'user-1']);
+      return [{ organization_id: OTHER_ORG, role: 'admin' }];
+    });
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).toEqual({
+      organizationId: OTHER_ORG,
+      role: 'admin',
+    });
+    expect(issued).toHaveLength(1);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
   });
 
-  it('returns null when the caller belongs to no organization', async () => {
-    const { db } = makeDb(() => []);
+  it('keeps Personal null without any membership or saved-selection query', async () => {
+    const { db, issued } = makeDb(() => {
+      throw new Error('Personal scope must not query');
+    });
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', null)).toBeNull();
+    expect(issued).toHaveLength(0);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(mockCachedRead).not.toHaveBeenCalled();
+    expect(mockCachedWrite).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'inactive'])('refuses a %s membership excluded by the active predicate', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      expect(sql).toMatch(/and status = 'active'/i);
+      expect(params).toEqual([OTHER_ORG, 'user-1']);
+      return [];
+    });
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).toBeNull();
+    expect(issued).toHaveLength(1);
+  });
+
+  it('refuses a returned row for a different organization', async () => {
+    const { db } = makeDb(() => [{ organization_id: ORG, role: 'owner' }]);
+    expect(await resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).toBeNull();
+  });
+
+  it('propagates database failures without falling back to saved scope', async () => {
+    const failure = new Error('membership read failed');
+    const { db, issued } = makeDb(() => {
+      throw failure;
+    });
+    await expect(resolveOrgMembershipForOrganization(db, 'user-1', OTHER_ORG)).rejects.toBe(failure);
+    expect(issued).toHaveLength(1);
+  });
+});
+
+describe('resolveOrgMembership saved-selection wrapper', () => {
+  it('resolves the saved selection then uses the same explicit membership predicate', async () => {
+    const { db, issued } = makeDb((sql, params) => {
+      if (/from public\.user_settings/i.test(sql)) {
+        expect(params).toEqual(['user-1']);
+        return [{ organization_id: ORG }];
+      }
+      expect(sql).toMatch(/from public\.organization_members/i);
+      expect(sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
+      expect(sql).toMatch(/and status = 'active'/i);
+      expect(params).toEqual([ORG, 'user-1']);
+      return [{ organization_id: ORG, role: 'admin' }];
+    });
+    expect(await resolveOrgMembership(db, 'user-1')).toEqual({ organizationId: ORG, role: 'admin' });
+    expect(issued).toHaveLength(2);
+    expect(issued[0]!.sql).toMatch(/join public\.organization_members/i);
+  });
+
+  it('returns null when the saved selection resolves Personal', async () => {
+    const { db, issued } = makeDb((sql) => {
+      expect(sql).toMatch(/from public\.user_settings/i);
+      return [];
+    });
     expect(await resolveOrgMembership(db, 'user-1')).toBeNull();
+    expect(issued).toHaveLength(1);
   });
 });
 

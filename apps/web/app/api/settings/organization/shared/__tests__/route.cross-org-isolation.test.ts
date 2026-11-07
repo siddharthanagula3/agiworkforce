@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/services/org-entitlements');
 
 vi.mock('server-only', () => ({}));
@@ -74,16 +75,16 @@ describe('organization shared surface · cross-org isolation', () => {
     mockGetUserScopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mockQuery(...args) },
       userId: 'user-in-org-a',
-      organizationId: null,
+      organizationId: ORG_A,
     });
   });
 
-  it('GET never binds a client-supplied organization id, only the membership one', async () => {
+  it('GET ignores query scope and uses the authenticated resolver scope', async () => {
     bindCallerInOrgA('admin');
 
     const request = new Request(
       `http://localhost:3000/api/settings/organization/shared?organizationId=${ORG_B}`,
-      { headers: { 'x-agi-organization-id': ORG_B } },
+      { headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: ORG_A } },
     ) as never;
 
     const response = await GET(request);
@@ -136,7 +137,7 @@ describe('organization shared surface · cross-org isolation', () => {
     const response = await SHARE_PROJECT(
       new Request(
         `http://localhost:3000/api/settings/organization/shared/projects/${PROJECT_IN_ORG_B}`,
-        { method: 'PUT', headers: { 'x-agi-organization-id': ORG_B }, body: '{}' },
+        { method: 'PUT', headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: ORG_A }, body: '{}' },
       ) as never,
       { params: Promise.resolve({ projectId: PROJECT_IN_ORG_B }) },
     ).catch((error: unknown) => error as { statusCode?: number; status?: number });

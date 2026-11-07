@@ -44,7 +44,15 @@ export async function resolveOrgMembership(
   userId: string,
 ): Promise<OrgMembership | null> {
   const organizationId = await resolveActiveOrganizationId(db, userId);
-  if (!organizationId) return null;
+  return resolveOrgMembershipForOrganization(db, userId, organizationId);
+}
+
+export async function resolveOrgMembershipForOrganization(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string | null,
+): Promise<OrgMembership | null> {
+  if (organizationId === null) return null;
   const [row] = await db.query<{ organization_id: string; role: OrgRole }>(
     `select organization_id, role
        from public.organization_members
@@ -53,7 +61,7 @@ export async function resolveOrgMembership(
       limit 1`,
     [organizationId, userId],
   );
-  if (!row) return null;
+  if (!row || row.organization_id !== organizationId) return null;
   return { organizationId: row.organization_id, role: row.role };
 }
 
