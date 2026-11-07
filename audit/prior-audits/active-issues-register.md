@@ -17114,3 +17114,35 @@ cross-controller ordering, delayed writes and live native/auth/database behavior
 remain open. No product tests, lint, typechecks, builds, installs, app/module
 execution, live services/databases, migration application, fetch, push or deploy.
 The existing recovery-chain, unapplied-migration and lost-history limits remain.
+
+### Mobile Sites takedown names visitor-data loss
+
+Continuation 31df4da54c8c7b7405c54ea24e5c6f44e8f7676d, 2026-11-07, corrects the mobile Sites confirmation.
+Ordinary Unpublish previously said the link stopped working and the artifact
+stayed in chat, without naming the irreversible visitor-data loss. The separate
+Delete option mentioned erasure, suggesting a difference the backend does not
+provide. This is a source-qualified disclosure gap, not an observed incident.
+
+Both options now explicitly name loss of all shared and personal data visitors
+saved in this site, loss of link access for everyone, and non-recoverability.
+The original artifact remaining in chat is distinguished from published data.
+Native confirmation titles, destructive action labels, cancellation/dismissal
+and service dispatch are unchanged.
+
+The source chain is mobile unpublishSite to owner-scoped publication DELETE,
+then unpublishArtifactRecord's parent-row deletion. Migration 0325 declares
+the publication-storage foreign key ON DELETE CASCADE for shared and personal
+rows. No database schema or deletion behavior changes; deployed schema and
+actual deletion were not inspected or exercised. This does not certify backup
+retention, app snapshots or other copies outside publication storage.
+
+Two source/fixture files are independently reviewed. Real-screen native alert
+fixtures name the exact consequence, hold dispatch until confirmation, preserve
+both existing request sequences, and reject cancellation/dismissal; all UNRUN.
+An existing unrelated Restore fixture still expects the obsolete root POST,
+although current service uses token/version POST; it is not repaired here.
+Legacy mobile Sites account/view lifetime, bodyless DELETE acceptance and the
+separate clear-then-delete partial-failure workflow remain unresolved. This
+copy correction adds no atomicity, recovery, receipt or lifecycle guarantee.
+No product checks, live service/database or migration actions, push or deploy.
+Existing fixed-base recovery dependencies and lost-history limits remain.

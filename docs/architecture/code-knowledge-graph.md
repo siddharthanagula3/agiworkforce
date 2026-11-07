@@ -7337,3 +7337,20 @@ metadata semantics or lasting remote state. DELETE, legacy Sites and durable
 reconciliation remain outside this slice. Fixtures are authored/adapted UNRUN;
 no product checks, live service/database or migration actions, push or deployment.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Mobile Sites takedown discloses visitor-storage deletion
+
+Continuation 31df4da54c8c7b7405c54ea24e5c6f44e8f7676d aligns both mobile SiteDetailScreen takedown
+confirmations with the existing owner-scoped publication deletion. Removing
+published_artifacts cascades shared and personal published_artifact_storage
+rows under migration 0325; the original source artifact is separate.
+
+Both confirmations name loss of link access, irreversible visitor-data erasure
+and the surviving chat artifact. Native titles/actions, cancel/dismiss handling,
+unpublish DELETE and optional shared-clear-then-DELETE sequence are unchanged.
+This is a disclosure correction, not new storage behavior or atomicity.
+
+Real-screen alert and dispatch fixtures are UNRUN. Live schema/cascade behavior,
+legacy Sites request lifetime, DELETE acknowledgement, partial failure and
+recovery remain unverified; no product checks, migrations, push or deployment.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.
