@@ -15665,7 +15665,8 @@ schema were not verified. No product checks, DB/provider actions, push or deploy
 ## WEB-ORG-SETTINGS-REQUEST-SCOPE-01
 
 Severity: Medium. Bounded sharing/spend correction source-reviewed in
-`12c9a9a7c85536c373968c5e9137c1af04eade1b`, 2026-11-07. Other request-backed settings, client
+`12c9a9a7c85536c373968c5e9137c1af04eade1b`; interactive caller continuation in
+`2ae29f73ae6adaa7337f1ee1783d112401406ca3`, 2026-11-07. Other request-backed settings, client
 workspace binding and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -15712,11 +15713,57 @@ source guard requires explicit scope propagation at all ten corrected call sites
 All fixtures and guards remain UNRUN; none proves real auth/header parsing, database
 RLS, concurrent selection, integrated UI or deployment behavior.
 
+A second bounded correction in 2ae29f73ae6adaa7337f1ee1783d112401406ca3 retains the same request-resolved
+organization in the interactive branches of resolveWorkspaceApiCaller and
+resolveComplianceCaller. Their ten route files contain fourteen handler call
+sites: member roster/detail/role/removal, invitations, usage report, automation
+principals, audit reads/exports and legal-hold preservation/export. The strongest
+qualified write is service-principals PATCH: valid A membership, Team/Enterprise
+access, identity.manage, normal session/CSRF controls and a known A principal can
+otherwise enable/disable that principal despite an explicit Personal or B
+selector. setServicePrincipalDisabled uses the privileged service adapter with
+the reselected A. A principal existing only in B instead fails A's resource
+predicate. Roster and legal-hold preservation readers also use privileged adapters;
+audit readers bind the caller organization and applicable permission RLS, not an
+automatic request-organization equality guard. These are source-supported target
+confusion paths, not observed incidents or permission acquisition.
+
+Both interactive helpers now use the canonical explicit membership lookup before
+the unchanged entitlement/permission gates and return that same organization.
+The API-key branches are unchanged: verified key organization, scopes, entitlement
+and IP controls remain authoritative regardless of a conflicting request selector.
+The workspace caller retains its unknown-route and members-only guards. Direct
+compliance consumers still supply their own permission argument rather than
+universally consulting the workspace route table; legal-hold preservation is an
+existing such consumer. No new table enforcement, bearer fallback or MFA exemption
+is added.
+
+New helper fixtures invoke both real callers and the canonical membership lookup
+behind mocked scoped auth, key verification, database rows, entitlement/permission
+and IP boundaries. They cover captured B/headerless scope, Personal, empty or
+mismatched membership, auth/query errors, gate denials, route permission mapping,
+delegation and key A with conflicting selectors. The automation-principal route
+fixture retains real handlers, callers, storage-query construction and key
+verification against mocked DB responses; auth, entitlement and permission
+boundaries remain mocked. Parameter-sensitive rows assert B reads/writes/audits,
+Personal refusal, A-only principal not-found under B, key GET anchored to A and
+key PATCH refusal.
+The existing audit/export fixture now supplies its authenticated organization,
+preserving earlier assertions. These fixtures are UNRUN, not executed header
+parsing, SQL/RLS, authentication, cache races or runtime acceptance. Empty query
+results model filtered inactive membership; SQL text asserts the active predicate.
+No additional source-shape guard was added for this continuation.
+
+The automation-principal UI currently omits workspace selectors and uses a global
+query key. Audit queries and export links likewise do not bind a workspace
+snapshot. The helper correction preserves the first server resolution; it cannot
+recover client intent before that resolution or make stale client views safe.
+
 The sharing hooks use a constant query key and omit a selector; the spend UI also
 omits one. Keeping the first server resolution does not reconstruct stale UI intent
 or stop a selection change before that resolution. Twelve other organization
-settings route files, interactive compliance/service-principal gates, shared-project
-scope and conversation-sharing target helpers still need separate scope review.
+settings route files, shared-project scope and conversation-sharing target helpers
+still need separate scope review.
 Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
 were deliberately not migrated. In particular the policy route's MFA exemption
 requires an authentication-boundary review, not a mechanical target replacement.
