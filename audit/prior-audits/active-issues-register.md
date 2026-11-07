@@ -15668,7 +15668,8 @@ Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `12c9a9a7c85536c373968c5e9137c1af04eade1b`; interactive caller continuation in
 `2ae29f73ae6adaa7337f1ee1783d112401406ca3`; legal-hold/admin-key continuation in
 `2b88fbf779028837dbf33864103949a5343d4e5f`; retention/audit-destination continuation in
-`31053fc862dea2a4e00637f5828414963601bc2a`, 2026-11-07. Other request-backed settings, client
+`31053fc862dea2a4e00637f5828414963601bc2a`; model/connector continuation in
+`d1123747532a84e34c0af1215c461e239974ea21`, 2026-11-07. Other request-backed settings, client
 workspace binding and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -15849,6 +15850,44 @@ workspace selectors on their direct fetches. They do not establish which headers
 an ordinary UI interaction ultimately sends. Keeping the first server resolution
 does not recover stale client intent or prevent a switch before that resolution.
 
+A fifth bounded correction in `d1123747532a84e34c0af1215c461e239974ea21` retains the captured organization
+at all four GET/PUT gates in model-policy and connector-policy. A valid A member
+could previously read A's policy despite explicit Personal/B selection, and a
+valid A policy manager could replace A's model/connector restrictions through
+privileged storage. Team/Enterprise access, normal authentication/MFA/IP, CSRF,
+rate and input gates still applied; explicit B requires upstream B membership.
+The scoped reads use membership-based policy RLS, not selected-organization equality.
+Neither route opts into the separate MFA-owner exemption or API-key admission.
+
+Both routes now use the canonical exact active-membership lookup with the required
+string-or-null target. Personal and lost target membership refuse before resource
+effects. GET remains available to eligible ordinary members, with target permissions
+used to report management capability; PUT still requires policy.manage. Catalog
+validation, provider/model lists, connector/plugin/domain normalization, overlap
+checks, omitted connector toolRules merge, query adapters and audit/response targets
+are unchanged. The correction binds configuration storage, not proof of downstream
+model/connector enforcement, cancellation of admitted work or retroactive cleanup.
+Post-check permission/policy races and post-write audit/response failures remain.
+
+The two route fixtures retain real handlers, canonical membership validation,
+policy service read/write/format/diff logic and request-body/schema validation.
+Model catalog lookup remains real in fixture source; connector catalog mapping is
+mocked. Scoped authentication, error wrappers, plan/permission gates, separate
+parameter-sensitive scoped/privileged databases, saved selectors and audit/effect
+boundaries are mocked and reset per case. Existing assertions are preserved.
+Cases cover B versus saved A with explicit/headerless capture, canonical Personal,
+missing/mismatched membership, target plan/permission refusal, ordinary-member GET,
+B storage/payload/audit and unchanged A, plus early CSRF/rate and schema/catalog
+coherence refusals. Connector fixtures distinguish A/B prior toolRules and preserve
+B's omitted rules, while explicit rules retain normalization/deduplication.
+All fixtures remain UNRUN and do not prove header parsing, auth, middleware,
+SQL/RLS, actual policy enforcement, concurrency or runtime acceptance.
+No additional source-shape guard was added.
+
+Both hooks use global query keys and omit explicit workspace selectors in direct
+fetches. This source correction retains the first server resolution; it does not
+recover stale UI intent or stop a workspace switch before that resolution.
+
 Current legal-hold and API-key hooks use global query keys and omit workspace
 selectors on their direct fetches; key creation separately binds its step-up flow
 to an organization. This source correction does not establish which headers an
@@ -15862,12 +15901,47 @@ recover client intent before that resolution or make stale client views safe.
 
 The sharing hooks use a constant query key and omit a selector; the spend UI also
 omits one. Keeping the first server resolution does not reconstruct stale UI intent
-or stop a selection change before that resolution. Eight other organization
+or stop a selection change before that resolution. Six other organization
 settings route files, shared-project scope and conversation-sharing target helpers
 still need separate scope review.
 Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
 were deliberately not migrated. Both policy and policy/code request the owner MFA
 exemption and require authentication-boundary review, not mechanical replacement.
+
+Further source-only review leaves both policy routes and authentication unchanged.
+The owner exemption in api-auth uses saved-workspace membership, whereas lockdown
+and getUserScopedDb resolve the request selector, and policy/policy-code later
+reselect saved membership. With saved locked A and explicit Personal/unlocked B,
+lockdown can inspect Personal/B while the route acts on A under otherwise valid
+A rights. No later route-target lockdown assertion corrects that mismatch.
+
+A conditional headerless interleaving also exists: exemption is granted as owner
+of saved A, then a separately admitted selection write changes the shared
+account-keyed saved/cache selection to B before DB/route resolution. A caller
+with B policy.manage can then reach B without repeating aggregate MFA. Concrete
+paths include policy GET, Code PATCH with an existing policy, or a valid main
+policy PATCH setting requireMfa:false; a main PATCH preserving required MFA may
+instead fail its enrollment safety check. Both workspace-switch endpoints enforce
+normal MFA, so an already-unenrolled caller cannot simply issue a fresh ungated
+switch. Another eligible session or previously admitted write is required.
+No timing, cache schedule, session eligibility or runtime exploit is demonstrated.
+
+Changing only the routes to select B would introduce a simpler stable saved-owner-A
+to selected-nonowner-B exemption mismatch. A future correction must bind the
+existing owner exception, target lockdown, restricted DB scope and route target
+to one authenticated account/organization snapshot, without narrowing ordinary
+aggregate MFA to the selected workspace. Preserve the existing owner-recovery
+contract only for the owned target; broader recovery redesign is separate.
+
+Cookie getUserScopedDb also discards the mapped AuthResult and returns the provider
+subject. Returning the product account alone is insufficient: both session-token
+adapter paths bind the token's subject, and current_app_user_id reads that claim
+without applying the identity bridge. Any correction must preserve verified
+authentication and the app_rls boundary while binding both logical and DB identity.
+The existing claimed-scope adapter is not authentication on its own. This namespace
+work remains under WEB-IDENTITY-POLICY-NAMESPACE-01; no JWT rewriting, raw-client
+identity proof or service-role fallback is proposed or implemented.
+
 Membership/permission changes after checking, post-write audit/cache/response errors
 and uncertain outcomes remain separate; no transaction or replay guarantee was
 added. Prior migrations 0394/0395 remain UNAPPLIED. Installed Next guidance and

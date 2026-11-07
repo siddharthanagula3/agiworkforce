@@ -6747,8 +6747,38 @@ parsing, middleware, auth, SQL/RLS, encryption, network delivery or atomicity.
 No new structural guard was added; the earlier guard remains limited to its ten
 sharing/spend sites.
 
+Continuation `d1123747532a84e34c0af1215c461e239974ea21` binds four model-policy/connector-policy
+GET/PUT gates to the captured organization. Previously a caller with valid A
+membership and paid entitlement could read A's policy despite Personal/B selection;
+policy.manage also admitted privileged A configuration writes. The canonical
+required-target lookup refuses Personal and missing/mismatched target membership.
+Eligible ordinary-member GET and existing manager PUT gates remain unchanged.
+
+Catalog/schema/coherence checks, list normalization, omitted connector toolRules
+merge, adapters, audits and payloads keep their existing behavior. Neither route
+opts into MFA-owner exemption. This binds configuration, not runtime enforcement
+or cancellation of already-admitted work; post-check races and post-write
+uncertainty remain. Headerless clients/global query keys still do not bind UI intent.
+
+Route fixtures retain real canonical membership, policy query/format/diff and
+schema logic, with real model catalog source and mocked connector catalog.
+Authentication, middleware wrapper, permissions/plan, DB and effects remain
+mocked. Parameter-aware A/B data cover exact targets, Personal/gate refusal,
+ordinary-member GET, unchanged A and B's omitted connector toolRules. All UNRUN;
+no executed header parsing, SQL/RLS, enforcement, concurrency or runtime proof.
+
+Policy and policy/code remain unchanged pending a bound auth/scope correction.
+Their saved-owner exemption, request-target lockdown and later saved route target
+can diverge. The headerless MFA interleaving requires a separately admitted switch;
+ordinary unenrolled switching is not an ungated path, and actual exploitation is
+unverified. A route-only retarget would introduce a stable exemption mismatch.
+Preserve aggregate MFA and owned-target recovery while pinning authenticated account,
+target lockdown, app_rls identity and route scope together. Both token adapter paths
+can retain provider-subject RLS even when AuthResult names the mapped product account;
+see WEB-IDENTITY-POLICY-NAMESPACE-01. No auth/RLS change is included here.
+
 Headerless clients and global query keys remain unbound to stale UI intent before
-the first server resolution. Eight other organization settings files, project/session
+the first server resolution. Six other organization settings files, project/session
 target helpers and MFA owner-exemption scope (both policy and policy/code) remain
 separate work. Post-check membership/policy changes, post-write errors and uncertain
 outcomes are unchanged;
