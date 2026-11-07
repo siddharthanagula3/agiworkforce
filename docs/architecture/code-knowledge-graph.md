@@ -6704,8 +6704,26 @@ prove real header parsing, SQL/RLS, cache races, authentication or runtime succe
 The earlier sharing/spend source guard covers ten sites; no new structural guard
 was added for the two helper branches.
 
+Continuation `2b88fbf779028837dbf33864103949a5343d4e5f` applies the same required-target lookup
+to legal-hold and admin-key route gates, covering six GET/POST/DELETE handlers.
+Valid A administrators could otherwise release a known A hold or revoke a known
+A key through privileged storage despite explicit Personal/B selection. Release
+removes one hold's protection, not records; later deletion remains conditional on
+eligibility, an executing deletion operation and other holds. Key revocation does
+not prove that already-running work stops. Lists expose metadata, not existing
+plaintext key secrets. Key creation still requires a proof bound to the actual
+target plus existing principal/scope gates; optional idempotency retains that
+organization. No credential generator, transaction or authentication change.
+
+The hold/key fixtures retain real route/member/query-construction code over mock
+DB/auth/entitlement/permission boundaries. The hold transaction callback is simulated.
+Key step-up/grant/idempotency helpers remain real in fixture source, with B proof
+success, A proof refusal before storage/replay, A-only resource refusals and an
+organization-aware replay map. All are UNRUN; no persisted secret, real SQL/RLS,
+transaction rollback, cache race or runtime evidence is claimed.
+
 Headerless clients and global query keys remain unbound to stale UI intent before
-the first server resolution. Twelve other organization settings files, project/session
+the first server resolution. Ten other organization settings files, project/session
 target helpers and MFA owner-exemption scope remain separate work. Post-check
 membership/policy changes, post-write errors and uncertain outcomes are unchanged;
 no transaction or replay guarantee is added. No new migration or product checks.

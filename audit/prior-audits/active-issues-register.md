@@ -15666,7 +15666,8 @@ schema were not verified. No product checks, DB/provider actions, push or deploy
 
 Severity: Medium. Bounded sharing/spend correction source-reviewed in
 `12c9a9a7c85536c373968c5e9137c1af04eade1b`; interactive caller continuation in
-`2ae29f73ae6adaa7337f1ee1783d112401406ca3`, 2026-11-07. Other request-backed settings, client
+`2ae29f73ae6adaa7337f1ee1783d112401406ca3`; legal-hold/admin-key continuation in
+`2b88fbf779028837dbf33864103949a5343d4e5f`, 2026-11-07. Other request-backed settings, client
 workspace binding and runtime acceptance remain open.
 
 getUserScopedDb already resolves an explicit workspace or Personal selector and
@@ -15754,6 +15755,54 @@ parsing, SQL/RLS, authentication, cache races or runtime acceptance. Empty query
 results model filtered inactive membership; SQL text asserts the active predicate.
 No additional source-shape guard was added for this continuation.
 
+A third bounded correction in `2b88fbf779028837dbf33864103949a5343d4e5f` retains the captured request
+organization in the shared gates for legal-holds and admin-api-keys, covering
+GET/POST/DELETE on each route. Previously a caller with active A membership,
+Team/Enterprise access and content.govern or identity.manage could submit a known
+active A hold/key ID with an explicit Personal or B selector and release/revoke A
+through the privileged service adapter. Normal authentication, rate limits, CSRF
+and resource predicates still applied; B selection also required upstream B
+membership. Neither DELETE adds or previously required step-up. A B-only resource
+under the old A target is not found, not modified.
+
+Releasing a hold removes that hold's protection, not the records themselves.
+Subsequent deletion still depends on an eligible deletion/retention operation and
+other applicable holds. Key revocation affects subsequent verification; stopping
+already-running work is not established. Hold creation could preserve A while
+leaving intended B without the requested hold. Key listing returns key metadata and
+principals, not existing plaintext secrets. Wrong-target key creation additionally
+requires an A-bound valid api_credential.reveal step-up proof; a B-only proof fails.
+Its existing principal/permission ceilings and optional organization-scoped
+idempotency remain intact. This continuation changes no credential generator,
+transaction, authorization policy or replay guarantee.
+
+Both routes now resolve exact active membership using the captured string-or-null
+organization. Personal fails before privileged resources, step-up, idempotency and
+route-level mutation/access audit calls; target membership loss fails before downstream authorization. Permission,
+entitlement, resource, step-up, storage, payload and audit destinations retain that
+target. Default authentication/account-security/MFA/IP checks are untouched, and
+neither route opts into the separate MFA-owner exemption. These are authorized
+wrong-target source paths, not demonstrated unauthorized access or runtime incidents.
+
+The two route fixtures retain real handlers, canonical membership and storage-query
+construction with mocked authentication, database/transaction callbacks, entitlement,
+permissions and audit sinks. All verbs cover captured scope, Personal, membership
+and gate denials; parameter-sensitive hold/key/principal responses distinguish A
+from B. Legal-hold fixtures retain retention/admin-audit helpers and check target
+arguments, not executed release SQL or rollback. Key fixtures also retain real
+step-up grant verification, idempotency and credential/principal helper source:
+B proof admits the B path, A proof refuses before B replay/storage, and the replay
+map now includes organization, scope and key so a seeded A result cannot stand in
+for B. Existing assertions are preserved. These fixtures remain UNRUN; no live
+authentication, header parsing, SQL/RLS, persisted credential, transaction or
+concurrency result is established. No additional source-shape guard was added.
+
+Current legal-hold and API-key hooks use global query keys and omit workspace
+selectors on their direct fetches; key creation separately binds its step-up flow
+to an organization. This source correction does not establish which headers an
+ordinary UI interaction ultimately sends, repair stale cached intent or stop a
+selection change before the first authoritative server resolution.
+
 The automation-principal UI currently omits workspace selectors and uses a global
 query key. Audit queries and export links likewise do not bind a workspace
 snapshot. The helper correction preserves the first server resolution; it cannot
@@ -15761,7 +15810,7 @@ recover client intent before that resolution or make stale client views safe.
 
 The sharing hooks use a constant query key and omit a selector; the spend UI also
 omits one. Keeping the first server resolution does not reconstruct stale UI intent
-or stop a selection change before that resolution. Twelve other organization
+or stop a selection change before that resolution. Ten other organization
 settings route files, shared-project scope and conversation-sharing target helpers
 still need separate scope review.
 Bootstrap/layout saved-selection semantics and the owner MFA recovery exemption
