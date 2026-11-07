@@ -17592,3 +17592,43 @@ Focused fixtures are authored UNRUN. Existing Private readback and Publish
 uncertainty-marker semantics remain; failed/malformed readback stays unknown.
 No product checks, live calls, migrations, push or deployment. Existing
 recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+### Web shared-data clearing stays with its owning view
+
+Continuation 496f40e6ce5bb7d5779f632debcf7b1463b06a86, 2026-11-07, addresses a web Data-tab operation
+that could outlive its owning view. A confirmed clear awaited CSRF preparation,
+then dispatched DELETE even if navigation had already unmounted that tab.
+Later settlement could also show feedback and start another GET after retirement.
+The request still named its original token and backend ownership checks remained;
+no wrong-token deletion, cross-account bypass or observed incident is established.
+
+The Data tab keys its session by token, artifact and publication lease, then
+creates a fresh activation lane in its layout effect. Cleanup permanently
+retires the lane and its read/mutation requests. Accepted data identity and a
+one-shot ticket bind confirmation/cancellation; a retained or repeated callback
+cannot acquire a newer operation. Retry is bound to its accepted error state.
+
+Data helpers now accept narrow optional request authority, check before work,
+after CSRF preparation and around response/body settlement, and use its
+cookie-preserving fetch. Component requests also check lane, operation and
+lease identity, with abort as an additional signal rather than the sole guard.
+A retired completion cannot adopt data, show feedback or launch a refresh.
+Current mutation completion retains the existing guarded readback behavior.
+
+The existing clear response is legitimately { cleared }, including zero.
+No token or success field is invented and no backend/schema or shared
+confirmation primitive changes are made. Cookie transport remains ambient;
+local view/lease authority is not native credential binding.
+
+Five source/fixture files include real-service component coverage of CSRF
+retirement, delayed success/error/decoding, token and lease round trips, stale
+confirm/cancel/Retry callbacks, duplicate admission, zero/positive receipts
+and fresh StrictMode lanes. Two existing data-helper assertions adopt the new
+authority argument. All fixtures are UNRUN; mock transport and source inspection
+are not React/browser/CSRF, actual cancellation or deployed-data acceptance.
+
+Already-dispatched server mutations cannot be recalled; abort/currentness
+guards do not establish rollback or server cancellation. No atomicity, durable
+unknown-write record, automatic retry or cross-controller ordering claim.
+No product checks, live services, migration application, push or deployment.
+Existing recovery prerequisites, unapplied migrations and lost-history limits remain.

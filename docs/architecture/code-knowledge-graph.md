@@ -7583,3 +7583,22 @@ remain separate. Badge absence is not Private.
 No extra GET, retry, mutation, persistent revision map or server/global freshness
 guarantee. Four independently source-reviewed files include UNRUN fixtures.
 See WEB-PUBLICATION-QUOTA-ADMISSION-01.
+
+## Web shared-data actions belong to their Data-tab session
+
+Continuation 496f40e6ce5bb7d5779f632debcf7b1463b06a86 keys the Data-tab session by token, artifact and
+publication lease, then uses fresh layout-effect lanes and owned read/mutation
+requests. Accepted-result identity, one-shot confirmation tickets and current
+lease checks reject retained callbacks; superseded reads and retired outcomes
+cannot replace current state or emit feedback.
+
+Data service helpers accept optional narrow authority and check before work,
+after CSRF and around response decoding/errors. Their transport retains cookies;
+this is local request ownership, not native session credential binding.
+The canonical { cleared } response, including zero, is unchanged. Current
+clear settlement retains its existing guarded refresh, without replaying DELETE.
+
+Already-dispatched server writes cannot be recalled. No backend/shared-dialog
+change, rollback guarantee, durable uncertainty record or global ordering.
+Five source/fixture files are independently reviewed; fixtures remain UNRUN.
+See WEB-PUBLICATION-QUOTA-ADMISSION-01.
