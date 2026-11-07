@@ -1,5 +1,8 @@
 import 'server-only';
 
+import { z } from 'zod';
+import { AccountDeletionScheduleTimestampSchema } from '@agiworkforce/cloud-contracts';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
@@ -140,10 +143,13 @@ function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
   return `Cancel your ${plan} plan before deleting your account. Nothing was deleted, and billing continues until you cancel in Settings > Billing. Email ${CONTACT_EMAIL} if you need help.`;
 }
 
-interface DeletionScheduleRow {
-  deletion_requested_at: string | null;
-  deletion_scheduled_for: string | null;
-}
+const DeletionScheduleRowsSchema = z.array(z.object({
+  deletion_requested_at: AccountDeletionScheduleTimestampSchema.nullable(),
+  deletion_scheduled_for: AccountDeletionScheduleTimestampSchema.nullable(),
+  can_cancel: z.boolean(),
+})).max(1);
+
+type DeletionScheduleRow = z.infer<typeof DeletionScheduleRowsSchema>[number];
 
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'account-deletion-status');
@@ -164,10 +170,21 @@ async function handleGet(request: NextRequest) {
   let row: DeletionScheduleRow | undefined;
   try {
     const rows = await db.query<DeletionScheduleRow>(
-      `select deletion_requested_at, deletion_scheduled_for from profiles where id = $1`,
+      `select case when deletion_requested_at is null then null
+                   when deletion_requested_at >= '0001-01-01T00:00:00Z'::timestamptz
+                    and deletion_requested_at < '10000-01-01T00:00:00Z'::timestamptz
+                   then to_char(deletion_requested_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+                   else 'unsupported' end as deletion_requested_at,
+              case when deletion_scheduled_for is null then null
+                   when deletion_scheduled_for >= '0001-01-01T00:00:00Z'::timestamptz
+                    and deletion_scheduled_for < '10000-01-01T00:00:00Z'::timestamptz
+                   then to_char(deletion_scheduled_for at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+                   else 'unsupported' end as deletion_scheduled_for,
+              coalesce(deletion_scheduled_for > clock_timestamp(), false) as can_cancel
+         from profiles where id = $1`,
       [userId],
     );
-    row = rows[0];
+    row = DeletionScheduleRowsSchema.parse(rows)[0];
   } catch (error) {
     logger.error(
       { userId, error: error instanceof Error ? error.message : String(error) },
@@ -181,13 +198,14 @@ async function handleGet(request: NextRequest) {
 
   const scheduledFor = row?.deletion_scheduled_for ?? null;
   const pending = scheduledFor !== null;
-  const canCancel = pending && new Date(scheduledFor).getTime() > Date.now();
+  const canCancel = pending && row?.can_cancel === true;
   // The same outcome the audit row carries: what the deletion has reached is
   // the one question a receipt answers.
   const outcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
 
   return NextResponse.json(
     {
+      ...(pending ? { cancellationPrecondition: 'schedule-pair-v1' } : {}),
       pending,
       canCancel,
       requestedAt: pending ? (row?.deletion_requested_at ?? null) : null,

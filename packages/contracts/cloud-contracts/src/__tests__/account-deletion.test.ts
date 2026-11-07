@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AccountDeletionScheduleCancellationRequestSchema,
+  AccountDeletionScheduleTimestampSchema,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
   parseAccountDeletionStatus,
   parseAccountDeletionScheduleReceipt,
   parseAccountDeletionCancellationReceipt,
@@ -96,5 +100,45 @@ describe('account deletion mutation receipts', () => {
     { message: 'Account deletion cancelled.', cancelled: true, error: 'Nothing was restored.' },
   ].map((body) => ({ body })))('rejects an unconfirmed cancellation receipt: $body', ({ body }) => {
     expect(() => parseAccountDeletionCancellationReceipt(body)).toThrow();
+  });
+});
+
+describe('schedule-pair cancellation contract', () => {
+  const expectedSchedule = { scheduledFor: '2026-11-08T00:00:00.123456Z', requestedAt: null };
+
+  it('keeps legacy and required-precondition paths distinct', () => {
+    expect(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH).toBe('/api/user/delete-account/cancel');
+    expect(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH).toBe('/api/user/delete-account/cancel-schedule');
+  });
+
+  it.each(['0001-01-01T00:00:00Z', '9999-12-31T23:59:59.999999Z', '2000-02-29T12:00:00.1Z', '2024-02-29T12:00:00.123Z'])
+    ('accepts supported finite calendar UTC values unchanged: %s', (value) => {
+      expect(AccountDeletionScheduleTimestampSchema.parse(value)).toBe(value);
+    });
+
+  it.each([null, 0, {}, '', ' ', 'infinity', '-infinity', '0000-01-01T00:00:00Z',
+    '10000-01-01T00:00:00Z', '1900-02-29T00:00:00Z', '2026-02-30T00:00:00Z',
+    '2026-04-31T00:00:00Z', '2026-00-01T00:00:00Z', '2026-13-01T00:00:00Z',
+    '2026-01-00T00:00:00Z', '2026-01-01T24:00:00Z', '2026-01-01T00:60:00Z',
+    '2026-01-01T00:00:60Z', '2026-01-01T00:00:00.1234567Z',
+    '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00', '2026-01-01',
+    ' 2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z\n'])
+    ('rejects unsupported timestamps: %j', (value) => {
+      expect(AccountDeletionScheduleTimestampSchema.safeParse(value).success).toBe(false);
+    });
+
+  it.each([undefined, null, [], '', {}, { expectedSchedule: {} },
+    { expectedSchedule: { scheduledFor: expectedSchedule.scheduledFor } },
+    { expectedSchedule: { requestedAt: null } },
+    { expectedSchedule: { ...expectedSchedule, extra: true } },
+    { expectedSchedule, extra: true }])('requires both strict objects: %j', (body) => {
+      expect(AccountDeletionScheduleCancellationRequestSchema.safeParse(body).success).toBe(false);
+    });
+
+  it('retains marker only for compatible pending snapshot values', () => {
+    const status = { pending: true, canCancel: true, ...expectedSchedule, cancellationPrecondition: 'schedule-pair-v1' };
+    expect(parseAccountDeletionStatus(status)).toEqual(status);
+    expect(() => parseAccountDeletionStatus({ ...status, scheduledFor: '2026-11-08T00:00:00+00:00' })).toThrow();
+    expect(() => parseAccountDeletionStatus({ ...status, pending: false, canCancel: false, scheduledFor: null })).toThrow();
   });
 });

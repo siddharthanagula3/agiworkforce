@@ -27,6 +27,13 @@ const CSRF_OPENERS: ReadonlyArray<{
   check: RegExp;
 }> = [
   {
+    file: 'lib/server/account-deletion-cancellation.ts',
+    name: 'handleAccountDeletionCancellation',
+    call: /\bhandleAccountDeletionCancellation\s*\(\s*request\s*,\s*\{\s*kind:\s*'(?:legacy|required-pair)'\s*\}\s*\)/,
+    check:
+      /^\s*const rateLimitResponse = await withRateLimit\(request, 'account-deletion-cancel'\);\s*if \(rateLimitResponse\) return rateLimitResponse;\s*const csrfError = await requireCsrfToken\(request\);\s*if \(csrfError\) \{\s*return csrfError as NextResponse;\s*\}/,
+  },
+  {
     file: 'lib/agents/agent-route.ts',
     name: 'openAgentWrite',
     call: /\bopenAgentWrite\s*\(/,
@@ -286,6 +293,16 @@ describe('CSRF coverage on state-changing routes', () => {
         opener.check,
       );
     }
+  });
+
+  it.each(['cancel', 'cancel-schedule'])('includes account deletion %s in the shared-gate scan', (route) => {
+    const src = fs.readFileSync(path.join(API_ROOT, 'user/delete-account', route, 'route.ts'), 'utf8');
+    expect(MUTATING.test(src)).toBe(true);
+    expect(src).toContain("from '@/lib/server/account-deletion-cancellation'");
+    expect(checksCsrf(src)).toBe(true);
+    const opener = CSRF_OPENERS.find((entry) => entry.name === 'handleAccountDeletionCancellation');
+    expect(opener).toBeDefined();
+    expect(opener!.call.test(src)).toBe(true);
   });
 
   it('keeps the exemption list honest', () => {

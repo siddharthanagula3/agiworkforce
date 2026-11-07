@@ -78,7 +78,7 @@ describe('GET /api/user/delete-account', () => {
   });
 
   it('reports nothing pending when no deletion is scheduled', async () => {
-    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null }]);
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null, can_cancel: false }]);
 
     const response = await GET(statusRequest());
     const body = await response.json();
@@ -94,27 +94,53 @@ describe('GET /api/user/delete-account', () => {
     });
   });
 
-  it('serializes finite PostgreSQL Date values into the shared status contract', async () => {
-    const requestedAt = new Date('2020-01-01T12:00:00+01:00');
-    const scheduledFor = new Date('2020-01-02T12:00:00+01:00');
-    mockQuery.mockResolvedValue([{ deletion_requested_at: requestedAt, deletion_scheduled_for: scheduledFor }]);
-
+  it('preserves SQL UTC microseconds and the pair snapshot marker', async () => {
+    const requestedAt = '2020-01-01T11:00:00.123456Z';
+    const scheduledFor = '2020-01-02T11:00:00.123457Z';
+    mockQuery.mockResolvedValue([{ deletion_requested_at: requestedAt, deletion_scheduled_for: scheduledFor, can_cancel: true }]);
     const response = await GET(statusRequest());
     expect(response.status).toBe(200);
     expect(parseAccountDeletionStatus(await response.json())).toEqual({
-      pending: true,
-      canCancel: false,
-      requestedAt: requestedAt.toISOString(),
-      scheduledFor: scheduledFor.toISOString(),
+      pending: true, canCancel: true, requestedAt, scheduledFor,
+      cancellationPrecondition: 'schedule-pair-v1',
+    });
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('HH24:MI:SS.US'), ['user_checking']);
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("at time zone 'UTC'"), ['user_checking']);
+    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('clock_timestamp()'), ['user_checking']);
+    for (const column of ['deletion_requested_at', 'deletion_scheduled_for']) {
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining(`${column} >= '0001-01-01T00:00:00Z'::timestamptz`), ['user_checking']);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining(`${column} < '10000-01-01T00:00:00Z'::timestamptz`), ['user_checking']);
+    }
+  });
+
+  it('preserves nullable request timestamps in pair snapshots', async () => {
+    const scheduledFor = '2020-01-02T11:00:00.000001Z';
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: scheduledFor, can_cancel: false }]);
+    expect(parseAccountDeletionStatus(await (await GET(statusRequest())).json())).toEqual({
+      pending: true, canCancel: false, requestedAt: null, scheduledFor,
+      cancellationPrecondition: 'schedule-pair-v1',
     });
   });
 
-  it('preserves nullable informational request dates and offset timestamps', async () => {
-    const scheduledFor = '2020-01-02T12:00:00+01:00';
-    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: scheduledFor }]);
-    expect(parseAccountDeletionStatus(await (await GET(statusRequest())).json())).toEqual({
-      pending: true, canCancel: false, requestedAt: null, scheduledFor,
+  it.each([new Date('2020-01-01T00:00:00Z'), '2020-01-01T01:00:00+01:00', 'infinity', 'unsupported', '2026-02-30T00:00:00Z'])
+    ('fails closed instead of advertising lossy or unsupported timestamps: %s', async (value) => {
+      mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: value, can_cancel: true }]);
+      const response = await GET(statusRequest());
+      expect(response.status).toBe(500);
+      expect(await response.json()).not.toHaveProperty('cancellationPrecondition');
     });
+
+  it.each([undefined, null, {}, [{}], [{ deletion_requested_at: null, deletion_scheduled_for: null }]])
+    ('fails closed on malformed status adapter results: %j', async (rows) => {
+      mockQuery.mockResolvedValue(rows);
+      expect((await GET(statusRequest())).status).toBe(500);
+    });
+
+  it('preserves no visible profile as no pending schedule without marker', async () => {
+    mockQuery.mockResolvedValue([]);
+    const body = await (await GET(statusRequest())).json();
+    expect(body).toMatchObject({ pending: false, canCancel: false, scheduledFor: null });
+    expect(body).not.toHaveProperty('cancellationPrecondition');
   });
 
   /**
@@ -125,7 +151,7 @@ describe('GET /api/user/delete-account', () => {
   it('hands back the same outcome the deletion trail records', async () => {
     const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     mockQuery.mockResolvedValue([
-      { deletion_requested_at: scheduledFor, deletion_scheduled_for: scheduledFor },
+      { deletion_requested_at: scheduledFor, deletion_scheduled_for: scheduledFor, can_cancel: false },
     ]);
 
     const body = await (await GET(statusRequest())).json();
@@ -140,7 +166,7 @@ describe('GET /api/user/delete-account', () => {
     const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const requestedAt = new Date(Date.now() - 60 * 1000).toISOString();
     mockQuery.mockResolvedValue([
-      { deletion_requested_at: requestedAt, deletion_scheduled_for: scheduledFor },
+      { deletion_requested_at: requestedAt, deletion_scheduled_for: scheduledFor, can_cancel: true },
     ]);
 
     const response = await GET(statusRequest());
@@ -156,7 +182,7 @@ describe('GET /api/user/delete-account', () => {
   it('reports pending but not cancellable once the grace window has closed', async () => {
     const scheduledFor = new Date(Date.now() - 60 * 1000).toISOString();
     mockQuery.mockResolvedValue([
-      { deletion_requested_at: scheduledFor, deletion_scheduled_for: scheduledFor },
+      { deletion_requested_at: scheduledFor, deletion_scheduled_for: scheduledFor, can_cancel: false },
     ]);
 
     const response = await GET(statusRequest());
@@ -193,7 +219,7 @@ describe('GET /api/user/delete-account', () => {
   });
 
   it('binds the read to the claimed session scope before checking deletion status', async () => {
-    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null }]);
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null, can_cancel: false }]);
 
     await GET(statusRequest());
 
@@ -205,7 +231,7 @@ describe('GET /api/user/delete-account', () => {
   });
 
   it('ignores an identity smuggled into the query string and scopes to the session user', async () => {
-    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null }]);
+    mockQuery.mockResolvedValue([{ deletion_requested_at: null, deletion_scheduled_for: null, can_cancel: false }]);
 
     await GET(statusRequest('http://localhost:3000/api/user/delete-account?userId=victim-user'));
 
