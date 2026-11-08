@@ -46,7 +46,43 @@ beforeEach(() => {
 
 describe('the host command channel', () => {
   it('names the commands the menu and the page agree on', () => {
-    expect([...HOST_COMMANDS]).toEqual(['toggle-sidebar', 'show-keyboard-shortcuts']);
+    expect([...HOST_COMMANDS]).toEqual([
+      'toggle-sidebar',
+      'show-keyboard-shortcuts',
+      'find',
+      'find-next',
+      'find-previous',
+      'find-in-files',
+      'open-search',
+      'open-folder',
+      'new-project',
+      'previous-chat',
+      'next-chat',
+      'previous-tab',
+      'next-tab',
+      'new-tab',
+      'new-temporary-chat',
+      'send-feedback',
+      'toggle-terminal',
+      'toggle-side-chat',
+      'start-performance-trace',
+      'toggle-chat-tabs',
+      'reopen-closed-tab',
+      'focus-first-tab',
+      'close-active-tab',
+      'close-other-tabs',
+      'close-tabs-to-the-right',
+      'focus-second-tab',
+      'focus-third-tab',
+      'focus-fourth-tab',
+      'focus-fifth-tab',
+      'focus-sixth-tab',
+      'focus-seventh-tab',
+      'focus-eighth-tab',
+      'toggle-changes',
+      'toggle-files',
+      'focus-follow-up',
+    ]);
     for (const command of HOST_COMMANDS) {
       expect(isHostCommand(command)).toBe(true);
     }

@@ -8,9 +8,11 @@ const listWorkspaceFiles = vi.fn();
 const findWorkspaceFilesByName = vi.fn();
 const readWorkspaceText = vi.fn();
 const writeWorkspaceText = vi.fn();
+const deleteWorkspaceFile = vi.fn();
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
+  deleteWorkspaceFile,
   findWorkspaceFilesByName,
   listWorkspaceFiles,
   readWorkspaceText,
@@ -104,5 +106,25 @@ describe('the files panel of a local coding session', () => {
     rerender(<LocalFilesPanel rootId="root-1" searchFocusKey={1} onClose={onClose} />);
 
     expect(screen.getByLabelText('Search files by name')).toHaveFocus();
+  });
+
+  it('deletes a file from the public files panel after confirming', async () => {
+    deleteWorkspaceFile.mockResolvedValue(true);
+    renderPanel();
+
+    const panel = await screen.findByRole('complementary', { name: 'Files' });
+    const row = (await within(panel).findByRole('button', { name: 'README.md' })).closest('li');
+    if (!row) throw new Error('README.md row was not listed');
+    await userEvent.click(within(row).getByRole('button', { name: 'Delete file' }));
+
+    const confirmDialog = await screen.findByRole('alertdialog');
+    expect(confirmDialog).toHaveTextContent('Delete file?');
+    expect(deleteWorkspaceFile).not.toHaveBeenCalled();
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Delete file' }));
+
+    await waitFor(() => expect(deleteWorkspaceFile).toHaveBeenCalledWith('root-1', 'README.md'));
+    await waitFor(() =>
+      expect(within(panel).queryByRole('button', { name: 'README.md' })).not.toBeInTheDocument(),
+    );
   });
 });

@@ -68,7 +68,7 @@ describe('DesktopUpdateRow', () => {
     });
     render(<DesktopUpdateRow />);
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
-    expect(await screen.findByRole('button', { name: 'Restart to update' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
     expect(screen.getByRole('status')).toHaveTextContent('An update is ready.');
     expect(screen.getByRole('alert')).toHaveTextContent('Latest version could not be checked.');
   });
@@ -90,7 +90,7 @@ describe('DesktopUpdateRow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Download installer' }));
     expect(openUpdateInstaller).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('button', { name: 'Restart to update' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Relaunch to update' })).toBeNull();
   });
 
   it('renders nothing in a browser', () => {
@@ -156,7 +156,7 @@ describe('DesktopUpdateRow', () => {
     expect(screen.getByText(/^Last checked /u)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Restart to update' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Relaunch to update' }));
     expect(restartToUpdate).toHaveBeenCalledTimes(1);
     expect(openUpdateInstaller).not.toHaveBeenCalled();
   });
@@ -181,12 +181,12 @@ describe('DesktopUpdateRow', () => {
     render(<DesktopUpdateRow />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Relaunch to update' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('AGI Desktop could not restart to install the update.');
     expect(alert).not.toHaveTextContent('Error invoking remote method');
-    expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
 
   it.each([
@@ -206,7 +206,7 @@ describe('DesktopUpdateRow', () => {
     render(<DesktopUpdateRow />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Relaunch to update' }));
 
     await waitFor(() => {
       expect(screen.getByRole(role)).toHaveTextContent(text);
@@ -230,7 +230,7 @@ describe('DesktopUpdateRow', () => {
       expect(screen.getByRole('status')).toHaveTextContent('An update is downloading.');
     });
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Restart to update' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Relaunch to update' })).toBeNull();
     expect(screen.queryByText(/^Last checked /u)).toBeNull();
   });
 

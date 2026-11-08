@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { BrowserPairingState } from '@agiworkforce/local-runtime-contract';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
@@ -7,6 +7,16 @@ import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-s
 type RuntimeClientModule = typeof import('../lib/runtime-client');
 
 const readBrowserPairing = vi.fn();
+const routerPush = vi.hoisted(() => vi.fn());
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: routerPush,
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+  }),
+}));
 
 vi.mock('../lib/runtime-client', async (importOriginal) => ({
   ...(await importOriginal<RuntimeClientModule>()),
@@ -48,7 +58,7 @@ describe('BrowserPairingSection', () => {
     expect(
       await screen.findByText(/Another app on this computer is already using the browser bridge/),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Quit and reopen AGI Desktop/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Quit and reopen Desktop/)).not.toBeInTheDocument();
   });
 
   it('falls back to the general line when the shell gave no reason', async () => {
@@ -59,6 +69,16 @@ describe('BrowserPairingSection', () => {
     expect(
       await screen.findByText(/The local pairing bridge is not listening/),
     ).toBeInTheDocument();
+  });
+
+  it('opens the extension page from Install extension', async () => {
+    readBrowserPairing.mockResolvedValue({ ...NOT_LISTENING, bridgeListening: true });
+
+    render(<BrowserPairingSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Install extension' }));
+
+    expect(routerPush).toHaveBeenCalledWith('/chrome-extension');
   });
 
   // The code is what a person reads off the app and types into the extension.
@@ -78,7 +98,7 @@ describe('BrowserPairingSection', () => {
     render(<BrowserPairingSection />);
 
     expect(
-      await screen.findByText(/The code is in a dialog AGI Desktop opened on this Mac/),
+      await screen.findByText(/The code is in a dialog Desktop opened on this Mac/),
     ).toBeInTheDocument();
     expect(screen.queryByText('123456')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Pairing code')).not.toBeInTheDocument();

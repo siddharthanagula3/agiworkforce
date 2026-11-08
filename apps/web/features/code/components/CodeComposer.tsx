@@ -192,6 +192,8 @@ export interface CodeLocalState {
   adding: boolean;
   /** Where a new local session runs: the folder itself or a new worktree of it. */
   placement: LocalPlacement;
+  primaryRootId: string | null;
+  onMakePrimary: (rootId: string) => void;
   onAddFolder: () => void;
   onModelChange: (modelId: string) => void;
   onBranchSwitched: () => void;
@@ -428,6 +430,16 @@ function LocalFolderItems({
           );
         })}
       </DropdownMenuRadioGroup>
+      {local.folders
+        .filter((choice) => choice.rootId !== local.primaryRootId && choice.unavailable === null)
+        .map((choice) => (
+          <DropdownMenuItem
+            key={`primary-${choice.rootId}`}
+            onSelect={() => local.onMakePrimary(choice.rootId)}
+          >
+            Make primary
+          </DropdownMenuItem>
+        ))}
       <DropdownMenuItem
         disabled={local.adding}
         onSelect={(event) => {

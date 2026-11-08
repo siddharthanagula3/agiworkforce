@@ -589,7 +589,7 @@ describe('shared LibraryView', () => {
       openRowMenu('quarterly-report.pdf');
 
       expect(screen.queryByRole('menuitem', { name: 'Add to chat' })).toBeNull();
-      expect(screen.queryByRole('menuitem', { name: 'Add to AGI Work' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Add to Work' })).toBeNull();
       expect(screen.queryByRole('menuitem', { name: 'Add to project' })).toBeNull();
       expect(screen.queryByRole('menuitem', { name: 'Share link' })).toBeNull();
     });
@@ -605,7 +605,7 @@ describe('shared LibraryView', () => {
       await waitFor(() => expect(addToChat).toHaveBeenCalledWith(ITEM));
 
       openRowMenu('quarterly-report.pdf');
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to AGI Work' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add to Work' }));
       await waitFor(() => expect(addToWork).toHaveBeenCalledWith(ITEM));
     });
 
@@ -637,7 +637,7 @@ describe('shared LibraryView', () => {
 
       expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
       expect(screen.queryByRole('menuitem', { name: 'Add to chat' })).toBeNull();
-      expect(screen.queryByRole('menuitem', { name: 'Add to AGI Work' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Add to Work' })).toBeNull();
     });
 
     it('adds the file to the project picked from the host folder list', async () => {

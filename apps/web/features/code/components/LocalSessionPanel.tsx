@@ -1,5 +1,6 @@
 'use client';
 
+import { onAppCommand } from '@shared/lib/app-commands';
 import {
   useEffect,
   useRef,
@@ -133,6 +134,7 @@ import { runThreadSummary, useThreadSummarizing } from '../local-summaries';
 import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
 import { LocalTerminalDock } from './LocalTerminal';
+import { useShowTerminal } from '../use-show-terminal';
 import { LocalFilesPanel } from './LocalFilesPanel';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalMemoryControl } from './LocalMemoryControl';
@@ -566,6 +568,7 @@ export function LocalSessionPanel({
   };
   const toggleTerminalRef = useRef(toggleTerminal);
   toggleTerminalRef.current = toggleTerminal;
+  useShowTerminal(canUseTerminal, terminalOpen, toggleTerminal);
   useEffect(() => {
     if (!canUseTerminal) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -615,6 +618,8 @@ export function LocalSessionPanel({
   toggleReviewRef.current = toggleReview;
   const openFilesRef = useRef(openFiles);
   openFilesRef.current = openFiles;
+  const toggleFilesRef = useRef(toggleFiles);
+  toggleFilesRef.current = toggleFiles;
   const review = useLocalReview(
     session,
     worktree,
@@ -658,6 +663,18 @@ export function LocalSessionPanel({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [remoteSsh]);
+
+  useEffect(() => {
+    return onAppCommand('find-in-files', () => {
+      openFilesRef.current(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    return onAppCommand('toggle-files', () => {
+      toggleFilesRef.current();
+    });
+  }, []);
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
   const testsRunning = tests.status === 'running';
   const memory = localSessionMemory(session.rootId, session.id);

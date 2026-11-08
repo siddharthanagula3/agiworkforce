@@ -6,7 +6,7 @@ import { useCurrentUser } from '@/lib/identity/client';
 import { reportDesktopAccount } from '../lib/runtime-client';
 
 /**
- * Tells the shell which account this window is signed in as, so every AGI CLI
+ * Tells the shell which account this window is signed in as, so every CLI
  * the shell runs on this machine is that same account.
  *
  * The page is the only authority on this that cannot be raced. The shell could

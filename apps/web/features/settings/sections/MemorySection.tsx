@@ -239,8 +239,8 @@ function OwnedMemorySection({
           Memory
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Facts saved in your selected Managed Cloud workspace. Device-local and offline memories
-          are separate and are not shown or uploaded here.
+          Facts saved in your selected Cloud workspace. Device-local and offline memories are
+          separate and are not shown or uploaded here.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="memory" label="How memory works" />
@@ -317,7 +317,7 @@ function OwnedMemorySection({
         <ul className="divide-y divide-border" style={{ margin: 0, padding: 0 }}>
           {memoryRow(
             'Persistent memory',
-            'Allow AGI to remember details across conversations',
+            'Allow the assistant to remember details across conversations',
             <Switch
               aria-label="Persistent memory"
               checked={settings.memory}
@@ -395,7 +395,7 @@ function OwnedMemorySection({
       <ul className="divide-y divide-border" style={{ margin: 0, padding: 0 }}>
         {memoryRow(
           'Save memories from chats',
-          'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
+          'Let the assistant save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
           <Switch
             aria-label="Save memories from chats"
             aria-describedby={needsMemory ? 'memory-hint-save-from-chats' : undefined}
@@ -408,7 +408,7 @@ function OwnedMemorySection({
 
         {memoryRow(
           'Search past chats',
-          'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
+          'Let the assistant look up excerpts from your other conversations when answering. Never used in temporary chats.',
           <Switch
             aria-label="Search past chats"
             checked={settings.searchPastChats}

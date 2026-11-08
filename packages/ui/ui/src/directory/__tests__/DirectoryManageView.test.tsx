@@ -5,7 +5,10 @@ import { DirectoryActionConfirmation } from '../action-notice';
 import {
   BROWSE_SKILLS_DESCRIPTION,
   BROWSE_SKILLS_LABEL,
+  UPLOAD_CHOOSE_FILE_LABEL,
   UPLOAD_SKILL_DESCRIPTION,
+  UPLOAD_SKILL_LABEL,
+  UPLOAD_SUBMIT_LABEL,
 } from '../constants';
 import { DirectoryPanel } from '../DirectoryPanel';
 import type { DirectoryAdapter, DirectoryManageSection } from '../types';
@@ -268,6 +271,23 @@ describe('the Add menu offers what the account can actually do', () => {
     await waitFor(() => expect(screen.queryByLabelText('Choose file')).toBeNull());
   });
 
+  it('uploads the chosen plugin archive from Upload plugin', async () => {
+    const uploadPluginArchive = vi.fn().mockResolvedValue({
+      title: 'Plugin uploaded',
+      lines: ['Productivity is now available.'],
+    });
+    renderPlugins({ rows: ROWS }, { uploadPluginArchive });
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Upload plugin' }));
+    const file = new File([new Uint8Array([1, 2, 3])], 'productivity.zip', {
+      type: 'application/zip',
+    });
+    fireEvent.change(screen.getByLabelText(UPLOAD_CHOOSE_FILE_LABEL), {
+      target: { files: [file] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: UPLOAD_SUBMIT_LABEL }));
+    await waitFor(() => expect(uploadPluginArchive).toHaveBeenCalledWith(file, undefined));
+  });
+
   it('opens the create dialog from the menu', async () => {
     renderPlugins({ rows: ROWS }, { createPlugin: vi.fn() });
     fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Create a plugin' }));
@@ -304,7 +324,7 @@ describe('the Add menu offers what the account can actually do', () => {
       .map((item) => item.textContent);
     expect(items).toEqual([
       'Create a skill',
-      `Upload skill${UPLOAD_SKILL_DESCRIPTION}`,
+      `${UPLOAD_SKILL_LABEL}${UPLOAD_SKILL_DESCRIPTION}`,
       `${BROWSE_SKILLS_LABEL}${BROWSE_SKILLS_DESCRIPTION}`,
     ]);
   });
@@ -458,7 +478,7 @@ describe('the skills list grouped like the leaders', () => {
         manage: { rows, groups, actions: [] },
       },
     });
-    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: /^Upload skill/ }));
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: /^Upload a skill/ }));
     expect(
       screen.getByText(
         'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.',
@@ -468,6 +488,23 @@ describe('the skills list grouped like the leaders', () => {
       'Only add skills and plugins from sources you trust. Read the files first; a skill can include instructions or scripts that act on your data.',
     );
     expect(screen.getByLabelText('Choose file').getAttribute('accept')).toContain('.skill');
+  });
+
+  it('uploads the chosen skill file from Upload a skill', async () => {
+    const uploadSkillFile = vi.fn().mockResolvedValue({
+      title: 'Skill uploaded',
+      lines: ['summarise is now available in chat.'],
+    });
+    renderSkills({ uploadSkillFile });
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: /^Upload a skill/ }));
+    const file = new File([new Uint8Array([1, 2, 3])], 'summarise.skill', {
+      type: 'application/octet-stream',
+    });
+    fireEvent.change(screen.getByLabelText(UPLOAD_CHOOSE_FILE_LABEL), {
+      target: { files: [file] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: UPLOAD_SUBMIT_LABEL }));
+    await waitFor(() => expect(uploadSkillFile).toHaveBeenCalledWith(file, undefined));
   });
 });
 

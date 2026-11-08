@@ -1,6 +1,7 @@
 import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
 import type { ReactNode } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');
 type ScanModule1 = typeof import('@/app/settings/_lib/preferences-client');
@@ -21,12 +22,14 @@ const mocks = vi.hoisted(() => ({
   openModelPicker: vi.fn(() => true),
   exitVoiceSession: vi.fn(),
   enterVoiceSession: vi.fn(),
+  routerPush: vi.fn(),
+  createProject: vi.fn(),
 }));
 
 const CONVERSATION_ID = '00000000-0000-4000-8000-000000000911';
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: mocks.routerPush, back: vi.fn() }),
   useParams: () => ({ sessionId: CONVERSATION_ID }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => `/chat/${CONVERSATION_ID}`,
@@ -206,7 +209,7 @@ vi.mock('@features/projects/services/managed-cloud-projects', () => ({
   webManagedCloudProjects: {
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
-    createProject: vi.fn(),
+    createProject: mocks.createProject,
   },
 }));
 
@@ -223,14 +226,6 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
   };
 });
 
-vi.mock('../../components/dialogs/GlobalSearchDialog', () => ({ GlobalSearchDialog: () => null }));
-vi.mock('../../components/dialogs/KeyboardShortcutsDialog', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  KeyboardShortcutsDialog: () => null,
-}));
-vi.mock('../../components/dialogs/CreateProjectDialog', () => ({
-  CreateProjectDialog: () => null,
-}));
 vi.mock('../../components/dialogs/UpgradePlanDialog', () => ({
   UpgradePlanDialog: () => null,
 }));
@@ -337,6 +332,12 @@ describe('WebChatPage keyboard shortcut wiring', () => {
     mocks.openModelPicker.mockClear();
     mocks.exitVoiceSession.mockClear();
     mocks.enterVoiceSession.mockClear();
+    mocks.routerPush.mockClear();
+    mocks.createProject.mockReset();
+    mocks.createProject.mockResolvedValue({
+      id: '00000000-0000-4000-8000-000000000c11',
+      name: 'Field notes',
+    });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('{}', { status: 200 })),
@@ -346,6 +347,82 @@ describe('WebChatPage keyboard shortcut wiring', () => {
   afterEach(() => {
     useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
     vi.unstubAllGlobals();
+  });
+
+  it('opens the feedback dialog when Send Feedback reaches the chat page', async () => {
+    openConversation();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+    expect(screen.queryByRole('dialog', { name: 'Share feedback' })).toBeNull();
+
+    await act(async () => {
+      emitAppCommand('open-feedback');
+    });
+
+    expect(await screen.findByRole('dialog', { name: 'Share feedback' })).toBeInTheDocument();
+  });
+
+  it('opens Keyboard Shortcuts when that command reaches the chat page', async () => {
+    openConversation();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+    expect(screen.queryByRole('dialog', { name: 'Keyboard Shortcuts' })).toBeNull();
+
+    await act(async () => {
+      emitAppCommand('open-shortcuts');
+    });
+
+    expect(await screen.findByRole('dialog', { name: 'Keyboard Shortcuts' })).toBeInTheDocument();
+  });
+
+  it('opens Search on the chat page the public window loads without running a query', async () => {
+    openConversation();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+    expect(screen.queryByRole('dialog', { name: 'Search Conversations' })).toBeNull();
+
+    await act(async () => {
+      emitAppCommand('open-search');
+    });
+
+    expect(await screen.findByRole('dialog', { name: 'Search Conversations' })).toBeVisible();
+    expect(screen.getByPlaceholderText('Search messages and conversations...')).toBeVisible();
+  });
+
+  it('opens the create dialog when File > New Project reaches the chat page', async () => {
+    openConversation();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+    expect(screen.queryByRole('dialog', { name: 'Create project' })).toBeNull();
+
+    await act(async () => {
+      emitAppCommand('new-project');
+    });
+
+    expect(await screen.findByRole('button', { name: 'Create project' })).toBeInTheDocument();
+  });
+
+  it('creates the named project when File > New Project is submitted on the public chat page', async () => {
+    openConversation();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+
+    await act(async () => {
+      emitAppCommand('new-project');
+    });
+
+    fireEvent.change(await screen.findByLabelText('Project name'), {
+      target: { value: 'Field notes' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+
+    await waitFor(() => expect(mocks.createProject).toHaveBeenCalled());
+    expect(mocks.createProject.mock.calls[0]?.[0]).toMatchObject({ name: 'Field notes' });
+    await waitFor(() =>
+      expect(mocks.routerPush).toHaveBeenCalledWith(
+        '/chat/projects/00000000-0000-4000-8000-000000000c11',
+      ),
+    );
   });
 
   it('supplies a handler for every shortcut the dialog documents on this page', async () => {

@@ -106,6 +106,14 @@ const hostBridge: HostBridge = {
     };
   },
 
+  setTerminalState(state: { available: boolean; open: boolean }): void {
+    ipcRenderer.send(ELECTRON_IPC_CHANNELS.terminalState, state);
+  },
+
+  setSideChatState(state: { available: boolean; open: boolean }): void {
+    ipcRenderer.send(ELECTRON_IPC_CHANNELS.sideChatState, state);
+  },
+
   onHostCommand(callback: (command: HostCommand) => void): () => void {
     const listener = (_event: unknown, command: unknown) => {
       if (isHostCommand(command)) callback(command);

@@ -40,6 +40,8 @@ const HOSTED_PAGE = [
   'checkForUpdate',
   'openUpdateInstaller',
   'restartToUpdate',
+  'setTerminalState',
+  'setSideChatState',
 ];
 
 const originalArgv = [...process.argv];

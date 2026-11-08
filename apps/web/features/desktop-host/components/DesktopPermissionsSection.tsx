@@ -30,9 +30,9 @@ import {
 } from './DesktopSettingsRow';
 
 const HEADING = 'Permissions';
-const HEADING_HINT = 'Remove an answer and AGI Desktop asks again the next time it needs it.';
+const HEADING_HINT = 'Remove an answer and Desktop asks again the next time it needs it.';
 const ANSWERS_HEADING = 'Your answers';
-const NO_ANSWERS = 'None yet. AGI Desktop asks the first time it needs each permission.';
+const NO_ANSWERS = 'None yet. Desktop asks the first time it needs each permission.';
 const SYSTEM_HINT = 'Computer use, screenshots and dictation need these.';
 const REFRESH_LABEL = 'Refresh';
 const OPEN_SETTINGS_LABEL = 'Open System Settings';

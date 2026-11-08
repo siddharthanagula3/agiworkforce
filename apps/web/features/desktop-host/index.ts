@@ -55,6 +55,7 @@ export {
   typeInPairedBrowser,
   unpairBrowser,
   clipboardAttachments,
+  deleteWorkspaceFile,
   listLocalModels,
   findWorkspaceFilesByName,
   listWorkspaceFiles,

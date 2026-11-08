@@ -6,6 +6,16 @@ import {
   centeredUpperPosition,
   duplicateShortcutKeys,
   fillsWorkArea,
+  frameFillingWorkArea,
+  centeredFrame,
+  tiledFrame,
+  frameSavedBeforeTile,
+  frameToRestore,
+  arrangedFrames,
+  cascadedFrames,
+  windowSetAfterJoin,
+  windowSetWithout,
+  autoFillSelector,
   followNavigationState,
   frameIsOnScreen,
   isShortcutOff,
@@ -326,6 +336,121 @@ describe('fillsWorkArea', () => {
   it('tolerates the dozen pixels a zoom lands off by on a notched display', () => {
     expect(fillsWorkArea({ x: 2, y: 34, width: 1468, height: 834 }, workArea)).toBe(true);
     expect(fillsWorkArea({ x: 5, y: 35, width: 1457, height: 832 }, workArea)).toBe(true);
+  });
+
+  it('builds the frame Window > Fill gives the front window', () => {
+    expect(frameFillingWorkArea(workArea)).toEqual(workArea);
+    expect(fillsWorkArea(frameFillingWorkArea(workArea), workArea)).toBe(true);
+  });
+
+  it('builds the frame Window > Center gives the front window', () => {
+    const frame = { x: 40, y: 80, width: 800, height: 600 };
+    expect(centeredFrame(frame, workArea)).toEqual({
+      x: 335,
+      y: 151,
+      width: 800,
+      height: 600,
+    });
+  });
+
+  it('keeps the frame Move & Resize had before the first tile', () => {
+    const current = { x: 40, y: 80, width: 800, height: 600 };
+    const left = tiledFrame(workArea, 'left');
+    const right = tiledFrame(workArea, 'right');
+
+    expect(frameToRestore(null)).toBeNull();
+    expect(frameSavedBeforeTile(current, current, null)).toBeNull();
+
+    const saved = frameSavedBeforeTile(current, left, null);
+    expect(saved).toEqual(current);
+    expect(frameSavedBeforeTile(left, right, saved)).toEqual(current);
+    expect(frameToRestore(saved)).toEqual(current);
+  });
+
+  it('builds the frames Window > Move & Resize gives the front window', () => {
+    const left = tiledFrame(workArea, 'left');
+    const right = tiledFrame(workArea, 'right');
+    const top = tiledFrame(workArea, 'top');
+    const bottom = tiledFrame(workArea, 'bottom');
+    const topLeft = tiledFrame(workArea, 'top-left');
+
+    expect(left.x).toBe(workArea.x);
+    expect(left.y).toBe(workArea.y);
+    expect(left.height).toBe(workArea.height);
+    expect(right.y).toBe(workArea.y);
+    expect(right.height).toBe(workArea.height);
+    expect(left.width + right.width).toBe(workArea.width);
+    expect(right.x).toBe(workArea.x + left.width);
+    expect(top.width).toBe(workArea.width);
+    expect(top.height + bottom.height).toBe(workArea.height);
+    expect(bottom.y).toBe(workArea.y + top.height);
+    expect(topLeft.width).toBe(left.width);
+    expect(topLeft.height).toBe(top.height);
+  });
+
+  it('builds the frames Window > Arrange in Front gives the open windows', () => {
+    const front = { width: 800, height: 600 };
+    const behind = { width: 640, height: 480 };
+    const frames = cascadedFrames([front, behind], workArea);
+    expect(frames).toHaveLength(2);
+    const first = frames[0];
+    const second = frames[1];
+    if (!first || !second) return;
+
+    expect(first.width).toBe(front.width);
+    expect(first.height).toBe(front.height);
+    expect(second.width).toBe(behind.width);
+    expect(second.height).toBe(behind.height);
+    const step = second.x - first.x;
+    expect(step).toBeGreaterThan(0);
+    expect(second.y - first.y).toBe(step);
+    const spanW = Math.max(...frames.map((frame) => frame.x + frame.width)) - first.x;
+    const spanH = Math.max(...frames.map((frame) => frame.y + frame.height)) - first.y;
+    expect(first.x).toBe(workArea.x + Math.round((workArea.width - spanW) / 2));
+    expect(first.y).toBe(workArea.y + Math.round((workArea.height - spanH) / 2));
+    expect(cascadedFrames([front], workArea)[0]).toEqual(
+      centeredFrame({ x: 0, y: 0, width: front.width, height: front.height }, workArea),
+    );
+  });
+
+  it('names the system action Edit > AutoFill sends for each saved source', () => {
+    expect(autoFillSelector('contact')).toBe('showAutoFillContactsForView:');
+    expect(autoFillSelector('passwords')).toBe('showAutoFillPasswordsForView:');
+    expect(autoFillSelector('credit-card')).toBe('showAutoFillCreditCardsForView:');
+  });
+
+  it('drops the front window from the set Window > Remove Window from Set edits', () => {
+    expect(windowSetAfterJoin([4], [9, 4])).toEqual([4, 9]);
+    expect(windowSetWithout([4, 9, 2], 9)).toEqual([4, 2]);
+    expect(windowSetWithout([9], 9)).toEqual([]);
+  });
+
+  it('builds the frames Window > Move & Resize gives a pair of windows', () => {
+    const [front, beside] = arrangedFrames(workArea, 'left-right');
+    const quarters = arrangedFrames(workArea, 'left-quarters');
+
+    expect(front.x).toBe(workArea.x);
+    expect(front.y).toBe(workArea.y);
+    expect(front.height).toBe(workArea.height);
+    expect(beside.height).toBe(workArea.height);
+    expect(front.width + beside.width).toBe(workArea.width);
+    expect(beside.x).toBe(workArea.x + front.width);
+    expect(quarters[0].width).toBe(front.width);
+    expect(quarters[1].x).toBe(quarters[2].x);
+    expect(quarters[1].width).toBe(quarters[2].width);
+    expect(quarters[1].height + quarters[2].height).toBe(workArea.height);
+    expect(quarters[0].width + quarters[1].width).toBe(workArea.width);
+  });
+
+  it('builds the four frames Window > Move & Resize > Quarters gives the open windows', () => {
+    const frames = arrangedFrames(workArea, 'quarters');
+
+    expect(frames).toHaveLength(4);
+    expect(frames[0]).toEqual(tiledFrame(workArea, 'top-left'));
+    expect(frames[1]).toEqual(tiledFrame(workArea, 'top-right'));
+    expect(frames[2]).toEqual(tiledFrame(workArea, 'bottom-left'));
+    expect(frames[3]).toEqual(tiledFrame(workArea, 'bottom-right'));
+    expect(new Set(frames.map((frame) => `${frame.x},${frame.y}`)).size).toBe(4);
   });
 
   it('does not mistake a window the user sized for a zoomed one', () => {

@@ -4,7 +4,11 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, File, Folder, X } from '@agiworkforce/icons';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import type { FileEntry } from '@agiworkforce/local-runtime-contract';
-import { findWorkspaceFilesByName, listWorkspaceFiles } from '@/features/desktop-host';
+import {
+  deleteWorkspaceFile,
+  findWorkspaceFilesByName,
+  listWorkspaceFiles,
+} from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { LOCAL_CODE_COPY } from '../local-code';
 import { LocalFileEditor } from './LocalFileEditor';
@@ -37,11 +41,13 @@ function FileTree({
   tree,
   onToggle,
   onOpen,
+  onDelete,
 }: {
   path: string;
   tree: TreeState;
   onToggle: (entry: FileEntry) => void;
   onOpen: (path: string) => void;
+  onDelete: (entry: FileEntry) => void;
 }) {
   const entries = tree.children.get(path);
   if (!entries) return null;
@@ -70,17 +76,28 @@ function FileTree({
                 )}
               </button>
             ) : (
-              <button
-                type="button"
-                className={styles['fileRow']}
-                onClick={() => onOpen(entry.path)}
-              >
-                <File size={GLYPH_SIZE} aria-hidden="true" />
-                <span className={styles['fileName']}>{entry.name}</span>
-              </button>
+              <div className={styles['fileRow']}>
+                <button type="button" onClick={() => onOpen(entry.path)}>
+                  <File size={GLYPH_SIZE} aria-hidden="true" />
+                  <span className={styles['fileName']}>{entry.name}</span>
+                </button>
+                <button
+                  type="button"
+                  className={styles['secondaryButton']}
+                  onClick={() => onDelete(entry)}
+                >
+                  {LOCAL_CODE_COPY.deleteFile}
+                </button>
+              </div>
             )}
             {entry.kind === 'directory' && open && (
-              <FileTree path={entry.path} tree={tree} onToggle={onToggle} onOpen={onOpen} />
+              <FileTree
+                path={entry.path}
+                tree={tree}
+                onToggle={onToggle}
+                onOpen={onOpen}
+                onDelete={onDelete}
+              />
             )}
           </li>
         );
@@ -168,9 +185,7 @@ export function LocalFilesPanel({
       findWorkspaceFilesByName(rootId, trimmed, '')
         .then((found) => {
           if (cancelled) return;
-          setResults(
-            found.filter((entry) => entry.kind === 'file').slice(0, MAX_SEARCH_RESULTS),
-          );
+          setResults(found.filter((entry) => entry.kind === 'file').slice(0, MAX_SEARCH_RESULTS));
         })
         .catch((cause: unknown) => {
           if (!cancelled) setError(toUserMessage(cause, LOCAL_CODE_COPY.filesFailed));
@@ -230,6 +245,34 @@ export function LocalFilesPanel({
       description: LOCAL_CODE_COPY.discardEditsDescription(path),
       confirmLabel: LOCAL_CODE_COPY.discardFileEdits,
       onConfirm: () => dropTab(path),
+    });
+  };
+
+  const forgetFile = (filePath: string) => {
+    dropTab(filePath);
+    setTree((current) => {
+      const children = new Map(current.children);
+      for (const [folder, entries] of children) {
+        children.set(
+          folder,
+          entries.filter((item) => item.path !== filePath),
+        );
+      }
+      return { ...current, children };
+    });
+    setResults((current) => current?.filter((item) => item.path !== filePath) ?? current);
+  };
+
+  const deleteFile = (entry: FileEntry) => {
+    confirm({
+      title: LOCAL_CODE_COPY.deleteFileTitle,
+      description: LOCAL_CODE_COPY.deleteFileDescription(entry.name),
+      confirmLabel: LOCAL_CODE_COPY.deleteFile,
+      destructive: true,
+      onConfirm: async () => {
+        await deleteWorkspaceFile(rootId, entry.path);
+        forgetFile(entry.path);
+      },
     });
   };
 
@@ -295,15 +338,23 @@ export function LocalFilesPanel({
                 <ul className={styles['filesTree']}>
                   {results.map((entry) => (
                     <li key={entry.path}>
-                      <button
-                        type="button"
-                        className={styles['fileRow']}
-                        title={entry.path}
-                        onClick={() => openFile(entry.path)}
-                      >
-                        <File size={GLYPH_SIZE} aria-hidden="true" />
-                        <span className={styles['fileName']}>{entry.path}</span>
-                      </button>
+                      <div className={styles['fileRow']}>
+                        <button
+                          type="button"
+                          title={entry.path}
+                          onClick={() => openFile(entry.path)}
+                        >
+                          <File size={GLYPH_SIZE} aria-hidden="true" />
+                          <span className={styles['fileName']}>{entry.path}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles['secondaryButton']}
+                          onClick={() => deleteFile(entry)}
+                        >
+                          {LOCAL_CODE_COPY.deleteFile}
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -311,7 +362,13 @@ export function LocalFilesPanel({
             ) : tree.children.get('')?.length === 0 ? (
               <p className={styles['changesEmpty']}>{LOCAL_CODE_COPY.filesEmpty}</p>
             ) : tree.children.has('') ? (
-              <FileTree path="" tree={tree} onToggle={toggleFolder} onOpen={openFile} />
+              <FileTree
+                path=""
+                tree={tree}
+                onToggle={toggleFolder}
+                onOpen={openFile}
+                onDelete={deleteFile}
+              />
             ) : (
               error === null && (
                 <div className={styles['changesEmpty']}>

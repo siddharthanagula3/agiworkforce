@@ -30,6 +30,7 @@ import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 import { WEB_SETTINGS_NAV_GROUPS } from '@features/settings/components/web-settings-navigation';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -177,8 +178,18 @@ vi.mock('./SendButton', () => ({
 }));
 
 vi.mock('./ComposerFooter', () => ({
-  ComposerFooter: ({ showStyleSelector = true }: { showStyleSelector?: boolean }) => (
-    <div data-testid="composer-footer" data-show-style-selector={String(showStyleSelector)} />
+  ComposerFooter: ({
+    showStyleSelector = true,
+    showModelSelector = false,
+  }: {
+    showStyleSelector?: boolean;
+    showModelSelector?: boolean;
+  }) => (
+    <div
+      data-testid="composer-footer"
+      data-show-style-selector={String(showStyleSelector)}
+      data-show-model-selector={String(showModelSelector)}
+    />
   ),
 }));
 
@@ -304,6 +315,7 @@ describe('ChatComposerNew', () => {
       draftContent: '',
     });
     vi.unstubAllGlobals();
+    delete window.agiHost;
   });
 
   it('renders the message textarea', () => {
@@ -729,6 +741,81 @@ describe('ChatComposerNew', () => {
     fireEvent.click(moreBtn);
 
     expect(screen.getByText('Add photos & files')).toBeInTheDocument();
+  });
+
+  it('opens attach files without sending the draft', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
+    const fileInput = screen.getByLabelText('File upload') as HTMLInputElement;
+    const openPicker = vi.spyOn(fileInput, 'click');
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add photos & files/ }));
+
+    expect(openPicker).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('Keep this draft');
+  });
+
+  it('keeps a chosen file on the draft without sending it', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
+    const file = new File(['hello notes'], 'notes.txt', { type: 'text/plain' });
+
+    fireEvent.change(screen.getByLabelText('File upload'), { target: { files: [file] } });
+
+    expect(screen.getByRole('button', { name: 'Remove notes.txt' })).toBeInTheDocument();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('Keep this draft');
+  });
+
+  it('turns computer use off without starting a run or sending the draft', () => {
+    const host = hostBridgeStub();
+    const invokeRuntime = vi.spyOn(host, 'invokeRuntime');
+    window.agiHost = host;
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    invokeRuntime.mockClear();
+    const computerUse = screen.getByRole('button', { name: 'Use this computer' });
+    expect(computerUse).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(computerUse);
+
+    expect(computerUse).toHaveAttribute('aria-pressed', 'false');
+    expect(invokeRuntime).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('Keep this draft');
+  });
+
+  it('turns computer use back on without starting a run or sending the draft', () => {
+    const host = hostBridgeStub();
+    const invokeRuntime = vi.spyOn(host, 'invokeRuntime');
+    window.agiHost = host;
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    invokeRuntime.mockClear();
+    const computerUse = screen.getByRole('button', { name: 'Use this computer' });
+    fireEvent.click(computerUse);
+    expect(computerUse).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(computerUse);
+
+    expect(computerUse).toHaveAttribute('aria-pressed', 'true');
+    expect(invokeRuntime).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('Keep this draft');
   });
 
   it('offers the cross-provider file types and rejects executables before send', () => {
@@ -1395,6 +1482,15 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByText(/free web chat accepts plain text/i)).not.toBeInTheDocument();
   });
 
+  it('mounts the model selector on the public composer outside image and video mode', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    expect(screen.getByTestId('composer-footer')).toHaveAttribute(
+      'data-show-model-selector',
+      'true',
+    );
+  });
+
   it('offers the response style picker on Free and sends the chosen style', async () => {
     const onSend = vi.fn();
     useStyleStore.setState({ style: 'concise' });
@@ -1801,6 +1897,24 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByRole('switch', { name: /toggle/i })).toBeNull();
   });
 
+  it('opens the connectors list without calling a connector or sending the draft', () => {
+    const onSend = vi.fn();
+    chatComposerMocks.connectors.connectedIds = new Set(['custom-abc123']);
+    chatComposerMocks.connectors.sources = { 'custom-abc123': 'custom' };
+    chatComposerMocks.connectors.customNames = { 'custom-abc123': 'Internal Docs MCP' };
+
+    render(<ChatComposerNew onSend={onSend} />);
+    fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+      target: { value: 'Keep this draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    fireEvent.click(screen.getByText('Connectors'));
+
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Internal Docs MCP' })).toBeInTheDocument();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Keep this draft');
+  });
+
   it('the Connectors row expands a submenu instead of navigating straight to Settings', () => {
     chatComposerMocks.openSettings.mockClear();
     render(<ChatComposerNew onSend={vi.fn()} />);
@@ -1987,6 +2101,51 @@ describe('ChatComposerNew', () => {
     expect(chatButton).toHaveAttribute('aria-pressed', 'true');
     expect(agiWorkButton).toHaveAttribute('aria-pressed', 'false');
     expect(textarea).toHaveAttribute('placeholder', 'How can I help you today?');
+  });
+
+  it('keeps the typed draft in the same composer when Chat and AGI Work switch', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="conv-1"
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+
+    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Keep this draft');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
+
+    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Keep this draft');
+  });
+
+  it('sends the typed draft from the public composer', async () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Send this draft' } });
+
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalled();
+    });
+    expect(onSend.mock.calls[0]?.[0]).toBe('Send this draft');
+    expect(textarea).toHaveValue('');
   });
 
   it('puts the text field on a row of its own above the control row at every width', () => {
@@ -2411,7 +2570,7 @@ describe('ChatComposerNew', () => {
     }
 
     function enterAgiWork() {
-      fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Work', exact: true }));
     }
 
     it('is absent when the host provides no project data (no cosmetic control)', () => {
@@ -2446,16 +2605,19 @@ describe('ChatComposerNew', () => {
 
     it('selecting a project reports its projectId to the host (the value threaded into createConversation)', () => {
       const picker = makePicker();
-      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
+      const onSend = vi.fn();
+      render(<ChatComposerNew onSend={onSend} emptyState projectPicker={picker} />);
       enterAgiWork();
       fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
       fireEvent.click(screen.getByText('Mobile App'));
       expect(picker.onSelectProject).toHaveBeenCalledWith('proj-2');
+      expect(onSend).not.toHaveBeenCalled();
     });
 
     it('a preselected project (URL entry) auto-enters AGI Work and shows the project on the chip', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
-      render(<ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker} />);
+      const onSend = vi.fn();
+      render(<ChatComposerNew onSend={onSend} emptyState projectPicker={picker} />);
       expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
         'aria-pressed',
         'true',
@@ -2468,6 +2630,7 @@ describe('ChatComposerNew', () => {
       ).toHaveTextContent('Website Redesign');
       fireEvent.click(screen.getByRole('button', { name: /clear project or folder selection/i }));
       expect(picker.onSelectProject).toHaveBeenCalledWith(null);
+      expect(onSend).not.toHaveBeenCalled();
     });
 
     it('switching back to Chat clears the project selection (no hidden scope)', () => {
@@ -3534,6 +3697,7 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
   const capture = () => lifetime;
   return {
     ...(await importOriginal<ReadonlyIdentityModule>()),
+    useSessionSnapshot: () => () => null,
     useReadonlyIdentityLifetime: () => capture,
   };
 });

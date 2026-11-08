@@ -10,6 +10,7 @@ import {
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  AgiMark,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -29,11 +30,11 @@ import { readRemoteControl, stopRemoteControl } from '../lib/runtime-client';
 
 const HEADING = 'Remote Control';
 const INTRO =
-  'Pair your phone to follow AGI Code sessions running on this computer: approve steps, read diffs, test results and new files, and steer the next turn.';
+  'Pair your phone to follow Code sessions running on this computer: approve steps, read diffs, test results and new files, and steer the next turn.';
 const HOW_TO_PAIR =
-  'Open AGI Mobile on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
+  'Open chat Mobile on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
 const PAIRING_WINDOW =
-  'Scan the code in the pairing window with AGI Mobile on your phone. Before the phone connects, this computer asks you to allow it.';
+  'Scan the code in the pairing window with Mobile on your phone. Before the phone connects, this computer asks you to allow it.';
 const PHONE_CAN_RECONNECT =
   'Your phone disconnected. It reconnects on its own while Remote Control is on. To pair a different phone, stop Remote Control and pair again.';
 const BROWSER_PAIRING =
@@ -205,10 +206,15 @@ export function RemoteControlSection() {
                     disabled={busy}
                     onClick={() => void onRefreshCode()}
                   >
-                    <RefreshCw
-                      className={`h-4 w-4 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`}
-                      aria-hidden="true"
-                    />
+                    {busy ? (
+                      <AgiMark
+                        spinning
+                        className="h-4 w-4 motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
               </div>

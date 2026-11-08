@@ -4,7 +4,7 @@
  * The composer's "+" panel, in its two shapes.
  *
  * Chat mode keeps the entry-and-submenu shape: Skills, Connectors and Plugins
- * are rows that expand or open the settings pane. AGI Work mode renders the
+ * are rows that expand or open the settings pane. Work mode renders the
  * unified palette both leader products show in their own work mode, one flat
  * list of actions, then a row per connected connector carrying its capability
  * line, then a search field pinned last that filters everything above it and
@@ -79,6 +79,7 @@ import {
   type SkillRecorderEntry,
 } from '@/features/skill-recorder';
 import { findShortcut, formatShortcutKeys } from '@agiworkforce/unified-chat';
+import { isDesktopHost } from '@/features/desktop-host';
 import { safePlatform } from '@shared/utils/browser-utils';
 import type { LibraryItem } from '@agiworkforce/cloud-contracts';
 import {
@@ -116,8 +117,10 @@ import {
 } from '@features/chat/services/installed-plugins';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import {
+  EXIT_INCOGNITO_LABEL,
   TEMPORARY_CHAT_END_LABEL,
   TEMPORARY_CHAT_LABEL,
+  USE_INCOGNITO_LABEL,
   TEMPORARY_CHAT_PRIVACY_EXPLANATION,
   TEMPORARY_CHAT_RETENTION_NOTE,
 } from '@/lib/temporary-chat-policy';
@@ -176,6 +179,7 @@ const DEVICE_STEPS_TITLE =
   'When on, AGI can work in your approved folders, apps and browser on this computer during this chat. Turn it off to keep the chat in the cloud.';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
+
 const ROW_LABEL_PLUGINS = 'Plugins';
 const ROW_LABEL_RESEARCH = 'Deep Research';
 const ROW_LABEL_STUDY = 'Study';
@@ -185,6 +189,7 @@ const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = TEMPORARY_CHAT_LABEL;
 const ROW_LABEL_TEMPORARY_SAVING = `${TEMPORARY_CHAT_LABEL} · saving…`;
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
+const ROW_LABEL_OPEN_CONNECTORS = 'Manage connectors';
 const ROW_LABEL_BROWSE_CONNECTORS = 'Browse connectors';
 const ROW_LABEL_ADD_CUSTOM_CONNECTOR = 'Add custom connector';
 const ROW_LABEL_MANAGE_SKILLS = 'Manage skills';
@@ -359,7 +364,7 @@ function RowBadge({ badge }: { badge: MediaBadge }) {
 /**
  * Plugins' own mark: a block grid plus a connection point, distinct from the
  * generic `Globe` glyph `Web search` uses. Shared by the + menu's Plugins row
- * and the AGI Work bar's Plugins entry so neither falls back to a mismatched
+ * and the Work bar's Plugins entry so neither falls back to a mismatched
  * icon when the account has no connected connectors to show instead.
  */
 export function PluginsGlyph({ className }: { className?: string }) {
@@ -481,7 +486,13 @@ function TemporaryChatRows({
       <MenuToggleRow
         icon={EyeOff}
         role={role}
-        label={temporaryChatSaving ? ROW_LABEL_TEMPORARY_SAVING : ROW_LABEL_TEMPORARY}
+        label={
+          temporaryChatSaving
+            ? ROW_LABEL_TEMPORARY_SAVING
+            : isIncognito
+              ? EXIT_INCOGNITO_LABEL
+              : USE_INCOGNITO_LABEL
+        }
         checked={isIncognito}
         onToggle={onToggleIncognito}
         disabled={!canToggleIncognito}
@@ -516,7 +527,7 @@ function TemporaryChatRows({
  * replace that one -- both run on every keypress -- and would fight it for
  * which "next item" wins.
  */
-/** A connected connector as the AGI Work palette shows it: mark, name, capability line. */
+/** A connected connector as the Work palette shows it: mark, name, capability line. */
 function PaletteConnectorRow({
   connector,
   checked,
@@ -588,7 +599,7 @@ export interface ComposerPlusMenuProps {
   open: boolean;
   onRequestClose: () => void;
   closeMenu: () => void;
-  /** AGI Work mode renders the unified palette instead of the entry-and-submenu menu. */
+  /** Work mode renders the unified palette instead of the entry-and-submenu menu. */
   workPalette: boolean;
 
   onAddFiles: () => void;
@@ -1412,6 +1423,14 @@ function ChatMenu(props: MenuProps) {
             onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
             className={SUBMENU_MANAGE_CLASS}
           >
+            {ROW_LABEL_OPEN_CONNECTORS}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => openDirectorySettings(props, SETTINGS_SECTION_CONNECTORS)}
+            className={SUBMENU_MANAGE_CLASS}
+          >
             {ROW_LABEL_BROWSE_CONNECTORS}
           </button>
           {connectorsReleased() ? (
@@ -1540,7 +1559,7 @@ function ChatMenu(props: MenuProps) {
       {props.showTemporaryChat && <TemporaryChatRows {...props} />}
 
       {/* Last in the list and sticky to the panel's own scrollport, the same
-      treatment the AGI Work palette uses for its search field, so the send
+      treatment the Work palette uses for its search field, so the send
       status a user opened the menu to check cannot be the part that scrolls
       out of view: this panel is routinely taller than the space above the
       composer. */}
@@ -1710,9 +1729,13 @@ function WorkPalette(props: MenuProps) {
         disabled={props.scopeDisabled}
       />
     ),
-    props.showTemporaryChat && matches(ROW_LABEL_TEMPORARY, TEMPORARY_CHAT_END_LABEL) && (
-      <TemporaryChatRows key="temporary" {...props} role="menuitem" />
-    ),
+    props.showTemporaryChat &&
+      matches(
+        USE_INCOGNITO_LABEL,
+        EXIT_INCOGNITO_LABEL,
+        ROW_LABEL_TEMPORARY,
+        TEMPORARY_CHAT_END_LABEL,
+      ) && <TemporaryChatRows key="temporary" {...props} role="menuitem" />,
   ].filter(Boolean);
 
   const hasResults =

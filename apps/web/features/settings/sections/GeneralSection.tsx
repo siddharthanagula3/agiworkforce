@@ -862,7 +862,7 @@ function DefaultWorkModeRow() {
         className={SELECT_CLASS}
       >
         <option value="chat">Chat</option>
-        <option value="agiwork">AGI Work</option>
+        <option value="agiwork">Work</option>
       </select>
     </Row>
   );

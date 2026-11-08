@@ -1,4 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -127,6 +128,55 @@ describe('LocalSessionPanel review pane', () => {
 
     await user.keyboard('{Control>}{Shift>}G{/Shift}{/Control}');
     expect(screen.queryByTestId('local-review-pane')).not.toBeInTheDocument();
+  });
+
+  it('opens the file search from the public window Find in Files command', async () => {
+    render(
+      <LocalSessionPanel
+        session={session}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={runtime}
+        verbose={false}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
+
+    act(() => {
+      emitAppCommand('find-in-files');
+    });
+
+    const files = await screen.findByRole('complementary', { name: 'Files' });
+    await waitFor(() => expect(within(files).getByLabelText('Search files by name')).toHaveFocus());
+  });
+
+  it('shows and hides the file tree from the public window Show Files command', async () => {
+    render(
+      <LocalSessionPanel
+        session={session}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={runtime}
+        verbose={false}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
+
+    act(() => {
+      emitAppCommand('toggle-files');
+    });
+
+    expect(await screen.findByRole('complementary', { name: 'Files' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'true');
+
+    act(() => {
+      emitAppCommand('toggle-files');
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('opens the files panel on Cmd+P with the cursor in the file search, and swaps it for the review pane', async () => {

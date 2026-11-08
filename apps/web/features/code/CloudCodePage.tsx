@@ -1455,6 +1455,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     modelUnreachable: localModelSetup(draftRuntime, localModelId) !== null,
     adding: local.adding,
     placement: local.worktrees ? localPlacement : 'local',
+    primaryRootId: draft.localRootId,
+    onMakePrimary: (rootId) => handleDraftChange({ environment: 'local', localRootId: rootId }),
     onAddFolder: () => void local.addFolder(),
     onModelChange: (modelId) => handleDraftChange({ localModelId: modelId }),
     onBranchSwitched: local.refresh,

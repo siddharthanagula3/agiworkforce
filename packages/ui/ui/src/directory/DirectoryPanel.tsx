@@ -78,6 +78,8 @@ import {
   UPLOAD_SKILL_FAILED_COPY,
   UPLOAD_SKILL_INTRO,
   UPLOAD_SKILL_LABEL,
+  RESET_FILTERS_EMPTY_COPY,
+  RESET_FILTERS_LABEL,
 } from './constants';
 import { DirectoryBackLink } from './DirectoryDetailHeader';
 import { DirectoryGrid, DirectoryQuickAddChip } from './DirectoryGrid';
@@ -324,6 +326,11 @@ function DirectorySectionPanel({
   const rest = useMemo(() => catalog.filter((entry) => entry.popular !== true), [catalog]);
   const unfiltered =
     query.trim() === '' && sourceId === null && countActiveFilters(selection) === 0;
+  const filtersHideEverything =
+    countActiveFilters(selection) > 0 &&
+    visible.length === 0 &&
+    data.loading !== true &&
+    !data.error;
   const quickAdd = useMemo(
     () =>
       unfiltered
@@ -905,7 +912,22 @@ function DirectorySectionPanel({
         {renderActionError()}
 
         <div className="flex flex-col gap-5" aria-busy={remote && data.loading === true}>
-          {quickAdd.length > 0 && quickAddInstall ? (
+          {filtersHideEverything ? (
+            <div className="py-16 text-center" role="status">
+              <p className="text-sm text-muted-foreground">{RESET_FILTERS_EMPTY_COPY}</p>
+              <button
+                type="button"
+                onClick={() => setSelection(NO_FILTERS)}
+                className={cn(
+                  'mt-3 inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted',
+                  DIRECTORY_FOCUS_RING,
+                )}
+              >
+                {RESET_FILTERS_LABEL}
+              </button>
+            </div>
+          ) : null}
+          {filtersHideEverything ? null : quickAdd.length > 0 && quickAddInstall ? (
             <section aria-labelledby={quickAddHeadingId} className="flex flex-col gap-2">
               <h3
                 id={quickAddHeadingId}
@@ -963,7 +985,8 @@ function DirectorySectionPanel({
             </section>
           ))}
 
-          {ungrouped.length > 0 || data.loading || data.error || !groupedAbove ? (
+          {!filtersHideEverything &&
+          (ungrouped.length > 0 || data.loading || data.error || !groupedAbove) ? (
             <section className="flex flex-col gap-2">
               {trailingHeading ? (
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

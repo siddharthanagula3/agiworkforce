@@ -238,6 +238,7 @@ function OwnedImportMemoryDialog({
   const totalPreviewItems = preview?.items.length ?? 0;
   const allSelected = totalPreviewItems > 0 && selectedCount === totalPreviewItems;
   const someSelected = selectedCount > 0 && !allSelected;
+  const selectionLabel = allSelected ? 'Deselect all' : 'Select all';
 
   const toggleSelectAll = useCallback(() => {
     if (!preview) return;
@@ -462,9 +463,9 @@ function OwnedImportMemoryDialog({
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleSelectAll}
-                  aria-label="Select all memories"
+                  aria-label={selectionLabel}
                 />
-                Select all
+                {selectionLabel}
               </label>
               <span className="text-xs text-muted-foreground" aria-live="polite">
                 {selectedCount} of {totalPreviewItems} selected

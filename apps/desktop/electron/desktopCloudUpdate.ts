@@ -255,7 +255,7 @@ export function desktopUpdatePrompt(
       title: `${PRODUCT_NAMES.desktop} update ready`,
       message: `${PRODUCT_NAMES.desktop}${version ? ` ${version}` : ' update'} is ready to install.`,
       detail: `You have ${outcome.currentVersion}. Restart ${PRODUCT_NAMES.desktop} to finish updating; your chats are saved in your account.${outcome.metadataError ? ` ${outcome.metadataError}` : ''}`,
-      buttons: ['Restart to Update', 'Later'],
+      buttons: ['Relaunch to update', 'Later'],
       downloadButton: null,
       restartButton: 0,
     };

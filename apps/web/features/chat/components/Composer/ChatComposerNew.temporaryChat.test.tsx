@@ -46,6 +46,10 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
   }),
 }));
 
+vi.mock('@shared/hooks/use-workspace-policy', () => ({
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
+}));
+
 function openPlusMenu(): void {
   fireEvent.click(screen.getByRole('button', { name: /Add attachments and tools/ }));
 }
@@ -72,7 +76,7 @@ const TEMPORARY_CONVERSATION = {
 };
 
 function temporaryRow(): HTMLElement {
-  return screen.getByRole('button', { name: 'Temporary chat' });
+  return screen.getByRole('button', { name: 'Use incognito' });
 }
 
 describe('temporary chat armed before a conversation exists', () => {
@@ -80,8 +84,11 @@ describe('temporary chat armed before a conversation exists', () => {
     useSettingsStore.getState().setNewChatsTemporary(true);
     render(<ChatComposerNew onSend={vi.fn()} />);
     openPlusMenu();
-    expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(temporaryRow());
+    expect(screen.getByRole('button', { name: 'Exit incognito' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Exit incognito' }));
     openPlusMenu();
     expect(temporaryRow()).toHaveAttribute('aria-pressed', 'false');
     expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
@@ -91,22 +98,35 @@ describe('temporary chat armed before a conversation exists', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     openPlusMenu();
 
-    expect(screen.getByRole('button', { name: 'Temporary chat' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Use incognito' })).toBeEnabled();
+  });
+
+  it('reads Use incognito while temporary chat is off and turns it on', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    openPlusMenu();
+
+    expect(screen.getByRole('button', { name: 'Use incognito' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Use incognito' }));
+
+    expect(useChatStore.getState().pendingTemporaryChat).toBe(true);
   });
 
   it('arms the pending flag and checks the menu row, with no composer-face chip', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     openPlusMenu();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use incognito' }));
 
     expect(useChatStore.getState().pendingTemporaryChat).toBe(true);
     // The composer face stays plus, mode pill, Style, model trigger, mic,
     // send; temporary chat surfaces only in this menu and the page header.
-    expect(screen.queryByText('Temporary chat')).not.toBeInTheDocument();
+    expect(screen.queryByText('Use incognito')).not.toBeInTheDocument();
 
     openPlusMenu();
-    expect(screen.getByRole('button', { name: 'Temporary chat' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Exit incognito' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -116,11 +136,11 @@ describe('temporary chat armed before a conversation exists', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     openPlusMenu();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use incognito' }));
     expect(useChatStore.getState().pendingTemporaryChat).toBe(true);
 
     openPlusMenu();
-    fireEvent.click(screen.getByRole('button', { name: 'Temporary chat' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exit incognito' }));
     expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
   });
 });
@@ -251,14 +271,14 @@ describe('temporary chat inside a project', () => {
     render(<ChatComposerNew onSend={vi.fn()} projectPicker={projectPicker} />);
     openPlusMenu();
 
-    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use incognito' })).toBeNull();
   });
 
   it('is not offered on a project page composer', () => {
     render(<ChatComposerNew onSend={vi.fn()} projectId={PROJECT_ID} />);
     openPlusMenu();
 
-    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use incognito' })).toBeNull();
   });
 
   it('is not offered in an existing project conversation', () => {
@@ -282,7 +302,7 @@ describe('temporary chat inside a project', () => {
     );
     openPlusMenu();
 
-    expect(screen.queryByRole('button', { name: 'Temporary chat' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use incognito' })).toBeNull();
   });
 
   it('stays offered on a chat already temporary inside a project, so it can be turned off', () => {
@@ -299,7 +319,27 @@ describe('temporary chat inside a project', () => {
     );
     openPlusMenu();
 
-    expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Exit incognito' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('reads Exit incognito while a temporary chat is on and turns it off', () => {
+    openTemporaryConversation();
+    const onSetTemporaryChat = vi.fn(async () => true);
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId={TEMPORARY_CONVERSATION.id}
+        onSetTemporaryChat={onSetTemporaryChat}
+      />,
+    );
+    openPlusMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exit incognito' }));
+
+    expect(onSetTemporaryChat).toHaveBeenCalledWith(false);
   });
 
   it('says a new project chat will be saved when new chats start temporary', () => {
@@ -392,6 +432,7 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
   const capture = () => lifetime;
   return {
     ...(await importOriginal<ReadonlyIdentityModule>()),
+    useSessionSnapshot: () => () => null,
     useReadonlyIdentityLifetime: () => capture,
   };
 });

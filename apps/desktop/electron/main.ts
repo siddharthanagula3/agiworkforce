@@ -10,6 +10,7 @@ import {
   clipboard,
   desktopCapturer,
   ipcMain,
+  Menu,
   nativeTheme,
   net,
   powerMonitor,
@@ -34,6 +35,7 @@ import {
   type DesktopCloudUpdateAvailability,
   type DesktopUpdatePrompt,
 } from './desktopCloudUpdate';
+import { planOpenConversationInNewWindow, publicConversationUrl } from './conversationWindow';
 import {
   autoUpdateDownloadFailed,
   autoUpdateState,
@@ -182,6 +184,20 @@ import {
   ZOOM_LEVEL_STEP,
   clampZoomLevel,
   fillsWorkArea,
+  frameFillingWorkArea,
+  centeredFrame,
+  tiledFrame,
+  frameSavedBeforeTile,
+  frameToRestore,
+  arrangedFrames,
+  autoFillSelector,
+  cascadedFrames,
+  windowSetAfterJoin,
+  windowSetWithout,
+  type AutoFillSource,
+  type RectLike,
+  type WindowTile,
+  type WindowArrangement,
   followNavigationState,
   frameIsOnScreen,
   hostShortcutKeyFor,
@@ -331,6 +347,15 @@ let resumeAfterSignIn: {
   reported: string | null | undefined;
 } | null = null;
 
+const windowsInSet = new Set<number>();
+const previousWindowFrames = new Map<number, RectLike>();
+const terminalPanes = new Map<number, { open: boolean }>();
+const sideChatPanes = new Map<number, { open: boolean }>();
+
+function rememberJoined(ids: readonly number[]): void {
+  for (const id of windowSetAfterJoin([...windowsInSet], ids)) windowsInSet.add(id);
+}
+
 function liveWindows(): ShellWindowEntry[] {
   return [...shellWindows.values()].filter((entry) => !entry.win.isDestroyed());
 }
@@ -360,6 +385,8 @@ function installedMacArchitecture(): DesktopCloudMacArchitecture {
 const QUICK_ASK_WARMUP_MS = 5000;
 const UPDATE_RESTART_TIMEOUT_MS = 60_000;
 
+const HELP_PATH = '/help';
+const WHATS_NEW_PATH = '/changelog';
 const SUPPORT_PATH = '/support';
 
 /**
@@ -376,7 +403,7 @@ const SUPPORT_PATH = '/support';
  * bridge, and the check lives here rather than in the preload because the main
  * process is the side that cannot be lied to about who is calling.
  */
-function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
+function isTrustedSender(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): boolean {
   const frame = event.senderFrame;
   if (!frame || frame !== event.sender.mainFrame) return false;
   return isTrustedPageUrl(frame.url);
@@ -597,6 +624,24 @@ function registerIpcHandlers(): void {
     const history = event.sender.navigationHistory;
     if (direction === 'back' && history.canGoBack()) history.goBack();
     if (direction === 'forward' && history.canGoForward()) history.goForward();
+  });
+
+  ipcMain.on(ELECTRON_IPC_CHANNELS.terminalState, (event, state: unknown) => {
+    if (!isTrustedSender(event)) return;
+    const reported = terminalStateFrom(state);
+    if (!reported) return;
+    if (reported.available) terminalPanes.set(event.sender.id, { open: reported.open });
+    else terminalPanes.delete(event.sender.id);
+    installMenu();
+  });
+
+  ipcMain.on(ELECTRON_IPC_CHANNELS.sideChatState, (event, state: unknown) => {
+    if (!isTrustedSender(event)) return;
+    const reported = terminalStateFrom(state);
+    if (!reported) return;
+    if (reported.available) sideChatPanes.set(event.sender.id, { open: reported.open });
+    else sideChatPanes.delete(event.sender.id);
+    installMenu();
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.hostPreferences, async (event, patch) => {
@@ -1132,6 +1177,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     giveUp: () => showUnreachable(LOAD_TIMED_OUT_ERROR, entryUrl),
   });
   win.once('ready-to-show', firstLoad.settled);
+  win.on('page-title-updated', () => installMenu());
   win.on('closed', firstLoad.cancel);
 
   const followRoute = (_event: unknown, url: string, httpStatusCode?: number) => {
@@ -1321,8 +1367,53 @@ async function newChatFromShortcut(): Promise<void> {
   await focusComposerWhenReady(win, NEW_CHAT_COMPOSER_WAIT_MS);
 }
 
+function autoFill(source: AutoFillSource): void {
+  Menu.sendActionToFirstResponder(autoFillSelector(source));
+}
+
+function startDictation(): void {
+  Menu.sendActionToFirstResponder('startDictation:');
+}
+
+function showEmojiAndSymbols(): void {
+  app.showEmojiPanel();
+}
+
+function closeAllShellWindows(): void {
+  for (const entry of liveWindows()) {
+    if (!entry.win.isDestroyed()) entry.win.close();
+  }
+}
+
+function minimizeAllShellWindows(): void {
+  for (const entry of liveWindows()) {
+    if (!entry.win.isDestroyed()) entry.win.minimize();
+  }
+}
+
+function zoomAllShellWindows(): void {
+  for (const entry of liveWindows()) {
+    const win = entry.win;
+    if (win.isDestroyed()) continue;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  }
+}
+
 function openNewWindow(): void {
   createShellWindow({ primary: false, route: null });
+}
+
+function copyCurrentConversationUrl(): void {
+  const url = publicConversationUrl(CLOUD_APP_ORIGIN, focusedConversationRoute());
+  if (!url) return;
+  clipboard.writeText(url);
+}
+
+function openCurrentChatInNewWindow(): void {
+  const plan = planOpenConversationInNewWindow(focusedConversationRoute());
+  if (plan.openInNewWindow === null) return;
+  createShellWindow({ primary: false, route: plan.openInNewWindow });
 }
 
 function openFocusedConversationInNewWindow(): void {
@@ -1344,6 +1435,133 @@ function frontShellWindow(): BrowserWindow | null {
 
 function setFrontWindowOnTop(onTop: boolean): void {
   frontShellWindow()?.setAlwaysOnTop(onTop, 'floating');
+  installMenu();
+}
+
+function fillFrontWindow(): void {
+  const win = frontShellWindow();
+  if (!win || win.isDestroyed()) return;
+  win.setBounds(frameFillingWorkArea(screen.getDisplayMatching(win.getBounds()).workArea));
+  rememberJoined([win.id]);
+}
+
+function centerFrontWindow(): void {
+  const win = frontShellWindow();
+  if (!win || win.isDestroyed()) return;
+  const bounds = win.getBounds();
+  win.setBounds(centeredFrame(bounds, screen.getDisplayMatching(bounds).workArea));
+  rememberJoined([win.id]);
+}
+
+function placeTiledWindow(win: BrowserWindow, next: RectLike): void {
+  if (win.isDestroyed()) return;
+  const saved = frameSavedBeforeTile(
+    win.getBounds(),
+    next,
+    previousWindowFrames.get(win.id) ?? null,
+  );
+  if (saved) previousWindowFrames.set(win.id, saved);
+  win.setBounds(next);
+}
+
+function moveFrontWindow(tile: WindowTile): void {
+  const win = frontShellWindow();
+  if (!win || win.isDestroyed()) return;
+  const bounds = win.getBounds();
+  placeTiledWindow(win, tiledFrame(screen.getDisplayMatching(bounds).workArea, tile));
+  rememberJoined([win.id]);
+  installMenu();
+}
+
+function returnFrontWindowToPreviousSize(): void {
+  const win = frontShellWindow();
+  if (!win || win.isDestroyed()) return;
+  const saved = frameToRestore(previousWindowFrames.get(win.id) ?? null);
+  if (!saved) return;
+  previousWindowFrames.delete(win.id);
+  win.setBounds(saved);
+  installMenu();
+}
+
+function terminalStateFrom(state: unknown): { available: boolean; open: boolean } | null {
+  if (!state || typeof state !== 'object') return null;
+  const reported = state as { available?: unknown; open?: unknown };
+  if (typeof reported.available !== 'boolean' || typeof reported.open !== 'boolean') return null;
+  return { available: reported.available, open: reported.open };
+}
+
+function frontPane(panes: ReadonlyMap<number, { open: boolean }>): {
+  available: boolean;
+  open: boolean;
+} {
+  const win = frontShellWindow();
+  if (!win) return { available: false, open: false };
+  const pane = panes.get(win.webContents.id);
+  return pane ? { available: true, open: pane.open } : { available: false, open: false };
+}
+
+function frontTerminalPane(): { available: boolean; open: boolean } {
+  return frontPane(terminalPanes);
+}
+
+function frontWindowHasPreviousSize(): boolean {
+  const win = frontShellWindow();
+  return win !== null && frameToRestore(previousWindowFrames.get(win.id) ?? null) !== null;
+}
+
+function arrangeWindowsInFront(): void {
+  const front = frontShellWindow();
+  const windows = liveWindows()
+    .map((entry) => entry.win)
+    .filter((win) => !win.isDestroyed());
+  const ordered = front ? [front, ...windows.filter((win) => win.id !== front.id)] : windows;
+  const anchor = ordered[0];
+  if (!anchor) return;
+  const workArea = screen.getDisplayMatching(anchor.getBounds()).workArea;
+  const frames = cascadedFrames(
+    ordered.map((win) => {
+      const bounds = win.getBounds();
+      return { width: bounds.width, height: bounds.height };
+    }),
+    workArea,
+  );
+  ordered.forEach((win, index) => {
+    const frame = frames[index];
+    if (!frame || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.setBounds(frame);
+  });
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    const win = ordered[index];
+    if (win && !win.isDestroyed()) win.moveTop();
+  }
+  anchor.focus();
+  rememberJoined(ordered.map((win) => win.id));
+}
+
+function arrangeFrontWindows(arrangement: WindowArrangement): void {
+  const front = frontShellWindow();
+  if (!front || front.isDestroyed()) return;
+  const bounds = front.getBounds();
+  const frames = arrangedFrames(screen.getDisplayMatching(bounds).workArea, arrangement);
+  const others = liveWindows()
+    .map((entry) => entry.win)
+    .filter((win) => win.id !== front.id && !win.isDestroyed());
+  const placed = [front, ...others];
+  placed.forEach((win, index) => {
+    const frame = frames[index];
+    if (frame) placeTiledWindow(win, frame);
+  });
+  rememberJoined(placed.slice(0, frames.length).map((win) => win.id));
+  installMenu();
+}
+
+function removeFrontWindowFromSet(): void {
+  const win = frontShellWindow();
+  if (!win) return;
+  const remaining = windowSetWithout([...windowsInSet], win.id);
+  windowsInSet.clear();
+  for (const id of remaining) windowsInSet.add(id);
   installMenu();
 }
 
@@ -1958,6 +2176,14 @@ async function writeHostPreferences(
   return hostPreferencesState();
 }
 
+function openProductHelp(): void {
+  openExternally(`${CLOUD_APP_ORIGIN}${HELP_PATH}`);
+}
+
+function openWhatsNew(): void {
+  openExternally(`${CLOUD_APP_ORIGIN}${WHATS_NEW_PATH}`);
+}
+
 function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
 }
@@ -2098,7 +2324,7 @@ function announceUpdateReady(version: string): void {
   const notification = createNativeNotification({
     title: `${PRODUCT_NAMES.desktop} update ready`,
     body: `${version ? `Version ${version}` : 'An update'} is downloaded. Restart ${PRODUCT_NAMES.desktop} to finish updating.`,
-    actions: [{ type: 'button', text: 'Restart to Update' }],
+    actions: [{ type: 'button', text: 'Relaunch to update' }],
   });
   notification.on('action', () => void restartToUpdate());
   notification.on('click', () => void checkForCloudUpdate());
@@ -2146,6 +2372,8 @@ function installMenu(): void {
     {
       newChat: garnishHandlers.onNewChat,
       newWindow: openNewWindow,
+      openCurrentChatInNewWindow,
+      copyConversationUrl: copyCurrentConversationUrl,
       openConversationInNewWindow: openFocusedConversationInNewWindow,
       hasFocusedConversation: () => focusedConversationRoute() !== null,
       isFrontWindowOnTop: () => frontShellWindow()?.isAlwaysOnTop() ?? null,
@@ -2155,6 +2383,8 @@ function installMenu(): void {
       openSettings,
       openLogs: openLogsFolder,
       copyDiagnostics,
+      openProductHelp,
+      openWhatsNew,
       openSupport,
       openOpenSourceNotices: () => void showOpenSourceNotices(),
       checkForUpdates: garnishHandlers.onCheckForUpdates,
@@ -2166,6 +2396,35 @@ function installMenu(): void {
       takeOverScreen,
       handBackScreen,
       stopScreenControl: () => void stopComputerUse(),
+      closeAllWindows: closeAllShellWindows,
+      minimizeAllWindows: minimizeAllShellWindows,
+      zoomAllWindows: zoomAllShellWindows,
+      autoFill,
+      startDictation,
+      showEmojiPanel: showEmojiAndSymbols,
+      fillWindow: fillFrontWindow,
+      centerWindow: centerFrontWindow,
+      moveWindow: moveFrontWindow,
+      terminalAvailable: () => frontTerminalPane().available,
+      terminalOpen: () => frontTerminalPane().open,
+      sideChatAvailable: () => frontPane(sideChatPanes).available,
+      sideChatOpen: () => frontPane(sideChatPanes).open,
+      hasPreviousWindowSize: frontWindowHasPreviousSize,
+      returnToPreviousSize: returnFrontWindowToPreviousSize,
+      arrangeWindows: arrangeFrontWindows,
+      arrangeInFront: arrangeWindowsInFront,
+      frontWindowIsInSet: () => {
+        const win = frontShellWindow();
+        return win !== null && windowsInSet.has(win.id);
+      },
+      removeWindowFromSet: removeFrontWindowFromSet,
+      shellWindows: () =>
+        liveWindows().map((entry) => ({
+          id: entry.win.id,
+          title: entry.win.getTitle() || PRODUCT_NAMES.desktop,
+          focused: entry.win.isFocused(),
+        })),
+      focusShellWindow: focusWindow,
     },
     {
       quickAsk: getShortcuts().quickAskShortcut,

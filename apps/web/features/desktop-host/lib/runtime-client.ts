@@ -77,7 +77,7 @@ import type {
   ThreadDeleteResponse,
 } from '@agiworkforce/types/protocol';
 
-const NO_HOST_MESSAGE = 'Local access is only available in AGI Desktop.';
+const NO_HOST_MESSAGE = 'Local access is only available in Desktop.';
 
 export class DesktopHostUnavailable extends Error {
   constructor() {
@@ -119,6 +119,10 @@ export function openWorkspaceInEditor(rootId: string): Promise<ApplicationOpenRe
 
 export function readWorkspaceText(rootId: string, path: string): Promise<FileTextContent> {
   return invoke<FileTextContent>('file_read_text', { rootId, path });
+}
+
+export function deleteWorkspaceFile(rootId: string, path: string): Promise<boolean> {
+  return invoke<boolean>('file_delete', { rootId, path });
 }
 
 export function writeWorkspaceText(
@@ -492,6 +496,10 @@ export function typeInPairedBrowser(
 
 export function navigatePairedBrowser(url: string): Promise<{ url: string }> {
   return invoke<{ url: string }>('browser_navigate', { url });
+}
+
+export function stopPairedBrowser(): Promise<{ stopped: boolean }> {
+  return invoke<{ stopped: boolean }>('browser_stop');
 }
 
 export function capturePairedBrowser(): Promise<{ dataUrl: string }> {

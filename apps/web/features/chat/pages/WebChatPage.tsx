@@ -61,6 +61,7 @@ import {
   ToolApprovalProvider,
   ToolInputProvider,
   InteractiveCardResumeProvider,
+  saveMessageToDb,
 } from '@/lib/hooks/useChatStream';
 import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
@@ -206,6 +207,7 @@ import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
 import { DraftConflictDialog } from '../components/DraftConflictDialog';
 import { useExplicitMemoryCommands } from '../hooks/use-explicit-memory-commands';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
+import { useFocusFollowUp, focusFollowUpComposer } from '../hooks/use-focus-follow-up';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 import { openModelPicker } from '../lib/model-picker-trigger';
@@ -245,6 +247,7 @@ import { ComposerFeedbackDialog } from '../components/Composer/ComposerFeedbackD
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { EnhancedExportDialog } from '../components/dialogs/EnhancedExportDialog';
 import { printConversation } from '../lib/print-conversation';
+import { copyConversationMarkdown } from '../lib/conversation-markdown';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import {
   MessageInlineEditProvider,
@@ -260,6 +263,7 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
+import { ComposerSuggestions } from '../components/Composer/ComposerSuggestions';
 import { HomeActiveTasks } from '../components/HomeActiveTasks';
 import { AgiWorkIntroDialog } from '../components/AgiWorkIntroDialog';
 import { NewChatConnectorSuggestions } from '../components/NewChat/NewChatConnectorSuggestions';
@@ -448,6 +452,7 @@ import {
 } from '../stores/image-transcript-recovery-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { onAppCommand } from '@shared/lib/app-commands';
+import { subscribeNewProject } from '@shared/lib/new-project-command';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { requestUsageResetReminder } from '@/features/chat/lib/usage-reset-reminder';
 import { useProjectChatDefaults } from '@/features/projects/hooks/use-project-chat-defaults';
@@ -486,7 +491,7 @@ type SendMeta = {
   mcpContext?: McpContextSelection;
   disabledConnectorIds?: string[];
   connectorToolsEnabled?: boolean;
-  /** Structured AGI Work goal captured by the composer. */
+  /** Structured Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
@@ -1281,7 +1286,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     router.replace(url.pathname + url.search);
   }, [starterPromptParam, router]);
 
-  // AGI Work has no page of its own, it is the composer's work-mode toggle;
+  // Work has no page of its own, it is the composer's work-mode toggle;
   // /chat/page.tsx passes initialWorkMode down when the proxy rewrote a
   // signed-in visit to /agi-work here (see apps/web/proxy.ts). This lands the
   // new-chat composer already switched to it; the toggle's own billing-
@@ -1563,9 +1568,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   useEffect(() => {
     const stopSearch = onAppCommand('open-search', () => setSearchDialogOpen(true));
     const stopShortcuts = onAppCommand('open-shortcuts', () => setKeyboardShortcutsOpen(true));
+    const stopFeedback = onAppCommand('open-feedback', () => setFeedbackOpen(true));
     return () => {
       stopSearch();
       stopShortcuts();
+      stopFeedback();
     };
   }, []);
 
@@ -1777,7 +1784,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       modelLabel: selectedModel?.name ?? undefined,
       modelId: activeModelId,
       toolNames: sendPreviewToolNames,
-      destinationHost: 'AGI managed cloud',
+      destinationHost: 'Cloud',
     });
   }, [activeModelId, selectedModel, sendPreviewToolNames]);
 
@@ -2051,7 +2058,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   // Notification banner: never on an empty conversation (hasMessages gates
   // it), shown at most once per browser, and only once a turn is either a
-  // task type that runs long by nature (Deep Research, an AGI Work agent
+  // task type that runs long by nature (Deep Research, an Work agent
   // run, or an image/video generation job) or has been streaming past
   // TimeoutPresets.LONG_RUNNING. Dismissing it, resolving the Notification
   // permission, or simply having shown it once all persist to localStorage
@@ -4494,9 +4501,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   }, []);
 
   const handleFocusComposer = useCallback(() => {
-    const textarea = document.querySelector<HTMLTextAreaElement>('[data-composer-textarea]');
-    textarea?.focus();
+    focusFollowUpComposer();
   }, []);
+
+  useFocusFollowUp();
 
   const handleSelectSession = useCallback(
     (id: string) => {
@@ -4612,6 +4620,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setCreateProjectFromComposer(false);
     setCreateProjectOpen(true);
   }, []);
+  useEffect(() => subscribeNewProject(handleProjectCreate), [handleProjectCreate]);
 
   /**
    * Create project from the composer "Project or folder" picker: same dialog,
@@ -5974,17 +5983,43 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (!assistantMsg || !steps?.length || !review) return;
 
       if (decision.kind === 'cancel') {
-        updateMessage(
-          id,
-          {
-            metadata: {
-              ...assistantMsg.metadata,
-              agiWorkPlan: steps.map((step) => ({ ...step, status: 'cancelled' as const })),
-              agiWorkPlanReview: { ...review, awaitingApproval: false },
+        const metadata: MessageMetadata = {
+          ...assistantMsg.metadata,
+          agiWorkPlan: steps.map((step) => ({ ...step, status: 'cancelled' as const })),
+          agiWorkPlanReview: { ...review, awaitingApproval: false },
+        };
+        updateMessage(id, { metadata }, displayedConversationId);
+        if (
+          displayedConversation?.isTemporary === true ||
+          conversationHoldsLocalTurns(displayedMessages) ||
+          displayedMessages.some(
+            (message) =>
+              message.metadata?.privacyMode === 'byok' ||
+              message.metadata?.providerMode === 'DirectByok' ||
+              message.metadata?.providerMode === 'Local',
+          )
+        ) {
+          return;
+        }
+        try {
+          await saveMessageToDb(
+            displayedConversationId,
+            {
+              id,
+              role: assistantMsg.role,
+              content: assistantMsg.content,
+              model: assistantMsg.model,
+              parentId: assistantMsg.parentId,
+              metadata,
             },
-          },
-          displayedConversationId,
-        );
+            getToken,
+          );
+        } catch (error) {
+          setChatError(
+            toUserMessage(error, 'The plan was cancelled here, but the change could not be saved.'),
+            displayedConversationId,
+          );
+        }
         return;
       }
       if (isTrialExhausted) {
@@ -6045,6 +6080,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       displayedConversation,
       displayedConversationId,
       displayedMessages,
+      getToken,
       handleOpenUpgradeDialog,
       isStreaming,
       isTrialExhausted,
@@ -6246,7 +6282,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   useEffect(() => {
     if (!showWorkSession) setWorkSessionPanelOpen(false);
   }, [showWorkSession, setWorkSessionPanelOpen]);
-  // The dock opens itself for each AGI Work run, keyed by the run's own turn, so
+  // The dock opens itself for each Work run, keyed by the run's own turn, so
   // a dock the user closed stays closed until the next task starts.
   const activeRunKey = useMemo(
     () => taskDockRunKey(displayedConversationId, displayedMessages),
@@ -6988,6 +7024,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       title={activeConversationTitle}
                       agiWork={isAgiWorkConversation}
                       projects={sidebarProjects}
+                      projectId={conversationProjectId}
                       onRename={(next) => handleRenameSession(displayedConversationId, next)}
                       onMoveToProject={
                         temporaryChatActive
@@ -7017,6 +7054,20 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           ? () => {
                               const last = displayedMessages[displayedMessages.length - 1];
                               if (last?.id) void createBranch(last.id);
+                            }
+                          : undefined
+                      }
+                      onCopyMarkdown={
+                        displayedMessages.length > 0
+                          ? () => {
+                              void copyConversationMarkdown(
+                                activeConversationTitle,
+                                displayedMessages.map((message) => ({
+                                  role: message.role,
+                                  content:
+                                    typeof message.content === 'string' ? message.content : '',
+                                })),
+                              );
                             }
                           : undefined
                       }
@@ -7235,6 +7286,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       onReviewApprovals={handleReviewApprovals}
                     />
                     {studyModeIndicator}
+                    {!voiceModeActive && <ComposerSuggestions onPick={setComposerPrefill} />}
                     {voiceModeActive ? (
                       <VoiceModeSurface
                         variant={VOICE_SURFACE_VARIANT.empty}

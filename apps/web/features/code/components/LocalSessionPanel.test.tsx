@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import { LOCAL_CODE_COPY } from '../local-code';
 
 const readDeveloperSession = vi.fn();
@@ -144,6 +145,26 @@ beforeEach(() => {
   answerDeveloperApproval.mockResolvedValue(true);
   answerDeveloperUserInput.mockResolvedValue(true);
   listWorkspaceFiles.mockResolvedValue([]);
+});
+
+describe('Show Terminal on the public window', () => {
+  it('opens the terminal pane when the View menu command arrives', () => {
+    const setTerminalState = vi.fn();
+    window.agiHost = { setTerminalState } as Window['agiHost'];
+    renderPanel();
+
+    const button = screen.getByRole('button', { name: 'Terminal panel' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(setTerminalState).toHaveBeenCalledWith({ available: true, open: false });
+
+    act(() => {
+      emitAppCommand('toggle-terminal');
+    });
+
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(setTerminalState).toHaveBeenCalledWith({ available: true, open: true });
+    delete window.agiHost;
+  });
 });
 
 describe('local session capabilities', () => {
@@ -739,6 +760,27 @@ describe('local session approvals', () => {
       decision: 'approve_once',
       note: 'e2e',
     });
+  });
+
+  it('allows the command for this session from Allow for this session', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await startRunningTurn(user);
+    send(approval);
+
+    const card = await screen.findByTestId('local-approval');
+    await user.click(within(card).getByRole('button', { name: 'Allow for this session' }));
+    await waitFor(() =>
+      expect(answerDeveloperApproval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rootId: 'root-1',
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          requestId: 'ask-1',
+          decision: 'approve_for_session',
+        }),
+      ),
+    );
   });
 
   it('confirms an always-allow rule, naming the command it lets run everywhere', async () => {

@@ -15,6 +15,7 @@ import {
   clickInPairedBrowser,
   downloadThroughPairedBrowser,
   navigatePairedBrowser,
+  stopPairedBrowser,
   openDownloadsFolder,
   readBrowserActivity,
   listPairedTabs,
@@ -30,12 +31,12 @@ const TITLE = 'Use the browser';
 const INTRO =
   'Acts in the Chrome window paired with this Mac. Every action asks you first, and Chrome carries it out only on sites you approved in the extension.';
 const NOT_PAIRED =
-  'No browser is paired yet. Open Settings, Capabilities to pair the AGI Extension with this Mac.';
+  'No browser is paired yet. Open Settings, Capabilities to pair the Extension with this Mac.';
 const NOT_CONNECTED =
-  'The paired browser is not answering. Open Chrome with the AGI Extension enabled and try again.';
+  'The paired browser is not answering. Open Chrome with the Extension enabled and try again.';
 const FAILED = 'That browser action did not run.';
 const ACTIVITY_HEADING = 'Recent activity';
-const NO_ACTIVITY = 'Nothing has used the paired browser since AGI Desktop opened.';
+const NO_ACTIVITY = 'Nothing has used the paired browser since Desktop opened.';
 const DOWNLOADS_HEADING = 'Downloads';
 const OPEN_DOWNLOADS_LABEL = 'Open Downloads folder';
 const SUB_HEADING_CLASS = 'text-xs font-medium text-muted-foreground';
@@ -76,6 +77,7 @@ const ACTIONS: readonly BrowserAction[] = [
   { command: 'browser_click', label: 'Click', fields: ['selector'] },
   { command: 'browser_type', label: 'Type', fields: ['selector', 'text'] },
   { command: 'browser_navigate', label: 'Open a page', fields: ['url'] },
+  { command: 'browser_stop', label: 'Stop loading', fields: [] },
   { command: 'browser_console', label: 'Read the console', fields: [] },
   { command: 'browser_network', label: 'Read network activity', fields: [] },
   { command: 'browser_download', label: 'Download a file', fields: ['url'] },
@@ -154,6 +156,10 @@ async function runAction(
     case 'browser_navigate': {
       const navigated = await navigatePairedBrowser(values.url);
       return { transcript: `Opened ${navigated.url}.`, files: [] };
+    }
+    case 'browser_stop': {
+      await stopPairedBrowser();
+      return { transcript: 'Stopped loading.', files: [] };
     }
     case 'browser_console': {
       const read = await readPairedBrowserConsole({});

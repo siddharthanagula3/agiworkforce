@@ -12,6 +12,7 @@ import {
   grepFiles,
   listDirectory,
   readBinaryFile,
+  deleteRegularFile,
   readTextFile,
   writeTextFile,
 } from '../runtime/filesystemService';
@@ -83,6 +84,20 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await fs.rm(sandbox, { recursive: true, force: true });
+});
+
+describe('deleteRegularFile', () => {
+  it('removes a file inside the granted folder', async () => {
+    const relative = 'scratch-delete.txt';
+    await fs.writeFile(path.join(sandbox, relative), 'gone\n');
+    await expect(deleteRegularFile(root, relative)).resolves.toBe(true);
+    expect(existsSync(path.join(sandbox, relative))).toBe(false);
+  });
+
+  it('refuses a directory', async () => {
+    await expect(deleteRegularFile(root, 'src')).rejects.toThrow(/not a file/);
+    expect(existsSync(path.join(sandbox, 'src'))).toBe(true);
+  });
 });
 
 describe('listDirectory', () => {

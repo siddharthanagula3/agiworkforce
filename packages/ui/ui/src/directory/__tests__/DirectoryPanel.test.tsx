@@ -304,6 +304,21 @@ describe('DirectoryPanel layout', () => {
     expect(createEntry).toHaveBeenCalledWith('skills');
   });
 
+  it('creates a skill from the public skills page', () => {
+    const createEntry = vi.fn();
+    renderPanel('skills', {
+      createEntry,
+      skills: {
+        installable: true,
+        entries: [],
+        createLabel: 'Create a skill',
+        sortOptions: ['name'],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create a skill' }));
+    expect(createEntry).toHaveBeenCalledWith('skills');
+  });
+
   it('hides the create control on a section with no create label', () => {
     renderPanel('plugins', { createEntry: vi.fn() });
     expect(screen.queryByRole('button', { name: 'New skill' })).toBeNull();
@@ -677,6 +692,24 @@ describe('DirectoryPanel connector detail actions', () => {
     expect(openSettings).toHaveBeenCalledWith('skills', 'canvas-design');
     expect(screen.queryByRole('button', { name: 'Uninstall' })).toBeNull();
   });
+
+  it('adds an installed skill to the current chat from Try in chat', async () => {
+    const trySkillInChat = vi.fn();
+    renderPanel(
+      'skills',
+      {
+        trySkillInChat,
+        loadDetail: () =>
+          Promise.resolve({
+            ...DETAILS.skills,
+            installed: true,
+          } as DirectoryDetail),
+      },
+      { openEntryId: 'canvas-design' },
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Try in chat' }));
+    expect(trySkillInChat).toHaveBeenCalledWith('canvas-design');
+  });
 });
 
 describe('DirectoryPanel connector credentials', () => {
@@ -1009,6 +1042,66 @@ describe('DirectoryPanel plugin groups', () => {
       expect(queryEntries).toHaveBeenLastCalledWith(
         'plugins',
         expect.objectContaining({ sourceId: 'marketplace' }),
+      ),
+    );
+  });
+
+  it('clears the plugin search from Clear search', () => {
+    render(<DirectoryPanel section="plugins" adapter={pluginsAdapter()} />);
+    const search = screen.getByRole('searchbox', { name: 'Search plugins' });
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
+    fireEvent.change(search, { target: { value: 'calendar' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(
+      (screen.getByRole('searchbox', { name: 'Search plugins' }) as HTMLInputElement).value,
+    ).toBe('');
+    expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
+  });
+
+  it('resets the plugin filters from Reset filters when nothing matches', async () => {
+    const queryEntries = vi.fn();
+    const adapter = pluginsAdapter({ queryEntries });
+    render(
+      <DirectoryPanel
+        section="plugins"
+        adapter={{
+          ...adapter,
+          plugins: { ...adapter.plugins!, entries: [] },
+        }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Filter by/ }));
+    fireEvent.click(await screen.findByText('Web'));
+    expect(await screen.findByText('Nothing matches these filters.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    await waitFor(() =>
+      expect(queryEntries).toHaveBeenLastCalledWith(
+        'plugins',
+        expect.objectContaining({ selection: {} }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
+  });
+
+  it('clears the plugin filters from Clear filters', async () => {
+    const queryEntries = vi.fn();
+    render(<DirectoryPanel section="plugins" adapter={pluginsAdapter({ queryEntries })} />);
+    await waitFor(() => expect(queryEntries).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /Filter by/ }));
+    fireEvent.click(await screen.findByText('Web'));
+    await waitFor(() =>
+      expect(queryEntries).toHaveBeenLastCalledWith(
+        'plugins',
+        expect.objectContaining({ selection: { 'works-with': ['web'] } }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Filter by/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Clear filters' }));
+    await waitFor(() =>
+      expect(queryEntries).toHaveBeenLastCalledWith(
+        'plugins',
+        expect.objectContaining({ selection: {} }),
       ),
     );
   });

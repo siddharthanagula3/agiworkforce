@@ -49,6 +49,7 @@ export interface ConversationTitleMenuProps {
   agiWork?: boolean;
   archived?: boolean;
   projects: ReadonlyArray<{ id: string; name: string }>;
+  projectId?: string | null;
   onRename: (title: string) => void | Promise<boolean>;
   onMoveToProject?: (projectId: string) => void;
   onArchiveToggle?: () => void;
@@ -57,6 +58,7 @@ export interface ConversationTitleMenuProps {
   onExport?: () => void;
   onShare?: () => void;
   onFork?: () => void;
+  onCopyMarkdown?: () => void;
   onEditInstructions?: () => void;
   hasInstructions?: boolean;
 }
@@ -66,11 +68,13 @@ export function ConversationTitleMenu({
   agiWork = false,
   archived = false,
   projects,
+  projectId = null,
   onRename,
   onMoveToProject,
   onArchiveToggle,
   onDelete,
   onFork,
+  onCopyMarkdown,
   onPrint,
   onExport,
   onShare,
@@ -162,7 +166,7 @@ export function ConversationTitleMenu({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <FolderInput className="me-2 h-4 w-4" />
-                  Move to project
+                  {projectId ? 'Change project' : 'Move to project'}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
                   {projects.map((p) => (
@@ -194,6 +198,11 @@ export function ConversationTitleMenu({
               <DropdownMenuItem onSelect={() => onExport()}>
                 <Download className="me-2 h-4 w-4" />
                 Export…
+              </DropdownMenuItem>
+            )}
+            {onCopyMarkdown && (
+              <DropdownMenuItem onSelect={() => onCopyMarkdown()}>
+                Copy as Markdown
               </DropdownMenuItem>
             )}
             {onFork && (

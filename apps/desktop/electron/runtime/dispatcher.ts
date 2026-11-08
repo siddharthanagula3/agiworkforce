@@ -180,6 +180,7 @@ import {
   grepFiles,
   listDirectory,
   readBinaryFile,
+  deleteRegularFile,
   readTextFile,
   writeTextFile,
 } from './filesystemService';
@@ -596,6 +597,10 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
   file_edit_text: {
     capability: 'filesystem.write',
     reason: 'The agent wants to change part of a file in this folder.',
+  },
+  file_delete: {
+    capability: 'filesystem.write',
+    reason: 'Delete a file in this folder.',
   },
   workspace_reveal: {
     capability: 'filesystem.read',
@@ -1946,6 +1951,8 @@ async function execute(
       return readTextFile(resolveRoot(args), requireString(args, 'path'));
     case 'file_read_bytes':
       return readBinaryFile(resolveRoot(args), requireString(args, 'path'));
+    case 'file_delete':
+      return deleteRegularFile(resolveRoot(args), requireString(args, 'path'));
     case 'file_write_text':
       return writeTextFile(
         resolveRoot(args),

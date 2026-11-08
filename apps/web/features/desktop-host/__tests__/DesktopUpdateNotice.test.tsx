@@ -68,7 +68,7 @@ describe('DesktopUpdateNotice', () => {
     );
     expect(screen.getByRole('status')).toHaveTextContent('AGI Desktop update is ready to install');
     expect(screen.getByRole('status')).not.toHaveTextContent('1.4.0');
-    expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
 
   it('retires events from a previous host', async () => {
@@ -120,7 +120,7 @@ describe('DesktopUpdateNotice', () => {
       'AGI Desktop 1.3.0 is ready to install',
     );
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Restart to update' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Relaunch to update' }));
     expect(restartToUpdate).toHaveBeenCalledTimes(1);
     expect(openUpdateInstaller).not.toHaveBeenCalled();
   });
@@ -140,12 +140,12 @@ describe('DesktopUpdateNotice', () => {
     }));
     render(<DesktopUpdateNotice host={host({ checkForUpdate, restartToUpdate })} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Relaunch to update' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('AGI Desktop could not restart to install the update.');
     expect(alert).not.toHaveTextContent('Error invoking remote method');
-    expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
 
   it.each([
@@ -162,7 +162,7 @@ describe('DesktopUpdateNotice', () => {
     }));
     render(<DesktopUpdateNotice host={host({ checkForUpdate, restartToUpdate })} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Relaunch to update' }));
 
     expect(await screen.findByText(new RegExp(text, 'u'))).toBeInTheDocument();
   });

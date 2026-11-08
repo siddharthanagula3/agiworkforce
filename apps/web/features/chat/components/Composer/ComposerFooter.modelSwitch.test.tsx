@@ -107,6 +107,35 @@ beforeEach(() => {
 });
 
 describe('ComposerFooter model switch compatibility', () => {
+  it('leaves the selected model unchanged when the menu is opened and closed', async () => {
+    const user = userEvent.setup();
+    const before = useModelStore.getState().selectedModelId;
+    renderFooter();
+
+    await openPicker(user);
+    await user.keyboard('{Escape}');
+
+    expect(useModelStore.getState().selectedModelId).toBe(before);
+    expect(screen.queryByRole('button', { name: /All models/ })).toBeNull();
+  });
+
+  it('shows the selected model name and keeps that label when the menu closes', async () => {
+    const user = userEvent.setup();
+    const before = useModelStore.getState().selectedModelId;
+    renderFooter();
+
+    const button = screen.getByRole('button', { name: /, change model$/ });
+    expect(button).toHaveTextContent(anchor.model.name);
+
+    await openPicker(user);
+    await user.keyboard('{Escape}');
+
+    expect(useModelStore.getState().selectedModelId).toBe(before);
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      anchor.model.name,
+    );
+  });
+
   it('gates a switch whose context window cannot hold the conversation', async () => {
     const user = userEvent.setup();
     seedConversation([overflowingTurn()]);
@@ -159,6 +188,9 @@ describe('ComposerFooter model switch compatibility', () => {
     await waitFor(() => {
       expect(useModelStore.getState().selectedModelId).toBe(target.model.id);
     });
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      target.model.name,
+    );
     expect(screen.queryByRole('button', { name: 'Switch anyway' })).toBeNull();
   });
 

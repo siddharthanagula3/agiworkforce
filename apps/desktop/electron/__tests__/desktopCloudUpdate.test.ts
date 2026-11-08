@@ -236,7 +236,7 @@ describe('desktop cloud update origin and in-place prompts', () => {
     });
 
     expect(prompt.title).toBe('AGI Desktop update ready');
-    expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Restart to Update');
+    expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Relaunch to update');
     expect(prompt.downloadButton).toBeNull();
   });
 
@@ -281,7 +281,7 @@ describe('desktop cloud update origin and in-place prompts', () => {
       downloadFailed: true,
     });
 
-    expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Restart to Update');
+    expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Relaunch to update');
   });
 
   it('keeps the signed installer as the answer when the update cannot install in place', () => {

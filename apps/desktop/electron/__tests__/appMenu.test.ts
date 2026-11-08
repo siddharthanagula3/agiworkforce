@@ -24,6 +24,8 @@ function actions() {
   return {
     newChat: vi.fn(),
     newWindow: vi.fn(),
+    openCurrentChatInNewWindow: vi.fn(),
+    copyConversationUrl: vi.fn(),
     openConversationInNewWindow: vi.fn(),
     hasFocusedConversation: vi.fn(() => true),
     isFrontWindowOnTop: vi.fn(() => false),
@@ -33,10 +35,16 @@ function actions() {
     openSettings: vi.fn(),
     openLogs: vi.fn(),
     copyDiagnostics: vi.fn(),
+    openProductHelp: vi.fn(),
+    openWhatsNew: vi.fn(),
     openSupport: vi.fn(),
     openOpenSourceNotices: vi.fn(),
     checkForUpdates: vi.fn(),
     sendHostCommand: vi.fn(),
+    terminalAvailable: vi.fn(() => false),
+    terminalOpen: vi.fn(() => false),
+    sideChatAvailable: vi.fn(() => false),
+    sideChatOpen: vi.fn(() => false),
     goBack: vi.fn(),
     goForward: vi.fn(),
     setZoomLevel: vi.fn(),
@@ -44,6 +52,23 @@ function actions() {
     takeOverScreen: vi.fn(),
     handBackScreen: vi.fn(),
     stopScreenControl: vi.fn(),
+    closeAllWindows: vi.fn(),
+    minimizeAllWindows: vi.fn(),
+    zoomAllWindows: vi.fn(),
+    startDictation: vi.fn(),
+    showEmojiPanel: vi.fn(),
+    autoFill: vi.fn(),
+    fillWindow: vi.fn(),
+    centerWindow: vi.fn(),
+    moveWindow: vi.fn(),
+    hasPreviousWindowSize: vi.fn(() => false),
+    returnToPreviousSize: vi.fn(),
+    arrangeWindows: vi.fn(),
+    arrangeInFront: vi.fn(),
+    frontWindowIsInSet: vi.fn(() => false),
+    removeWindowFromSet: vi.fn(),
+    shellWindows: vi.fn(() => []),
+    focusShellWindow: vi.fn(),
   };
 }
 
@@ -71,6 +96,18 @@ function item(
 ): MenuItemConstructorOptions {
   const found = submenu(menu, menuLabel).find((entry) => entry.label === itemLabel);
   if (!found) throw new Error(`${menuLabel} has no item labelled ${itemLabel}`);
+  return found;
+}
+
+function editFindItem(
+  menu: MenuItemConstructorOptions[],
+  label: string,
+): MenuItemConstructorOptions {
+  const find = submenu(menu, 'Edit').find((entry) => entry.label === 'Find');
+  const found = ((find?.submenu as MenuItemConstructorOptions[] | undefined) ?? []).find(
+    (entry) => entry.label === label,
+  );
+  if (!found) throw new Error(`Find has no item labelled ${label}`);
   return found;
 }
 
@@ -113,16 +150,80 @@ describe('the application menu', () => {
     const { menu, actions: spies } = template();
 
     (item(menu, 'View', 'Toggle Sidebar').click as () => void)();
+    (item(menu, 'View', 'Search').click as () => void)();
     (
       submenu(menu, 'Help').find((entry) => entry.label === 'Keyboard Shortcuts')
         ?.click as () => void
     )();
 
     const sent = spies.sendHostCommand.mock.calls.map(([command]) => command);
-    expect(sent).toEqual(['toggle-sidebar', 'show-keyboard-shortcuts']);
+    expect(sent).toEqual(['toggle-sidebar', 'open-search', 'show-keyboard-shortcuts']);
+    expect(item(menu, 'View', 'Search').registerAccelerator).toBe(false);
     for (const command of sent) {
       expect(HOST_COMMANDS).toContain(command);
     }
+  });
+
+  it('opens keyboard shortcuts from the public window Help menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Help', 'Keyboard Shortcuts').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('show-keyboard-shortcuts');
+  });
+
+  it('shows a side chat from the public window View menu when a conversation is open', () => {
+    const idle = template();
+    const hidden = item(idle.menu, 'View', 'Show Side Chat');
+    expect(hidden.enabled).toBe(false);
+
+    const spies = actions();
+    spies.sideChatAvailable.mockReturnValue(true);
+    const shown = template(spies);
+    const open = item(shown.menu, 'View', 'Show Side Chat');
+    expect(open.enabled).toBe(true);
+    expect(open.accelerator).toBe('CommandOrControl+;');
+    (open.click as () => void)();
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-side-chat');
+
+    spies.sideChatOpen.mockReturnValue(true);
+    spies.sendHostCommand.mockClear();
+    const hiding = template(spies);
+    const close = item(hiding.menu, 'View', 'Hide Side Chat');
+    expect(close.enabled).toBe(true);
+    (close.click as () => void)();
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-side-chat');
+  });
+
+  it('shows the terminal from the public window View menu when a pane is open', () => {
+    const idle = template();
+    const hidden = item(idle.menu, 'View', 'Show Terminal');
+    expect(hidden.enabled).toBe(false);
+    expect(hidden.registerAccelerator).toBe(false);
+
+    const spies = actions();
+    spies.terminalAvailable.mockReturnValue(true);
+    const shown = template(spies);
+    const open = item(shown.menu, 'View', 'Show Terminal');
+    expect(open.enabled).toBe(true);
+    (open.click as () => void)();
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-terminal');
+
+    spies.terminalOpen.mockReturnValue(true);
+    spies.sendHostCommand.mockClear();
+    const hiding = template(spies);
+    const close = item(hiding.menu, 'View', 'Hide Terminal');
+    expect(close.enabled).toBe(true);
+    (close.click as () => void)();
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-terminal');
+  });
+
+  it('opens feedback from the public window Help menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Help', 'Send Feedback').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('send-feedback');
   });
 
   it('drives zoom by steps and resets to actual size', () => {
@@ -134,6 +235,182 @@ describe('the application menu', () => {
 
     expect(spies.stepZoomLevel.mock.calls).toEqual([[1], [-1]]);
     expect(spies.setZoomLevel).toHaveBeenCalledWith(0);
+  });
+
+  it('opens the previous tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Previous Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('previous-tab');
+  });
+
+  it('opens the next tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Next Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('next-tab');
+  });
+
+  it('starts a performance trace from the public window Help menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Help', 'Start Performance Trace').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('start-performance-trace');
+  });
+
+  it('reopens the last closed tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Reopen Closed Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('reopen-closed-tab');
+  });
+
+  it('opens the first tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'First Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-first-tab');
+  });
+
+  it('closes the active tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Close Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('close-active-tab');
+  });
+
+  it('closes the other tabs from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Close Other Tabs').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('close-other-tabs');
+  });
+
+  it('closes the tabs to the right from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Close Tabs to the Right').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('close-tabs-to-the-right');
+  });
+
+  it('opens the second tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Second Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-second-tab');
+  });
+
+  it('opens the third tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Third Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-third-tab');
+  });
+
+  it('opens the fourth tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Fourth Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-fourth-tab');
+  });
+
+  it('opens the fifth tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Fifth Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-fifth-tab');
+  });
+
+  it('opens the sixth tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Sixth Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-sixth-tab');
+  });
+
+  it('opens the seventh tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Seventh Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-seventh-tab');
+  });
+
+  it('opens the eighth tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Eighth Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-eighth-tab');
+  });
+
+  it('shows the changes panel from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Show Changes').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-changes');
+  });
+
+  it('focuses the composer from the public window Edit menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Edit', 'Focus Follow-up').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('focus-follow-up');
+  });
+
+  it('shows the file tree from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Show Files').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-files');
+  });
+
+  it('shows the open chats from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'Show Tabs').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('toggle-chat-tabs');
+  });
+
+  it('opens a new tab from the public window View menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'View', 'New Tab').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('new-tab');
+  });
+
+  it('opens the previous chat from the public window History menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'History', 'Previous Chat').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('previous-chat');
+  });
+
+  it('opens the next chat from the public window History menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'History', 'Next Chat').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('next-chat');
   });
 
   it('moves through history from the History menu', () => {
@@ -153,17 +430,39 @@ describe('the application menu', () => {
     const { menu, actions: spies } = template();
     const help = submenu(menu, 'Help');
 
-    for (const label of [`${PRODUCT_NAMES.desktop} Support`, 'Open Logs', 'Open-Source Licenses']) {
+    for (const label of [`${PRODUCT_NAMES.desktop} Support`, 'Open-Source Licenses']) {
       const entry = help.find((candidate) => candidate.label === label);
       expect(entry, label).toBeDefined();
       (entry?.click as () => void)();
     }
+    const trouble = help.find((candidate) => candidate.label === 'Troubleshooting');
+    const logs = (trouble?.submenu as MenuItemConstructorOptions[] | undefined)?.find(
+      (candidate) => candidate.label === 'Open Logs',
+    );
+    expect(logs).toBeDefined();
+    (logs?.click as () => void)();
     (item(menu, UPDATES_MENU, UPDATES_LABEL).click as () => void)();
 
     expect(spies.openSupport).toHaveBeenCalledTimes(1);
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
     expect(spies.openOpenSourceNotices).toHaveBeenCalledTimes(1);
     expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens product help from the public window Help menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Help', `${PRODUCT_NAMES.desktop} Help`).click as () => void)();
+
+    expect(spies.openProductHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens What's New from the public window Help menu", () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Help', "What's New").click as () => void)();
+
+    expect(spies.openWhatsNew).toHaveBeenCalledTimes(1);
   });
 
   it('names the support item for the product, never the company', () => {
@@ -183,11 +482,24 @@ describe('the application menu', () => {
   it('leaves no item without an action', () => {
     const { menu } = template();
 
-    for (const entry of menu) {
-      for (const child of (entry.submenu as MenuItemConstructorOptions[] | undefined) ?? []) {
+    const assertActions = (items: MenuItemConstructorOptions[], trail: string) => {
+      for (const child of items) {
         if (child.type === 'separator' || child.role) continue;
-        expect(typeof child.click, `${entry.label} > ${child.label}`).toBe('function');
+        if (child.enabled === false && typeof child.click !== 'function') continue;
+        const label = `${trail} > ${child.label}`;
+        if (Array.isArray(child.submenu)) {
+          assertActions(child.submenu, label);
+          continue;
+        }
+        expect(typeof child.click, label).toBe('function');
       }
+    };
+
+    for (const entry of menu) {
+      assertActions(
+        (entry.submenu as MenuItemConstructorOptions[] | undefined) ?? [],
+        entry.label ?? String(entry.role),
+      );
     }
   });
 
@@ -202,6 +514,11 @@ describe('the application menu', () => {
       ['View', 'Zoom Out', 'host-zoom-out'],
       ['History', 'Back', 'host-back'],
       ['History', 'Forward', 'host-forward'],
+      ['History', 'Previous Chat', 'host-previous-chat'],
+      ['History', 'Next Chat', 'host-next-chat'],
+      ['View', 'New Tab', 'host-new-tab'],
+      ['View', 'Previous Tab', 'host-previous-tab'],
+      ['View', 'Next Tab', 'host-next-tab'],
     ];
 
     for (const [menuLabel, itemLabel, id] of claimed) {
@@ -219,13 +536,168 @@ describe('the application menu', () => {
     expect(spies.handBackScreen).toHaveBeenCalledTimes(1);
   });
 
-  it('closes a window from the Window menu on every platform', () => {
+  it('closes a window from the File menu on every platform', () => {
     const { menu } = template();
-    const windowItems = submenu(menu, 'Window');
-    const close = windowItems.find((entry) => entry.role === 'close');
+    const fileItems = submenu(menu, 'File');
+    const close = fileItems.find((entry) => entry.role === 'close');
 
     expect(close).toBeDefined();
     expect(close?.accelerator).toBe(contractAccelerator('host-close-window'));
+  });
+
+  it('fills a field from Edit > AutoFill on the public window', () => {
+    const { menu, actions: spies } = template();
+    const autoFill = submenu(menu, 'Edit').find((entry) => entry.label === 'AutoFill');
+    const sources = (autoFill?.submenu ?? []) as MenuItemConstructorOptions[];
+    const contact = sources.find((entry) => entry.label === 'Contact…');
+    const passwords = sources.find((entry) => entry.label === 'Passwords…');
+    const card = sources.find((entry) => entry.label === 'Credit Card…');
+
+    (contact?.click as () => void)();
+    (passwords?.click as () => void)();
+    (card?.click as () => void)();
+
+    expect(spies.autoFill).toHaveBeenNthCalledWith(1, 'contact');
+    expect(spies.autoFill).toHaveBeenNthCalledWith(2, 'passwords');
+    expect(spies.autoFill).toHaveBeenNthCalledWith(3, 'credit-card');
+  });
+
+  it('pastes and matches style from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'pasteAndMatchStyle')).toBe(true);
+  });
+
+  it('deletes from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'delete')).toBe(true);
+  });
+
+  it('selects all from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'selectAll')).toBe(true);
+  });
+
+  it('undoes from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'undo')).toBe(true);
+  });
+
+  it('redoes from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'redo')).toBe(true);
+  });
+
+  it('cuts from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'cut')).toBe(true);
+  });
+
+  it('copies from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'copy')).toBe(true);
+  });
+
+  it('opens About from the public window application menu', () => {
+    const { menu } = template();
+    const application = submenu(menu, 'AGI Desktop');
+
+    expect(application.some((entry) => entry.role === 'about')).toBe(true);
+  });
+
+  it('opens Services from the public window application menu', () => {
+    const { menu } = template();
+    const application = submenu(menu, 'AGI Desktop');
+
+    expect(application.some((entry) => entry.role === 'services')).toBe(true);
+  });
+
+  it('puts Hide on the public window application menu', () => {
+    const { menu } = template();
+    const application = submenu(menu, 'AGI Desktop');
+
+    expect(application.some((entry) => entry.role === 'hide')).toBe(true);
+  });
+
+  it('puts Hide Others on the public window application menu', () => {
+    const { menu } = template();
+    const application = submenu(menu, 'AGI Desktop');
+
+    expect(application.some((entry) => entry.role === 'hideOthers')).toBe(true);
+  });
+
+  it('puts Show All on the public window application menu', () => {
+    const { menu } = template();
+    const application = submenu(menu, 'AGI Desktop');
+
+    expect(application.some((entry) => entry.role === 'unhide')).toBe(true);
+  });
+
+  it('puts Quit on the public window application menu', () => {
+    const { menu } = template();
+    const application = submenu(menu, 'AGI Desktop');
+
+    expect(application.some((entry) => entry.role === 'quit')).toBe(true);
+  });
+
+  it('checks for updates from the public window application menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, UPDATES_MENU, UPDATES_LABEL).click as () => void)();
+
+    expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens settings from the public window application menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, SETTINGS_MENU, SETTINGS_LABEL).click as () => void)();
+
+    expect(spies.openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('pastes from the public window Edit menu', () => {
+    const { menu } = template();
+    const edit = submenu(menu, 'Edit');
+
+    expect(edit.some((entry) => entry.role === 'paste')).toBe(true);
+  });
+
+  it('starts dictation from the public window Edit menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Edit', 'Start Dictation…').click as () => void)();
+
+    expect(spies.startDictation).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens emoji and symbols from the public window Edit menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Edit', 'Emoji & Symbols').click as () => void)();
+
+    expect(spies.showEmojiPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes every window from File > Close All on the public window', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'File', 'Close All').click as () => void)();
+
+    expect(spies.closeAllWindows).toHaveBeenCalledTimes(1);
   });
 
   it('hands full screen, minimize and zoom to the platform rather than reimplementing them', () => {
@@ -238,12 +710,307 @@ describe('the application menu', () => {
     expect(windowItems).toContain('zoom');
   });
 
-  it('puts a support report on the clipboard from the Help menu', () => {
+  it('puts Minimize on the public window Window menu', () => {
+    const { menu } = template();
+    const windowItems = submenu(menu, 'Window');
+
+    expect(windowItems.some((entry) => entry.role === 'minimize')).toBe(true);
+  });
+
+  it('puts Minimize All on the public window Window menu', () => {
+    const { menu, actions: spies } = template();
+    const entry = item(menu, 'Window', 'Minimize All');
+
+    (entry.click as () => void)();
+
+    expect(spies.minimizeAllWindows).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts Zoom on the public window Window menu', () => {
+    const { menu } = template();
+    const windowItems = submenu(menu, 'Window');
+
+    expect(windowItems.some((entry) => entry.role === 'zoom')).toBe(true);
+  });
+
+  it('fills the front window from the public Window menu', () => {
     const { menu, actions: spies } = template();
 
-    (item(menu, 'Help', 'Copy Diagnostics').click as () => void)();
+    (item(menu, 'Window', 'Fill').click as () => void)();
+
+    expect(spies.fillWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('centers the front window from the public Window menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Window', 'Center').click as () => void)();
+
+    expect(spies.centerWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the front window to its previous size from Move & Resize', () => {
+    const idle = actions();
+    const idleMenu = template(idle).menu;
+    const idleMove = submenu(idleMenu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const idleItem = ((idleMove?.submenu as MenuItemConstructorOptions[] | undefined) ?? []).find(
+      (entry) => entry.label === 'Return to Previous Size',
+    );
+
+    expect(idleItem?.enabled).toBe(false);
+
+    const spies = actions();
+    spies.hasPreviousWindowSize.mockReturnValue(true);
+    const { menu } = template(spies);
+    const move = submenu(menu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const restore = ((move?.submenu as MenuItemConstructorOptions[] | undefined) ?? []).find(
+      (entry) => entry.label === 'Return to Previous Size',
+    );
+
+    expect(restore?.enabled).toBe(true);
+    (restore?.click as () => void)();
+
+    expect(spies.returnToPreviousSize).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves the front window from the public Window menu', () => {
+    const { menu, actions: spies } = template();
+    const move = submenu(menu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const tiles = (move?.submenu ?? []) as MenuItemConstructorOptions[];
+    const left = tiles.find((entry) => entry.label === 'Left');
+
+    (left?.click as () => void)();
+
+    expect(spies.moveWindow).toHaveBeenCalledWith('left');
+  });
+
+  it('arranges windows from the public Window menu', () => {
+    const { menu, actions: spies } = template();
+    const move = submenu(menu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const tiles = (move?.submenu ?? []) as MenuItemConstructorOptions[];
+    const pair = tiles.find((entry) => entry.label === 'Left & Right');
+
+    (pair?.click as () => void)();
+
+    expect(spies.arrangeWindows).toHaveBeenCalledWith('left-right');
+  });
+
+  it('places windows in quarters from the public Window menu', () => {
+    const { menu, actions: spies } = template();
+    const move = submenu(menu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const tiles = (move?.submenu ?? []) as MenuItemConstructorOptions[];
+    const quarters = tiles.find((entry) => entry.label === 'Quarters' && entry.enabled !== false);
+
+    (quarters?.click as () => void)();
+
+    expect(spies.arrangeWindows).toHaveBeenCalledWith('quarters');
+  });
+
+  it('shows the Move & Resize section labels on the public Window menu', () => {
+    const { menu } = template();
+    const move = submenu(menu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const tiles = (move?.submenu ?? []) as MenuItemConstructorOptions[];
+    const disabled = (label: string) =>
+      tiles.filter((entry) => entry.label === label && entry.enabled === false);
+
+    expect(disabled('Halves')).toHaveLength(1);
+    expect(disabled('Quarters')).toHaveLength(1);
+    expect(disabled('Arrange')).toHaveLength(1);
+    expect(tiles.some((entry) => entry.label === 'Quarters' && entry.enabled !== false)).toBe(true);
+  });
+
+  it('places the front window on every other Move & Resize tile', () => {
+    const { menu, actions: spies } = template();
+    const move = submenu(menu, 'Window').find((entry) => entry.label === 'Move & Resize');
+    const tiles = (move?.submenu ?? []) as MenuItemConstructorOptions[];
+    const tileMenu = submenu(menu, 'Window').find((entry) => entry.label === 'Full Screen Tile');
+    const sides = (tileMenu?.submenu ?? []) as MenuItemConstructorOptions[];
+    const click = (entries: MenuItemConstructorOptions[], label: string) => {
+      const entry = entries.find((candidate) => candidate.label === label);
+      expect(entry, label).toBeDefined();
+      (entry?.click as () => void)();
+    };
+
+    for (const label of [
+      'Right',
+      'Top',
+      'Bottom',
+      'Top Left',
+      'Top Right',
+      'Bottom Left',
+      'Bottom Right',
+    ]) {
+      click(tiles, label);
+    }
+    click(sides, 'Right of Screen');
+    for (const label of [
+      'Left & Quarters',
+      'Right & Left',
+      'Right & Quarters',
+      'Top & Bottom',
+      'Top & Quarters',
+      'Bottom & Top',
+      'Bottom & Quarters',
+    ]) {
+      click(tiles, label);
+    }
+
+    expect(spies.moveWindow.mock.calls.map(([tile]) => tile)).toEqual([
+      'right',
+      'top',
+      'bottom',
+      'top-left',
+      'top-right',
+      'bottom-left',
+      'bottom-right',
+      'right',
+    ]);
+    expect(spies.arrangeWindows.mock.calls.map(([arrangement]) => arrangement)).toEqual([
+      'left-quarters',
+      'right-left',
+      'right-quarters',
+      'top-bottom',
+      'top-quarters',
+      'bottom-top',
+      'bottom-quarters',
+    ]);
+  });
+
+  it('puts Bring All to Front on the public window Window menu', () => {
+    const { menu } = template();
+    const windowItems = submenu(menu, 'Window');
+
+    expect(windowItems.some((entry) => entry.role === 'front')).toBe(true);
+  });
+
+  it('arranges windows in front from the public Window menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Window', 'Arrange in Front').click as () => void)();
+
+    expect(spies.arrangeInFront).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the front window from its set on the public Window menu', () => {
+    const spies = actions();
+    spies.frontWindowIsInSet.mockReturnValue(true);
+    const { menu } = template(spies);
+    const entry = item(menu, 'Window', 'Remove Window from Set');
+
+    expect(entry.enabled).toBe(true);
+    (entry.click as () => void)();
+
+    expect(spies.removeWindowFromSet).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists the open windows on the public Window menu and focuses the one that was chosen', () => {
+    const spies = actions();
+    spies.shellWindows.mockReturnValue([
+      { id: 4, title: 'AGI Desktop', focused: true },
+      { id: 9, title: 'AGI Desktop', focused: false },
+    ]);
+    const { menu } = template(spies);
+    const entries = submenu(menu, 'Window').filter((entry) => entry.label === 'AGI Desktop');
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.checked).toBe(true);
+    expect(entries[1]?.checked).toBe(false);
+    (entries[1]?.click as () => void)();
+
+    expect(spies.focusShellWindow).toHaveBeenCalledWith(9);
+  });
+
+  it('leaves Remove Window from Set disabled until the front window is in a set', () => {
+    const { menu } = template();
+
+    expect(item(menu, 'Window', 'Remove Window from Set').enabled).toBe(false);
+  });
+
+  it('tiles the front window from the public Window menu', () => {
+    const { menu, actions: spies } = template();
+    const tile = submenu(menu, 'Window').find((entry) => entry.label === 'Full Screen Tile');
+    const sides = (tile?.submenu ?? []) as MenuItemConstructorOptions[];
+    const left = sides.find((entry) => entry.label === 'Left of Screen');
+
+    (left?.click as () => void)();
+
+    expect(spies.moveWindow).toHaveBeenCalledWith('left');
+  });
+
+  it('puts Zoom All on the public window Window menu', () => {
+    const { menu, actions: spies } = template();
+    const entry = item(menu, 'Window', 'Zoom All');
+
+    (entry.click as () => void)();
+
+    expect(spies.zoomAllWindows).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts Enter Full Screen on the public window View menu', () => {
+    const { menu } = template();
+    const view = submenu(menu, 'View');
+
+    expect(view.some((entry) => entry.role === 'togglefullscreen')).toBe(true);
+  });
+
+  it('puts a support report on the clipboard from the Help menu', () => {
+    const { menu, actions: spies } = template();
+    const trouble = submenu(menu, 'Help').find((entry) => entry.label === 'Troubleshooting');
+    const report = (trouble?.submenu as MenuItemConstructorOptions[] | undefined)?.find(
+      (entry) => entry.label === 'Copy Diagnostics',
+    );
+
+    (report?.click as () => void)();
 
     expect(spies.copyDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens logs from Help > Troubleshooting on the public window', () => {
+    const { menu, actions: spies } = template();
+    const trouble = submenu(menu, 'Help').find((entry) => entry.label === 'Troubleshooting');
+    const logs = (trouble?.submenu as MenuItemConstructorOptions[] | undefined)?.find(
+      (entry) => entry.label === 'Open Logs',
+    );
+
+    (logs?.click as () => void)();
+
+    expect(spies.openLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies the current chat URL from the public window View menu', () => {
+    const onConversation = actions();
+    const onSomethingElse = { ...actions(), hasFocusedConversation: vi.fn(() => false) };
+
+    expect(item(appMenuTemplate(onConversation, ACCELERATORS), 'View', 'Copy URL').enabled).toBe(
+      true,
+    );
+    expect(item(appMenuTemplate(onSomethingElse, ACCELERATORS), 'View', 'Copy URL').enabled).toBe(
+      false,
+    );
+
+    (item(appMenuTemplate(onConversation, ACCELERATORS), 'View', 'Copy URL').click as () => void)();
+
+    expect(onConversation.copyConversationUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the current chat in a new window from the public Window menu', () => {
+    const onConversation = actions();
+    const onSomethingElse = { ...actions(), hasFocusedConversation: vi.fn(() => false) };
+
+    expect(
+      item(appMenuTemplate(onConversation, ACCELERATORS), 'Window', 'Open in New Window').enabled,
+    ).toBe(true);
+    expect(
+      item(appMenuTemplate(onSomethingElse, ACCELERATORS), 'Window', 'Open in New Window').enabled,
+    ).toBe(false);
+
+    (
+      item(appMenuTemplate(onConversation, ACCELERATORS), 'Window', 'Open in New Window')
+        .click as () => void
+    )();
+
+    expect(onConversation.openCurrentChatInNewWindow).toHaveBeenCalledTimes(1);
+    expect(onConversation.openConversationInNewWindow).not.toHaveBeenCalled();
   });
 
   it('opens a second window from the Window menu', () => {
@@ -281,6 +1048,89 @@ describe('the application menu', () => {
       ).click as () => void
     )();
     expect(onConversation.openConversationInNewWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts File > New Project on the public window menu and asks the page to open it', () => {
+    const { menu, actions: spies } = template();
+    const entry = item(menu, 'File', 'New Project');
+
+    (entry.click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('new-project');
+  });
+
+  it('puts Find and File > Open Folder on the public window menu and runs their handlers', () => {
+    const { menu, actions: spies } = template();
+    const openFolder = item(menu, 'File', 'Open Folder');
+    const find = submenu(menu, 'Edit').find((entry) => entry.label === 'Find');
+    const findItems = (find?.submenu as MenuItemConstructorOptions[] | undefined) ?? [];
+    const byLabel = (label: string) => findItems.find((entry) => entry.label === label);
+
+    expect(findItems.map((entry) => entry.label)).toEqual([
+      'Find…',
+      'Find Next',
+      'Find Previous',
+      'Find in Files',
+    ]);
+    expect(openFolder.accelerator).toBe(contractAccelerator('host-open-folder'));
+    expect(byLabel('Find…')?.accelerator).toBe(contractAccelerator('host-find'));
+    expect(byLabel('Find Next')?.accelerator).toBe(contractAccelerator('host-find-next'));
+    expect(byLabel('Find Previous')?.accelerator).toBe(contractAccelerator('host-find-previous'));
+
+    (openFolder.click as () => void)();
+    (byLabel('Find…')?.click as () => void)();
+    (byLabel('Find Next')?.click as () => void)();
+    (byLabel('Find Previous')?.click as () => void)();
+
+    expect(spies.sendHostCommand.mock.calls.map(([command]) => command)).toEqual([
+      'open-folder',
+      'find',
+      'find-next',
+      'find-previous',
+    ]);
+  });
+
+  it('searches files from the public window Edit menu', () => {
+    const { menu, actions: spies } = template();
+
+    (editFindItem(menu, 'Find in Files').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('find-in-files');
+  });
+
+  it('finds the next match from the public window Edit menu', () => {
+    const { menu, actions: spies } = template();
+
+    (editFindItem(menu, 'Find Next').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('find-next');
+  });
+
+  it('finds the previous match from the public window Edit menu', () => {
+    const { menu, actions: spies } = template();
+
+    (editFindItem(menu, 'Find Previous').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('find-previous');
+  });
+
+  it('starts a temporary chat from File > New Temporary Chat on the public window', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'File', 'New Temporary Chat').click as () => void)();
+
+    expect(spies.sendHostCommand).toHaveBeenCalledWith('new-temporary-chat');
+  });
+
+  it('starts a new chat from File > New Chat without sending a message', () => {
+    const { menu, actions: spies } = template();
+    const newChat = item(menu, 'File', 'New Chat');
+
+    expect(newChat.accelerator).toBe(contractAccelerator('host-new-chat'));
+    (newChat.click as () => void)();
+
+    expect(spies.newChat).toHaveBeenCalledTimes(1);
+    expect(spies.sendHostCommand).not.toHaveBeenCalled();
   });
 
   it('keeps Settings and updates where the platform puts them, once each', () => {

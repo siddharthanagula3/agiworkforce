@@ -331,6 +331,187 @@ export function fillsWorkArea(bounds: RectLike, workArea: RectLike): boolean {
   );
 }
 
+/** The frame Window > Fill gives the front window: the display's work area. */
+export function frameFillingWorkArea(workArea: RectLike): RectLike {
+  return {
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
+  };
+}
+
+/** The frame Window > Center gives the front window: same size, middle of the work area. */
+export function centeredFrame(frame: RectLike, workArea: RectLike): RectLike {
+  return {
+    x: Math.round(workArea.x + (workArea.width - frame.width) / 2),
+    y: Math.round(workArea.y + (workArea.height - frame.height) / 2),
+    width: frame.width,
+    height: frame.height,
+  };
+}
+
+export type WindowTile =
+  'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/**
+ * The frame Move & Resize > Return to Previous Size puts back.
+ * Null means this window has not been tiled yet, so the item stays disabled.
+ */
+export function frameToRestore(saved: RectLike | null): RectLike | null {
+  return saved;
+}
+
+/**
+ * Remember the frame a Move & Resize tile replaces.
+ * The first change is the one Return to Previous Size puts back.
+ * A later tile keeps that original frame. An unchanged frame keeps the saved value.
+ */
+export function frameSavedBeforeTile(
+  current: RectLike,
+  next: RectLike,
+  saved: RectLike | null,
+): RectLike | null {
+  if (
+    current.x === next.x &&
+    current.y === next.y &&
+    current.width === next.width &&
+    current.height === next.height
+  ) {
+    return saved;
+  }
+  return saved ?? { x: current.x, y: current.y, width: current.width, height: current.height };
+}
+
+/** The frame Window > Move & Resize gives the front window for one tile of the work area. */
+export function tiledFrame(workArea: RectLike, tile: WindowTile): RectLike {
+  const halfW = Math.floor(workArea.width / 2);
+  const halfH = Math.floor(workArea.height / 2);
+  const restW = workArea.width - halfW;
+  const restH = workArea.height - halfH;
+  const rightX = workArea.x + halfW;
+  const bottomY = workArea.y + halfH;
+  switch (tile) {
+    case 'left':
+      return { x: workArea.x, y: workArea.y, width: halfW, height: workArea.height };
+    case 'right':
+      return { x: rightX, y: workArea.y, width: restW, height: workArea.height };
+    case 'top':
+      return { x: workArea.x, y: workArea.y, width: workArea.width, height: halfH };
+    case 'bottom':
+      return { x: workArea.x, y: bottomY, width: workArea.width, height: restH };
+    case 'top-left':
+      return { x: workArea.x, y: workArea.y, width: halfW, height: halfH };
+    case 'top-right':
+      return { x: rightX, y: workArea.y, width: restW, height: halfH };
+    case 'bottom-left':
+      return { x: workArea.x, y: bottomY, width: halfW, height: restH };
+    case 'bottom-right':
+      return { x: rightX, y: bottomY, width: restW, height: restH };
+  }
+}
+
+export type WindowArrangement =
+  | 'left-right'
+  | 'left-quarters'
+  | 'right-left'
+  | 'right-quarters'
+  | 'top-bottom'
+  | 'top-quarters'
+  | 'bottom-top'
+  | 'bottom-quarters'
+  | 'quarters';
+
+/**
+ * Frames for Window > Arrange in Front.
+ * Each window keeps its size. The front window is first. Each later window sits
+ * one title strip down and to the right, and the whole group is centered in
+ * the work area. A group larger than the work area stays pinned to its origin.
+ */
+export function cascadedFrames(
+  sizes: readonly { width: number; height: number }[],
+  workArea: RectLike,
+): RectLike[] {
+  if (sizes.length === 0) return [];
+  const step = 22;
+  let spanW = 0;
+  let spanH = 0;
+  sizes.forEach((size, index) => {
+    spanW = Math.max(spanW, index * step + size.width);
+    spanH = Math.max(spanH, index * step + size.height);
+  });
+  const originX = workArea.x + Math.max(0, Math.round((workArea.width - spanW) / 2));
+  const originY = workArea.y + Math.max(0, Math.round((workArea.height - spanH) / 2));
+  return sizes.map((size, index) => ({
+    x: originX + index * step,
+    y: originY + index * step,
+    width: size.width,
+    height: size.height,
+  }));
+}
+
+export type AutoFillSource = 'contact' | 'passwords' | 'credit-card';
+
+/** The system action Edit > AutoFill sends for one saved source. */
+export function autoFillSelector(source: AutoFillSource): string {
+  switch (source) {
+    case 'contact':
+      return 'showAutoFillContactsForView:';
+    case 'passwords':
+      return 'showAutoFillPasswordsForView:';
+    case 'credit-card':
+      return 'showAutoFillCreditCardsForView:';
+  }
+}
+
+/** Window ids placed together by Fill, Center, a tile, or an arrange. */
+export function windowSetAfterJoin(
+  existing: readonly number[],
+  joined: readonly number[],
+): number[] {
+  return [...new Set([...existing, ...joined])];
+}
+
+/** Window > Remove Window from Set drops the front window and keeps the others. */
+export function windowSetWithout(existing: readonly number[], windowId: number): number[] {
+  return existing.filter((id) => id !== windowId);
+}
+
+/**
+ * Frames for Window > Move & Resize Arrange.
+ * The first frame is the front window. Later frames are the windows beside it.
+ */
+export function arrangedFrames(workArea: RectLike, arrangement: WindowArrangement): RectLike[] {
+  const left = tiledFrame(workArea, 'left');
+  const right = tiledFrame(workArea, 'right');
+  const top = tiledFrame(workArea, 'top');
+  const bottom = tiledFrame(workArea, 'bottom');
+  const topLeft = tiledFrame(workArea, 'top-left');
+  const topRight = tiledFrame(workArea, 'top-right');
+  const bottomLeft = tiledFrame(workArea, 'bottom-left');
+  const bottomRight = tiledFrame(workArea, 'bottom-right');
+  switch (arrangement) {
+    case 'left-right':
+      return [left, right];
+    case 'right-left':
+      return [right, left];
+    case 'top-bottom':
+      return [top, bottom];
+    case 'bottom-top':
+      return [bottom, top];
+    case 'left-quarters':
+      return [left, topRight, bottomRight];
+    case 'right-quarters':
+      return [right, topLeft, bottomLeft];
+    case 'top-quarters':
+      return [top, bottomLeft, bottomRight];
+    case 'bottom-quarters':
+      return [bottom, topLeft, topRight];
+    case 'quarters':
+      return [topLeft, topRight, bottomLeft, bottomRight];
+  }
+}
+
 /**
  * Keeps a remembered frame on a display that still exists.
  *

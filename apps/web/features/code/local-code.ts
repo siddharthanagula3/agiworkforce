@@ -64,7 +64,7 @@ export const LOCAL_CODE_COPY = {
   allowSessions: 'Allow running commands',
   allowingSessions: 'Waiting for your answer',
   sessionsRefused:
-    'Running commands in this folder was refused. That lasts until you quit AGI Desktop, or until you withdraw the answer in Settings, under Capabilities.',
+    'Running commands in this folder was refused. That lasts until you quit Desktop, or until you withdraw the answer in Settings, under Capabilities.',
   allowSessionsFailed: 'This folder could not be opened to coding sessions.',
   mcpAwaitingApproval: (name: string): string =>
     `The MCP server ${name} has not started. This project names it, and it waits for your approval.`,
@@ -147,6 +147,9 @@ export const LOCAL_CODE_COPY = {
   filesEmpty: 'This folder is empty.',
   filesNoMatch: 'No file names match.',
   filesFailed: 'The files in this folder could not be listed.',
+  deleteFile: 'Delete file',
+  deleteFileTitle: 'Delete file?',
+  deleteFileDescription: (name: string): string => `${name} is removed from this folder.`,
   openFiles: 'Open files',
   closeTab: (name: string): string => `Close ${name}`,
   discardEditsTitle: 'Discard your edits?',
@@ -224,7 +227,7 @@ export const LOCAL_CODE_COPY = {
     count === 1 ? '1 more approval is waiting.' : `${count} more approvals are waiting.`,
   alwaysAllowTitle: 'Always allow this command?',
   alwaysAllowBody: (prefix: string): string =>
-    `From now on the agent runs any command that starts with "${prefix}" without asking, in every folder on this computer and in every session. The rule is saved in the AGI CLI on this computer and stays until you remove it there.`,
+    `From now on the agent runs any command that starts with "${prefix}" without asking, in every folder on this computer and in every session. The rule is saved in the CLI on this computer and stays until you remove it there.`,
   alwaysAllowConfirm: 'Always allow',
   turnChanges: (count: number): string =>
     translateUiPlural('chat', 'counts.changedFiles', count, {
@@ -239,7 +242,7 @@ export const LOCAL_CODE_COPY = {
   removeContextFile: (path: string): string => `Remove ${path}`,
   imagesOnly: 'Only images can be pasted into a coding session. Add other files from this folder.',
   imagesNeedUpdate:
-    'Pasting images into a coding session needs a newer version of AGI Desktop. Update the app, then try again.',
+    'Pasting images into a coding session needs a newer version of Desktop. Update the app, then try again.',
   tooManyImages: (limit: number): string => `A message can carry at most ${limit} images.`,
   tooManyFiles: (limit: number): string => `A message can carry at most ${limit} files.`,
   imageTooLarge: (limit: string): string => `Images must be ${limit} or smaller.`,
@@ -1471,7 +1474,7 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
     keep === 1 ? 'Keeping the newest worktree.' : `Keeping the newest ${keep} worktrees.`,
   saveFailed: 'The worktree count was not saved.',
   notRunning:
-    'Start a coding session to change this. The count is kept by the AGI CLI, which is not running yet.',
+    'Start a coding session to change this. The count is kept by the CLI, which is not running yet.',
   readFailed: 'The worktree count could not be read.',
   range: (max: number): string => `Choose a whole number from 1 to ${max}.`,
 } as const;

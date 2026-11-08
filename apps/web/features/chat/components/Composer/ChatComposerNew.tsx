@@ -75,6 +75,7 @@ import {
   LocalFolderAttachDialog,
   clipboardAttachments,
   readHostClipboard,
+  isDesktopHost,
   useDesktopHost,
   useDesktopVoiceHotkey,
   useLocalModelSelection,
@@ -279,7 +280,7 @@ const IMAGE_EDIT_OPERATIONS = [
 type ImageEditOperation = (typeof IMAGE_EDIT_OPERATIONS)[number]['id'];
 
 /**
- * The same ceiling the managed-cloud message contract enforces
+ * The same ceiling the cloud message contract enforces
  * (`ManagedCloudCreateMessageRequestSchema`), not a second hand-picked number.
  */
 const COMPOSER_MAX_CHARS = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH;
@@ -307,7 +308,7 @@ interface QueuedFollowUp {
 
 const WORK_MODE_LABELS: Record<ComposerWorkMode, string> = {
   chat: 'Chat',
-  agiwork: 'AGI Work',
+  agiwork: 'Work',
 };
 
 const WORK_MODE_LABEL_KEYS: Record<ComposerWorkMode, string> = {
@@ -321,7 +322,7 @@ const WORK_MODE_TITLE_KEYS: Record<ComposerWorkMode, string> = {
 
 const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
   chat: 'Chat: quick questions and conversation',
-  agiwork: 'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
+  agiwork: 'Work: multi-step tasks with tools, files, and reviewable deliverables',
 };
 const WORK_MODE_GLYPHS: Record<ComposerWorkMode, typeof MessageSquare> = {
   chat: MessageSquare,
@@ -329,7 +330,7 @@ const WORK_MODE_GLYPHS: Record<ComposerWorkMode, typeof MessageSquare> = {
 };
 
 /**
- * Placeholder copy per work mode, so switching to AGI Work changes what the
+ * Placeholder copy per work mode, so switching to Work changes what the
  * input says. `chat` is null so the caller-supplied `placeholder` still wins.
  */
 const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
@@ -403,7 +404,7 @@ export interface ComposerSendMeta {
   skillName?: string;
   /** Explicit user-selected MCP Prompt/Resources for this one turn. */
   mcpContext?: McpContextSelection;
-  /** Structured AGI Work goal captured by the composer. */
+  /** Structured Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
   /** Connector ids switched off for this conversation; their tools are not offered to the model. */
   disabledConnectorIds?: string[];
@@ -876,8 +877,8 @@ const ChatComposerNewComponent = ({
   );
   // Reset per message so each new draft gets its own warning.
   const secretWarningAcknowledgedRef = useRef(false);
-  // Optional AGI Work scope fields. Lightweight inline inputs shown
-  // only in AGI Work mode; the composed message is the objective itself.
+  // Optional Work scope fields. Lightweight inline inputs shown
+  // only in Work mode; the composed message is the objective itself.
   const [agiWorkConstraints, setAgiWorkConstraints] = useState('');
   const [agiWorkDeliverable, setAgiWorkDeliverable] = useState('');
   const [agiWorkExcludedTools, setAgiWorkExcludedTools] = useState<AgiWorkExcludableTool[]>([]);
@@ -1204,7 +1205,7 @@ const ChatComposerNewComponent = ({
 
   // Entering with a preselected project (sidebar "New chat in project" /
   // project-page handoff → ?projectId= → host store) lands eligible accounts in
-  // AGI Work. Free/basic accounts keep ordinary project-scoped chat; AGI Work
+  // Work. Free/basic accounts keep ordinary project-scoped chat; Work
   // needs the canUseAgiWork capability, which carries the `agi_work` plan
   // capability and the Work switch the server enforces.
   const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
@@ -2146,7 +2147,7 @@ const ChatComposerNewComponent = ({
     setLocalNotice(null);
     // A new draft gets its own secret warning.
     secretWarningAcknowledgedRef.current = false;
-    // The AGI Work scope fields belong to a single send, like the skill pick.
+    // The Work scope fields belong to a single send, like the skill pick.
     setAgiWorkConstraints('');
     setAgiWorkDeliverable('');
     setAgiWorkExcludedTools([]);
@@ -3392,7 +3393,7 @@ const ChatComposerNewComponent = ({
    */
   const activeToolLabels = useMemo(() => {
     const labels: string[] = [];
-    if (canUseAgiWork && workMode === 'agiwork') labels.push('AGI Work');
+    if (canUseAgiWork && workMode === 'agiwork') labels.push('Work');
     if (webSearchEnabled) labels.push('Web search');
     if (researchEnabled) labels.push('Deep Research');
     if (codeExecutionEnabled) labels.push('Run code');
@@ -3919,7 +3920,7 @@ const ChatComposerNewComponent = ({
                   (connector) => !disabledConnectorIds.includes(connector.toolId),
                 ),
           memoryEnabled: memoryEnabledForChat,
-          // Attach the structured goal on an AGI Work send. The objective
+          // Attach the structured goal on an Work send. The objective
           // is the composed message; the optional scope fields ride alongside.
           agiWorkGoal:
             canUseAgiWork && workMode === 'agiwork'
@@ -6151,7 +6152,7 @@ const ChatComposerNewComponent = ({
                   />
                 </div>
 
-                {/* Chat | AGI Work sits on the face at every width and in an
+                {/* Chat | Work sits on the face at every width and in an
                 existing chat, so the "+" menu carries no Mode row. */}
                 {projectPicker && canUseAgiWork && !imageMode && !videoMode && (
                   <div
@@ -7229,9 +7230,9 @@ const ChatComposerNewComponent = ({
           </div>
         )}
 
-      {/* AGI Work goal intake. The composed message is the objective;
+      {/* Work goal intake. The composed message is the objective;
           these optional inline fields let the user pin down scope + deliverable
-          without a modal wall. Shown only in paid AGI Work mode. */}
+          without a modal wall. Shown only in paid Work mode. */}
       {canUseAgiWork && workMode === 'agiwork' && !imageMode && !videoMode && agiWorkFieldsOpen && (
         <div className="mt-2">
           <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 p-2.5">

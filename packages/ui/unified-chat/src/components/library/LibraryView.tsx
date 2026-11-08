@@ -637,7 +637,7 @@ export function LibraryView({
   const handleAddToWork = useMemo(
     () =>
       addToWork
-        ? (item: LibraryItem) => void runHostAction(item, 'Add to AGI Work', () => addToWork(item))
+        ? (item: LibraryItem) => void runHostAction(item, 'Add to Work', () => addToWork(item))
         : undefined,
     [addToWork, runHostAction],
   );
@@ -1754,7 +1754,7 @@ function ItemMenu({
                   onClick={choose(() => actions.onAddToWork?.(item))}
                 >
                   <Briefcase className="h-4 w-4" aria-hidden />
-                  Add to AGI Work
+                  Add to Work
                 </button>
               ) : null}
               {actions.onOpenConversation && item.conversation_id ? (

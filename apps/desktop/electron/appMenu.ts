@@ -7,6 +7,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
+import type { AutoFillSource, WindowArrangement, WindowTile } from './garnishCore';
 
 /**
  * The native application menu.
@@ -27,6 +28,8 @@ import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 export interface AppMenuActions {
   newChat: () => void;
   newWindow: () => void;
+  openCurrentChatInNewWindow: () => void;
+  copyConversationUrl: () => void;
   openConversationInNewWindow: () => void;
   hasFocusedConversation: () => boolean;
   isFrontWindowOnTop: () => boolean | null;
@@ -36,10 +39,16 @@ export interface AppMenuActions {
   openSettings: () => void;
   openLogs: () => void;
   copyDiagnostics: () => void;
+  openProductHelp: () => void;
+  openWhatsNew: () => void;
   openSupport: () => void;
   openOpenSourceNotices: () => void;
   checkForUpdates: () => void;
   sendHostCommand: (command: HostCommand) => void;
+  terminalAvailable: () => boolean;
+  terminalOpen: () => boolean;
+  sideChatAvailable: () => boolean;
+  sideChatOpen: () => boolean;
   goBack: () => void;
   goForward: () => void;
   setZoomLevel: (level: number) => void;
@@ -47,6 +56,29 @@ export interface AppMenuActions {
   takeOverScreen: () => void;
   handBackScreen: () => void;
   stopScreenControl: () => void;
+  closeAllWindows: () => void;
+  minimizeAllWindows: () => void;
+  zoomAllWindows: () => void;
+  startDictation: () => void;
+  showEmojiPanel: () => void;
+  autoFill: (source: AutoFillSource) => void;
+  fillWindow: () => void;
+  centerWindow: () => void;
+  moveWindow: (tile: WindowTile) => void;
+  hasPreviousWindowSize: () => boolean;
+  returnToPreviousSize: () => void;
+  arrangeWindows: (arrangement: WindowArrangement) => void;
+  arrangeInFront: () => void;
+  frontWindowIsInSet: () => boolean;
+  removeWindowFromSet: () => void;
+  shellWindows: () => ShellWindowMenuEntry[];
+  focusShellWindow: (id: number) => void;
+}
+
+export interface ShellWindowMenuEntry {
+  id: number;
+  title: string;
+  focused: boolean;
 }
 
 export interface AppMenuAccelerators {
@@ -125,6 +157,22 @@ function fileMenu(
   const items: MenuItemConstructorOptions[] = [
     { label: 'New Chat', accelerator: hostAccelerator('host-new-chat'), click: actions.newChat },
     {
+      label: 'New Temporary Chat',
+      click: () => actions.sendHostCommand('new-temporary-chat'),
+    },
+    {
+      label: 'New Project',
+      click: () => actions.sendHostCommand('new-project'),
+    },
+    {
+      label: 'Open Folder',
+      accelerator: hostAccelerator('host-open-folder'),
+      click: () => actions.sendHostCommand('open-folder'),
+    },
+    { type: 'separator' },
+    { role: 'close', accelerator: hostAccelerator('host-close-window') },
+    { label: 'Close All', click: () => actions.closeAllWindows() },
+    {
       label: 'Quick Ask',
       accelerator: accelerators.quickAsk,
       registerAccelerator: false,
@@ -176,7 +224,34 @@ function fileMenu(
   return { label: 'File', submenu: items };
 }
 
-function editMenu(): MenuItemConstructorOptions {
+function findMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+  return {
+    label: 'Find',
+    submenu: [
+      {
+        label: 'Find…',
+        accelerator: hostAccelerator('host-find'),
+        click: () => actions.sendHostCommand('find'),
+      },
+      {
+        label: 'Find Next',
+        accelerator: hostAccelerator('host-find-next'),
+        click: () => actions.sendHostCommand('find-next'),
+      },
+      {
+        label: 'Find Previous',
+        accelerator: hostAccelerator('host-find-previous'),
+        click: () => actions.sendHostCommand('find-previous'),
+      },
+      {
+        label: 'Find in Files',
+        click: () => actions.sendHostCommand('find-in-files'),
+      },
+    ],
+  };
+}
+
+function editMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   const items: MenuItemConstructorOptions[] = [
     { role: 'undo' },
     { role: 'redo' },
@@ -185,9 +260,28 @@ function editMenu(): MenuItemConstructorOptions {
     { role: 'copy' },
     { role: 'paste' },
     { role: 'selectAll' },
+    { type: 'separator' },
+    findMenu(actions),
+    {
+      label: 'Focus Follow-up',
+      click: () => actions.sendHostCommand('focus-follow-up'),
+    },
   ];
   if (isMac) {
     items.splice(6, 0, { role: 'pasteAndMatchStyle' }, { role: 'delete' });
+    items.push(
+      { type: 'separator' },
+      {
+        label: 'AutoFill',
+        submenu: [
+          { label: 'Contact…', click: () => actions.autoFill('contact') },
+          { label: 'Passwords…', click: () => actions.autoFill('passwords') },
+          { label: 'Credit Card…', click: () => actions.autoFill('credit-card') },
+        ],
+      },
+      { label: 'Start Dictation…', click: () => actions.startDictation() },
+      { label: 'Emoji & Symbols', click: () => actions.showEmojiPanel() },
+    );
   }
   return { label: 'Edit', submenu: items };
 }
@@ -199,6 +293,106 @@ function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       accelerator: PAGE_TOGGLE_SIDEBAR_ACCELERATOR,
       registerAccelerator: false,
       click: () => actions.sendHostCommand('toggle-sidebar'),
+    },
+    {
+      label: 'Search',
+      accelerator: 'CommandOrControl+Shift+F',
+      registerAccelerator: false,
+      click: () => actions.sendHostCommand('open-search'),
+    },
+    {
+      label: actions.terminalOpen() ? 'Hide Terminal' : 'Show Terminal',
+      enabled: actions.terminalAvailable(),
+      accelerator: 'Ctrl+`',
+      registerAccelerator: false,
+      click: () => actions.sendHostCommand('toggle-terminal'),
+    },
+    {
+      label: actions.sideChatOpen() ? 'Hide Side Chat' : 'Show Side Chat',
+      enabled: actions.sideChatAvailable(),
+      accelerator: 'CommandOrControl+;',
+      click: () => actions.sendHostCommand('toggle-side-chat'),
+    },
+    { type: 'separator' },
+    {
+      label: 'New Tab',
+      accelerator: hostAccelerator('host-new-tab'),
+      click: () => actions.sendHostCommand('new-tab'),
+    },
+    {
+      label: 'Previous Tab',
+      accelerator: hostAccelerator('host-previous-tab'),
+      click: () => actions.sendHostCommand('previous-tab'),
+    },
+    {
+      label: 'Next Tab',
+      accelerator: hostAccelerator('host-next-tab'),
+      click: () => actions.sendHostCommand('next-tab'),
+    },
+    {
+      label: 'Show Tabs',
+      click: () => actions.sendHostCommand('toggle-chat-tabs'),
+    },
+    {
+      label: 'Reopen Closed Tab',
+      click: () => actions.sendHostCommand('reopen-closed-tab'),
+    },
+    {
+      label: 'First Tab',
+      click: () => actions.sendHostCommand('focus-first-tab'),
+    },
+    {
+      label: 'Close Tab',
+      click: () => actions.sendHostCommand('close-active-tab'),
+    },
+    {
+      label: 'Close Other Tabs',
+      click: () => actions.sendHostCommand('close-other-tabs'),
+    },
+    {
+      label: 'Close Tabs to the Right',
+      click: () => actions.sendHostCommand('close-tabs-to-the-right'),
+    },
+    {
+      label: 'Copy URL',
+      enabled: actions.hasFocusedConversation(),
+      click: actions.copyConversationUrl,
+    },
+    {
+      label: 'Second Tab',
+      click: () => actions.sendHostCommand('focus-second-tab'),
+    },
+    {
+      label: 'Third Tab',
+      click: () => actions.sendHostCommand('focus-third-tab'),
+    },
+    {
+      label: 'Fourth Tab',
+      click: () => actions.sendHostCommand('focus-fourth-tab'),
+    },
+    {
+      label: 'Fifth Tab',
+      click: () => actions.sendHostCommand('focus-fifth-tab'),
+    },
+    {
+      label: 'Sixth Tab',
+      click: () => actions.sendHostCommand('focus-sixth-tab'),
+    },
+    {
+      label: 'Seventh Tab',
+      click: () => actions.sendHostCommand('focus-seventh-tab'),
+    },
+    {
+      label: 'Eighth Tab',
+      click: () => actions.sendHostCommand('focus-eighth-tab'),
+    },
+    {
+      label: 'Show Changes',
+      click: () => actions.sendHostCommand('toggle-changes'),
+    },
+    {
+      label: 'Show Files',
+      click: () => actions.sendHostCommand('toggle-files'),
     },
     { type: 'separator' },
     {
@@ -232,14 +426,25 @@ function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
     submenu: [
       { label: 'Back', accelerator: hostAccelerator('host-back'), click: actions.goBack },
       { label: 'Forward', accelerator: hostAccelerator('host-forward'), click: actions.goForward },
+      { type: 'separator' },
+      {
+        label: 'Previous Chat',
+        accelerator: hostAccelerator('host-previous-chat'),
+        click: () => actions.sendHostCommand('previous-chat'),
+      },
+      {
+        label: 'Next Chat',
+        accelerator: hostAccelerator('host-next-chat'),
+        click: () => actions.sendHostCommand('next-chat'),
+      },
     ],
   };
 }
 
 function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
-  // Close is on every platform: macOS reads a window with no Cmd+W as broken,
-  // and the app survives losing its last window because `activate`, a second
-  // launch and a deep link all bring one back.
+  // Close lives on File. Minimize and zoom stay here because the platform
+  // owns those window actions. On macOS Minimize All is its own item beside
+  // Minimize, and Zoom All is its own item beside Zoom.
   //
   // Moving a conversation out is disabled rather than hidden when the front
   // window is not on one: an item that appears and disappears as the user
@@ -250,6 +455,11 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       label: 'New Window',
       accelerator: hostAccelerator('host-new-window'),
       click: actions.newWindow,
+    },
+    {
+      label: 'Open in New Window',
+      enabled: actions.hasFocusedConversation(),
+      click: actions.openCurrentChatInNewWindow,
     },
     {
       label: 'Move Conversation to New Window',
@@ -265,11 +475,75 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
     },
     { type: 'separator' },
     { role: 'minimize' },
+    ...(isMac ? [{ label: 'Minimize All', click: () => actions.minimizeAllWindows() }] : []),
     { role: 'zoom' },
-    { role: 'close', accelerator: hostAccelerator('host-close-window') },
+    ...(isMac ? [{ label: 'Zoom All', click: () => actions.zoomAllWindows() }] : []),
+    { label: 'Fill', click: () => actions.fillWindow() },
+    { label: 'Center', click: () => actions.centerWindow() },
+    {
+      label: 'Move & Resize',
+      submenu: [
+        { label: 'Halves', enabled: false },
+        { label: 'Left', click: () => actions.moveWindow('left') },
+        { label: 'Right', click: () => actions.moveWindow('right') },
+        { label: 'Top', click: () => actions.moveWindow('top') },
+        { label: 'Bottom', click: () => actions.moveWindow('bottom') },
+        { type: 'separator' },
+        { label: 'Quarters', enabled: false },
+        { label: 'Top Left', click: () => actions.moveWindow('top-left') },
+        { label: 'Top Right', click: () => actions.moveWindow('top-right') },
+        { label: 'Bottom Left', click: () => actions.moveWindow('bottom-left') },
+        { label: 'Bottom Right', click: () => actions.moveWindow('bottom-right') },
+        { type: 'separator' },
+        { label: 'Arrange', enabled: false },
+        { label: 'Left & Right', click: () => actions.arrangeWindows('left-right') },
+        { label: 'Left & Quarters', click: () => actions.arrangeWindows('left-quarters') },
+        { label: 'Right & Left', click: () => actions.arrangeWindows('right-left') },
+        { label: 'Right & Quarters', click: () => actions.arrangeWindows('right-quarters') },
+        { label: 'Top & Bottom', click: () => actions.arrangeWindows('top-bottom') },
+        { label: 'Top & Quarters', click: () => actions.arrangeWindows('top-quarters') },
+        { label: 'Bottom & Top', click: () => actions.arrangeWindows('bottom-top') },
+        { label: 'Bottom & Quarters', click: () => actions.arrangeWindows('bottom-quarters') },
+        { label: 'Quarters', click: () => actions.arrangeWindows('quarters') },
+        { type: 'separator' },
+        {
+          label: 'Return to Previous Size',
+          enabled: actions.hasPreviousWindowSize(),
+          click: () => actions.returnToPreviousSize(),
+        },
+      ],
+    },
+    {
+      label: 'Full Screen Tile',
+      submenu: [
+        { label: 'Left of Screen', click: () => actions.moveWindow('left') },
+        { label: 'Right of Screen', click: () => actions.moveWindow('right') },
+      ],
+    },
   ];
   if (isMac) {
-    items.push({ type: 'separator' }, { role: 'front' });
+    items.push(
+      { type: 'separator' },
+      { role: 'front' },
+      { label: 'Arrange in Front', click: () => actions.arrangeInFront() },
+      {
+        label: 'Remove Window from Set',
+        enabled: actions.frontWindowIsInSet(),
+        click: () => actions.removeWindowFromSet(),
+      },
+    );
+    const open = actions.shellWindows();
+    if (open.length > 0) {
+      items.push({ type: 'separator' });
+      for (const win of open) {
+        items.push({
+          label: win.title,
+          type: 'checkbox',
+          checked: win.focused,
+          click: () => actions.focusShellWindow(win.id),
+        });
+      }
+    }
   }
   return { label: 'Window', submenu: items };
 }
@@ -278,6 +552,8 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return {
     role: 'help',
     submenu: [
+      { label: `${PRODUCT_NAMES.desktop} Help`, click: () => actions.openProductHelp() },
+      { label: "What's New", click: () => actions.openWhatsNew() },
       { label: `${PRODUCT_NAMES.desktop} Support`, click: actions.openSupport },
       {
         label: 'Keyboard Shortcuts',
@@ -285,9 +561,19 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
         registerAccelerator: false,
         click: () => actions.sendHostCommand('show-keyboard-shortcuts'),
       },
+      { label: 'Send Feedback', click: () => actions.sendHostCommand('send-feedback') },
+      {
+        label: 'Start Performance Trace',
+        click: () => actions.sendHostCommand('start-performance-trace'),
+      },
       { type: 'separator' },
-      { label: 'Open Logs', click: actions.openLogs },
-      { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+      {
+        label: 'Troubleshooting',
+        submenu: [
+          { label: 'Open Logs', click: actions.openLogs },
+          { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+        ],
+      },
       { label: 'Open-Source Licenses', click: actions.openOpenSourceNotices },
       ...(isMac ? [] : [{ label: 'Check for Updates', click: actions.checkForUpdates }]),
     ],
@@ -302,7 +588,7 @@ export function appMenuTemplate(
   return [
     ...appleMenu(actions),
     fileMenu(actions, accelerators, computerUse),
-    editMenu(),
+    editMenu(actions),
     viewMenu(actions),
     historyMenu(actions),
     windowMenu(actions),

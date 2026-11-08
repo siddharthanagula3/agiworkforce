@@ -7,8 +7,11 @@ type ScanModule0 = typeof import('@features/chat/hooks/use-dictation');
 
 const dictation = vi.hoisted(() => ({
   active: false,
+  deliverResult: false,
   start: vi.fn(),
   stop: vi.fn(),
+  send: vi.fn(),
+  onInsert: undefined as undefined | ((text: string) => void),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -43,20 +46,26 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 
 vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  useDictation: () => ({
-    status: dictation.active ? 'recording' : 'idle',
-    isActive: dictation.active,
-    error: null,
-    bars: [],
-    level: 0,
-    announcement: '',
-    reducedMotion: false,
-    start: dictation.start,
-    stop: dictation.stop,
-    send: vi.fn(),
-    cancel: vi.fn(),
-    retry: vi.fn(),
-  }),
+  useDictation: (options: { onInsert: (text: string) => void }) => {
+    dictation.onInsert = options.onInsert;
+    return {
+      status: dictation.active ? 'recording' : 'idle',
+      isActive: dictation.active,
+      error: null,
+      bars: [],
+      level: 0,
+      announcement: '',
+      reducedMotion: false,
+      start: dictation.start,
+      stop: () => {
+        dictation.stop();
+        if (dictation.deliverResult) dictation.onInsert?.('Noted from dictation');
+      },
+      send: dictation.send,
+      cancel: vi.fn(),
+      retry: vi.fn(),
+    };
+  },
 }));
 
 function composer() {
@@ -73,11 +82,61 @@ beforeEach(() => {
   window.sessionStorage.clear();
   __resetComposerDraftStorageForTests();
   dictation.active = false;
+  dictation.deliverResult = false;
   dictation.start.mockClear();
   dictation.stop.mockClear();
+  dictation.send.mockClear();
 });
 
 describe('composer shortcuts', () => {
+  it('starts voice mode without sending the draft', () => {
+    const onSend = vi.fn();
+    const onEnterVoiceMode = vi.fn();
+    render(<ChatComposerNew onSend={onSend} onEnterVoiceMode={onEnterVoiceMode} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice mode' }));
+
+    expect(onEnterVoiceMode).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(dictation.start).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('');
+  });
+
+  it('puts a dictation result in the composer without sending it', () => {
+    dictation.active = true;
+    dictation.deliverResult = true;
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop recording and edit the transcript' }));
+
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue(
+      'Noted from dictation',
+    );
+    expect(onSend).not.toHaveBeenCalled();
+    expect(dictation.send).not.toHaveBeenCalled();
+  });
+
+  it('starts dictation without sending the draft', () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn() },
+    });
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice input' }));
+
+    expect(dictation.start).toHaveBeenCalledTimes(1);
+    expect(dictation.send).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('Keep this draft');
+    Reflect.deleteProperty(navigator, 'mediaDevices');
+  });
+
   it('opens the file picker from the add files chord', () => {
     const textarea = composer();
     const fileInput = screen.getByLabelText('File upload') as HTMLInputElement;

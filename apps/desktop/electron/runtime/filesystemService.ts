@@ -701,6 +701,20 @@ async function assertUnchangedSinceRead(
   }
 }
 
+export async function deleteRegularFile(
+  root: WorkspaceRoot,
+  relativePath: string,
+): Promise<boolean> {
+  const resolved = await resolveWithinRoot(root, relativePath);
+  await assertWritable(resolved);
+  const named = await fs.lstat(resolved.absolute);
+  if (named.isSymbolicLink() || !named.isFile()) {
+    throw new PathRefused('io-error', `${resolved.relative} is not a file.`);
+  }
+  await fs.unlink(resolved.absolute);
+  return true;
+}
+
 export async function writeTextFile(
   root: WorkspaceRoot,
   relativePath: string,

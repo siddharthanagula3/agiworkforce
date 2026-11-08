@@ -78,6 +78,9 @@ export const DIRECTORY_CATEGORY_FILTER_ID = 'category';
 export const FILTER_MENU_LABEL = 'Filter by';
 export const SORT_MENU_LABEL = 'Sort by';
 export const CLEAR_FILTERS_LABEL = 'Clear filters';
+export const CLEAR_SEARCH_LABEL = 'Clear search';
+export const RESET_FILTERS_LABEL = 'Reset filters';
+export const RESET_FILTERS_EMPTY_COPY = 'Nothing matches these filters.';
 
 export const DIRECTORY_SORT_LABELS: Record<DirectorySortKey, string> = {
   popular: 'Most popular',
@@ -403,7 +406,7 @@ export const UPLOAD_PLUGIN_INTRO =
 export const UPLOAD_PLUGIN_ACCEPT = '.zip,application/zip';
 export const UPLOAD_PLUGIN_FAILED_COPY = 'The plugin could not be uploaded.';
 
-export const UPLOAD_SKILL_LABEL = 'Upload skill';
+export const UPLOAD_SKILL_LABEL = 'Upload a skill';
 export const UPLOAD_SKILL_DESCRIPTION = 'A .zip, .skill or SKILL.md file.';
 export const BROWSE_SKILLS_ACTION_ID = 'browse-skills';
 export const BROWSE_SKILLS_LABEL = 'Add from the catalog';

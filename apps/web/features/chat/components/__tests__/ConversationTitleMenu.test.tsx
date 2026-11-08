@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { ConversationTitleMenu, ConversationTitlePlaceholder } from '../ConversationTitleMenu';
@@ -111,6 +111,40 @@ describe('ConversationTitleMenu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
   });
 
+  it('copies the chat as Markdown from the public window title menu', async () => {
+    const user = userEvent.setup();
+    const onCopyMarkdown = vi.fn();
+    render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        projects={projects}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyMarkdown={onCopyMarkdown}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy as Markdown' }));
+    expect(onCopyMarkdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('forks the chat from the public window title menu', async () => {
+    const user = userEvent.setup();
+    const onFork = vi.fn();
+    render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        projects={projects}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onFork={onFork}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Duplicate as branch' }));
+    expect(onFork).toHaveBeenCalledTimes(1);
+  });
+
   it('opens to Rename / Move to project / Delete when projects exist', async () => {
     const user = userEvent.setup();
     render(
@@ -126,6 +160,29 @@ describe('ConversationTitleMenu', () => {
     expect(await screen.findByText('Rename')).toBeTruthy();
     expect(screen.getByText('Move to project')).toBeTruthy();
     expect(screen.getByText('Delete')).toBeTruthy();
+  });
+
+  it('reads Change project when the conversation already belongs to a project and still moves it', async () => {
+    const onMoveToProject = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConversationTitleMenu
+        title="Domain strategy"
+        projects={projects}
+        projectId="p1"
+        onRename={vi.fn()}
+        onMoveToProject={onMoveToProject}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    expect(screen.queryByText('Move to project')).toBeNull();
+    await user.click(await screen.findByText('Change project'));
+    const beta = await screen.findByRole('menuitem', { name: 'Beta' });
+    await act(async () => {
+      fireEvent.click(beta);
+    });
+    expect(onMoveToProject).toHaveBeenCalledWith('p2');
   });
 
   it('hides Move to project when there are no projects', async () => {

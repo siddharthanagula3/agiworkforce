@@ -29,9 +29,8 @@ import { useElectronHost } from '../lib/host';
 const START_LABEL = 'Continue in your browser';
 const REOPEN_LABEL = 'Open the browser again';
 const START_HINT =
-  "Sign in with your browser, including your organization's single sign-on, and AGI Desktop finishes signing you in here.";
-const WAITING_HINT =
-  'Finish signing in in your browser. AGI Desktop opens again when you are done.';
+  "Sign in with your browser, including your organization's single sign-on, and Desktop finishes signing you in here.";
+const WAITING_HINT = 'Finish signing in in your browser. Desktop opens again when you are done.';
 
 export function DesktopBrowserSignIn() {
   const host = useElectronHost();

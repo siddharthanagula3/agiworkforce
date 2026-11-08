@@ -254,6 +254,14 @@ export function planBrowserCommand(
         ),
       );
     }
+    case 'browser_stop': {
+      const tabId = optionalNumber(rawArgs, 'tabId');
+      return plan(
+        withDefined({ tabId }),
+        'Stop loading the page?',
+        'The paired browser stops loading the current page.',
+      );
+    }
     case 'browser_history': {
       const direction = requireString(rawArgs, 'direction');
       if (direction !== 'back' && direction !== 'forward') {

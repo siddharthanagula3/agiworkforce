@@ -111,7 +111,7 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
       >
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">
-            {`AGI Desktop${ready.version ? ` ${ready.version}` : ' update'} is ready to install`}
+            {`Desktop${ready.version ? ` ${ready.version}` : ' update'} is ready to install`}
           </p>
           <InstallFeedback
             feedback={feedback}
@@ -127,7 +127,7 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
           className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
           onClick={() => void install(canRestart)}
         >
-          {canRestart ? 'Restart to update' : 'Download installer'}
+          {canRestart ? 'Relaunch to update' : 'Download installer'}
         </button>
         <button
           type="button"
@@ -152,7 +152,7 @@ export function DesktopUpdateNotice({ host }: { host: HostBridge }) {
       className="pointer-events-auto flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground shadow-lg"
     >
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">AGI Desktop {update.version} is available</p>
+        <p className="text-sm font-medium">Desktop {update.version} is available</p>
         <InstallFeedback
           feedback={feedback}
           fallback="Download the signed macOS installer when you are ready."

@@ -317,6 +317,18 @@ describe('ComposerPlusMenu, chat mode', () => {
     vi.unstubAllGlobals();
   });
 
+  it('opens connector settings from Manage connectors', () => {
+    window.location.hash = '';
+    const { props } = renderMenu({ connectorsSubmenuOpen: true });
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Manage connectors' }));
+
+    expect(window.location.hash).toBe('#settings/customize-connectors');
+    expect(props.onOpenSettings).toHaveBeenCalledWith('connectors');
+    expect(props.closeMenu).toHaveBeenCalled();
+    window.location.hash = '';
+  });
+
   it('makes the settings it opens bookmarkable by setting the hash', () => {
     window.location.hash = '';
     const { props } = renderMenu({ connectorsSubmenuOpen: true });

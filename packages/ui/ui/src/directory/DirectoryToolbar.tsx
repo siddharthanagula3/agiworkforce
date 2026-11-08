@@ -10,6 +10,7 @@ import { Menu, MenuItem, MenuSeparator } from '../sidebar/Menu';
 import {
   ADD_MARKETPLACE_LABEL,
   CLEAR_FILTERS_LABEL,
+  CLEAR_SEARCH_LABEL,
   DIRECTORY_SEARCH_PLACEHOLDERS,
   DIRECTORY_SORT_LABELS,
   DIRECTORY_SOURCE_ALL_ID,
@@ -99,13 +100,29 @@ export function DirectoryToolbar({
   const activeFilterCount = countActiveFilters(menuSelection);
   return (
     <div className="flex flex-col gap-3">
-      <SearchInput
-        ref={searchRef}
-        value={query}
-        onChange={(event) => onQueryChange(event.target.value)}
-        placeholder={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
-        aria-label={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
-      />
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <SearchInput
+            ref={searchRef}
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
+            aria-label={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
+          />
+        </div>
+        {query.trim() !== '' ? (
+          <button
+            type="button"
+            onClick={() => onQueryChange('')}
+            className={cn(
+              'inline-flex min-h-9 shrink-0 items-center rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted',
+              DIRECTORY_FOCUS_RING,
+            )}
+          >
+            {CLEAR_SEARCH_LABEL}
+          </button>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {sourcesHeading ? (

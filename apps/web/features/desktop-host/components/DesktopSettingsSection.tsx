@@ -33,7 +33,11 @@ import { useDesktopHost } from '../lib/host';
 import { readDeveloperRuntimeStatus } from '../lib/runtime-client';
 import { BackgroundActivitySection } from './BackgroundActivitySection';
 import { DesktopPermissionsSection } from './DesktopPermissionsSection';
-import { DesktopSettingsHeading, DesktopSettingsRow as Row } from './DesktopSettingsRow';
+import {
+  DESKTOP_SETTINGS_BUTTON_CLASS,
+  DesktopSettingsHeading,
+  DesktopSettingsRow as Row,
+} from './DesktopSettingsRow';
 import { DesktopUpdateRow } from './DesktopUpdateRow';
 
 const HEADING = 'General desktop settings';
@@ -43,9 +47,13 @@ const SAVE_FAILED = 'That setting was not saved.';
 const NO_SHORTCUT_LABEL = 'No shortcut';
 
 const STARTUP_LABEL = 'Run on startup';
-const STARTUP_HINT = 'Start AGI Desktop when you log in to this computer.';
+const STARTUP_HINT = 'Start Desktop when you log in to this computer.';
 const MENU_BAR_LABEL = 'Menu bar';
-const MENU_BAR_HINT = 'Show AGI Desktop in the menu bar.';
+const MENU_BAR_HINT = 'Show Desktop in the menu bar.';
+const STORAGE_LABEL = 'Storage';
+const STORAGE_HINT = 'Chats kept on this computer.';
+const STORAGE_MANAGE = 'Manage';
+const STORAGE_KEPT = 'Chats stay on this computer. Nothing was removed.';
 const DICTATE_ELSEWHERE_LABEL = 'Dictate into the app you are using';
 const DICTATE_ELSEWHERE_HINT =
   'With another app in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again.';
@@ -58,14 +66,14 @@ const COMPLETION_ALERTS_HINT =
 const APPROVAL_ALERTS_LABEL = 'Approval alerts';
 const APPROVAL_ALERTS_HINT =
   'Show a notification when a coding session on this computer needs your approval.';
-const CLI_PATH_LABEL = 'AGI CLI path';
+const CLI_PATH_LABEL = 'CLI path';
 const CLI_PATH_HINT =
-  'Leave empty to use the AGI CLI bundled with the app, or the agi on this computer’s PATH.';
+  'Leave empty to use the CLI bundled with the app, or the agi on this computer’s PATH.';
 const CLI_PATH_PLACEHOLDER = 'agi';
-const CLI_MISSING = 'Not found on this computer. Install the AGI CLI to run coding sessions here.';
-const CLI_RESOLVING = 'Looking for the AGI CLI…';
+const CLI_MISSING = 'Not found on this computer. Install the CLI to run coding sessions here.';
+const CLI_RESOLVING = 'Looking for the CLI…';
 
-const CLI_ACCOUNT_FAILED = 'This account could not be given to the AGI CLI on this computer.';
+const CLI_ACCOUNT_FAILED = 'This account could not be given to the CLI on this computer.';
 
 const CLI_SOURCE_LABELS: Record<NonNullable<DeveloperRuntimeStatus['source']>, string> = {
   bundled: 'Bundled with the app',
@@ -112,7 +120,7 @@ const NOTIFY_LABEL = 'Agent notifications';
 const NOTIFY_HINT = 'When coding agents on this computer notify you.';
 const NOTIFY_MODE_LABELS: Record<HostAgentNotificationMode, string> = {
   always: 'Always',
-  unfocused: 'Only when AGI Desktop is in the background',
+  unfocused: 'Only when Desktop is in the background',
   never: 'Never',
 };
 const NOTIFY_KIND_ROWS: Record<HostAgentNotificationKind, { label: string; hint: string }> = {
@@ -139,8 +147,8 @@ const DRAW_ATTENTION_LABEL = 'Draw attention';
 
 function drawAttentionHint(platform: string): string {
   return platform.includes('darwin')
-    ? 'Bounce the Dock icon when an agent notifies you while AGI Desktop is in the background.'
-    : 'Flash the taskbar button when an agent notifies you while AGI Desktop is in the background.';
+    ? 'Bounce the Dock icon when an agent notifies you while Desktop is in the background.'
+    : 'Flash the taskbar button when an agent notifies you while Desktop is in the background.';
 }
 
 /**
@@ -148,7 +156,7 @@ function drawAttentionHint(platform: string): string {
  * and `off` say nothing: the control already shows both.
  */
 const STATUS_NOTE: Partial<Record<HostShortcutStatus, string>> = {
-  duplicate: 'Already used by another AGI Desktop shortcut.',
+  duplicate: 'Already used by another Desktop shortcut.',
   taken: 'Already used by another app.',
   malformed: 'Not a shortcut this computer can register.',
 };
@@ -175,6 +183,7 @@ export function DesktopSettingsSection() {
   const [error, setError] = useState<string | null>(null);
   const [cliStatus, setCliStatus] = useState<DeveloperRuntimeStatus | null>(null);
   const [cliWrites, setCliWrites] = useState(0);
+  const [storageOpen, setStorageOpen] = useState(false);
 
   const cliReads = useRef(0);
   const resolveCli = useCallback(() => {
@@ -317,6 +326,22 @@ export function DesktopSettingsSection() {
             />
           </Row>
 
+          <Row
+            label={STORAGE_LABEL}
+            hint={STORAGE_HINT}
+            note={storageOpen ? STORAGE_KEPT : undefined}
+            noteIsFailure={false}
+          >
+            <button
+              type="button"
+              className={DESKTOP_SETTINGS_BUTTON_CLASS}
+              aria-label="Manage storage"
+              onClick={() => setStorageOpen(true)}
+            >
+              {STORAGE_MANAGE}
+            </button>
+          </Row>
+
           {preferences?.dictateIntoFocusedApp !== undefined && (
             <Row label={DICTATE_ELSEWHERE_LABEL} hint={DICTATE_ELSEWHERE_HINT}>
               <Switch
@@ -381,7 +406,7 @@ export function DesktopSettingsSection() {
         </div>
 
         {platformName !== null && (
-          <p className="text-sm text-[var(--text-3)]">AGI Desktop on {platformName}</p>
+          <p className="text-sm text-[var(--text-3)]">Desktop on {platformName}</p>
         )}
       </section>
 

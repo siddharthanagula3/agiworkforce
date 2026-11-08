@@ -467,6 +467,69 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     expect(thinking.effort).toBe('high');
   });
 
+  it('changes reasoning effort on the public composer and keeps the model', () => {
+    sel.id = 'fixture-standard';
+    thinking.enabled = true;
+    thinking.effort = 'medium';
+    const view = render(<ComposerFooter />);
+
+    expect(screen.getByText('Effort')).toBeInTheDocument();
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.medium);
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      'Standard Fixture',
+    );
+
+    moveEffort(2);
+    expect(thinking.effort).toBe('high');
+    view.rerender(<ComposerFooter />);
+    expect(effortLevel()).toBe(EFFORT_LABEL.high);
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.high);
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      'Standard Fixture',
+    );
+  });
+
+  it('sets Extended from the public composer effort slider and keeps the model', () => {
+    sel.id = 'fixture-five-level';
+    thinking.enabled = true;
+    thinking.effort = 'medium';
+    const view = render(<ComposerFooter />);
+
+    expect(screen.getByText('Effort')).toBeInTheDocument();
+    expect(effortLevel()).toBe(EFFORT_LABEL.medium);
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      'Five-Level Fixture',
+    );
+
+    moveEffort(3);
+    expect(thinking.effort).toBe('xhigh');
+    view.rerender(<ComposerFooter />);
+    expect(effortLevel()).toBe(EFFORT_LABEL.xhigh);
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.xhigh);
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      'Five-Level Fixture',
+    );
+  });
+
+  it('sets Maximum from the public composer effort slider and keeps the model', () => {
+    sel.id = 'fixture-five-level';
+    thinking.enabled = true;
+    thinking.effort = 'medium';
+    const view = render(<ComposerFooter />);
+
+    expect(screen.getByText('Effort')).toBeInTheDocument();
+    expect(effortLevel()).toBe(EFFORT_LABEL.medium);
+
+    moveEffort(4);
+    expect(thinking.effort).toBe('max');
+    view.rerender(<ComposerFooter />);
+    expect(effortLevel()).toBe(EFFORT_LABEL.max);
+    expect(effortTrigger()).toHaveTextContent(EFFORT_LABEL.max);
+    expect(screen.getByRole('button', { name: /, change model$/ })).toHaveTextContent(
+      'Five-Level Fixture',
+    );
+  });
+
   it('keeps effort as its own control beside the model trigger, not inside the picker', () => {
     sel.id = 'fixture-four-level-secondary';
     thinking.effort = 'medium';

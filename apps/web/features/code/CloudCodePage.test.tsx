@@ -27,6 +27,7 @@ import {
   type ToolApprovalPreferences,
 } from '@shared/types/toolApprovalPolicy';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
+import { listLocalBranches, switchLocalBranch } from '@/features/desktop-host';
 import { CloudCodePage } from './CloudCodePage';
 import { forgetLocalSession } from './local-session-memory';
 import {
@@ -3237,6 +3238,25 @@ describe('the environment the composer starts a session in', () => {
     expect(within(menu).getByRole('menuitemradio', { name: /qa-project/ })).toBeChecked();
   });
 
+  it('checks out the branch picked from the public code page', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ branch: 'main' })];
+    vi.mocked(listLocalBranches).mockResolvedValueOnce({
+      current: 'main',
+      branches: ['main', 'release'],
+      remoteUrl: null,
+      baseBranch: 'main',
+    });
+    vi.mocked(switchLocalBranch).mockClear();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Change the branch' }));
+    await user.click(await screen.findByRole('button', { name: 'release' }));
+
+    await waitFor(() => expect(switchLocalBranch).toHaveBeenCalledWith('root-recent', 'release'));
+  });
+
   it('opens the local session a link names, on a cold load', async () => {
     replace.mockClear();
     host = {};
@@ -3611,6 +3631,21 @@ describe('the environment the composer starts a session in', () => {
     expect(within(menu).getByRole('menuitem', { name: 'Add a folder' })).toBeInTheDocument();
     expect(within(menu).getByText('Cloud')).toBeInTheDocument();
     expect(within(menu).getByRole('menuitem', { name: 'Edit environment' })).toBeInTheDocument();
+  });
+
+  it('makes the other folder the one a new session starts in from Make primary', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder(), folder({ rootId: 'root-two', name: 'second-project', sessions: [] })];
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
+    const menu = await openEnvironment(user);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Make primary' }));
+
+    expect(
+      await screen.findByRole('button', { name: 'Change the folder: second-project' }),
+    ).toBeInTheDocument();
   });
 
   it('asks the host for a folder from the environment menu', async () => {

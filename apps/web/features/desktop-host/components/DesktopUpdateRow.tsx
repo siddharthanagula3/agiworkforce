@@ -11,7 +11,7 @@ const LABEL = 'App version';
 const CHECK_LABEL = 'Check for updates';
 const CHECKING_LABEL = 'Checking…';
 const INSTALL_LABEL = 'Download installer';
-const RESTART_LABEL = 'Restart to update';
+const RESTART_LABEL = 'Relaunch to update';
 const UP_TO_DATE = 'This is the latest version.';
 const CHECK_FAILED = 'The update check did not complete.';
 
@@ -136,7 +136,7 @@ export function DesktopUpdateRow() {
           </p>
         ) : readyToInstall ? (
           <p role="status" style={hintStyle}>
-            {`${readyVersion ? `Version ${readyVersion}` : 'An update'} is ready. ${canRestart ? 'Restart AGI Desktop' : 'Download the installer'} to finish updating.`}
+            {`${readyVersion ? `Version ${readyVersion}` : 'An update'} is ready. ${canRestart ? 'Restart Desktop' : 'Download the installer'} to finish updating.`}
           </p>
         ) : downloading ? (
           <p role="status" style={hintStyle}>

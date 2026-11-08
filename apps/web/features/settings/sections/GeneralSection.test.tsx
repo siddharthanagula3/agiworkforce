@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   setCodeTheme: vi.fn(),
   setMotion: vi.fn(),
   setFollowUpBehavior: vi.fn(),
+  setTheme: vi.fn(),
   settings: {
     accentColor: 'default' as string,
     highContrast: false,
@@ -30,7 +31,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@shared/hooks/useAppTheme', () => ({
-  useAppTheme: () => ({ theme: 'dark', setTheme: vi.fn() }),
+  useAppTheme: () => ({ theme: 'dark', setTheme: mocks.setTheme }),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -409,6 +410,39 @@ describe('GeneralSection composer and theme captions', () => {
     mocks.fetchPreferences.mockResolvedValue({});
     mocks.settings.followUpBehavior = 'queue';
     mocks.setFollowUpBehavior.mockReset();
+    mocks.setTheme.mockClear();
+  });
+
+  it('shows the Appearance theme without changing the selected theme', () => {
+    render(<GeneralSection />);
+
+    expect(screen.getByText('Appearance')).toBeVisible();
+    const group = screen.getByRole('group', { name: 'Theme' });
+    expect(within(group).getByRole('button', { name: 'Dark theme' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(group).getByRole('button', { name: 'Light theme' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(within(group).getByRole('button', { name: 'System theme' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(mocks.setTheme).not.toHaveBeenCalled();
+  });
+
+  it('sets the Appearance theme to Light when that option is chosen', async () => {
+    render(<GeneralSection />);
+
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', {
+        name: 'Light theme',
+      }),
+    );
+
+    expect(mocks.setTheme).toHaveBeenCalledWith('light');
   });
 
   it('captions each theme option with its visible name', () => {

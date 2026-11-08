@@ -18,7 +18,7 @@ import {
 
 const HEADING = 'Running on this Mac';
 const HEADING_HINT =
-  'What AGI Desktop keeps running in the background. Stop any of it here without quitting the app.';
+  'What Desktop keeps running in the background. Stop any of it here without quitting the app.';
 const NOTHING_RUNNING = 'Nothing is running in the background.';
 const LOAD_FAILED = 'What is running could not be read from the app.';
 const STOP_FAILED = 'That was not stopped.';
@@ -122,7 +122,7 @@ export function BackgroundActivitySection() {
       ) : (
         <div className="flex flex-col">
           {activity.codingRuntimes.map((runtime) => {
-            const label = `AGI CLI in ${runtime.rootName}`;
+            const label = `CLI in ${runtime.rootName}`;
             return (
               <DesktopSettingsRow
                 key={runtime.rootId}
