@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { scheduledSourceAuthority } from '../src/features/background/scheduled-task-source-authority';
 import {
   loadScheduledSitePolicyInput,
@@ -71,7 +73,10 @@ describe('scheduled source authority', () => {
   });
 
   it('routes cold admission and recovery through fresh authority before irreversible cleanup', () => {
-    const source = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+      'utf8',
+    );
     const admission = source.slice(
       source.indexOf('async function executeScheduledTask('),
       source.indexOf('// A tab-originated message'),
@@ -82,7 +87,9 @@ describe('scheduled source authority', () => {
       admission.indexOf('await handleDeleteScheduledTask('),
     );
     expect(admission).not.toContain('!isOriginApprovedForAutomation(task.createdByOrigin)');
-    expect(admission).toContain('(current) => current.createdByOrigin === task.createdByOrigin');
+    expect(admission).toMatch(
+      /\(current\) =>\s+current\.createdByOrigin === task\.createdByOrigin/,
+    );
     expect(admission).toContain(
       'if (!deletion.success || deletionGeneration === undefined) return;',
     );

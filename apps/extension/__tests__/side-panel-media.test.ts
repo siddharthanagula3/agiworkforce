@@ -181,7 +181,7 @@ describe('produced media in an answer', () => {
     expect(bubble.querySelector<HTMLElement>('.sp-bubble')!.hidden).toBe(true);
   });
 
-  it('keeps the spinner when the video progress label changes', () => {
+  it('renders the loading logo beside the video progress label', () => {
     const msg: SidePanelChatMessage = {
       id: 'v-2',
       role: 'assistant',
@@ -192,7 +192,10 @@ describe('produced media in an answer', () => {
     const bubble = buildBubbleWithTools(msg, { fileAccess: access });
     const label = bubble.querySelector('#sp-video-progress-v-2 .sp-video-progress__label');
     expect(label?.textContent).toContain('Creating your video');
-    expect(bubble.querySelector('#sp-video-progress-v-2 svg')).not.toBeNull();
+    const mark = bubble.querySelector<HTMLImageElement>('#sp-video-progress-v-2 .agi-loading-mark');
+    expect(mark).not.toBeNull();
+    expect(mark?.alt).toBe('');
+    expect(mark?.width).toBe(14);
     expect(bubble.querySelector('#sp-video-progress-v-2 .agi-icon')?.textContent).toBe('');
   });
 
@@ -232,6 +235,8 @@ describe('produced media in an answer', () => {
     expect(section.getAttribute('aria-label')).toBe('Generated image');
     expect(section.querySelectorAll('figure')).toHaveLength(2);
     expect(section.querySelector('[aria-label="Download Generated image 2"]')).not.toBeNull();
-    await vi.waitFor(() => expect(section.querySelectorAll('img')).toHaveLength(2));
+    await vi.waitFor(() =>
+      expect(section.querySelectorAll('.sp-answer-image__open img')).toHaveLength(2),
+    );
   });
 });

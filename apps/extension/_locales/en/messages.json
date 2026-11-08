@@ -1781,20 +1781,6 @@
       }
     }
   },
-  "spLinkStatus": {
-    "message": "$SITE$ answered with error $STATUS$, so nothing was attached.",
-    "description": "Link form error when the site returned an error status",
-    "placeholders": {
-      "site": {
-        "content": "$1",
-        "example": "example.com"
-      },
-      "status": {
-        "content": "$2",
-        "example": "404"
-      }
-    }
-  },
   "spLinkNotText": {
     "message": "The link on $SITE$ is not a web page or text, so it cannot be attached this way. Upload the file instead.",
     "description": "Link form error when the link points to a file that is not HTML or text",

@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { createSitePolicyPublicationOwner } from '../src/background/site-policy-publication';
 
@@ -156,7 +158,10 @@ describe('site-policy publication ownership', () => {
 });
 
 describe('background publication wiring', () => {
-  const background = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+  const background = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+    'utf8',
+  );
   const startup = background.slice(
     background.indexOf('const siteAllowlistPublication ='),
     background.indexOf('function isOriginApprovedForAutomation'),

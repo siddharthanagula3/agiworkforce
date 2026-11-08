@@ -116,9 +116,9 @@ describe('toolbar button without a side panel API', () => {
     expect(toolbar.open).toHaveBeenCalledWith({ windowId: 6 });
   });
 
-  it('leaves the click to Chrome’s own side panel behaviour when it exists', () => {
+  it('dispatches the toolbar gesture to the same panel opener when the side panel exists', () => {
     const toolbar = register(true);
     toolbar.click(6);
-    expect(toolbar.open).not.toHaveBeenCalled();
+    expect(toolbar.open).toHaveBeenCalledExactlyOnceWith({ tabId: undefined, windowId: 6 });
   });
 });

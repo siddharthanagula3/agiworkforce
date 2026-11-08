@@ -8458,7 +8458,7 @@ function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boo
         if (!saved) {
           handleStreamError(
             streamId,
-            t(projectBindingPending ? 'spProjectChatNotSaved' : 'spWorkChatNotSaved'),
+            projectBindingPending ? t('spProjectChatNotSaved') : t('spWorkChatNotSaved'),
           );
           return;
         }
@@ -14786,10 +14786,10 @@ chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   ) {
     const message =
       pendingBrowserContextTabs.length > 0 || _ctx.pendingPageContextSource?.chosen
-        ? 'spAttachedTabChanged'
-        : 'spContextChipDropped';
+        ? t('spAttachedTabChanged')
+        : t('spContextChipDropped');
     clearPendingPageContext();
-    composerContextNotice = t(message);
+    composerContextNotice = message;
     updateContextButton();
     updateAttachmentPreview();
   }

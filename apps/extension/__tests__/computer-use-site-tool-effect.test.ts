@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const tabs = vi.hoisted(() => ({ url: 'https://example.com/checkout' }));
@@ -91,9 +93,12 @@ describe('browser site tools use the canonical approval path', () => {
   });
 
   it('does not restore automatic alias discovery or unbound browser-agent execution', () => {
-    const background = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const background = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+      'utf8',
+    );
     const loop = readFileSync(
-      new URL('../src/features/computer-use/agentLoop.ts', import.meta.url),
+      resolve(dirname(fileURLToPath(import.meta.url)), '../src/features/computer-use/agentLoop.ts'),
       'utf8',
     );
     expect(background).toContain('browserSiteTools: new BrowserAgentSiteTools(');

@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
@@ -6,7 +8,10 @@ import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedClou
 import type { MemoryCommandResult } from '../src/features/cloud-bridge/memoryClient';
 import { UUID_PATTERN } from '../src/lib/uuid';
 
-const source = readFileSync(new URL('../src/side_panel.ts', import.meta.url), 'utf8');
+const source = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
+  'utf8',
+);
 const program = ts.createSourceFile('side_panel.ts', source, ts.ScriptTarget.Latest, true);
 const functions = program.statements
   .filter(
@@ -65,6 +70,10 @@ function harness() {
     getManagedCloudAuthContext: auth,
     runAccountMemoryCommand: command,
     UUID_PATTERN,
+    composerVoiceInput: { reset: vi.fn() },
+    resetReadAloud: vi.fn(),
+    clearVoiceInputComposerNotice: vi.fn(),
+    taskSiteGrants: { releaseTask: vi.fn(async () => undefined) },
     cancelComposerImageIntake: vi.fn(),
     t: (key: string) => key,
     tPlural: (key: string, count: number, values: string[]) =>

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import { getPickerModels, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 import {
@@ -188,12 +190,21 @@ describe('private scheduled transport authority', () => {
 
   it('keeps private hooks out of payloads and preserves default and cancellation wiring', () => {
     const client = readFileSync(
-      new URL('../src/features/cloud-bridge/freeTrialClient.ts', import.meta.url),
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        '../src/features/cloud-bridge/freeTrialClient.ts',
+      ),
       'utf8',
     );
-    const background = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const background = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+      'utf8',
+    );
     const control = readFileSync(
-      new URL('../src/features/cloud-bridge/managedRunControl.ts', import.meta.url),
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        '../src/features/cloud-bridge/managedRunControl.ts',
+      ),
       'utf8',
     );
     expect(client).toContain('(options.fetchImpl ?? fetch)(resumeEndpoint ?? FREE_TRIAL_ENDPOINT');
@@ -204,7 +215,7 @@ describe('private scheduled transport authority', () => {
     expect(
       client.match(/if \(error instanceof ScheduledTaskTransportControl\) throw error;/g),
     ).toHaveLength(2);
-    expect(background).toContain('...(scheduledTransport ? {');
+    expect(background).toMatch(/\.\.\.\(scheduledTransport\s+\?\s+\{/);
     expect(background).toContain(
       'if (error instanceof ScheduledTaskTransportControl) throw error;',
     );

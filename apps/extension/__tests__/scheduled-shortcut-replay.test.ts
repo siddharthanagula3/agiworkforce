@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ExtensionResponse, SavedShortcut } from '../src/types';
 import { ORIGIN_EXTENSION_PAGE } from '../src/background/policy';
 import {
@@ -185,7 +187,10 @@ describe('scheduled-only recorded replay', () => {
   });
 
   it('keeps interactive replay separate and preserves the synchronous forwarding boundary', () => {
-    const source = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+      'utf8',
+    );
     expect(source).toContain("case 'REPLAY_SHORTCUT':\n      return handleReplayShortcut");
     const scheduled = source.slice(
       source.indexOf('async function executeScheduledTask('),
